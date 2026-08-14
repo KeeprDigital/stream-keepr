@@ -1,8 +1,11 @@
+import type { H3Event } from 'h3';
 import type { DbPlayerDeckUnresolvedCard } from '~~/server/db/schema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
+import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 const mockRequireMeleeSyncEventData = vi.fn();
+const mockSetResponseHeader = vi.fn();
 const mockPlayerDeckCompanionService = {
 	shouldSyncImportedCompanion: vi.fn(),
 };
@@ -79,15 +82,21 @@ vi.mock('~~/server/utils/scryfall', () => ({
 	fetchScryfallCardById: mockFetchScryfallCardById,
 }));
 
-vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) => {
-	const error = new Error(input.message ?? input.statusMessage) as Error & { statusCode: number };
-	error.statusCode = input.statusCode;
-	return error;
+// `cause` and `statusMessage` are carried through (#346) because the retry-after rows
+// below assert on the refusal a caller actually receives — the error after
+// `mapPublicNitroError` — and that mapper reads its classification off the cause. A
+// stub that dropped it would let the surviving sentence be sanitized to 'Internal
+// Server Error', failing the pin for a reason that has nothing to do with the header.
+// The rows that predate this assert on the raw throw and are indifferent to it.
+vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string; cause?: unknown }) => {
+	return Object.assign(new Error(input.message ?? input.statusMessage), input);
 });
+vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
 
 const { deckListResolutionModule } = await import('~~/server/modules/deck-list-resolution');
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
+const requestEvent = {} as H3Event;
 
 function createUnresolvedEntry(overrides: Partial<DbPlayerDeckUnresolvedCard> = {}): DbPlayerDeckUnresolvedCard {
 	return {
@@ -139,6 +148,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		});
 
 		expect(mockRequireMeleeSyncEventData).toHaveBeenCalledWith(1);
@@ -189,6 +199,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 20,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		})).rejects.toMatchObject({
 			statusCode: 400,
 			message: 'Imported companion requires an open sideboard slot or an existing sideboard copy.',
@@ -210,6 +221,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 20,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		});
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();
@@ -224,6 +236,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		})).rejects.toMatchObject({
 			statusCode: 409,
 			message: 'Unresolved deck card references a deck outside this event',
@@ -243,6 +256,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		})).rejects.toMatchObject({
 			statusCode: 502,
 			message: 'Card data provider is temporarily unavailable. Try again later.',
@@ -261,10 +275,62 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		})).rejects.toMatchObject({
 			statusCode: 400,
 			message: 'The selected Scryfall card was not found',
 		});
+	});
+
+	/**
+	 * The number that goes with the word *temporarily*.
+	 *
+	 * #346, the second of the two sites #337's review found still carrying its defect:
+	 * the sentence called the outage momentary and the response carried no
+	 * `retry-after`, so a caller told to come back had to invent an interval. Asserted
+	 * after `mapPublicNitroError` because that is the response a caller actually
+	 * receives — the header and the sentence are one piece of guidance, and #321's
+	 * finding was precisely the two halves disagreeing. A row reading the header off
+	 * the raw throw would pass with the sentence sanitized away.
+	 */
+	it('tells a caller how long to wait for the card provider, beside a sentence saying what for', async () => {
+		mockFetchScryfallCardById.mockRejectedValue({
+			code: 'SCRYFALL_UPSTREAM_FAILURE',
+			notFound: false,
+			message: 'private upstream response body',
+		});
+
+		const refusal = await refusalFrom(deckListResolutionModule().resolveUnresolvedDeckCard({
+			eventId: 1,
+			unresolvedCardId: 11,
+			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
+		}));
+
+		expect(refusal.statusCode).toBe(502);
+		expect(refusal.message).toBe('Card data provider is temporarily unavailable. Try again later.');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(requestEvent, 'retry-after', 5);
+	});
+
+	it('does not tell a caller to wait for a card ID that no waiting will resolve', async () => {
+		// The counterweight to the row above, and the same distinction
+		// `requireGraphicsAdministrator` makes: an unreachable provider resolves by
+		// waiting and a card ID the provider does not have does not — waiting only makes
+		// it later. A `retry-after` set once for the whole catch block would satisfy the
+		// row above and be wrong here, which is what this exists to catch.
+		mockFetchScryfallCardById.mockRejectedValue({
+			code: 'SCRYFALL_UPSTREAM_FAILURE',
+			notFound: true,
+		});
+
+		await expect(deckListResolutionModule().resolveUnresolvedDeckCard({
+			eventId: 1,
+			unresolvedCardId: 11,
+			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
+		})).rejects.toMatchObject({ statusCode: 400 });
+
+		expect(mockSetResponseHeader).not.toHaveBeenCalled();
 	});
 
 	it('merges pre-existing duplicate card rows inside the same retry-safe batch', async () => {
@@ -281,6 +347,7 @@ describe('deck List Resolution server module', () => {
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
 		});
 
 		expect(mockDb.batch).toHaveBeenCalledOnce();

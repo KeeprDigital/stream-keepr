@@ -148,14 +148,21 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * sites use: it is a floor on how hard to retry, not an estimate of when the store
  * returns, and a second spelling of that floor would only invite the two to drift.
  *
- * **That is bounded to those siblings on purpose: the codebase-wide version of the
- * sentence is false, and was briefly written here.**
+ * **That was bounded to those siblings on purpose, because the codebase-wide version
+ * of the sentence was false when it was briefly written here.** It is no longer.
  * `server/modules/deck-list-resolution/index.ts` (502) and
- * `server/modules/melee-sync/configuration.ts` (504/502) each tell a caller something
- * is 'temporarily unavailable. Try again later.' and set no header — neither module
- * calls `setResponseHeader` at all. They are two more instances of the defect #337
- * describes, and they get their own ticket rather than a drive-by fix from this lane.
- * Anyone tempted to widen the line above should widen the behaviour first.
+ * `server/modules/melee-sync/configuration.ts` (504/502) each told a caller something
+ * was 'temporarily unavailable. Try again later.' and set no header; #346 widened the
+ * behaviour at both, which is the order this note asked for. Each took an `H3Event`
+ * to do it — neither module had one in scope, so neither was the one-line fix its
+ * ticket predicted. Their pins are in
+ * `test/unit/server/modules/deckListResolution.test.ts` and
+ * `test/unit/server/api/events/[id]/melee-config.put.test.ts`.
+ *
+ * What still bounds the claim is the other direction, and it is the durable half:
+ * a refusal that does **not** call itself temporary owes no interval, which is why
+ * `graphics-administrator.ts` sets none and why both #346 sites set theirs inside the
+ * outage branch rather than the enclosing catch.
  *
  * **Two different sevens meet here, and #337's own text runs them together.** Seven
  * sites set `retry-after: 5` before this one did; seven files were classified by

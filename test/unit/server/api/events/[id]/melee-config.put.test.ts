@@ -2,6 +2,7 @@ import { H3Error } from 'h3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MeleeTransportError } from '~~/server/services/meleeTransport';
 import { MeleeCredentialCryptoError } from '~~/server/utils/meleeCredentialCrypto';
+import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 const mockGetValidatedRouterParams = vi.fn();
 const mockReadValidatedBody = vi.fn();
@@ -16,10 +17,12 @@ const mockAcquireMeleeSyncLease = vi.fn();
 const mockReleaseMeleeSyncLease = vi.fn();
 const mockEventParamsParse = vi.fn(input => input);
 const mockMeleeConfigParse = vi.fn(input => input);
+const mockSetResponseHeader = vi.fn();
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getValidatedRouterParams', mockGetValidatedRouterParams);
 vi.stubGlobal('readValidatedBody', mockReadValidatedBody);
+vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
 vi.stubGlobal('createError', vi.fn((input: { statusCode: number; message: string; data?: unknown }) => {
 	return Object.assign(new Error(input.message), input);
 }));
@@ -89,6 +92,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			expiresAt: new Date('2026-01-01T00:15:00.000Z'),
 		});
 		mockReleaseMeleeSyncLease.mockReset().mockResolvedValue(true);
+		mockSetResponseHeader.mockReset();
 	});
 
 	it('decrypts an existing envelope for validation and re-saves plaintext through the encrypting service boundary', async () => {
@@ -219,6 +223,69 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		});
 		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
 		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	/**
+	 * The number that goes with the word *temporarily*.
+	 *
+	 * #346, the first of the two sites #337's review found still carrying its defect:
+	 * the sentence called the outage momentary and the response carried no
+	 * `retry-after`, so a caller told to come back had to invent an interval. Asserted
+	 * after `mapPublicNitroError` because that is the response a caller actually
+	 * receives — the header and the sentence are one piece of guidance, and #321's
+	 * finding was precisely the two halves disagreeing. A row reading the header off
+	 * the raw throw would pass with the sentence sanitized away.
+	 */
+	it('tells a caller how long to wait for Melee.gg, beside a sentence saying what for', async () => {
+		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
+			'Melee.gg API request failed with status 503',
+			'http',
+			503,
+		));
+		const event = {} as any;
+
+		const refusal = await refusalFrom(handler(event));
+
+		expect(refusal.statusCode).toBe(502);
+		expect(refusal.message).toBe('Melee.gg is temporarily unavailable. Try again later.');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	it('gives the same interval when the upstream timed out rather than answered', async () => {
+		// The status here is the one thing about this refusal that varies, and it varies
+		// on the same line the header now sits beside. A number written into either
+		// branch of that conditional would leave a caller who timed out with no interval
+		// and a caller who got a bad gateway with one.
+		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
+			'Melee.gg API request timed out',
+			'timeout',
+		));
+		const event = {} as any;
+
+		const refusal = await refusalFrom(handler(event));
+
+		expect(refusal.statusCode).toBe(504);
+		expect(refusal.message).toBe('Melee.gg is temporarily unavailable. Try again later.');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	it('does not tell a caller to wait for credentials Melee.gg refused', async () => {
+		// The counterweight, and the same distinction `requireGraphicsAdministrator`
+		// makes: an unreachable Melee.gg resolves by waiting and a rejected client ID
+		// does not — waiting only makes it later. A `retry-after` set once for the whole
+		// `MeleeTransportError` branch would satisfy the two rows above and be wrong
+		// here, which is what this exists to catch.
+		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
+			'Melee.gg API request failed with status 401',
+			'http',
+			401,
+		));
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 });
+
+		expect(mockSetResponseHeader).not.toHaveBeenCalled();
 		warn.mockRestore();
 	});
 

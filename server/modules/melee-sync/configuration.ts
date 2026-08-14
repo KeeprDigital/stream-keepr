@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3';
 import type { MeleeConfigInput } from '~~/server/schemas/api/event';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { inspectMeleeGameCompatibility } from '~~/server/modules/melee-sync/gameCompatibility';
@@ -12,6 +13,13 @@ interface UpdateMeleeConfigurationParams {
 	eventId: number;
 	input: MeleeConfigInput;
 	originConnectionId?: string;
+	/**
+	 * The request being answered, carried in only so the upstream-outage refusal below
+	 * can set `retry-after` on it (#346). `requestEvent` rather than `event` for the
+	 * reason the sibling commands in this module use that name: `eventId` beside it
+	 * means a tournament Event.
+	 */
+	requestEvent: H3Event;
 }
 
 function throwMeleeCredentialCryptoError(error: MeleeCredentialCryptoError): never {
@@ -46,7 +54,7 @@ function throwInvalidMeleeConfiguration(): never {
  * against sync commands via the sync lease so a stale command cannot
  * repopulate data after the boundary changed.
  */
-export async function updateMeleeConfiguration({ eventId, input, originConnectionId }: UpdateMeleeConfigurationParams) {
+export async function updateMeleeConfiguration({ eventId, input, originConnectionId, requestEvent }: UpdateMeleeConfigurationParams) {
 	const eventSvc = eventService();
 	// Configuration changes can delete imported data and swap the upstream Event.
 	// Serialize them with sync commands so a stale command cannot repopulate data
@@ -108,6 +116,15 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 						&& error.upstreamStatus !== null
 						&& [400, 401, 403, 404, 422].includes(error.upstreamStatus);
 					if (!rejectedConfiguration) {
+						// The sentence says *temporarily*, so the response owes the caller an
+						// interval: #346, the same defect #337 fixed at the author-session 503.
+						// The number is the 5 seconds every retryable site here uses — a floor
+						// on how hard to retry, not an estimate of when Melee.gg returns, and it
+						// is the same for both statuses below because a timeout and a bad
+						// gateway are the same advice to a caller. Set inside this branch rather
+						// than the enclosing `MeleeTransportError` one on purpose: the refusal
+						// below it is credentials Melee.gg rejected, which no waiting resolves.
+						setResponseHeader(requestEvent, 'retry-after', 5);
 						throw createError({
 							statusCode: error.category === 'timeout' ? 504 : 502,
 							statusMessage: error.category === 'timeout' ? 'Gateway Timeout' : 'Bad Gateway',

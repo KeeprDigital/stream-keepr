@@ -11,5 +11,6 @@ export default defineEventHandler(async (event) => {
 		eventId: id,
 		input: body,
 		originConnectionId: getOriginConnectionId(event),
+		requestEvent: event,
 	});
 });

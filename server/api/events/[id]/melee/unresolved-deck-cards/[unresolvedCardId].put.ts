@@ -18,5 +18,6 @@ export default defineEventHandler(async (event) => {
 		eventId,
 		unresolvedCardId,
 		scryfallId: body.scryfallId,
+		requestEvent: event,
 	});
 });

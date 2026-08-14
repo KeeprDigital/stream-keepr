@@ -1,4 +1,5 @@
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { H3Event } from 'h3';
 import type { DbPlayerDeckUnresolvedCard, DeckListCompartment } from '~~/server/db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
@@ -24,6 +25,13 @@ export interface ResolveUnresolvedDeckCardInput {
 	eventId: number;
 	unresolvedCardId: number;
 	scryfallId: string;
+	/**
+	 * The request being answered, carried in only so the upstream-outage refusal below
+	 * can set `retry-after` on it (#346). Named for the HTTP request rather than
+	 * `event`, because `eventId` beside it means a tournament Event — the same
+	 * disambiguation `melee-sync` makes with `requestEvent`.
+	 */
+	requestEvent: H3Event;
 }
 
 export interface ResolveUnresolvedDeckCardResult {
@@ -99,6 +107,7 @@ export function deckListResolutionModule() {
 		eventId,
 		unresolvedCardId,
 		scryfallId,
+		requestEvent,
 	}: ResolveUnresolvedDeckCardInput): Promise<ResolveUnresolvedDeckCardResult> {
 		await requireMeleeSyncEventData(eventId);
 
@@ -139,6 +148,13 @@ export function deckListResolutionModule() {
 				});
 			}
 
+			// The sentence says *temporarily*, so the response owes the caller an
+			// interval: #346, the same defect #337 fixed at the author-session 503. The
+			// number is the 5 seconds every retryable site here uses — a floor on how
+			// hard to retry, not an estimate of when Scryfall returns. Set inside this
+			// branch rather than the enclosing catch on purpose: the 400 above is a card
+			// ID the provider does not have, and no amount of waiting resolves that.
+			setResponseHeader(requestEvent, 'retry-after', 5);
 			throw createError({
 				statusCode: 502,
 				statusMessage: 'Bad Gateway',
