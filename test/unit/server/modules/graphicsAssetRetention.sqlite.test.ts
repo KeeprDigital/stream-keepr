@@ -902,6 +902,54 @@ describe('scheduled Graphics Asset Library retention', () => {
 				[first.id, undefined],
 			]);
 		});
+
+		it('releases nothing for a candidate whose expiry did not commit', async () => {
+			// The expiry is the sweep's claim on the operation, and it is refused
+			// whenever a durable checkpoint advanced since the candidate was listed.
+			// Releasing the objects ahead of that claim would delete the staged
+			// input of an operation that had just resumed, so a refused claim has to
+			// leave the staging store untouched.
+			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
+			const context = createRetentionLibrary({
+				catalogue: { ...catalogue, async expireStagedInput() {
+					return false;
+				} },
+			});
+			const resumed = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'claim-refused-keeps-objects',
+				initiatedBy: 'retention-author',
+				name: 'Resumed transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.canonical.injectTransientFailure('create', 2);
+			await context.library.uploadGraphicAsset({
+				operationId: resumed.id,
+				initiatedBy: resumed.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			const identity = graphicsObjectIdentity(`ingestion/${resumed.id}/source`);
+
+			context.advance(8 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			expect(await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			})).toEqual([]);
+		});
 	});
 
 	describe('revision pruning', () => {
