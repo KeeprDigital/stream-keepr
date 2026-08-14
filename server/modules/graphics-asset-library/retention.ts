@@ -327,8 +327,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 
 	/**
 	 * Releases every staging object one operation may own, and reports whether
-	 * every abort and delete landed. Object-store unavailability withholds the
-	 * flag so a caller never reports reclaimed bytes that still exist.
+	 * every abort and delete landed. Only object-store unavailability withholds
+	 * the flag, because it is the one outcome that leaves bytes behind: a false
+	 * answer means bytes this sweep did not reclaim are still in the store.
 	 */
 	async function releaseStagedObjects(
 		operationId: GraphicsIngestionOperationId,

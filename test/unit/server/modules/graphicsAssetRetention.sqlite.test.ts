@@ -904,11 +904,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('releases nothing for a candidate whose expiry did not commit', async () => {
-			// The expiry is the sweep's claim on the operation, and it is refused
-			// whenever a durable checkpoint advanced since the candidate was listed.
-			// Releasing the objects ahead of that claim would delete the staged
-			// input of an operation that had just resumed, so a refused claim has to
-			// leave the staging store untouched.
+			// A refused claim has to leave the staging store untouched; the order
+			// this pins, and why it is that way round, is stated where it is
+			// decided, above the release call in expireStagedInput.
 			const catalogue = {
 				...createD1GraphicsAssetCatalogue(harness.database),
 				async expireStagedInput() {

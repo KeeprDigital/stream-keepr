@@ -97,6 +97,22 @@ reclaimed, and that it stops:
 
 So an expiry entry showing reserved bytes is the one case where the staging
 store holds objects the catalogue no longer accounts for. Nothing else reclaims
-them: reconciliation scans canonical objects, not staging ones. Check staging
-usage against the operational retention view after a staging outage, and clear
-any leftover `ingestion/<operationId>/…` objects by hand.
+them: reconciliation scans canonical objects, not staging ones.
+
+Neither storage figure can find them, which is what makes the entry the only
+lead. The retention view above carries deadlines and canonical pressure, not
+staging usage, and its staged-input list holds only operations that still have
+staged input to lose — an expired one has left it. Capacity's staging
+`usedBytes` is the sum of every operation's `staging_used_byte_length`, and the
+same statement that expires the operation sets that column to zero, so the bytes
+leave the figure at the instant they strand.
+
+Recovering the space after a staging outage therefore starts at the ledger. Read
+it over the outage window filtered to the expiry category
+(`GET /api/admin/graphics-assets/evidence?category=staged-input-expired`, or
+`?group=ingestion`), take the operation identity from every entry showing
+**Bytes reserved** rather than **Bytes freed**, and remove that operation's
+`ingestion/<operationId>/source` and `ingestion/<operationId>/video-poster`
+from the staging bucket directly. Where the operation was mid-multipart, what
+survives under the `source` key is an unfinished upload rather than a stored
+object, and it is aborted rather than deleted.
