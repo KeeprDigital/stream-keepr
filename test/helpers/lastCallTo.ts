@@ -139,12 +139,15 @@ export function lastCallTo<Args extends unknown[]>(
  * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
  * ```
  *
- * The `.map` in that example is load-bearing and not decoration. The count enforced here
- * is a run-time fact the compiler knows nothing about, so destructuring the returned list
- * directly is an indexed read like any other under `noUncheckedIndexedAccess` — `TS18048:
- * possibly 'undefined'`, which #342 earned by writing it the other way and which only the
- * Nuxt typecheck program reported. Read each call's argument through `.map` (or accept the
- * bang this file exists to remove).
+ * The count enforced here is a run-time fact the compiler knows nothing about, so
+ * destructuring the returned list is an indexed read like any other under
+ * `noUncheckedIndexedAccess`: `TS18048: possibly 'undefined'`. The example above escapes
+ * that only because its `.map` yields `any` — #342 wrote the same shape with a cast in the
+ * callback, which restored a real element type and reported the identical error a second
+ * time. So `.map` is not the rule; the rule is that a positional read of this function's
+ * result wants a bang, and the shape that wants nothing is asserting on the mapped list
+ * itself (`expect(calls.map(…)).toEqual([…])`). Both errors came from the Nuxt typecheck
+ * program alone — the suite, the single-file run and eslint were all silent.
  *
  * The selector carries `lastCallTo`'s meaning unchanged: name the call where anything
  * else can reach the subject, and leave it off only for a purpose-built mock the code
