@@ -27,6 +27,7 @@
 
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
+import { checkStillImagePublication } from './graphics-acceptance/assertions.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	acceptanceOrigin,
@@ -62,42 +63,6 @@ const FORMATS = [
 	},
 ];
 
-/**
- * What one settled operation must look like, reduced to stable codes. Issue
- * codes are contract vocabulary and safe to print; identities are not, and
- * none travels here.
- */
-function judge({ format, bytes, settled }) {
-	if (settled.stage !== 'completed' || settled.report?.outcome !== 'accepted' || !settled.result) {
-		return [{
-			code: 'still-image-ingestion-refused',
-			detail: {
-				format,
-				stage: settled.stage,
-				outcome: settled.report?.outcome,
-				issues: (settled.report?.issues ?? []).map(issue => issue.code).join(',') || undefined,
-			},
-		}];
-	}
-	const facts = settled.report.facts;
-	const expected = {
-		format,
-		width: 1,
-		height: 1,
-		byteLength: bytes.byteLength,
-	};
-	const wrong = Object.entries(expected)
-		.filter(([key, value]) => facts?.[key] !== value)
-		.map(([key]) => key);
-	if (wrong.length > 0) {
-		return [{
-			code: 'still-image-ingestion-facts-unexpected',
-			detail: { format, fields: wrong.join(',') },
-		}];
-	}
-	return [];
-}
-
 await runAcceptanceHarness({
 	harness: HARNESS,
 	async run({ record }) {
@@ -114,7 +79,10 @@ await runAcceptanceHarness({
 					bytes,
 				});
 				staged.push(publication);
-				record(judge({ format, bytes, settled: publication.settled }));
+				record(checkStillImagePublication(publication.settled, {
+					format,
+					byteLength: bytes.byteLength,
+				}));
 			}
 		}
 		finally {
