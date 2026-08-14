@@ -1188,6 +1188,7 @@ onMounted(async () => {
 							color="error"
 							variant="soft"
 							icon="i-lucide-triangle-alert"
+							data-testid="selection-error"
 							:title="selectionError"
 						/>
 						<UButton
@@ -1261,6 +1262,7 @@ onMounted(async () => {
 								color="error"
 								variant="soft"
 								icon="i-lucide-triangle-alert"
+								data-testid="remote-selection-error"
 								:title="remoteSelectionError"
 							/>
 							<UButton
