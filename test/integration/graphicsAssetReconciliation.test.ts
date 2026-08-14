@@ -104,7 +104,48 @@ describe('the Graphics Asset Library reconciliation API', () => {
 		});
 	});
 
-	it('reports agreement for a healthy library and invents no catalogue state', async () => {
+	/**
+	 * Scoped to the fixture this test publishes, because the reconciliation sweep
+	 * reads the whole library and every integration suite publishes into the same
+	 * one. The sweep's counters and the overview's open list therefore describe
+	 * rows other files left behind as much as this suite's own, and #123 records
+	 * this test failing on exactly that: one open `unavailable-content`
+	 * discrepancy with `affectedUsage: []`, over orphaned content nothing here
+	 * created. So this pins agreement about one Graphic Asset, not a healthy
+	 * library — an unhealthy library is precisely what it now tolerates.
+	 *
+	 * `affectedUsage` is what makes the scoping possible, and its bound is what
+	 * keeps the claim honest. It is built from the revisions and derivatives
+	 * reaching the content (`listContentUsageForDigests` unions the two), so a
+	 * disagreement about content this asset reaches always names it, while a
+	 * foreign orphan — content no revision reaches, the shape that bled in — never
+	 * can.
+	 *
+	 * The bound: `unexpected-object` discrepancies are bytes the catalogue has no
+	 * row for, so they are in neither half of that union and carry an empty
+	 * `affectedUsage` by construction. **That kind is not covered here**, and it
+	 * cannot be, because a discrepancy deliberately exposes no content digest —
+	 * see the type's own docblock — so there is nothing on the response to match
+	 * this suite's bytes against. It was never really covered before either: the
+	 * library-wide counter that used to stand in for it is the thing that bled.
+	 * What covers the case that matters — this asset's bytes going missing however
+	 * it happened — is the revision status read at the end, which reads the bytes
+	 * themselves.
+	 *
+	 * Paging is a weaker guarantee than it looks, too. The overview takes fifty per
+	 * kind ordered `isolated DESC, detected_at DESC, id DESC`, so newest-first is
+	 * only a tiebreak below isolation: a fresh disagreement about this fixture
+	 * leads its kind unless fifty isolated rows of that same kind precede it, which
+	 * makes it unlikely to be paged off rather than impossible. (`unexpected-object`
+	 * is ordered by quarantine deadline ascending, where a fresh row sorts last —
+	 * another reason the bound above is the honest statement for that kind.)
+	 *
+	 * The two library-wide counters this used to assert (`unavailableDetected` and
+	 * `criticalIntegrityIncidents`) have no scoped form — they are counts over
+	 * whatever the batch happened to contain — so the discrepancy list is where
+	 * both of those kinds are now caught.
+	 */
+	it('reports agreement for the Graphic Asset it publishes and invents no state about it', async () => {
 		const operation = await ingest('Reconciliation logo', 'reconciliation-healthy');
 		expect(operation.stage).toBe('completed');
 		const assetId = operation.result!.assetId;
@@ -114,24 +155,29 @@ describe('the Graphics Asset Library reconciliation API', () => {
 			{ method: 'POST', headers: administratorHeaders },
 		);
 		expect(sweep.content.checked).toBeGreaterThan(0);
-		expect(sweep.content.unavailableDetected).toBe(0);
-		expect(sweep.criticalIntegrityIncidents).toBe(0);
 
-		// Content this library just published is expected, so the scan of the byte
-		// store never quarantines it as unexpected.
+		// Content this library just published is expected, so nothing the
+		// reconciliation sweep opens names this asset.
 		const overview = await $fetch<GraphicsReconciliationOverview>(
 			'/api/admin/graphics-assets/reconciliation',
 			{ headers: administratorHeaders },
 		);
-		expect(overview.discrepancies).toEqual([]);
+		expect(overview.discrepancies.filter(
+			discrepancy => discrepancy.affectedUsage.some(usage => usage.assetId === assetId),
+		)).toEqual([]);
 		expect(overview.lastSweep?.correlationId).toBe(sweep.correlationId);
 
-		// The asset it just checked is still exactly as it was published.
+		// The asset it just checked is still exactly as it was published. This route
+		// reads the bytes rather than the catalogue's advisory availability flag, so
+		// it fails on a sweep that quarantined or discarded them even in the cases no
+		// discrepancy would have named this asset at all — the `unexpected-object`
+		// bound above being the one that matters.
 		const status = await fetch(
 			`/api/graphics-assets/${assetId}/revisions/${operation.result!.revisionId}/status`,
 			{ headers: authorHeaders },
 		);
 		expect(status.status).toBe(200);
+		expect(await status.json()).toMatchObject({ outcome: 'available' });
 	});
 
 	it('reports an unknown discrepancy identity as not found on every action', async () => {
