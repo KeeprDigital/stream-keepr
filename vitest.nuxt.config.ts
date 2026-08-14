@@ -6,6 +6,9 @@ export default defineVitestConfig({
 		name: 'nuxt',
 		include: ['test/nuxt/**/*.test.ts'],
 		environment: 'nuxt',
+		// Quarantines the app's own background `$fetch` writers away from suite
+		// mocks (#367); see the file's docblock for the contract and opt-outs.
+		setupFiles: ['./test/nuxt/setup.ts'],
 		execArgv: ['--no-experimental-webstorage'],
 		hookTimeout: 30000,
 		restoreMocks: true,
