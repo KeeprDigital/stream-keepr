@@ -909,12 +909,13 @@ describe('scheduled Graphics Asset Library retention', () => {
 			// Releasing the objects ahead of that claim would delete the staged
 			// input of an operation that had just resumed, so a refused claim has to
 			// leave the staging store untouched.
-			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-			const context = createRetentionLibrary({
-				catalogue: { ...catalogue, async expireStagedInput() {
+			const catalogue = {
+				...createD1GraphicsAssetCatalogue(harness.database),
+				async expireStagedInput() {
 					return false;
-				} },
-			});
+				},
+			};
+			const context = createRetentionLibrary({ catalogue });
 			const resumed = await context.library.initiateGraphicsIngestion({
 				idempotencyKey: 'claim-refused-keeps-objects',
 				initiatedBy: 'retention-author',
