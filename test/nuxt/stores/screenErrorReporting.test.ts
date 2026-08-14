@@ -219,6 +219,18 @@ describe('useScreenStore error reporting', () => {
 		expect(store.error).toBe(`${LIST_REQUEST}: 409 Conflict`);
 	});
 
+	it('falls back to a static line where the throw was not an Error at all', async () => {
+		// The one case on which the two spellings of this could have disagreed. #341
+		// replaced a hand-written expansion of `reportedMessage`'s ordering with the
+		// util itself, and the fallback is the branch that expansion reached last:
+		// no sentence, and nothing carrying a message to show instead.
+		mockRepo.list.mockRejectedValue('the repository threw a string');
+
+		await store.loadScreensByEventId(1);
+
+		expect(store.error).toBe('An error occurred');
+	});
+
 	it('keeps its own message for a failure that never reached the server', async () => {
 		// No status means nothing about it was written by the authority, so none of it
 		// may be quoted as though it were.

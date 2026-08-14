@@ -190,12 +190,17 @@ export function isSanitizedFailure(caught: unknown): boolean {
  * Filed as #299: eight call sites across seven surfaces had written this out, four with
  * a fallback and four without, and #286 had to be applied to every one of them by hand.
  * The seam is here so the next discrimination between quotable and unquotable prose is
- * made once. Three further `failureSentence` call sites deliberately do **not** use this
- * and are worth naming,
- * because each looks like an oversight and is not: `stores/metagame.ts` wants the
- * static line for *any* unsentenced failure rather than the transport's, `stores/screen.ts`
- * re-raises rather than reports (that shape is `withFailureSentence` below), and
+ * made once. Two further `failureSentence` call sites deliberately do **not** use this and
+ * are worth naming, because each looks like an oversight and is not: `stores/metagame.ts`
+ * wants the static line for *any* unsentenced failure rather than the transport's, and
  * `useRequestFeedback`'s `getErrorMessage` reads five more fields after this one.
+ *
+ * `stores/screen.ts` was a third until #341, on the reading that it re-raises rather than
+ * reports. It does both: its three loaders report to the store's own `error` and now ask
+ * this, and its writes re-raise through `withFailureSentence` below, which is the shape it
+ * had written out by hand. Neither half was an exception to the seam — the store was one
+ * surface doing both jobs, and the census could not see it because it reached this file
+ * indirectly through the copies.
  */
 export function reportedMessage(caught: unknown, fallback: string): string;
 export function reportedMessage(caught: unknown, fallback?: string): string | undefined;

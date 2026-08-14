@@ -31,49 +31,40 @@ export const useScreenStore = defineStore('screen', () => {
 	}
 
 	/**
-	 * Report a failure in the words the authority wrote about it, where it wrote any.
+	 * What a failed load says to whoever is looking at the Screens page.
 	 *
-	 * Everything this store surfaces ends at an `Error.message`, and for a `$fetch`
-	 * failure that message is the transport's status line — `[GET] "…": 409 Conflict` —
-	 * which names neither what was refused nor what an operator can do about it. The
-	 * sentence about the show is in the response body, and `failureSentence` owns when
-	 * it may be quoted: a sub-500 status, or a 5xx whose prose the server preserved
-	 * through sanitizing (#286), since every other 5xx carries a placeholder written
-	 * over whatever actually failed and a failure with no status never reached the
-	 * server at all. #245 did this for the live-session store; this is the same adoption for
-	 * the Screen store, whose `error` is what the Screens page shows (#262).
+	 * The sentence the authority wrote about the refusal where it wrote one; otherwise
+	 * the failure's own message, which for a `$fetch` failure is the transport's status
+	 * line — `[GET] "…": 409 Conflict` — and reads as machinery rather than as words
+	 * anyone chose. `reportedMessage` owns that ordering, and `failureSentence` owns
+	 * which bodies may be quoted at all. #245 did this for the live-session store; this
+	 * is the same adoption for the Screen store, whose `error` is what the Screens page
+	 * shows (#262).
+	 *
+	 * Read here rather than raised into the failure, unlike the writes below, because
+	 * all three loaders report to `error` themselves rather than through the reporting
+	 * seam — and `loadScreenBySlug` re-raises what it caught, where narrowing the
+	 * failure to a fresh `Error` would take a status its caller may one day want.
 	 */
-	function reportedFailure(caught: unknown): unknown {
-		const sentence = failureSentence(caught);
-		return sentence === undefined ? caught : new Error(sentence, { cause: caught });
-	}
-
 	function loadErrorMessage(caughtError: unknown) {
-		const reported = reportedFailure(caughtError);
-		return reported instanceof Error ? reported.message : 'An error occurred';
+		return reportedMessage(caughtError, 'An error occurred');
 	}
 
 	/**
-	 * `executeAction`, with the substitution above applied to whatever the action threw.
+	 * `executeAction`, with the authority's own sentence substituted into whatever the
+	 * action threw.
 	 *
-	 * The substitution is inside the action rather than around the whole call so the
-	 * two things downstream of it stay right: `onError` rollbacks and the deferred
-	 * rejections a debounced config write answers its caller with get the same failure
-	 * the banner does, and the conflict-retry inside each action still reads the raw
-	 * `FetchError`'s status, because it is nested further in than this.
+	 * The substitution is `withFailureSentence`, inside the action rather than around
+	 * the whole call so the two things downstream of it stay right: `onError` rollbacks
+	 * and the deferred rejections a debounced config write answers its caller with get
+	 * the same failure the banner does, and the conflict-retry inside each action still
+	 * reads the raw `FetchError`'s status, because it is nested further in than this.
 	 *
 	 * Handed to the runtime Module as its `executeAction` so that every Screen write
 	 * reports through one seam. Two seams that must agree are two seams that can drift.
 	 */
 	const executeReporting: ExecuteAction = (action, options) => executeAction(
-		async () => {
-			try {
-				return await action();
-			}
-			catch (failure) {
-				throw reportedFailure(failure);
-			}
-		},
+		() => withFailureSentence(action),
 		options,
 	);
 

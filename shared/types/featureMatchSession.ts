@@ -99,6 +99,18 @@ export interface FeatureMatchSourceSnapshot {
 	defaults: FeatureMatchDefaults;
 	player1: FeatureMatchSnapshotPlayer;
 	player2: FeatureMatchSnapshotPlayer;
+	/**
+	 * When this Session's snapshot was **first taken** — not when it was last rebuilt.
+	 *
+	 * `buildSourceSnapshot` stamps `Date.now()` every time it runs, and it runs again
+	 * for every `SnapshotCorrected`. Left at that, the field answered "when did the last
+	 * correction happen", which nothing asks and which moved even when a reverse sync
+	 * found nothing about the Slot changed. So the reducer restores the held value when
+	 * it applies a correction, and the stamp a rebuild carries is discarded (#332).
+	 *
+	 * The two questions this is *not* for are answered by the Session row itself, which
+	 * carries `createdAt` and `updatedAt` columns of its own.
+	 */
 	createdAt: number;
 	/**
 	 * Whether this Session presents its players in the opposite order to the Slot

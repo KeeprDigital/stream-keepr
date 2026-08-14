@@ -53,23 +53,42 @@ export function normalizeFeatureMatchSessionCommandPayload(
 }
 
 /**
- * Re-apply a Session's player orientation to a snapshot rebuilt from its Slot.
+ * A snapshot rebuilt from the Slot, with the facts that belong to the Session put back.
  *
- * A `SnapshotCorrected` payload always comes from `buildSourceSnapshot`, which
- * reads the Slot row and so knows nothing about `SwapPlayers` — it arrives in
- * Slot order every time. Orientation belongs to the Session, so the correction
- * carries the Slot's facts and the Session keeps its own sides.
+ * A `SnapshotCorrected` payload always comes from `buildSourceSnapshot`, which reads
+ * the Slot row: it carries the Slot's facts, and everything a Session knows about
+ * itself is absent or freshly invented. Two such facts exist, and both are restored
+ * here rather than at the two call sites that raise a correction — `featureMatch`'s
+ * update and `playerFeatureMatchSync`'s reverse sync — because a third cannot then
+ * forget one.
+ *
+ * **Orientation.** `buildSourceSnapshot` knows nothing about `SwapPlayers`, so a
+ * rebuild arrives in Slot order every time. Which side a player sits on belongs to the
+ * Session, so the correction carries the Slot's facts and the Session keeps its sides.
+ *
+ * **Creation time.** `createdAt` is stamped `Date.now()` on every build, so a rebuild
+ * arrives claiming the Session's snapshot was first taken at the moment of the
+ * correction. It means *first taken*, and a correction is not a taking: it revises a
+ * snapshot the Session has been holding since it opened. Before #332 every correction
+ * moved it, including the ones raised by a reverse sync where nothing about the Slot
+ * had changed. The questions that *are* about a moving time are the Session row's own:
+ * its `createdAt` and `updatedAt` columns say when the Session opened and when it last
+ * advanced, and neither of those is what this field is for.
  */
-function orientSourceSnapshot(snapshot: FeatureMatchSourceSnapshot, swapped: boolean): FeatureMatchSourceSnapshot {
-	if (!swapped)
-		return snapshot;
+function correctedSourceSnapshot(
+	rebuilt: FeatureMatchSourceSnapshot,
+	held: FeatureMatchSourceSnapshot,
+): FeatureMatchSourceSnapshot {
+	const oriented = (held.playersSwapped ?? false)
+		? {
+				...rebuilt,
+				player1: rebuilt.player2,
+				player2: rebuilt.player1,
+				playersSwapped: true,
+			}
+		: rebuilt;
 
-	return {
-		...snapshot,
-		player1: snapshot.player2,
-		player2: snapshot.player1,
-		playersSwapped: true,
-	};
+	return { ...oriented, createdAt: held.createdAt };
 }
 
 export function applyFeatureMatchSessionEvent(
@@ -88,9 +107,9 @@ export function applyFeatureMatchSessionEvent(
 	if (type === 'SnapshotCorrected') {
 		return {
 			currentState,
-			sourceSnapshot: orientSourceSnapshot(
+			sourceSnapshot: correctedSourceSnapshot(
 				payload.sourceSnapshot as FeatureMatchSourceSnapshot,
-				sourceSnapshot.playersSwapped ?? false,
+				sourceSnapshot,
 			),
 		};
 	}
