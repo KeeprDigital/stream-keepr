@@ -167,6 +167,37 @@ describe('useScreenStore error reporting', () => {
 		vi.useRealTimers();
 	});
 
+	it('carries a refused mode-config write’s sentence the same way, from its own queue', async () => {
+		// The Module has five `state.executeAction(` sites, and this is the one that was
+		// left unpinned — third of the five in file order, and the first of the two
+		// debounced queues. It reports through the same seam as the Screen-config queue
+		// above and shares its debounce, its `writeQueue` and its `errorRef`/`onError`
+		// options; what differs is the mode it carries, which its repository call takes
+		// as an argument and its queue key includes. #353's adoption row killed the other
+		// four and left this one alive, because the only tests reaching it asserted the
+		// batching — nothing said a refusal here reaches `errorRef` or the caller at all
+		// (#365). It almost certainly always did; unpinned is the defect, and a second
+		// queue is exactly the thing an edit can drift.
+		vi.useFakeTimers();
+		store.screens = [createMockScreen({ id: 5, stateVersion: 1 })];
+		// Not a 409, for the reason the row above gives: that status belongs to the
+		// conflict retry, and what this pins is the reporting seam.
+		mockRepo.updateModeConfig.mockRejectedValue(explainedRefusal(
+			403,
+			'Forbidden',
+			'This Event has been archived',
+			`[PATCH] "/api/events/1/screens/5/config/card"`,
+		));
+
+		const write = store.updateModeConfig(1, 5, 'card', { scale: 2 });
+		const settled = expect(write).rejects.toThrow('This Event has been archived');
+		await vi.advanceTimersByTimeAsync(300);
+		await settled;
+
+		expect(store.error).toBe('This Event has been archived');
+		vi.useRealTimers();
+	});
+
 	it('leaves the conflict retry able to recognise the conflict it retries', async () => {
 		// Where the substitution sits is load-bearing, and true by construction is not
 		// pinned: it wraps the whole action, so `withConflictRetry` — nested further in —

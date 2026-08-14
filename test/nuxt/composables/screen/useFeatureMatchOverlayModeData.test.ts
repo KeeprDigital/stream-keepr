@@ -146,13 +146,15 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 * later rejection can restore the state an earlier one should never have left.
 	 * Asserting once at the end let a completely open guard pass this test (#351).
 	 *
-	 * The empty push comes last, after a real one has been accepted, for the same
-	 * reason from the other direction: wrongly adopting it clears the override, and
-	 * against a frame that had adopted nothing yet that is indistinguishable from
-	 * having rejected it. Only a working configuration it can be seen to wipe makes
-	 * that arm observable at all.
+	 * The fourth arm is not a sender check at all, and the name says so: the empty push
+	 * comes *from* the embedding editor, and what makes it inadmissible is that it
+	 * carries no configuration. It comes last, after a real one has been accepted, for
+	 * the same reason from the other direction: wrongly adopting it would take the
+	 * preview back off the working configuration it is showing, and against a frame that
+	 * had adopted nothing yet that is indistinguishable from having rejected it. Only a
+	 * working configuration it can be seen to wipe makes that arm observable at all.
 	 */
-	it('ignores a working configuration pushed by anyone but the embedding editor', async () => {
+	it('takes a working configuration only from the embedding editor, and never an empty push', async () => {
 		const { wrapper, data } = mountOverlay({
 			isPreview: ref(true),
 			previewGuides: ref(false),

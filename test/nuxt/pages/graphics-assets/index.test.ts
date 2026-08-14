@@ -176,6 +176,24 @@ mockNuxtImport('useFetch', () => (path: string) => ({
 const passthroughStub = defineComponent({
 	template: '<div><slot name="actions" /><slot name="header" /><slot /><slot name="footer" /></div>',
 });
+/**
+ * The passthrough, plus the one prop `UAlert` reads as prose rather than as a slot.
+ *
+ * A slots-only stand-in dropped `title`, which made every alert passing its message
+ * that way unassertable: the surface rendered nothing, so an assertion naming it
+ * either failed for the wrong reason or passed off some other element carrying the
+ * same words (#365, from #350's review). `description` is deliberately still
+ * dropped — no alert on this page routes a failure through it, and a stub that
+ * renders every prop stops telling a reader which one the page actually used.
+ *
+ * It is a stub of its own rather than a `title` on `passthroughStub` so the prop
+ * stays an alert's concern: `UCard`, `UFormField`, `UIcon` and `NuxtLayout` share
+ * that one, and none of them passes a `title` today.
+ */
+const alertStub = defineComponent({
+	props: ['title'],
+	template: '<div><slot name="actions" /><slot name="header" /><span v-if="title">{{ title }}</span><slot /><slot name="footer" /></div>',
+});
 const fileUploadStub = defineComponent({
 	props: ['modelValue'],
 	emits: ['update:modelValue'],
@@ -202,7 +220,7 @@ async function mountPage() {
 		global: {
 			stubs: {
 				NuxtLayout: passthroughStub,
-				UAlert: passthroughStub,
+				UAlert: alertStub,
 				UBadge: badgeStub,
 				UButton: buttonStub,
 				UCard: passthroughStub,
@@ -1115,16 +1133,24 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * write goes through `$fetch` inside a `catch` and was reported by the graphics author
 	 * session's `describeFailure`, which reached for `Error.message` — so the two halves of
 	 * one page answered a refusal differently, and the half that refuses most of what an
-	 * author actually does was the one naming the route. The two surfaces pinned below are
-	 * the ones already carrying a `data-testid`; the rest reach the same seam and are
-	 * covered where it lives, in `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
+	 * author actually does was the one naming the route. The page has nine such catches
+	 * and five error surfaces they write to; one catch per surface is pinned below, and
+	 * the remaining four reach the same seam and are covered where it lives, in
+	 * `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
 	 *
-	 * That is a gap worth naming rather than a property of the page. The lifecycle alert
-	 * renders its message in the default slot and wants only the attribute, which the rule
-	 * above says every alert should carry; the metadata and replacement alerts pass theirs
-	 * as `:title`, which the passthrough stub drops, so those two want the stub taught the
-	 * prop before an assertion on them could fail. Filed as follow-up rather than widened
-	 * into here.
+	 * #350 could pin only the two surfaces that already carried a `data-testid`, and named
+	 * the reason: the lifecycle alert renders its message in the default slot and wanted
+	 * only the attribute, which the rule below says every alert should carry; the metadata
+	 * and replacement alerts pass theirs as `:title`, which the passthrough stub dropped,
+	 * so an assertion on either could not have failed. #365 gave all three their attribute
+	 * and gave `UAlert` a stub that renders `title` — the stub first, because a pin written
+	 * before it would have been the vacuous thing the rule below is about.
+	 *
+	 * The lifecycle testid interpolates its asset id and the other two do not, which is a
+	 * fact about where each error lives rather than a convention: `lifecycleErrorByAssetId`
+	 * is a map, so several assets can hold a lifecycle failure at once, while
+	 * `metadataError` and `replacementError` are single refs behind single-valued
+	 * `editingAssetId`/`replacementAssetId` gates — one panel open, one message, one node.
 	 */
 	it('says why an upload was refused rather than naming the route', async () => {
 		const wrapper = await mountPage();
@@ -1164,19 +1190,82 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(alert.text()).toContain('The Graphics Asset Library store is unavailable');
 		expect(alert.text()).not.toContain('503 Service Unavailable');
 	});
+
+	it('says why a lifecycle action was refused rather than naming the route', async () => {
+		const wrapper = await mountPage();
+		mockApiFetch.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'This Graphic Asset is on air and cannot be retired' },
+			request: `[POST] "/api/graphics-assets/asset-1/lifecycle-actions"`,
+		}));
+
+		const retire = wrapper.findAll('button').find(button => button.text() === 'Retire');
+		await retire!.trigger('click');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="lifecycle-error-asset-1"]');
+		expect(alert.text()).toContain('This Graphic Asset is on air and cannot be retired');
+		expect(alert.text()).not.toContain('409 Conflict');
+	});
+
+	it('says why a metadata save was refused rather than naming the route', async () => {
+		const wrapper = await mountPage();
+		mockApiFetch.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'Another author renamed this Graphic Asset first' },
+			request: `[PATCH] "/api/graphics-assets/asset-1"`,
+		}));
+
+		const edit = wrapper.findAll('button').find(button => button.text().includes('Edit metadata'));
+		await edit!.trigger('click');
+		const save = wrapper.findAll('button').find(button => button.text().includes('Save metadata'));
+		await save!.trigger('click');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="metadata-error"]');
+		expect(alert.text()).toContain('Another author renamed this Graphic Asset first');
+		expect(alert.text()).not.toContain('409 Conflict');
+	});
+
+	it('says why a replacement was refused rather than naming the route', async () => {
+		const replacementFile = new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' });
+		const wrapper = await mountPage();
+		// Not the capacity-load test's sentence, which this file already contains twice:
+		// a kill attributed by assertion value could not have told the two apart.
+		mockApiFetch.mockRejectedValue(transportFailure({
+			status: 507,
+			statusText: 'Insufficient Storage',
+			body: { message: 'Canonical byte store cannot hold another Graphic Asset Revision' },
+			request: `[POST] "/api/graphics-assets/asset-1/replacement-operations"`,
+		}));
+
+		const replace = wrapper.findAll('button').find(button => button.text().includes('Replace content'));
+		await replace!.trigger('click');
+		wrapper.findAllComponents(fileUploadStub).at(-1)!.vm.$emit('update:modelValue', replacementFile);
+		await flushPromises();
+		const publish = wrapper.findAll('button')
+			.find(button => button.text().includes('Replace with new Graphic Asset Revision'));
+		await publish!.trigger('click');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="replacement-error"]');
+		expect(alert.text()).toContain('Canonical byte store cannot hold another Graphic Asset Revision');
+		expect(alert.text()).not.toContain('507 Insufficient Storage');
+	});
 });
 
 /**
  * **Assert on the element under test, not on `wrapper.text()`.**
  *
  * `wrapper.text()` proves *something on the page* says it, which is not the same
- * claim and is weaker than it looks here. `UAlert` is stubbed by a passthrough
- * that renders slots only, so any alert passing its message as `:description`
- * renders nothing at all — and an assertion naming that alert passes anyway, off
- * whichever other element happens to carry the same words. This suite shipped
- * exactly that: two cases named for the remote-copy alert passed off the
+ * claim and is weaker than it looks here. `UAlert` is stubbed, and the stub renders
+ * the slots and `title` and nothing else — so any alert passing its message as
+ * `:description` renders nothing at all, and an assertion naming that alert passes
+ * anyway, off whichever other element happens to carry the same words. This suite
+ * shipped exactly that: two cases named for the remote-copy alert passed off the
  * top-level lapsed banner, and replacing the remote-copy message with a literal
- * left all twenty-four green.
+ * left all twenty-four green. (`title` was in that list until #365, which is why
+ * three surfaces could not be pinned at all; `:description` still is.)
  *
  * So every alert below carries a `data-testid` and every assertion reads it. The
  * rule generalises past the stub: an assertion that cannot fail when the thing it
