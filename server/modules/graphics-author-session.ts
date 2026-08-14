@@ -164,7 +164,7 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * report this site rather than drop it, the day a route's own import graph reaches
  * this file; and the `carriesCause` census added by #339 cannot read a status here
  * to hold it to, so this site satisfies that guard by being unreadable rather than
- * by naming a cause. It does name one — `cause: failure`, three lines below — and
+ * by naming a cause. It does name one — `cause: failure` in the call below — and
  * the pins for that are in `test/unit/server/modules/graphicsAuthorSession.test.ts`.
  * Spelling the status as a literal 503 would make both readable; it would also put
  * the number in two places, which is what the property access exists to avoid.
