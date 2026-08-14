@@ -76,3 +76,27 @@ If content becomes reachable while its bytes are being deleted, the sweep marks
 it Unavailable Graphic Asset Content and records a `content-deletion-conflict`
 Evidence entry rather than losing a reachable identity silently. That is a repair
 case, not a data-loss case: the identity and its references stay intact.
+
+## Staged input the sweep could not release
+
+Staged input expiry cannot be two-phase the same way. Expiring the operation is
+what claims it — the update only lands if no durable checkpoint advanced since
+the candidate was listed — so releasing the staging objects first would delete
+the input of an operation that had just resumed. The claim therefore commits
+before the objects go, and an unavailable staging store leaves them behind with
+the operation already expired.
+
+What the sweep guarantees instead is that it never reports those bytes as
+reclaimed, and that it stops:
+
+- the `staged-input-expired` entry records **Bytes reserved** rather than
+  **Bytes freed**, meaning the operation is over but its staged bytes may still
+  be occupying the staging store;
+- the rest of that batch is left untouched for the next sweep, because a store
+  that cannot release one candidate will not release the next twenty either.
+
+So an expiry entry showing reserved bytes is the one case where the staging
+store holds objects the catalogue no longer accounts for. Nothing else reclaims
+them: reconciliation scans canonical objects, not staging ones. Check staging
+usage against the operational retention view after a staging outage, and clear
+any leftover `ingestion/<operationId>/…` objects by hand.

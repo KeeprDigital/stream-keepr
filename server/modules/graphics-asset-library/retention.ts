@@ -326,9 +326,9 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 	}
 
 	/**
-	 * Releases every staging object one operation may own. Object-store
-	 * unavailability leaves the objects for the next sweep instead of reporting
-	 * reclaimed bytes that still exist.
+	 * Releases every staging object one operation may own, and reports whether
+	 * every abort and delete landed. Object-store unavailability withholds the
+	 * flag so a caller never reports reclaimed bytes that still exist.
 	 */
 	async function releaseStagedObjects(
 		operationId: GraphicsIngestionOperationId,
@@ -396,7 +396,14 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			});
 			if (!expired)
 				continue;
-			await releaseStagedObjects(candidate.operationId, candidate.initiatedBy);
+			// The expiry is this sweep's claim on the operation, and it has to come
+			// first: releasing the objects before it would delete the staged input
+			// of an operation that resumed since it was listed — the exact case the
+			// expiry's own observed-instant guard exists to lose.
+			const released = await releaseStagedObjects(
+				candidate.operationId,
+				candidate.initiatedBy,
+			);
 			if (candidate.transferComplete)
 				expiredCompletedInput++;
 			else
@@ -416,7 +423,14 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				detail: {
 					...quotaState,
 					operationId: candidate.operationId,
-					bytesFreed: candidate.stagingBytes,
+					// Bytes an unavailable store still holds are recorded as retained,
+					// not as freed. The figure is the operation's whole staged total
+					// either way: a release that failed partway leaves the sweep unable
+					// to say which objects went, and overstating what survives is the
+					// safe direction for a reader deciding whether space came back.
+					...(released
+						? { bytesFreed: candidate.stagingBytes }
+						: { bytesReserved: candidate.stagingBytes }),
 					transition: { from: candidate.stage, to: 'expired' },
 					deadline: graphicsRetentionDeadline(
 						candidate.observedUpdatedAt,
@@ -426,6 +440,12 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					),
 				},
 			}));
+			// One unreleasable candidate is a store this sweep cannot reclaim
+			// anything through, and expiring the rest of the batch would strand
+			// their objects the same way with nothing left to retry from. Their
+			// rows are untouched, so the next sweep lists them again.
+			if (!released)
+				break;
 		}
 		return {
 			stagedInput: { expiredIncompleteTransfers, expiredCompletedInput },
