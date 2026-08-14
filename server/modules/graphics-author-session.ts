@@ -4,6 +4,7 @@ import {
 	getCookie,
 	getRequestURL,
 	setCookie,
+	setResponseHeader,
 } from 'h3';
 import { kv } from 'hub:kv';
 import { GraphicsAuthorSessionUnavailableError } from '~~/server/utils/errors';
@@ -139,9 +140,38 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * the refusal and logs. It raises the same one anyway so that a second caller —
  * a route minting a session directly — inherits the sentence rather than the
  * placeholder the middleware never had to care about.
+ *
+ * `retry-after` beside it because the sentence says *temporarily*, and the seven
+ * sites #321 classified as retryable all set one. A caller told a thing is
+ * momentary and given no number has to invent an interval, which is the half of
+ * #321's finding that was left out of its scope and filed as #337. The number is
+ * the same 5 seconds those sites use: it is a floor on how hard to retry, not an
+ * estimate of when the store returns, and a second spelling of that floor would
+ * only invite the two to drift.
+ *
+ * The middleware swallows this refusal, so a page load made while the store is
+ * down answers 200 carrying a `retry-after` nothing will read — `Retry-After` is
+ * defined for the statuses that carry it and is inert on a 200. That is the
+ * accepted cost of the number living with the refusal rather than at each of the
+ * two throw sites, where it could be reverted at one and kept at the other.
+ *
+ * **The status is deliberately not readable from source, and the refusal scan
+ * says so.** `statusCode: failure.statusCode` is a property access, and
+ * `test/helpers/routeRefusalScan.ts` reads a `createError`'s halves out of the
+ * syntax — so this surfaces as `statusCode: undefined`, the #330(1) class at a
+ * status rather than at a message. Two consequences, both wanted: the
+ * exhaustiveness check in `test/unit/integration/realtimeDiagnosis.test.ts` would
+ * report this site rather than drop it, the day a route's own import graph reaches
+ * this file; and the `carriesCause` census added by #339 cannot read a status here
+ * to hold it to, so this site satisfies that guard by being unreadable rather than
+ * by naming a cause. It does name one — `cause: failure`, three lines below — and
+ * the pins for that are in `test/unit/server/modules/graphicsAuthorSession.test.ts`.
+ * Spelling the status as a literal 503 would make both readable; it would also put
+ * the number in two places, which is what the property access exists to avoid.
  */
-function graphicsAuthorSessionUnavailable(cause: unknown) {
+function graphicsAuthorSessionUnavailable(event: H3Event, cause: unknown) {
 	const failure = new GraphicsAuthorSessionUnavailableError(cause);
+	setResponseHeader(event, 'retry-after', 5);
 	return createError({
 		statusCode: failure.statusCode,
 		statusMessage: 'Service Unavailable',
@@ -170,7 +200,7 @@ export async function ensureGraphicsAuthorSession(event: H3Event): Promise<strin
 		return session.authorId;
 	}
 	catch (error) {
-		throw graphicsAuthorSessionUnavailable(error);
+		throw graphicsAuthorSessionUnavailable(event, error);
 	}
 }
 
@@ -218,7 +248,7 @@ export async function requireGraphicsAuthorSession(event: H3Event): Promise<stri
 			return session.authorId;
 	}
 	catch (error) {
-		throw graphicsAuthorSessionUnavailable(error);
+		throw graphicsAuthorSessionUnavailable(event, error);
 	}
 	throw createError({
 		statusCode: 401,
