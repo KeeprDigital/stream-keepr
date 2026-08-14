@@ -141,13 +141,21 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * a route minting a session directly — inherits the sentence rather than the
  * placeholder the middleware never had to care about.
  *
- * `retry-after` beside it because the sentence says *temporarily*, and every other
- * refusal in this codebase that says so sets one. A caller told a thing is momentary
- * and given no number has to invent an interval, which is the half of #321's finding
- * that was left out of its scope and filed as #337. The number is the same 5 seconds
- * those sites use: it is a floor on how hard to retry, not an estimate of when the
- * store returns, and a second spelling of that floor would only invite the two to
- * drift.
+ * `retry-after` beside it because the sentence says *temporarily*, and the sibling
+ * 503s in the graphics routes all set one. A caller told a thing is momentary and
+ * given no number has to invent an interval, which is the half of #321's finding that
+ * was left out of its scope and filed as #337. The number is the same 5 seconds those
+ * sites use: it is a floor on how hard to retry, not an estimate of when the store
+ * returns, and a second spelling of that floor would only invite the two to drift.
+ *
+ * **That is bounded to those siblings on purpose: the codebase-wide version of the
+ * sentence is false, and was briefly written here.**
+ * `server/modules/deck-list-resolution/index.ts` (502) and
+ * `server/modules/melee-sync/configuration.ts` (504/502) each tell a caller something
+ * is 'temporarily unavailable. Try again later.' and set no header — neither module
+ * calls `setResponseHeader` at all. They are two more instances of the defect #337
+ * describes, and they get their own ticket rather than a drive-by fix from this lane.
+ * Anyone tempted to widen the line above should widen the behaviour first.
  *
  * **Two different sevens meet here, and #337's own text runs them together.** Seven
  * sites set `retry-after: 5` before this one did; seven files were classified by
