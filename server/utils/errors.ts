@@ -113,8 +113,12 @@ export class GraphicsAuthorSessionUnavailableError extends Error {
  * class carries no wording of its own precisely so it cannot flatten theirs.
  *
  * It says a subsystem is unreachable and never why, so nothing a store threw travels
- * with it. Pass the underlying failure as `cause` where there is one: it reaches the
- * failure log's `errorName` through this class's name, and no response body.
+ * with it. Pass the underlying failure as `cause` where there is one: the exception is
+ * kept there for a debugger to reach, and no response carries it. The failure log does
+ * not either — `errorLogFields` reads a single level of cause and takes only its `name`
+ * and `code`, so the line names this class rather than the store's refusal, with or
+ * without an inner cause. The same judgement as `GraphicsAuthorSessionUnavailableError`
+ * above.
  */
 export class TemporarilyUnavailableError extends Error {
 	statusCode = 503;

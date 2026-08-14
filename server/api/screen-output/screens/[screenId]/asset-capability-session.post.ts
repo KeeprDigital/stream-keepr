@@ -39,7 +39,9 @@ export default defineEventHandler(async (event) => {
 		// authorizer's own failure rides along inside it: an output that cannot open a
 		// session resolves no content URL for anything the Screen publishes, so
 		// 'Internal Server Error' was the whole of what an operator got for a blank
-		// Screen (#321). The store's words reach the failure log and no response.
+		// Screen (#321). The authorizer's own exception is kept as `cause`, where a
+		// debugger can reach it; the log line names this class, not the store's
+		// refusal, because `errorLogFields` reads a single level of cause.
 		const cause = new TemporarilyUnavailableError(
 			'Screen Output asset capability session is temporarily unavailable',
 			{ cause: failure },

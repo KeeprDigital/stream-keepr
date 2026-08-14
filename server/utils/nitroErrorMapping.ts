@@ -132,11 +132,15 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		// codes, which the branch above already has.
 		//
 		// Twenty-three sites in the library raise this code and every one of them
-		// publishes its sentence through here. Each writes a fixed one naming a
-		// store or an interrupted operation; none interpolates what it caught, and
-		// a site that started to would hand a provider's own words to every caller.
-		// A caught exception belongs in `cause`, which reaches the failure log and
-		// no response body. (Counted for #321: a note here used to say three.)
+		// publishes its sentence through here. Twenty write a literal naming a store
+		// or an interrupted operation. Three interpolate, and what they interpolate
+		// is the point: a part number, a caller-supplied literal, and the origin the
+		// author asked for — never what was caught. `remote-source.ts` shows the
+		// rule being kept in the one place it would be easiest to break, returning
+		// '<origin> could not be reached right now.' from inside a bare `catch`.
+		// A site that published a caught exception instead would hand a provider's
+		// own words to every caller; those belong in `cause`, which no response body
+		// carries. (Counted for #321: a note here used to say three throw sites.)
 		error.statusCode = 503;
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;
