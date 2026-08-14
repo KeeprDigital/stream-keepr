@@ -267,6 +267,32 @@ describe('feature match session reducer', () => {
 		expect(result.sourceSnapshot.player2.data?.name).toBe('Bob');
 	});
 
+	it('keeps the creation stamp the session has been holding when a correction arrives', () => {
+		const snapshot = createSnapshot({ createdAt: 1000 });
+		// A correction is rebuilt by `buildSourceSnapshot`, which stamps `Date.now()`
+		// every time it runs — so it always arrives claiming its own build time.
+		const rebuiltFromSlot = createSnapshot({ tableNumber: 20, createdAt: 5000 });
+
+		const result = reduce(createInitialFeatureMatchState(), snapshot, 'SnapshotCorrected', { sourceSnapshot: rebuiltFromSlot });
+
+		expect(result.sourceSnapshot.createdAt).toBe(1000);
+		// The control: everything the correction is actually for still lands.
+		expect(result.sourceSnapshot.tableNumber).toBe(20);
+	});
+
+	it('keeps the creation stamp through a correction to a swapped session', () => {
+		// The two facts a rebuild cannot know are restored together, so neither can be
+		// reinstated in a way that drops the other.
+		const swapped = reduce(createInitialFeatureMatchState(), createSnapshot({ createdAt: 1000 }), 'SwapPlayers', {});
+		const rebuiltFromSlot = createSnapshot({ tableNumber: 20, createdAt: 5000 });
+
+		const result = reduce(swapped.currentState, swapped.sourceSnapshot, 'SnapshotCorrected', { sourceSnapshot: rebuiltFromSlot });
+
+		expect(result.sourceSnapshot.createdAt).toBe(1000);
+		expect(result.sourceSnapshot.player1.data?.name).toBe('Bob');
+		expect(result.sourceSnapshot.tableNumber).toBe(20);
+	});
+
 	it('returns a twice-swapped session to slot order across a correction', () => {
 		const once = reduce(createInitialFeatureMatchState(), createSnapshot(), 'SwapPlayers', {});
 		const twice = reduce(once.currentState, once.sourceSnapshot, 'SwapPlayers', {});
@@ -373,6 +399,27 @@ describe('feature match session state service', () => {
 			},
 		});
 		expect(snapshot.createdAt).toEqual(expect.any(Number));
+	});
+
+	it('stamps a snapshot with the moment it was built', async () => {
+		// The other half of #332's decision, and the reason the fix is in the reducer
+		// rather than here: a build still records when it ran. It is the *correction*
+		// that must not adopt the stamp, and freezing the builder to make that true
+		// would leave a newly opened Session claiming a creation time it never had.
+		const builtAt = Date.parse('2026-03-04T05:06:07.000Z');
+		vi.useFakeTimers();
+		vi.setSystemTime(builtAt);
+		try {
+			const snapshot = await featureMatchStateService().buildSourceSnapshot(
+				createSlot(),
+				{ ...DEFAULT_FEATURE_MATCH_DEFAULTS, game: 'mtg' },
+			);
+
+			expect(snapshot.createdAt).toBe(builtAt);
+		}
+		finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('preserves an explicit no-deck Match snapshot instead of falling back to the player primary deck', async () => {

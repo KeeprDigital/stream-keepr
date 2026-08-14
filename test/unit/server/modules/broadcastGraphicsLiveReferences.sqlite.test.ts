@@ -127,13 +127,6 @@ function clip(revisionId: string): MediaGraphicInputValue {
 	return { assetId: testGraphicAssetId(ASSET_ID), revisionId: testGraphicAssetRevisionId(revisionId) };
 }
 
-/**
- * The Graphics Asset Library, answering for exactly the revisions seeded below.
- *
- * Injected rather than faked at a lower seam because it is a declared dependency of
- * the operation under test: `Set Input` records the pinned revision's own facts on a
- * media value at the moment of selection, and that is the authority it asks.
- */
 /** A revision that exists but whose bytes the library cannot currently reach. */
 const UNREACHABLE_REVISION = 'revision-unreachable';
 
@@ -146,6 +139,13 @@ const UNREACHABLE_REVISION = 'revision-unreachable';
  */
 const graphicsAssetLibraryOutage = new Set<string>();
 
+/**
+ * The Graphics Asset Library, answering for exactly the revisions seeded below.
+ *
+ * Injected rather than faked at a lower seam because it is a declared dependency of
+ * the operation under test: `Set Input` records the pinned revision's own facts on a
+ * media value at the moment of selection, and that is the authority it asks.
+ */
 const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { assetId: string; revisionId: string }): Promise<GraphicAssetReferenceStatus> {
 		if (input.revisionId === UNREACHABLE_REVISION || graphicsAssetLibraryOutage.has(input.revisionId))

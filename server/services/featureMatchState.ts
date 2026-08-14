@@ -183,6 +183,10 @@ export function featureMatchStateService() {
 			defaults: eventDefaults,
 			player1: await resolveSnapshotPlayer(slot.eventId, slot.player1Id, slot.player1Data, preloadedPlayers),
 			player2: await resolveSnapshotPlayer(slot.eventId, slot.player2Id, slot.player2Data, preloadedPlayers),
+			// The build time, which is the right answer only for the builds that open a
+			// Session. A rebuild for a `SnapshotCorrected` has this discarded in favour
+			// of the stamp the Session is already holding — the field means first taken,
+			// and the reducer is where that is enforced for every caller (#332).
 			createdAt: Date.now(),
 		};
 	};
