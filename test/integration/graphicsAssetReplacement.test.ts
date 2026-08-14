@@ -153,10 +153,17 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		config.layout.frame.backgroundImage = originalReference;
 		// A Screen mutation, so this is one of the two operations #123 suspects: it
 		// awaits a real Ably REST publish before it answers.
-		await step('pin the original revision to the Screen', async () => await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
-		));
+		// This is one of the two `$fetch` calls here with no explicit response type,
+		// so `step`'s type parameter would be inferred through Nitro's route table —
+		// which overflows the checker with TS2321, catalogued in
+		// docs/agents/parallel-rounds.md as surfacing about two at a time. Annotating
+		// the callback settles the type before it reaches the generic.
+		await step('pin the original revision to the Screen', async (): Promise<void> => {
+			await $fetch(
+				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+				{ method: 'PATCH', body: { layout: config.layout } },
+			);
+		});
 	});
 
 	it('records replaced content as a new Graphic Asset Revision of the same Graphic Asset', async () => {
@@ -252,11 +259,14 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			assetId: originalReference.assetId,
 			revisionId: replaced.result!.revisionId,
 		};
-		// The second Screen mutation, and the second real Ably REST publish.
-		await step('adopt the new revision on the Screen', async () => await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: config.layout } },
-		));
+		// The second Screen mutation, and the second real Ably REST publish. Typed
+		// like the pin above, and for the same TS2321 reason.
+		await step('adopt the new revision on the Screen', async (): Promise<void> => {
+			await $fetch(
+				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+				{ method: 'PATCH', body: { layout: config.layout } },
+			);
+		});
 		await expect(step('read usage after adoption', async () => await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${originalReference.assetId}/usage`,
 			{ headers: authorHeaders },
