@@ -119,10 +119,13 @@ describe('shapeGeometry', () => {
 	 * The presets override the square geometry through `Object.assign` so the
 	 * bundler cannot flatten the call into a duplicate-key literal (#324, #338).
 	 * That form is only equivalent while the override still *replaces* what the
-	 * base wrote — an argument order that lets the base win, or an override
-	 * merged under it, reads as a refactor and is a behaviour change. `toEqual`
-	 * rather than `toMatchObject`, so an override that narrows rather than
-	 * replaces fails here (the row #324's review taught).
+	 * base wrote — an argument order that lets the base win reads as a refactor
+	 * and is a behaviour change. `toEqual` rather than `toMatchObject`, because
+	 * what the looser matcher cannot see is a key left standing: it ignores
+	 * properties the expectation does not mention, so a stale key the override
+	 * failed to displace, or one it invented, passes it in silence. #324's
+	 * review made the same point with a `not.toHaveProperty` on a stale key;
+	 * comparing the whole object covers every key of it at once.
 	 */
 	it('replaces what the square geometry wrote rather than narrowing it', () => {
 		expect(getShapeGeometryPreset('slanted-edge').apply(SIZE).geometry).toEqual({

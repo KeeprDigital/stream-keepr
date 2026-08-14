@@ -28,7 +28,8 @@
  * about the half that was actually wrong — which files the walk reaches.
  * `test/unit/scripts/assertNoRuntimeWasm.test.ts` plants the same regression in
  * a real directory instead, under a `.wasm` name and a subdirectory, and holds
- * both refusals (#326).
+ * both refusals — nothing to scan, and a directory it cannot read — in the two
+ * cases each of them has (#326).
  */
 
 import { readdirSync, readFileSync } from 'node:fs';

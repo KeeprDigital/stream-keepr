@@ -196,6 +196,15 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		 * mapping silently flattens real evidence into the generic failure. The
 		 * pages are read here rather than listed, so a page that starts naming a
 		 * code nobody published fails this rather than degrading in a run.
+		 *
+		 * The residual, stated because it is invisible from the result: the
+		 * regex sees single-quoted literals only, so a code written with double
+		 * quotes, built as a template literal, or reached through a variable is
+		 * missed — and missed quietly, since a smaller enumeration still passes.
+		 * Two of the four pages author no code at all (`silent-video-v1` and
+		 * `still-image-v1` publish only `dataset.result`), so a mistake in the
+		 * pattern would leave a plausible-looking set rather than an empty one.
+		 * The control below is what keeps that from reading as a pass.
 		 */
 		it('publishes every code the acceptance pages actually author', () => {
 			const authored = new Set<string>();
