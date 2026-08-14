@@ -40,8 +40,10 @@ function decodeEvidence(bytes: Uint8Array) {
 }
 
 /**
- * Every round trip below is wrapped in `step` so a failure names the operation it
- * was on.
+ * Every round trip inside a test below is wrapped in `step` so a failure names the
+ * operation it was on. The `beforeAll` and `afterAll` round trips are not: a stall
+ * creating the Event or the Screen still reports as a bare hook timeout with
+ * nothing named, and would take the whole file's tests with it as skips.
  *
  * #123 carries a 30,000 ms timeout in this suite whose cause was never found
  * across six full integration runs, and the reason it stayed unfound is the shape
@@ -78,6 +80,11 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 	 * already pinned, and the concurrency scenario needs a revision to race
 	 * against. Splitting them is what makes a stall legible; sharing the chain is
 	 * what keeps each one about a single operation.
+	 *
+	 * The chain's cost is that one failure reddens its successors, which read this
+	 * state and will throw on it being unset. Read the FIRST red test: the ones
+	 * below it are consequences, and their errors describe the missing state rather
+	 * than anything about themselves.
 	 */
 	let config: FeatureMatchOverlayModeConfig;
 	let originalReference: GraphicAssetReference;

@@ -217,28 +217,36 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 		 * There is no waste to remove, so what it wanted was a budget something had
 		 * chosen it against.
 		 *
-		 * Measured rather than inherited: 1985 / 2158 / 2174 ms in three runs on a
-		 * quiet machine at load ~3, and 1966 / 1930 / 2066 / 2016 ms under deliberate
-		 * parallel load — three unit suites looping in sibling processes, at loads of
-		 * 19.3, 18.0, 16.7 and 15.3 respectively. That is the load band #123 reports
-		 * its failures from, and the cost here does not move.
+		 * Measured rather than inherited, and pinned to when — every figure below is
+		 * one machine's, and the same machine disagreed with itself inside an
+		 * afternoon.
 		 *
-		 * What did move the cost, mildly, was contention of the same shape: eight
-		 * concurrent copies of *this file* put it at 2391–2606 ms across sixteen runs,
-		 * dearer than a higher load average made of other work. Worth knowing before
-		 * reading a slow run as a regression — the neighbour that matters is another
-		 * hundred-identity batch, not a busy machine.
+		 * Measured at 4a3c9ea on 2026-08-14: 1985 / 2158 / 2174 ms quiet at load ~3,
+		 * and 1966 / 1930 / 2066 / 2016 ms under deliberate parallel load — three unit
+		 * suites looping in sibling processes, at loads of 19.3, 18.0, 16.7 and 15.3.
+		 * Eight concurrent copies of *this file* cost more than any of that: 2391–2606
+		 * ms across sixteen runs, at a lower load average. Contention of the same
+		 * shape is dearer than a busier machine doing other work, which is worth
+		 * knowing before a slow run gets read as a regression.
 		 *
-		 * Nothing available here reproduces the five to ten seconds #123's operators
-		 * report, so that range stays theirs: it was taken on machines running six to
-		 * eight worktrees' full suites, which these runs do not reach.
+		 * Then, roughly two and a half hours later on that same machine, this test's
+		 * reviewer measured 3117 / 3023 / 3185 ms — above every figure above,
+		 * including the loaded ones. So the honest summary is a range, not a number:
+		 * **roughly 1.9 to 3.2 seconds**, drifting with machine state nobody has
+		 * characterised. Treat any single measurement here as a reading, not a
+		 * constant.
 		 *
-		 * A minute is therefore some twenty-three times the worst cost measured here
-		 * and six times the worst anyone has reported, and the margin is the point: a
-		 * failure here should mean the batch broke, not that a sibling worktree was
-		 * busy. The budget is load-bearing rather than decorative — under
-		 * `--testTimeout=1` this is the one test in the file that survives, and all
-		 * five unbudgeted siblings die at 1 ms.
+		 * Nothing anyone has run here reproduces the five to ten seconds #123's
+		 * operators report; that range stays theirs, taken on machines running six to
+		 * eight worktrees' full suites.
+		 *
+		 * Against the worst figure anyone has measured — the reviewer's 3185 ms — a
+		 * minute is about **eighteen times** the cost, and that is the margin to
+		 * quote, because it is the one that survives the drift. The point of it is
+		 * that a failure here should mean the batch broke, not that the machine was
+		 * having a bad afternoon. The budget is load-bearing rather than decorative:
+		 * under `--testTimeout=1` this is the one test in the file that survives,
+		 * while its unbudgeted siblings die at 1 ms.
 		 */
 		it('publishes a hundred created identities and their references at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
