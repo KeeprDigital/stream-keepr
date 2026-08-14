@@ -191,8 +191,9 @@ export async function openInstallation(origin) {
  *
  * Deliberately mechanical: whether the settled stage, outcome, and facts are
  * the ones the run demands is the acceptance's own subject, so the judgement
- * lives in the runner where a miss becomes a stable failure code — not here,
- * where a throw would misfile a codec defect as an unready environment.
+ * lives in `checkStillImagePublication` (assertions.mjs) where a miss becomes
+ * a stable failure code — not here, where a throw would misfile a codec
+ * defect as an unready environment.
  */
 export async function stageStillImagePublication(session, { name, sourceFileName, declaredMime, bytes }) {
 	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {

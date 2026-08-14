@@ -327,6 +327,20 @@ describe('checkStillImagePublication', () => {
 		}]);
 	});
 
+	it('names the absent halves of a refusal that never produced a report', () => {
+		// `Object.entries` in the evidence line renders every key it is handed,
+		// so an undefined value would print as `=undefined`; the detail says
+		// 'absent'/'none' instead, in so many words.
+		const failures = checkStillImagePublication(
+			{ stage: 'failed' },
+			{ format: 'webp', byteLength: 120 },
+		);
+		expect(failures).toEqual([{
+			code: 'still-image-ingestion-refused',
+			detail: { format: 'webp', stage: 'failed', outcome: 'absent', issues: 'none' },
+		}]);
+	});
+
 	it('reports which published facts disagree with the sent source', () => {
 		const failures = checkStillImagePublication(
 			settledOperation({

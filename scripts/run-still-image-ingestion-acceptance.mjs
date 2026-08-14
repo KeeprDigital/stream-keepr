@@ -65,8 +65,9 @@ const FORMATS = [
 
 await runAcceptanceHarness({
 	harness: HARNESS,
-	async run({ record }) {
+	async run({ evidence, record }) {
 		const session = await openInstallation(acceptanceOrigin({ deployed }));
+		evidence.addSecret(session.authorCookie);
 		const marker = randomUUID();
 		const staged = [];
 		try {

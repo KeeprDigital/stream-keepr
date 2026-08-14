@@ -401,8 +401,8 @@ export function checkStillImagePublication(settled, { format, byteLength }) {
 		return [failure('still-image-ingestion-refused', {
 			format,
 			stage: settled.stage,
-			outcome: settled.report?.outcome,
-			issues: (settled.report?.issues ?? []).map(issue => issue.code).join(',') || undefined,
+			outcome: settled.report?.outcome ?? 'absent',
+			issues: (settled.report?.issues ?? []).map(issue => issue.code).join(',') || 'none',
 		})];
 	}
 	const facts = settled.report.facts;
