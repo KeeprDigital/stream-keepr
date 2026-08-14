@@ -562,11 +562,28 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('leaves an operation whose resumed transfer completed out of the candidate list', async () => {
-			// `completed` is absent from the retained stages, so this operation is
-			// never listed as a candidate at all. What spares it is the candidate
-			// query, not the expiry's observed-instant guard — which the test below
-			// covers, on an operation that stays in a retained stage.
-			const context = createRetentionLibrary();
+			// The fixture is aged past the seven-day completed-input promise on
+			// purpose: with the deadline satisfied, the retained-stage list is the
+			// only thing left that can spare it. `completed` is absent from that
+			// list, so this operation is never listed as a candidate — and the
+			// claim's stage predicate would refuse it even if it were. Either way
+			// what spares it is not the expiry's observed-instant guard, which the
+			// test below covers.
+			//
+			// The listing is wrapped only to record, so "never listed" is observed
+			// here rather than narrated. Without that, this test passes whether the
+			// stage list excludes the operation or not.
+			const delegate = createD1GraphicsAssetCatalogue(harness.database);
+			const observed: string[] = [];
+			const catalogue: typeof delegate = {
+				...delegate,
+				async listStagedInputExpiryCandidates(input) {
+					const candidates = await delegate.listStagedInputExpiryCandidates(input);
+					observed.push(...candidates.map(candidate => candidate.operationId));
+					return candidates;
+				},
+			};
+			const context = createRetentionLibrary({ catalogue });
 			const resumed = await context.library.initiateGraphicsIngestion({
 				idempotencyKey: 'resumed-transfer-completed',
 				initiatedBy: 'retention-author',
@@ -577,7 +594,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 				declaredByteLength: pixelPng.byteLength,
 			});
 			context.advance(DAY + 1);
-			await context.library.uploadGraphicAsset({
+			const completed = await context.library.uploadGraphicAsset({
 				operationId: resumed.id,
 				initiatedBy: resumed.initiatedBy,
 				declaredMime: 'image/png',
@@ -587,8 +604,16 @@ describe('scheduled Graphics Asset Library retention', () => {
 				}),
 			});
 
+			context.advanceTo(new Date(
+				new Date(completed.updatedAt).getTime() + 7 * DAY,
+			).toISOString());
 			const swept = await context.library.runGraphicsRetention();
-			expect(swept.stagedInput.expiredIncompleteTransfers).toBe(0);
+
+			expect(observed).toEqual([]);
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
 			await expect(context.library.getIngestionOperation({
 				operationId: resumed.id,
 				initiatedBy: resumed.initiatedBy,
