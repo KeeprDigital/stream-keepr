@@ -290,9 +290,11 @@ describe('playerFeatureMatchSyncService', () => {
 		 * preserved deck identity onto the other slot's snapshot — the fix's own failure
 		 * mode, so it gets its own pin.
 		 *
-		 * Nothing else caught it: that aliasing edit fails only this test across the five
-		 * unit files that reach the factory. The test above carries one slot and never
-		 * compares two, which is why the aliasing never reached an assertion.
+		 * Nothing else caught it: that aliasing edit fails only this test across the unit
+		 * files that reach the factory — `playerToMatchData` is module-private, so the set
+		 * is the five files `grep -rl playerFeatureMatchSync test/` names. The test above
+		 * carries one match source snapshot and never compares two, which is why the
+		 * aliasing never reached an assertion.
 		 */
 		it('gives each slot its own object to preserve its deck identity into', async () => {
 			const aliceHistorical = { type: 'mtg' as const, deckName: 'Alice Historical', deckColors: 'G' };
@@ -319,14 +321,14 @@ describe('playerFeatureMatchSyncService', () => {
 
 			await playerFeatureMatchSyncService().syncMatchesFromPlayers(1, [5, 6]);
 
-			// A shared factory result would leave both slots holding whichever side was
-			// assigned last, so each side's own preserved identity is the discriminator.
-			const slot = mockFeatureMatchStateService.buildSourceSnapshot.mock.calls[0]![0];
-			expect(slot).toEqual(expect.objectContaining({
+			// A shared factory result would leave both sides holding whichever was assigned
+			// last, so each side's own preserved identity is the discriminator.
+			const snapshot = mockFeatureMatchStateService.buildSourceSnapshot.mock.calls[0]![0];
+			expect(snapshot).toEqual(expect.objectContaining({
 				player1Data: expect.objectContaining({ name: 'Alice', deckId: 99, archetypeId: 8, gameData: aliceHistorical }),
 				player2Data: expect.objectContaining({ name: 'Bob', deckId: 77, archetypeId: 3, gameData: bobHistorical }),
 			}));
-			expect(slot.player1Data).not.toBe(slot.player2Data);
+			expect(snapshot.player1Data).not.toBe(snapshot.player2Data);
 		});
 	});
 

@@ -197,15 +197,18 @@ export function playerFeatureMatchSyncService() {
 				// is correct as written — the override is last, so it wins — but
 				// `playerToMatchData` returns a bare literal that writes `archetypeId` and
 				// `gameData` itself, which rolldown is free to inline into the same object
-				// literal; the emitted chunk would then carry both keys twice. #324 found four
-				// of that shape and #338/#348 fixed the rest. Nothing here warns today — the
-				// motivation is that precedent plus the form, not an observed bundler defect —
-				// and keeping the factory out of the literal is what makes the form immune
-				// rather than merely currently-correct.
+				// literal; the emitted chunk would then carry both keys twice and warn
+				// (`duplicate-object-key`, visible only in wrangler's esbuild pass). #324 found
+				// four of that shape, and #338/#348 carried the same rewrite through the Shape
+				// Geometry presets, the live-session recovery and the Graphic Binding data set.
+				// Nothing here warns today — the motivation is that precedent plus the form, not
+				// an observed bundler defect — and keeping the factory out of the literal is what
+				// makes the form immune rather than merely currently-correct.
 				//
 				// The `satisfies` clause is doing new work rather than restoring old work, which
-				// is the opposite of the two `carriedForwardBroadcastGraphicsLiveState` returns
-				// and was measured rather than assumed: because `updatedData` is a conditional
+				// is the same as the per-graphic literal in `carriedForwardBroadcastGraphicsLiveState`
+				// (the one built inside `Object.fromEntries(…map(…))`, not its return) and was
+				// measured rather than assumed: because `updatedData` is a conditional
 				// with no declared type, the literal below never had a contextual type, so an
 				// invented key here was reported by neither typecheck program before this
 				// rewrite. `Object.assign` takes its second argument by assignability and would
