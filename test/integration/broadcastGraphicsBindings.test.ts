@@ -522,7 +522,7 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 });
 
 /**
- * What the Event supplies that no operator picks.
+ * What the Event itself supplies, picked or not.
  *
  * A Current Event Graphic Source Selection has nothing for an operator to pick — it
  * resolves the Event the Screen belongs to — and an Event's Talent is reached from it
