@@ -104,6 +104,28 @@ describe('the Graphics Asset Library reconciliation API', () => {
 		});
 	});
 
+	/**
+	 * Scoped to the fixture this test publishes, because the sweep reads the whole
+	 * library and every integration suite publishes into the same one. The sweep's
+	 * counters and the overview's open list therefore describe rows other files
+	 * left behind as much as this suite's own, and #123 records this test failing
+	 * on exactly that: one open `unavailable-content` discrepancy with
+	 * `affectedUsage: []`, over orphaned content nothing here created.
+	 *
+	 * `affectedUsage` is what makes the scoping possible and what keeps it honest.
+	 * It names every Graphic Asset Revision reaching the content in question, so a
+	 * disagreement about this test's own asset always names it, while a foreign
+	 * orphan — content no revision reaches, which is the shape that bled in — never
+	 * can. Nor can a real one be pushed off the overview's fifty-per-kind page: it
+	 * would be the most recently detected of its kind, which is the order that page
+	 * is taken in.
+	 *
+	 * The two library-wide counters this used to assert (`unavailableDetected` and
+	 * `criticalIntegrityIncidents`) have no scoped form — they are counts over
+	 * whatever the batch happened to contain — so the discrepancy list is where
+	 * both kinds are now caught, and the revision status read below covers what a
+	 * count could not: the sweep having moved this asset's bytes.
+	 */
 	it('reports agreement for a healthy library and invents no catalogue state', async () => {
 		const operation = await ingest('Reconciliation logo', 'reconciliation-healthy');
 		expect(operation.stage).toBe('completed');
@@ -114,24 +136,29 @@ describe('the Graphics Asset Library reconciliation API', () => {
 			{ method: 'POST', headers: administratorHeaders },
 		);
 		expect(sweep.content.checked).toBeGreaterThan(0);
-		expect(sweep.content.unavailableDetected).toBe(0);
-		expect(sweep.criticalIntegrityIncidents).toBe(0);
 
 		// Content this library just published is expected, so the scan of the byte
-		// store never quarantines it as unexpected.
+		// store never quarantines it as unexpected, and nothing the sweep opens
+		// names this asset.
 		const overview = await $fetch<GraphicsReconciliationOverview>(
 			'/api/admin/graphics-assets/reconciliation',
 			{ headers: administratorHeaders },
 		);
-		expect(overview.discrepancies).toEqual([]);
+		expect(overview.discrepancies.filter(
+			discrepancy => discrepancy.affectedUsage.some(usage => usage.assetId === assetId),
+		)).toEqual([]);
 		expect(overview.lastSweep?.correlationId).toBe(sweep.correlationId);
 
-		// The asset it just checked is still exactly as it was published.
+		// The asset it just checked is still exactly as it was published. This route
+		// reads the bytes rather than the catalogue's advisory availability flag, so
+		// it fails on a sweep that quarantined or discarded them even in the case no
+		// discrepancy would have named this asset at all.
 		const status = await fetch(
 			`/api/graphics-assets/${assetId}/revisions/${operation.result!.revisionId}/status`,
 			{ headers: authorHeaders },
 		);
 		expect(status.status).toBe(200);
+		expect(await status.json()).toMatchObject({ outcome: 'available' });
 	});
 
 	it('reports an unknown discrepancy identity as not found on every action', async () => {
