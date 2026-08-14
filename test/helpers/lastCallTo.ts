@@ -60,10 +60,11 @@
  *   announcement happened to be last rather than the one under test. It is the mock's
  *   declaration that decides this and not the suite's environment: in
  *   `test/nuxt/pages/event/[eventId]/screen/[screenSlug].test.ts`, where `$fetch` is left
- *   real and a *global* `fetch` is stubbed, the clock sync runs and every sample fails —
- *   the run says "Server time sync unavailable" — while the stub's own record holds
- *   nothing but the page's request. Where inside `$fetch` those samples die was not
- *   established; that they never reach the stub was.
+ *   real and a *global* `fetch` is stubbed, the stub's own record holds nothing but the
+ *   page's request, while the run reports "Server time sync unavailable" — so the sync
+ *   ran and every sample failed somewhere short of the stub. That second half was
+ *   observed on a forced-failure run of that suite; `silent: 'passed-only'` suppresses
+ *   the line when it passes. Where inside `$fetch` the samples die was not established.
  * - **The subject of the read is the relationship between two calls**, where the count
  *   belongs at the read rather than in a `toHaveBeenCalledTimes` a few lines above it.
  *   That is `callsTo`'s case, below.
