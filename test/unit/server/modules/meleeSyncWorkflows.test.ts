@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { providerRefusal } from '~~/test/helpers/providerRefusal';
+
+/** #264's publish-failure line, told apart from anything else a sync run logs. */
+function isPublishFailureLine(call: unknown[]): boolean {
+	const [line] = call;
+	return typeof line === 'string' && line.includes('"message":"melee_sync_realtime_publish_failed"');
+}
 
 const mockMelee = {
 	fetchMergedPlayers: vi.fn(),
@@ -212,7 +219,11 @@ describe('melee Sync updateFromMelee workflow', () => {
 
 		const result = await createMeleeSyncWorkflows().runInitialSetup({} as any, 1, eventData, vi.fn().mockResolvedValue(undefined));
 
-		expect(JSON.parse(warnSpy.mock.calls[0]![0] as string)).toEqual({
+		// Named rather than taken from position 0: `console.warn` is nobody's private
+		// channel, so the first line this run logged need not be the publish failure, and
+		// `JSON.parse` of the wrong one fails as a syntax error about neither.
+		const [line] = lastCallTo(warnSpy, isPublishFailureLine);
+		expect(JSON.parse(line as string)).toEqual({
 			message: 'melee_sync_realtime_publish_failed',
 			messageType: 'melee:structureSynced',
 			statusCode: 404,

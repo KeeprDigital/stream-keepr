@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
@@ -21,6 +22,23 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockFetch);
 
 // ── Helpers ──
+
+/** The Event every test below loads, so the request can be named rather than counted. */
+const SUMMARY_ENDPOINT = '/api/events/1/metagame';
+
+/**
+ * The query the summary request carried, chosen by name rather than taken from
+ * position 0.
+ *
+ * The mock above stands in for the module's whole `$fetch`, which is not this store's
+ * alone: `useServerTime` samples the clock through it on its own timers (#123), and a
+ * sample arriving first would hand back its options and answer `undefined` for a query
+ * nobody asked about. Why the selection rather than a guard is `lastCallTo`'s own docblock.
+ */
+function summaryQuery() {
+	const [, options] = lastCallTo(mockFetch, SUMMARY_ENDPOINT);
+	return options.query;
+}
 
 function makeSummaryData() {
 	return {
@@ -96,8 +114,7 @@ describe('useMetagameStore', () => {
 			store.topN = 8;
 			await store.loadSummary(1);
 
-			const query = (mockFetch.mock.calls[0] as any)[1].query;
-			expect(query).toMatchObject({ scope: 'topN', topN: 8 });
+			expect(summaryQuery()).toMatchObject({ scope: 'topN', topN: 8 });
 		});
 
 		it('scope=\'playerList\', playerListId=5 → includes playerListId: 5', async () => {
@@ -105,8 +122,7 @@ describe('useMetagameStore', () => {
 			store.playerListId = 5;
 			await store.loadSummary(1);
 
-			const query = (mockFetch.mock.calls[0] as any)[1].query;
-			expect(query).toMatchObject({ scope: 'playerList', playerListId: 5 });
+			expect(summaryQuery()).toMatchObject({ scope: 'playerList', playerListId: 5 });
 		});
 	});
 

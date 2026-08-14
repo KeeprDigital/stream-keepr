@@ -26,8 +26,10 @@ enableAutoUnmount(afterEach);
 
 /**
  * The seams the card reaches the outside world through, mocked exactly where
- * `ListItem.test.ts` mocks them (#269). Nothing here hands out an output, so none of
- * them is expected to be called — they exist because the card's `setup` calls each one.
+ * `ListItem.test.ts` mocks them (#269). Nothing here hands out an output, so nothing the
+ * card does calls any of them — they exist because the card's `setup` calls each one.
+ * `$fetch` is the exception, and not because of the card: it is the module's `$fetch`, so
+ * `useServerTime`'s clock sync records calls here that no card made (#123, #342).
  */
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockApiFetch);
@@ -162,6 +164,14 @@ async function mountList(props: Partial<{
 describe('screen list — the cards it composes, and the Screen each one is for', () => {
 	function cards(wrapper: Awaited<ReturnType<typeof mountList>>) {
 		return wrapper.findAllComponents(ScreenListItem);
+	}
+
+	/** The one call that arrives without this file asking for it (see `mockApiFetch`). */
+	const CLOCK_SYNC_ENDPOINT = '/api/time';
+
+	/** Everything the list actually asked for: the clock sync is not its request. */
+	function requestsOtherThanTheClockSync() {
+		return mockApiFetch.mock.calls.filter(([path]) => String(path) !== CLOCK_SYNC_ENDPOINT);
 	}
 
 	/**
@@ -397,10 +407,19 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 	 * mount is the staleness #231 and #269 were about — one per card, on a list an
 	 * operator leaves open. The card's own suite pins that for one card; this pins that
 	 * rendering a whole list of them does not add up to a request either.
+	 *
+	 * Filtered rather than counted whole: an `/api/time` sample landing in this window
+	 * reddened the unfiltered `not.toHaveBeenCalled()` three times, the third of them on
+	 * round fifteen's authoritative round-close run, where a suite nobody had touched read
+	 * as a regression (#342). Why a negative guard on a shared mock needs selecting as much
+	 * as a positive one does is `test/helpers/lastCallTo.ts`.
+	 *
+	 * Everything except that one call is still asserted away, so a capability minted at
+	 * mount fails this — and so does any other request the composition starts.
 	 */
 	it('mints no asset capability merely by rendering the list', async () => {
 		await mountList();
 
-		expect(mockApiFetch).not.toHaveBeenCalled();
+		expect(requestsOtherThanTheClockSync()).toEqual([]);
 	});
 });

@@ -17,6 +17,7 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { callsTo } from '~~/test/helpers/lastCallTo';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -1520,12 +1521,17 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			initiatedBy: initiated.initiatedBy,
 		});
 		expect(completed.stage).toBe('completed');
-		expect(validate).toHaveBeenCalledTimes(2);
-		expect(validate.mock.calls[1]![0]).toMatchObject({
-			operationId: validate.mock.calls[0]![0].operationId,
-			idempotencyKey: validate.mock.calls[0]![0].idempotencyKey,
-			sourceDigest: validate.mock.calls[0]![0].sourceDigest,
-			factsDigest: validate.mock.calls[0]![0].factsDigest,
+		// Two attempts, counted where they are read rather than a line or two above it,
+		// because the retry's whole subject is its relationship to the first attempt. This
+		// is the destructure-the-mapped-list shape `callsTo`'s docblock names second: the
+		// count is refused before either name is bound, so neither read can be the empty
+		// case that made the same comparison pass vacuously in #330.
+		const [firstAttempt, retriedAttempt] = callsTo(validate, 2).map(([input]) => input);
+		expect(retriedAttempt).toMatchObject({
+			operationId: firstAttempt.operationId,
+			idempotencyKey: firstAttempt.idempotencyKey,
+			sourceDigest: firstAttempt.sourceDigest,
+			factsDigest: firstAttempt.factsDigest,
 		});
 	});
 

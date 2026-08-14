@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 /** The storage ceiling a Screen's `modeConfigs` is bounded by, from the Screen schema. */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
@@ -720,6 +721,20 @@ describe('event Data publication module', () => {
 	 */
 	describe('a Screen change is announced rather than shipped', () => {
 		/**
+		 * The announcement each row below is about, told apart by its message type — the
+		 * second argument `publishMessage` is called with. A create and an update carry the
+		 * same payload here, so nothing but the type distinguishes them.
+		 */
+		function isScreenUpdate(call: unknown[]): boolean {
+			return call[1] === 'screen:updated';
+		}
+
+		/** As above, for the create row. */
+		function isScreenCreate(call: unknown[]): boolean {
+			return call[1] === 'screen:created';
+		}
+
+		/**
 		 * A Screen's `modeConfigs` is bounded by `MAX_MODE_CONFIGS_BYTES` (512 KiB),
 		 * and a realtime message is bounded by far less — 64 KiB on the packages
 		 * Ably documents that figure for. Publishing the mapped entity therefore
@@ -748,7 +763,11 @@ describe('event Data publication module', () => {
 
 			// Size first, then shape: a regression here puts half a megabyte of
 			// fixture in the diff, and the byte count says what went wrong on its own.
-			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			// The announcement is chosen by name, not taken from the end of the list: this
+			// mock records every message the module publishes, so a write that grows a
+			// second announcement would silently move the one under test out from under
+			// `.at(-1)`.
+			const [, , payload] = lastCallTo(mockPublishMessage, isScreenUpdate);
 			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
 				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
 			expect(payload).toEqual({ screenId: 8 });
@@ -760,7 +779,7 @@ describe('event Data publication module', () => {
 
 			await publication.screenCreated({ eventId: 1, entity: entity as any });
 
-			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			const [, , payload] = lastCallTo(mockPublishMessage, isScreenCreate);
 			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
 				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
 			expect(payload).toEqual({ screenId: 8 });

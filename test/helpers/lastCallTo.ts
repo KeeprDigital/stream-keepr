@@ -1,5 +1,13 @@
 /**
- * The call a test means, chosen by name rather than taken from the end of the list.
+ * The calls a test means, chosen by name rather than taken by position.
+ *
+ * Two functions live here rather than the one this file is named for: `lastCallTo`
+ * answers "which call", and `callsTo` below answers "which calls, and how many". The name
+ * stayed at the older function's in #342, on the argument that a rename buys a reader
+ * nothing this sentence does not — weighed against an import edit in every file that reads
+ * from this path, at a moment when sibling branches held test files. Note what that
+ * argument is worth: #342's own sweep took the importers from seven files to thirteen, so
+ * the branch that declined the rename is the branch that made it dearer.
  *
  * A mock's call list belongs to the mock, not to the test — anything else sharing the
  * subject writes into it too. #273 proved the consequence in situ: `evidence.test.ts`
@@ -36,19 +44,50 @@
  * `ably.test.ts` carried the instance #300 closed; #330 then found three more in a
  * **destructuring** spelling — `const [first, second] = mock.calls.map(…)`, which has
  * no index in it either — in `broadcastGraphicsLiveSession.test.ts`. Those wanted
- * `callsTo` rather than this function, for the reason below. A future sweep wants every
- * shape: an indexed, `.at()`, or destructured read of a mock's calls, whether or not a
- * bang follows, and whether or not a `.map()` sits in between.
+ * `callsTo` rather than this function, for the reason below.
  *
- * Filed as #280, generalising the guard #273 built for one site.
+ * **#342 ran the sweep this paragraph used to ask for** — every shape, indexed or `.at()`
+ * or destructured, bang or no bang, `.map()` in between or not. Its census lives on the
+ * issue rather than here, with the grep, the tip it was taken at and the judgement for
+ * each file: a count in a docblock is right on the day it is written and quietly wrong
+ * afterwards. What generalises, and is worth carrying here, is which sites the sweep
+ * converted. Convert where either holds:
+ *
+ * - **Something other than the code under test writes to the subject.** A
+ *   `mockNuxtImport('$fetch')` mock is the standing example, because the clock sync's
+ *   `/api/time` samples are recorded there (#123) — as is a `console` spy, and a module
+ *   mock that records every message a module publishes, where `.at(-1)` follows whichever
+ *   announcement happened to be last rather than the one under test. It is the mock's
+ *   declaration that decides this and not the suite's environment: in
+ *   `test/nuxt/pages/event/[eventId]/screen/[screenSlug].test.ts`, where `$fetch` is left
+ *   real and a *global* `fetch` is stubbed, the stub's own record holds nothing but the
+ *   page's request, while the run reports "Server time sync unavailable" — so the sync
+ *   ran and every sample failed somewhere short of the stub. That second half was
+ *   observed on a forced-failure run of that suite; `silent: 'passed-only'` suppresses
+ *   the line when it passes. Where inside `$fetch` the samples die was not established.
+ * - **The subject of the read is the relationship between two calls**, where the count
+ *   belongs at the read rather than in a `toHaveBeenCalledTimes` a few lines above it.
+ *   That is `callsTo`'s case, below.
+ *
+ * Most sites are neither, and stay as they are: purpose-built mocks with one caller — a DB
+ * or port double, a prop callback, a toast a component's own suite counts before it reads.
+ * There the unselected form says what it means, and its failure is loud rather than quiet:
+ * a missing call makes the read `undefined`, and `expect(undefined).not.toHaveProperty(…)`
+ * does not pass vacuously the way one might fear — it throws `TypeError: Cannot convert
+ * undefined or null to object`. Worth having checked, since the opposite would have made
+ * every `calls[0]?.[n]` site urgent rather than merely inelegant.
+ *
+ * Filed as #280, generalising the guard #273 built for one site; swept in #342.
  */
 
 /**
  * The part of a Vitest mock this reads.
  *
- * Structural rather than `MockInstance`, because the four sites hand it three
- * different things — `vi.fn()`, `vi.spyOn(...)` and `vi.mocked(port.method)` — and
- * the argument tuple is what needs to survive to the caller, not the mock's own type.
+ * Structural rather than `MockInstance`, because its call sites hand it three different
+ * things — `vi.fn()`, `vi.spyOn(...)` and `vi.mocked(port.method)` — and the argument
+ * tuple is what needs to survive to the caller, not the mock's own type. (How many sites
+ * that is belongs on #342 with the rest of the census, not in a sentence nobody will
+ * revisit when the next one lands.)
  */
 interface CallRecorder<Args extends unknown[]> {
 	mock: { calls: Args[] };
@@ -108,6 +147,23 @@ export function lastCallTo<Args extends unknown[]>(
  * const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
  * ```
  *
+ * **A positional read of what this returns is safe in a way `mock.calls[1]!` is not, and
+ * the compiler cannot tell the difference.** At run time the count has already been
+ * enforced, so index 0 and index 1 of a `callsTo(mock, 2)` result exist or nothing
+ * downstream runs at all — the refusal above happens first. To the type system it is still
+ * an unchecked indexed read, so under `noUncheckedIndexedAccess` it compiles only where the
+ * element type is `any` (an untyped `vi.fn()`, as in the example above) and otherwise wants
+ * `!` or a guard. The bang that buys is a formality, not the blindness this file exists to
+ * remove: `mock.calls[1]!` asserts a call nobody counted, `callsTo(mock, 2)[1]!` asserts one
+ * this function refuses to let be missing.
+ *
+ * That leaves three honest shapes, in order of preference: assert on the mapped list and
+ * index nothing (`expect(calls.map(…)).toEqual([…])`); destructure the mapped list where
+ * comparing two calls is the whole subject; bang the read where neither reads well. #342
+ * learned the middle one the hard way — it wrote a cast into the `.map` callback, which
+ * restored a real element type and reported `TS18048` twice over, and **both times only the
+ * Nuxt typecheck program said so**: the suite, the single-file run and eslint were silent.
+ *
  * The selector carries `lastCallTo`'s meaning unchanged: name the call where anything
  * else can reach the subject, and leave it off only for a purpose-built mock the code
  * under test is the sole caller of.
@@ -154,8 +210,11 @@ function describeSelector<Args extends unknown[]>(select?: CallSelector<Args>): 
 }
 
 /**
- * What arrived instead. The listed calls are the most recent ones, because the
- * selection takes the last match and the strays that displaced it are at that end.
+ * What arrived instead. The listed calls are the most recent ones, which is the useful
+ * end for both callers, for two different reasons: `lastCallTo` takes the last match, so
+ * a stray that displaced the call it wanted is right there — and `callsTo` reports a
+ * count, where the tail is what the run just added and the earlier calls are elided
+ * rather than blamed.
  */
 function describeCalls(calls: unknown[][]): string {
 	if (calls.length === 0)
