@@ -49,9 +49,9 @@ const transparentPixelPng = Uint8Array.from(Buffer.concat([
 ]));
 
 /**
- * An author identity the server does not honour. Every request an intruder makes
- * here still sends it, set to the identity that initiated the operation under
- * attack, because the library used to read this header: it must buy nothing.
+ * An author identity the server does not honour. The library used to read this
+ * header, so every request an intruder makes here still sends it, set to the
+ * identity that initiated the operation under attack. It must buy nothing.
  */
 const UNHONOURED_AUTHOR_ID_HEADER = { 'x-graphics-author-id': 'authorisation-victim-author' };
 
