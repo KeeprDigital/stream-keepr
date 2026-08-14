@@ -264,4 +264,3 @@ describe('reportedMessage', () => {
 		expect(reportedMessage(null)).toBeUndefined();
 	});
 });
-
