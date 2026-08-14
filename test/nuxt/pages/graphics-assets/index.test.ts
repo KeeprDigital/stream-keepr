@@ -1107,6 +1107,63 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.get('[data-testid="library-load-error"]').text())
 			.toContain('[GET] "/api/graphics-assets": 503 Service Unavailable');
 	});
+
+	/**
+	 * The same judgement on the write paths, which did not have it (#350).
+	 *
+	 * A read here goes through `useFetch` and is reported by `reportedMessage` above; a
+	 * write goes through `$fetch` inside a `catch` and was reported by the graphics author
+	 * session's `describeFailure`, which reached for `Error.message` — so the two halves of
+	 * one page answered a refusal differently, and the half that refuses most of what an
+	 * author actually does was the one naming the route. The two surfaces pinned below are
+	 * the ones already carrying a `data-testid`; the rest reach the same seam and are
+	 * covered where it lives, in `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
+	 *
+	 * That is a gap worth naming rather than a property of the page. The lifecycle alert
+	 * renders its message in the default slot and wants only the attribute, which the rule
+	 * above says every alert should carry; the metadata and replacement alerts pass theirs
+	 * as `:title`, which the passthrough stub drops, so those two want the stub taught the
+	 * prop before an assertion on them could fail. Filed as follow-up rather than widened
+	 * into here.
+	 */
+	it('says why an upload was refused rather than naming the route', async () => {
+		const wrapper = await mountPage();
+		const file = new File([new Uint8Array(68)], 'new-scoreboard.png', { type: 'image/png' });
+		mockApiFetch.mockRejectedValue(transportFailure({
+			status: 409,
+			body: { message: 'A Graphic Asset already holds this exact content' },
+			request: `[POST] "/api/graphics-assets/ingestion-operations"`,
+		}));
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="upload-error"]');
+		expect(alert.text()).toContain('A Graphic Asset already holds this exact content');
+		expect(alert.text()).not.toContain('409 Conflict');
+	});
+
+	it('says why an approved remote copy was refused rather than naming the route', async () => {
+		const wrapper = await mountPage();
+		mockApiFetch.mockRejectedValue(transportFailure({
+			status: 503,
+			body: { message: 'The Graphics Asset Library store is unavailable' },
+			request: `[POST] "/api/graphics-assets/ingestion-operations"`,
+		}));
+
+		await wrapper.get('[data-testid="remote-source-url"]')
+			.setValue('https://cdn.example.com/scoreboard.png');
+		await wrapper.get('[data-testid="remote-source-name"]')
+			.setValue('Remote scoreboard logo');
+		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
+		await flushPromises();
+
+		const alert = wrapper.get('[data-testid="remote-copy-error"]');
+		expect(alert.text()).toContain('The Graphics Asset Library store is unavailable');
+		expect(alert.text()).not.toContain('503 Service Unavailable');
+	});
 });
 
 /**

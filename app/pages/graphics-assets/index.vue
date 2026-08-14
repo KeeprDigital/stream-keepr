@@ -123,6 +123,16 @@ const {
  * server preserves through sanitizing: an exhausted byte store and an unavailable library
  * are both answers this page exists to relay, and both are 5xx. A genuinely sanitized 5xx
  * still falls back to the transport's line, which reads as machinery (#271).
+ *
+ * The 401 in that example is quoted, and it is worth saying plainly that this page's
+ * *writes* answer the same status differently: every one of them goes through the
+ * graphics author session's `describeFailure`, which replaces a 401's sentence with the
+ * lapse notice and the reload. Both reads here hit `requireGraphicsAuthorSession` routes,
+ * so the sentence quoted above is that guard's own. The difference is the write: it may
+ * have left a Graphics Ingestion Operation owned by a session nobody holds, which is
+ * ADR-0003's cost and what the reload addresses, while a refused read has nothing staked
+ * and is better served by what the route actually said. Whether a read should name the
+ * lapse too is a fair question and is not settled here (#350).
  */
 const loadFailureMessage = computed(() => reportedMessage(error.value));
 const capacityFailureMessage = computed(() => reportedMessage(capacityError.value));
