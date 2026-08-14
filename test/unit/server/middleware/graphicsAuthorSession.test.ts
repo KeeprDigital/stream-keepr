@@ -11,9 +11,10 @@ import { lastCallTo } from '~~/test/helpers/lastCallTo';
  * so following it into the domain layer would charge every route with every refusal any
  * service raises. `test/unit/integration/realtimeDiagnosis.test.ts` asserts the
  * narrowing directly (`scan.files` does not contain
- * `server/modules/graphics-author-session.ts`), and that file's own comment names what
- * survives it: "a middleware that genuinely refuses through a service; there is none
- * today."
+ * `server/modules/graphics-author-session.ts`), and names what survives it as "a
+ * middleware refusing through the domain layer". `routeRefusalScan.ts`'s own
+ * `serverMiddlewareFiles` docblock puts it as the open question: "The residual is a
+ * middleware that genuinely refuses through a service; there is none today."
  *
  * This is the one place that could stop being true. The module next door raises a
  * banded 401 from `requireGraphicsAuthorSession`, and this middleware is its neighbour's
