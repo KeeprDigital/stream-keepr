@@ -561,10 +561,14 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 		});
 
-		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
+		it('leaves an operation whose resumed transfer completed out of the candidate list', async () => {
+			// `completed` is absent from the retained stages, so this operation is
+			// never listed as a candidate at all. What spares it is the candidate
+			// query, not the expiry's observed-instant guard — which the test below
+			// covers, on an operation that stays in a retained stage.
 			const context = createRetentionLibrary();
 			const resumed = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'progress-cancels-expiry',
+				idempotencyKey: 'resumed-transfer-completed',
 				initiatedBy: 'retention-author',
 				name: 'Resumed transfer',
 				sourceFileName: 'logo.png',
@@ -589,6 +593,63 @@ describe('scheduled Graphics Asset Library retention', () => {
 				operationId: resumed.id,
 				initiatedBy: resumed.initiatedBy,
 			})).resolves.toMatchObject({ stage: 'completed' });
+		});
+
+		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
+			// The guard is the expiry's compare-and-swap on the instant the sweep
+			// observed, so the operation has to remain in a stage the sweep would
+			// otherwise expire: a resume that also left the retained stages would be
+			// refused by the claim's stage predicate instead, and the observed
+			// instant would never be the reason for anything.
+			const delegate = createD1GraphicsAssetCatalogue(harness.database);
+			const observed: string[] = [];
+			const catalogue: typeof delegate = {
+				...delegate,
+				async listStagedInputExpiryCandidates(input) {
+					const candidates = await delegate.listStagedInputExpiryCandidates(input);
+					observed.push(...candidates.map(candidate => candidate.operationId));
+					// The resume lands between the listing and the claim: the operation
+					// checkpoints, staying in `created`, while the sweep still carries
+					// the instant it read a moment earlier.
+					for (const candidate of candidates) {
+						await harness.client.execute({
+							sql: 'UPDATE graphics_ingestion_operations SET updated_at = ? WHERE id = ?',
+							args: [
+								new Date(candidate.observedUpdatedAt).getTime() + 1000,
+								candidate.operationId,
+							],
+						});
+					}
+					return candidates;
+				},
+			};
+			const context = createRetentionLibrary({ catalogue });
+			const resumed = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'progress-cancels-expiry',
+				initiatedBy: 'retention-author',
+				name: 'Resumed transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+
+			context.advance(DAY + 1);
+			const swept = await context.library.runGraphicsRetention();
+
+			// Listed, and refused anyway. Without the first assertion every one below
+			// it would also hold for an operation the sweep never considered.
+			expect(observed).toEqual([resumed.id]);
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.library.getIngestionOperation({
+				operationId: resumed.id,
+				initiatedBy: resumed.initiatedBy,
+			})).resolves.toMatchObject({ stage: 'created' });
+			expect(await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			})).toEqual([]);
 		});
 
 		it('records Evidence for each expiry without exposing object keys or filenames', async () => {
