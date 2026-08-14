@@ -155,13 +155,21 @@ const USwitchStub = defineComponent({
  * Stands in for the Graphic Asset picker, reflecting the reference it was handed
  * so a test can ask what the panel pinned rather than what the library rendered.
  *
- * Its `media-asset-picker` testid names only the pickers the panel passes no
- * testid of its own to — the item panel's. A host-passed `data-testid` wins the
- * fallthrough merge outright and replaces this one, so the Graphic Inputs panel's
- * default picker answers to `graphic-input-default` and to nothing else.
+ * The testid is *bound*, not hardcoded: a host-passed `data-testid` is what it
+ * answers to, and `media-asset-picker` is the fallback for a picker the panel names
+ * no other way — the item panel's. So the Graphic Inputs panel's default picker
+ * answers to `graphic-input-default` and to nothing else, and it does so visibly
+ * here rather than through an attribute-fallthrough merge whose winner a reader of
+ * this file had to be told about (#365; #352 documented the hardcoded form instead
+ * of changing it, and the docblock that did is what this replaces).
+ *
+ * `inheritAttrs` is off because the binding is now explicit; `v-bind="$attrs"` keeps
+ * everything else the host passes reaching the element, and the individual
+ * `:data-testid` after it is the one that wins.
  */
 const GraphicsAssetFocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
+	inheritAttrs: false,
 	props: {
 		modelValue: { type: Object, required: false },
 		eventId: { type: Number, required: false },
@@ -170,7 +178,7 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		videoTarget: { type: String, required: false },
 	},
 	emits: ['update:modelValue', 'select'],
-	template: '<div data-testid="media-asset-picker" :data-field-label="fieldLabel" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
+	template: '<div v-bind="$attrs" :data-testid="$attrs[\'data-testid\'] ?? \'media-asset-picker\'" :data-field-label="fieldLabel" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
 });
 
 async function mountComponent(options: {
@@ -1145,8 +1153,11 @@ describe('graphicsCompositorInspector', () => {
 		// A null default is not a value the select can carry, so the panel maps it onto
 		// the No default option it offers. Without that mapping the field shows nothing
 		// selected, which reads as an option the author has not chosen yet.
-		expect(selectField(wrapper, 'graphic-input-default')?.props('items')?.[0])
-			.toEqual({ label: 'No default', value: '' });
+		//
+		// That the option is *offered* is pinned by the items assertion in 'sets a choice
+		// Graphic Input’s default from its own declared options', and was asserted here
+		// too until #365 — one edit killed both rows (#352's M4), so this one was crediting
+		// itself with coverage it did not add. What is only pinned here is the mapping.
 		expect(selectField(wrapper, 'graphic-input-default')?.props('modelValue')).toBe('');
 	});
 
@@ -1208,6 +1219,23 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('assetKind')).toBe('silent-video');
+	});
+
+	it('names this panel’s default picker as its own, not as the item picker', async () => {
+		// Two panels mount the same picker and a test that finds "the" picker by testid
+		// has to be able to tell them apart. The name is the panel's, passed at the call
+		// site; the stub's `media-asset-picker` fallback is for the item panel, which
+		// passes none — so it must not appear here, where a name was passed.
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(wrapper.find('[data-testid="graphic-input-default"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="media-asset-picker"]').exists()).toBe(false);
 	});
 
 	it('shows a media Graphic Input’s declared default as the reference it pins', async () => {
