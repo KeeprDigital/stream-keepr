@@ -214,10 +214,22 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 		 * time out — never on an unloaded machine, and above roughly load 8 in
 		 * something like 8 of 60 runs — while the work itself is genuine: a hundred
 		 * identities, their revisions, derivatives and references, against real D1.
-		 * A minute is generous against the measured cost — under two seconds on a
-		 * quiet machine, five to ten when #123's operators saw it fail — and the
-		 * margin is the point: a failure here should mean the batch broke, not that
-		 * a sibling worktree was busy.
+		 * There is no waste to remove, so what it wanted was a budget something had
+		 * chosen it against.
+		 *
+		 * Measured rather than inherited: 1985 / 2158 / 2174 ms in three runs on a
+		 * quiet machine at load ~3, and 2391–2606 ms across sixteen runs with eight
+		 * copies of this file running at once. #123's operators report five to ten
+		 * seconds where it failed, on machines running six to eight worktrees' full
+		 * suites at load 16–36 — a condition the runs above do not reach, so that
+		 * range is theirs and not a number from here.
+		 *
+		 * A minute is therefore some twenty-three times the worst cost measured here
+		 * and six times the worst anyone has reported, and the margin is the point: a
+		 * failure here should mean the batch broke, not that a sibling worktree was
+		 * busy. The budget is load-bearing rather than decorative — under
+		 * `--testTimeout=1` this is the one test in the file that survives, and all
+		 * five unbudgeted siblings die at 1 ms.
 		 */
 		it('publishes a hundred created identities and their references at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);
