@@ -32,6 +32,8 @@
 		"test:integration": "vitest --config vitest.integration.config.ts",
 		"test:integration:run": "vitest run --config vitest.integration.config.ts",
 		"test:browser:still-images": "node scripts/run-still-image-browser-acceptance.mjs",
+		"test:ingestion:still-images": "node scripts/run-still-image-ingestion-acceptance.mjs",
+		"test:ingestion:still-images:deployed": "node scripts/run-still-image-ingestion-acceptance.mjs --deployed",
 		"test:browser:still-images:deployed": "node scripts/run-still-image-browser-acceptance.mjs --deployed",
 		"test:browser:fonts": "node scripts/run-font-browser-acceptance.mjs",
 		"test:browser:fonts:library": "node scripts/run-font-browser-acceptance.mjs --library",

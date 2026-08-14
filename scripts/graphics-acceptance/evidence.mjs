@@ -95,6 +95,12 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'package-duplicate-commit',
 	'package-retry-not-idempotent',
 	'package-interrupted-result-exposed',
+	// Still-image ingestion (#302). The runtime distinction the pair exists
+	// for: a refusal on JPEG or WebP while PNG publishes is the codec Wasm
+	// failing on the runtime under test, because PNG is the one still-image
+	// path that never touches Wasm.
+	'still-image-ingestion-refused',
+	'still-image-ingestion-facts-unexpected',
 	// Harness plumbing.
 	'harness-precondition-unmet',
 	'harness-installation-unreachable',
