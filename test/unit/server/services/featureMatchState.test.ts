@@ -5,8 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefaults';
 import { createInitialFeatureMatchState } from '~~/shared/types/featureMatchState';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 const mockPublishMessage = vi.fn();
+
+/** The announcement `applyCommand` makes, told apart by its message type. */
+function isEventApplied(call: unknown[]): boolean {
+	return call[1] === 'featureMatchSession:eventApplied';
+}
 
 vi.mock('hub:db', () => ({ db: mockDb }));
 
@@ -724,7 +730,11 @@ describe('feature match session state service', () => {
 				baseSequence: 3,
 			}, 'origin-1', { publish: true });
 
-			const [,, payload] = mockPublishMessage.mock.calls[0]!;
+			// Named rather than taken from position 0: this mock records every message the
+			// service publishes, so a second announcement added ahead of this one would
+			// quietly move what is read here, and a run that published nothing died as a
+			// type crash instead of saying so (#273, #280, swept in #342).
+			const [,, payload] = lastCallTo(mockPublishMessage, isEventApplied);
 			expect(payload).not.toHaveProperty('session');
 		});
 

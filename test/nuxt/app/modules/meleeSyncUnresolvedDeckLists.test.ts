@@ -6,6 +6,10 @@ import {
 	groupUnresolvedDeckCards,
 	useMeleeSyncUnresolvedDeckListResolution,
 } from '~~/app/modules/melee-sync/unresolvedDeckLists';
+import { callsTo } from '~~/test/helpers/lastCallTo';
+
+/** Where the workflow looks a printed card name up (`unresolvedDeckLists.ts`). */
+const SCRYFALL_SEARCH_ENDPOINT = 'https://api.scryfall.com/cards/search';
 
 const mockEventRepo = {
 	listUnresolvedDeckCards: vi.fn(),
@@ -165,7 +169,13 @@ describe('melee Sync unresolved Deck List module', () => {
 		const olderRequest = workflow.searchResolveCandidates();
 		workflow.resolveSearchTerm.value = 'second';
 		const newerRequest = workflow.searchResolveCandidates();
-		expect(mockFetch.mock.calls[0]?.[1].signal.aborted).toBe(true);
+		// Two searches, counted rather than assumed, and named rather than taken from
+		// position 0: this `$fetch` mock stands in for the module's, which `useServerTime`
+		// also samples the clock through (#123). A stray at position 0 hands back options
+		// with no `signal` on them, and a run that dispatched only one search would read
+		// `undefined` here instead of saying so (#273, #280, swept in #342).
+		const [olderSearch] = callsTo(mockFetch, 2, SCRYFALL_SEARCH_ENDPOINT);
+		expect(olderSearch[1].signal.aborted).toBe(true);
 
 		const newestResult = { id: 'new', name: 'Newest', set: 'new' };
 		secondSearch.resolve({ data: [newestResult] });

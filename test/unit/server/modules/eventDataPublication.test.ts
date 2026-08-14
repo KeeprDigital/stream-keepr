@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
 
 /** The storage ceiling a Screen's `modeConfigs` is bounded by, from the Screen schema. */
@@ -719,6 +720,15 @@ describe('event Data publication module', () => {
 	 * and the only thing that would notice is a lower third on air holding a stale name.
 	 */
 	describe('a Screen change is announced rather than shipped', () => {
+		/** The announcement each row below is about, told apart by its message type. */
+		function isScreenUpdate(call: unknown[]): boolean {
+			return call[1] === 'screen:updated';
+		}
+
+		function isScreenCreate(call: unknown[]): boolean {
+			return call[1] === 'screen:created';
+		}
+
 		/**
 		 * A Screen's `modeConfigs` is bounded by `MAX_MODE_CONFIGS_BYTES` (512 KiB),
 		 * and a realtime message is bounded by far less — 64 KiB on the packages
@@ -748,7 +758,12 @@ describe('event Data publication module', () => {
 
 			// Size first, then shape: a regression here puts half a megabyte of
 			// fixture in the diff, and the byte count says what went wrong on its own.
-			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			// The announcement is chosen by name, not taken from the end of the list:
+			// this mock records every message the module publishes, so a write that
+			// grows a second announcement would silently move the one under test out
+			// from under `.at(-1)`, and a write that published nothing died here as a
+			// type crash rather than saying so (#273, #280, swept in #342).
+			const [, , payload] = lastCallTo(mockPublishMessage, isScreenUpdate);
 			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
 				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
 			expect(payload).toEqual({ screenId: 8 });
@@ -760,7 +775,7 @@ describe('event Data publication module', () => {
 
 			await publication.screenCreated({ eventId: 1, entity: entity as any });
 
-			const [, , payload] = mockPublishMessage.mock.calls.at(-1)!;
+			const [, , payload] = lastCallTo(mockPublishMessage, isScreenCreate);
 			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
 				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
 			expect(payload).toEqual({ screenId: 8 });

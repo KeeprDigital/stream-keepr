@@ -31,6 +31,14 @@ enableAutoUnmount(afterEach);
  */
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockApiFetch);
+
+/**
+ * The one call that arrives here without this file asking for it: `useServerTime` is a
+ * lazy singleton that samples the clock through the same `$fetch` (#123), so the mock
+ * above records requests the composition never made. Selected out where it is asserted
+ * about, never counted as one of the list's own (#342).
+ */
+const CLOCK_SYNC_ENDPOINT = '/api/time';
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: vi.fn() }));
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
 mockNuxtImport('navigateTo', () => vi.fn());
@@ -162,6 +170,11 @@ async function mountList(props: Partial<{
 describe('screen list — the cards it composes, and the Screen each one is for', () => {
 	function cards(wrapper: Awaited<ReturnType<typeof mountList>>) {
 		return wrapper.findAllComponents(ScreenListItem);
+	}
+
+	/** Everything the list actually asked for: the clock sync above is not its request. */
+	function requestsOtherThanTheClockSync() {
+		return mockApiFetch.mock.calls.filter(([path]) => String(path) !== CLOCK_SYNC_ENDPOINT);
 	}
 
 	/**
@@ -397,10 +410,22 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 	 * mount is the staleness #231 and #269 were about — one per card, on a list an
 	 * operator leaves open. The card's own suite pins that for one card; this pins that
 	 * rendering a whole list of them does not add up to a request either.
+	 *
+	 * Filtered rather than counted whole, which is the half this was wrong about until
+	 * #342. `$fetch` is mocked for the module, so the clock sync writes into the same
+	 * mock, and an `/api/time` sample landing inside this window reddened an unfiltered
+	 * `not.toHaveBeenCalled()` four times — twice on #342 and once on round fifteen's
+	 * authoritative round-close run, where a suite nobody had touched read as a
+	 * regression. A negative guard on a shared mock is blind in exactly the way a
+	 * positive one is, and wants the same selection (#273, #280, #123).
+	 *
+	 * The breadth survives the filter: every call except that one is still asserted
+	 * away, so a capability minted at mount fails this — and so does any other request
+	 * the composition starts, which counting only capability requests would have missed.
 	 */
 	it('mints no asset capability merely by rendering the list', async () => {
 		await mountList();
 
-		expect(mockApiFetch).not.toHaveBeenCalled();
+		expect(requestsOtherThanTheClockSync()).toEqual([]);
 	});
 });
