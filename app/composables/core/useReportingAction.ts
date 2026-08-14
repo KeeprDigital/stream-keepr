@@ -18,7 +18,9 @@ import type { AsyncActionOptions } from './useAsyncAction';
  * It is a separate composable, not a second method on `useAsyncAction`, because reporting
  * the authority's sentence is a decision a surface makes: the Screen Output showing a bare
  * status line and the Live Control showing a refusal are not the same reader, and a store
- * adopts this by naming it (#262 adopts six, #245 the seventh).
+ * adopts this by naming it. #245 was the first to, and #262 the round that took a batch of
+ * others; adopters have been added since, and this line is not where their number is kept.
+ * It is auto-imported, so its call sites are what a live count has to be read from.
  *
  * A second, practical reason has since retired, and the rest of this is history. Suites
  * once stood a hand-written copy of `useAsyncAction` in for the real one returning
