@@ -741,6 +741,214 @@ describe('scheduled Graphics Asset Library retention', () => {
 				staging.resumeMultipart(identity, uploadId!),
 			).resolves.toMatchObject({ outcome: 'unavailable' });
 		});
+
+		it('reports no reclaimed bytes when the multipart abort could not land', async () => {
+			const oversized = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 4096);
+			oversized.set(pixelPng, 0);
+			const delegate = createInMemoryStagingGraphicsObjectStore();
+			let uploadId: GraphicsMultipartUploadIdentity | undefined;
+			const staging: InMemoryGraphicsStagingObjectStore = {
+				...delegate,
+				async beginMultipart(input) {
+					const started = await delegate.beginMultipart(input);
+					if (started.outcome === 'started')
+						uploadId = started.upload.uploadId;
+					return started;
+				},
+			};
+			const context = createRetentionLibrary({
+				staging,
+				remoteSource: createGraphicsRemoteSourceFetcher({
+					resolver: {
+						async resolve() {
+							return { outcome: 'resolved', addresses: ['93.184.216.34'] };
+						},
+					},
+					async fetch() {
+						return new Response(oversized, { status: 200 });
+					},
+				}),
+			});
+			const stranded = await context.library.initiateRemoteGraphicAssetCopy({
+				idempotencyKey: 'unabortable-remote-copy-upload',
+				initiatedBy: 'retention-author',
+				name: 'Interrupted remote source',
+				sourceFileName: 'logo.png',
+			});
+			const identity = graphicsObjectIdentity(`ingestion/${stranded.id}/source`);
+			staging.injectTransientFailure('multipart-upload-part');
+			staging.injectTransientFailure('multipart-abort');
+			await context.library.copyRemoteGraphicAssetSource({
+				operationId: stranded.id,
+				initiatedBy: stranded.initiatedBy,
+				sourceUrl: 'https://cdn.example.test/scoreboard.png',
+			});
+
+			// The sweep's own abort finds the store unavailable too, so the upload
+			// it was going to reclaim is still holding its parts afterwards.
+			staging.injectTransientFailure('multipart-abort');
+			context.advance(DAY + HOUR);
+			await context.library.runGraphicsRetention();
+
+			await expect(
+				staging.resumeMultipart(identity, uploadId!),
+			).resolves.toMatchObject({ outcome: 'resumed' });
+			const [entry] = await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			});
+			expect(entry).toMatchObject({
+				subject: { kind: 'graphics-ingestion-operation', id: stranded.id },
+			});
+			expect(entry?.detail.bytesFreed).toBeUndefined();
+		});
+
+		it('reports retained bytes rather than reclaimed ones when the staged objects survive', async () => {
+			const context = createRetentionLibrary();
+			context.canonical.injectTransientFailure('create', 2);
+			const operation = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'unreleasable-staged-input',
+				initiatedBy: 'retention-author',
+				name: 'Interrupted publication',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			const failed = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+
+			context.advanceTo(new Date(new Date(failed.updatedAt).getTime() + 7 * DAY).toISOString());
+			context.staging.injectTransientFailure('delete', 2);
+			const swept = await context.library.runGraphicsRetention();
+
+			// The catalogue row is expired — the sweep claimed it before it acted —
+			// but the bytes it claimed are still occupying the staging store, so the
+			// Evidence records them as retained rather than as freed.
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 1,
+			});
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			const [entry] = await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			});
+			expect(entry).toMatchObject({
+				subject: { kind: 'graphics-ingestion-operation', id: operation.id },
+			});
+			expect(entry?.detail.bytesFreed).toBeUndefined();
+			expect(entry?.detail.bytesReserved).toBe(pixelPng.byteLength);
+		});
+
+		it('leaves the rest of the batch for the next sweep once the store is unavailable', async () => {
+			const context = createRetentionLibrary();
+			const first = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'unavailable-store-first',
+				initiatedBy: 'retention-author',
+				name: 'First abandoned transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.advance(1000);
+			const second = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'unavailable-store-second',
+				initiatedBy: 'retention-author',
+				name: 'Second abandoned transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				declaredByteLength: pixelPng.byteLength,
+			});
+
+			context.advance(DAY + 1);
+			// Exactly the two deletes the first candidate needs, so a sweep that
+			// carried on would find the store working again for the second one.
+			context.staging.injectTransientFailure('delete', 2);
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 1,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.library.getIngestionOperation({
+				operationId: first.id,
+				initiatedBy: first.initiatedBy,
+			})).resolves.toMatchObject({ failure: { code: 'staged-input-expired' } });
+			await expect(context.library.getIngestionOperation({
+				operationId: second.id,
+				initiatedBy: second.initiatedBy,
+			})).resolves.toMatchObject({ stage: 'created' });
+
+			context.advance(1000);
+			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
+				expiredIncompleteTransfers: 1,
+				expiredCompletedInput: 0,
+			});
+			const ledger = await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			});
+			expect(ledger.map(entry => [entry.subject.id, entry.detail.bytesFreed])).toEqual([
+				[second.id, pixelPng.byteLength],
+				[first.id, undefined],
+			]);
+		});
+
+		it('releases nothing for a candidate whose expiry did not commit', async () => {
+			// A refused claim has to leave the staging store untouched; the order
+			// this pins, and why it is that way round, is stated where it is
+			// decided, above the release call in expireStagedInput.
+			const catalogue = {
+				...createD1GraphicsAssetCatalogue(harness.database),
+				async expireStagedInput() {
+					return false;
+				},
+			};
+			const context = createRetentionLibrary({ catalogue });
+			const resumed = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'claim-refused-keeps-objects',
+				initiatedBy: 'retention-author',
+				name: 'Resumed transfer',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			context.canonical.injectTransientFailure('create', 2);
+			await context.library.uploadGraphicAsset({
+				operationId: resumed.id,
+				initiatedBy: resumed.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			const identity = graphicsObjectIdentity(`ingestion/${resumed.id}/source`);
+
+			context.advance(8 * DAY);
+			const swept = await context.library.runGraphicsRetention();
+
+			expect(swept.stagedInput).toEqual({
+				expiredIncompleteTransfers: 0,
+				expiredCompletedInput: 0,
+			});
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+			expect(await evidenceOf(context.library, {
+				categories: ['staged-input-expired'],
+			})).toEqual([]);
+		});
 	});
 
 	describe('revision pruning', () => {

@@ -76,3 +76,43 @@ If content becomes reachable while its bytes are being deleted, the sweep marks
 it Unavailable Graphic Asset Content and records a `content-deletion-conflict`
 Evidence entry rather than losing a reachable identity silently. That is a repair
 case, not a data-loss case: the identity and its references stay intact.
+
+## Staged input the sweep could not release
+
+Staged input expiry cannot be two-phase the same way. Expiring the operation is
+what claims it — the update only lands if no durable checkpoint advanced since
+the candidate was listed — so releasing the staging objects first would delete
+the input of an operation that had just resumed. The claim therefore commits
+before the objects go, and an unavailable staging store leaves them behind with
+the operation already expired.
+
+What the sweep guarantees instead is that it never reports those bytes as
+reclaimed, and that it stops:
+
+- the `staged-input-expired` entry records **Bytes reserved** rather than
+  **Bytes freed**, meaning the operation is over but its staged bytes may still
+  be occupying the staging store;
+- the rest of that batch is left untouched for the next sweep, because a store
+  that cannot release one candidate will not release the next twenty either.
+
+So an expiry entry showing reserved bytes is the one case where the staging
+store holds objects the catalogue no longer accounts for. Nothing else reclaims
+them: reconciliation scans canonical objects, not staging ones.
+
+Neither storage figure can find them, which is what makes the entry the only
+lead. The retention view above carries deadlines and canonical pressure, not
+staging usage, and its staged-input list holds only operations that still have
+staged input to lose — an expired one has left it. Capacity's staging
+`usedBytes` is the sum of every operation's `staging_used_byte_length`, and the
+same statement that expires the operation sets that column to zero, so the bytes
+leave the figure at the instant they strand.
+
+Recovering the space after a staging outage therefore starts at the ledger. Read
+it over the outage window filtered to the expiry category
+(`GET /api/admin/graphics-assets/evidence?category=staged-input-expired`, or
+`?group=ingestion`), take the operation identity from every entry showing
+**Bytes reserved** rather than **Bytes freed**, and remove that operation's
+`ingestion/<operationId>/source` and `ingestion/<operationId>/video-poster`
+from the staging bucket directly. Where the operation was mid-multipart, what
+survives under the `source` key is an unfinished upload rather than a stored
+object, and it is aborted rather than deleted.
