@@ -67,6 +67,23 @@ describe('featureMatchOverlayPreviewMessages', () => {
 			}, expectedFromEditor)).toBe(true);
 		});
 
+		it('ignores a selection pushed by anyone but the embedding editor', () => {
+			// The push carries what the frame will mark as under authoring, and this
+			// guard is the only thing between that and any same-origin script on the
+			// page. Its sibling below covers the same check on the way back; without
+			// this, dropping the sender check here failed nothing in the module's own
+			// suite and only one component test noticed.
+			for (const message of [
+				{ origin: 'https://attacker.test', source: editorWindow },
+				{ origin: 'https://keepr.test', source: previewWindow },
+			]) {
+				expect(isFeatureMatchOverlayPreviewSelectedTargetMessage({
+					...message,
+					data: { type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE, target: sourceTarget },
+				}, expectedFromEditor)).toBe(false);
+			}
+		});
+
 		it('accepts the frame’s selection reported back, and only from that frame', () => {
 			const message = {
 				origin: 'https://keepr.test',
