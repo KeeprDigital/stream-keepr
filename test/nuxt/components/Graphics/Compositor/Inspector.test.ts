@@ -158,14 +158,20 @@ const USwitchStub = defineComponent({
  * The testid is *bound*, not hardcoded: a host-passed `data-testid` is what it
  * answers to, and `media-asset-picker` is the fallback for a picker the panel names
  * no other way — the item panel's. So the Graphic Inputs panel's default picker
- * answers to `graphic-input-default` and to nothing else, and it does so visibly
- * here rather than through an attribute-fallthrough merge whose winner a reader of
- * this file had to be told about (#365; #352 documented the hardcoded form instead
- * of changing it, and the docblock that did is what this replaces).
+ * answers to `graphic-input-default` and to nothing else. The expression on the
+ * element says which wins; the hardcoded form it replaces said the opposite and
+ * relied on attribute fallthrough to overrule it, so the template read as a claim
+ * that had to be corrected by prose (#365; #352 documented that form rather than
+ * changing it, and its docblock is what this replaces).
  *
  * `inheritAttrs` is off because the binding is now explicit; `v-bind="$attrs"` keeps
  * everything else the host passes reaching the element, and the individual
  * `:data-testid` after it is the one that wins.
+ *
+ * Worth knowing before "fixing" this back: the suite passes either way. Restoring the
+ * hardcoded template and `inheritAttrs` together is green on all 102 tests, because
+ * fallthrough really does deliver `graphic-input-default`. What the pins below catch
+ * is the panel dropping the attribute, not the stub's spelling of it.
  */
 const GraphicsAssetFocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',

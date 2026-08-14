@@ -18,9 +18,14 @@ import type { AsyncActionOptions } from './useAsyncAction';
  * It is a separate composable, not a second method on `useAsyncAction`, because reporting
  * the authority's sentence is a decision a surface makes: the Screen Output showing a bare
  * status line and the Live Control showing a refusal are not the same reader, and a store
- * adopts this by naming it. #245 was the first to, and #262 the round that took a batch of
- * others; adopters have been added since, and this line is not where their number is kept.
- * It is auto-imported, so its call sites are what a live count has to be read from.
+ * adopts this by naming it rather than by hand-copying the wrapper #245 wrote when there
+ * was no composable to put one in (`967d1aa`, #262). So the order runs the other way from
+ * the ticket numbers: #262 built this and moved six stores onto it (`f82864a`), and #245's
+ * own live-session store followed as the seventh, its inline re-raise becoming a single
+ * delegation (`32e858e`). Those two numbers are that moment's and are kept here as history
+ * — #271 added the Card store and the Player List member Module, #353 the Screen store, and
+ * this line is not where a running total belongs. It is auto-imported, so a live count has
+ * to be read from the call sites.
  *
  * A second, practical reason has since retired, and the rest of this is history. Suites
  * once stood a hand-written copy of `useAsyncAction` in for the real one returning
