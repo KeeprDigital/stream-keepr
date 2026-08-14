@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { authorSessionCookie } from '../../../scripts/graphics-acceptance/chromium.mjs';
 
-/** The name the installation issues its graphics author session under. */
-const COOKIE = 'graphics_author_session=W5nJ2p.Ht8sQ0vLb3xR7dK1cAe4mZgYuF';
+/**
+ * The name the installation issues its graphics author session under
+ * (`server/modules/graphics-author-session.ts:11`).
+ */
+const COOKIE_NAME = 'stream_keepr_graphics_author_session';
+/**
+ * Shaped like a real token rather than merely opaque: the installation mints one
+ * as two concatenated `crypto.randomUUID()`s (`graphics-author-session.ts:159`),
+ * so it is hex and hyphens and carries no `.` or `=` of its own.
+ */
+const COOKIE_VALUE = '3f9c1a72-5d84-4e21-9b6f-0a7c2e8d41b5'
+	+ 'c4e70d92-1f38-4a6b-8c25-7d09e3f1a2b6';
+const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
 
 /**
  * The `--library` font gate stages an ingestion from Node and then reads it
@@ -12,20 +23,25 @@ const COOKIE = 'graphics_author_session=W5nJ2p.Ht8sQ0vLb3xR7dK1cAe4mZgYuF';
  * own could not pass by construction (#276).
  *
  * The live shape of that fact — the browser reading the operation `200` as its
- * initiator — needs a running installation, a signing key, and a local
- * Chromium. What is checkable here is the cookie the browser is handed, and it
- * has to match the one the installation issued attribute for attribute, because
- * a cookie stored under different rules is a different cookie for the requests
- * that matter.
+ * initiator — needs a running installation and a local Chromium. What is
+ * checkable here is everything below that: the cookie the browser is handed,
+ * which has to match the one the installation issued attribute for attribute
+ * because a cookie stored under different rules is a different cookie for the
+ * requests that matter, and the conversation that installs it.
  */
 describe('the author session the acceptance browser is given', () => {
 	it('splits the pair the installation issued at its first separator', () => {
 		const cookie = authorSessionCookie('http://127.0.0.1:8787/_acceptance/static-font-v1.html', COOKIE);
-		expect(cookie.name).toBe('graphics_author_session');
-		expect(cookie.value).toBe('W5nJ2p.Ht8sQ0vLb3xR7dK1cAe4mZgYuF');
+		expect(cookie.name).toBe(COOKIE_NAME);
+		expect(cookie.value).toBe(COOKIE_VALUE);
 	});
 
-	it('keeps a value containing an "=" whole, as base64 padding routinely is', () => {
+	/**
+	 * This installation's own token carries no `=`, but a cookie value may, and
+	 * the harness reads whatever it was handed rather than what it expects — so
+	 * the split is at the first separator, not the last.
+	 */
+	it('keeps a value containing an "=" whole', () => {
 		expect(authorSessionCookie('http://127.0.0.1:8787/', 'session=YWJjZA==').value).toBe('YWJjZA==');
 	});
 

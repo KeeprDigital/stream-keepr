@@ -313,6 +313,73 @@ describe('a harness printing evidence it cannot format', () => {
 		expect(observed.stderr).not.toContain(REPOSITORY_ROOT);
 	});
 
+	/**
+	 * The half of that guard which asks whether the formatter is talking at all.
+	 * An error from anywhere else may say anything — including nothing
+	 * path-shaped — so "has no slash in it" is not what makes a message
+	 * printable, and a message that passes only that test must still be refused.
+	 */
+	it('does not echo a non-formatter error merely because it carries no path', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({
+				get checked() {
+					throw new Error('boom');
+				},
+			}),
+		}));
+
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.stderr).not.toContain('boom');
+		expect(observed.exitCode).toBe(1);
+	});
+
+	/**
+	 * And the other half. A refusal's message is built from the harness name, a
+	 * leak code, and a **field name** — which is a literal chosen by whoever
+	 * wrote the detail, not a value the formatter checked. One shaped like a path
+	 * satisfies the formatter's own prefix and is exactly what must not be
+	 * printed, so being in the right shape is not sufficient either.
+	 */
+	it('does not echo a formatter-shaped message whose field name is path-shaped', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async () => ({ 'canonical/key': AN_OBJECT_KEY }),
+		}));
+
+		expect(observed.stderr).toBe(
+			'delivery-v1 acceptance failed:\n'
+			+ 'delivery-v1 evidence-report-refused\n',
+		);
+		expect(observed.stderr).not.toContain('canonical/key');
+		expect(observed.exitCode).toBe(1);
+	});
+
+	/**
+	 * The notes path prints through the same formatter and sits outside the run's
+	 * try exactly as the failure path does, so a note whose detail leaks could
+	 * take the harness down after every check had already passed.
+	 */
+	it('degrades a note whose detail is refused, without failing the run', async () => {
+		const observed = await observeHarness(() => runAcceptanceHarness({
+			harness: 'delivery-v1',
+			run: async ({ note }) => {
+				note({ code: 'delivery-cache-never-hit', detail: { key: AN_OBJECT_KEY } });
+			},
+		}));
+
+		expect(observed.stdout).toBe(
+			'delivery-v1 delivery-cache-never-hit detail=withheld\n'
+			+ 'delivery-v1 evidence-opaque-token-leak field=key (reported, not enforced)\n'
+			+ 'delivery-v1 acceptance passed checks=0\n',
+		);
+		expect(observed.stdout).not.toContain(AN_OBJECT_KEY);
+		expect(observed.stderr).toBe('');
+	});
+
 	it('still prints an ordinary pass, and a deferral under its instructions', async () => {
 		const passed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
