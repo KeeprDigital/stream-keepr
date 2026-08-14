@@ -1631,6 +1631,7 @@ onMounted(async () => {
 								class="mt-3"
 								color="error"
 								variant="soft"
+								:data-testid="`lifecycle-error-${asset.id}`"
 							>
 								<p>{{ lifecycleErrorByAssetId[asset.id] }}</p>
 							</UAlert>
