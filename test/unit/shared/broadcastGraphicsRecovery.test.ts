@@ -312,5 +312,42 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(carriedForwardBroadcastGraphicsLiveState({ playout: 'slate', inputs: { a: 1 } }))
 				.toEqual(createInitialBroadcastGraphicsLiveState());
 		});
+
+		/**
+		 * This function builds both of its results by assigning onto a factory call
+		 * rather than by spreading one into an object literal, so the bundler cannot
+		 * flatten the call into duplicate keys (#324, #338, #348). `Object.assign`
+		 * mutates its target, which the spread did not, and every target here is a
+		 * factory that returns a fresh literal today. A later edit that made either
+		 * factory hand back a shared constant instead would put one Broadcast
+		 * Graphic's carried working values into another's state, and every call to
+		 * this function into the state the next call starts from — the fix's own
+		 * failure mode, so it gets its own pin.
+		 *
+		 * Nothing else caught it: both aliasing edits survived all 240 tests across
+		 * the eight unit files that touch these factories.
+		 */
+		it('gives every graphic and every epoch its own state to be assigned into', () => {
+			const first = carriedForwardBroadcastGraphicsLiveState({
+				inputs: {
+					slate: { working: { name: 'Ava' } },
+					bug: { working: { name: 'Sam' } },
+				},
+				sources: { slate: { player: 7 } },
+			});
+			const second = carriedForwardBroadcastGraphicsLiveState({ inputs: {} });
+
+			// Per graphic: a shared inputs factory would leave both entries as whichever
+			// graphic was assigned last.
+			expect(first.inputs.slate?.working).toEqual({ name: 'Ava' });
+			expect(first.inputs.bug?.working).toEqual({ name: 'Sam' });
+			expect(first.inputs.slate).not.toBe(first.inputs.bug);
+
+			// Per epoch, read after the second state is built: a shared live-state
+			// factory would have building it empty the selections carried into the first.
+			expect(first).not.toBe(second);
+			expect(first.sources).toEqual({ slate: { player: 7 } });
+			expect(second.sources).toEqual({});
+		});
 	});
 });
