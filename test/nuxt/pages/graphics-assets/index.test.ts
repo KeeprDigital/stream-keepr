@@ -1269,11 +1269,30 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * refusal that outlived the input it refuses would leave an author reading a
 	 * sentence about a file they had already replaced.
 	 *
-	 * The remote pin's third assertion is the page's own rule about the URL it was
-	 * given (`index.vue`, above `remoteSourcePath`): a remote source's secrets are
-	 * sent once and never displayed. An alert quoting back what it just refused is
-	 * the one way this surface could publish one, and embedded credentials are the
-	 * arm where the refusal and the secret are the same string.
+	 * The remote pin's third assertion is this pin's own extension, and is worth
+	 * naming as one rather than dressed up as a restatement.
+	 *
+	 * What this repository has decided about userinfo is that it is refused, not
+	 * that it is unprintable. `docs/operations/approved-remote-graphics-copy.md`:
+	 * "no embedded credentials — a URL carrying userinfo is rejected, and no
+	 * cookie, authorization header, reusable cloud credential, or interactive
+	 * authentication is ever supplied"; enforced by `validateDestination` in
+	 * `server/modules/graphics-asset-library/remote-source.ts`, which answers
+	 * `remote-source-credentials-present` at the initial URL and again after every
+	 * redirect. Non-display is decided somewhere else and about different parts of
+	 * the URL: `index.vue`, above `remoteSourcePath`, makes a remote source's query
+	 * parameters and fragment secrets that are never stored, displayed, or used to
+	 * name the Graphic Asset. Userinfo is neither of those parts, so this pin
+	 * extends that rule rather than quoting it — a surface that may not print the
+	 * query string has no better claim to print the password.
+	 *
+	 * That rule's "sent once with the copy request" is a fact about a copy that
+	 * happens, and is not true of credentials, which are never sent at all: the
+	 * same guard that raises this sentence holds `canCopyRemoteSource` false, which
+	 * 'refuses a plaintext or credential-bearing remote source before contacting
+	 * it' pins with `expect(mockApiFetch).not.toHaveBeenCalled()`. The alert is
+	 * therefore the only place these characters could surface, which is what makes
+	 * the assertion worth its line.
 	 *
 	 * Its sentence is also the one this file already asserts twice — at 'refuses a
 	 * plaintext or credential-bearing remote source before contacting it', through
