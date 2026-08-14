@@ -115,13 +115,26 @@ export function graphicBindingDataService() {
 		if (!event)
 			return createEmptyGraphicBindingDataSet();
 
-		const data: GraphicBindingDataSet = {
-			...createEmptyGraphicBindingDataSet(),
+		// The Event and its Talents are assigned onto a fresh empty set rather than
+		// written beside a spread of one. `{ ...createEmptyGraphicBindingDataSet(), … }`
+		// was correct — the overrides are last, so they win — but that factory returns a
+		// bare object literal, which rolldown is free to inline into this one, and the
+		// emitted Worker chunk would then carry `event` and `talents` twice and warn
+		// (`duplicate-object-key`, visible only in wrangler's esbuild pass). It does not
+		// warn today; #324 found four that did and #338 fixed the same shape in the
+		// Shape Geometry presets, and keeping the factory out of the literal is what
+		// makes the form immune rather than merely currently-correct (#348).
+		//
+		// The `satisfies` clause preserves the excess-property check the spread had from
+		// the annotation on `data`: `Object.assign` takes its second argument by
+		// assignability, so on its own it would let a mistyped or invented key through
+		// in silence.
+		const data: GraphicBindingDataSet = Object.assign(createEmptyGraphicBindingDataSet(), {
 			event,
 			// Talents arrive with the Event, and an Event's commentators are reached by a
 			// fixed relationship rather than by selection, so they are always available.
 			talents: byId(event.talents ?? []),
-		};
+		} satisfies Partial<GraphicBindingDataSet>);
 
 		// Concurrently: nothing here depends on anything else here, and a command is on
 		// the operator's critical path, so serialising these round trips would only add
