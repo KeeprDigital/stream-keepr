@@ -1,3 +1,4 @@
+import type { NormalizedBroadcastGraphicInputsState } from './inputs';
 import type { BroadcastGraphicsLiveState } from './playout';
 import { createInitialBroadcastGraphicInputsState } from './inputs';
 import { createInitialBroadcastGraphicsLiveState } from './playout';
@@ -251,12 +252,32 @@ export function recoveredBroadcastGraphicsLiveState(raw: unknown): BroadcastGrap
  */
 export function carriedForwardBroadcastGraphicsLiveState(raw: unknown): BroadcastGraphicsLiveState {
 	const recovered = recoveredBroadcastGraphicsLiveState(raw);
+
+	// Both constructions below assign their overrides onto a fresh factory result
+	// rather than writing them beside a spread of one. `{ ...factory(), key: … }` is
+	// correct as written — the override is last, so it wins — but both factories
+	// return a bare one-line literal, which rolldown is free to inline into the same
+	// object literal; the emitted chunk then carries the key twice and warns
+	// (`duplicate-object-key`, visible only in wrangler's esbuild pass). #324 found
+	// four of those and #338 fixed the same shape in the Shape Geometry presets.
+	// Neither site here warns today; keeping the factory out of the literal is what
+	// makes the form immune rather than merely currently-correct (#348).
+	//
+	// The `satisfies` clause is what keeps the override honest. `Object.assign` takes
+	// its second argument by assignability, so on its own it would let a mistyped or
+	// invented key through in silence. On the return below that check is one the
+	// spread already had, from the declared return type; on the per-graphic state it
+	// is new, because an object literal built inside `Object.fromEntries(…map(…))`
+	// has no contextual type and nothing was checking its keys at all.
 	const inputs = Object.fromEntries(
-		Object.entries(recovered.inputs).map(([graphicId, stored]) => [graphicId, {
-			...createInitialBroadcastGraphicInputsState(),
-			working: stored.working ?? {},
-		}]),
+		Object.entries(recovered.inputs).map(([graphicId, stored]) => [graphicId, Object.assign(
+			createInitialBroadcastGraphicInputsState(),
+			{ working: stored.working ?? {} } satisfies Partial<NormalizedBroadcastGraphicInputsState>,
+		)]),
 	);
 
-	return { ...createInitialBroadcastGraphicsLiveState(), inputs, sources: recovered.sources ?? {} };
+	return Object.assign(createInitialBroadcastGraphicsLiveState(), {
+		inputs,
+		sources: recovered.sources ?? {},
+	} satisfies Partial<BroadcastGraphicsLiveState>);
 }

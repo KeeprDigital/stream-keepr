@@ -312,5 +312,46 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(carriedForwardBroadcastGraphicsLiveState({ playout: 'slate', inputs: { a: 1 } }))
 				.toEqual(createInitialBroadcastGraphicsLiveState());
 		});
+
+		/**
+		 * This function builds both of its results by assigning onto a factory call
+		 * rather than by spreading one into an object literal, so the bundler cannot
+		 * flatten the call into duplicate keys (#324, #338, #348). `Object.assign`
+		 * mutates its target, which the spread did not, and every target here is a
+		 * factory that returns a fresh literal today. A later edit that made either
+		 * factory hand back a shared constant instead would put one Broadcast
+		 * Graphic's carried working values into another's state, and every call to
+		 * this function into the state the next call starts from — the fix's own
+		 * failure mode, so it gets its own pin.
+		 *
+		 * Nothing else caught it: measured at f8a7710, both aliasing edits survived
+		 * every test in the eight unit files that touch these factories.
+		 */
+		it('gives every graphic and every epoch its own state to be assigned into', () => {
+			const first = carriedForwardBroadcastGraphicsLiveState({
+				inputs: {
+					slate: { working: { name: 'Ava' } },
+					bug: { working: { name: 'Sam' } },
+				},
+				sources: { slate: { player: 7 } },
+			});
+			const second = carriedForwardBroadcastGraphicsLiveState({ inputs: {} });
+
+			// Both aliasing edits land on the first assertion below: a shared inputs
+			// factory leaves both entries holding whichever graphic was assigned last,
+			// and a shared live-state factory has `second` empty the very `inputs` map
+			// this reads from. The assertions after it are defence in depth rather than
+			// proven discriminators — neither exercised mutant reaches them.
+			expect(first.inputs.slate?.working).toEqual({ name: 'Ava' });
+			expect(first.inputs.bug?.working).toEqual({ name: 'Sam' });
+			expect(first.inputs.slate).not.toBe(first.inputs.bug);
+
+			// Per epoch, read after the second state is built: if the live-state factory
+			// returned a shared constant, building `second` would empty the selections
+			// `first` carried.
+			expect(first).not.toBe(second);
+			expect(first.sources).toEqual({ slate: { player: 7 } });
+			expect(second.sources).toEqual({});
+		});
 	});
 });
