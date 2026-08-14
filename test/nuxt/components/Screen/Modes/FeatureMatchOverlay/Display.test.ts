@@ -242,6 +242,32 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(html.indexOf('data-item-guide')).toBeLessThan(html.indexOf('graphic-item-guide--source'));
 		});
 
+		/**
+		 * The host-owned half of the pair below, which nothing pinned until #260: the
+		 * frame's *send* of a Source Item selection had no test at all, so the type it
+		 * goes out under was held at one end only. A sender and a receiver that source
+		 * the same constant prove nothing about the wire between them unless both ends
+		 * are read against the literal — which is why this asserts the literal.
+		 */
+		it('reports a Source Item click back to the editor in this host’s own vocabulary', async () => {
+			mockConfig.value = guidedConfig();
+			mockPreviewGuides.value = true;
+			mockIsPreview.value = true;
+			const postMessage = vi.spyOn(window.parent, 'postMessage');
+
+			const wrapper = await mountComponent();
+			await wrapper.get('[aria-label="Select Main Match Source"]').trigger('click');
+
+			expect(postMessage).toHaveBeenCalledWith(
+				{
+					type: 'feature-match-overlay:select',
+					target: { type: 'source', itemId: 'main-source' },
+				},
+				window.location.origin,
+			);
+			postMessage.mockRestore();
+		});
+
 		it('reports a shared Graphic Item click back to the editor in the compositor’s vocabulary', async () => {
 			mockConfig.value = guidedConfig();
 			mockPreviewGuides.value = true;

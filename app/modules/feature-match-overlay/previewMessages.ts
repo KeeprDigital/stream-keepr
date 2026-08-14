@@ -1,6 +1,6 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import type { ExpectedSender, MessageEnvelope } from '~/modules/graphics/previewMessages';
 import type { FeatureMatchOverlaySelectionTarget } from './selection';
+import type { ExpectedSender, MessageEnvelope } from '~/modules/graphics/previewMessages';
 import { isFromExpectedSender } from '~/modules/graphics/previewMessages';
 import { isFeatureMatchOverlaySelectionTarget } from './selection';
 
