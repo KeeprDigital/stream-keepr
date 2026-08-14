@@ -324,8 +324,8 @@ describe('broadcastGraphicsRecovery', () => {
 		 * this function into the state the next call starts from — the fix's own
 		 * failure mode, so it gets its own pin.
 		 *
-		 * Nothing else caught it: both aliasing edits survived all 240 tests across
-		 * the eight unit files that touch these factories.
+		 * Nothing else caught it: measured at f8a7710, both aliasing edits survived
+		 * every test in the eight unit files that touch these factories.
 		 */
 		it('gives every graphic and every epoch its own state to be assigned into', () => {
 			const first = carriedForwardBroadcastGraphicsLiveState({
@@ -337,14 +337,18 @@ describe('broadcastGraphicsRecovery', () => {
 			});
 			const second = carriedForwardBroadcastGraphicsLiveState({ inputs: {} });
 
-			// Per graphic: a shared inputs factory would leave both entries as whichever
-			// graphic was assigned last.
+			// Both aliasing edits land on the first assertion below: a shared inputs
+			// factory leaves both entries holding whichever graphic was assigned last,
+			// and a shared live-state factory has `second` empty the very `inputs` map
+			// this reads from. The assertions after it are defence in depth rather than
+			// proven discriminators — neither exercised mutant reaches them.
 			expect(first.inputs.slate?.working).toEqual({ name: 'Ava' });
 			expect(first.inputs.bug?.working).toEqual({ name: 'Sam' });
 			expect(first.inputs.slate).not.toBe(first.inputs.bug);
 
-			// Per epoch, read after the second state is built: a shared live-state
-			// factory would have building it empty the selections carried into the first.
+			// Per epoch, read after the second state is built: if the live-state factory
+			// returned a shared constant, building `second` would empty the selections
+			// `first` carried.
 			expect(first).not.toBe(second);
 			expect(first.sources).toEqual({ slate: { player: 7 } });
 			expect(second.sources).toEqual({});

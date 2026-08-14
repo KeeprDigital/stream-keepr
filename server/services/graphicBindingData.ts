@@ -129,6 +129,15 @@ export function graphicBindingDataService() {
 		// the annotation on `data`: `Object.assign` takes its second argument by
 		// assignability, so on its own it would let a mistyped or invented key through
 		// in silence.
+		//
+		// No aliasing pin guards this site, unlike the two in `recovery.ts`, and the
+		// reason is that the exposure here is not new. `Object.assign` mutating its
+		// target would matter only if this factory began returning a shared object —
+		// and that was already broken before this change, because the spread copied the
+		// sub-maps by reference, so the `Object.assign(data.<map>, …)` calls below have
+		// always written straight into the objects the factory returned. All this
+		// rewrite adds is the top-level object. The pin lives where the exposure is
+		// genuinely new, on `carriedForwardBroadcastGraphicsLiveState`.
 		const data: GraphicBindingDataSet = Object.assign(createEmptyGraphicBindingDataSet(), {
 			event,
 			// Talents arrive with the Event, and an Event's commentators are reached by a
