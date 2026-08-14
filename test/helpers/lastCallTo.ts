@@ -1,5 +1,11 @@
 /**
- * The call a test means, chosen by name rather than taken from the end of the list.
+ * The calls a test means, chosen by name rather than taken by position.
+ *
+ * Two functions live here rather than the one this file is named for: `lastCallTo`
+ * answers "which call", and `callsTo` below answers "which calls, and how many". The
+ * name stayed at the older function's in #342 — thirteen files import from this path,
+ * and a rename buys a reader nothing they do not get from this sentence while costing
+ * every one of them an edit, in a round where sibling branches hold test files.
  *
  * A mock's call list belongs to the mock, not to the test — anything else sharing the
  * subject writes into it too. #273 proved the consequence in situ: `evidence.test.ts`
@@ -36,11 +42,36 @@
  * `ably.test.ts` carried the instance #300 closed; #330 then found three more in a
  * **destructuring** spelling — `const [first, second] = mock.calls.map(…)`, which has
  * no index in it either — in `broadcastGraphicsLiveSession.test.ts`. Those wanted
- * `callsTo` rather than this function, for the reason below. A future sweep wants every
- * shape: an indexed, `.at()`, or destructured read of a mock's calls, whether or not a
- * bang follows, and whether or not a `.map()` sits in between.
+ * `callsTo` rather than this function, for the reason below.
  *
- * Filed as #280, generalising the guard #273 built for one site.
+ * **#342 ran the sweep this paragraph used to ask for**: every shape, indexed or
+ * `.at()` or destructured, bang or no bang, `.map()` in between or not — 83 reads across
+ * 37 test files. Twelve of them were converted, and the judgement is the point of the
+ * exercise, because the other 71 are honest. Convert where either holds:
+ *
+ * - **Something other than the code under test writes to the subject.** A
+ *   `mockNuxtImport('$fetch')` mock is the standing example, because the clock sync's
+ *   `/api/time` samples are recorded there (#123) — as is a `console` spy, and a module
+ *   mock that records every message a module publishes, where `.at(-1)` follows whichever
+ *   announcement happened to be last rather than the one under test. It is the mock's
+ *   declaration that decides this and not the suite's environment: a *global* `fetch`
+ *   stub in the Nuxt environment does **not** see the clock sync, because `$fetch` never
+ *   reaches it — the sample fails inside `$fetch`, the run prints "Server time sync
+ *   unavailable", and the stub records only what the page itself asked for (checked in
+ *   `test/nuxt/pages/event/[eventId]/screen/[screenSlug].test.ts`).
+ * - **The subject of the read is the relationship between two calls**, where the count
+ *   belongs at the read rather than in a `toHaveBeenCalledTimes` a few lines above it.
+ *   That is `callsTo`'s case, below.
+ *
+ * The 71 are purpose-built mocks with one caller — a DB or port double, a prop callback,
+ * a toast a component's own suite counts before it reads. There the unselected form says
+ * what it means, and its failure is loud rather than quiet: a missing call makes the read
+ * `undefined`, and `expect(undefined).not.toHaveProperty(…)` does not pass vacuously the
+ * way one might fear — it throws `TypeError: Cannot convert undefined or null to object`.
+ * Worth having checked, since the opposite would have made a dozen `calls[0]?.[n]` sites
+ * urgent instead of merely inelegant.
+ *
+ * Filed as #280, generalising the guard #273 built for one site; swept in #342.
  */
 
 /**
@@ -154,8 +185,11 @@ function describeSelector<Args extends unknown[]>(select?: CallSelector<Args>): 
 }
 
 /**
- * What arrived instead. The listed calls are the most recent ones, because the
- * selection takes the last match and the strays that displaced it are at that end.
+ * What arrived instead. The listed calls are the most recent ones, which is the useful
+ * end for both callers, for two different reasons: `lastCallTo` takes the last match, so
+ * a stray that displaced the call it wanted is right there — and `callsTo` reports a
+ * count, where the tail is what the run just added and the earlier calls are elided
+ * rather than blamed.
  */
 function describeCalls(calls: unknown[][]): string {
 	if (calls.length === 0)

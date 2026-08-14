@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 /** The storage ceiling a Screen's `modeConfigs` is bounded by, from the Screen schema. */
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
