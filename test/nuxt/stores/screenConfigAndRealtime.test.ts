@@ -31,9 +31,10 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
  * suite. The stand-in that used to sit here rethrew every failure; the real
  * composable swallows one unless the call site asks for `throwError`, writes the
  * message to `errorRef` and resolves `null`. So every failure-path row here was
- * asserting against a contract the store does not have, and the store's own
- * `executeReporting` wrapper — the seam all of this reports through — was never
- * exercised at all. The sibling suites removed exactly this mock for exactly this
+ * asserting against a contract the store does not have, and `executeReporting` — the
+ * seam all of this reports through, the store's own wrapper until #353 replaced it with
+ * `useReportingAction` — was never exercised at all. The sibling suites removed exactly
+ * this mock for exactly this
  * reason (#241, #263, #271); #311 is the same removal here. The real composable is
  * auto-imported, does no I/O and starts no timers.
  */

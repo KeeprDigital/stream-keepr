@@ -10,12 +10,11 @@ export const useScreenStore = defineStore('screen', () => {
 	 * The seam every Screen write reports through: `executeAction` with the authority's
 	 * own sentence substituted into whatever the action threw.
 	 *
-	 * `useReportingAction` owns that substitution, and where it sits is load-bearing
-	 * here. It is inside the action rather than around the whole call, so the `onError`
-	 * rollback and the deferred rejection a debounced config write answers its caller
-	 * with both get the same failure the banner does, and the conflict-retry inside each
-	 * action still reads the raw `FetchError`'s status, because it is nested further in
-	 * than the substitution.
+	 * `useReportingAction` owns the substitution and documents where it sits. Two things
+	 * here rest on that placement: the deferred rejection a debounced config write answers
+	 * its caller with carries the same sentence the banner shows, and `withConflictRetry`,
+	 * nested further inside each action, still meets the raw `FetchError` and can read its
+	 * 409 — substitute one level deeper and the retry stops recognising the conflict.
 	 *
 	 * Handed to the runtime Module as its `executeAction` so that every Screen write
 	 * reports through one seam. Two seams that must agree are two seams that can drift.
