@@ -16,7 +16,7 @@ import { transportFailure } from '~~/test/helpers/transportFailure';
  * required' — and quoting it would tell an author what was missing while leaving out the
  * one thing they can act on.
  */
-describe('what the graphics author session says a failure was', () => {
+describe('useGraphicsAuthorSession', () => {
 	it('quotes the sentence the library wrote about the refusal rather than the transport line', () => {
 		const { describeFailure } = useGraphicsAuthorSession();
 

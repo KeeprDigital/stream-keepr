@@ -72,8 +72,17 @@ export function useGraphicsAuthorSession() {
 	 *
 	 * The lapse is asked first and unconditionally, because a `401` from an
 	 * ingestion route does carry a sentence of its own — 'An authenticated
-	 * graphics author session is required' — and quoting it would name what was
-	 * missing while leaving out the one thing the author can do about it.
+	 * graphics author session is required', which is what
+	 * `requireGraphicsAuthorSession` writes — and quoting it would name what was
+	 * missing while leaving out the one thing the author can do about it. That is
+	 * a judgement about *writes*, and the Library Workspace's reads deliberately
+	 * make the opposite one: `pages/graphics-assets/index.vue`'s listing and
+	 * capacity quote that same 401 sentence verbatim. A refused write may have
+	 * left a Graphics Ingestion Operation owned by a session nobody holds, which
+	 * is what ADR-0003 costs an author and what the reload is for; a refused read
+	 * has no operation to lose, so it relays what the route said. The two
+	 * docblocks name each other so the difference reads as a decision rather than
+	 * as one of them being stale.
 	 *
 	 * Everything else is `reportedMessage`, which reads the sentence the route
 	 * wrote before falling back to the failure's own line. This arm was that

@@ -1115,9 +1115,16 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * write goes through `$fetch` inside a `catch` and was reported by the graphics author
 	 * session's `describeFailure`, which reached for `Error.message` — so the two halves of
 	 * one page answered a refusal differently, and the half that refuses most of what an
-	 * author actually does was the one naming the route. Both surfaces the page gives a
-	 * `data-testid` are pinned; the rest reach the same seam and are covered where it
-	 * lives, in `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
+	 * author actually does was the one naming the route. The two surfaces pinned below are
+	 * the ones already carrying a `data-testid`; the rest reach the same seam and are
+	 * covered where it lives, in `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
+	 *
+	 * That is a gap worth naming rather than a property of the page. The lifecycle alert
+	 * renders its message in the default slot and wants only the attribute, which the rule
+	 * above says every alert should carry; the metadata and replacement alerts pass theirs
+	 * as `:title`, which the passthrough stub drops, so those two want the stub taught the
+	 * prop before an assertion on them could fail. Filed as follow-up rather than widened
+	 * into here.
 	 */
 	it('says why an upload was refused rather than naming the route', async () => {
 		const wrapper = await mountPage();
