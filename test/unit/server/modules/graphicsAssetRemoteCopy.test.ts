@@ -33,10 +33,13 @@ vi.mock('~~/server/modules/graphics-author-session', () => ({
 	optionalGraphicsAuthorSession: vi.fn(),
 }));
 
-// `rethrowGraphicsAssetApiError` reaches Nitro's auto-imported `createError`,
-// which a unit run does not have. Nothing in the library module calls it.
+// `rethrowGraphicsAssetApiError` reaches Nitro's auto-imported `createError`
+// and, on its 503 branch, `setResponseHeader` — neither of which a unit run
+// has. Nothing in the library module calls either.
 vi.stubGlobal('createError', (input: { statusCode: number; message: string; cause?: unknown }) =>
 	Object.assign(new Error(input.message), input));
+const mockSetResponseHeader = vi.fn();
+vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -1076,12 +1079,16 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		// The sentence names which store is out of reach, so it must reach the
 		// caller rather than being rewritten to 'Internal Server Error'. There is no
 		// route test for remote-copy.post.ts, so its two mapping hops are run here
-		// instead — status and message only. Passing no event skips the
-		// `retry-after` header that the same helper sets from a real request, so
-		// this row says nothing about that header.
+		// instead. The event carries a distinguishing property because
+		// `toHaveBeenCalledWith` compares deeply, and a bare `{}` cannot tell this
+		// request apart from any other empty object (#356; the same change made the
+		// helper's event parameter required, which is why this call passes one at
+		// all — and having to pass one, the row now pins the `retry-after` header
+		// its earlier form disclaimed).
+		const requestEvent = { __requestEventFor: 'remote-copy-release-failure' } as never;
 		let routeError: unknown;
 		try {
-			rethrowGraphicsAssetApiError(thrown);
+			rethrowGraphicsAssetApiError(thrown, requestEvent);
 		}
 		catch (error) {
 			routeError = error;
@@ -1089,6 +1096,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		const refusal = await publicServerFailure(routeError);
 		expect(refusal.statusCode).toBe(503);
 		expect(refusal.message).toBe('Graphics Asset staging byte store could not release a previous approved remote Graphic Asset copy attempt');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(requestEvent, 'retry-after', 5);
 	});
 
 	it('reports no client-transfer facts for a remote copy holding a checkpoint', async () => {

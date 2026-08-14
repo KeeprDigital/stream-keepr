@@ -19,7 +19,14 @@ export async function graphicsAdministratorActor(event: H3Event): Promise<string
 	return await optionalGraphicsAuthorSession(event) ?? 'graphics-administrator';
 }
 
-export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): never {
+/**
+ * The event is required so that omitting it is a compile error rather than a
+ * silently lost `retry-after` on a 503 — the same conversion #346 made for its
+ * two modules. Only the 503 branch reads it, but an optional parameter left
+ * every other call site one refactor away from dropping the header with no
+ * compiler help (#356; every one of the 44 call sites already passed it).
+ */
+export function rethrowGraphicsAssetApiError(error: unknown, event: H3Event): never {
 	if (error instanceof GraphicsObjectInputError) {
 		throw createError({
 			statusCode: 400,
@@ -41,7 +48,7 @@ export function rethrowGraphicsAssetApiError(error: unknown, event?: H3Event): n
 			'canonical-capacity-exhausted': 500,
 			'graphics-asset-library-unavailable': 503,
 		} as const)[error.code];
-		if (statusCode === 503 && event)
+		if (statusCode === 503)
 			setResponseHeader(event, 'retry-after', 5);
 		throw createError({
 			statusCode,
