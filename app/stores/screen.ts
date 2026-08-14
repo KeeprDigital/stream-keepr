@@ -1,11 +1,25 @@
-import type { ExecuteAction, ScreenPresenceInfo } from '~/modules/screen/runtime';
+import type { ScreenPresenceInfo } from '~/modules/screen/runtime';
 import type { Screen } from '~/types';
 import { toRaw } from 'vue';
 import { useScreenRuntime } from '~/modules/screen/runtime';
 
 export const useScreenStore = defineStore('screen', () => {
 	const screenRepo = useScreenRepository();
-	const { executeAction } = useAsyncAction();
+
+	/**
+	 * The seam every Screen write reports through: `executeAction` with the authority's
+	 * own sentence substituted into whatever the action threw.
+	 *
+	 * `useReportingAction` owns the substitution and documents where it sits. Two things
+	 * here rest on that placement: the deferred rejection a debounced config write answers
+	 * its caller with carries the same sentence the banner shows, and `withConflictRetry`,
+	 * nested further inside each action, still meets the raw `FetchError` and can read its
+	 * 409 — substitute one level deeper and the retry stops recognising the conflict.
+	 *
+	 * Handed to the runtime Module as its `executeAction` so that every Screen write
+	 * reports through one seam. Two seams that must agree are two seams that can drift.
+	 */
+	const { executeReporting } = useReportingAction();
 
 	const screens = ref<Screen[]>([]);
 	const activeScreen = ref<Screen | null>(null);
@@ -49,24 +63,6 @@ export const useScreenStore = defineStore('screen', () => {
 	function loadErrorMessage(caughtError: unknown) {
 		return reportedMessage(caughtError, 'An error occurred');
 	}
-
-	/**
-	 * `executeAction`, with the authority's own sentence substituted into whatever the
-	 * action threw.
-	 *
-	 * The substitution is `withFailureSentence`, inside the action rather than around
-	 * the whole call so the two things downstream of it stay right: `onError` rollbacks
-	 * and the deferred rejections a debounced config write answers its caller with get
-	 * the same failure the banner does, and the conflict-retry inside each action still
-	 * reads the raw `FetchError`'s status, because it is nested further in than this.
-	 *
-	 * Handed to the runtime Module as its `executeAction` so that every Screen write
-	 * reports through one seam. Two seams that must agree are two seams that can drift.
-	 */
-	const executeReporting: ExecuteAction = (action, options) => executeAction(
-		() => withFailureSentence(action),
-		options,
-	);
 
 	// Screen presence tracking
 	const screenPresence = ref<Map<number, ScreenPresenceInfo>>(new Map());

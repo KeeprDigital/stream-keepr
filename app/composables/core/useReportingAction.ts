@@ -9,17 +9,27 @@ import type { AsyncActionOptions } from './useAsyncAction';
  * `throwError` contract, the `null` an unhandled failure resolves to — is unchanged,
  * because it is the same composable underneath.
  *
- * A separate composable rather than a second method on `useAsyncAction`, for two reasons.
- * Reporting the authority's sentence is a decision a surface makes: the Screen Output
- * showing a bare status line and the Live Control showing a refusal are not the same
- * reader, and a store adopts this by naming it (#262 adopts six, #245 the seventh).
- * And practically, two suites still stand a hand-written copy of `useAsyncAction` in for
- * the real one, both of them returning `{ executeAction }` alone — a second method on that
- * return would be `undefined` in either of them, while this composable calls whatever
- * `useAsyncAction` those suites provide. It was nineteen when this was written; #263
- * consolidated the rest onto the real composable (#271 took the Card store's own suite in
- * the same round, #290 the Card Deck Sources one), and the two that remain are the Screen
- * store's.
+ * The substitution sits inside the action rather than around the whole call, and that
+ * placement is the contract a consumer builds on: `executeAction` still meets a failure
+ * carrying the sentence, so an `onError` rollback and a `throwError` rejection both
+ * receive it, while anything the action nests further inside — a retry reading a
+ * `FetchError`'s status, say — still meets the raw failure untouched.
+ *
+ * It is a separate composable, not a second method on `useAsyncAction`, because reporting
+ * the authority's sentence is a decision a surface makes: the Screen Output showing a bare
+ * status line and the Live Control showing a refusal are not the same reader, and a store
+ * adopts this by naming it (#262 adopts six, #245 the seventh).
+ *
+ * A second, practical reason has since retired, and the rest of this is history. Suites
+ * once stood a hand-written copy of `useAsyncAction` in for the real one returning
+ * `{ executeAction }` alone, where a second method on that return would have been
+ * `undefined`, while this composable calls whatever `useAsyncAction` a suite provides.
+ * Nineteen suites did so when this was written and none do now — consolidated by #263,
+ * then by #271 for the Card store's own suite and #290 for the Card Deck Sources one, and
+ * last by #311, which took the two mocked Screen store suites onto the real composable.
+ * The third, that store's error-reporting suite, never mocked it at all. Losing those two
+ * is what let the Screen store drop its own hand-rolled copy of `executeReporting` and
+ * name this one instead (#353).
  */
 export function useReportingAction() {
 	const { executeAction } = useAsyncAction();

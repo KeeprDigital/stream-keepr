@@ -5,11 +5,11 @@ import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
 /*
- * `useAsyncAction` is deliberately not mocked here, unlike in this store's other two
- * suites. It is the seam every write reports through, and what these tests are about
- * is the prose that comes out of it — a hand-written stand-in that ignores `errorRef`
- * can assert nothing about what an operator is shown. The real composable is
- * auto-imported, does no I/O and starts no timers (#241, #245).
+ * `useAsyncAction` has never been mocked here, unlike in this store's other two suites,
+ * which stood a hand-written copy in until #311. It is the seam every write reports
+ * through, and what these tests are about is the prose that comes out of it — a
+ * stand-in that ignores `errorRef` can assert nothing about what an operator is shown.
+ * The real composable is auto-imported, does no I/O and starts no timers (#241, #245).
  */
 
 const mockRepo = {
