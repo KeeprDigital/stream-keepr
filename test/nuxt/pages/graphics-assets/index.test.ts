@@ -1021,7 +1021,8 @@ describe('the Graphics Asset Library Workspace', () => {
 			'http://cdn.example.com/scoreboard.png',
 		);
 		await flushPromises();
-		expect(wrapper.html()).toContain('Only public HTTPS sources may be copied into the library.');
+		expect(wrapper.get('[data-testid="remote-selection-error"]').text())
+			.toContain('Only public HTTPS sources may be copied into the library.');
 		expect(wrapper.get('[data-testid="copy-remote-source"]').attributes('disabled'))
 			.toBeDefined();
 
@@ -1029,7 +1030,8 @@ describe('the Graphics Asset Library Workspace', () => {
 			'https://user:secret@cdn.example.com/scoreboard.png',
 		);
 		await flushPromises();
-		expect(wrapper.html()).toContain('An approved remote source must not carry embedded credentials.');
+		expect(wrapper.get('[data-testid="remote-selection-error"]').text())
+			.toContain('An approved remote source must not carry embedded credentials.');
 		expect(wrapper.get('[data-testid="copy-remote-source"]').attributes('disabled'))
 			.toBeDefined();
 		expect(mockApiFetch).not.toHaveBeenCalled();
@@ -1294,11 +1296,11 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * therefore the only place these characters could surface, which is what makes
 	 * the assertion worth its line.
 	 *
-	 * Its sentence is also the one this file already asserts twice — at 'refuses a
-	 * plaintext or credential-bearing remote source before contacting it', through
-	 * `wrapper.html()`. A kill attributed by value alone could not tell the two
-	 * apart; deleting the `data-testid` separates them, because only the pin here
-	 * reads it.
+	 * Its sentence is also the one this file asserts at 'refuses a plaintext or
+	 * credential-bearing remote source before contacting it' — since #372 through
+	 * the same `data-testid`, so deleting that testid kills all three
+	 * remote-selection assertions. A kill lands on this pin by its FAIL-header
+	 * test name, not by value alone.
 	 */
 	it('says why a selected source cannot be uploaded, and stops once one that can is picked', async () => {
 		const wrapper = await mountPage();
