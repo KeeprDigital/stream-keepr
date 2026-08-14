@@ -31,6 +31,7 @@ const LIVE_NAME = integrationTextInput('name', { updatePolicy: 'live', maxLength
 const RECORD = integrationTextInput('title', { maxLength: 40 });
 
 const PLAYER_SOURCE = { key: 'player', label: 'Player', kind: 'player' as const };
+const EVENT_SOURCE = { key: 'event', label: 'Current Event', kind: 'event' as const };
 const NAME_BINDING = { inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' };
 const RECORD_BINDING = { inputKey: 'title', sourceKey: 'player', fieldId: 'player.record' };
 
@@ -517,5 +518,148 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 			payload: { graphicId: 'lead' },
 		});
 		expect(taken.currentState.inputs.lead!.accepted).toEqual({ name: 'Wendell Achebe-Stone' });
+	});
+});
+
+/**
+ * The Event itself, and what is reached through it.
+ *
+ * A Current Event Graphic Source Selection has nothing for an operator to pick — it
+ * resolves the Event the Screen belongs to — and an Event's Talent is reached from it
+ * by a fixed relationship rather than by a second pick. So the show-open card naming
+ * the Event and its casters is fully resolved before anybody has touched a picker,
+ * which is the case every selection-shaped test above skips over. The Event's game is
+ * here for the same reason: it is what decides whether a game-specific field is
+ * offered at all, and it arrives with the Event rather than with a selection.
+ */
+describe('broadcast graphics binding to the Event and its Talents', () => {
+	let eventId: number;
+	let commentatorId: number;
+	let guestId: number;
+	let deckPlayerId: number;
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Talent Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+
+		// Two Talents, only one of them a commentator: a test that followed the wrong one,
+		// or resolved "some Talent" rather than the Event's own, reads a different name.
+		const commentator = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Imani Okoye' },
+		});
+		commentatorId = commentator.id;
+		const guest = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Rhys Delacroix' },
+		});
+		guestId = guest.id;
+
+		await $fetch(`/api/events/${eventId}`, {
+			method: 'PATCH',
+			body: { commentator1TalentId: commentatorId },
+		});
+
+		const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: {
+				name: 'Dara Whitlock',
+				wins: 5,
+				losses: 0,
+				draws: 0,
+				gameData: { type: 'mtg', deckName: 'Boros Energy' },
+			},
+		});
+		deckPlayerId = player.id;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('takes the Event\'s own name on air with no selection to make', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-event-kind', graphicWith(
+			[NAME],
+			[EVENT_SOURCE],
+			[{ inputKey: 'name', sourceKey: 'event', fieldId: 'event.name' }],
+		));
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-event-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Integration Talent Event' });
+	});
+
+	it('follows the Event to the Talent commentating on it', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-commentator', graphicWith(
+			[NAME],
+			[
+				EVENT_SOURCE,
+				{ key: 'caster', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+			],
+			[{ inputKey: 'name', sourceKey: 'caster', fieldId: 'talent.name' }],
+		));
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-commentator-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		// The Event names this Talent as its first commentator; the other Talent on the
+		// Event is not reachable from here at all.
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Imani Okoye' });
+	});
+
+	it('resolves a Talent the operator picks for themselves', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-talent-kind', graphicWith(
+			[NAME],
+			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.name' }],
+		));
+
+		// The Talent nobody is commentating with, so this cannot pass by following the
+		// Event's commentator relationship instead of the pick.
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'talent', guestId);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-talent-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Rhys Delacroix' });
+	});
+
+	it('resolves a game-specific field because the Event names the game it belongs to', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-game-specific', graphicWith(
+			[NAME, RECORD],
+			[PLAYER_SOURCE],
+			[
+				{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.deckName' },
+				RECORD_BINDING,
+			],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', deckPlayerId);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-game-specific-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		// A Magic deck name is offered on a Magic Event and nowhere else, so this resolves
+		// only while the loaded Event Data can say which game this Event is. The record
+		// beside it is game-agnostic and stays put, which is what makes a lost game read as
+		// one field disappearing rather than as the whole set failing to load.
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Boros Energy', title: '5-0' });
 	});
 });
