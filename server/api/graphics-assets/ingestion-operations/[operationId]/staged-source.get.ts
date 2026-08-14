@@ -1,6 +1,7 @@
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -25,10 +26,15 @@ export default defineEventHandler(async (event) => {
 		}
 		if (staged.outcome === 'unavailable') {
 			setResponseHeader(event, 'retry-after', 5);
+			// The cause is what carries this sentence past the 5xx sanitizer; without it
+			// the author waiting to confirm an ingestion reads 'Internal Server Error'
+			// and cannot tell a staging store that went away from a broken server (#321).
+			const cause = new TemporarilyUnavailableError('Staged Graphic Asset source bytes are temporarily unavailable');
 			throw createError({
-				statusCode: 503,
+				statusCode: cause.statusCode,
 				statusMessage: 'Service Unavailable',
-				message: 'Staged Graphic Asset source bytes are temporarily unavailable',
+				message: cause.message,
+				cause,
 			});
 		}
 		return new Response(staged.body, {

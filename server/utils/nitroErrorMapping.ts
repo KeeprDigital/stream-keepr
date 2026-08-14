@@ -4,6 +4,7 @@ import {
 	ServiceConfigurationError,
 	ServiceWiringError,
 	StateConflictError,
+	TemporarilyUnavailableError,
 } from './errors';
 import { RealtimePublishError } from './realtimePublishFailure';
 
@@ -129,7 +130,33 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		// Only this one code. Every other `GraphicsAssetLibraryError` is answered
 		// below 500 by `rethrowGraphicsAssetApiError`, except the two capacity
 		// codes, which the branch above already has.
+		//
+		// Twenty-three sites in the library raise this code and every one of them
+		// publishes its sentence through here. Twenty write a literal naming a store
+		// or an interrupted operation. Three interpolate, and what they interpolate
+		// is the point: a part number, a caller-supplied literal, and the origin the
+		// author asked for — never what was caught. `remote-source.ts` shows the
+		// rule being kept in the one place it would be easiest to break, returning
+		// '<origin> could not be reached right now.' from inside a bare `catch`.
+		// A site that published a caught exception instead would hand a provider's
+		// own words to every caller; those belong in `cause`, which no response body
+		// carries. (Counted for #321: a note here used to say three throw sites.)
 		error.statusCode = 503;
+		error.statusMessage = 'Service Unavailable';
+		error.message = cause.message;
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (cause instanceof TemporarilyUnavailableError) {
+		// The shared classification, and the one branch here that is not about a
+		// particular subsystem: seven sites each wrote an operator a sentence about
+		// something momentarily out of reach — Graphic Asset content whole and
+		// ranged, thumbnails, staged bytes, Screen Output delivery, a capability
+		// session, a Template Package export — and every one of those sentences was
+		// overwritten below until #321. They differ only in what they name, so they
+		// share a class rather than earning seven, and the message carried here is
+		// the raiser's.
+		error.statusCode = cause.statusCode;
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;
 		hasMappedPublicServerMessage = true;

@@ -1,6 +1,7 @@
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -31,10 +32,15 @@ export default defineEventHandler(async (event) => {
 		}
 		if (result.outcome === 'unavailable') {
 			setResponseHeader(event, 'retry-after', 5);
+			// The cause is what carries this sentence past the 5xx sanitizer; without
+			// it the operator reads 'Internal Server Error' beside a retry-after header
+			// and cannot tell a store that went away from a server that broke (#321).
+			const cause = new TemporarilyUnavailableError('Graphic Asset thumbnail is temporarily unavailable');
 			throw createError({
-				statusCode: 503,
+				statusCode: cause.statusCode,
 				statusMessage: 'Service Unavailable',
-				message: 'Graphic Asset thumbnail is temporarily unavailable',
+				message: cause.message,
+				cause,
 			});
 		}
 		return new Response(result.body, {

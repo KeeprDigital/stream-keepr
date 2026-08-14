@@ -9,6 +9,7 @@ import {
 	ServiceConfigurationError,
 	ServiceWiringError,
 	StateConflictError,
+	TemporarilyUnavailableError,
 } from '~~/server/utils/errors';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
@@ -393,9 +394,10 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('preserves the byte store\'s own wording rather than a sentence of its own', () => {
-			// Three throw sites share the one code and each names a different store,
-			// so the branch may not substitute a message of its own — it carries
-			// whichever one the library wrote.
+			// Twenty-three throw sites share the one code — this comment said three
+			// until #321 counted them — and each names a different store or a
+			// different interrupted operation, so the branch may not substitute a
+			// message of its own. It carries whichever one the library wrote.
 			const error: MappableNitroError = {
 				statusCode: 503,
 				message: 'Graphics Asset staging byte store is unavailable',
@@ -481,6 +483,79 @@ describe('error-handler mapping logic', () => {
 		});
 	});
 
+	describe('temporarily unavailable mapping', () => {
+		it('keeps the sentence a route wrote about something momentarily out of reach', () => {
+			// #321: seven routes wrote an operator a sentence, set `retry-after` beside
+			// it, and had the sentence replaced with 'Internal Server Error' on the way
+			// out — retry guidance in the header and nothing in the body saying what for.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphic Asset thumbnail is temporarily unavailable',
+				cause: new TemporarilyUnavailableError('Graphic Asset thumbnail is temporarily unavailable'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphic Asset thumbnail is temporarily unavailable',
+				unhandled: false,
+			});
+		});
+
+		it('carries each raiser\'s own words, having none of its own', () => {
+			// The one class is shared by every subsystem that raises it, so it may not
+			// substitute a sentence: a Screen Output whose delivery is down and an author
+			// whose staged bytes are unreadable are told different things.
+			for (const sentence of [
+				'Screen Output asset delivery is temporarily unavailable',
+				'Staged Graphic Asset source bytes are temporarily unavailable',
+				'The Template Package could not be exported',
+			]) {
+				const error: MappableNitroError = {
+					statusCode: 503,
+					message: sentence,
+					cause: new TemporarilyUnavailableError(sentence),
+				};
+
+				mapPublicNitroError(error);
+
+				expect(error.message).toBe(sentence);
+			}
+		});
+
+		it('sanitizes the bare 503 the routes raised before they classified it', () => {
+			// The shape #321 found at all seven sites, kept as a row because it is what
+			// any of them reverted to a causeless `createError` would produce.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Graphic Asset thumbnail is temporarily unavailable',
+				cause: undefined,
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+		});
+
+		it('does not exempt a store failure that merely reached the same route', () => {
+			// The class is the mark, not the status: the authorizer's own exception
+			// carried as the cause says nothing a caller may be shown.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				message: 'Screen Output asset capability session is temporarily unavailable',
+				cause: new Error('D1_ERROR: network error'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+		});
+	});
+
 	/**
 	 * Every family whose prose survives the sanitizer, driven in one place.
 	 *
@@ -548,6 +623,11 @@ describe('error-handler mapping logic', () => {
 				cause: new GraphicsAuthorSessionUnavailableError(new Error('KV GET failed')),
 				sentence: 'Graphics author sessions are temporarily unavailable',
 			},
+			{
+				family: 'a subsystem a route classified as momentarily out of reach (#321)',
+				cause: new TemporarilyUnavailableError('Graphic Asset Content is temporarily unavailable'),
+				sentence: 'Graphic Asset Content is temporarily unavailable',
+			},
 		];
 
 		it.each(preserved)('says something an operator can act on for $family', ({ cause, sentence }) => {
@@ -575,12 +655,13 @@ describe('error-handler mapping logic', () => {
 
 		/**
 		 * The count `failureSentence`'s docstring quotes. It was nine until #294 added
-		 * the two above, and the number is load-bearing on the client's side of the
-		 * boundary: it is the enumeration behind "every preserved family comes out
-		 * non-500", which is the whole reason the status mark can be trusted.
+		 * two and eleven until #321 added the shared one, and the number is load-bearing
+		 * on the client's side of the boundary: it is the enumeration behind "every
+		 * preserved family comes out non-500", which is the whole reason the status mark
+		 * can be trusted.
 		 */
-		it('is eleven families wide', () => {
-			expect(preserved).toHaveLength(11);
+		it('is twelve families wide', () => {
+			expect(preserved).toHaveLength(12);
 		});
 	});
 

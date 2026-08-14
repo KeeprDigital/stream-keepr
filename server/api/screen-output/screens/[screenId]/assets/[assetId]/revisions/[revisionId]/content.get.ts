@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { screenOutputAssetDeliveryForEvent } from '~~/server/modules/screen-output-assets/runtime';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
 import { screenOutputAssetCapabilityCookieName } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -59,10 +60,16 @@ export default defineEventHandler(async (event) => {
 	}
 	if (result.outcome === 'unavailable') {
 		setResponseHeader(event, 'retry-after', 5);
+		// The cause is what carries this sentence past the 5xx sanitizer. This is the
+		// one refusal an on-air output meets while its item is already missing, and
+		// 'Internal Server Error' does not distinguish a store that will be back from
+		// a Screen that has to be reconfigured (#321).
+		const cause = new TemporarilyUnavailableError('Screen Output asset delivery is temporarily unavailable');
 		throw createError({
-			statusCode: 503,
+			statusCode: cause.statusCode,
 			statusMessage: 'Service Unavailable',
-			message: 'Screen Output asset delivery is temporarily unavailable',
+			message: cause.message,
+			cause,
 		});
 	}
 	return result.response;

@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3';
 import {
 	graphicAssetId,
 	graphicAssetRevisionId,
@@ -9,7 +10,29 @@ import {
 	rangePermitted,
 	requestedByteRange,
 } from '~~/server/utils/byteRangeContentDelivery';
+import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+
+/**
+ * The one refusal both reads answer when the byte store is out of reach.
+ *
+ * Shared between the whole-body read and the ranged one because they are the same
+ * failure seen twice — a range is served by a second resolve against the same store,
+ * so the twin used to be the site most likely to drift. The cause is what carries the
+ * sentence past the 5xx sanitizer; without it both answered 'Internal Server Error'
+ * beside a retry-after header, which tells an operator to retry and not what for
+ * (#321).
+ */
+function contentTemporarilyUnavailable(event: H3Event) {
+	setResponseHeader(event, 'retry-after', 5);
+	const cause = new TemporarilyUnavailableError('Graphic Asset Content is temporarily unavailable');
+	return createError({
+		statusCode: cause.statusCode,
+		statusMessage: 'Service Unavailable',
+		message: cause.message,
+		cause,
+	});
+}
 
 export default defineEventHandler(async (event) => {
 	await requireGraphicsAuthorSession(event);
@@ -36,14 +59,8 @@ export default defineEventHandler(async (event) => {
 				message: 'Graphic Asset Revision not found',
 			});
 		}
-		if (complete.outcome === 'unavailable') {
-			setResponseHeader(event, 'retry-after', 5);
-			throw createError({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Graphic Asset Content is temporarily unavailable',
-			});
-		}
+		if (complete.outcome === 'unavailable')
+			throw contentTemporarilyUnavailable(event);
 		const range = rangePermitted(getRequestHeader(event, 'if-range'), etag)
 			? requestedByteRange(getRequestHeader(event, 'range'), complete.byteLength)
 			: undefined;
@@ -65,14 +82,8 @@ export default defineEventHandler(async (event) => {
 				revisionId,
 				range: { offset: range.start, length: rangeLength },
 			});
-			if (partial.outcome !== 'available') {
-				setResponseHeader(event, 'retry-after', 5);
-				throw createError({
-					statusCode: 503,
-					statusMessage: 'Service Unavailable',
-					message: 'Graphic Asset Content is temporarily unavailable',
-				});
-			}
+			if (partial.outcome !== 'available')
+				throw contentTemporarilyUnavailable(event);
 			return new Response(partial.body, {
 				status: 206,
 				headers: {
