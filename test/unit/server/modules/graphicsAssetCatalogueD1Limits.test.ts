@@ -218,11 +218,20 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 		 * chosen it against.
 		 *
 		 * Measured rather than inherited: 1985 / 2158 / 2174 ms in three runs on a
-		 * quiet machine at load ~3, and 2391–2606 ms across sixteen runs with eight
-		 * copies of this file running at once. #123's operators report five to ten
-		 * seconds where it failed, on machines running six to eight worktrees' full
-		 * suites at load 16–36 — a condition the runs above do not reach, so that
-		 * range is theirs and not a number from here.
+		 * quiet machine at load ~3, and 1966 / 1930 / 2066 / 2016 ms under deliberate
+		 * parallel load — three unit suites looping in sibling processes, at loads of
+		 * 19.3, 18.0, 16.7 and 15.3 respectively. That is the load band #123 reports
+		 * its failures from, and the cost here does not move.
+		 *
+		 * What did move the cost, mildly, was contention of the same shape: eight
+		 * concurrent copies of *this file* put it at 2391–2606 ms across sixteen runs,
+		 * dearer than a higher load average made of other work. Worth knowing before
+		 * reading a slow run as a regression — the neighbour that matters is another
+		 * hundred-identity batch, not a busy machine.
+		 *
+		 * Nothing available here reproduces the five to ten seconds #123's operators
+		 * report, so that range stays theirs: it was taken on machines running six to
+		 * eight worktrees' full suites, which these runs do not reach.
 		 *
 		 * A minute is therefore some twenty-three times the worst cost measured here
 		 * and six times the worst anyone has reported, and the margin is the point: a
