@@ -169,12 +169,17 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 		const handler = (await import(
 			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
 		)).default;
+		// Carries a distinguishing property on purpose: `toHaveBeenCalledWith`
+		// compares deeply, so the literal `{}` this row used to pass could not tell
+		// the request being answered apart from any other empty object a careless
+		// edit might hand `setResponseHeader` (#346 M7-pre, closed by #356).
+		const event = stubH3Event({ __requestEventFor: 'revision-content' });
 
-		await expect(handler(stubH3Event())).rejects.toMatchObject({
+		await expect(handler(event)).rejects.toMatchObject({
 			statusCode: 503,
 			message: 'catalogue unavailable',
 		});
-		expect(mockSetResponseHeader).toHaveBeenCalledWith({}, 'retry-after', 5);
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 
 	/**

@@ -13,6 +13,7 @@ import {
 	GraphicsObjectInputError,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 // The API boundary imports the author session for its actor resolution, which reaches
 // `hub:kv` — a binding no unit run has. Nothing here asks it anything.
@@ -157,7 +158,7 @@ describe('the graphics object identity boundary', () => {
 			}
 		})();
 
-		expect(() => rethrowGraphicsAssetApiError(thrown)).toThrow(expect.objectContaining({
+		expect(() => rethrowGraphicsAssetApiError(thrown, stubH3Event())).toThrow(expect.objectContaining({
 			statusCode: 400,
 			message: 'A graphics object identity cannot be empty',
 		}));
