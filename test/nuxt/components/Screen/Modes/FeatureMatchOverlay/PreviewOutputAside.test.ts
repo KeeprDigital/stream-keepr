@@ -232,6 +232,12 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		});
 	});
 
+	/**
+	 * The message types below are spelled as the literals they go on the wire as
+	 * rather than as the constants both ends now read (#260): a test written in the
+	 * constant moves with a rename, and so cannot tell a rename from a no-op —
+	 * while on the wire a rename ends the exchange in silence.
+	 */
 	it('accepts selections only from its own same-origin preview frame', async () => {
 		const wrapper = await mountComponent();
 		const previewFrame = wrapper.get('iframe').element;

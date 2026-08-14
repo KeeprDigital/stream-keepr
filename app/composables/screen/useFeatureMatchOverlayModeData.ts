@@ -1,7 +1,7 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatch, Match } from '~/types';
-import { isFromExpectedSender } from '~/modules/graphics/previewMessages';
+import { isFeatureMatchOverlayPreviewConfigMessage } from '~/modules/feature-match-overlay/previewMessages';
 
 export function useFeatureMatchOverlayModeData() {
 	const { eventId, isPreview } = useScreenContext();
@@ -29,19 +29,13 @@ export function useFeatureMatchOverlayModeData() {
 	const loading = displayData.loading;
 	const error = displayData.error;
 
-	function isPreviewConfigMessage(message: MessageEvent): message is MessageEvent<{ type: 'feature-match-overlay:preview-config'; config: FeatureMatchOverlayModeConfig }> {
-		if (!isFromExpectedSender(message, { origin: window.location.origin, source: window.parent }))
-			return false;
-
-		const data = message.data as Record<string, unknown>;
-		return data.type === 'feature-match-overlay:preview-config'
-			&& typeof data.config === 'object'
-			&& data.config !== null;
-	}
-
 	function handlePreviewConfigMessage(message: MessageEvent) {
-		if (!isPreview?.value || !isPreviewConfigMessage(message))
+		if (!isPreview?.value || !isFeatureMatchOverlayPreviewConfigMessage(message, {
+			origin: window.location.origin,
+			source: window.parent,
+		})) {
 			return;
+		}
 
 		previewConfigOverride.value = message.data.config;
 	}
