@@ -42,6 +42,26 @@ export interface ScannedRefusal {
 	readonly statusCode: number | undefined;
 	/** The message, or `undefined` where the scan could not read one. */
 	readonly message: string | undefined;
+	/**
+	 * Whether the call names a `cause`, or `undefined` where the scan could not read
+	 * the call's shape at all.
+	 *
+	 * #339's axis, and it exists for a different guard than the two above. A 5xx that
+	 * names no cause has its message replaced with 'Internal Server Error' by
+	 * `mapPublicNitroError`, so a hand-rolled 503 without one is an operator being told
+	 * the server broke when the route had written them a sentence about what did. The
+	 * class has been fixed three times (#233/#243, #294, #321) and nothing structural
+	 * stopped it regrowing; `test/unit/server/plugins/error-handler.test.ts` holds the
+	 * census that now does.
+	 *
+	 * **Presence, not usefulness.** The scan reads syntax: a `cause` naming an
+	 * expression it cannot evaluate counts, because whether that expression is a class
+	 * the mapper recognises is a question about the mapper rather than about the call.
+	 * The one shape ruled out is the literal `cause: undefined`, which names the key
+	 * and supplies nothing — counting it would let the census be satisfied by writing
+	 * the word.
+	 */
+	readonly carriesCause: boolean | undefined;
 	/** The call as written, so an unreadable entry says what defeated the scan. */
 	readonly source: string;
 }
@@ -77,6 +97,13 @@ const H3_STATUS_KEYS = ['statusCode', 'status'] as const;
  * `statusMessage`, not the `message` Nitro reports and the diagnosis matches on.
  */
 const H3_MESSAGE_KEYS = ['message', 'statusMessage'] as const;
+
+/**
+ * The key h3 carries through to the `H3Error`, and the one `mapPublicNitroError`
+ * classifies a 5xx by. There is no fallback spelling: `cause` is the only name h3
+ * reads for it.
+ */
+const H3_CAUSE_KEY = 'cause';
 
 /** h3 answers a `createError` that names no status with 500. */
 const H3_DEFAULT_STATUS = 500;
@@ -190,12 +217,12 @@ export function scanSourceForRefusals(label: string, text: string): ScannedRefus
 	return refusals;
 }
 
-/** The status and message halves of one `createError` call, each possibly unreadable. */
+/** The status, message and cause of one `createError` call, each possibly unreadable. */
 function readRefusal(
 	node: ts.CallExpression,
 	constants: Map<string, ts.Expression | undefined>,
-): Pick<ScannedRefusal, 'statusCode' | 'message'> {
-	const unreadable = { statusCode: undefined, message: undefined };
+): Pick<ScannedRefusal, 'statusCode' | 'message' | 'carriesCause'> {
+	const unreadable = { statusCode: undefined, message: undefined, carriesCause: undefined };
 
 	const argument = node.arguments[0];
 	// `createError(somethingElse)` and `createError('a string')` hide the whole shape.
@@ -222,7 +249,29 @@ function readRefusal(
 	return {
 		statusCode: composed(assigned, H3_STATUS_KEYS, H3_DEFAULT_STATUS, constants, readNumber),
 		message: composed(assigned, H3_MESSAGE_KEYS, H3_DEFAULT_MESSAGE, constants, readString),
+		carriesCause: namesCause(assigned),
 	};
+}
+
+/**
+ * Whether a readable call names a `cause` worth anything.
+ *
+ * Deliberately not `composed`: the other two halves ask *what value* a key holds and
+ * degrade to `undefined` when they cannot tell, because a status the scan misreads is
+ * a refusal that vanishes from a band. This asks only *whether a key is there*, which
+ * the syntax always answers — so it returns a boolean for every readable call rather
+ * than a third state nobody could act on. The unreadable calls are already `undefined`
+ * on all three halves, where `readRefusal` returns before reaching this.
+ */
+function namesCause(assigned: Map<string, ts.Expression>): boolean {
+	const cause = assigned.get(H3_CAUSE_KEY);
+	if (cause === undefined)
+		return false;
+	// `cause: undefined` is the one way to name the key and supply nothing, and it is a
+	// shape this repository really writes — `templatePackageExportApi.ts` classifies its
+	// retryable half and leaves the other one undefined in the same call.
+	const value = unwrap(cause);
+	return !(ts.isIdentifier(value) && value.text === 'undefined');
 }
 
 /** The key a property assigns to, where the scan can name it at all. */
@@ -522,7 +571,7 @@ export function serverMiddlewareFiles(directory: string = MIDDLEWARE_DIRECTORY):
 	// one directory down runs on every request exactly as a top-level one does, and a
 	// flat read would have skipped it in silence. Declaration files are excluded for the
 	// reason a type-only import is — they cannot carry a throw.
-	const files = existsSync(directory) ? middlewareFilesUnder(directory) : [];
+	const files = existsSync(directory) ? typeScriptFilesUnder(directory) : [];
 
 	if (files.length === 0) {
 		throw new Error(
@@ -535,12 +584,22 @@ export function serverMiddlewareFiles(directory: string = MIDDLEWARE_DIRECTORY):
 	return files;
 }
 
-function middlewareFilesUnder(directory: string): string[] {
+/**
+ * Every TypeScript source file under a directory, deepest-last within each level and
+ * sorted by name, as absolute paths.
+ *
+ * Declaration files are excluded for the reason a type-only import is followed by
+ * nothing: they cannot carry a throw. Shared by `serverMiddlewareFiles`, whose
+ * recursion this was, and by #339's `server/`-wide `carriesCause` census — which needs
+ * every file rather than every file some route's graph reaches, because the class it
+ * guards against is a `createError` nobody has connected up yet.
+ */
+export function typeScriptFilesUnder(directory: string): string[] {
 	const found: string[] = [];
 	for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
 		const path = resolve(directory, entry.name);
 		if (entry.isDirectory())
-			found.push(...middlewareFilesUnder(path));
+			found.push(...typeScriptFilesUnder(path));
 		else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts'))
 			found.push(path);
 	}

@@ -1,5 +1,8 @@
 import type { LoggedNitroError } from '~~/server/utils/errorLogFields';
 import type { MappableNitroError } from '~~/server/utils/nitroErrorMapping';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
 import { errorLogFields } from '~~/server/utils/errorLogFields';
@@ -14,6 +17,7 @@ import {
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusal';
+import { scanSourceForRefusals, typeScriptFilesUnder } from '~~/test/helpers/routeRefusalScan';
 
 describe('error-handler mapping logic', () => {
 	describe('log path safety', () => {
@@ -687,6 +691,73 @@ describe('error-handler mapping logic', () => {
 			};
 			mapPublicNitroError(error);
 			expect(error.statusCode).toBe(409);
+		});
+	});
+
+	/**
+	 * The structural half of everything above: no `createError` under `server/` may raise
+	 * a non-500 5xx without naming a cause.
+	 *
+	 * Every row in this file drives the mapper with an error somebody constructed here.
+	 * That establishes what the mapper does and nothing at all about what the server hands
+	 * it — so the class this guards has been fixed three times over (#233/#243, then #294,
+	 * then #321's seven sites) and each fix left nothing behind that would notice the
+	 * fourth. `app/utils/failureSentence.ts` reads the far side of the same boundary and
+	 * says its placeholder mark is belt-and-braces; until this row that honesty rested on
+	 * nobody writing a bare 5xx again. #339.
+	 *
+	 * **Read the site before satisfying the failure.** A cause is not a formality: it is
+	 * what `mapPublicNitroError` classifies by, so the fix is to raise a class the mapper
+	 * recognises — `TemporarilyUnavailableError` and friends in `server/utils/errors.ts`,
+	 * enumerated as the twelve families above. Attaching whatever a store threw satisfies
+	 * this row and still answers 'Internal Server Error', which is the shape pinned under
+	 * 'does not exempt a store failure that merely reached the same route'.
+	 *
+	 * **500 is deliberately outside the band.** A hand-rolled 500 is this server saying it
+	 * broke, and 'Internal Server Error' is the honest answer to that — demanding a cause
+	 * there would demand that every route classify a genuine crash. Four such 500s exist
+	 * today and are not this row's business.
+	 *
+	 * **What the readability filter costs, stated so nobody reads more into a pass.** The
+	 * scan reads syntax, so `statusCode: cause.statusCode` — the idiom #321's own fixes
+	 * landed on — has no readable status and is out of scope here; thirteen calls under
+	 * `server/` are in that position, and each is pinned by its own route's tests instead.
+	 * What is in scope is the shape the defect actually takes when it regrows: a fresh
+	 * `createError({ statusCode: 503, message: '…' })` written by someone who had not read
+	 * #321. That is what the planted-regression proof on this ticket exercised.
+	 */
+	describe('every hand-rolled non-500 5xx under server/', () => {
+		const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+		const serverDirectory = fileURLToPath(new URL('../../../../server/', import.meta.url));
+
+		const scanned = typeScriptFilesUnder(serverDirectory).flatMap(
+			file => scanSourceForRefusals(relative(repositoryRoot, file), readFileSync(file, 'utf8')),
+		);
+
+		/** A readable 5xx that is not 500 — the band whose prose the mapper decides on. */
+		const banded = scanned.filter(
+			refusal => refusal.statusCode !== undefined && refusal.statusCode > 500 && refusal.statusCode < 600,
+		);
+
+		it('is found by the scan at all, so this row cannot pass by scanning nothing', () => {
+			// The whole census is a filter over a list, and an empty list satisfies every
+			// filter. A scan pointed at a renamed directory, or one that stopped matching
+			// `createError`, would otherwise report a clean server in silence — which is
+			// the defect class one level up, and the one this file keeps meeting.
+			expect(typeScriptFilesUnder(serverDirectory).length).toBeGreaterThan(100);
+			expect(scanned.length).toBeGreaterThan(100);
+			// And the band itself is non-empty, so the assertion below is quantifying over
+			// something. It is one site today — `deck-list-resolution`'s 502 — which is
+			// thin, and the reason the sanity marker above is separate from it.
+			expect(banded.length).toBeGreaterThan(0);
+		});
+
+		it('names a cause, so the sentence it wrote reaches the operator it wrote it for', () => {
+			const uncaused = banded
+				.filter(refusal => refusal.carriesCause === false)
+				.map(refusal => `${refusal.site}: ${refusal.source}`);
+
+			expect(uncaused).toEqual([]);
 		});
 	});
 });

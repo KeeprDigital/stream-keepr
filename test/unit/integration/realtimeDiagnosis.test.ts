@@ -391,9 +391,18 @@ describe('the Screen-command route\'s own refusals', () => {
 	});
 });
 
-/** A scanned refusal, for the shapes no route in this repository has grown yet. */
+/**
+ * A scanned refusal, for the shapes no route in this repository has grown yet.
+ *
+ * `carriesCause` is fixed rather than a parameter: every fixture here is a credential-band
+ * 4xx, and neither `inCredentialBand` nor `unlistedRefusals` reads that axis — a 4xx is
+ * the authority answering this request and is never sanitized, so whether it names a
+ * cause decides nothing. #339's axis is exercised where it decides something, against
+ * source text below and against `server/` in
+ * `test/unit/server/plugins/error-handler.test.ts`.
+ */
 function scanned(statusCode: number | undefined, message: string | undefined): ScannedRefusal {
-	return { site: 'synthetic.ts:1', statusCode, message, source: 'createError({ ... })' };
+	return { site: 'synthetic.ts:1', statusCode, message, carriesCause: false, source: 'createError({ ... })' };
 }
 
 /**
@@ -563,6 +572,49 @@ describe('what the scan can read out of a route', () => {
 			.toBeUndefined();
 		expect(scan('let status = 403;\ncreateError({ statusCode: status, message: \'x\' });')[0]?.statusCode)
 			.toBeUndefined();
+	});
+
+	it('reads whether a refusal names a cause, which decides whether its 5xx keeps its words', () => {
+		// #339's axis. `mapPublicNitroError` classifies a 5xx by its cause, so a 503
+		// without one is answered 'Internal Server Error' however carefully the route
+		// worded it. Presence rather than usefulness: whether the named expression is a
+		// class the mapper recognises is a question about the mapper, asked next door in
+		// `test/unit/server/plugins/error-handler.test.ts`.
+		expect(scan('createError({ statusCode: 503, message: \'x\', cause: failure });')[0]?.carriesCause).toBe(true);
+		expect(scan('createError({ statusCode: 503, message: \'x\', cause: new TemporarilyUnavailableError(\'x\') });')[0]?.carriesCause).toBe(true);
+		expect(scan('createError({ statusCode: 503, message: \'x\' });')[0]?.carriesCause).toBe(false);
+	});
+
+	it('does not count a cause that names the key and supplies nothing', () => {
+		// A real shape here: `templatePackageExportApi.ts` classifies its retryable half
+		// and leaves the other undefined in the same call. Counting `cause: undefined`
+		// would let the `server/`-wide census be satisfied by writing the word, which is
+		// the census reduced to a spelling check.
+		expect(scan('createError({ statusCode: 503, message: \'x\', cause: undefined });')[0]?.carriesCause).toBe(false);
+		expect(scan('createError({ statusCode: 503, message: \'x\', cause: (undefined) });')[0]?.carriesCause).toBe(false);
+	});
+
+	it('reports a cause it could not look for, on a call whose shape is hidden', () => {
+		// The same direction the other two halves take, and for the same reason: a spread
+		// or a non-object argument can supply a cause the scan never sees, so `false`
+		// there would be a claim the syntax does not support. `undefined` says the scan
+		// could not look — and the census filters on a readable status, which no such
+		// call has, so it reports as out of scope rather than as a violation.
+		//
+		// The shorthand `{ statusCode: 503, cause }` belongs here rather than with the
+		// causes above, and the reason is worth knowing before writing one: a shorthand
+		// anywhere in the literal makes the *whole* call unreadable, status included, so
+		// such a site would be out of the census's scope entirely. No `createError` under
+		// `server/` is written that way today.
+		for (const hidden of [
+			'createError({ ...base, statusCode: 503 });',
+			'createError(refusalFor(screen));',
+			'createError({ statusCode: 503, [causeKey]: failure });',
+			'createError({ statusCode: 503, message: \'x\', cause });',
+		]) {
+			expect(scan(hidden)[0]?.carriesCause, hidden).toBeUndefined();
+			expect(scan(hidden)[0]?.statusCode, hidden).toBeUndefined();
+		}
 	});
 
 	it('records one entry per createError call it finds, readable or not', () => {
