@@ -98,6 +98,7 @@ export const integrationRealtimeConfigured = INTEGRATION_ABLY_API_KEY !== '';
  *   90, 91   graphicsAssetLifecycle
  *   100-107  broadcastGraphicsMedia — Graphic Input media fixtures
  *   110, 111 graphicsAssetReplacement — original and replacement content
+ *   120      graphicsLibraryReadAuthorisation
  *
  * This registry keeps suites off each other's *content*. Keeping them off each
  * other's *Graphic Assets* is `graphicsIngestionRequest`'s job — see that file.
