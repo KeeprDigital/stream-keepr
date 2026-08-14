@@ -29,7 +29,6 @@ import {
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
 import { publishMessage } from '~~/server/utils/ably';
-import { ServiceWiringError } from '~~/server/utils/errors';
 import {
 	broadcastGraphicChannelContexts,
 	BroadcastGraphicsCommandRejection,
@@ -52,42 +51,43 @@ import {
 } from '~~/shared/utils/graphicsAssetReferences';
 import { randomCommandId } from '~~/shared/utils/uuid';
 
+/**
+ * A collaborator an operation needs, passed as a thunk and invoked at the point
+ * of use.
+ *
+ * The same shape screen-write's operations take, and declared here rather than
+ * imported because the alias is structural — `() => T` is `() => T` whichever
+ * module writes it — so sharing one declaration would buy no type safety, and it
+ * would cost a dependency in the wrong direction: screen-write imports this
+ * module and calls it at four sites, so importing its alias back would close a
+ * cycle between the two. The two decisions behind the shape are argued in full at
+ * `server/modules/screen-write/index.ts` (#247); what they mean here is:
+ *
+ * **Required, and on `applyCommand` rather than on the module.** Optional module
+ * dependencies meant a construction site could omit the library and find out at
+ * runtime, which is the 503 #246 spent a ticket making legible. Requiring it
+ * makes the omission a compile error and the defensive branch unrepresentable,
+ * so it is deleted rather than decorated. It sits on the operation because
+ * `applyCommand` is the only one of this module's seven entry points that reaches
+ * the library — a module-level requirement would make the seven construction
+ * sites that call one of the other six (two Live Session routes, four in
+ * screen-write, and this module's own binding refresh) name a collaborator they
+ * never use.
+ *
+ * **A thunk, because constructing one can be wasted.** Only a Take carrying
+ * Graphic Asset References and a media Graphic Input selection ask the library;
+ * an Out, a cleared media value, and a Take on a graphic that pins nothing all
+ * ask it nothing, and none of them should pay for a library. See #265.
+ */
+type Provides<T> = () => T;
+
 interface ApplyCommandParams {
 	eventId: number;
 	screenId: number;
 	sessionId: number;
 	command: BroadcastGraphicsCommand;
 	originConnectionId?: string;
-}
-
-/**
- * A playout path asked the Graphics Asset Library, and this module was never
- * handed one.
- *
- * A wiring fault rather than a configuration one — nothing is missing from the
- * environment and no setting will fix it — so it carries `ServiceWiringError`,
- * which `mapPublicNitroError` passes through with `unhandled` cleared. Without
- * the cause the sanitizer rewrites it to a bare 'Internal Server Error', leaving
- * the operator of a misassembled build nothing to report. See #246, which is
- * #243's defect in this module.
- *
- * No route reaches it today: both call sites sit under `applyCommand`, whose only
- * route supplies the library, and the two entry points a dependency-less Screen
- * write calls — `endSessionsForScreen` and `republishLiveSessionReferences` —
- * never touch the dependency. It is the branch a future construction site would
- * fall into.
- */
-function missingGraphicsAssetLibrary() {
-	const cause = new ServiceWiringError(
-		'The Broadcast Graphics Live Session module',
-		'the Graphics Asset Library',
-	);
-	return createError({
-		statusCode: cause.statusCode,
-		statusMessage: 'Service Unavailable',
-		message: cause.message,
-		cause,
-	});
+	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>>;
 }
 
 /**
@@ -102,9 +102,7 @@ function missingGraphicsAssetLibrary() {
  * port, because the port's aggregate is exactly the row its projection writes
  * back — the Screen is a second entity the sequenced aggregate does not contain.
  */
-export function broadcastGraphicsLiveSessionModule(dependencies: {
-	graphicsAssets?: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>;
-} = {}) {
+export function broadcastGraphicsLiveSessionModule() {
 	const state = broadcastGraphicsStateService();
 	const screens = screenService();
 	const bindingData = graphicBindingDataService();
@@ -181,15 +179,15 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	 */
 	const requireResolvableGraphicAssets = async (
 		references: readonly ScreenGraphicAssetReference[],
+		graphicsAssets: ApplyCommandParams['graphicsAssets'],
 	): Promise<void> => {
 		if (references.length === 0)
 			return;
 
-		if (!dependencies.graphicsAssets)
-			throw missingGraphicsAssetLibrary();
+		const library = graphicsAssets();
 
 		for (const item of references) {
-			const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+			const status = await library.inspectGraphicAssetRevision({
 				assetId: graphicAssetId(item.reference.assetId),
 				revisionId: graphicAssetRevisionId(item.reference.revisionId),
 			});
@@ -233,6 +231,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 	const recordMediaSelectionFacts = async (
 		graphic: BroadcastGraphicConfig,
 		command: BroadcastGraphicsCommand,
+		graphicsAssets: ApplyCommandParams['graphicsAssets'],
 	): Promise<BroadcastGraphicsCommand> => {
 		if (command.type !== 'Set Input' && command.type !== 'Set Override')
 			return command;
@@ -246,10 +245,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		if (declaration?.type !== 'media')
 			return command;
 
-		if (!dependencies.graphicsAssets)
-			throw missingGraphicsAssetLibrary();
-
-		const status = await dependencies.graphicsAssets.inspectGraphicAssetRevision({
+		const status = await graphicsAssets().inspectGraphicAssetRevision({
 			assetId: graphicAssetId(value.assetId),
 			revisionId: graphicAssetRevisionId(value.revisionId),
 		});
@@ -609,6 +605,7 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 		sessionId,
 		command,
 		originConnectionId,
+		graphicsAssets,
 	}: ApplyCommandParams): Promise<BroadcastGraphicsCommandResult> => {
 		const screen = await requireBroadcastGraphicsScreen(eventId, screenId);
 		const graphic = findAuthoredGraphic(screen, command.payload.graphicId);
@@ -635,10 +632,10 @@ export function broadcastGraphicsLiveSessionModule(dependencies: {
 					{ graphics: [graphic] },
 					session.currentState,
 				),
-			]);
+			], graphicsAssets);
 		}
 
-		const admitted = await recordMediaSelectionFacts(graphic, command);
+		const admitted = await recordMediaSelectionFacts(graphic, command, graphicsAssets);
 
 		const result = await state.applyCommand(
 			sessionId,
