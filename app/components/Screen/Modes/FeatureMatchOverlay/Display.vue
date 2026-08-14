@@ -242,12 +242,37 @@ function announcePreviewReady() {
 	window.parent?.postMessage({ type: GRAPHICS_PREVIEW_READY_MESSAGE }, window.location.origin);
 }
 
+/**
+ * Both selection listeners exist to hear one window: the editor that embedded
+ * this frame. A live Screen Output has no editor behind it — and `window.parent`
+ * there is the output's own window — so the sender check every one of these
+ * guards is built on stops nothing at all on a live output, and a same-origin
+ * embedder or an in-page script could set the selection state (#259).
+ *
+ * Gated at the registration rather than inside each handler, on the same ground
+ * as the announcement above: whether this frame has an editor behind it is a
+ * property of the frame, not of a message, and reading it here settles it once
+ * for both listeners instead of asking every handler a future edit adds to
+ * remember. A live output then installs no `message` listener of its own at all,
+ * which is a stronger statement than each handler declining to act.
+ *
+ * The write it closes is dead today — the guide layer is gated on
+ * `showPreviewGuides`, and the render model passes `itemGuides: false` on a live
+ * output, so nothing drawn there reads either selection — but "nothing renders
+ * it yet" is a property of consumers this component does not own, and the pins
+ * on this are written so the gate holds whatever a future consumer does.
+ */
 onMounted(() => {
-	window.addEventListener('message', handleSelectedPreviewTargetMessage);
-	window.addEventListener('message', handleSelectedCompositorTargetMessage);
+	if (isPreview?.value) {
+		window.addEventListener('message', handleSelectedPreviewTargetMessage);
+		window.addEventListener('message', handleSelectedCompositorTargetMessage);
+	}
 	announcePreviewReady();
 });
 
+// Unconditional on purpose: removing a listener that was never added is a no-op,
+// while re-reading `isPreview` here would leave one installed for good if it had
+// changed since the mount.
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handleSelectedPreviewTargetMessage);
 	window.removeEventListener('message', handleSelectedCompositorTargetMessage);

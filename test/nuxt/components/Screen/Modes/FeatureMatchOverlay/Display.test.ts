@@ -263,6 +263,9 @@ describe('featureMatchOverlayDisplay', () => {
 		it('marks the shared Graphic Item the editor selected', async () => {
 			mockConfig.value = guidedConfig();
 			mockPreviewGuides.value = true;
+			// This is a frame an editor embedded, which is the only kind that listens
+			// for either selection at all (#259).
+			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
 			expect(wrapper.get('[data-item-guide="shared-clock"]').classes()).not.toContain('is-selected');
@@ -293,6 +296,7 @@ describe('featureMatchOverlayDisplay', () => {
 		it('marks the host-owned Source Item the editor selected, and only from the editor', async () => {
 			mockConfig.value = guidedConfig();
 			mockPreviewGuides.value = true;
+			mockIsPreview.value = true;
 
 			const wrapper = await mountComponent();
 			const guide = () => wrapper.get('[aria-label="Select Main Match Source"]');
@@ -322,6 +326,93 @@ describe('featureMatchOverlayDisplay', () => {
 			await nextTick();
 
 			expect(guide().classes()).toContain('is-selected');
+		});
+
+		/**
+		 * Who this frame is willing to hear a selection from (#259).
+		 *
+		 * Both listeners exist to hear the editor that embedded the frame, and the
+		 * sender check they are built on compares `message.source` against
+		 * `window.parent` — which on a live Screen Output is the output's own window,
+		 * so it stops nothing there. A live output that installs the listeners
+		 * anyway takes a selection from any same-origin script on the page.
+		 *
+		 * Pinned as "installs neither listener" rather than as "renders no guide",
+		 * because the second is a fact about consumers this component does not own:
+		 * the write is dead today only because the guide layer is gated on the guides
+		 * flag and the render model passes `itemGuides: false` on a live output. A
+		 * consumer that later reads `selectedPreviewTarget` unconditionally would
+		 * reopen the hole without touching this file.
+		 */
+		describe('listening only where there is an editor to listen to', () => {
+			async function mountCountingMessageListeners() {
+				let installed = 0;
+				const install = window.addEventListener.bind(window);
+				const addEventListener = vi.spyOn(window, 'addEventListener')
+					.mockImplementation((...args: Parameters<Window['addEventListener']>) => {
+						if (args[0] === 'message')
+							installed += 1;
+						install(...args);
+					});
+
+				try {
+					await mountComponent();
+				}
+				finally {
+					addEventListener.mockRestore();
+				}
+
+				return installed;
+			}
+
+			it('installs no message listener at all on a live Screen Output', async () => {
+				mockConfig.value = guidedConfig();
+
+				expect(await mountCountingMessageListeners()).toBe(0);
+			});
+
+			it('installs both selection listeners in an embedded preview', async () => {
+				// The other direction, so the pin above cannot be satisfied by a component
+				// that listens to nobody.
+				mockConfig.value = guidedConfig();
+				mockIsPreview.value = true;
+
+				expect(await mountCountingMessageListeners()).toBe(2);
+			});
+
+			/**
+			 * The same rule read through what it protects, with the guides flag forced on
+			 * beside a live output. The real screen context derives `previewGuides` from
+			 * `isPreview`, so no URL produces this pair — which is exactly why it is
+			 * driven from the mock here: it makes the gate's own behaviour observable
+			 * instead of resting on a derivation two files away that could change.
+			 */
+			it('ignores a selection pushed at a live Screen Output, even with guides drawn', async () => {
+				mockConfig.value = guidedConfig();
+				mockPreviewGuides.value = true;
+
+				const wrapper = await mountComponent();
+				const sourceGuide = () => wrapper.get('[aria-label="Select Main Match Source"]');
+				expect(sourceGuide().classes()).not.toContain('is-selected');
+
+				window.dispatchEvent(new MessageEvent('message', {
+					origin: window.location.origin,
+					source: window.parent,
+					data: { type: 'feature-match-overlay:selected-target', target: { type: 'source', itemId: 'main-source' } },
+				}));
+				window.dispatchEvent(new MessageEvent('message', {
+					origin: window.location.origin,
+					source: window.parent,
+					data: {
+						type: 'graphics-compositor:selected-target',
+						target: { type: 'item', graphicId: FEATURE_MATCH_LAYOUT_COMPOSITION_ID, itemId: 'shared-clock' },
+					},
+				}));
+				await nextTick();
+
+				expect(sourceGuide().classes()).not.toContain('is-selected');
+				expect(wrapper.get('[data-item-guide="shared-clock"]').classes()).not.toContain('is-selected');
+			});
 		});
 
 		it('draws advisory safe areas without offering anything to select', async () => {
