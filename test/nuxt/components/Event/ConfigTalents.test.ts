@@ -168,6 +168,25 @@ describe('event config talents', () => {
 		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alicia' }]);
 	});
 
+	// Nothing above this card is a form, so a `type="submit"` on Save would be
+	// inert and would only suggest that pressing it posts something. Save is
+	// written twice — bare, and wrapped in the tooltip that explains why it is
+	// disabled mid-edit — so both spellings are checked, and the tooltip's
+	// presence is what says the second mount reached the other branch.
+	it('offers Save as an ordinary button in both of its forms', async () => {
+		const wrapper = await mountComponent([ALICE]);
+		await flushPromises();
+
+		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(false);
+		expect(saveButton(wrapper).attributes('type')).toBe('button');
+
+		await wrapper.get('[data-label="Add talent"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(true);
+		expect(saveButton(wrapper).attributes('type')).toBe('button');
+	});
+
 	// The guard is what stops an operator navigating away from an unsaved edit. It
 	// registers through inject, so a card mounted without a page around it
 	// registers with nothing and loses this silently.

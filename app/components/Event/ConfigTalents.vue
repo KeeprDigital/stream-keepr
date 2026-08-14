@@ -222,6 +222,14 @@ defineExpose({ resetForm });
 		</ul>
 
 		<template #footer>
+			<!--
+				This card is not a form. There is no `<form>` or `UForm` above these
+				controls and saving runs entirely off the click handler, so every button
+				here is an ordinary one. `EventConfigFormFooter`'s Save is a
+				`type="submit"` because each of its seven consumers does wrap it in a
+				real form; copying that attribute across gives a Save that reads as
+				though pressing it submits something and does nothing of the sort (#328).
+			-->
 			<div class="flex justify-between items-center gap-4">
 				<UButton
 					label="Reset"
@@ -248,7 +256,7 @@ defineExpose({ resetForm });
 						label="Save"
 						color="primary"
 						variant="outline"
-						type="submit"
+						type="button"
 						:loading="props.loading"
 						:disabled="!canSave"
 						@click="handleSubmit"
@@ -259,7 +267,7 @@ defineExpose({ resetForm });
 					label="Save"
 					color="primary"
 					variant="outline"
-					type="submit"
+					type="button"
 					:loading="props.loading"
 					:disabled="!canSave"
 					@click="handleSubmit"

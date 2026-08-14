@@ -167,23 +167,39 @@ async function turnTo(position: GraphicsAssetEvidencePosition, towards: 'older' 
 }
 
 /**
+ * A form holding nothing but the one thread being followed.
+ *
+ * The thread is assigned onto a fresh reset rather than written as overrides
+ * beside a spread of one. The two say the same thing, and the spread said it
+ * more plainly — but a spread and the keys overriding it flatten into a single
+ * object literal when the page is bundled, and the four keys the callers below
+ * override were four of the five `duplicate-object-key` warnings every Worker
+ * build printed. Last-key-wins meant the overrides were always the ones that
+ * survived, so nothing here was ever wrong; the cost was four standing warnings,
+ * and a standing warning is where a real shadowing goes unread (#324).
+ */
+function threadOnly(thread: Partial<EvidenceFilters>): EvidenceFilters {
+	return Object.assign(noFilters(), thread);
+}
+
+/**
  * The three ways one entry leads to another: everything that happened to the
  * same subject, everything one sweep or request decided, and everyone one actor
  * decided. Each replaces the filter rather than adding to it, because following
  * a thread is a new question and not a narrowing of the old one.
  */
 async function followSubject(entry: GraphicsAssetEvidenceEntry) {
-	draft.value = { ...noFilters(), subjectKind: entry.subject.kind, subjectId: entry.subject.id };
+	draft.value = threadOnly({ subjectKind: entry.subject.kind, subjectId: entry.subject.id });
 	await applyFilters();
 }
 
 async function followCorrelation(entry: GraphicsAssetEvidenceEntry) {
-	draft.value = { ...noFilters(), correlationId: entry.correlationId };
+	draft.value = threadOnly({ correlationId: entry.correlationId });
 	await applyFilters();
 }
 
 async function followActor(entry: GraphicsAssetEvidenceEntry) {
-	draft.value = { ...noFilters(), actor: entry.actor };
+	draft.value = threadOnly({ actor: entry.actor });
 	await applyFilters();
 }
 
