@@ -158,10 +158,12 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	});
 
 	/**
-	 * The harness's own call site is process-entry code and cannot be executed by
-	 * a unit runner, so the fact it has to get right is held here instead: a page
-	 * opened for staged work carries the session that staged it, and the pairing
-	 * is one expression rather than two arguments an edit can separate.
+	 * `run-font-browser-acceptance.mjs` runs its harness at import — the module's
+	 * body *is* the run — so importing it in a test would open an installation
+	 * and drive a browser, and its own call site is therefore reachable by no
+	 * unit runner. The fact that call site has to get right is held here instead:
+	 * a page opened for staged work carries the session that staged it, as one
+	 * expression rather than two arguments an edit can separate.
 	 */
 	it('pairs a staged page with the session that staged it', () => {
 		const session = { origin: 'http://127.0.0.1:8787', authorCookie: COOKIE };
