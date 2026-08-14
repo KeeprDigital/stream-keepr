@@ -4,6 +4,7 @@ import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { callsTo } from '~~/test/helpers/lastCallTo';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const mockRepository = {
@@ -222,7 +223,10 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 		await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
-		const [first, second] = mockRepository.sendCommand.mock.calls.map(call => call[3].commandId);
+		// Two, asserted rather than assumed: destructuring a shorter list would leave
+		// `second` undefined and pass this assertion while the second press was never
+		// sent at all (#330).
+		const [first, second] = callsTo(mockRepository.sendCommand, 2).map(call => call[3].commandId);
 		expect(first).not.toBe(second);
 	});
 
@@ -247,8 +251,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		// retry carries the same command id. A fresh id would defeat the receipt
 		// that exists to recognise it: were the first attempt to have landed after
 		// all, the retry would be accepted a second time rather than answered with
-		// the outcome it already had.
-		const [first, retried] = mockRepository.sendCommand.mock.calls.map(call => call[3].commandId);
+		// the outcome it already had. Two deliveries, asserted rather than assumed: on a
+		// run that sent nothing this compared `undefined` to `undefined` and passed (#330).
+		const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3].commandId);
 		expect(retried).toBe(first);
 	});
 
@@ -548,7 +553,10 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		// id would defeat the receipt that recognises the repeat, and re-reading the
 		// revision inside the retry would re-base the sequence guard onto whatever
 		// landed in the meantime and stop it protecting the colleague it exists for.
-		const [first, retried] = mockRepository.sendCommand.mock.calls.map(call => call[3]);
+		// Two, asserted rather than assumed: a shorter list crashed here on an
+		// unnamed `Cannot read properties of undefined` instead of saying what was
+		// missing (#330).
+		const [first, retried] = callsTo(mockRepository.sendCommand, 2).map(call => call[3]);
 		expect(retried.commandId).toBe(first.commandId);
 		expect(retried.payload).toEqual(first.payload);
 		expect(first.payload.basedOnAcceptedRevision).toBe(4);

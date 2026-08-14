@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lastCallTo } from '~~/test/helpers/lastCallTo';
+import { callsTo, lastCallTo } from '~~/test/helpers/lastCallTo';
 
 /**
  * The two things a call-selecting read has to get right, pinned because a shared
@@ -133,6 +133,53 @@ describe('lastCallTo', () => {
 
 			expect(() => lastCallTo(spy, 'nothing')).toThrow('expected a call to nothing, got only [[object Object]]');
 		});
+	});
+});
+
+/**
+ * The count a test destructures against, pinned because getting it wrong is silent.
+ *
+ * `lastCallTo` answers "which call"; this answers "how many", which is the question a
+ * test comparing two calls to each other is actually asking. #330's three sites all
+ * read `const [first, second] = mock.calls.map(…)`, and every one of them had a run on
+ * which the list was shorter than the destructuring and the assertion passed anyway —
+ * `expect(first).not.toBe(undefined)` and `expect(undefined).toBe(undefined)` are both
+ * vacuous truths. So the first case below is the one that matters: a short list must
+ * fail, and fail with a sentence rather than as a `TypeError` three lines later.
+ */
+describe('callsTo', () => {
+	it('hands back exactly the calls the test destructures, in the order they were made', () => {
+		const [first, second] = callsTo(recordedFetch(), 2, LEDGER);
+
+		expect(first?.[1]).toEqual({ query: { page: 1 } });
+		expect(second?.[1]).toEqual({ query: { page: 2 } });
+	});
+
+	it('refuses a list shorter than the test thinks, which is how a vacuous pass happens', () => {
+		const mock = vi.fn();
+		mock(LEDGER, { query: { page: 1 } });
+
+		expect(() => callsTo(mock, 2, LEDGER)).toThrow(
+			`expected 2 calls to ${LEDGER}, got 1; recorded only ["${LEDGER}"]`,
+		);
+	});
+
+	it('refuses a longer list too, because an extra call means the pair is not the pair', () => {
+		expect(() => callsTo(recordedFetch(), 2)).toThrow(
+			'expected 2 calls, got 3; recorded only',
+		);
+	});
+
+	it('counts what the selector accepts, not what the mock recorded', () => {
+		// The stray-after-the-subject arrangement the file opens with: an unselected
+		// count would read 3 here and refuse a test that is perfectly correct.
+		expect(callsTo(recordedFetch(), 2, LEDGER)).toHaveLength(2);
+	});
+
+	it('names the matcher when one was given, the way lastCallTo does', () => {
+		expect(() => callsTo(vi.fn(), 1, isPublishFailureLine)).toThrow(
+			'expected 1 call matching isPublishFailureLine, got 0; recorded none',
+		);
 	});
 });
 

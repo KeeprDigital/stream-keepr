@@ -74,8 +74,7 @@ export function useGraphicsAdminReading<Reading>(options: {
 	 * bodies may be quoted; a sanitized 5xx writes none, and falls back to that line.
 	 */
 	function describeFailure(caught: unknown, fallback: string) {
-		return failureSentence(caught)
-			?? (caught instanceof Error ? caught.message : fallback);
+		return reportedMessage(caught, fallback);
 	}
 
 	function statusOf(caught: unknown) {

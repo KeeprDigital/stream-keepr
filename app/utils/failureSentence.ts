@@ -109,8 +109,9 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * A `useFetch` error is that failure rebuilt by `createError`, which keeps `statusCode`
  * and `data` and does not always keep `status` — imported from `@nuxt/nitro-server/h3` in
  * a bare node process it does not. That is why `failureStatus` reads `statusCode` first,
- * and it is the whole reason the three surfaces reading `useFetch`'s `error` can use this
- * at all.
+ * and it is the whole reason the three `useFetch` errors this application reads —
+ * `GraphicsAsset/FocusPicker.vue`'s listing and `pages/graphics-assets/index.vue`'s
+ * listing and capacity, across two components — can use this at all.
  *
  * What it cannot tell apart is prose written by something that is not this server — an
  * edge or proxy answering 503 with its own JSON body would be quoted. That is a limit
@@ -162,6 +163,44 @@ function preservedServerSentence(caught: unknown): string | undefined {
 export function isSanitizedFailure(caught: unknown): boolean {
 	const status = failureStatus(caught);
 	return status !== undefined && status >= 500 && preservedServerSentence(caught) === undefined;
+}
+
+/**
+ * What a failure says to the person who was watching, in one line.
+ *
+ * The sentence the authority wrote where it wrote one; otherwise the failure's own
+ * `message`, which for a `$fetch` failure is the transport's line and reads as
+ * machinery rather than as words anyone chose; otherwise the caller's static wording,
+ * for a throw that is not an `Error` at all and therefore carries no line to fall back
+ * to.
+ *
+ * The ordering is the whole content, and it is #245's judgement applied twice: quote
+ * the authority where quoting it is honest, and where it is not, show machinery as
+ * machinery rather than dressing a placeholder as the authority's own words. Which
+ * bodies may be quoted is not decided here — `failureSentence` owns that question, and
+ * this adds nothing to it.
+ *
+ * `fallback` is optional because two kinds of caller ask this. A `catch` holds
+ * `unknown` and must say *something*, so it names the line to print when the throw was
+ * not an `Error`. A surface reading `useFetch`'s `error` holds an `Error` or nothing,
+ * so its "nothing" case is the absent failure rather than an unusable one, and
+ * `undefined` is the honest answer — `reportedMessage(undefined)` is `undefined`,
+ * which is what those computeds already returned for an absent error.
+ *
+ * Filed as #299: eight call sites across seven surfaces had written this out, four with
+ * a fallback and four without, and #286 had to be applied to every one of them by hand.
+ * The seam is here so the next discrimination between quotable and unquotable prose is
+ * made once. Three further `failureSentence` call sites deliberately do **not** use this
+ * and are worth naming,
+ * because each looks like an oversight and is not: `stores/metagame.ts` wants the
+ * static line for *any* unsentenced failure rather than the transport's, `stores/screen.ts`
+ * re-raises rather than reports (that shape is `withFailureSentence` below), and
+ * `useRequestFeedback`'s `getErrorMessage` reads five more fields after this one.
+ */
+export function reportedMessage(caught: unknown, fallback: string): string;
+export function reportedMessage(caught: unknown, fallback?: string): string | undefined;
+export function reportedMessage(caught: unknown, fallback?: string): string | undefined {
+	return failureSentence(caught) ?? (caught instanceof Error ? caught.message : fallback);
 }
 
 /**

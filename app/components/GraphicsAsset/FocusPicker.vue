@@ -81,9 +81,7 @@ const {
  * back into a status line. The transport's line stays as the fallback, because a
  * genuinely sanitized 5xx has nothing else honest to show (#271).
  */
-const loadFailureMessage = computed(() =>
-	error.value ? failureSentence(error.value) ?? error.value.message : undefined,
-);
+const loadFailureMessage = computed(() => reportedMessage(error.value));
 
 const acceptedKinds = computed<GraphicAsset['kind'][]>(
 	() => Array.isArray(props.assetKind) ? props.assetKind : [props.assetKind],

@@ -216,3 +216,53 @@ describe('failureSentence', () => {
 		});
 	});
 });
+
+/**
+ * The one line a surface shows, assembled from the judgement above.
+ *
+ * #299: eight surfaces had written this ordering out by hand — the authority's sentence,
+ * then the failure's own line, then static wording — and #286 had to be applied to each
+ * of them separately. The branches below are what those copies agreed on, pinned here so
+ * the seam can be checked in one place rather than eight.
+ */
+describe('reportedMessage', () => {
+	it('prefers the sentence the authority wrote over the transport line', () => {
+		const refused = transportFailure({
+			status: 403,
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+
+		expect(reportedMessage(refused, 'a fallback nobody should see'))
+			.toBe('An authenticated graphics author session is required');
+	});
+
+	it('falls back to the transport line when the sanitizer wrote the body', () => {
+		// A sanitized 5xx has nothing honest to quote, and a status line at least reads
+		// as machinery rather than as words the authority chose (#245). The fallback
+		// argument must not win here — that would put static wording in front of an
+		// operator where a real, if unhelpful, line exists.
+		const sanitized = transportFailure({
+			status: 500,
+			body: { message: 'Internal Server Error' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+
+		expect(reportedMessage(sanitized, 'a fallback nobody should see'))
+			.toBe(`[GET] "/api/graphics-assets": 500 Internal Server Error`);
+	});
+
+	it('uses the caller wording only for a throw carrying no line at all', () => {
+		// The arm that is not redundant with the one above: a `catch` holds `unknown`,
+		// and something that is not an `Error` has no `message` to show instead.
+		expect(reportedMessage('a bare string nobody wrapped', 'The style update could not be applied'))
+			.toBe('The style update could not be applied');
+	});
+
+	it('answers nothing for an absent failure, which is what a surface with no error has', () => {
+		// The three `useFetch` computeds pass `error.value` straight in, so the no-error
+		// case reaches here rather than being guarded at the call site as it used to be.
+		expect(reportedMessage(undefined)).toBeUndefined();
+		expect(reportedMessage(null)).toBeUndefined();
+	});
+});
