@@ -7,6 +7,7 @@ import {
 	patchGraphicInput,
 	patchGraphicPlaceholderStyle,
 	setGraphicInputChoiceOptions,
+	setGraphicInputMediaKind,
 } from '~~/shared/modules/graphics';
 
 function textItem(overrides: Partial<TextGraphicItemConfig> = {}): TextGraphicItemConfig {
@@ -129,6 +130,51 @@ describe('graphicInputAuthoring', () => {
 		]);
 
 		expect(graphics[0]!.inputs![0]).toMatchObject({ type: 'choice', options: [{ value: 'l', label: 'Left' }] });
+	});
+
+	/**
+	 * A default outside its own options is a value the input reports unavailable, so
+	 * every Broadcast Graphic placed from the declaration would start on something it
+	 * can never show. An author editing the list is saying what this input may be.
+	 */
+	it('drops a choice Graphic Input’s default when the option list stops offering it', () => {
+		let graphics = addGraphicInput(stack(), 'lower-third', 'choice');
+		graphics = setGraphicInputChoiceOptions(graphics, 'lower-third', 'input-1', [
+			{ value: 'l', label: 'Left' },
+			{ value: 'r', label: 'Right' },
+		]);
+		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', { default: 'r' });
+
+		// Editing a different option leaves the default it still offers alone.
+		const kept = setGraphicInputChoiceOptions(graphics, 'lower-third', 'input-1', [
+			{ value: 'r', label: 'Right side' },
+		]);
+		const orphaned = setGraphicInputChoiceOptions(graphics, 'lower-third', 'input-1', [
+			{ value: 'l', label: 'Left' },
+		]);
+
+		expect(kept[0]!.inputs![0]).toMatchObject({ default: 'r' });
+		expect(orphaned[0]!.inputs![0]).toMatchObject({ default: null });
+	});
+
+	/**
+	 * Nothing set a media Graphic Input declaration's kind before #336 — the writes
+	 * around it were all for the Media Graphic ITEM, whose kind comes from its chosen
+	 * asset — so a runtime silent-video Graphic Input could not be declared through
+	 * the product at all. The declared kind is what Live Control's picker offers.
+	 */
+	it('declares which media a media Graphic Input accepts, dropping a default of the other kind', () => {
+		let graphics = addGraphicInput(stack(), 'lower-third', 'media');
+		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', {
+			default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never },
+		});
+
+		const switched = setGraphicInputMediaKind(graphics, 'lower-third', 'input-1', 'silent-video');
+		// Re-declaring the kind it already has is not a reason to lose the default.
+		const unchanged = setGraphicInputMediaKind(graphics, 'lower-third', 'input-1', 'image');
+
+		expect(switched[0]!.inputs![0]).toMatchObject({ type: 'media', mediaKind: 'silent-video', default: null });
+		expect(unchanged[0]!.inputs![0]).toMatchObject({ mediaKind: 'image', default: { assetId: 'asset-1' } });
 	});
 
 	it('drops the binding and Graphic Placeholder Style of a Graphic Input it stops declaring', () => {

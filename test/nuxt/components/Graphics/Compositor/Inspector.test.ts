@@ -4,6 +4,7 @@ import type {
 	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
 	GraphicItemConfig,
+	MediaGraphicInputDeclaration,
 } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
@@ -258,6 +259,36 @@ function textInput(key: string): GraphicInputDeclaration {
 		default: '',
 		maxLength: MAX_GRAPHIC_TEXT_LENGTH,
 	};
+}
+
+function choiceInput(key: string, options: { value: string; label: string }[], fallback: string | null = null): GraphicInputDeclaration {
+	return {
+		type: 'choice',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		default: fallback,
+		options,
+	};
+}
+
+function mediaInput(key: string, overrides: Partial<MediaGraphicInputDeclaration> = {}): GraphicInputDeclaration {
+	return {
+		type: 'media',
+		key,
+		label: key,
+		required: false,
+		updatePolicy: 'staged',
+		default: null,
+		mediaKind: 'image',
+		...overrides,
+	};
+}
+
+/** The one declaration a Graphic Inputs panel edit emitted, at the given emission. */
+function declarationOf(wrapper: Awaited<ReturnType<typeof mountComponent>>, index = 0) {
+	return emittedGraphics(wrapper, index)[0]!.inputs![0];
 }
 
 function numberFieldByTestId(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
@@ -1036,6 +1067,150 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(emittedGraphics(wrapper, 0)[0]!.inputs![0]).toMatchObject({ key: 'name', required: true });
 		expect(emittedGraphics(wrapper, 1)[0]!.inputs![0]).toMatchObject({ key: 'name', updatePolicy: 'live' });
+	});
+
+	/**
+	 * A choice Graphic Input had an Options field and no Default control, so it was
+	 * stuck at `default: null` however its author declared it (#336, carried out of
+	 * #60 story 13).
+	 */
+	it('sets a choice Graphic Input’s default from its own declared options, and offers no other value', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }, { value: 'r', label: 'Right' }])],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		// Its own options and a way back to no default — nothing else is offered, which
+		// is what keeps the default inside the options.
+		expect(selectField(wrapper, 'graphic-input-default')?.props('items')).toEqual([
+			{ label: 'No default', value: '' },
+			{ label: 'Left', value: 'l' },
+			{ label: 'Right', value: 'r' },
+		]);
+
+		selectField(wrapper, 'graphic-input-default')?.vm.$emit('update:modelValue', 'r');
+		await nextTick();
+
+		expect(declarationOf(wrapper)).toMatchObject({ type: 'choice', default: 'r' });
+	});
+
+	it('takes a choice Graphic Input back to no default', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }], 'l')],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(selectField(wrapper, 'graphic-input-default')?.props('modelValue')).toBe('l');
+
+		selectField(wrapper, 'graphic-input-default')?.vm.$emit('update:modelValue', '');
+		await nextTick();
+
+		expect(declarationOf(wrapper)).toMatchObject({ default: null });
+	});
+
+	it('drops a choice Graphic Input’s default when its author edits that option away', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [choiceInput('side', [{ value: 'l', label: 'Left' }, { value: 'r', label: 'Right' }], 'r')],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		wrapper.findAllComponents(UInputStub)
+			.find(input => input.attributes('data-testid') === 'graphic-input-options')
+			?.vm
+			.$emit('update:modelValue', 'l=Left');
+		await nextTick();
+
+		// A default outside its options is a value the input reports unavailable, so the
+		// graphic would start on something it can never show.
+		expect(declarationOf(wrapper)).toMatchObject({ options: [{ value: 'l', label: 'Left' }], default: null });
+	});
+
+	/**
+	 * Nothing anywhere set a media Graphic Input DECLARATION's kind before #336 — the
+	 * writes around it were all for the Media Graphic Item, whose kind comes from its
+	 * chosen asset — so a silent-video Graphic Input was unreachable through the
+	 * product and declarable only in hand-written configuration.
+	 */
+	it('declares which media a media Graphic Input accepts', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({ ...graphic, inputs: [mediaInput('sting')] })),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(selectField(wrapper, 'graphic-input-media-kind')?.props('items')).toEqual([
+			{ label: 'Image', value: 'image' },
+			{ label: 'Silent video', value: 'silent-video' },
+		]);
+
+		selectField(wrapper, 'graphic-input-media-kind')?.vm.$emit('update:modelValue', 'silent-video');
+		await nextTick();
+
+		expect(declarationOf(wrapper)).toMatchObject({ type: 'media', mediaKind: 'silent-video' });
+	});
+
+	/**
+	 * The declared kind is the only kind Live Control's picker then offers, which is
+	 * pinned on that component; here it is the kind this panel's own default picker is
+	 * restricted to, so an author cannot pin a default the declaration excludes.
+	 */
+	it('restricts a media Graphic Input’s default to the kind it declares', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('assetKind')).toBe('silent-video');
+	});
+
+	it('pins a media Graphic Input’s default revision, with the fact the reference index checks it against', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [mediaInput('sting', { mediaKind: 'silent-video' })],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		wrapper.getComponent(GraphicsAssetFocusPickerStub).vm.$emit(
+			'select',
+			{ id: 'asset-2', kind: 'silent-video', facts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' } },
+			{ assetId: 'asset-2', revisionId: 'revision-3' },
+		);
+		await nextTick();
+
+		// The revision's own target compatibility travels with the default, because the
+		// Graphic Asset Reference index checks a silent-video reference against it and
+		// nothing downstream can go and ask the Graphics Asset Library.
+		expect(declarationOf(wrapper)).toMatchObject({
+			default: { assetId: 'asset-2', revisionId: 'revision-3', videoCompatibility: 'chromium-transparency' },
+		});
+	});
+
+	it('unpins a media Graphic Input’s default when the picker clears it', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				inputs: [mediaInput('sting', { default: { assetId: 'asset-1' as never, revisionId: 'revision-1' as never } })],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		wrapper.getComponent(GraphicsAssetFocusPickerStub).vm.$emit('update:modelValue', undefined);
+		await nextTick();
+
+		expect(declarationOf(wrapper)).toMatchObject({ default: null });
 	});
 
 	it('writes nothing when an author clears a Graphic Input’s label', async () => {

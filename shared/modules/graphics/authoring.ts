@@ -299,7 +299,20 @@ function stripPlaceholderStyle<T extends GraphicItemConfig>(item: T, key: string
 	return { ...item, placeholderStyles: Object.keys(kept).length > 0 ? kept : undefined };
 }
 
-/** Replace a choice Graphic Input's option list. */
+/**
+ * Replace a choice Graphic Input's option list, dropping a default the new list no
+ * longer offers.
+ *
+ * A default outside the declared options is one `graphicInputAvailability` reports
+ * unavailable, so every Broadcast Graphic placed from this declaration would start on
+ * a value it can never show. Cleared for the same reason `deleteGraphicInput` drops
+ * what named the key it removed: an author editing the list is saying what this input
+ * may be, and a default outside it names an option nothing declares.
+ *
+ * Only the declaration. The values a running Broadcast Graphics Live Session holds are
+ * the operator's own, and this codebase reports one that violates its declaration
+ * unavailable rather than changing it.
+ */
 export function setGraphicInputChoiceOptions(
 	graphics: readonly BroadcastGraphicConfig[],
 	graphicId: string,
@@ -310,7 +323,45 @@ export function setGraphicInputChoiceOptions(
 		? {
 				...graphic,
 				inputs: (graphic.inputs ?? []).map(input =>
-					input.key === key && input.type === 'choice' ? { ...input, options } : input,
+					input.key === key && input.type === 'choice'
+						? {
+								...input,
+								options,
+								default: options.some(option => option.value === input.default) ? input.default : null,
+							}
+						: input,
+				),
+			}
+		: graphic);
+}
+
+/**
+ * Declare which media a media Graphic Input accepts, dropping a default of the other
+ * kind.
+ *
+ * Its own operation rather than a `patchGraphicInput` field, exactly as a choice
+ * input's options are: `mediaKind` belongs to one member of the declaration union, so
+ * a patch of the properties every member shares cannot carry it.
+ *
+ * The default goes with the kind, for the reason `clearMediaGraphicItemAsset` returns
+ * an unpinned item to image: the default pins one exact Graphic Asset Revision, and
+ * the declared kind is both what Live Control's picker offers and what the Graphic
+ * Asset Reference index checks that revision against. Keeping an image default on a
+ * silent-video input would publish a reference indexed as a video the revision is not.
+ */
+export function setGraphicInputMediaKind(
+	graphics: readonly BroadcastGraphicConfig[],
+	graphicId: string,
+	key: string,
+	mediaKind: GraphicMediaKind,
+): BroadcastGraphicConfig[] {
+	return graphics.map(graphic => graphic.id === graphicId
+		? {
+				...graphic,
+				inputs: (graphic.inputs ?? []).map(input =>
+					input.key === key && input.type === 'media' && input.mediaKind !== mediaKind
+						? { ...input, mediaKind, default: null }
+						: input,
 				),
 			}
 		: graphic);
