@@ -5,8 +5,11 @@
  * gesture, no one watching. The gate has to observe the same thing, so it
  * drives a real browser and waits for the page to publish a verdict rather
  * than asking the browser what it claims it can play. A page reports through
- * `document.body.dataset.result`, and the detail it writes into `#result` is
- * treated as untrusted text: harnesses map it to a stable code themselves.
+ * `document.body.dataset.result`, names its own failure in
+ * `document.body.dataset.code`, and describes it in `#result`. All three are
+ * page text and none of them is forwarded as evidence: `verdictFailureCode`
+ * resolves the name against the published registry here, so what a harness
+ * prints is a code this contract owns rather than one a page chose.
  */
 
 import { spawn } from 'node:child_process';
@@ -16,6 +19,9 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { ACCEPTANCE_FAILURE_CODES } from './evidence.mjs';
+
+const PUBLISHED_CODES = new Set(ACCEPTANCE_FAILURE_CODES);
 
 /**
  * Translate a page's verdict into the stable code a harness prints.
@@ -24,13 +30,23 @@ import process from 'node:process';
  * that said nothing, and never lets "the driver never ran" or "the page never
  * decided" wear a code suggesting the content itself was examined and found
  * wanting.
+ *
+ * The name a page offers is `document.body.dataset.code` — page text, and
+ * therefore untrusted. It is looked up in the published registry rather than
+ * forwarded: a name the registry publishes is the page's own word for what it
+ * observed and is what prints, and anything else is the page failing without
+ * naming a failure this contract knows, which is `browser-acceptance-failed`
+ * exactly as a page that named nothing at all is. So no page-authored string
+ * reaches the formatter, and the degradation the formatter keeps for an
+ * unpublished code (`evidence-unknown-code`, #275) is no longer reachable from
+ * a browser verdict — it stays for a harness that constructs a code itself.
  */
 export function verdictFailureCode(verdict) {
 	if (verdict.outcome === 'unavailable')
 		return 'browser-driver-unavailable';
 	if (verdict.outcome === 'timed-out')
 		return 'browser-acceptance-timed-out';
-	return verdict.code || 'browser-acceptance-failed';
+	return PUBLISHED_CODES.has(verdict.code) ? verdict.code : 'browser-acceptance-failed';
 }
 
 export function chromiumCandidates() {

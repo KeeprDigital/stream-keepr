@@ -241,6 +241,16 @@ export const GRAPHIC_RULE_PRESET_HEIGHT = 4;
 /**
  * Authoring shortcuts. Each one initialises the same Shape Geometry rather than
  * persisting a distinct shape type, so nothing downstream branches on a preset.
+ *
+ * A preset that overrides part of the square geometry writes the override
+ * through `Object.assign` rather than spreading the call into an object literal.
+ * `{ ...squareShapeGeometry(), rightSlant: n }` is correct as written — the
+ * override is last, so it wins — but rolldown inlines the call into the same
+ * literal, and the emitted chunk then carries the key twice and warns
+ * (`duplicate-object-key`, visible only in wrangler's esbuild pass). #324 fixed
+ * the evidence store's copy of this shape the same way; keeping the base out of
+ * the literal is what makes the form immune rather than merely
+ * currently-correct.
  */
 const PRESETS: readonly ShapeGeometryPreset[] = [
 	{
@@ -260,7 +270,9 @@ const PRESETS: readonly ShapeGeometryPreset[] = [
 		label: 'Slanted edge',
 		icon: 'i-lucide-flag-triangle-right',
 		apply: size => ({
-			geometry: { ...squareShapeGeometry(), rightSlant: Math.round(Math.max(0, size.height) * 0.6) },
+			geometry: Object.assign(squareShapeGeometry(), {
+				rightSlant: Math.round(Math.max(0, size.height) * 0.6),
+			} satisfies Partial<ShapeGeometry>),
 		}),
 	},
 	{
@@ -270,11 +282,10 @@ const PRESETS: readonly ShapeGeometryPreset[] = [
 		apply: (size) => {
 			const cut = Math.round(Math.min(Math.max(0, size.width), Math.max(0, size.height)) * 0.3);
 			return {
-				geometry: {
-					...squareShapeGeometry(),
+				geometry: Object.assign(squareShapeGeometry(), {
 					topRight: { treatment: 'cut', size: cut },
 					bottomLeft: { treatment: 'cut', size: cut },
-				},
+				} satisfies Partial<ShapeGeometry>),
 			};
 		},
 	},
