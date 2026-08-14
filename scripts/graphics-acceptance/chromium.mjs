@@ -210,18 +210,50 @@ export function authorSessionCookie(url, authorCookie) {
 	};
 }
 
-async function installAuthorCookie(page, url, authorCookie) {
-	await page.command('Network.enable');
-	const { success } = await page.command('Network.setCookie', authorSessionCookie(url, authorCookie));
-	// A browser that did not take the cookie is a browser that will read the
-	// harness's own operation as somebody else's and be answered `404` — the
-	// defect this replaced, wearing the fix's clothes. Said here rather than
-	// left to surface as a font that would not load.
-	if (success === false) {
-		const refused = new Error('The acceptance browser refused the author session cookie.');
-		refused.code = 'author-session-cookie-refused';
-		throw refused;
+/**
+ * Where a target is created, which is not always where it is going.
+ *
+ * A page created at its destination has already made its first request by the
+ * time anything can be installed in the jar — as nobody, which is the identity
+ * the whole fix exists to avoid. So a run carrying a session starts blank and
+ * navigates afterwards, and a run without one is created where it is going,
+ * exactly as before this ticket.
+ */
+export function initialTarget(url, authorCookie) {
+	return authorCookie ? 'about:blank' : url;
+}
+
+/**
+ * Bring one page to `url` as the author whose session this is, ready to poll.
+ *
+ * Everything between "a target exists" and "the page is at the destination and
+ * answering `Runtime.evaluate`" lives here, so the order is one reviewable
+ * sequence rather than three statements interleaved with browser plumbing: the
+ * cookie is installed, the page is navigated, and only then is the runtime
+ * enabled. `page` is anything that answers `command(method, params)`.
+ *
+ * @param {{ command: (method: string, params?: object) => Promise<any> }} page
+ * @param {{ url: string, authorCookie?: string }} destination
+ */
+export async function openAuthoredPage(page, { url, authorCookie }) {
+	if (authorCookie) {
+		await page.command('Network.enable');
+		const { success } = await page.command(
+			'Network.setCookie',
+			authorSessionCookie(url, authorCookie),
+		);
+		// A browser that did not take the cookie is a browser that will read the
+		// harness's own operation as somebody else's and be answered `404` — the
+		// defect this replaced, wearing the fix's clothes. Said here rather than
+		// left to surface as a font that would not load.
+		if (success === false) {
+			const refused = new Error('The acceptance browser refused the author session cookie.');
+			refused.code = 'author-session-cookie-refused';
+			throw refused;
+		}
+		await page.command('Page.navigate', { url });
 	}
+	await page.command('Runtime.enable');
 }
 
 /**
@@ -249,18 +281,14 @@ export async function observeChromiumVerdict({
 		if (!browser)
 			continue;
 		try {
-			const opened = authorCookie ? 'about:blank' : url;
+			const opened = initialTarget(url, authorCookie);
 			const target = await fetch(
 				`http://${new URL(browser.endpoint).host}/json/new?${encodeURIComponent(opened)}`,
 				{ method: 'PUT' },
 			).then(response => response.json());
 			const page = await connect(target.webSocketDebuggerUrl);
 			try {
-				if (authorCookie) {
-					await installAuthorCookie(page, url, authorCookie);
-					await page.command('Page.navigate', { url });
-				}
-				await page.command('Runtime.enable');
+				await openAuthoredPage(page, { url, authorCookie });
 				const deadline = Date.now() + timeoutMs;
 				while (Date.now() < deadline) {
 					const evaluated = await page.command('Runtime.evaluate', {

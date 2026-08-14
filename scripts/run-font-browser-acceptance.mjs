@@ -44,6 +44,7 @@ import {
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	acceptanceOrigin,
+	authoredPageRequest,
 	openInstallation,
 	stageFontIngestion,
 } from './graphics-acceptance/installation.mjs';
@@ -137,8 +138,7 @@ await runAcceptanceHarness({
 		const local = library ? undefined : await serveLocally();
 		let staged;
 		try {
-			let url;
-			let authorCookie;
+			let page;
 			if (library) {
 				const origin = acceptanceOrigin({ deployed });
 				const session = await openInstallation(origin);
@@ -151,17 +151,17 @@ await runAcceptanceHarness({
 					declaredMime: 'font/woff2',
 					sourceFileName: 'acceptance-face.woff2',
 				});
-				url = `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`;
-				// The operation belongs to the session that staged it and is a 404 to
-				// every other one (ADR-0003), so the browser is handed this session
-				// rather than sent to the application to mint one of its own (#276).
-				authorCookie = session.authorCookie;
+				// One expression, because the page and the identity it reads as are one
+				// fact: the operation staged above is a 404 to every session but this
+				// one (ADR-0003, #276).
+				page = authoredPageRequest(session, `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`);
 			}
 			else {
-				url = `${local.origin}${ACCEPTANCE_PATH}`;
+				// Nothing to be the author of: the loopback run reads no library route.
+				page = { url: `${local.origin}${ACCEPTANCE_PATH}` };
 			}
 
-			const verdict = await observeChromiumVerdict({ url, authorCookie });
+			const verdict = await observeChromiumVerdict(page);
 			record(verdict.outcome === 'passed'
 				? []
 				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);

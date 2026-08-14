@@ -385,7 +385,10 @@ such as
 `/api/screen-output/screens/:screenId/assets/:assetId/revisions/:revisionId/content`,
 and a value that would leak is replaced by a failure of its own —
 `evidence-secret-leak`, `evidence-url-leak`, `evidence-filename-leak`, or
-`evidence-opaque-token-leak` — naming only the field that carried it.
+`evidence-opaque-token-leak` — naming only the field that carried it. A refusal
+the formatter did not itself raise reads `evidence-report-refused`, which says
+the line could not be built and deliberately says nothing about why: an error
+from anywhere else carries a message nobody has checked.
 
 Where that happens on the run's own failure path, the failures still print:
 each one keeps its stable code with `detail=withheld` in place of the values,

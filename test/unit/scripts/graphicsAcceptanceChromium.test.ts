@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { authorSessionCookie } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import {
+	authorSessionCookie,
+	initialTarget,
+	openAuthoredPage,
+} from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { authoredPageRequest } from '../../../scripts/graphics-acceptance/installation.mjs';
 
 /**
  * The name the installation issues its graphics author session under
@@ -67,5 +72,102 @@ describe('the author session the acceptance browser is given', () => {
 	it('refuses something that is not a name=value pair rather than setting a nameless cookie', () => {
 		expect(() => authorSessionCookie('http://127.0.0.1:8787/', 'nonsense')).toThrow();
 		expect(() => authorSessionCookie('http://127.0.0.1:8787/', '=value')).toThrow();
+	});
+});
+
+const PAGE_URL = 'http://127.0.0.1:8787/_acceptance/static-font-v1.html?operation=op-1';
+
+/**
+ * A page that records what it was asked to do.
+ *
+ * `openAuthoredPage` takes anything answering `command(method, params)`, which
+ * is the whole of what it needs from a CDP connection — so the conversation it
+ * holds is checkable without a browser. `Network.setCookie` answers the way
+ * Chromium does unless a test says otherwise.
+ */
+function recordingPage(answers: Record<string, unknown> = {}) {
+	const commands: { method: string, params?: object }[] = [];
+	return {
+		commands,
+		methods: () => commands.map(({ method }) => method),
+		paramsFor: (method: string) => commands.find(command => command.method === method)?.params,
+		async command(method: string, params?: object) {
+			commands.push({ method, params });
+			if (method in answers)
+				return answers[method];
+			return method === 'Network.setCookie' ? { success: true } : {};
+		},
+	};
+}
+
+/**
+ * The conversation that carries the harness's identity into the browser.
+ *
+ * The cookie helper above shapes the cookie; this is the part that decides it
+ * is installed at all, before anything is navigated. Both halves have to hold —
+ * a correctly shaped cookie set after the page has already loaded is the #276
+ * defect with an extra step.
+ */
+describe('opening the acceptance page as the author that staged the ingestion', () => {
+	it('creates the target blank when it has a session to install, and at the destination otherwise', () => {
+		expect(initialTarget(PAGE_URL, COOKIE)).toBe('about:blank');
+		expect(initialTarget(PAGE_URL, undefined)).toBe(PAGE_URL);
+	});
+
+	it('installs the cookie before it navigates, and enables the runtime last', async () => {
+		const page = recordingPage();
+
+		await openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE });
+
+		expect(page.methods()).toEqual([
+			'Network.enable',
+			'Network.setCookie',
+			'Page.navigate',
+			'Runtime.enable',
+		]);
+		expect(page.paramsFor('Network.setCookie')).toEqual(authorSessionCookie(PAGE_URL, COOKIE));
+		expect(page.paramsFor('Page.navigate')).toEqual({ url: PAGE_URL });
+	});
+
+	/**
+	 * The run without a session is every other browser harness, and it must be
+	 * left exactly as it was: no cookie, and no navigation either, because its
+	 * target was created at the destination.
+	 */
+	it('says nothing about cookies when it was given no session', async () => {
+		const page = recordingPage();
+
+		await openAuthoredPage(page, { url: PAGE_URL });
+
+		expect(page.methods()).toEqual(['Runtime.enable']);
+	});
+
+	/**
+	 * `Network.setCookie` reports refusal in its result rather than by failing,
+	 * so an unchecked call would hand the page an identity it does not have and
+	 * the gate would fail later as a font that would not load.
+	 */
+	it('fails with a named cause when the browser refuses the cookie', async () => {
+		const page = recordingPage({ 'Network.setCookie': { success: false } });
+
+		await expect(openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE }))
+			.rejects.toMatchObject({ code: 'author-session-cookie-refused' });
+		expect(page.methods()).not.toContain('Page.navigate');
+		expect(page.methods()).not.toContain('Runtime.enable');
+	});
+
+	/**
+	 * The harness's own call site is process-entry code and cannot be executed by
+	 * a unit runner, so the fact it has to get right is held here instead: a page
+	 * opened for staged work carries the session that staged it, and the pairing
+	 * is one expression rather than two arguments an edit can separate.
+	 */
+	it('pairs a staged page with the session that staged it', () => {
+		const session = { origin: 'http://127.0.0.1:8787', authorCookie: COOKIE };
+
+		expect(authoredPageRequest(session, PAGE_URL)).toEqual({
+			url: PAGE_URL,
+			authorCookie: COOKIE,
+		});
 	});
 });
