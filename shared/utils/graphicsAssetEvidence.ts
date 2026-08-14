@@ -33,7 +33,11 @@ export const GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES = [
 	'revision-pruned',
 	/** The bytes were deleted after a fresh proof of unreachability. */
 	'content-deleted',
-	/** The ingestion operation's staged input was released; the operation is over. */
+	/**
+	 * The ingestion operation is over: its staged input passed its deadline. The
+	 * bytes can outlive the entry, because a staging store that was unavailable
+	 * when the sweep acted leaves them recorded as reserved rather than freed.
+	 */
 	'staged-input-expired',
 	/** The disagreement was withdrawn or settled, closing the discrepancy. */
 	'discrepancy-rechecked',
