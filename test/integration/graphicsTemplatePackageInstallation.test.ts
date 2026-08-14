@@ -1,5 +1,4 @@
 import type {
-	GraphicAsset,
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 	InstalledGraphicsTemplate,
@@ -21,6 +20,7 @@ import {
 	suiteGraphicsAuthorSessionCookie,
 } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { libraryAssets } from './graphicsLibraryListing';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -82,13 +82,6 @@ async function installPackage(operationId: string) {
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
 		{ method: 'POST', headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
 	);
-}
-
-/** The library listing, read under this suite's graphics author session (#172). */
-async function libraryAssets(): Promise<GraphicAsset[]> {
-	return await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
-	});
 }
 
 describe('template Package installation through the API boundary', () => {
@@ -256,7 +249,7 @@ describe('template Package installation through the API boundary', () => {
 		expect(content.status).toBe(200);
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${installed.assetId}/usage`,
-			{ headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
+			{ headers: authorHeaders },
 		);
 		expect(usage).toEqual([expect.objectContaining({
 			owner: expect.objectContaining({ kind: 'installed-graphics-template' }),
@@ -307,7 +300,7 @@ describe('template Package installation through the API boundary', () => {
 		// before retiring or trashing anything.
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
-			{ headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
+			{ headers: authorHeaders },
 		);
 		expect(usage).toContainEqual(expect.objectContaining({
 			owner: expect.objectContaining({

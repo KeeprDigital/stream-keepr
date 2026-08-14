@@ -49,11 +49,11 @@ const transparentPixelPng = Uint8Array.from(Buffer.concat([
 ]));
 
 /**
- * The header that used to name the graphics author. Every request an intruder
- * makes here still sends it, set to the identity that initiated the operation
- * under attack: it must buy nothing.
+ * An author identity the server does not honour. Every request an intruder makes
+ * here still sends it, set to the identity that initiated the operation under
+ * attack, because the library used to read this header: it must buy nothing.
  */
-const RETIRED_AUTHOR_HEADER = { 'x-graphics-author-id': 'authorisation-victim-author' };
+const UNHONOURED_AUTHOR_ID_HEADER = { 'x-graphics-author-id': 'authorisation-victim-author' };
 
 const digest = createHash('sha256').update(transparentPixelPng).digest('hex');
 
@@ -208,7 +208,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
-				headers: { cookie, ...RETIRED_AUTHOR_HEADER },
+				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER },
 				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
@@ -230,7 +230,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
-				headers: { cookie, ...RETIRED_AUTHOR_HEADER },
+				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER },
 				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name,
@@ -252,7 +252,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			`/api/graphics-assets/ingestion-operations/${operationId}/content`,
 			{
 				method: 'PUT',
-				headers: { cookie, ...RETIRED_AUTHOR_HEADER, 'content-type': contentType },
+				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': contentType },
 				body: bytes,
 			},
 		);
@@ -329,7 +329,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it.each(operationRoutes)('is refused $label', async (route) => {
 			const response = await fetch(
 				route.path(sessionlessProbeOperationId),
-				requestInit(route, { ...RETIRED_AUTHOR_HEADER }),
+				requestInit(route, { ...UNHONOURED_AUTHOR_ID_HEADER }),
 			);
 			expect(response.status).toBe(401);
 		});
@@ -337,7 +337,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it('is refused the initiation of a new operation', async () => {
 			const response = await fetch('/api/graphics-assets/ingestion-operations', {
 				method: 'POST',
-				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
 				body: JSON.stringify(graphicsIngestionRequest({
 					idempotencyKey: 'authorisation-sessionless-initiation',
 					name: 'Sessionless initiation',
@@ -350,7 +350,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it('is refused the replacement of an existing Graphic Asset', async () => {
 			const response = await fetch(`/api/graphics-assets/${assetId}/replacement-operations`, {
 				method: 'POST',
-				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					idempotencyKey: 'authorisation-sessionless-replacement',
 					declaredByteLength: transparentPixelPng.byteLength,
@@ -362,7 +362,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it('is refused a Graphic Asset metadata rewrite', async () => {
 			const response = await fetch(`/api/graphics-assets/${assetId}`, {
 				method: 'PATCH',
-				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					name: 'Renamed by nobody',
 					eventIds: [eventId],
@@ -382,7 +382,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it('is refused the detachment of every Event association', async () => {
 			const response = await fetch(`/api/graphics-assets/${assetId}`, {
 				method: 'PATCH',
-				headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					name: 'Authorisation lifecycle subject',
 					eventIds: [],
@@ -399,7 +399,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			async (action) => {
 				const response = await fetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
 					method: 'POST',
-					headers: { ...RETIRED_AUTHOR_HEADER, 'content-type': 'application/json' },
+					headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
 					body: JSON.stringify({ action }),
 				});
 				expect(response.status).toBe(401);
@@ -418,7 +418,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		it.each(operationRoutes)('cannot reach the operation for $label', async (route) => {
 			const response = await fetch(
 				route.path(scopingProbes.get(route.label)!),
-				requestInit(route, { cookie: intruderCookie, ...RETIRED_AUTHOR_HEADER }),
+				requestInit(route, { cookie: intruderCookie, ...UNHONOURED_AUTHOR_ID_HEADER }),
 			);
 			expect(response.status).toBe(404);
 		});
@@ -437,7 +437,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				const operationId = scopingProbes.get(route.label)!;
 				await expect($fetch<GraphicsIngestionOperation>(
 					`/api/graphics-assets/ingestion-operations/${operationId}`,
-					{ headers: { cookie: authorCookie, ...RETIRED_AUTHOR_HEADER } },
+					{ headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER } },
 				)).resolves.toMatchObject({ id: operationId, stage: 'awaiting-confirmation' });
 			}
 		});
@@ -446,7 +446,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			const operationId = scopingProbes.get('reading provisional staged bytes')!;
 			const response = await fetch(
 				`/api/graphics-assets/ingestion-operations/${operationId}/staged-source`,
-				{ headers: { cookie: authorCookie, ...RETIRED_AUTHOR_HEADER } },
+				{ headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER } },
 			);
 			expect(response.status).toBe(200);
 			expect(new Uint8Array(await response.arrayBuffer())).toEqual(fontBytes);
