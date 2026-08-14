@@ -1697,6 +1697,7 @@ onMounted(async () => {
 							v-if="metadataError"
 							color="error"
 							variant="soft"
+							data-testid="metadata-error"
 							:title="metadataError"
 						/>
 						<div class="flex gap-2">
@@ -1739,6 +1740,7 @@ onMounted(async () => {
 							v-if="replacementError"
 							color="error"
 							variant="soft"
+							data-testid="replacement-error"
 							:title="replacementError"
 						/>
 						<div class="flex gap-2">

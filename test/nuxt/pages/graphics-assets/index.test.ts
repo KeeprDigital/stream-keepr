@@ -186,15 +186,11 @@ const passthroughStub = defineComponent({
  * dropped — no alert on this page routes a failure through it, and a stub that
  * renders every prop stops telling a reader which one the page actually used.
  *
- * It is a stub of its own rather than another name for `passthroughStub` because
- * `title` has to be readable per alert, and `findAllComponents(passthroughStub)`
- * cannot do that. Tried first: with one nameless definition standing in for `UAlert`
- * and four other components, the lookup returned six matches whose `title` was `null`
- * in every one — not an alert among them. A `name` is what makes
- * `findAllComponents({ name: 'UAlert' })` mean alerts and nothing else.
+ * It is a stub of its own rather than a `title` on `passthroughStub` so the prop
+ * stays an alert's concern: `UCard`, `UFormField`, `UIcon` and `NuxtLayout` share
+ * that one, and none of them passes a `title` today.
  */
 const alertStub = defineComponent({
-	name: 'UAlert',
 	props: ['title'],
 	template: '<div><slot name="actions" /><slot name="header" /><span v-if="title">{{ title }}</span><slot /><slot name="footer" /></div>',
 });
@@ -235,22 +231,6 @@ async function mountPage() {
 			},
 		},
 	});
-}
-
-/**
- * Every `title` an alert is currently rendering, in document order.
- *
- * The metadata and replacement alerts carry no `data-testid` — they are inside the
- * per-asset `v-for`, and #365 spent the page's one attribute on the lifecycle alert —
- * so the testid rule below cannot reach them the way it reaches the upload and
- * remote-copy alerts. Reading the prop off the alert stub is what is left, and it
- * still honours what that rule is for: the sentence has to be on an alert, not
- * merely somewhere on the page, which is the whole difference from `wrapper.text()`.
- */
-function alertTitles(wrapper: Awaited<ReturnType<typeof mountPage>>) {
-	return wrapper.findAllComponents({ name: 'UAlert' })
-		.map(alert => alert.props('title') as string | undefined)
-		.filter((title): title is string => typeof title === 'string' && title.length > 0);
 }
 
 describe('the Graphics Asset Library Workspace', () => {
@@ -1162,9 +1142,15 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * the reason: the lifecycle alert renders its message in the default slot and wanted
 	 * only the attribute, which the rule below says every alert should carry; the metadata
 	 * and replacement alerts pass theirs as `:title`, which the passthrough stub dropped,
-	 * so an assertion on either could not have failed. #365 gave the lifecycle alert its
-	 * attribute and gave `UAlert` a stub that renders `title` — in that order, because a
-	 * pin written before it would have been the vacuous thing the rule below is about.
+	 * so an assertion on either could not have failed. #365 gave all three their attribute
+	 * and gave `UAlert` a stub that renders `title` — the stub first, because a pin written
+	 * before it would have been the vacuous thing the rule below is about.
+	 *
+	 * The lifecycle testid interpolates its asset id and the other two do not, which is a
+	 * fact about where each error lives rather than a convention: `lifecycleErrorByAssetId`
+	 * is a map, so several assets can hold a lifecycle failure at once, while
+	 * `metadataError` and `replacementError` are single refs behind single-valued
+	 * `editingAssetId`/`replacementAssetId` gates — one panel open, one message, one node.
 	 */
 	it('says why an upload was refused rather than naming the route', async () => {
 		const wrapper = await mountPage();
@@ -1236,18 +1222,20 @@ describe('the Graphics Asset Library Workspace', () => {
 		await save!.trigger('click');
 		await flushPromises();
 
-		const titles = alertTitles(wrapper);
-		expect(titles).toContain('Another author renamed this Graphic Asset first');
-		expect(titles.join('\n')).not.toContain('409 Conflict');
+		const alert = wrapper.get('[data-testid="metadata-error"]');
+		expect(alert.text()).toContain('Another author renamed this Graphic Asset first');
+		expect(alert.text()).not.toContain('409 Conflict');
 	});
 
 	it('says why a replacement was refused rather than naming the route', async () => {
 		const replacementFile = new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' });
 		const wrapper = await mountPage();
+		// Not the capacity-load test's sentence, which this file already contains twice:
+		// a kill attributed by assertion value could not have told the two apart.
 		mockApiFetch.mockRejectedValue(transportFailure({
 			status: 507,
 			statusText: 'Insufficient Storage',
-			body: { message: 'Canonical byte store capacity is exhausted' },
+			body: { message: 'Canonical byte store cannot hold another Graphic Asset Revision' },
 			request: `[POST] "/api/graphics-assets/asset-1/replacement-operations"`,
 		}));
 
@@ -1260,9 +1248,9 @@ describe('the Graphics Asset Library Workspace', () => {
 		await publish!.trigger('click');
 		await flushPromises();
 
-		const titles = alertTitles(wrapper);
-		expect(titles).toContain('Canonical byte store capacity is exhausted');
-		expect(titles.join('\n')).not.toContain('507 Insufficient Storage');
+		const alert = wrapper.get('[data-testid="replacement-error"]');
+		expect(alert.text()).toContain('Canonical byte store cannot hold another Graphic Asset Revision');
+		expect(alert.text()).not.toContain('507 Insufficient Storage');
 	});
 });
 
@@ -1270,13 +1258,14 @@ describe('the Graphics Asset Library Workspace', () => {
  * **Assert on the element under test, not on `wrapper.text()`.**
  *
  * `wrapper.text()` proves *something on the page* says it, which is not the same
- * claim and is weaker than it looks here. `UAlert` is stubbed by a passthrough
- * that renders slots only, so any alert passing its message as `:description`
- * renders nothing at all — and an assertion naming that alert passes anyway, off
- * whichever other element happens to carry the same words. This suite shipped
- * exactly that: two cases named for the remote-copy alert passed off the
+ * claim and is weaker than it looks here. `UAlert` is stubbed, and the stub renders
+ * the slots and `title` and nothing else — so any alert passing its message as
+ * `:description` renders nothing at all, and an assertion naming that alert passes
+ * anyway, off whichever other element happens to carry the same words. This suite
+ * shipped exactly that: two cases named for the remote-copy alert passed off the
  * top-level lapsed banner, and replacing the remote-copy message with a literal
- * left all twenty-four green.
+ * left all twenty-four green. (`title` was in that list until #365, which is why
+ * three surfaces could not be pinned at all; `:description` still is.)
  *
  * So every alert below carries a `data-testid` and every assertion reads it. The
  * rule generalises past the stub: an assertion that cannot fail when the thing it
