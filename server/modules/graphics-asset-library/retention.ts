@@ -341,7 +341,10 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				identity: stagedIngestionObjectIdentities(operationId)[0]!,
 				uploadId: multipart.uploadId,
 			});
-			released = released && aborted.outcome === 'aborted';
+			// An upload the store no longer holds is released, the same way a staged
+			// object the store does not have is; only unavailability withholds the
+			// flag. Matches the `delete` reading below it.
+			released = released && aborted.outcome !== 'unavailable';
 		}
 		for (const identity of stagedIngestionObjectIdentities(operationId)) {
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.

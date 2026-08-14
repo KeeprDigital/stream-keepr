@@ -17,6 +17,45 @@ import {
 	validateRequestedRange,
 } from './object-store';
 
+/**
+ * R2's code for this condition — S3's `NoSuchUpload`. What is *not* established
+ * is that `abort()` raises it for an upload that is already gone: Cloudflare
+ * documents the code against a completed upload, the Workers API reference
+ * declines to say what `abort()` does with a reclaimed one, and the local
+ * Miniflare binding chooses idempotent success instead of an error, so this
+ * branch cannot be reproduced here. It is written for the refusal R2 is
+ * documented to have; if that refusal never arrives, every other one stays an
+ * outage and this path behaves exactly as it did before #293 — which is the
+ * direction that is safe to be wrong in, because reading an unreachable store
+ * as reclaimed is what strands an upload.
+ */
+const R2_NO_SUCH_UPLOAD_CODE = 10024;
+
+/**
+ * Both documented spellings of that refusal: Cloudflare's Workers API wording is
+ * 'Multipart upload does not exist or was aborted.' and the S3-style sentence
+ * the local Miniflare binding raises is 'The specified multipart upload does not
+ * exist.'. Their shared substring begins after the differing first letter, which
+ * is why this constant reads as though it were truncated.
+ */
+const R2_NO_SUCH_UPLOAD_MESSAGE = 'ultipart upload does not exist';
+
+/**
+ * The code is the discriminator; the message is checked beside it because the
+ * binding is not the only thing that can carry this refusal — a proxied error
+ * may arrive with the sentence and no numeric code — and both readings name
+ * the same fact.
+ */
+function isMissingMultipartUpload(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null)
+		return false;
+	if ('code' in error && (error as { code: unknown }).code === R2_NO_SUCH_UPLOAD_CODE)
+		return true;
+	return 'message' in error
+		&& typeof (error as { message: unknown }).message === 'string'
+		&& (error as { message: string }).message.includes(R2_NO_SUCH_UPLOAD_MESSAGE);
+}
+
 function mapR2Object(object: R2Object): GraphicsObjectMetadata {
 	return {
 		identity: graphicsObjectIdentity(object.key),
@@ -280,8 +319,10 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				await upload.abort();
 				return { outcome: 'aborted' };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return isMissingMultipartUpload(error)
+					? { outcome: 'missing' }
+					: unavailableObjectStoreOutcome();
 			}
 		},
 	};

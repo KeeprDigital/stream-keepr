@@ -78,6 +78,18 @@ export type DeleteGraphicsObjectOutcome
 		| { outcome: 'missing' }
 		| GraphicsObjectStoreUnavailable;
 
+/**
+ * Aborting is reclamation, so an upload the store no longer holds is the state
+ * the caller asked for rather than a refusal. Without the `missing` case a
+ * caller cannot tell "already gone" from "could not reach the store", and a
+ * checkpoint naming a gone upload can only be cleared by the 24h sweep — every
+ * retry re-aborts it and refuses. Only `unavailable` leaves work behind. #293.
+ */
+export type AbortGraphicsMultipartOutcome
+	= | { outcome: 'aborted' }
+		| { outcome: 'missing' }
+		| GraphicsObjectStoreUnavailable;
+
 export type CreateImmutableGraphicsObjectOutcome
 	= | { outcome: 'created'; object: GraphicsObjectMetadata }
 		| { outcome: 'already-exists'; object: GraphicsObjectMetadata }
@@ -159,7 +171,7 @@ export interface GraphicsStagingObjectStore extends GraphicsObjectStoreAccess {
 		upload: GraphicsMultipartUpload;
 		parts: readonly GraphicsMultipartPart[];
 	}) => Promise<CompleteGraphicsMultipartOutcome>;
-	abortMultipart: (upload: GraphicsMultipartUpload) => Promise<{ outcome: 'aborted' } | GraphicsObjectStoreUnavailable>;
+	abortMultipart: (upload: GraphicsMultipartUpload) => Promise<AbortGraphicsMultipartOutcome>;
 }
 
 export type GraphicsCanonicalObjectStoreOperation

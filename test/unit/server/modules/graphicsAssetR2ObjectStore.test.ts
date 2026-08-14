@@ -119,4 +119,47 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		expect(complete).toHaveBeenCalledWith([{ partNumber: 1, etag: 'etag-1' }]);
 		expect(outcome).toMatchObject({ outcome: 'created', object: { identity } });
 	});
+
+	it('reads a gone multipart upload as reclaimed and every other refusal as an outage', async () => {
+		const identity = graphicsObjectIdentity('staging/operation/multipart');
+		async function abortAgainst(rejection: unknown) {
+			const abort = vi.fn().mockRejectedValue(rejection);
+			const store = createR2StagingGraphicsObjectStore({
+				resumeMultipartUpload: vi.fn().mockReturnValue({ uploadId: 'upload-1', abort }),
+			} as unknown as R2Bucket);
+			const outcome = await store.abortMultipart({ identity, uploadId: 'upload-1' as never });
+			expect(abort).toHaveBeenCalled();
+			return outcome;
+		}
+
+		// The code is the discriminator and has to stand on its own, so this row
+		// carries a wording the message hedge below does not know. Sharing a
+		// sentence with those rows would let the hedge classify this one, and a
+		// broken code branch would then survive unnoticed.
+		await expect(abortAgainst(Object.assign(
+			new Error('R2 refused the abort.'),
+			{ code: 10024 },
+		))).resolves.toEqual({ outcome: 'missing' });
+		// The wording alone is enough when a proxied refusal has lost the code, and
+		// this refusal has two documented spellings: Cloudflare's Workers API
+		// wording, then the S3-style sentence the local Miniflare binding raises.
+		await expect(abortAgainst(
+			new Error('Multipart upload does not exist or was aborted. (10024)'),
+		)).resolves.toEqual({ outcome: 'missing' });
+		await expect(abortAgainst(
+			new Error('The specified multipart upload does not exist.'),
+		)).resolves.toEqual({ outcome: 'missing' });
+		// Anything else is an outage. Reading these as reclaimed would clear a
+		// checkpoint whose upload is still held, which is what strands one.
+		await expect(abortAgainst(Object.assign(
+			new Error('We encountered an internal error. Please try again.'),
+			{ code: 10001 },
+		))).resolves.toMatchObject({ outcome: 'unavailable' });
+		await expect(abortAgainst(new Error('Network connection lost.')))
+			.resolves
+			.toMatchObject({ outcome: 'unavailable' });
+		await expect(abortAgainst('not an error at all'))
+			.resolves
+			.toMatchObject({ outcome: 'unavailable' });
+	});
 });

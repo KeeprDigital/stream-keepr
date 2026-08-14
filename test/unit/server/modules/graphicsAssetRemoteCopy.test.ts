@@ -4,7 +4,7 @@ import type {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
@@ -17,12 +17,26 @@ import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
+	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
+
+// The API boundary imports the author session for its actor resolution, which
+// reaches `hub:kv` — a binding no unit run has. Nothing here asks it anything.
+vi.mock('~~/server/modules/graphics-author-session', () => ({
+	optionalGraphicsAuthorSession: vi.fn(),
+}));
+
+// `rethrowGraphicsAssetApiError` reaches Nitro's auto-imported `createError`,
+// which a unit run does not have. Nothing in the library module calls it.
+vi.stubGlobal('createError', (input: { statusCode: number; message: string; cause?: unknown }) =>
+	Object.assign(new Error(input.message), input));
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -949,6 +963,132 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			operation.id,
 			operation.initiatedBy,
 		)).resolves.toBeUndefined();
+	});
+
+	it('clears the checkpoint when something else reclaimed the upload first', async () => {
+		const delegate = createInMemoryStagingGraphicsObjectStore();
+		let uploadId: GraphicsMultipartUploadIdentity | undefined;
+		const staging: InMemoryGraphicsStagingObjectStore = {
+			...delegate,
+			async beginMultipart(input) {
+				const started = await delegate.beginMultipart(input);
+				if (started.outcome === 'started')
+					uploadId = started.upload.uploadId;
+				return started;
+			},
+			async uploadPart(input) {
+				// The part fails and a concurrent sweep reclaims the upload before this
+				// request's own abort runs, so that abort finds nothing to reclaim.
+				await delegate.abortMultipart(input.upload);
+				return unavailableObjectStoreOutcome();
+			},
+		};
+		const { library, catalogue } = createLibrary({
+			staging,
+			hops: {
+				'https://cdn.example.test/scoreboard.png': {
+					body: oversizedRemoteSource,
+					contentLength: null,
+				},
+			},
+		});
+		const operation = await library.initiateRemoteGraphicAssetCopy({
+			idempotencyKey: 'remote-upload-reclaimed-elsewhere',
+			initiatedBy: 'graphics-author-1',
+			name: 'Interrupted remote source',
+			sourceFileName: 'scoreboard.png',
+		});
+
+		const failed = await library.copyRemoteGraphicAssetSource({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			failure: { code: 'staging-unavailable', retryable: true },
+		});
+		// A checkpoint exists only so a sweep can find the upload. This one is
+		// already gone, so keeping the checkpoint would strand the next attempt
+		// behind an abort that can never answer anything but 'already reclaimed'.
+		expect(uploadId).toBeDefined();
+		await expect(catalogue.getGraphicAssetMultipartState(
+			operation.id,
+			operation.initiatedBy,
+		)).resolves.toBeUndefined();
+	});
+
+	it('retries past a checkpoint naming an upload the staging store no longer holds', async () => {
+		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-already-gone');
+		expect(stranded.uploadId).toBeDefined();
+		// The abort landed and the checkpoint-clear write did not, which is the
+		// state #293 is about: the checkpoint names an upload that is already gone.
+		// Every retry re-aborts it, and an abort of a gone upload used to answer
+		// unavailable — so the operation refused until the 24h sweep.
+		await expect(stranded.staging.abortMultipart({
+			identity: graphicsObjectIdentity(`ingestion/${stranded.operation.id}/source`),
+			uploadId: stranded.uploadId!,
+		})).resolves.toEqual({ outcome: 'aborted' });
+
+		const retried = await stranded.library.copyRemoteGraphicAssetSource({
+			operationId: stranded.operation.id,
+			initiatedBy: stranded.operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		// The attempt got past the stale checkpoint and copied every byte; what
+		// stops it now is the source's own compatibility, not a reclamation it
+		// could not perform.
+		expect(retried).toMatchObject({
+			stage: 'failed',
+			transferredByteLength: oversizedRemoteSource.byteLength,
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect(stranded.catalogue.getGraphicAssetMultipartState(
+			stranded.operation.id,
+			stranded.operation.initiatedBy,
+		)).resolves.toBeUndefined();
+	});
+
+	it('refuses a remote copy whose stranded upload the staging store cannot answer for', async () => {
+		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-abort-unavailable');
+		stranded.staging.injectTransientFailure('multipart-abort');
+
+		const thrown = await stranded.library.copyRemoteGraphicAssetSource({
+			operationId: stranded.operation.id,
+			initiatedBy: stranded.operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		}).then(() => null, (error: unknown) => error);
+
+		// A store that cannot answer may still be holding the upload, so this
+		// attempt stops rather than stranding it behind a second one.
+		expect(thrown).toMatchObject({
+			code: 'graphics-asset-library-unavailable',
+			message: 'Graphics Asset staging byte store could not release a previous approved remote Graphic Asset copy attempt',
+		});
+		// The checkpoint is what a later sweep reclaims from, so it survives.
+		await expect(stranded.catalogue.getGraphicAssetMultipartState(
+			stranded.operation.id,
+			stranded.operation.initiatedBy,
+		)).resolves.toMatchObject({ uploadId: stranded.uploadId });
+
+		// The sentence names which store is out of reach, so it must reach the
+		// caller rather than being rewritten to 'Internal Server Error'. There is no
+		// route test for remote-copy.post.ts, so its two mapping hops are run here
+		// instead — status and message only. Passing no event skips the
+		// `retry-after` header that the same helper sets from a real request, so
+		// this row says nothing about that header.
+		let routeError: unknown;
+		try {
+			rethrowGraphicsAssetApiError(thrown);
+		}
+		catch (error) {
+			routeError = error;
+		}
+		const refusal = await publicServerFailure(routeError);
+		expect(refusal.statusCode).toBe(503);
+		expect(refusal.message).toBe('Graphics Asset staging byte store could not release a previous approved remote Graphic Asset copy attempt');
 	});
 
 	it('reports no client-transfer facts for a remote copy holding a checkpoint', async () => {
