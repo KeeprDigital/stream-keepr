@@ -171,9 +171,8 @@ describe('melee Sync unresolved Deck List module', () => {
 		const newerRequest = workflow.searchResolveCandidates();
 		// Two searches, counted rather than assumed, and named rather than taken from
 		// position 0: this `$fetch` mock stands in for the module's, which `useServerTime`
-		// also samples the clock through (#123). A stray at position 0 hands back options
-		// with no `signal` on them, and a run that dispatched only one search would read
-		// `undefined` here instead of saying so (#273, #280, swept in #342).
+		// also samples the clock through (#123), and a stray at position 0 hands back
+		// options with no `signal` on them.
 		// Both signals, asserted as a list rather than read by position: the older search
 		// is abandoned and the newer one is still live, which is the whole of what
 		// "keeps the newest" means here. Nothing indexes the call list at all — the count

@@ -732,8 +732,7 @@ describe('feature match session state service', () => {
 
 			// Named rather than taken from position 0: this mock records every message the
 			// service publishes, so a second announcement added ahead of this one would
-			// quietly move what is read here, and a run that published nothing died as a
-			// type crash instead of saying so (#273, #280, swept in #342).
+			// quietly move what is read here.
 			const [,, payload] = lastCallTo(mockPublishMessage, isEventApplied);
 			expect(payload).not.toHaveProperty('session');
 		});

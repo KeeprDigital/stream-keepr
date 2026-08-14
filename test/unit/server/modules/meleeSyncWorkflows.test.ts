@@ -220,9 +220,8 @@ describe('melee Sync updateFromMelee workflow', () => {
 		const result = await createMeleeSyncWorkflows().runInitialSetup({} as any, 1, eventData, vi.fn().mockResolvedValue(undefined));
 
 		// Named rather than taken from position 0: `console.warn` is nobody's private
-		// channel, so the first line this run logged need not be the publish failure —
-		// and a run that logged nothing at all indexed past the end and died as a type
-		// crash naming neither the spy nor the expectation (#273, #280, swept in #342).
+		// channel, so the first line this run logged need not be the publish failure, and
+		// `JSON.parse` of the wrong one fails as a syntax error about neither.
 		const [line] = lastCallTo(warnSpy, isPublishFailureLine);
 		expect(JSON.parse(line as string)).toEqual({
 			message: 'melee_sync_realtime_publish_failed',

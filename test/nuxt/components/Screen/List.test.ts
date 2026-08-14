@@ -26,19 +26,13 @@ enableAutoUnmount(afterEach);
 
 /**
  * The seams the card reaches the outside world through, mocked exactly where
- * `ListItem.test.ts` mocks them (#269). Nothing here hands out an output, so none of
- * them is expected to be called — they exist because the card's `setup` calls each one.
+ * `ListItem.test.ts` mocks them (#269). Nothing here hands out an output, so nothing the
+ * card does calls any of them — they exist because the card's `setup` calls each one.
+ * `$fetch` is the exception, and not because of the card: it is the module's `$fetch`, so
+ * `useServerTime`'s clock sync records calls here that no card made (#123, #342).
  */
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockApiFetch);
-
-/**
- * The one call that arrives here without this file asking for it: `useServerTime` is a
- * lazy singleton that samples the clock through the same `$fetch` (#123), so the mock
- * above records requests the composition never made. Selected out where it is asserted
- * about, never counted as one of the list's own (#342).
- */
-const CLOCK_SYNC_ENDPOINT = '/api/time';
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: vi.fn() }));
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
 mockNuxtImport('navigateTo', () => vi.fn());
@@ -172,7 +166,10 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 		return wrapper.findAllComponents(ScreenListItem);
 	}
 
-	/** Everything the list actually asked for: the clock sync above is not its request. */
+	/** The one call that arrives without this file asking for it (see `mockApiFetch`). */
+	const CLOCK_SYNC_ENDPOINT = '/api/time';
+
+	/** Everything the list actually asked for: the clock sync is not its request. */
 	function requestsOtherThanTheClockSync() {
 		return mockApiFetch.mock.calls.filter(([path]) => String(path) !== CLOCK_SYNC_ENDPOINT);
 	}
@@ -411,17 +408,14 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 	 * operator leaves open. The card's own suite pins that for one card; this pins that
 	 * rendering a whole list of them does not add up to a request either.
 	 *
-	 * Filtered rather than counted whole, which is the half this was wrong about until
-	 * #342. `$fetch` is mocked for the module, so the clock sync writes into the same
-	 * mock, and an `/api/time` sample landing inside this window reddened an unfiltered
-	 * `not.toHaveBeenCalled()` four times — twice on #342 and once on round fifteen's
-	 * authoritative round-close run, where a suite nobody had touched read as a
-	 * regression. A negative guard on a shared mock is blind in exactly the way a
-	 * positive one is, and wants the same selection (#273, #280, #123).
+	 * Filtered rather than counted whole: an `/api/time` sample landing in this window
+	 * reddened the unfiltered `not.toHaveBeenCalled()` three times, the third of them on
+	 * round fifteen's authoritative round-close run, where a suite nobody had touched read
+	 * as a regression (#342). Why a negative guard on a shared mock needs selecting as much
+	 * as a positive one does is `test/helpers/lastCallTo.ts`.
 	 *
-	 * The breadth survives the filter: every call except that one is still asserted
-	 * away, so a capability minted at mount fails this — and so does any other request
-	 * the composition starts, which counting only capability requests would have missed.
+	 * Everything except that one call is still asserted away, so a capability minted at
+	 * mount fails this — and so does any other request the composition starts.
 	 */
 	it('mints no asset capability merely by rendering the list', async () => {
 		await mountList();

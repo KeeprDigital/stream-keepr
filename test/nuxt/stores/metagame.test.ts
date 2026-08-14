@@ -33,9 +33,7 @@ const SUMMARY_ENDPOINT = '/api/events/1/metagame';
  * The mock above stands in for the module's whole `$fetch`, which is not this store's
  * alone: `useServerTime` samples the clock through it on its own timers (#123), and a
  * sample arriving first would hand back its options and answer `undefined` for a query
- * nobody asked about. Selecting also says what went wrong when the summary was never
- * requested at all, which position 0 could only report as a type crash (#273, #280,
- * swept in #342).
+ * nobody asked about. Why the selection rather than a guard is `lastCallTo`'s own docblock.
  */
 function summaryQuery() {
 	const [, options] = lastCallTo(mockFetch, SUMMARY_ENDPOINT);

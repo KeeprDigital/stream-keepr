@@ -1521,12 +1521,11 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			initiatedBy: initiated.initiatedBy,
 		});
 		expect(completed.stage).toBe('completed');
-		// Two attempts, counted where they are read rather than a line or two above it:
-		// the retry's whole subject is its relationship to the first attempt, and a run
-		// that validated once would have compared the retry against `undefined` — which
-		// `toMatchObject` reports as a type crash naming neither call (#330, swept in
-		// #342). The count this replaces said the same thing further from the reads that
-		// depend on it.
+		// Two attempts, counted where they are read rather than a line or two above it,
+		// because the retry's whole subject is its relationship to the first attempt. This
+		// is the destructure-the-mapped-list shape `callsTo`'s docblock names second: the
+		// count is refused before either name is bound, so neither read can be the empty
+		// case that made the same comparison pass vacuously in #330.
 		const [firstAttempt, retriedAttempt] = callsTo(validate, 2).map(([input]) => input);
 		expect(retriedAttempt).toMatchObject({
 			operationId: firstAttempt.operationId,
