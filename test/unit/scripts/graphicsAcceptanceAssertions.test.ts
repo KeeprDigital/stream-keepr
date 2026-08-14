@@ -13,6 +13,7 @@ import {
 	checkOriginExposure,
 	checkRangeRead,
 	checkRetryableUnavailable,
+	checkStillImagePublication,
 	checkUnsatisfiableRange,
 	checkValidatorStability,
 } from '../../../scripts/graphics-acceptance/assertions.mjs';
@@ -285,5 +286,74 @@ describe('graphics staging delivery assertions', () => {
 			.toEqual([]);
 		expect(codes(checkCapabilityDenial(observed(404, {}), { route, body: '', expectedStatus: 401 })))
 			.toEqual(['outcome-not-denied']);
+	});
+});
+
+describe('checkStillImagePublication', () => {
+	function settledOperation(overrides: object = {}) {
+		return {
+			stage: 'completed',
+			report: {
+				outcome: 'accepted',
+				facts: { format: 'jpeg', width: 1, height: 1, byteLength: 120 },
+			},
+			result: { assetId: 'asset', revisionId: 'revision' },
+			...overrides,
+		};
+	}
+
+	it('accepts a published operation whose facts match the sent source', () => {
+		expect(checkStillImagePublication(settledOperation(), { format: 'jpeg', byteLength: 120 }))
+			.toEqual([]);
+	});
+
+	it('reports a refusal with the report issue codes that carried it', () => {
+		// The signature a runtime without working codec Wasm produces: the decode
+		// throw is indistinguishable from an undecodable image at the validation
+		// boundary (#302).
+		const failures = checkStillImagePublication({
+			stage: 'failed',
+			report: { outcome: 'rejected', issues: [{ code: 'incomplete-jpeg-frame' }] },
+			failure: { code: 'validation-failed', retryable: false },
+		}, { format: 'jpeg', byteLength: 120 });
+		expect(failures).toEqual([{
+			code: 'still-image-ingestion-refused',
+			detail: {
+				format: 'jpeg',
+				stage: 'failed',
+				outcome: 'rejected',
+				issues: 'incomplete-jpeg-frame',
+			},
+		}]);
+	});
+
+	it('names the absent halves of a refusal that never produced a report', () => {
+		// `Object.entries` in the evidence line renders every key it is handed,
+		// so an undefined value would print as `=undefined`; the detail says
+		// 'absent'/'none' instead, in so many words.
+		const failures = checkStillImagePublication(
+			{ stage: 'failed' },
+			{ format: 'webp', byteLength: 120 },
+		);
+		expect(failures).toEqual([{
+			code: 'still-image-ingestion-refused',
+			detail: { format: 'webp', stage: 'failed', outcome: 'absent', issues: 'none' },
+		}]);
+	});
+
+	it('reports which published facts disagree with the sent source', () => {
+		const failures = checkStillImagePublication(
+			settledOperation({
+				report: {
+					outcome: 'accepted',
+					facts: { format: 'jpeg', width: 2, height: 1, byteLength: 119 },
+				},
+			}),
+			{ format: 'jpeg', byteLength: 120 },
+		);
+		expect(failures).toEqual([{
+			code: 'still-image-ingestion-facts-unexpected',
+			detail: { format: 'jpeg', fields: 'width,byteLength' },
+		}]);
 	});
 });

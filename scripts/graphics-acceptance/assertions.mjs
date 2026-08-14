@@ -388,3 +388,29 @@ export function checkCapabilityDenial(observation, { route, body, expectedStatus
 		failures.push(failure('outcome-detail-disclosed', { route }));
 	return failures;
 }
+
+/**
+ * A settled still-image ingestion, judged against what publishing it must
+ * have proved (#302). Refusal carries the report's issue codes — contract
+ * vocabulary, safe to print — because on a runtime whose codec Wasm cannot
+ * run, the decode throw surfaces as `incomplete-jpeg-frame`, and that word
+ * beside a publishing PNG is the whole diagnosis.
+ */
+export function checkStillImagePublication(settled, { format, byteLength }) {
+	if (settled.stage !== 'completed' || settled.report?.outcome !== 'accepted' || !settled.result) {
+		return [failure('still-image-ingestion-refused', {
+			format,
+			stage: settled.stage,
+			outcome: settled.report?.outcome ?? 'absent',
+			issues: (settled.report?.issues ?? []).map(issue => issue.code).join(',') || 'none',
+		})];
+	}
+	const facts = settled.report.facts;
+	const expected = { format, width: 1, height: 1, byteLength };
+	const wrong = Object.entries(expected)
+		.filter(([key, value]) => facts?.[key] !== value)
+		.map(([key]) => key);
+	return wrong.length > 0
+		? [failure('still-image-ingestion-facts-unexpected', { format, fields: wrong.join(',') })]
+		: [];
+}

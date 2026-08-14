@@ -72,6 +72,57 @@ export function distinctPixelPng(marker) {
 	]));
 }
 
+const BASE_PIXEL_JPEG = Uint8Array.from(Buffer.from(
+	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
+	'base64',
+));
+
+/**
+ * The JPEG counterpart of `distinctPixelPng`, carried in a COM segment right
+ * after the signature — a marker the still-image validator walks past and the
+ * decoder ignores, so distinctness costs nothing the run is trying to prove.
+ * Unlike the PNG, ingesting this decodes through the codec Wasm, which is the
+ * path #302 needs a deployed run to exercise.
+ */
+export function distinctPixelJpeg(marker) {
+	const payload = Buffer.from(`sk-acceptance\0${marker}`);
+	const length = payload.byteLength + 2;
+	return Uint8Array.from(Buffer.concat([
+		Buffer.from(BASE_PIXEL_JPEG.subarray(0, 2)),
+		Buffer.of(0xFF, 0xFE, length >>> 8, length & 0xFF),
+		payload,
+		Buffer.from(BASE_PIXEL_JPEG.subarray(2)),
+	]));
+}
+
+const BASE_PIXEL_WEBP = Uint8Array.from(Buffer.from(
+	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
+	'base64',
+));
+
+/**
+ * The WebP counterpart, as a trailing RIFF chunk under a fourCC nothing
+ * recognises — the validator skips unknown chunk types and libwebp never
+ * reads past the image payload. The RIFF length is rewritten to keep the
+ * container honest about the bytes it now holds, because the validator
+ * refuses a length that disagrees with the source.
+ */
+export function distinctPixelWebp(marker) {
+	const payload = Buffer.from(`sk-acceptance\0${marker}`);
+	const chunkHeader = Buffer.alloc(8);
+	chunkHeader.write('SKAC', 0, 'ascii');
+	chunkHeader.writeUInt32LE(payload.byteLength, 4);
+	const padding = payload.byteLength % 2 === 1 ? Buffer.alloc(1) : Buffer.alloc(0);
+	const combined = Buffer.concat([
+		Buffer.from(BASE_PIXEL_WEBP),
+		chunkHeader,
+		payload,
+		padding,
+	]);
+	combined.writeUInt32LE(combined.byteLength - 8, 4);
+	return Uint8Array.from(combined);
+}
+
 async function observe(response) {
 	const bytes = new Uint8Array(await response.arrayBuffer());
 	return {
@@ -132,6 +183,60 @@ export async function openInstallation(origin) {
 	}
 
 	return { origin, authorCookie, request, json };
+}
+
+/**
+ * Publish one still image through the ordinary ingestion routes and hand the
+ * settled operation back for the caller to judge (#302).
+ *
+ * Deliberately mechanical: whether the settled stage, outcome, and facts are
+ * the ones the run demands is the acceptance's own subject, so the judgement
+ * lives in `checkStillImagePublication` (assertions.mjs) where a miss becomes
+ * a stable failure code — not here, where a throw would misfile a codec
+ * defect as an unready environment.
+ */
+export async function stageStillImagePublication(session, { name, sourceFileName, declaredMime, bytes }) {
+	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
+		method: 'POST',
+		author: true,
+		body: {
+			idempotencyKey: `staging-acceptance-still-${randomUUID()}`,
+			name,
+			sourceFileName,
+			declaredMime,
+			browserDecodeEvidence: {
+				outcome: 'decoded',
+				sourceDigest: digestOf(bytes),
+				width: 1,
+				height: 1,
+			},
+			declaredByteLength: bytes.byteLength,
+		},
+	});
+	const settled = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
+		method: 'PUT',
+		author: true,
+		headers: { 'content-type': declaredMime },
+		body: bytes,
+	});
+	return {
+		settled,
+		async dispose() {
+			const assetId = settled?.result?.assetId;
+			if (!assetId)
+				return;
+			try {
+				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
+					method: 'POST',
+					author: true,
+					body: { action: 'trash' },
+				});
+			}
+			catch {
+				// A left-behind acceptance pixel is noise, never a failure of the gate.
+			}
+		},
+	};
 }
 
 /**
