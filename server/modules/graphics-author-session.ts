@@ -4,6 +4,7 @@ import {
 	getCookie,
 	getRequestURL,
 	setCookie,
+	setResponseHeader,
 } from 'h3';
 import { kv } from 'hub:kv';
 import { GraphicsAuthorSessionUnavailableError } from '~~/server/utils/errors';
@@ -139,9 +140,56 @@ async function readSession(event: H3Event): Promise<GraphicsAuthorSession | unde
  * the refusal and logs. It raises the same one anyway so that a second caller —
  * a route minting a session directly — inherits the sentence rather than the
  * placeholder the middleware never had to care about.
+ *
+ * `retry-after` beside it because the sentence says *temporarily*, and the sibling
+ * 503s in the graphics routes all set one. A caller told a thing is momentary and
+ * given no number has to invent an interval, which is the half of #321's finding that
+ * was left out of its scope and filed as #337. The number is the same 5 seconds those
+ * sites use: it is a floor on how hard to retry, not an estimate of when the store
+ * returns, and a second spelling of that floor would only invite the two to drift.
+ *
+ * **That is bounded to those siblings on purpose: the codebase-wide version of the
+ * sentence is false, and was briefly written here.**
+ * `server/modules/deck-list-resolution/index.ts` (502) and
+ * `server/modules/melee-sync/configuration.ts` (504/502) each tell a caller something
+ * is 'temporarily unavailable. Try again later.' and set no header — neither module
+ * calls `setResponseHeader` at all. They are two more instances of the defect #337
+ * describes, and they get their own ticket rather than a drive-by fix from this lane.
+ * Anyone tempted to widen the line above should widen the behaviour first.
+ *
+ * **Two different sevens meet here, and #337's own text runs them together.** Seven
+ * sites set `retry-after: 5` before this one did; seven files were classified by
+ * #321 (dc58c35). They are not the same seven and neither contains the other. Six
+ * overlap. `server/utils/graphicsAssetApi.ts` sets the header and predates #321
+ * entirely — it arrived with #55 (e28208a). `server/modules/graphics-administrator.ts`
+ * was classified by #321 and deliberately sets **no** header, because an unset
+ * environment name does not resolve by waiting. So the rule this site follows is not
+ * "#321 set one everywhere" but the narrower and truer one: a refusal that calls
+ * itself temporary owes the caller an interval, and a refusal that does not, does not.
+ *
+ * The middleware swallows this refusal, so a page load made while the store is
+ * down answers 200 carrying a `retry-after` nothing will read — `Retry-After` is
+ * defined for the statuses that carry it and is inert on a 200. That is the
+ * accepted cost of the number living with the refusal rather than at each of the
+ * two throw sites, where it could be reverted at one and kept at the other.
+ *
+ * **The status is deliberately not readable from source, and the refusal scan
+ * says so.** `statusCode: failure.statusCode` is a property access, and
+ * `test/helpers/routeRefusalScan.ts` reads a `createError`'s halves out of the
+ * syntax — so this surfaces as `statusCode: undefined`, the #330(1) class at a
+ * status rather than at a message. Two consequences, both wanted: the
+ * exhaustiveness check in `test/unit/integration/realtimeDiagnosis.test.ts` would
+ * report this site rather than drop it, the day a route's own import graph reaches
+ * this file; and the `carriesCause` census added by #339 cannot read a status here
+ * to hold it to, so this site satisfies that guard by being unreadable rather than
+ * by naming a cause. It does name one — `cause: failure` in the call below — and
+ * the pins for that are in `test/unit/server/modules/graphicsAuthorSession.test.ts`.
+ * Spelling the status as a literal 503 would make both readable; it would also put
+ * the number in two places, which is what the property access exists to avoid.
  */
-function graphicsAuthorSessionUnavailable(cause: unknown) {
+function graphicsAuthorSessionUnavailable(event: H3Event, cause: unknown) {
 	const failure = new GraphicsAuthorSessionUnavailableError(cause);
+	setResponseHeader(event, 'retry-after', 5);
 	return createError({
 		statusCode: failure.statusCode,
 		statusMessage: 'Service Unavailable',
@@ -170,7 +218,7 @@ export async function ensureGraphicsAuthorSession(event: H3Event): Promise<strin
 		return session.authorId;
 	}
 	catch (error) {
-		throw graphicsAuthorSessionUnavailable(error);
+		throw graphicsAuthorSessionUnavailable(event, error);
 	}
 }
 
@@ -218,7 +266,7 @@ export async function requireGraphicsAuthorSession(event: H3Event): Promise<stri
 			return session.authorId;
 	}
 	catch (error) {
-		throw graphicsAuthorSessionUnavailable(error);
+		throw graphicsAuthorSessionUnavailable(event, error);
 	}
 	throw createError({
 		statusCode: 401,

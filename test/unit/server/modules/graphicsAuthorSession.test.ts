@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 /**
  * How long a graphics author session survives, and what keeps it alive.
@@ -23,6 +24,7 @@ const mockKv = {
 };
 const mockGetCookie = vi.fn();
 const mockSetCookie = vi.fn();
+const mockSetResponseHeader = vi.fn();
 
 vi.mock('hub:kv', () => ({ kv: mockKv }));
 vi.mock('h3', () => ({
@@ -34,6 +36,7 @@ vi.mock('h3', () => ({
 	// class an unreachable session store raises, and that module imports it.
 	isError: (candidate: unknown) => candidate instanceof Error,
 	setCookie: mockSetCookie,
+	setResponseHeader: mockSetResponseHeader,
 }));
 
 const {
@@ -76,6 +79,7 @@ beforeEach(() => {
 	mockKv.del.mockReset();
 	mockGetCookie.mockReset();
 	mockSetCookie.mockReset();
+	mockSetResponseHeader.mockReset();
 	mockGetCookie.mockReturnValue(TOKEN);
 });
 
@@ -261,6 +265,39 @@ describe('a graphics author session whose store cannot be reached', () => {
 		});
 	});
 
+	/**
+	 * The number that goes with the word *temporarily*, at both entry points.
+	 *
+	 * #337: the sentence said the condition was momentary and the response carried no
+	 * `retry-after`, so a caller told to come back was left to invent an interval —
+	 * while the seven sites #321 classified as retryable all set one. Asserted after
+	 * `mapPublicNitroError` because that is the response a caller actually receives:
+	 * the header and the sentence are one piece of guidance, and #321's finding was
+	 * precisely the two halves disagreeing — retry advice in the header with
+	 * 'Internal Server Error' in the body. A row that read the header off the raw
+	 * throw would pass with the sentence sanitized away.
+	 */
+	it('tells a guarded caller how long to wait, beside a sentence saying what for', async () => {
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await refusalFrom(requireGraphicsAuthorSession(event));
+
+		expect(refusal.message).toBe('Graphics author sessions are temporarily unavailable');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
+	it('tells a caller minting a session the same thing', async () => {
+		// The refusal is raised through one helper, so the number could only be lost at
+		// one site by being lost at both — but the helper takes the event as an argument
+		// now, and an entry point that stopped passing its own would lose it here alone.
+		mockKv.get.mockRejectedValue(storeFailure);
+
+		const refusal = await refusalFrom(ensureGraphicsAuthorSession(event));
+
+		expect(refusal.message).toBe('Graphics author sessions are temporarily unavailable');
+		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
+	});
+
 	it('is still no reason to refuse a request that only asked in passing', async () => {
 		// Unchanged by #294. A caller with no session-scoped right at stake gets no
 		// identity rather than a refusal, and a store that is down is one way to
@@ -277,6 +314,18 @@ describe('a graphics author session that has lapsed', () => {
 
 		await expect(requireGraphicsAuthorSession(event)).rejects.toMatchObject({ statusCode: 401 });
 		expect(mockKv.set).not.toHaveBeenCalled();
+	});
+
+	it('is not something the caller is told to wait for', async () => {
+		// The counterweight to #337's rows above, and the same distinction
+		// `requireGraphicsAdministrator` makes: a store that is down resolves by
+		// waiting and a lapsed session does not — waiting only makes it later. A
+		// `retry-after` set unconditionally in this module would satisfy both of those
+		// rows and be wrong here, which is what this exists to catch.
+		mockKv.get.mockResolvedValue({ authorId: AUTHOR_ID, expiresAt: NOW - 1 });
+
+		await expect(requireGraphicsAuthorSession(event)).rejects.toMatchObject({ statusCode: 401 });
+		expect(mockSetResponseHeader).not.toHaveBeenCalled();
 	});
 
 	it('leaves nothing behind for its token to name', async () => {
