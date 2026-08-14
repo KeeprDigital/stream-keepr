@@ -25,6 +25,7 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
 
 // The API boundary imports the author session for its actor resolution, which
@@ -1085,7 +1086,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		// helper's event parameter required, which is why this call passes one at
 		// all — and having to pass one, the row now pins the `retry-after` header
 		// its earlier form disclaimed).
-		const requestEvent = { __requestEventFor: 'remote-copy-release-failure' } as never;
+		const requestEvent = stubH3Event({ __requestEventFor: 'remote-copy-release-failure' });
 		let routeError: unknown;
 		try {
 			rethrowGraphicsAssetApiError(thrown, requestEvent);

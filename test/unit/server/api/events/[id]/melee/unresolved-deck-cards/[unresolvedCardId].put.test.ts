@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 /**
@@ -37,7 +37,7 @@ const handler = (await import(
 
 const scryfallId = '3b1e5f6a-9d2c-4e8f-b7a1-0c5d4e3f2a1b';
 
-function requestFor(params: Record<string, string>, body: Record<string, unknown>) {
+function stubRequestEvent(params: Record<string, string>, body: Record<string, unknown>) {
 	// Carries a distinguishing property on purpose: `toHaveBeenCalledWith`
 	// compares deeply, so a bare `{}` could not tell this request apart from any
 	// other empty object a careless edit might thread as `requestEvent` — the
@@ -50,11 +50,14 @@ function requestFor(params: Record<string, string>, body: Record<string, unknown
 }
 
 describe('pUT /api/events/[id]/melee/unresolved-deck-cards/[unresolvedCardId] wiring', () => {
-	it('threads the coerced params, validated body, and the request itself to the resolution module', async () => {
+	beforeEach(() => {
 		mockResolveUnresolvedDeckCard.mockReset();
+	});
+
+	it('threads the coerced params, validated body, and the request itself to the resolution module', async () => {
 		const resolution = { outcome: 'resolved', resolvedCardCount: 3 };
 		mockResolveUnresolvedDeckCard.mockResolvedValue(resolution);
-		const event = requestFor({ id: '7', unresolvedCardId: '31' }, { scryfallId });
+		const event = stubRequestEvent({ id: '7', unresolvedCardId: '31' }, { scryfallId });
 
 		await expect(handler(event)).resolves.toBe(resolution);
 
@@ -67,16 +70,14 @@ describe('pUT /api/events/[id]/melee/unresolved-deck-cards/[unresolvedCardId] wi
 	});
 
 	it('refuses a non-positive card id before the resolution module is asked', async () => {
-		mockResolveUnresolvedDeckCard.mockReset();
-		const event = requestFor({ id: '7', unresolvedCardId: '0' }, { scryfallId });
+		const event = stubRequestEvent({ id: '7', unresolvedCardId: '0' }, { scryfallId });
 
 		await expect(handler(event)).rejects.toMatchObject({ name: 'ZodError' });
 		expect(mockResolveUnresolvedDeckCard).not.toHaveBeenCalled();
 	});
 
 	it('refuses a scryfallId that is not a UUID before the resolution module is asked', async () => {
-		mockResolveUnresolvedDeckCard.mockReset();
-		const event = requestFor({ id: '7', unresolvedCardId: '31' }, { scryfallId: 'not-a-uuid' });
+		const event = stubRequestEvent({ id: '7', unresolvedCardId: '31' }, { scryfallId: 'not-a-uuid' });
 
 		await expect(handler(event)).rejects.toMatchObject({ name: 'ZodError' });
 		expect(mockResolveUnresolvedDeckCard).not.toHaveBeenCalled();
