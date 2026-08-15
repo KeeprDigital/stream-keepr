@@ -797,6 +797,12 @@ export interface GraphicsAssetLibrary {
 		assetId: GraphicAssetId;
 		actor?: string;
 	}) => Promise<GraphicAssetLifecycleActionOutcome>;
+	/**
+	 * The rename and Event re-association. It takes no actor and records no
+	 * Evidence, unlike the transitions above: an authoring metadata edit is
+	 * not a lifecycle or reconciliation decision (#174) — the route carries
+	 * the full reasoning.
+	 */
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
 		name: string;

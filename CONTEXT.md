@@ -419,6 +419,7 @@ It must reproduce the exact bytes the catalogue already recorded; anything else 
 The chronological administrator-facing record of automated Graphics Asset Library lifecycle and reconciliation decisions, retained for one year after the cleanup it explains.
 It identifies subjects by opaque domain identity and never carries object keys, content digests, filenames, delivery or signed URLs, capability secrets, or deleted bytes.
 Each entry records the actor or automated policy, the transition either side of the change where the subject has named states, the checked reference count, bytes reserved or freed, the quota state observed, the deadline the decision established or acted on, the opaque operation and correlation identities, the outcome, and a stable reason.
+An authoring metadata edit — a Graphic Asset rename or Event re-association — is not ledger material: it is not a lifecycle transition, it removes no Graphic Asset Reference and starts nothing toward cleanup, and like all library-wide metadata it is outside revision history, so recording it would make the ledger a general edit log rather than the record of why content was or was not cleaned up.
 
 **Evidence Terminal Cleanup**:
 The recorded event that says one Evidence Ledger subject will never be heard from again — a Graphic Asset purge, a Revision Pruning, a Graphic Asset Content deletion, a staged input expiry, or a settled Graphics Discrepancy.
