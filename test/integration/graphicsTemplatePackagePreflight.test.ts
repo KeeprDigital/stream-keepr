@@ -1,4 +1,4 @@
-import type { GraphicsIngestionOperation } from '../../shared/types/graphicsAsset';
+import type { GraphicsAssetLibraryCapacity, GraphicsIngestionOperation } from '../../shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -144,6 +144,35 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 	);
 }
 
+/**
+ * The installation's retained canonical source bytes, read through the
+ * capacity surface.
+ *
+ * This suite's "publishes nothing" claims read the library listing before and
+ * after an operation, which pins them by absence: a listing blinded into
+ * returning `[]` for every read satisfies both compares, so the listing alone
+ * cannot distinguish "nothing was published" from "the listing is blind"
+ * (#369). No cheap mutation makes preflight actually publish — deleting the
+ * `template-package` early return in `continueGraphicsIngestion` fails on the
+ * stage assertion before any listing read — so the claim is pinned through a
+ * second observable computed independently of the listing route: capacity's
+ * retained source bytes, summed by SQL over the contents revisions retain.
+ * Publishing an asset must grow this figure. Positive coverage of the listing
+ * itself stays with the installation suite, which installs and sees the
+ * listing grow (#369's recorded decision).
+ *
+ * Only `retainedSourceBytes` is compared: `metadataBytes` grows with every
+ * operation row this suite creates, and the staging figures move with
+ * preflight's own staging, so either would drift for reasons that say nothing
+ * about publication.
+ */
+async function retainedCanonicalSourceBytes(): Promise<number> {
+	const capacity = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
+		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+	});
+	return capacity.canonical.breakdown.retainedSourceBytes;
+}
+
 describe('template Package preflight through the API boundary', () => {
 	let eventId: number;
 	let screenId: number;
@@ -226,6 +255,10 @@ describe('template Package preflight through the API boundary', () => {
 
 	it('maps a package back to its exact origins and publishes nothing', async () => {
 		const before = await libraryAssets();
+		const retainedBefore = await retainedCanonicalSourceBytes();
+		// Anti-vacuity: this suite's own source asset is retained, so the capacity
+		// observable is live rather than an empty default.
+		expect(retainedBefore).toBeGreaterThan(0);
 
 		const operation = await receivePackage(exportedPackage);
 
@@ -244,9 +277,11 @@ describe('template Package preflight through the API boundary', () => {
 		expect(report.quota.canonicalGrowthBytes).toBe(0);
 		expect(report.observed.archiveByteLength).toBe(exportedPackage.byteLength);
 
-		// Preflight proposes; it never installs. The library is untouched.
+		// Preflight proposes; it never installs. The library is untouched — by the
+		// listing, and by the listing-independent capacity figure (#369).
 		const after = await libraryAssets();
 		expect(after.map(asset => asset.id).sort()).toEqual(before.map(asset => asset.id).sort());
+		expect(await retainedCanonicalSourceBytes()).toBe(retainedBefore);
 
 		// The immutable report survives a reconnect on the durable operation.
 		const reread = await $fetch<GraphicsIngestionOperation>(
@@ -332,6 +367,7 @@ describe('template Package preflight through the API boundary', () => {
 	});
 
 	it('pauses on warnings and installs nothing until the exact report is confirmed', async () => {
+		const retainedBefore = await retainedCanonicalSourceBytes();
 		const parts = readTemplatePackageParts(exportedPackage);
 		const packaged = parts.manifest.packagedAssets[0]!;
 		// A revision of a known source this installation does not hold: a separate
@@ -381,10 +417,12 @@ describe('template Package preflight through the API boundary', () => {
 		);
 		expect(confirmed.stage).toBe('awaiting-installation');
 
-		// Confirmation readies the operation; it still installs nothing.
+		// Confirmation readies the operation; it still installs nothing — by the
+		// listing, and by the listing-independent capacity figure (#369).
 		const assets = await libraryAssets();
 		expect(assets.some(asset => asset.name === packaged.name && asset.id !== reference.assetId))
 			.toBe(false);
+		expect(await retainedCanonicalSourceBytes()).toBe(retainedBefore);
 	});
 
 	it('permanently rejects an unsafe archive with one complete report', async () => {
