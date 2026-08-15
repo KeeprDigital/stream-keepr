@@ -20,6 +20,7 @@ import type {
 	RevisionPruningCancellation,
 	RevisionPruningSchedule,
 	StagedInputExpiryCandidate,
+	UnreleasedStagedInput,
 } from './retention';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { boundJsonArray, valuesFromJsonArray } from './catalogue-sql';
@@ -71,6 +72,29 @@ const UNRELEASED_STAGED_INPUT_SQL = `(
 	${TERMINAL_STAGE_SQL}
 	AND staging_used_byte_length + staging_reserved_byte_length > 0
 )`;
+
+const UNRELEASED_STAGED_INPUT_COLUMNS = `id, initiated_by, stage, proposed_name, updated_at,
+	staging_used_byte_length + staging_reserved_byte_length AS staging_bytes`;
+
+interface UnreleasedStagedInputRow {
+	id: string;
+	initiated_by: string;
+	stage: GraphicsIngestionStage;
+	proposed_name: string;
+	updated_at: number;
+	staging_bytes: number;
+}
+
+function unreleasedStagedInputFromRow(row: UnreleasedStagedInputRow): UnreleasedStagedInput {
+	return {
+		operationId: row.id as GraphicsIngestionOperationId,
+		initiatedBy: row.initiated_by,
+		stage: row.stage,
+		name: row.proposed_name,
+		stagingBytes: row.staging_bytes,
+		updatedAt: new Date(row.updated_at).toISOString(),
+	};
+}
 
 /**
  * Content is reachable only through a retained revision or a derivative of one.
@@ -302,55 +326,23 @@ export function createD1GraphicsAssetRetentionCatalogue(
 		},
 		async listUnreleasedStagedInput(input) {
 			const result = await database.prepare(`
-				SELECT id, initiated_by, stage, proposed_name, updated_at,
-					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes
+				SELECT ${UNRELEASED_STAGED_INPUT_COLUMNS}
 				FROM graphics_ingestion_operations
 				WHERE ${UNRELEASED_STAGED_INPUT_SQL}
 				ORDER BY updated_at, id
 				LIMIT ?
-			`).bind(input.limit).all<{
-				id: string;
-				initiated_by: string;
-				stage: GraphicsIngestionStage;
-				proposed_name: string;
-				updated_at: number;
-				staging_bytes: number;
-			}>();
+			`).bind(input.limit).all<UnreleasedStagedInputRow>();
 			if (!result.success)
 				throw new Error('Graphics unreleased staged input could not be read');
-			return result.results.map(row => ({
-				operationId: row.id as GraphicsIngestionOperationId,
-				initiatedBy: row.initiated_by,
-				stage: row.stage,
-				name: row.proposed_name,
-				stagingBytes: row.staging_bytes,
-				updatedAt: new Date(row.updated_at).toISOString(),
-			}));
+			return result.results.map(unreleasedStagedInputFromRow);
 		},
 		async findUnreleasedStagedInput(operationId) {
 			const row = await database.prepare(`
-				SELECT id, initiated_by, stage, proposed_name, updated_at,
-					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes
+				SELECT ${UNRELEASED_STAGED_INPUT_COLUMNS}
 				FROM graphics_ingestion_operations
 				WHERE id = ? AND ${UNRELEASED_STAGED_INPUT_SQL}
-			`).bind(operationId).first<{
-				id: string;
-				initiated_by: string;
-				stage: GraphicsIngestionStage;
-				proposed_name: string;
-				updated_at: number;
-				staging_bytes: number;
-			}>();
-			if (!row)
-				return undefined;
-			return {
-				operationId: row.id as GraphicsIngestionOperationId,
-				initiatedBy: row.initiated_by,
-				stage: row.stage,
-				name: row.proposed_name,
-				stagingBytes: row.staging_bytes,
-				updatedAt: new Date(row.updated_at).toISOString(),
-			};
+			`).bind(operationId).first<UnreleasedStagedInputRow>();
+			return row ? unreleasedStagedInputFromRow(row) : undefined;
 		},
 		async countUnreleasedStagedInput() {
 			const row = await database.prepare(`

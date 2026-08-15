@@ -456,7 +456,7 @@ Expiry is decided before stage, because an operation whose staged input passed i
 
 **Operational Queue**:
 One risk-ordered list of Graphics Asset Library work grouped by what is wrong with it rather than by the provider objects underneath, holding its complete size as a count and a bounded sample ordered by deadline proximity.
-There is one queue per operational state — Critical Integrity Incident, Unavailable Graphic Asset Content, missing Graphics Derivative, retryable ingestion, expired staged input, Trashed Graphic Asset, superseded Graphic Asset Revision, quarantined object, and Retired Graphic Asset — and they stay distinct because the valid action differs in every one.
+There is one queue per operational state — Critical Integrity Incident, Unavailable Graphic Asset Content, missing Graphics Derivative, retryable ingestion, expired staged input, unreleased staged input, Trashed Graphic Asset, superseded Graphic Asset Revision, quarantined object, and Retired Graphic Asset — and they stay distinct because the valid action differs in every one.
 _Avoid_: work list, task list, incident bucket.
 
 **Queue Inspector**:

@@ -510,6 +510,65 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 	}
 
 	/**
+	 * Releases one strand's staged objects and, only once they are proven
+	 * gone, zeroes its byte accounting. The one release both the sweep's retry
+	 * stage and the queue's retry action run, so the retry policy cannot fork.
+	 */
+	async function releaseOneStrand(strand: UnreleasedStagedInput): Promise<
+		| { outcome: 'released'; releasedAt: string; bytesFreed: number }
+		| { outcome: 'already-released' }
+		| { outcome: 'unavailable' }
+	> {
+		const releasedObjects = await releaseStagedObjects(
+			strand.operationId,
+			strand.initiatedBy,
+		);
+		if (!releasedObjects)
+			return { outcome: 'unavailable' };
+		const releasedAt = timestamp();
+		const freed = await catalogue.releaseStagedInputBytes({
+			operationId: strand.operationId,
+			releasedAt,
+		});
+		// Someone zeroed the books between the listing and now — the other
+		// retry path, most likely. Nothing further to record.
+		if (!freed.released)
+			return { outcome: 'already-released' };
+		return { outcome: 'released', releasedAt, bytesFreed: freed.bytesFreed };
+	}
+
+	/** The `staged-input-released` entry a finally-landed release records. */
+	function strandReleasedEvidence(input: {
+		strand: UnreleasedStagedInput;
+		releasedAt: string;
+		bytesFreed: number;
+		correlationId: string;
+		reason: string;
+		actor?: string;
+		quotaState: GraphicsAssetEvidenceEntry['detail'];
+	}): GraphicsAssetEvidenceEntry {
+		return evidence({
+			recordedAt: input.releasedAt,
+			correlationId: input.correlationId,
+			category: 'staged-input-released',
+			actor: input.actor,
+			subject: {
+				kind: 'graphics-ingestion-operation',
+				id: input.strand.operationId,
+			},
+			outcome: 'staged-input-released',
+			reason: input.reason,
+			detail: {
+				...input.quotaState,
+				operationId: input.strand.operationId,
+				// What was actually freed, beside the expiry entry's deliberately
+				// overstated Bytes-reserved figure.
+				bytesFreed: input.bytesFreed,
+			},
+		});
+	}
+
+	/**
 	 * Retries the release of staged objects earlier sweeps expired but could
 	 * not reclaim (#358, decision 1): a strand is a delete that has not
 	 * happened yet, which is what a sweep-retried deadline is for. It runs
@@ -530,41 +589,21 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 		const records: GraphicsAssetEvidenceEntry[] = [];
 		let released = 0;
 		for (const strand of strands) {
-			const releasedObjects = await releaseStagedObjects(
-				strand.operationId,
-				strand.initiatedBy,
-			);
+			const outcome = await releaseOneStrand(strand);
 			// One unreleasable strand is a store this sweep cannot reclaim
 			// anything through; the rest of the batch stays listed for the next.
-			if (!releasedObjects)
+			if (outcome.outcome === 'unavailable')
 				break;
-			const releasedAt = timestamp();
-			const freed = await catalogue.releaseStagedInputBytes({
-				operationId: strand.operationId,
-				releasedAt,
-			});
-			// Someone zeroed the books between the listing and now — the queue's
-			// own retry action, most likely. Nothing further to record.
-			if (!freed.released)
+			if (outcome.outcome === 'already-released')
 				continue;
 			released++;
-			records.push(evidence({
-				recordedAt: releasedAt,
+			records.push(strandReleasedEvidence({
+				strand,
+				releasedAt: outcome.releasedAt,
+				bytesFreed: outcome.bytesFreed,
 				correlationId,
-				category: 'staged-input-released',
-				subject: {
-					kind: 'graphics-ingestion-operation',
-					id: strand.operationId,
-				},
-				outcome: 'staged-input-released',
 				reason: 'stranded-release-retried',
-				detail: {
-					...quotaState,
-					operationId: strand.operationId,
-					// What was actually freed, beside the expiry entry's
-					// deliberately overstated Bytes-reserved figure.
-					bytesFreed: freed.bytesFreed,
-				},
+				quotaState,
 			}));
 		}
 		return { strandedStagedInput: { released }, records };
@@ -1113,38 +1152,22 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			const strand = await catalogue.findUnreleasedStagedInput(input.operationId);
 			if (!strand)
 				return { outcome: 'already-in-state' };
-			const releasedObjects = await releaseStagedObjects(
-				strand.operationId,
-				strand.initiatedBy,
-			);
-			if (!releasedObjects)
+			const released = await releaseOneStrand(strand);
+			if (released.outcome === 'unavailable')
 				return { outcome: 'retryable-unavailable' };
-			const releasedAt = timestamp();
-			const freed = await catalogue.releaseStagedInputBytes({
-				operationId: strand.operationId,
-				releasedAt,
-			});
 			// A sweep beat this action to the zeroing between the read and now.
-			if (!freed.released)
+			if (released.outcome === 'already-released')
 				return { outcome: 'already-in-state' };
-			await catalogue.recordGraphicsAssetEvidence([evidence({
-				recordedAt: releasedAt,
+			await catalogue.recordGraphicsAssetEvidence([strandReleasedEvidence({
+				strand,
+				releasedAt: released.releasedAt,
+				bytesFreed: released.bytesFreed,
 				correlationId: generateIdentity(),
-				category: 'staged-input-released',
-				actor: input.actor,
-				subject: {
-					kind: 'graphics-ingestion-operation',
-					id: strand.operationId,
-				},
-				outcome: 'staged-input-released',
 				reason: 'administrator-retried-release',
-				detail: {
-					...await observeQuotaState(),
-					operationId: strand.operationId,
-					bytesFreed: freed.bytesFreed,
-				},
+				actor: input.actor,
+				quotaState: await observeQuotaState(),
 			})]);
-			return { outcome: 'completed', bytesFreed: freed.bytesFreed };
+			return { outcome: 'completed', bytesFreed: released.bytesFreed };
 		},
 		async run(): Promise<GraphicsRetentionSweepResult> {
 			const correlationId = generateIdentity();
