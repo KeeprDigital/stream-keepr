@@ -39,6 +39,21 @@ export const GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE
 	= `${GRAPHICS_AUTHOR_SESSION_LAPSED_NOTICE.title}. Reload the page to start a new session.`;
 
 /**
+ * What the Workspace states when the page was never issued a session (#206).
+ *
+ * The middleware serves the page even when minting fails, leaving the marker
+ * `GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE` as the only readable trace.
+ * This is deliberately not the lapse notice: a lapse lost a session and the
+ * reload starts a fresh one, while a failed issue lost nothing and a reload
+ * helps only once the session store is back. Promising the lapse's reload here
+ * would prescribe a cure that does not act on the disease.
+ */
+export const GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_NOTICE = {
+	title: 'This page could not be issued a graphics author session',
+	body: 'The session store was unreachable when this page loaded, so the Graphics Asset Library does not recognise this browser as an author and nothing here will load. No session was lost — none was issued. Reloading retries, and helps once the store is reachable again.',
+} as const;
+
+/**
  * Whether a failure means the asking session is gone.
  *
  * Only `401` qualifies. A `404` from an ingestion route is the *other* half of
@@ -74,15 +89,14 @@ export function useGraphicsAuthorSession() {
 	 * ingestion route does carry a sentence of its own — 'An authenticated
 	 * graphics author session is required', which is what
 	 * `requireGraphicsAuthorSession` writes — and quoting it would name what was
-	 * missing while leaving out the one thing the author can do about it. That is
-	 * a judgement about *writes*, and the Library Workspace's reads deliberately
-	 * make the opposite one: `pages/graphics-assets/index.vue`'s listing and
-	 * capacity quote that same 401 sentence verbatim. A refused write may have
-	 * left a Graphics Ingestion Operation owned by a session nobody holds, which
-	 * is what ADR-0003 costs an author and what the reload is for; a refused read
-	 * has no operation to lose, so it relays what the route said. The two
-	 * docblocks name each other so the difference reads as a decision rather than
-	 * as one of them being stale.
+	 * missing while leaving out the one thing the author can do about it. Since
+	 * #360 that judgement covers the whole surface: the Library Workspace's
+	 * reads (`pages/graphics-assets/index.vue`'s listing and capacity) route
+	 * through here too, because a read's 401 means this browser holds no author
+	 * session either, and the operator's next action is the same reload whether
+	 * or not anything was staked on the session that went. The route's own
+	 * sentence was the more diagnostic reading; the reload is the actionable
+	 * one, and one story beats two.
 	 *
 	 * Everything else is `reportedMessage`, which reads the sentence the route
 	 * wrote before falling back to the failure's own line. This arm was that
@@ -109,6 +123,7 @@ export function useGraphicsAuthorSession() {
 		lapsed,
 		ownershipNotice: GRAPHICS_AUTHOR_SESSION_OWNERSHIP_NOTICE,
 		lapsedNotice: GRAPHICS_AUTHOR_SESSION_LAPSED_NOTICE,
+		issueFailedNotice: GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_NOTICE,
 		describeFailure,
 		reload,
 	};

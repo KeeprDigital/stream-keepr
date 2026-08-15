@@ -40,10 +40,16 @@ vi.mock('~~/server/modules/graphics-author-session', () => ({
 
 const mockGetRequestHeader = vi.fn();
 const mockGetRequestURL = vi.fn();
+const mockGetCookie = vi.fn();
+const mockSetCookie = vi.fn();
+const mockDeleteCookie = vi.fn();
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getRequestHeader', mockGetRequestHeader);
 vi.stubGlobal('getRequestURL', mockGetRequestURL);
+vi.stubGlobal('getCookie', mockGetCookie);
+vi.stubGlobal('setCookie', mockSetCookie);
+vi.stubGlobal('deleteCookie', mockDeleteCookie);
 
 const handler = (await import('~~/server/middleware/graphics-author-session')).default;
 
@@ -122,6 +128,44 @@ describe('the graphics author session middleware', () => {
 
 		expect(mockEnsure.mock.calls.length + mockRequire.mock.calls.length).toBe(1);
 		expect(console.warn).not.toHaveBeenCalled();
+	});
+
+	it('marks a failed issue where the page can read it, since the swallow hides it from the response', async () => {
+		// #206(2): the served page's session cookie is httpOnly, so this readable
+		// marker is the only way the Library Workspace can tell "never issued a
+		// session" from "session lapsed" — the first is not healed by the reload
+		// the lapse notice prescribes.
+		mockEnsure.mockRejectedValue(bandedRefusal());
+
+		await handler(pageRequest());
+
+		expect(mockSetCookie).toHaveBeenCalledWith(
+			expect.anything(),
+			'stream_keepr_graphics_author_session_issue_failed',
+			'1',
+			expect.objectContaining({ httpOnly: false }),
+		);
+	});
+
+	it('withdraws the marker once a session is issued again, and only then', async () => {
+		// A recovered store must stop claiming failure, and the ordinary
+		// navigation — which never failed — must not write a header at all.
+		mockEnsure.mockResolvedValue('an-author-id');
+
+		mockGetCookie.mockReturnValue('1');
+		await handler(pageRequest());
+		expect(mockDeleteCookie).toHaveBeenCalledWith(
+			expect.anything(),
+			'stream_keepr_graphics_author_session_issue_failed',
+			expect.anything(),
+		);
+
+		mockDeleteCookie.mockClear();
+		mockSetCookie.mockClear();
+		mockGetCookie.mockReturnValue(undefined);
+		await handler(pageRequest());
+		expect(mockDeleteCookie).not.toHaveBeenCalled();
+		expect(mockSetCookie).not.toHaveBeenCalled();
 	});
 
 	it('does not reach the session call for an API request', async () => {

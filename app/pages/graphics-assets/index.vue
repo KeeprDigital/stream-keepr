@@ -20,6 +20,7 @@ import {
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE } from '~~/shared/utils/graphicsAuthorSessionIssue';
 import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
@@ -117,25 +118,42 @@ const {
  * What a failed read says to the author working the Library Workspace.
  *
  * `useFetch` hands its `error` on as the failure the request produced, whose own
- * `message` is the transport's line — '[GET] "/api/graphics-assets": 401 Unauthorized'
- * where the route had written what was actually missing. `failureSentence` owns which
- * failures may be quoted, and since #286 that includes the 5xx families whose prose the
- * server preserves through sanitizing: an exhausted byte store and an unavailable library
- * are both answers this page exists to relay, and both are 5xx. A genuinely sanitized 5xx
- * still falls back to the transport's line, which reads as machinery (#271).
+ * `message` is the transport's line — '[GET] "/api/graphics-assets": 503 Service
+ * Unavailable' where the route had written what was actually missing. `describeFailure`
+ * routes to what to say: a 401 becomes the lapse notice with its reload, and everything
+ * else is `reportedMessage`, whose quoting rules `failureSentence` owns — since #286
+ * that includes the 5xx families whose prose the server preserves through sanitizing,
+ * and a genuinely sanitized 5xx still falls back to the transport's line (#271).
  *
- * The 401 in that example is quoted, and it is worth saying plainly that this page's
- * *writes* answer the same status differently: every one of them goes through the
- * graphics author session's `describeFailure`, which replaces a 401's sentence with the
- * lapse notice and the reload. Both reads here hit `requireGraphicsAuthorSession` routes,
- * so the sentence quoted above is that guard's own. The difference is the write: it may
- * have left a Graphics Ingestion Operation owned by a session nobody holds, which is
- * ADR-0003's cost and what the reload addresses, while a refused read has nothing staked
- * and is better served by what the route actually said. Whether a read should name the
- * lapse too is a fair question and is not settled here (#350).
+ * The 401 arm is #360's decision, closing what #350 left open: reads name the lapse
+ * exactly as this page's writes do. A read has nothing staked on the session that went
+ * — that was the argument for quoting the route — but the operator's next action is
+ * the same reload either way, and one story beats two. Watchers rather than computeds,
+ * because `describeFailure` records the lapse it noticed, and a computed must not
+ * write.
  */
-const loadFailureMessage = computed(() => reportedMessage(error.value));
-const capacityFailureMessage = computed(() => reportedMessage(capacityError.value));
+const loadFailureMessage = ref<string>();
+watch(error, (caught) => {
+	loadFailureMessage.value = caught
+		? authorSession.describeFailure(caught, 'The Graphic Asset listing could not be loaded.')
+		: undefined;
+}, { immediate: true });
+const capacityFailureMessage = ref<string>();
+watch(capacityError, (caught) => {
+	capacityFailureMessage.value = caught
+		? authorSession.describeFailure(caught, 'Storage capacity could not be loaded.')
+		: undefined;
+}, { immediate: true });
+
+/**
+ * Whether this page was never issued a session at all (#206) — the middleware's
+ * marker, readable where the httpOnly session cookie is not. Sharper than the
+ * lapse it would otherwise present as: the reads above still answer 401 and
+ * still name the lapse, but the banner shows this diagnosis instead, because
+ * "reload to start a new session" is the one prescription that does not act on
+ * a store that cannot issue one.
+ */
+const sessionIssueFailed = useCookie(GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE);
 
 watch(selectedFile, (file) => {
 	if (file && !proposedName.value.trim())
@@ -1100,7 +1118,22 @@ onMounted(async () => {
 			</UAlert>
 
 			<UAlert
-				v-if="authorSession.lapsed.value"
+				v-if="sessionIssueFailed"
+				color="error"
+				variant="soft"
+				icon="i-lucide-user-x"
+				data-testid="author-session-issue-failed"
+			>
+				<p class="font-medium">
+					{{ authorSession.issueFailedNotice.title }}
+				</p>
+				<p class="mt-1 text-sm">
+					{{ authorSession.issueFailedNotice.body }}
+				</p>
+			</UAlert>
+
+			<UAlert
+				v-else-if="authorSession.lapsed.value"
 				color="error"
 				variant="soft"
 				icon="i-lucide-user-x"

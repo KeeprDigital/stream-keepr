@@ -1,4 +1,5 @@
 import { ensureGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE } from '~~/shared/utils/graphicsAuthorSessionIssue';
 
 export default defineEventHandler(async (event) => {
 	const requestUrl = getRequestURL(event);
@@ -35,11 +36,25 @@ export default defineEventHandler(async (event) => {
 	// rather than the spelling: no refusal from that module escapes this handler.
 	try {
 		await ensureGraphicsAuthorSession(event);
+		// A recovered store stops claiming failure. Deleted only when present, so
+		// the ordinary navigation — which never failed — writes no header at all.
+		if (getCookie(event, GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE) !== undefined)
+			deleteCookie(event, GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE, { path: '/' });
 	}
 	catch {
 		console.warn(JSON.stringify({
 			message: 'graphics_author_session_issue_failed',
 			path: requestUrl.pathname,
 		}));
+		// #206(2): the page is served anyway, but no longer silently broken. The
+		// session cookie is httpOnly, so this readable marker is the only way the
+		// page can tell "never issued a session" from "session lapsed" — the
+		// first is not healed by the reload the lapse notice prescribes. Setting
+		// a cookie is not refusing; the property pinned above still holds.
+		setCookie(event, GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE, '1', {
+			httpOnly: false,
+			sameSite: 'lax',
+			path: '/',
+		});
 	}
 });

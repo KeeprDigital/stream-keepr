@@ -173,6 +173,12 @@ mockNuxtImport('useFetch', () => (path: string) => ({
 	refresh: path === '/api/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
 }));
 
+/** The middleware's failed-issue marker (#206), settable per test. */
+const sessionIssueMarker = ref<string | null>(null);
+
+mockNuxtImport('useCookie', () => (name: string) =>
+	name === 'stream_keepr_graphics_author_session_issue_failed' ? sessionIssueMarker : ref(null));
+
 const passthroughStub = defineComponent({
 	template: '<div><slot name="actions" /><slot name="header" /><slot /><slot name="footer" /></div>',
 });
@@ -237,6 +243,7 @@ describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
 		listingError.value = null;
 		capacityLoadError.value = null;
+		sessionIssueMarker.value = null;
 		assets.value = [{
 			id: 'asset-1' as never,
 			name: 'Scoreboard logo',
@@ -1087,9 +1094,11 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * the server actually gave. `failureSentence` owns which failures may be quoted, and
 	 * since #286 that includes the 5xx families whose prose the server preserves through
 	 * sanitizing: an exhausted byte store and an unavailable library are both answers this
-	 * page exists to relay, and both are 5xx.
+	 * page exists to relay, and both are 5xx. A 401 is the exception since #360: a read's
+	 * 401 means this browser holds no author session either, so it names the lapse and
+	 * lights the same reload banner the writes do, rather than quoting the route.
 	 */
-	it('says why the library listing was refused rather than naming the route', async () => {
+	it('names the lapse when the library listing answers 401, exactly as the writes do', async () => {
 		listingError.value = transportFailure({
 			status: 401,
 			statusText: 'Unauthorized',
@@ -1099,8 +1108,45 @@ describe('the Graphics Asset Library Workspace', () => {
 		const wrapper = await mountPage();
 
 		const alert = wrapper.get('[data-testid="library-load-error"]');
-		expect(alert.text()).toContain('An authenticated graphics author session is required');
-		expect(alert.text()).not.toContain('401 Unauthorized');
+		expect(alert.text()).toContain('Your graphics author session has lapsed');
+		expect(alert.text()).not.toContain('401');
+		expect(wrapper.text()).toContain('Reload and start a new session');
+	});
+
+	it('names the lapse when the capacity read answers 401', async () => {
+		capacityLoadError.value = transportFailure({
+			status: 401,
+			statusText: 'Unauthorized',
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[GET] "/api/graphics-assets/capacity"`,
+		});
+		const wrapper = await mountPage();
+
+		const alert = wrapper.get('[data-testid="capacity-load-error"]');
+		expect(alert.text()).toContain('Your graphics author session has lapsed');
+		expect(alert.text()).not.toContain('401');
+	});
+
+	/**
+	 * The sharper diagnosis outranks the lapse (#206). When the middleware could
+	 * not issue a session at all it leaves a readable marker, and the banner
+	 * shows that instead: the reads still answer 401 and still name the lapse in
+	 * their own alerts, but "reload to start a new session" is not prescribed,
+	 * because no reload starts a session while the store cannot issue one.
+	 */
+	it('says the page was never issued a session, instead of a lapse, when the middleware left its marker', async () => {
+		sessionIssueMarker.value = '1';
+		listingError.value = transportFailure({
+			status: 401,
+			statusText: 'Unauthorized',
+			body: { message: 'An authenticated graphics author session is required' },
+			request: `[GET] "/api/graphics-assets"`,
+		});
+		const wrapper = await mountPage();
+
+		expect(wrapper.get('[data-testid="author-session-issue-failed"]').text())
+			.toContain('This page could not be issued a graphics author session');
+		expect(wrapper.text()).not.toContain('Reload and start a new session');
 	});
 
 	it('relays an exhausted byte store, whose 507 the mapper preserved', async () => {
