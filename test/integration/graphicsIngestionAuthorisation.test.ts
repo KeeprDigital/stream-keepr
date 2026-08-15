@@ -277,6 +277,15 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		 * routes have real work to refuse — in particular the staged-source route,
 		 * which answers `missing` at any other stage and would otherwise report a
 		 * 404 that says nothing at all about who asked.
+		 *
+		 * Parked is also load-bearing for suite isolation: these bytes are
+		 * byte-identical to the `mplantin.woff` that graphicsAssetIngestion
+		 * publishes as a real font revision. Staged-but-unconfirmed content touches
+		 * nothing digest-keyed (see the padding-count registry docblock in
+		 * helpers.ts, proved on #371), so the two suites cannot collide — but
+		 * confirming any probe would publish these bytes and recreate exactly the
+		 * #368 cross-suite dedup collision. The last test in this file trips if
+		 * that ever happens.
 		 */
 		for (const [index, route] of operationRoutes.entries()) {
 			const initiated = await initiateFontAs(
@@ -599,5 +608,24 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				report: { outcome: 'rejected' },
 			});
 		});
+	});
+
+	/**
+	 * The tripwire the probe setup docblock promises: after every case above has
+	 * run (vitest executes a file's tests in declaration order, so this one runs
+	 * last), each scoping probe is still parked at `awaiting-confirmation`, so no
+	 * copy of this suite's staged `mplantin.woff` ever became canonical content.
+	 * That is what keeps this suite off graphicsAssetIngestion's published font
+	 * revision (#371); a future case that confirms a probe fails here.
+	 */
+	it('leaves every scoping probe parked at awaiting-confirmation', async () => {
+		expect(scopingProbes.size).toBe(operationRoutes.length);
+		for (const [label, operationId] of scopingProbes) {
+			const operation = await $fetch<GraphicsIngestionOperation>(
+				`/api/graphics-assets/ingestion-operations/${operationId}`,
+				{ headers: { cookie: authorCookie } },
+			);
+			expect(operation.stage, `scoping probe for ${label}`).toBe('awaiting-confirmation');
+		}
 	});
 });

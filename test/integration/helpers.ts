@@ -108,6 +108,22 @@ export const integrationRealtimeConfigured = INTEGRATION_ABLY_API_KEY !== '';
  * instead of by count — broadcastGraphicTemplates, broadcastGraphicTemplatePackages,
  * and the graphicsTemplatePackage export, preflight and installation suites — are
  * distinct by construction and need no entry.
+ *
+ * One shared fixture deliberately lives outside this registry:
+ * `public/fonts/mplantin.woff` is uploaded byte-identically by
+ * graphicsAssetIngestion (published as a font revision) and
+ * graphicsIngestionAuthorisation (staged only, parked at
+ * `awaiting-confirmation`). That is safe because staged-but-unconfirmed content
+ * never reaches anything digest-keyed: staged bytes live under the
+ * operation-scoped `ingestion/<operationId>/source` identity, and on the
+ * ordinary ingestion path this fixture takes, every content-addressed write —
+ * the canonical-write-candidate claim, the canonical store object, the
+ * `graphic_asset_contents` row — happens in `continueGraphicsIngestion`
+ * only *after* its `awaiting-confirmation` return (proved on #371; Template
+ * Packages make their canonical writes elsewhere, likewise only after their
+ * own confirmation). The safety holds exactly as long as the staged copies are
+ * never confirmed; the authorisation suite documents that at its probe setup
+ * and ends with a tripwire test that every probe is still parked.
  */
 
 /**
