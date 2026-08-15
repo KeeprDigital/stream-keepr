@@ -161,12 +161,12 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	});
 
 	/**
-	 * `run-font-browser-acceptance.mjs` runs its harness at import — the module's
-	 * body *is* the run — so importing it in a test would open an installation
-	 * and drive a browser, and its own call site is therefore reachable by no
-	 * unit runner. The fact that call site has to get right is held here instead:
-	 * a page opened for staged work carries the session that staged it, as one
-	 * expression rather than two arguments an edit can separate.
+	 * The helper's own shape: a page opened for staged work carries the session
+	 * that staged it, as one expression rather than two arguments an edit can
+	 * separate. Its call site in `run-font-browser-acceptance.mjs` used to be
+	 * reachable by no unit runner — the module ran its harness at import — and
+	 * this test was the stand-in; since #345 the call site is pinned directly in
+	 * `runFontBrowserAcceptance.test.ts`, and this holds just the helper.
 	 */
 	it('pairs a staged page with the session that staged it', () => {
 		const session = { origin: 'http://127.0.0.1:8787', authorCookie: COOKIE };
