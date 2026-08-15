@@ -218,6 +218,7 @@ describe('the Graphics Asset Library operational queues', () => {
 			'missing-derivative',
 			'retryable-ingestion',
 			'expired-ingestion-input',
+			'unreleased-staged-input',
 			'trashed-asset',
 			'superseded-revision',
 			'quarantined-object',
@@ -499,6 +500,55 @@ describe('one queue never crowding out another', () => {
 			subject: { kind: 'graphics-ingestion-operation', id: unlisted },
 			actions: [],
 		});
+	});
+
+	it('queues a stranded release with its one action, and clears it exactly when the state clears', async () => {
+		const context = createQueuesLibrary();
+		// A publication that fails retryably leaves staged bytes; the expiry
+		// sweep claims it while the staging store cannot answer its deletes, so
+		// the objects strand with the accounting still on the books (#358).
+		context.canonical.injectTransientFailure('create', 2);
+		const stranded = await ingestAsset(context, {
+			idempotencyKey: 'stranded-release',
+			name: 'Stranded release',
+		});
+		context.advance(8 * DAY);
+		context.staging.injectTransientFailure('delete', 2);
+		await context.library.runGraphicsRetention();
+
+		const overview = await context.library.getOperationalQueues();
+		const queue = queueOf(overview, 'unreleased-staged-input');
+		expect(queue.severity).toBe('warning');
+		expect(queue.totalCount).toBe(1);
+		expect(queue.items).toHaveLength(1);
+		expect(queue.items[0]).toMatchObject({
+			subject: { kind: 'graphics-ingestion-operation', id: stranded.id },
+			actions: ['retry-release'],
+		});
+
+		const inspection = await context.library.inspectOperationalQueueItem({
+			queue: 'unreleased-staged-input',
+			subjectId: stranded.id,
+		});
+		expect(inspection.detail).toMatchObject({
+			kind: 'unreleased-staged-input',
+			strand: { operationId: stranded.id, stagingBytes: pixelPng.byteLength },
+		});
+		expect(inspection.actions).toEqual(['retry-release']);
+		expect(inspection.evidence.map(entry => entry.category))
+			.toContain('staged-input-expired');
+
+		// The retry action releases it; the queue entry clears with the state.
+		await expect(context.library.releaseStrandedStagedInput({
+			operationId: stranded.id,
+			actor: 'graphics-admin',
+		})).resolves.toMatchObject({ outcome: 'completed' });
+		const after = await context.library.getOperationalQueues();
+		expect(queueOf(after, 'unreleased-staged-input').totalCount).toBe(0);
+		await expect(context.library.inspectOperationalQueueItem({
+			queue: 'unreleased-staged-input',
+			subjectId: stranded.id,
+		})).rejects.toThrow('no longer in that queue');
 	});
 
 	it('lists the quarantined objects closest to deletion, not the newest', async () => {

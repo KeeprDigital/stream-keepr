@@ -24,13 +24,17 @@ describe('the operational queue vocabulary', () => {
 		// collapsing into one "needs attention" bucket. A critical integrity
 		// incident is the ninth: it fails closed and is never repaired in place,
 		// so merging it with ordinary unavailable content would offer a repair
-		// that the library would refuse.
+		// that the library would refuse. Unreleased staged input is the tenth
+		// (#358): it never appears in the expired-input queue — expiry already
+		// happened — and its one valid action is a release retry no other queue
+		// offers.
 		expect([...GRAPHICS_OPERATIONAL_QUEUES]).toEqual([
 			'critical-integrity-incident',
 			'unavailable-content',
 			'missing-derivative',
 			'retryable-ingestion',
 			'expired-ingestion-input',
+			'unreleased-staged-input',
 			'trashed-asset',
 			'superseded-revision',
 			'quarantined-object',

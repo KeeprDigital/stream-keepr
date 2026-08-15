@@ -62,6 +62,7 @@ function cockpitCatalogue(openCounts: Partial<Record<GraphicsDiscrepancyKind, nu
 		getReconciliationState: vi.fn().mockResolvedValue({}),
 		summariseIngestionAttention: vi.fn()
 			.mockResolvedValue({ counts: {}, operations: [] }),
+		countUnreleasedStagedInput: vi.fn().mockResolvedValue(0),
 		summariseRetentionDeadlines: vi.fn().mockResolvedValue(NO_DEADLINES),
 		listGraphicsAssetEvidence: vi.fn().mockResolvedValue([]),
 	};

@@ -98,6 +98,8 @@ export interface GraphicsOperationsCockpitCatalogue {
 		now: string;
 		limit: number;
 	}) => Promise<GraphicsIngestionAttentionRead>;
+	/** Terminal operations whose staged objects a failed release stranded (#358). */
+	countUnreleasedStagedInput: () => Promise<number>;
 	summariseRetentionDeadlines: () => Promise<GraphicsRetentionDeadlineSummary>;
 	listGraphicsAssetEvidence: (input: {
 		limit: number;
@@ -271,6 +273,7 @@ export async function readGraphicsOperationsCockpit(
 		isolatedIncidentCount,
 		reconciliationState,
 		ingestion,
+		unreleasedStagedInputCount,
 		retention,
 		evidence,
 	] = await Promise.all([
@@ -283,6 +286,7 @@ export async function readGraphicsOperationsCockpit(
 			now: checkedAt,
 			limit: INGESTION_SAMPLE_LIMIT,
 		}),
+		catalogue.countUnreleasedStagedInput(),
 		catalogue.summariseRetentionDeadlines(),
 		catalogue.listGraphicsAssetEvidence({
 			limit: RECENT_OUTCOME_WINDOW,
@@ -320,6 +324,12 @@ export async function readGraphicsOperationsCockpit(
 			{
 				code: 'graphics-ingestion-input-expired' as const,
 				openCount: attentionCounts['input-expired'],
+			},
+			// Backed by the durable byte accounting itself, so it stands until
+			// the release is proven and cannot be dismissed by a reload (#358).
+			{
+				code: 'graphics-staged-input-unreleased' as const,
+				openCount: unreleasedStagedInputCount,
 			},
 		]),
 		capacity: describeCapacity(capacity),

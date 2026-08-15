@@ -311,6 +311,40 @@ describe('the Operations Cockpit against a real catalogue', () => {
 		});
 	});
 
+	it('raises a warning Storage Health Alert while any stranded release exists', async () => {
+		const context = createCockpitLibrary();
+		context.canonical.injectTransientFailure('create', 2);
+		const stranded = await ingestImage(context, {
+			idempotencyKey: 'stranded-alert',
+			name: 'Stranded release',
+		});
+		context.advance(8 * DAY);
+		context.staging.injectTransientFailure('delete', 2);
+		await context.library.runGraphicsRetention();
+
+		// Derived from the durable accounting, so it survives navigation and
+		// reload until the release lands — the persistent-alert rule verbatim.
+		const alerted = await context.library.getOperationsCockpit();
+		expect(alerted.outcome).toBe('complete');
+		expect(alerted.outcome === 'complete' && alerted.alerts.open).toContainEqual({
+			code: 'graphics-staged-input-unreleased',
+			severity: 'warning',
+			openCount: 1,
+			persistent: true,
+		});
+
+		await expect(context.library.releaseStrandedStagedInput({
+			operationId: stranded.id,
+			actor: 'graphics-admin',
+		})).resolves.toMatchObject({ outcome: 'completed' });
+		const cleared = await context.library.getOperationsCockpit();
+		expect(cleared.outcome === 'complete' && cleared.alerts.open)
+			.not
+			.toContainEqual(expect.objectContaining({
+				code: 'graphics-staged-input-unreleased',
+			}));
+	});
+
 	it('counts each lifecycle group against the distinct deadline it is held to', async () => {
 		const context = createCockpitLibrary();
 		const retiredAsset = publishedAssetId(

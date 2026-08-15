@@ -156,6 +156,7 @@ const ALERT_SUMMARIES: Record<GraphicsStorageHealthAlert['code'], string> = {
 	'canonical-quota-warning': 'The Canonical Graphics Quota has passed 80%',
 	'staging-allowance-exhausted': 'The Graphics Staging Allowance has no room left',
 	'graphics-ingestion-input-expired': 'Staged input passed its retention guarantee',
+	'graphics-staged-input-unreleased': 'Staged objects a failed release stranded still occupy the allowance',
 };
 
 function alertColor(severity: GraphicsStorageHealthAlertSeverity) {

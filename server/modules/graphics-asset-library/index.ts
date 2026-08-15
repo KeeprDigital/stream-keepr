@@ -78,7 +78,7 @@ import type {
 	VerifyGraphicsContentBytesOutcome,
 } from './reconciliation';
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
-import type { GraphicsAssetRetentionCatalogue } from './retention';
+import type { GraphicsAssetRetentionCatalogue, StrandedStagedInputReleaseOutcome } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import type { ResolvedPackagedRevision } from './template-package';
 import type { TemplatePackageArchiveEntry } from './template-package-archive';
@@ -866,6 +866,16 @@ export interface GraphicsAssetLibrary {
 	 */
 	runGraphicsRetention: () => Promise<GraphicsRetentionSweepResult>;
 	/**
+	 * Retries the release of staged objects a failed sweep release stranded
+	 * (#358): the unreleased-staged-input queue's one action. Idempotent, and
+	 * it answers in Queue Action Outcome terms — a second run reports
+	 * already-in-state rather than a second success.
+	 */
+	releaseStrandedStagedInput: (input: {
+		operationId: GraphicsIngestionOperationId;
+		actor: string;
+	}) => Promise<StrandedStagedInputReleaseOutcome>;
+	/**
 	 * The administrator's explicitly confirmed early purge of unreferenced
 	 * Trash. It proves usage afresh and never shortens any other guarantee.
 	 */
@@ -1499,6 +1509,7 @@ export function createGraphicsAssetLibrary(
 		'countIsolatedDiscrepancies',
 		'getReconciliationState',
 		'summariseIngestionAttention',
+		'countUnreleasedStagedInput',
 		'summariseRetentionDeadlines',
 		'listGraphicsAssetEvidence',
 	] as const satisfies readonly (keyof GraphicsOperationsCockpitCatalogue)[];
@@ -1525,6 +1536,9 @@ export function createGraphicsAssetLibrary(
 		'countOpenDiscrepancies',
 		'summariseIngestionQueues',
 		'findIngestionAttentionItem',
+		'listUnreleasedStagedInput',
+		'findUnreleasedStagedInput',
+		'countUnreleasedStagedInput',
 		'summariseRetentionDeadlines',
 		'listTrashDeadlines',
 		'listRevisionRetention',
@@ -5438,6 +5452,12 @@ export function createGraphicsAssetLibrary(
 			return await catalogueRequest(
 				() => requireRetention().run(),
 				'Graphics Asset retention could not complete because the catalogue is unavailable',
+			);
+		},
+		async releaseStrandedStagedInput(input) {
+			return await catalogueRequest(
+				() => requireRetention().releaseStrandedStagedInput(input),
+				'The stranded staged input release could not run because the catalogue is unavailable',
 			);
 		},
 		async purgeTrashedGraphicAsset(input) {

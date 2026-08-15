@@ -57,6 +57,8 @@ export const GRAPHICS_STORAGE_HEALTH_ALERT_CODES = [
 	'staging-allowance-exhausted',
 	/** Staged input passed its retention guarantee; those operations need a new one. */
 	'graphics-ingestion-input-expired',
+	/** Staged objects a failed release stranded are still occupying the allowance. */
+	'graphics-staged-input-unreleased',
 ] as const;
 
 export type GraphicsStorageHealthAlertSeverity
@@ -78,6 +80,7 @@ const PERSISTENT_ALERT_CODES = new Set<GraphicsStorageHealthAlertCode>([
 	'missing-derivative-open',
 	'unexpected-object-quarantined',
 	'graphics-ingestion-input-expired',
+	'graphics-staged-input-unreleased',
 ]);
 
 export function graphicsStorageHealthAlertPersists(
@@ -99,6 +102,9 @@ const ALERT_SEVERITIES: Record<GraphicsStorageHealthAlertCode, GraphicsStorageHe
 	'canonical-quota-warning': 'warning',
 	'staging-allowance-exhausted': 'warning',
 	'graphics-ingestion-input-expired': 'warning',
+	// Warning, never escalating by age (#358): the queue carries the detail,
+	// and critical stays reserved for integrity.
+	'graphics-staged-input-unreleased': 'warning',
 };
 
 export function graphicsStorageHealthAlertSeverity(

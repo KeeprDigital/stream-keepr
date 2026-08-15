@@ -1037,6 +1037,169 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 	});
 
+	describe('stranded staged input', () => {
+		/**
+		 * One operation whose staged input the sweep expires but cannot release:
+		 * publication fails retryably, the retention deadline passes, and the
+		 * staging store is unavailable for exactly the sweep's own deletes. The
+		 * #358 trade: the CAS claim wins, the bytes strand.
+		 */
+		async function strandStagedInput(context: RetentionLibrary) {
+			context.canonical.injectTransientFailure('create', 2);
+			const operation = await context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'stranded-staged-input',
+				initiatedBy: 'retention-author',
+				name: 'Stranded publication',
+				sourceFileName: 'logo.png',
+				declaredMime: 'image/png',
+				browserDecodeEvidence: decodeEvidence(pixelPng),
+				declaredByteLength: pixelPng.byteLength,
+			});
+			const failed = await context.library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				declaredMime: 'image/png',
+				bytes: createBoundedByteStream(pixelPng, {
+					byteLength: pixelPng.byteLength,
+					maximumByteLength: pixelPng.byteLength,
+				}),
+			});
+			context.advanceTo(new Date(new Date(failed.updatedAt).getTime() + 7 * DAY).toISOString());
+			context.staging.injectTransientFailure('delete', 2);
+			await context.library.runGraphicsRetention();
+			return operation;
+		}
+
+		it('keeps stranded bytes on the books until the release is proven', async () => {
+			const context = createRetentionLibrary();
+			const operation = await strandStagedInput(context);
+
+			// The expiry committed — the operation is terminally failed — but the
+			// objects it claimed are still occupying the staging store, so capacity
+			// keeps reporting them. Zeroing here is what made #358's under-report.
+			const capacity = await context.library.getCapacity();
+			expect(capacity.staging.usedBytes + capacity.staging.reservedBytes)
+				.toBe(pixelPng.byteLength);
+			const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'available' });
+		});
+
+		it('releases the strand on the next sweep, zeroes the books, and records the release', async () => {
+			const context = createRetentionLibrary();
+			const operation = await strandStagedInput(context);
+
+			// The store has recovered; the next sweep retries the release it owes.
+			context.advance(HOUR);
+			const swept = await context.library.runGraphicsRetention();
+
+			expect(swept.strandedStagedInput).toEqual({ released: 1 });
+			const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
+			await expect(context.staging.readMetadata(identity))
+				.resolves
+				.toMatchObject({ outcome: 'missing' });
+			const capacity = await context.library.getCapacity();
+			expect(capacity.staging.usedBytes + capacity.staging.reservedBytes).toBe(0);
+			const [entry] = await evidenceOf(context.library, {
+				categories: ['staged-input-released'],
+			});
+			expect(entry).toMatchObject({
+				subject: { kind: 'graphics-ingestion-operation', id: operation.id },
+				outcome: 'staged-input-released',
+			});
+			// The release entry records what was actually freed, beside the
+			// expiry's deliberately overstated Bytes-reserved figure.
+			expect(entry?.detail.bytesFreed).toBe(pixelPng.byteLength);
+		});
+
+		it('keeps retrying every sweep while the store stays down, and stops at the first refusal', async () => {
+			const context = createRetentionLibrary();
+			await strandStagedInput(context);
+
+			context.advance(HOUR);
+			context.staging.injectTransientFailure('delete', 2);
+			expect((await context.library.runGraphicsRetention()).strandedStagedInput)
+				.toEqual({ released: 0 });
+			const capacity = await context.library.getCapacity();
+			expect(capacity.staging.usedBytes + capacity.staging.reservedBytes)
+				.toBe(pixelPng.byteLength);
+			expect(await evidenceOf(context.library, {
+				categories: ['staged-input-released'],
+			})).toEqual([]);
+
+			// No give-up: the sweep after the recovery still lists it and releases.
+			context.advance(HOUR);
+			expect((await context.library.runGraphicsRetention()).strandedStagedInput)
+				.toEqual({ released: 1 });
+		});
+
+		it('counts stranded bytes against the Graphics Staging Allowance with no exemption', async () => {
+			const context = createRetentionLibrary();
+			const operation = await strandStagedInput(context);
+			await context.library.updateCapacityLimits({
+				canonicalLimitBytes: 100 * 1024 * 1024,
+				stagingLimitBytes: pixelPng.byteLength,
+			});
+
+			// While the strand occupies the whole allowance, a refused ingestion
+			// is an honest "staging is full" rather than a quiet over-commitment.
+			await expect(context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'refused-behind-strand',
+				initiatedBy: 'retention-author',
+				name: 'Refused behind strand',
+				declaredByteLength: 1,
+			})).rejects.toMatchObject({ code: 'staging-capacity-exhausted' });
+
+			await context.library.releaseStrandedStagedInput({
+				operationId: operation.id,
+				actor: 'graphics-admin',
+			});
+			await expect(context.library.initiateGraphicsIngestion({
+				idempotencyKey: 'admitted-after-release',
+				initiatedBy: 'retention-author',
+				name: 'Admitted after release',
+				declaredByteLength: 1,
+			})).resolves.toMatchObject({ stage: 'created' });
+		});
+
+		it('lets an administrator retry the release immediately, in Queue Action Outcome terms', async () => {
+			const context = createRetentionLibrary();
+			const operation = await strandStagedInput(context);
+
+			// While the store is still down, the action is worth running again.
+			context.staging.injectTransientFailure('delete', 2);
+			await expect(context.library.releaseStrandedStagedInput({
+				operationId: operation.id,
+				actor: 'graphics-admin',
+			})).resolves.toEqual({ outcome: 'retryable-unavailable' });
+
+			const completed = await context.library.releaseStrandedStagedInput({
+				operationId: operation.id,
+				actor: 'graphics-admin',
+			});
+			expect(completed).toEqual({
+				outcome: 'completed',
+				bytesFreed: pixelPng.byteLength,
+			});
+			const capacity = await context.library.getCapacity();
+			expect(capacity.staging.usedBytes + capacity.staging.reservedBytes).toBe(0);
+			const [entry] = await evidenceOf(context.library, {
+				categories: ['staged-input-released'],
+			});
+			expect(entry).toMatchObject({
+				actor: 'graphics-admin',
+				subject: { kind: 'graphics-ingestion-operation', id: operation.id },
+			});
+
+			// The second retry answers already-in-state, never a second success.
+			await expect(context.library.releaseStrandedStagedInput({
+				operationId: operation.id,
+				actor: 'graphics-admin',
+			})).resolves.toEqual({ outcome: 'already-in-state' });
+		});
+	});
+
 	describe('revision pruning', () => {
 		it('keeps the latest revision while its Graphic Asset exists', async () => {
 			const context = createRetentionLibrary();

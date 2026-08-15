@@ -140,6 +140,7 @@ const QUEUE_LABELS: Record<GraphicsOperationalQueueId, string> = {
 	'missing-derivative': 'Missing Graphics Derivatives',
 	'retryable-ingestion': 'Retryable ingestion',
 	'expired-ingestion-input': 'Expired staged input',
+	'unreleased-staged-input': 'Unreleased staged input',
 	'trashed-asset': 'Trash awaiting purge',
 	'superseded-revision': 'Superseded revisions',
 	'quarantined-object': 'Quarantined objects',
@@ -157,6 +158,8 @@ const QUEUE_SUMMARIES: Record<GraphicsOperationalQueueId, string> = {
 		'Resumable from retained verified input, with no bytes retransmitted.',
 	'expired-ingestion-input':
 		'Staged input passed its retention guarantee. A new operation is required.',
+	'unreleased-staged-input':
+		'Staged objects a failed release stranded. The sweep retries every pass; the retry here runs the same release now.',
 	'trashed-asset':
 		'Restorable to its prior state until its recovery window ends.',
 	'superseded-revision':
@@ -173,6 +176,7 @@ const ACTION_LABELS: Record<GraphicsQueueAction, string> = {
 	'repair-with-exact-bytes': 'Repair with exact bytes',
 	'regenerate-derivative': 'Regenerate derivative',
 	'retry-ingestion': 'Retry from retained input',
+	'retry-release': 'Retry release',
 	'restore-graphic-asset': 'Restore',
 	'purge-now': 'Purge now',
 };
@@ -241,6 +245,11 @@ const revisionDetail = computed(() =>
 const operationDetail = computed(() =>
 	inspection.value?.detail.kind === 'graphics-ingestion-operation'
 		? inspection.value.detail.operation
+		: null);
+
+const strandDetail = computed(() =>
+	inspection.value?.detail.kind === 'unreleased-staged-input'
+		? inspection.value.detail.strand
 		: null);
 
 const purgeConfirmed = computed(() => purgeConfirmation.value === 'purge-now');
@@ -335,6 +344,18 @@ async function retryIngestion() {
 	)).outcome);
 }
 
+async function retryRelease() {
+	const strand = strandDetail.value;
+	if (!strand)
+		return;
+	await run('retry-release', async () => (await $fetch<{
+		outcome: GraphicsQueueActionOutcome;
+	}>(
+		`/api/admin/graphics-assets/ingestion-operations/${strand.operationId}/release-staged-input`,
+		{ method: 'POST', headers: administratorHeaders() },
+	)).outcome);
+}
+
 /**
  * Early purge is the one action that destroys restorable state, so it is the
  * one action that asks first. The confirmation is typed rather than clicked,
@@ -367,6 +388,8 @@ function actionHandler(action: GraphicsQueueAction) {
 		return restoreGraphicAsset;
 	if (action === 'retry-ingestion')
 		return retryIngestion;
+	if (action === 'retry-release')
+		return retryRelease;
 	return () => runDiscrepancyAction(action);
 }
 </script>
@@ -746,6 +769,45 @@ function actionHandler(action: GraphicsQueueAction) {
 										</dd>
 									</div>
 								</dl>
+							</UCard>
+
+							<UCard v-if="strandDetail">
+								<template #header>
+									<h3 class="font-semibold text-highlighted">
+										Unreleased staged input
+									</h3>
+								</template>
+								<dl class="grid gap-3 text-sm sm:grid-cols-2">
+									<div>
+										<dt class="text-xs text-dimmed">
+											Stage
+										</dt>
+										<dd class="text-muted">
+											{{ strandDetail.stage }} (terminal)
+										</dd>
+									</div>
+									<div>
+										<dt class="text-xs text-dimmed">
+											Stranded bytes
+										</dt>
+										<dd class="text-muted">
+											{{ formatByteCount(strandDetail.stagingBytes) }}
+										</dd>
+									</div>
+									<div>
+										<dt class="text-xs text-dimmed">
+											Last moved
+										</dt>
+										<dd class="text-muted">
+											{{ strandDetail.updatedAt }}
+										</dd>
+									</div>
+								</dl>
+								<p class="mt-3 text-sm text-muted">
+									These bytes still count against the Graphics Staging Allowance and stay
+									on the books until the release is proven. The retention sweep retries the
+									release every pass; Retry release runs the same release now.
+								</p>
 							</UCard>
 
 							<UCard>

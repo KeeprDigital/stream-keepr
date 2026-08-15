@@ -29,6 +29,7 @@ export const GRAPHIC_ASSET_PURGE_REASONS = ['trash-window-elapsed', 'early-purge
 
 export const GRAPHICS_RETENTION_EVIDENCE_CATEGORIES = [
 	'staged-input-expired',
+	'staged-input-released',
 	'revision-pruning-scheduled',
 	'revision-pruning-cancelled',
 	'revision-pruning-frozen',

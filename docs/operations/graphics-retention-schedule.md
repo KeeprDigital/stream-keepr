@@ -86,33 +86,42 @@ the input of an operation that had just resumed. The claim therefore commits
 before the objects go, and an unavailable staging store leaves them behind with
 the operation already expired.
 
-What the sweep guarantees instead is that it never reports those bytes as
-reclaimed, and that it stops:
+Since #358 a strand recovers itself: **the sweep retries the release, and the
+queue has a button.**
 
-- the `staged-input-expired` entry records **Bytes reserved** rather than
-  **Bytes freed**, meaning the operation is over but its staged bytes may still
-  be occupying the staging store;
-- the rest of that batch is left untouched for the next sweep, because a store
-  that cannot release one candidate will not release the next twenty either.
+- The stranded bytes stay on the books. The expiry no longer zeroes the
+  operation's staging byte columns; they zero only once the delete is proven,
+  so capacity's staging `usedBytes` keeps reporting what the store is still
+  holding and admission keeps counting it against the Graphics Staging
+  Allowance. A refused ingestion behind a strand is an honest "staging is
+  full", and the backlog frees on the first sweep after the store recovers.
+- Every sweep retries the release of every strand, indefinitely, before it
+  expires anything new. There is no give-up and no deadline: a strand is a
+  delete that has not happened yet.
+- The **Unreleased staged input** Operational Queue lists every strand with a
+  **Retry release** action that runs the same release immediately, answering
+  in Queue Action Outcome terms (a second retry answers already-in-state). A
+  warning-class Storage Health Alert stands while any strand exists, backed by
+  the durable accounting itself.
+- When a retried release finally lands — sweep or queue action — the ledger
+  records `staged-input-released` with the bytes actually freed, beside the
+  expiry's deliberately overstated **Bytes reserved** figure.
 
-So an expiry entry showing reserved bytes is the one case where the staging
-store holds objects the catalogue no longer accounts for. Nothing else reclaims
-them: reconciliation scans canonical objects, not staging ones.
+The expiry-time guarantees are unchanged: the `staged-input-expired` entry
+records **Bytes reserved** rather than **Bytes freed** when the objects
+survived, and the rest of that batch is left for the next sweep, because a
+store that cannot release one candidate will not release the next twenty
+either.
 
-Neither storage figure can find them, which is what makes the entry the only
-lead. The retention view above carries deadlines and canonical pressure, not
-staging usage, and its staged-input list holds only operations that still have
-staged input to lose — an expired one has left it. Capacity's staging
-`usedBytes` is the sum of every operation's `staging_used_byte_length`, and the
-same statement that expires the operation sets that column to zero, so the bytes
-leave the figure at the instant they strand.
+### Last resort: an upload with no operation row
 
-Recovering the space after a staging outage therefore starts at the ledger. Read
-it over the outage window filtered to the expiry category
-(`GET /api/admin/graphics-assets/evidence?category=staged-input-expired`, or
-`?group=ingestion`), take the operation identity from every entry showing
-**Bytes reserved** rather than **Bytes freed**, and remove that operation's
-`ingestion/<operationId>/source` and `ingestion/<operationId>/video-poster`
-from the staging bucket directly. Where the operation was mid-multipart, what
-survives under the `source` key is an unfinished upload rather than a stored
-object, and it is aborted rather than deleted.
+One case stays deliberately manual, because nothing in the catalogue names it:
+an in-flight multipart upload in the staging bucket whose operation row no
+longer exists (or never carried the upload id). The queue and the sweep both
+reconstruct staged keys from operation rows, so an orphan without one is
+invisible to them. To enumerate in-flight multipart uploads, use R2's
+S3-compatible API — `ListMultipartUploads` on the staging bucket
+(`aws s3api list-multipart-uploads --bucket stream-graphics-asset-staging
+--endpoint-url https://<accountid>.r2.cloudflarestorage.com`) — and abort the
+orphaned upload by its key and `UploadId` with `abort-multipart-upload`.
+Ordinary stranded objects never need this: the sweep and the queue cover them.

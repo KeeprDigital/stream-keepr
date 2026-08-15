@@ -45,6 +45,8 @@ export const GRAPHICS_OPERATIONAL_QUEUES = [
 	'retryable-ingestion',
 	/** Staged input passed its retention guarantee; a new operation is required. */
 	'expired-ingestion-input',
+	/** Staged objects a failed release stranded; the release is still owed (#358). */
+	'unreleased-staged-input',
 	/** A Trashed Graphic Asset inside its recovery window, awaiting restore or purge. */
 	'trashed-asset',
 	/** An unreferenced superseded Graphic Asset Revision awaiting pruning. */
@@ -70,6 +72,7 @@ const QUEUE_SEVERITIES: Record<GraphicsOperationalQueueId, GraphicsStorageHealth
 	'missing-derivative': 'warning',
 	'retryable-ingestion': 'warning',
 	'expired-ingestion-input': 'warning',
+	'unreleased-staged-input': 'warning',
 	'trashed-asset': 'warning',
 	'superseded-revision': 'info',
 	'quarantined-object': 'info',
@@ -101,6 +104,8 @@ export const GRAPHICS_QUEUE_ACTIONS = [
 	'regenerate-derivative',
 	/** Resume a Graphics Ingestion Operation from its retained verified input. */
 	'retry-ingestion',
+	/** Retry the release of staged objects a failed sweep release stranded. */
+	'retry-release',
 	/** Return a Retired asset to discovery, or a Trashed one to its prior state. */
 	'restore-graphic-asset',
 	/** Explicitly confirmed early purge of unreferenced Trash. */

@@ -37,7 +37,7 @@ import type {
 } from '~~/shared/utils/graphicsOperationalQueues';
 import type { GraphicsIngestionAttentionState } from '~~/shared/utils/graphicsOperationsCockpit';
 import type { GraphicsRetentionDeadlineSummary } from './operations-cockpit';
-import type { RetiredGraphicAsset } from './retention';
+import type { RetiredGraphicAsset, UnreleasedStagedInput } from './retention';
 import {
 	GRAPHICS_OPERATIONAL_QUEUES,
 	graphicsQueueSeverity,
@@ -76,6 +76,12 @@ export interface GraphicsOperationalQueuesCatalogue {
 		now: string;
 		operationId: string;
 	}) => Promise<GraphicsIngestionAttentionItem | undefined>;
+	/** Stranded releases (#358): terminal operations still holding staging bytes. */
+	listUnreleasedStagedInput: (input: { limit: number }) => Promise<UnreleasedStagedInput[]>;
+	findUnreleasedStagedInput: (
+		operationId: UnreleasedStagedInput['operationId'],
+	) => Promise<UnreleasedStagedInput | undefined>;
+	countUnreleasedStagedInput: () => Promise<number>;
 	summariseRetentionDeadlines: () => Promise<GraphicsRetentionDeadlineSummary>;
 	listTrashDeadlines: (input: { limit: number }) => Promise<GraphicsTrashDeadline[]>;
 	listRevisionRetention: (input: {
@@ -272,6 +278,20 @@ function ingestionItem(
 	};
 }
 
+function unreleasedStagedInputItem(strand: UnreleasedStagedInput): GraphicsOperationalQueueItem {
+	return {
+		key: graphicsQueueItemKey('unreleased-staged-input', strand.operationId),
+		queue: 'unreleased-staged-input',
+		subject: { kind: 'graphics-ingestion-operation', id: strand.operationId },
+		title: strand.name,
+		// Deliberately no deadline: the sweep retries every pass, indefinitely,
+		// and nothing takes the work away. The one action is the same release
+		// run now rather than at the next sweep.
+		referenceCount: 0,
+		actions: ['retry-release'],
+	};
+}
+
 function retiredItem(asset: RetiredGraphicAsset): GraphicsOperationalQueueItem {
 	return {
 		key: graphicsQueueItemKey('retired-asset', asset.assetId),
@@ -308,6 +328,8 @@ export function createGraphicsOperationalQueues(
 			const [
 				reconciliation,
 				ingestion,
+				unreleasedStrands,
+				unreleasedStrandCount,
 				retentionCounts,
 				trashDeadlines,
 				revisionDeadlines,
@@ -322,6 +344,8 @@ export function createGraphicsOperationalQueues(
 					now: checkedAt,
 					limit: GRAPHICS_QUEUE_ITEM_LIMIT,
 				}),
+				catalogue.listUnreleasedStagedInput({ limit: GRAPHICS_QUEUE_ITEM_LIMIT }),
+				catalogue.countUnreleasedStagedInput(),
 				catalogue.summariseRetentionDeadlines(),
 				catalogue.listTrashDeadlines({ limit: GRAPHICS_QUEUE_ITEM_LIMIT }),
 				// Frozen and referenced revisions are excluded at the query rather
@@ -352,6 +376,7 @@ export function createGraphicsOperationalQueues(
 				'quarantined-object': reconciliation.openCounts['unexpected-object'],
 				'retryable-ingestion': ingestion.counts.retryable ?? 0,
 				'expired-ingestion-input': ingestion.counts['input-expired'] ?? 0,
+				'unreleased-staged-input': unreleasedStrandCount,
 				'trashed-asset': retentionCounts.trashed.count,
 				'superseded-revision': retentionCounts.supersededRevisions.count,
 				'retired-asset': retentionCounts.retiredCount,
@@ -366,6 +391,7 @@ export function createGraphicsOperationalQueues(
 					.map(operation => ingestionItem(operation, 'retryable-ingestion')),
 				'expired-ingestion-input': ingestion.expired
 					.map(operation => ingestionItem(operation, 'expired-ingestion-input')),
+				'unreleased-staged-input': unreleasedStrands.map(unreleasedStagedInputItem),
 				'trashed-asset': trashDeadlines.map(trashItem),
 				'superseded-revision': revisionDeadlines
 					.filter(isPrunableRevision)
@@ -494,6 +520,33 @@ export function createGraphicsOperationalQueues(
 						usage: [],
 					},
 					evidence: await evidenceFor('graphic-asset-revision', revisionId),
+				};
+			}
+
+			if (input.queue === 'unreleased-staged-input') {
+				const strand = await catalogue.findUnreleasedStagedInput(
+					input.subjectId as UnreleasedStagedInput['operationId'],
+				);
+				if (!strand)
+					notFound('Graphics Ingestion Operation is no longer in that queue');
+				const item = unreleasedStagedInputItem(strand);
+				return {
+					...base,
+					subject: item.subject,
+					title: item.title,
+					referenceCount: 0,
+					actions: item.actions,
+					detail: {
+						kind: 'unreleased-staged-input',
+						strand: {
+							operationId: strand.operationId,
+							stage: strand.stage,
+							name: strand.name,
+							stagingBytes: strand.stagingBytes,
+							updatedAt: strand.updatedAt,
+						},
+					},
+					evidence: await evidenceFor('graphics-ingestion-operation', strand.operationId),
 				};
 			}
 

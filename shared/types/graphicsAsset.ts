@@ -755,6 +755,10 @@ export interface GraphicsRetentionSweepResult {
 		expiredIncompleteTransfers: number;
 		expiredCompletedInput: number;
 	};
+	/** Stranded releases from earlier sweeps this one finally proved gone (#358). */
+	strandedStagedInput: {
+		released: number;
+	};
 	revisions: {
 		pruningScheduled: number;
 		pruningCancelled: number;
@@ -1354,7 +1358,25 @@ export type GraphicsQueueInspectionDetail
 	| {
 		kind: 'graphics-ingestion-operation';
 		operation: GraphicsIngestionAttentionItem;
+	}
+	| {
+		kind: 'unreleased-staged-input';
+		strand: GraphicsUnreleasedStagedInput;
 	};
+
+/**
+ * A terminal Graphics Ingestion Operation whose staged objects a failed release
+ * stranded (#358). The staging bytes still on its books are the marker: every
+ * ordinary terminal transition zeroes them in the transition itself, so
+ * terminal-with-bytes means exactly a release the library still owes.
+ */
+export interface GraphicsUnreleasedStagedInput {
+	operationId: GraphicsIngestionOperationId;
+	stage: GraphicsIngestionStage;
+	name: string;
+	stagingBytes: number;
+	updatedAt: string;
+}
 
 /**
  * Everything the persistent inspector shows for one selected queue item.

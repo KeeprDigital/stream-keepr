@@ -53,6 +53,25 @@ const RETAINS_STAGED_INPUT_SQL = `(
 	OR (stage = 'failed' AND json_extract(failure, '$.retryable') = 1)
 )`;
 
+/** An operation nobody will hear from again: completed, cancelled, or failed for good. */
+const TERMINAL_STAGE_SQL = `(
+	stage IN ('completed', 'cancelled')
+	OR (stage = 'failed' AND json_extract(failure, '$.retryable') = 0)
+)`;
+
+/**
+ * A terminal operation still holding staging bytes is a stranded release, and
+ * only that (#358): every ordinary terminal transition zeroes the staging byte
+ * columns in the same statement that makes the stage terminal
+ * (`updateOperationStatement`), and the staged-input expiry above now leaves
+ * them standing precisely when `releaseStagedObjects` could not land. So the
+ * accounting is the marker — no separate column records the strand.
+ */
+const UNRELEASED_STAGED_INPUT_SQL = `(
+	${TERMINAL_STAGE_SQL}
+	AND staging_used_byte_length + staging_reserved_byte_length > 0
+)`;
+
 /**
  * Content is reachable only through a retained revision or a derivative of one.
  * Derivatives cascade away with their source revision, so they can never keep
@@ -215,6 +234,13 @@ export function createD1GraphicsAssetRetentionCatalogue(
 		async expireStagedInput(input) {
 			// Binding expiry to the observed instant means any durable checkpoint
 			// that advanced in the meantime cancels this expiry.
+			//
+			// The staging byte columns are deliberately not zeroed here (#358).
+			// The expiry is the sweep's claim, and the release of the staged
+			// objects comes after it and can fail against an unavailable store —
+			// so the bytes stay on the books until `releaseStagedInputBytes`
+			// proves the delete landed, and capacity keeps reporting what the
+			// store is still holding.
 			const result = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET stage = 'failed',
@@ -223,8 +249,6 @@ export function createD1GraphicsAssetRetentionCatalogue(
 						'retryable', json('false'),
 						'message', 'Staged Graphic Asset input passed its retention deadline; start a new ingestion operation.'
 					),
-					staging_reserved_byte_length = 0,
-					staging_used_byte_length = 0,
 					canonical_reserved_byte_length = 0,
 					updated_at = ?
 				WHERE id = ?
@@ -239,6 +263,103 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			if (!result.success)
 				throw new Error('Graphics staged input expiry failed');
 			return result.meta.changes === 1;
+		},
+		async releaseStagedInputBytes(input) {
+			// The proof half of the pair above: run only once the staged objects
+			// are known deleted, it zeroes the accounting and reports what was
+			// actually freed. Guarded to terminal stages holding bytes, so it is
+			// idempotent — a second run finds nothing to zero and says so — and
+			// so it can never write over an operation that is still working. The
+			// read-then-write pair is safe because nothing else writes a terminal
+			// operation's staging bytes, and the write re-states the figure it
+			// read as its own guard regardless.
+			const before = await database.prepare(`
+				SELECT staging_used_byte_length + staging_reserved_byte_length AS staging_bytes
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND ${TERMINAL_STAGE_SQL}
+			`).bind(input.operationId).first<{ staging_bytes: number }>();
+			if (!before || before.staging_bytes <= 0)
+				return { released: false, bytesFreed: 0 };
+			const zeroed = await database.prepare(`
+				UPDATE graphics_ingestion_operations
+				SET staging_reserved_byte_length = 0,
+					staging_used_byte_length = 0,
+					updated_at = ?
+				WHERE id = ?
+					AND ${TERMINAL_STAGE_SQL}
+					AND staging_used_byte_length + staging_reserved_byte_length = ?
+			`).bind(
+				new Date(input.releasedAt).getTime(),
+				input.operationId,
+				before.staging_bytes,
+			).run();
+			if (!zeroed.success)
+				throw new Error('Graphics stranded staged input bytes could not be zeroed');
+			return {
+				released: zeroed.meta.changes === 1,
+				bytesFreed: zeroed.meta.changes === 1 ? before.staging_bytes : 0,
+			};
+		},
+		async listUnreleasedStagedInput(input) {
+			const result = await database.prepare(`
+				SELECT id, initiated_by, stage, proposed_name, updated_at,
+					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes
+				FROM graphics_ingestion_operations
+				WHERE ${UNRELEASED_STAGED_INPUT_SQL}
+				ORDER BY updated_at, id
+				LIMIT ?
+			`).bind(input.limit).all<{
+				id: string;
+				initiated_by: string;
+				stage: GraphicsIngestionStage;
+				proposed_name: string;
+				updated_at: number;
+				staging_bytes: number;
+			}>();
+			if (!result.success)
+				throw new Error('Graphics unreleased staged input could not be read');
+			return result.results.map(row => ({
+				operationId: row.id as GraphicsIngestionOperationId,
+				initiatedBy: row.initiated_by,
+				stage: row.stage,
+				name: row.proposed_name,
+				stagingBytes: row.staging_bytes,
+				updatedAt: new Date(row.updated_at).toISOString(),
+			}));
+		},
+		async findUnreleasedStagedInput(operationId) {
+			const row = await database.prepare(`
+				SELECT id, initiated_by, stage, proposed_name, updated_at,
+					staging_used_byte_length + staging_reserved_byte_length AS staging_bytes
+				FROM graphics_ingestion_operations
+				WHERE id = ? AND ${UNRELEASED_STAGED_INPUT_SQL}
+			`).bind(operationId).first<{
+				id: string;
+				initiated_by: string;
+				stage: GraphicsIngestionStage;
+				proposed_name: string;
+				updated_at: number;
+				staging_bytes: number;
+			}>();
+			if (!row)
+				return undefined;
+			return {
+				operationId: row.id as GraphicsIngestionOperationId,
+				initiatedBy: row.initiated_by,
+				stage: row.stage,
+				name: row.proposed_name,
+				stagingBytes: row.staging_bytes,
+				updatedAt: new Date(row.updated_at).toISOString(),
+			};
+		},
+		async countUnreleasedStagedInput() {
+			const row = await database.prepare(`
+				SELECT COUNT(*) AS total FROM graphics_ingestion_operations
+				WHERE ${UNRELEASED_STAGED_INPUT_SQL}
+			`).first<{ total: number }>();
+			if (!row)
+				throw new Error('Graphics unreleased staged input could not be counted');
+			return row.total;
 		},
 		async cancelRevisionPruning(input) {
 			const result = await database.prepare(`

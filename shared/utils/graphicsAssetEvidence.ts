@@ -39,6 +39,12 @@ export const GRAPHICS_EVIDENCE_TERMINAL_CATEGORIES = [
 	 * when the sweep acted leaves them recorded as reserved rather than freed.
 	 */
 	'staged-input-expired',
+	/**
+	 * Staged objects a failed release had stranded are finally gone (#358). A
+	 * late release is a later terminal cleanup than the expiry that stranded
+	 * it, so sealing re-anchors the subject's year on it.
+	 */
+	'staged-input-released',
 	/** The disagreement was withdrawn or settled, closing the discrepancy. */
 	'discrepancy-rechecked',
 	'content-availability-restored',
@@ -66,7 +72,7 @@ export const GRAPHICS_EVIDENCE_RETENTION_MILLISECONDS
  * to see it.
  */
 export const GRAPHICS_EVIDENCE_CATEGORY_GROUPS = {
-	ingestion: ['staged-input-expired'],
+	ingestion: ['staged-input-expired', 'staged-input-released'],
 	lifecycle: [
 		'graphic-asset-retired',
 		'graphic-asset-trashed',

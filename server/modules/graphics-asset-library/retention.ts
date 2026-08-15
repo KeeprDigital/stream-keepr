@@ -64,6 +64,21 @@ export interface StagedInputExpiryCandidate {
 	observedUpdatedAt: string;
 }
 
+/**
+ * A terminal Graphics Ingestion Operation whose staged objects a release never
+ * proved gone (#358). The accounting is the marker: terminal stage with staging
+ * bytes still on the books means exactly this, because every ordinary terminal
+ * transition zeroes those bytes in the transition itself.
+ */
+export interface UnreleasedStagedInput {
+	operationId: GraphicsIngestionOperationId;
+	initiatedBy: string;
+	stage: GraphicsIngestionStage;
+	name: string;
+	stagingBytes: number;
+	updatedAt: string;
+}
+
 export interface RevisionPruningSchedule {
 	assetId: GraphicAssetId;
 	revisionId: GraphicAssetRevisionId;
@@ -106,6 +121,19 @@ export interface QuarantinedContent {
 	deleteAfter: string;
 }
 
+/**
+ * What retrying a stranded release did, in the Queue Action Outcome subset that
+ * can happen here: the release landed and the books were zeroed, the subject
+ * was already released, or the staging store could not answer and the same
+ * action is worth running again. Reference-blocked and integrity-conflict are
+ * structurally unreachable — nothing references staged input, and the release
+ * writes no content.
+ */
+export type StrandedStagedInputReleaseOutcome
+	= | { outcome: 'completed'; bytesFreed: number }
+		| { outcome: 'already-in-state' }
+		| { outcome: 'retryable-unavailable' };
+
 export type PurgeGraphicAssetOutcome
 	= | {
 		outcome: 'purged';
@@ -139,6 +167,21 @@ export interface GraphicsAssetRetentionCatalogue {
 		observedUpdatedAt: string;
 		expiredAt: string;
 	}) => Promise<boolean>;
+	/**
+	 * Zeroes a terminal operation's staging byte accounting once its staged
+	 * objects are proven gone, reporting what was actually freed. Idempotent:
+	 * a second run finds nothing on the books and reports `released: false`.
+	 */
+	releaseStagedInputBytes: (input: {
+		operationId: GraphicsIngestionOperationId;
+		releasedAt: string;
+	}) => Promise<{ released: boolean; bytesFreed: number }>;
+	/** Stranded releases, oldest first: terminal operations still holding bytes. */
+	listUnreleasedStagedInput: (input: { limit: number }) => Promise<UnreleasedStagedInput[]>;
+	findUnreleasedStagedInput: (
+		operationId: GraphicsIngestionOperationId,
+	) => Promise<UnreleasedStagedInput | undefined>;
+	countUnreleasedStagedInput: () => Promise<number>;
 	/**
 	 * Removes pruning state from revisions that are reachable again — a new
 	 * reference or the asset's latest revision — which cancels their pruning.
@@ -405,6 +448,18 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				candidate.operationId,
 				candidate.initiatedBy,
 			);
+			// The accounting follows the proof (#358): the claim above left the
+			// staging bytes on the books, and they zero only once the objects are
+			// known gone. A release that failed leaves a terminal operation still
+			// holding bytes, which is the strand the retry stage lists — so
+			// capacity keeps reporting what the store is still holding, admission
+			// keeps counting it, and no separate marker is needed.
+			if (released) {
+				await catalogue.releaseStagedInputBytes({
+					operationId: candidate.operationId,
+					releasedAt: timestamp(),
+				});
+			}
 			if (candidate.transferComplete)
 				expiredCompletedInput++;
 			else
@@ -452,6 +507,67 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			stagedInput: { expiredIncompleteTransfers, expiredCompletedInput },
 			records,
 		};
+	}
+
+	/**
+	 * Retries the release of staged objects earlier sweeps expired but could
+	 * not reclaim (#358, decision 1): a strand is a delete that has not
+	 * happened yet, which is what a sweep-retried deadline is for. It runs
+	 * every sweep, indefinitely — the backlog is bounded by what actually
+	 * stranded, and a missed retry only ever retains state for longer.
+	 *
+	 * Evidence is written only when a release finally lands. The strand's own
+	 * Bytes-reserved expiry entry already records that it happened, and an
+	 * entry per failed retry would make the ledger a poll log.
+	 */
+	async function retryUnreleasedStagedInput(
+		correlationId: string,
+		quotaState: GraphicsAssetEvidenceEntry['detail'],
+	) {
+		const strands = await catalogue.listUnreleasedStagedInput({
+			limit: GRAPHICS_RETENTION_STAGE_BATCH,
+		});
+		const records: GraphicsAssetEvidenceEntry[] = [];
+		let released = 0;
+		for (const strand of strands) {
+			const releasedObjects = await releaseStagedObjects(
+				strand.operationId,
+				strand.initiatedBy,
+			);
+			// One unreleasable strand is a store this sweep cannot reclaim
+			// anything through; the rest of the batch stays listed for the next.
+			if (!releasedObjects)
+				break;
+			const releasedAt = timestamp();
+			const freed = await catalogue.releaseStagedInputBytes({
+				operationId: strand.operationId,
+				releasedAt,
+			});
+			// Someone zeroed the books between the listing and now — the queue's
+			// own retry action, most likely. Nothing further to record.
+			if (!freed.released)
+				continue;
+			released++;
+			records.push(evidence({
+				recordedAt: releasedAt,
+				correlationId,
+				category: 'staged-input-released',
+				subject: {
+					kind: 'graphics-ingestion-operation',
+					id: strand.operationId,
+				},
+				outcome: 'staged-input-released',
+				reason: 'stranded-release-retried',
+				detail: {
+					...quotaState,
+					operationId: strand.operationId,
+					// What was actually freed, beside the expiry entry's
+					// deliberately overstated Bytes-reserved figure.
+					bytesFreed: freed.bytesFreed,
+				},
+			}));
+		}
+		return { strandedStagedInput: { released }, records };
 	}
 
 	/**
@@ -984,15 +1100,65 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 					}
 				: outcome;
 		},
+		/**
+		 * The queue's immediate manual path (#358): the same release the sweep
+		 * retries, run now on an administrator's say-so, answering in Queue
+		 * Action Outcome terms. Idempotent by the same accounting the sweep
+		 * uses — a strand that is no longer on the books was already released.
+		 */
+		async releaseStrandedStagedInput(input: {
+			operationId: GraphicsIngestionOperationId;
+			actor: string;
+		}): Promise<StrandedStagedInputReleaseOutcome> {
+			const strand = await catalogue.findUnreleasedStagedInput(input.operationId);
+			if (!strand)
+				return { outcome: 'already-in-state' };
+			const releasedObjects = await releaseStagedObjects(
+				strand.operationId,
+				strand.initiatedBy,
+			);
+			if (!releasedObjects)
+				return { outcome: 'retryable-unavailable' };
+			const releasedAt = timestamp();
+			const freed = await catalogue.releaseStagedInputBytes({
+				operationId: strand.operationId,
+				releasedAt,
+			});
+			// A sweep beat this action to the zeroing between the read and now.
+			if (!freed.released)
+				return { outcome: 'already-in-state' };
+			await catalogue.recordGraphicsAssetEvidence([evidence({
+				recordedAt: releasedAt,
+				correlationId: generateIdentity(),
+				category: 'staged-input-released',
+				actor: input.actor,
+				subject: {
+					kind: 'graphics-ingestion-operation',
+					id: strand.operationId,
+				},
+				outcome: 'staged-input-released',
+				reason: 'administrator-retried-release',
+				detail: {
+					...await observeQuotaState(),
+					operationId: strand.operationId,
+					bytesFreed: freed.bytesFreed,
+				},
+			})]);
+			return { outcome: 'completed', bytesFreed: freed.bytesFreed };
+		},
 		async run(): Promise<GraphicsRetentionSweepResult> {
 			const correlationId = generateIdentity();
 			const startedAt = timestamp();
 			const quotaState = await observeQuotaState();
+			// The stranded backlog first, so a store that has recovered frees what
+			// earlier sweeps owe before this one's own expiries join the queue.
+			const stranded = await retryUnreleasedStagedInput(correlationId, quotaState);
 			const staged = await expireStagedInput(correlationId, quotaState);
 			const trash = await purgeElapsedTrash(correlationId, quotaState);
 			const revisions = await pruneRevisions(correlationId);
 			const content = await collectUnreachableContent(correlationId, quotaState);
 			const records = [
+				...stranded.records,
 				...staged.records,
 				...trash.records,
 				...revisions.records,
@@ -1019,6 +1185,7 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 				startedAt,
 				completedAt: timestamp(),
 				stagedInput: staged.stagedInput,
+				strandedStagedInput: stranded.strandedStagedInput,
 				revisions: revisions.revisions,
 				trash: trash.trash,
 				content: content.content,
