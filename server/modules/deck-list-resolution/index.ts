@@ -16,6 +16,7 @@ import { DeckCompanionValidationError, playerDeckCompanionService } from '~~/ser
 import { playerDeckUnresolvedCardService } from '~~/server/services/playerDeckUnresolvedCard';
 import { normalizeImportedCardName, normalizeImportedSetCode } from '~~/server/utils/cardNameNormalization';
 import { chunkArray, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
+import { throwRetryableUpstreamRefusal } from '~~/server/utils/retryableUpstreamRefusal';
 import { fetchScryfallCardById } from '~~/server/utils/scryfall';
 
 /** Four copies of each ID are bound in the conditional merge expressions. */
@@ -148,24 +149,13 @@ export function deckListResolutionModule() {
 				});
 			}
 
-			// The sentence a caller receives says *temporarily*, so the response owes
-			// the caller an interval: #346, the same defect #337 fixed at the
-			// author-session 503. The number is the 5 seconds every retryable site here
-			// uses — a floor on how hard to retry, not an estimate of when Scryfall
-			// returns. Set inside this branch rather than the enclosing catch on
-			// purpose: the 400 above is a card ID the provider does not have, and no
-			// amount of waiting resolves that.
-			//
-			// The payload carries only the cause, on purpose (#355):
-			// `mapPublicNitroError` fires on `SCRYFALL_UPSTREAM_FAILURE` without
-			// `notFound` and owns the whole public spelling — a status or sentence
-			// written here would be dead to every caller and free to drift from the
-			// mapper's. The 400 above keeps its fields because the mapper declines
-			// `notFound` causes and the sanitizer leaves sub-500s alone. If the mapper
-			// somehow did not fire, the h3 defaults (500, empty message) sanitize to a
-			// bare Internal Server Error rather than publish anything.
-			setResponseHeader(requestEvent, 'retry-after', 5);
-			throw createError({ cause: error });
+			// Inside this branch rather than the enclosing catch on purpose: the 400
+			// above is a card ID the provider does not have, and no amount of waiting
+			// resolves that — and its fields stay live, because the mapper declines
+			// `notFound` causes and the sanitizer leaves sub-500s alone. Here the
+			// mapper fires (`SCRYFALL_UPSTREAM_FAILURE` without `notFound`); see
+			// `throwRetryableUpstreamRefusal` for why nothing is spelled here.
+			throwRetryableUpstreamRefusal(requestEvent, error);
 		}
 		const [existingResolvedCard] = unresolvedCard.entryType === 'companion'
 			? await db
