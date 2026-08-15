@@ -51,9 +51,14 @@ useRegisterDirtyState(computed(() => isHoldingTextDirty.value || isCommentatorsD
 
 const talentOptions = computed(() => {
 	return (event.value?.talents || [])
-		.map(talent => ({ label: talent.name, id: talent.id }))
+		.map(talent => ({ label: talent.name, value: talent.id }))
 		.sort((a, b) => a.label.localeCompare(b.label));
 });
+
+/** #128's rule, in one place: two names differing only in case are one person. */
+function sameTalentName(a: string, b: string) {
+	return a.toLowerCase() === b.toLowerCase();
+}
 
 /**
  * The other position's talent is excluded by name rather than by id, and
@@ -63,16 +68,14 @@ function optionsExcluding(otherTalentId: number | undefined) {
 	const other = event.value?.talents.find(talent => talent.id === otherTalentId);
 	if (!other)
 		return talentOptions.value;
-	const excluded = other.name.toLowerCase();
-	return talentOptions.value.filter(option => option.label.toLowerCase() !== excluded);
+	return talentOptions.value.filter(option => !sameTalentName(option.label, other.name));
 }
 
 const commentator1Options = computed(() => optionsExcluding(commentatorFormData.value.commentator2TalentId));
 const commentator2Options = computed(() => optionsExcluding(commentatorFormData.value.commentator1TalentId));
 
 function findTalentNamed(name: string) {
-	const wanted = name.toLowerCase();
-	return event.value?.talents.find(talent => talent.name.toLowerCase() === wanted) ?? null;
+	return event.value?.talents.find(talent => sameTalentName(talent.name, name)) ?? null;
 }
 
 /**
@@ -106,7 +109,7 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 		const otherId = commentatorFormData.value[`commentator${otherNumber}TalentId`];
 		const other = event.value.talents.find(talent => talent.id === otherId);
 
-		if (other && other.name.toLowerCase() === existing.name.toLowerCase()) {
+		if (other && sameTalentName(other.name, existing.name)) {
 			toast.add({
 				title: 'Error',
 				description: `${existing.name} is already assigned to the other commentator position`,
@@ -216,7 +219,7 @@ function swapCommentators() {
 						<USelectMenu
 							v-model="commentatorFormData.commentator1TalentId"
 							:items="commentator1Options"
-							value-key="id"
+							value-key="value"
 							:clearable="true"
 							searchable
 							create-item
@@ -238,7 +241,7 @@ function swapCommentators() {
 							v-model="commentatorFormData.commentator2TalentId"
 							class="w-full"
 							:items="commentator2Options"
-							value-key="id"
+							value-key="value"
 							:clearable="true"
 							searchable
 							create-item

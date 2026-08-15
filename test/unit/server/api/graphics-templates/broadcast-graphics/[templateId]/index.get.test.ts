@@ -30,7 +30,7 @@ describe('one Broadcast Graphic Template library entry', () => {
 		mockFindEntry.mockReset().mockResolvedValue({ id: 'template-1', document: {} });
 	});
 
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
+	it('rejects the read before touching the library without a graphics author session', async () => {
 		// #206: the entry's document embeds Graphic Asset identities, so the
 		// identifiers #172 hid from the Asset Library stayed reachable one layer
 		// over until this read asked for the same session its sibling writes do.
@@ -45,7 +45,7 @@ describe('one Broadcast Graphic Template library entry', () => {
 		expect(mockFindEntry).not.toHaveBeenCalled();
 	});
 
-	it('returns the summary with the stored document for an authenticated author', async () => {
+	it('returns the summary with the stored document when the session is present', async () => {
 		const handler = (await import(
 			'../../../../../../../server/api/graphics-templates/broadcast-graphics/[templateId]/index.get',
 		)).default;

@@ -131,7 +131,7 @@ describe('the graphics author session middleware', () => {
 	});
 
 	it('marks a failed issue where the page can read it, since the swallow hides it from the response', async () => {
-		// #206(2): the served page's session cookie is httpOnly, so this readable
+		// The served page's session cookie is httpOnly (#206), so this readable
 		// marker is the only way the Library Workspace can tell "never issued a
 		// session" from "session lapsed" — the first is not healed by the reload
 		// the lapse notice prescribes.

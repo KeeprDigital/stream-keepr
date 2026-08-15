@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
 			message: 'graphics_author_session_issue_failed',
 			path: requestUrl.pathname,
 		}));
-		// #206(2): the page is served anyway, but no longer silently broken. The
+		// The page is served anyway (#206), but no longer silently broken. The
 		// session cookie is httpOnly, so this readable marker is the only way the
 		// page can tell "never issued a session" from "session lapsed" — the
 		// first is not healed by the reload the lapse notice prescribes. Setting

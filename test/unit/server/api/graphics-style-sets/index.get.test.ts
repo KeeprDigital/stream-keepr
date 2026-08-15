@@ -30,7 +30,7 @@ describe('graphic Style Set browsing', () => {
 		mockFindAll.mockReset().mockResolvedValue([{ id: 'style-set-1' }]);
 	});
 
-	it('rejects the listing before touching the service when no author session is authenticated', async () => {
+	it('rejects the listing before touching the service without a graphics author session', async () => {
 		// #206: the same session the sibling writes ask for, asked as
 		// authentication and never consulted again — session-scoping, not access
 		// control (ADR-0008).
@@ -43,7 +43,7 @@ describe('graphic Style Set browsing', () => {
 		expect(mockFindAll).not.toHaveBeenCalled();
 	});
 
-	it('returns the summaries for an authenticated author', async () => {
+	it('returns the summaries when the session is present', async () => {
 		const handler = (await import('../../../../../server/api/graphics-style-sets/index.get')).default;
 
 		await expect(handler(stubH3Event({}))).resolves.toEqual({ styleSets: [{ id: 'style-set-1' }] });

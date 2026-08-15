@@ -206,8 +206,8 @@ describe('event controls', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		expect(commentatorField(wrapper, 1).props('items')).toEqual([{ label: 'Alice', id: ALICE.id }, { label: 'Caspar', id: CASPAR.id }]);
-		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Briony', id: BRIONY.id }, { label: 'Caspar', id: CASPAR.id }]);
+		expect(commentatorField(wrapper, 1).props('items')).toEqual([{ label: 'Alice', value: ALICE.id }, { label: 'Caspar', value: CASPAR.id }]);
+		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Briony', value: BRIONY.id }, { label: 'Caspar', value: CASPAR.id }]);
 	});
 
 	// Two talents whose names differ only in case are two rows in the database and
@@ -223,7 +223,7 @@ describe('event controls', () => {
 		await flushPromises();
 
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
-		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Caspar', id: CASPAR.id }]);
+		expect(commentatorField(wrapper, 2).props('items')).toEqual([{ label: 'Caspar', value: CASPAR.id }]);
 		expect(commentatorField(wrapper, 1).props('items')).toHaveLength(3);
 	});
 
@@ -241,9 +241,9 @@ describe('event controls', () => {
 		await flushPromises();
 
 		expect(commentatorField(wrapper, 1).props('items')).toEqual([
-			{ label: 'Caspar', id: CASPAR.id },
-			{ label: 'Sam', id: SAM_ONE.id },
-			{ label: 'Sam', id: SAM_TWO.id },
+			{ label: 'Caspar', value: CASPAR.id },
+			{ label: 'Sam', value: SAM_ONE.id },
+			{ label: 'Sam', value: SAM_TWO.id },
 		]);
 
 		await commentatorField(wrapper, 1).setValue(SAM_TWO.id);
