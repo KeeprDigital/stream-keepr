@@ -168,8 +168,13 @@ pnpm deploy
 
 The same deploy can be triggered from GitHub Actions instead: the **Deploy**
 workflow (`.github/workflows/deploy.yml`) is `workflow_dispatch`-only — never
-merge-triggered — and runs exactly what `pnpm deploy` runs, with an optional
-input to deploy the validator Worker first. Unlike the local path it ships a
+merge-triggered — and runs exactly what `pnpm deploy` runs. It decides for
+itself whether the silent-video validator Worker must deploy first: the
+`validator` input defaults to `auto`, which diffs
+`workers/silent-video-validator` between the commit the last successful
+production deployment shipped (read from the GitHub `production` environment's
+records) and the target release; `always`/`never` override the detection.
+Unlike the local path it ships a
 **released tag**, never main's HEAD: its `version` input takes `latest` (the
 default) or an explicit tag like `v1.2.0`, resolved through GitHub Releases —
 which also makes rollback "dispatch Deploy with the previous tag". It requires the

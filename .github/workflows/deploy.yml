@@ -19,7 +19,8 @@
 # stays free-form for emergencies.
 #
 # Required repository secrets: CLOUDFLARE_API_TOKEN (Workers Scripts:Edit,
-# D1:Edit), CLOUDFLARE_ACCOUNT_ID.
+# D1:Edit — plus the Containers scope whenever a run deploys the validator,
+# which is a Container), CLOUDFLARE_ACCOUNT_ID.
 
 name: Deploy
 
@@ -40,13 +41,20 @@ on:
           are not one atomic transaction; this is the rollback anchor.
         required: true
         type: string
-      deploy_validator:
+      validator:
         description: >-
-          Also deploy the silent-video validator Worker first, so the service
-          binding resolves (equivalent to `pnpm deploy:validator`).
+          Silent-video validator promotion. auto: deploy it first only when
+          workers/silent-video-validator changed between the last successful
+          production deployment and the target release. always/never override
+          the detection (e.g. redeploying to recover a bad validator state,
+          or skipping a first run with no deployment record).
         required: false
-        type: boolean
-        default: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - always
+          - never
 
 concurrency:
   group: deploy-production
@@ -54,6 +62,9 @@ concurrency:
 
 permissions:
   contents: read
+  # The validator auto-detection reads this environment's deployment records
+  # to learn which commit production is actually running.
+  deployments: read
 
 jobs:
   deploy:
@@ -91,6 +102,46 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.release.outputs.tag }}
+          # Full history: the validator detection diffs the deployed commit
+          # against the target tag.
+          fetch-depth: 0
+      - name: Decide whether the validator deploys
+        id: validator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          decide() {
+            case "${{ inputs.validator }}" in
+              always) echo "true|forced by the always input"; return ;;
+              never) echo "false|suppressed by the never input"; return ;;
+            esac
+            # Newest-first; the first deployment whose latest status is
+            # success is what production is running. This run's own record
+            # is still in_progress, so it never matches.
+            deployed_sha=""
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=20" --jq '.[].id'); do
+              state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
+              if [ "$state" = "success" ]; then
+                deployed_sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq .sha)
+                break
+              fi
+            done
+            if [ -z "$deployed_sha" ]; then
+              echo "true|no successful production deployment on record — deploying it is the safe default"
+            elif ! git cat-file -e "$deployed_sha" 2> /dev/null; then
+              echo "true|deployed commit $deployed_sha is unknown to this history — deploying it is the safe default"
+            elif git diff --quiet "$deployed_sha" HEAD -- workers/silent-video-validator; then
+              echo "false|workers/silent-video-validator unchanged since deployed $deployed_sha"
+            else
+              echo "true|workers/silent-video-validator changed since deployed $deployed_sha"
+            fi
+          }
+          result=$(decide)
+          deploy="${result%%|*}"
+          reason="${result#*|}"
+          echo "Validator deploy: $deploy ($reason)"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -98,11 +149,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Deploy the silent-video validator
-        if: inputs.deploy_validator
+        if: steps.validator.outputs.deploy == 'true'
         run: pnpm deploy:validator
       - name: Deploy (build, dry run, migrate D1, promote, verify)
         run: pnpm deploy
       - name: Remind the operator what is still owed
         run: |
           echo "Release ${{ steps.release.outputs.tag }} promoted and verified against https://stream.keepr.digital." >> "$GITHUB_STEP_SUMMARY"
+          echo "Validator: ${{ steps.validator.outputs.deploy == 'true' && 'deployed' || 'not deployed' }} — ${{ steps.validator.outputs.reason }}." >> "$GITHUB_STEP_SUMMARY"
           echo 'Run the seven `:deployed` gates locally, in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"
