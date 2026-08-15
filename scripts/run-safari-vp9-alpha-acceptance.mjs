@@ -48,9 +48,6 @@ const HARNESS = 'vp9-alpha-safari-v1';
 const ACCEPTANCE_PATH = '/_acceptance/vp9-alpha-safari-v1.html';
 const DRIVER_PORT = Number(process.env.STREAM_KEEPR_SAFARIDRIVER_PORT ?? 7055);
 
-const deployed = process.argv.includes('--deployed');
-const allowManual = process.argv.includes('--allow-manual') || !deployed;
-
 async function startSafariDriver() {
 	const child = spawn('safaridriver', ['-p', String(DRIVER_PORT)], {
 		stdio: ['ignore', 'ignore', 'pipe'],
@@ -162,119 +159,127 @@ function manualInstructions(origin, reason) {
 	].filter(Boolean).join('\n');
 }
 
-await runAcceptanceHarness({
-	harness: HARNESS,
-	async run({ evidence, record, note, defer }) {
-		const local = deployed ? undefined : await serveLocally();
-		let scenario;
-		try {
-			const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
+export async function main(argv = process.argv) {
+	const deployed = argv.includes('--deployed');
+	const allowManual = argv.includes('--allow-manual') || !deployed;
 
-			// The driver is settled before anything is provisioned. A Screen Output
-			// nobody can drive a browser at is one more restricted asset in a real
-			// installation, published for no reason and torn down before a person
-			// could look at it.
-			const driver = await startSafariDriver();
-			if (!driver.available) {
-				// A deployed gate that quietly downgrades to "someone should look at
-				// this" is not a gate, so the fallback is opt-in there.
-				if (!allowManual) {
-					record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
-					process.stderr.write(`${manualInstructions(origin, driver.detail)}\n`);
-					return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
-				}
-				defer(
-					{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
-					manualInstructions(origin, driver.detail),
-				);
-				return {};
-			}
-
-			// Only a deployed installation can hold a restricted Screen Output: the
-			// video has to pass the silent-video validator, and the local Worker has
-			// no service binding to reach it. Local runs therefore observe the
-			// browser fact alone and say so rather than implying the boundary was
-			// tested.
-			let url = `${origin}${ACCEPTANCE_PATH}`;
-			if (deployed) {
-				const session = await openInstallation(origin);
-				evidence.addSecret(session.authorCookie);
-				const { webmBase64 } = JSON.parse(await readFile(
-					new URL('../public/_acceptance/vp9-alpha-v1.json', import.meta.url),
-					'utf8',
-				));
-				scenario = await provisionRestrictedVideoScenario(session, {
-					label: 'Safari VP9 Alpha Boundary',
-					webm: Uint8Array.from(Buffer.from(webmBase64, 'base64')),
-				});
-				// The exact revision travels with the Screen Output, because the
-				// refusal being proved is per resolution request rather than per
-				// capability session (#98) and the page has to ask for those bytes
-				// by name.
-				url = `${origin}${ACCEPTANCE_PATH}`
-					+ `?event=${scenario.eventId}&screen=${scenario.screenId}`
-					+ `&asset=${encodeURIComponent(scenario.assetId)}`
-					+ `&revision=${encodeURIComponent(scenario.revisionId)}`;
-			}
-
-			let verdict;
+	await runAcceptanceHarness({
+		harness: HARNESS,
+		async run({ evidence, record, note, defer }) {
+			const local = deployed ? undefined : await serveLocally();
+			let scenario;
 			try {
-				// The page mints its own capability through the author session an
-				// ordinary page load issues, so nothing secret travels in the URL.
-				verdict = await observeSafariVerdict(url, { sessionUrl: `${origin}/` });
+				const origin = deployed ? acceptanceOrigin({ deployed }) : local.origin;
+
+				// The driver is settled before anything is provisioned. A Screen Output
+				// nobody can drive a browser at is one more restricted asset in a real
+				// installation, published for no reason and torn down before a person
+				// could look at it.
+				const driver = await startSafariDriver();
+				if (!driver.available) {
+					// A deployed gate that quietly downgrades to "someone should look at
+					// this" is not a gate, so the fallback is opt-in there.
+					if (!allowManual) {
+						record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
+						process.stderr.write(`${manualInstructions(origin, driver.detail)}\n`);
+						return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
+					}
+					defer(
+						{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
+						manualInstructions(origin, driver.detail),
+					);
+					return {};
+				}
+
+				// Only a deployed installation can hold a restricted Screen Output: the
+				// video has to pass the silent-video validator, and the local Worker has
+				// no service binding to reach it. Local runs therefore observe the
+				// browser fact alone and say so rather than implying the boundary was
+				// tested.
+				let url = `${origin}${ACCEPTANCE_PATH}`;
+				if (deployed) {
+					const session = await openInstallation(origin);
+					evidence.addSecret(session.authorCookie);
+					const { webmBase64 } = JSON.parse(await readFile(
+						new URL('../public/_acceptance/vp9-alpha-v1.json', import.meta.url),
+						'utf8',
+					));
+					scenario = await provisionRestrictedVideoScenario(session, {
+						label: 'Safari VP9 Alpha Boundary',
+						webm: Uint8Array.from(Buffer.from(webmBase64, 'base64')),
+					});
+					// The exact revision travels with the Screen Output, because the
+					// refusal being proved is per resolution request rather than per
+					// capability session (#98) and the page has to ask for those bytes
+					// by name.
+					url = `${origin}${ACCEPTANCE_PATH}`
+						+ `?event=${scenario.eventId}&screen=${scenario.screenId}`
+						+ `&asset=${encodeURIComponent(scenario.assetId)}`
+						+ `&revision=${encodeURIComponent(scenario.revisionId)}`;
+				}
+
+				let verdict;
+				try {
+					// The page mints its own capability through the author session an
+					// ordinary page load issues, so nothing secret travels in the URL.
+					verdict = await observeSafariVerdict(url, { sessionUrl: `${origin}/` });
+				}
+				finally {
+					driver.stop();
+				}
+
+				if (verdict.outcome === 'unavailable') {
+					if (!allowManual) {
+						record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
+						process.stderr.write(`${manualInstructions(origin, verdict.detail)}\n`);
+						return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
+					}
+					defer(
+						{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
+						manualInstructions(origin, verdict.detail),
+					);
+					return {};
+				}
+
+				record(verdict.outcome === 'passed'
+					? []
+					: [{ code: verdictFailureCode(verdict), detail: { driver: 'safaridriver' } }]);
+
+				const boundary = verdict.dataset?.boundary ?? 'not-exercised';
+				// The boundary is the whole reason for a deployed run, so reaching the
+				// end without having exercised it is a failure rather than a footnote.
+				// A page that fell through to its browser-fact-only branch would
+				// otherwise report a pass having asserted nothing that matters.
+				if (deployed) {
+					record(boundary === 'exercised'
+						? []
+						: [{
+								code: 'harness-precondition-unmet',
+								detail: { reason: 'the product boundary was not exercised' },
+							}]);
+				}
+
+				// A Safari that preserved the transparency would mean the premise of the
+				// restriction had changed. That is not a defect in the current contract
+				// — the boundary still held — but it is the one browser fact worth a
+				// human deciding whether the restriction should be relaxed.
+				if (verdict.dataset?.browserFact === 'transparency-rendered')
+					note({ code: 'safari-vp9-alpha-transparency-rendered', detail: { driver: 'safaridriver' } });
+
+				return {
+					path: 'safaridriver',
+					boundary,
+					browserFact: verdict.dataset?.browserFact ?? 'unobserved',
+					mode: deployed ? 'deployed' : 'local',
+				};
 			}
 			finally {
-				driver.stop();
+				await scenario?.dispose();
+				await local?.close();
 			}
+		},
+	});
+}
 
-			if (verdict.outcome === 'unavailable') {
-				if (!allowManual) {
-					record([{ code: 'browser-driver-unavailable', detail: { driver: 'safaridriver' } }]);
-					process.stderr.write(`${manualInstructions(origin, verdict.detail)}\n`);
-					return { path: 'safaridriver', mode: deployed ? 'deployed' : 'local' };
-				}
-				defer(
-					{ path: 'manual-check-required', mode: deployed ? 'deployed' : 'local' },
-					manualInstructions(origin, verdict.detail),
-				);
-				return {};
-			}
-
-			record(verdict.outcome === 'passed'
-				? []
-				: [{ code: verdictFailureCode(verdict), detail: { driver: 'safaridriver' } }]);
-
-			const boundary = verdict.dataset?.boundary ?? 'not-exercised';
-			// The boundary is the whole reason for a deployed run, so reaching the
-			// end without having exercised it is a failure rather than a footnote.
-			// A page that fell through to its browser-fact-only branch would
-			// otherwise report a pass having asserted nothing that matters.
-			if (deployed) {
-				record(boundary === 'exercised'
-					? []
-					: [{
-							code: 'harness-precondition-unmet',
-							detail: { reason: 'the product boundary was not exercised' },
-						}]);
-			}
-
-			// A Safari that preserved the transparency would mean the premise of the
-			// restriction had changed. That is not a defect in the current contract
-			// — the boundary still held — but it is the one browser fact worth a
-			// human deciding whether the restriction should be relaxed.
-			if (verdict.dataset?.browserFact === 'transparency-rendered')
-				note({ code: 'safari-vp9-alpha-transparency-rendered', detail: { driver: 'safaridriver' } });
-
-			return {
-				path: 'safaridriver',
-				boundary,
-				browserFact: verdict.dataset?.browserFact ?? 'unobserved',
-				mode: deployed ? 'deployed' : 'local',
-			};
-		}
-		finally {
-			await scenario?.dispose();
-			await local?.close();
-		}
-	},
-});
+if (import.meta.main)
+	await main();

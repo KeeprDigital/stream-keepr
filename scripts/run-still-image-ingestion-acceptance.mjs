@@ -40,8 +40,6 @@ import {
 
 const HARNESS = 'still-image-ingestion-v1';
 
-const deployed = process.argv.includes('--deployed');
-
 const FORMATS = [
 	{
 		format: 'png',
@@ -63,36 +61,43 @@ const FORMATS = [
 	},
 ];
 
-await runAcceptanceHarness({
-	harness: HARNESS,
-	async run({ evidence, record }) {
-		const session = await openInstallation(acceptanceOrigin({ deployed }));
-		evidence.addSecret(session.authorCookie);
-		const marker = randomUUID();
-		const staged = [];
-		try {
-			for (const { format, sourceFileName, declaredMime, bytesFor } of FORMATS) {
-				const bytes = bytesFor(`${marker}-${format}`);
-				const publication = await stageStillImagePublication(session, {
-					name: `Staging acceptance ${format} ${marker.slice(0, 8)}`,
-					sourceFileName,
-					declaredMime,
-					bytes,
-				});
-				staged.push(publication);
-				record(checkStillImagePublication(publication.settled, {
-					format,
-					byteLength: bytes.byteLength,
-				}));
+export async function main(argv = process.argv) {
+	const deployed = argv.includes('--deployed');
+
+	await runAcceptanceHarness({
+		harness: HARNESS,
+		async run({ evidence, record }) {
+			const session = await openInstallation(acceptanceOrigin({ deployed }));
+			evidence.addSecret(session.authorCookie);
+			const marker = randomUUID();
+			const staged = [];
+			try {
+				for (const { format, sourceFileName, declaredMime, bytesFor } of FORMATS) {
+					const bytes = bytesFor(`${marker}-${format}`);
+					const publication = await stageStillImagePublication(session, {
+						name: `Staging acceptance ${format} ${marker.slice(0, 8)}`,
+						sourceFileName,
+						declaredMime,
+						bytes,
+					});
+					staged.push(publication);
+					record(checkStillImagePublication(publication.settled, {
+						format,
+						byteLength: bytes.byteLength,
+					}));
+				}
 			}
-		}
-		finally {
-			for (const publication of staged)
-				await publication.dispose();
-		}
-		return {
-			mode: deployed ? 'deployed' : 'local',
-			formats: FORMATS.map(({ format }) => format).join(','),
-		};
-	},
-});
+			finally {
+				for (const publication of staged)
+					await publication.dispose();
+			}
+			return {
+				mode: deployed ? 'deployed' : 'local',
+				formats: FORMATS.map(({ format }) => format).join(','),
+			};
+		},
+	});
+}
+
+if (import.meta.main)
+	await main();

@@ -55,11 +55,6 @@ const MANIFEST_PATH = '/_acceptance/static-font-v1.json';
 /** Chromium loads this face, and the static-font-v1 profile accepts it. */
 const LIBRARY_FACE = 'public/fonts/mana.woff2';
 
-const deployed = process.argv.includes('--deployed');
-// A deployed run always has an installation in front of it, so there would be
-// no reason to visit it and skip the one fact only it can prove.
-const library = deployed || process.argv.includes('--library');
-
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
@@ -129,56 +124,66 @@ async function serveLocally() {
 	});
 }
 
-await runAcceptanceHarness({
-	harness: HARNESS,
-	async run({ evidence, record }) {
-		// The library face has to be reached from the installation's own origin:
-		// its routes are same-origin and cookie-authorized, so a page served from
-		// loopback could not read them at all.
-		const local = library ? undefined : await serveLocally();
-		let staged;
-		try {
-			let page;
-			if (library) {
-				const origin = acceptanceOrigin({ deployed });
-				const session = await openInstallation(origin);
-				// The session travels to a browser from here on, so it is registered
-				// before anything else can print it, exactly as the three sibling
-				// harnesses register theirs (#276).
-				evidence.addSecret(session.authorCookie);
-				staged = await stageFontIngestion(session, {
-					bytes: new Uint8Array(await readFile(fromRepository(LIBRARY_FACE))),
-					declaredMime: 'font/woff2',
-					sourceFileName: 'acceptance-face.woff2',
-				});
-				// One expression, because the page and the identity it reads as are one
-				// fact: the operation staged above is a 404 to every session but this
-				// one (ADR-0003, #276).
-				page = authoredPageRequest(session, `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`);
-			}
-			else {
-				// Nothing to be the author of: the loopback run reads no library route.
-				page = { url: `${local.origin}${ACCEPTANCE_PATH}` };
-			}
+export async function main(argv = process.argv) {
+	const deployed = argv.includes('--deployed');
+	// A deployed run always has an installation in front of it, so there would be
+	// no reason to visit it and skip the one fact only it can prove.
+	const library = deployed || argv.includes('--library');
 
-			const verdict = await observeChromiumVerdict(page);
-			record(verdict.outcome === 'passed'
-				? []
-				: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
+	await runAcceptanceHarness({
+		harness: HARNESS,
+		async run({ evidence, record }) {
+			// The library face has to be reached from the installation's own origin:
+			// its routes are same-origin and cookie-authorized, so a page served from
+			// loopback could not read them at all.
+			const local = library ? undefined : await serveLocally();
+			let staged;
+			try {
+				let page;
+				if (library) {
+					const origin = acceptanceOrigin({ deployed });
+					const session = await openInstallation(origin);
+					// The session travels to a browser from here on, so it is registered
+					// before anything else can print it, exactly as the three sibling
+					// harnesses register theirs (#276).
+					evidence.addSecret(session.authorCookie);
+					staged = await stageFontIngestion(session, {
+						bytes: new Uint8Array(await readFile(fromRepository(LIBRARY_FACE))),
+						declaredMime: 'font/woff2',
+						sourceFileName: 'acceptance-face.woff2',
+					});
+					// One expression, because the page and the identity it reads as are one
+					// fact: the operation staged above is a 404 to every session but this
+					// one (ADR-0003, #276).
+					page = authoredPageRequest(session, `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`);
+				}
+				else {
+					// Nothing to be the author of: the loopback run reads no library route.
+					page = { url: `${local.origin}${ACCEPTANCE_PATH}` };
+				}
 
-			return {
-				faces: library ? 6 : 5,
-				refusedFaces: 1,
-				library: library ? 'published' : 'not-exercised',
-				mode: deployed ? 'deployed' : 'local',
-			};
-		}
-		finally {
-			// The published face is a real asset in a real installation, so it is
-			// trashed whether the run passed or failed.
-			if (staged)
-				await staged.dispose(await staged.publishedAssetId());
-			await local?.close();
-		}
-	},
-});
+				const verdict = await observeChromiumVerdict(page);
+				record(verdict.outcome === 'passed'
+					? []
+					: [{ code: verdictFailureCode(verdict), detail: { page: HARNESS } }]);
+
+				return {
+					faces: library ? 6 : 5,
+					refusedFaces: 1,
+					library: library ? 'published' : 'not-exercised',
+					mode: deployed ? 'deployed' : 'local',
+				};
+			}
+			finally {
+				// The published face is a real asset in a real installation, so it is
+				// trashed whether the run passed or failed.
+				if (staged)
+					await staged.dispose(await staged.publishedAssetId());
+				await local?.close();
+			}
+		},
+	});
+}
+
+if (import.meta.main)
+	await main();
