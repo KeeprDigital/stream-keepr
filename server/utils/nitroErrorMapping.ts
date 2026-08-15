@@ -1,4 +1,5 @@
 import { GraphicsAssetLibraryError, graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
+import { meleeKeyringConfigurationFaultSentence } from '~~/server/services/meleeCredentials';
 import {
 	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
@@ -19,6 +20,7 @@ export interface MappableNitroError {
 export function mapPublicNitroError(error: MappableNitroError): void {
 	const cause = error.cause;
 	const graphicsCapacityError = graphicsCapacityErrorDescriptor(cause);
+	const meleeKeyringFaultSentence = meleeKeyringConfigurationFaultSentence(cause);
 	let hasMappedPublicServerMessage = false;
 	let mappedOperationalError = false;
 
@@ -100,6 +102,20 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusCode = category === 'timeout' ? 504 : 502;
 		error.statusMessage = category === 'timeout' ? 'Gateway Timeout' : 'Bad Gateway';
 		error.message = 'Melee.gg is temporarily unavailable. Try again later.';
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
+	else if (meleeKeyringFaultSentence !== null) {
+		// #347, the #233 judgement one subsystem over: a keyring-configuration
+		// fault is an unfinished deployment, and the sentence names the setting an
+		// operator must fix. Only the configuration half of the crypto codes maps —
+		// see `meleeKeyringConfigurationFaultSentence` for the split. The sentence is this
+		// map's rather than the raiser's so the crypto library's own words never
+		// reach a response; they stay on the cause, where `errorLogFields` reads
+		// the code.
+		error.statusCode = 503;
+		error.statusMessage = 'Service Unavailable';
+		error.message = meleeKeyringFaultSentence;
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}

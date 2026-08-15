@@ -14,6 +14,7 @@ import {
 	StateConflictError,
 	TemporarilyUnavailableError,
 } from '~~/server/utils/errors';
+import { MeleeCredentialCryptoError } from '~~/server/utils/meleeCredentialCrypto';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusal';
@@ -367,6 +368,93 @@ describe('error-handler mapping logic', () => {
 				statusCode: 502,
 				statusMessage: 'Bad Gateway',
 				message: 'Card data provider is temporarily unavailable. Try again later.',
+			});
+		});
+	});
+
+	describe('melee credential keyring configuration mapping', () => {
+		it('keeps a sentence naming the keyring setting an operator must fix', () => {
+			// #347: the same judgement as #233 one subsystem over. A missing or
+			// malformed keyring entry is an unfinished deployment, and the only
+			// reader who can act on it is the one holding the response. The public
+			// sentence names the setting, never a value — the crypto library's own
+			// words stay on the cause, where the log reads them.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Melee credential encryption is unavailable',
+				cause: new MeleeCredentialCryptoError(
+					'MELEE_CREDENTIAL_KEY_VERSION_MISSING',
+					'Melee credential encryption key version is not configured',
+				),
+				unhandled: true,
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION is not configured',
+				unhandled: false,
+			});
+			// The classified 503 keeps the crypto error where the failure log reads
+			// it — the cause is not consumed by the mapping.
+			expect(errorLogFields({ name: 'H3Error', statusCode: error.statusCode, cause: error.cause }, '/api/events/1/melee-config')).toMatchObject({
+				errorName: 'MeleeCredentialCryptoError',
+				errorCode: 'MELEE_CREDENTIAL_KEY_VERSION_MISSING',
+			});
+		});
+
+		it('classifies an unparseable previous-keys setting as the same deployment fault', () => {
+			// Beyond #347's enumerated four, deliberately: the brief's census listed
+			// the codes the crypto utility raises and missed the one the keyring
+			// *parser* raises, but the rule it wrote — keyring-configuration faults
+			// name the setting — covers it squarely. Flagged on the issue rather
+			// than silently shipped.
+			const error: MappableNitroError = {
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'Melee credential encryption is unavailable',
+				cause: new MeleeCredentialCryptoError(
+					'MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID',
+					'Melee credential previous encryption keys must be a JSON object of key versions to base64 keys',
+				),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 503,
+				statusMessage: 'Service Unavailable',
+				message: 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS is not a JSON object of key versions to base64 keys',
+			});
+		});
+
+		it('discriminates on the code, so a corrupt envelope stays a sanitized 500', () => {
+			// The other half of #347's split: a stored envelope that cannot be
+			// decrypted is a genuine internal failure — no setting fixes it, so its
+			// prose earns nothing and the sanitizer keeps the last word. The code
+			// still reaches the structured log through the cause.
+			const error: MappableNitroError = {
+				statusCode: 500,
+				message: 'Melee credential encryption is unavailable',
+				cause: new MeleeCredentialCryptoError(
+					'MELEE_CREDENTIAL_DECRYPTION_FAILED',
+					'Stored Melee credential could not be decrypted',
+				),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error).toMatchObject({
+				statusCode: 500,
+				statusMessage: 'Internal Server Error',
+				message: 'Internal Server Error',
+			});
+			expect(errorLogFields({ name: 'H3Error', statusCode: error.statusCode, cause: error.cause }, '/api/events/1/melee-config')).toMatchObject({
+				errorName: 'MeleeCredentialCryptoError',
+				errorCode: 'MELEE_CREDENTIAL_DECRYPTION_FAILED',
 			});
 		});
 	});

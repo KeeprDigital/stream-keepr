@@ -66,6 +66,54 @@ export function getMeleeCredentialKeyring(
 	return { activeKeyVersion, keys };
 }
 
+/**
+ * The environment names behind the keyring config above, as the operator sets them.
+ * The same convention as `ABLY_API_KEY_SETTING`: these exist so a refusal can name
+ * the setting an operator must fix, and they live here because this module is the
+ * one that reads them.
+ */
+const KEY_SETTING = 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY';
+const KEY_VERSION_SETTING = 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION';
+const PREVIOUS_KEYS_SETTING = 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS';
+
+/**
+ * The keyring-configuration half of `MeleeCredentialCryptoError`'s codes, each
+ * paired with the sentence a response may carry for it (#347).
+ *
+ * The split is the #233 judgement applied to this subsystem: these five codes mean
+ * the keyring itself is missing, incomplete, or unusable — an unfinished deployment
+ * only the reader holding the response can finish — so their refusal names the
+ * setting to fix, never a value and never the crypto library's own words. Every
+ * other code (a corrupt envelope, a failed crypto operation) is a genuine internal
+ * failure whose prose earns nothing; those stay out of this map and meet the 5xx
+ * sanitizer.
+ *
+ * `MELEE_CREDENTIAL_KEY_MISSING` and `MELEE_CREDENTIAL_INVALID_KEY` name both key
+ * settings because the code alone cannot say which side of the keyring the bad or
+ * absent key came from: encryption reads the active key, decryption may reach a
+ * retired one.
+ */
+const KEYRING_CONFIGURATION_FAULT_SENTENCES: Record<string, string> = {
+	MELEE_CREDENTIAL_KEY_VERSION_MISSING: `${KEY_VERSION_SETTING} is not configured`,
+	MELEE_CREDENTIAL_KEY_VERSION_INVALID: `${KEY_VERSION_SETTING} is not a usable key version`,
+	MELEE_CREDENTIAL_KEY_MISSING: `${KEY_SETTING} or ${PREVIOUS_KEYS_SETTING} is missing a key version that stored Melee credentials need`,
+	MELEE_CREDENTIAL_INVALID_KEY: `${KEY_SETTING} or ${PREVIOUS_KEYS_SETTING} carries a key that is not a valid AES-256 key`,
+	MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID: `${PREVIOUS_KEYS_SETTING} is not a JSON object of key versions to base64 keys`,
+};
+
+/**
+ * The public sentence for a keyring-configuration fault, or null for every other
+ * failure. Structural rather than `instanceof`, like the `MELEE_UPSTREAM_FAILURE`
+ * branch beside it in `mapPublicNitroError`: the code is the discriminator, so a
+ * cause that crossed a module-registry boundary still classifies.
+ */
+export function meleeKeyringConfigurationFaultSentence(cause: unknown): string | null {
+	if (!cause || typeof cause !== 'object' || !('code' in cause))
+		return null;
+	const code = (cause as { code: unknown }).code;
+	return typeof code === 'string' ? KEYRING_CONFIGURATION_FAULT_SENTENCES[code] ?? null : null;
+}
+
 /** Encrypt a newly supplied client secret before it crosses the persistence boundary. */
 export async function protectMeleeClientSecret(plaintext: string): Promise<string> {
 	return await encryptMeleeCredential(plaintext, getMeleeCredentialKeyring());

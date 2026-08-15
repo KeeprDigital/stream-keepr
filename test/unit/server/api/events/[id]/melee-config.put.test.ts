@@ -179,7 +179,14 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		warn.mockRestore();
 	});
 
-	it('surfaces encrypted-value configuration failures without logging credential material', async () => {
+	/**
+	 * #347: a keyring-configuration fault is the #233 family — an unfinished
+	 * deployment only the reader holding the response can finish — so the public
+	 * sentence names the setting to fix and survives the sanitizer. Asserted after
+	 * `mapPublicNitroError` because the sentence is the mapper's; the raw throw
+	 * carries the site's own prose, which no caller receives.
+	 */
+	it('answers a keyring configuration fault by naming the setting an operator must fix', async () => {
 		const storedValue = 'stored-envelope-never-log';
 		mockFindEvent.mockReset().mockResolvedValue({ id: 1, meleeClientSecret: storedValue });
 		mockRequireMeleeIntegration.mockRejectedValue(new MeleeCredentialCryptoError(
@@ -188,29 +195,61 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		));
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-		await expect(handler({} as any)).rejects.toMatchObject({
-			statusCode: 500,
-			data: { code: 'MELEE_CREDENTIAL_KEY_MISSING' },
-			message: 'Melee credential encryption is unavailable',
-		});
+		const refusal = await refusalFrom(handler({} as any));
+
+		expect(refusal.statusCode).toBe(503);
+		expect(refusal.statusMessage).toBe('Service Unavailable');
+		expect(refusal.message).toBe(
+			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY or NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS is missing a key version that stored Melee credentials need',
+		);
+		// The crypto library's own words name a key version; the public sentence
+		// names settings only, and the code travels on the cause, not in the body.
+		expect(refusal.message).not.toContain('retired');
+		expect((refusal as { data?: unknown }).data).toBeUndefined();
 		expect(warn).not.toHaveBeenCalled();
 		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
 		expect(mockReleaseMeleeSyncLease).toHaveBeenCalledWith(1, 'config-token');
 		warn.mockRestore();
 	});
 
-	it('surfaces encryption failures from the final persistence boundary with their stable code', async () => {
+	it('answers the same fault from the final persistence boundary the same way', async () => {
 		mockUpdateMeleeConfig.mockRejectedValue(new MeleeCredentialCryptoError(
 			'MELEE_CREDENTIAL_KEY_MISSING',
 			'Melee credential encryption key version "active" is not configured',
 		));
 
-		await expect(handler({} as any)).rejects.toMatchObject({
-			statusCode: 500,
-			data: { code: 'MELEE_CREDENTIAL_KEY_MISSING' },
-			message: 'Melee credential encryption is unavailable',
-		});
+		const refusal = await refusalFrom(handler({} as any));
+
+		expect(refusal.statusCode).toBe(503);
+		expect(refusal.message).toBe(
+			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY or NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS is missing a key version that stored Melee credentials need',
+		);
 		expect(mockPublishEventUpdated).not.toHaveBeenCalled();
+		expect(mockReleaseMeleeSyncLease).toHaveBeenCalledWith(1, 'config-token');
+	});
+
+	/**
+	 * The other half of #347's split, decided rather than deliberate-by-omission:
+	 * a corrupt stored envelope is a genuine internal failure no setting fixes, so
+	 * it stays a sanitized 500 — and the public payload carries no crypto code
+	 * either, now that the `data` escape hatch is closed. The code still reaches
+	 * the structured log through the cause; the mapper test pins that half.
+	 */
+	it('sanitizes a corrupt stored envelope and keeps the crypto code out of the body', async () => {
+		mockRequireMeleeIntegration.mockRejectedValue(new MeleeCredentialCryptoError(
+			'MELEE_CREDENTIAL_DECRYPTION_FAILED',
+			'Stored Melee credential could not be decrypted',
+		));
+
+		const refusal = await refusalFrom(handler({} as any));
+
+		expect(refusal.statusCode).toBe(500);
+		expect(refusal.message).toBe('Internal Server Error');
+		expect((refusal as { data?: unknown }).data).toBeUndefined();
+		expect(JSON.stringify({ statusCode: refusal.statusCode, statusMessage: refusal.statusMessage, message: refusal.message }))
+			.not
+			.toContain('MELEE_CREDENTIAL');
+		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
 		expect(mockReleaseMeleeSyncLease).toHaveBeenCalledWith(1, 'config-token');
 	});
 
