@@ -51,6 +51,18 @@ function validationInput(fixture, operationId) {
 	};
 }
 
+/**
+ * Wrangler colourises even when piped, and ignores NO_COLOR/FORCE_COLOR — an
+ * ANSI prefix on the `Status:` line defeats a `^Status:` anchor, which read as
+ * "deployed validation did not complete in time" while the workflow had
+ * completed in seconds. This output is parsed, so the codes are stripped here,
+ * once, for every caller.
+ */
+function stripAnsi(text) {
+	// eslint-disable-next-line no-control-regex
+	return text.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function wrangler(argumentList, options = {}) {
 	return new Promise((resolve, reject) => {
 		const child = spawn('npx', ['wrangler', ...argumentList], {
@@ -65,9 +77,9 @@ function wrangler(argumentList, options = {}) {
 		child.once('error', reject);
 		child.once('exit', (code) => {
 			if (code === 0)
-				resolve(stdout);
+				resolve(stripAnsi(stdout));
 			else
-				reject(new Error(`wrangler ${argumentList.join(' ')} exited ${code}: ${stderr.trim() || stdout.trim()}`));
+				reject(new Error(`wrangler ${argumentList.join(' ')} exited ${code}: ${stripAnsi(stderr.trim() || stdout.trim())}`));
 		});
 	});
 }
