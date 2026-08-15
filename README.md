@@ -56,6 +56,12 @@ Which script, when:
 | Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                    |
 | Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                  |
 
+CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
+and push to main: lint, typecheck, `pnpm test`, and `pnpm build` +
+`pnpm worker:dry-run` (the #302 Wasm guard). Realtime integration tests
+self-skip there — no Ably key is configured in CI by decision (#189). The
+prerequisite-bound suites in the table above stay local.
+
 Ad-hoc vitest modes still work without dedicated scripts: `pnpm exec vitest --ui`,
 `pnpm exec vitest run --coverage`.
 
@@ -138,6 +144,16 @@ Deploy production, including pending D1 migrations:
 ```bash
 pnpm deploy
 ```
+
+The same deploy can be triggered from GitHub Actions instead: the **Deploy**
+workflow (`.github/workflows/deploy.yml`) is `workflow_dispatch`-only — never
+merge-triggered — and runs exactly what `pnpm deploy` runs, with an optional
+input to deploy the validator Worker first. It requires the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets, and
+refuses to start until its `d1_recovery_point` input is the word `confirmed`,
+mirroring the recovery-point check below. Either way, the deployed acceptance
+gates and the "nothing on air" call remain the operator's, run locally per
+[Deploy day, in order](#deploy-day-in-order).
 
 Production uses the versioned D1 and KV IDs hardcoded in `nuxt.config.ts`.
 

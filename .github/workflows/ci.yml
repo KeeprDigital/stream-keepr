@@ -1,0 +1,71 @@
+# The self-contained test set: everything that needs nothing beyond Node,
+# Chrome, and workerd. The suites that stay local — and why — are tabled in
+# README.md § Testing (ingestion needs a running preview worker, the validator
+# needs Docker pre-flight, Safari VP9-alpha needs real Safari, fonts:library
+# needs a real library store). The seven `:deployed` gates run on deploy day
+# only: they provision real Events in production and spend Ably free-plan
+# quota (#189).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  tests:
+    name: Unit, Nuxt, integration, browser gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # One runner, sequential tiers: this is the "one authoritative run on a
+      # quiet machine" that docs/agents/parallel-rounds.md requires for
+      # integration numbers. Realtime integration tests self-skip here — no
+      # Ably key is configured in CI by decision; realtime coverage runs
+      # locally (#189).
+      - run: pnpm test
+
+  worker-guard:
+    name: Build and wrangler dry run
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The #302 class of failure: green on Node, broken on workerd. The dry
+      # run asserts the bundle wrangler would upload compiles no Wasm from
+      # bytes, so it belongs on every PR — not just deploy day.
+      - run: pnpm build
+      - run: pnpm worker:dry-run
