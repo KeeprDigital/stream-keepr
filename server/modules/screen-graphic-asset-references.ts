@@ -119,26 +119,40 @@ function graphicAssetReferenceBindings(fact: GraphicAssetReferenceFacts) {
  * list of records, so it reads fields out of each element rather than the element
  * itself.
  */
+/** The resolution rule read out of one bound JSON array's element, by alias. */
+function jsonElementGraphicAssetRevisionResolution(alias: string): string {
+	return resolvedGraphicAssetRevision({
+		revisionId: `json_extract(${alias}.value, '$.revisionId')`,
+		assetId: `json_extract(${alias}.value, '$.assetId')`,
+		allowRetired: `json_extract(${alias}.value, '$.allowRetired')`,
+		kind: `json_extract(${alias}.value, '$.kind')`,
+		videoCompatibility: `json_extract(${alias}.value, '$.videoCompatibility')`,
+		videoTarget: `json_extract(${alias}.value, '$.videoTarget')`,
+	});
+}
+
 const REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE = `
 	AND NOT EXISTS (
 		SELECT 1 FROM json_each(?) AS required
 		WHERE NOT EXISTS (
 			SELECT 1
-			${resolvedGraphicAssetRevision({
-				revisionId: `json_extract(required.value, '$.revisionId')`,
-				assetId: `json_extract(required.value, '$.assetId')`,
-				allowRetired: `json_extract(required.value, '$.allowRetired')`,
-				kind: `json_extract(required.value, '$.kind')`,
-				videoCompatibility: `json_extract(required.value, '$.videoCompatibility')`,
-				videoTarget: `json_extract(required.value, '$.videoTarget')`,
-			})}
+			${jsonElementGraphicAssetRevisionResolution('required')}
 		)
 	)
 `;
 
-/** The bind value for `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`. */
-function boundGraphicAssetReferenceFacts(facts: readonly GraphicAssetReferenceFacts[]): string {
+/**
+ * The bind value for `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE` and for the
+ * index insert that reads the same array. Elements may carry more fields than
+ * the resolution rule asks about — the insert's row identity and owner slot ride
+ * in the same array so both statements are bound from one encoding.
+ */
+function boundGraphicAssetReferenceFacts(
+	facts: readonly (GraphicAssetReferenceFacts & { id?: string; ownerSlot?: string })[],
+): string {
 	return JSON.stringify(facts.map(fact => ({
+		...(fact.id === undefined ? {} : { id: fact.id }),
+		...(fact.ownerSlot === undefined ? {} : { ownerSlot: fact.ownerSlot }),
 		revisionId: fact.reference.revisionId,
 		assetId: fact.reference.assetId,
 		allowRetired: fact.allowRetired ? 1 : 0,
@@ -233,9 +247,13 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		const previous = previousReferences.get(item.ownerSlot);
 		return {
 			...item,
+			id: crypto.randomUUID(),
 			allowRetired: sameGraphicAssetReference(previous, item.reference),
 		};
 	});
+	// One encoding binds the precondition and the index insert, so the set the
+	// save is refused on and the set it indexes cannot drift apart.
+	const boundFacts = boundGraphicAssetReferenceFacts(indexedReferences);
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
 		client.prepare(`
@@ -251,7 +269,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			input.id,
 			input.eventId,
 			expectedVersion,
-			boundGraphicAssetReferenceFacts(indexedReferences),
+			boundFacts,
 		),
 		// Scoped to this mode's own owner-slot namespace. A Screen may hold a
 		// configuration for every mode at once, so an unscoped delete would clear
@@ -273,32 +291,47 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			input.eventId,
 			referenceVersion,
 		),
-		...indexedReferences.map(fact => client.prepare(`
-			INSERT INTO graphic_asset_references (
-				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
-				event_id, created_at, updated_at
-			)
-			SELECT ?, ?, ?, 'screen', ?, ?, ?, ?, ?
-			${BOUND_GRAPHIC_ASSET_REFERENCE_RESOLUTION}
-				AND EXISTS (
-					SELECT 1 FROM screens
-					WHERE id = ? AND event_id = ?
-						AND graphic_asset_reference_version = ?
+		// The whole index in one statement, derived from the same bound array the
+		// precondition reads (#374). One `INSERT` per reference made a maximal
+		// authored save a six-hundred-statement batch, and remote D1 prices a batch
+		// by its statements' row churn — the #374 series put the cap regime at ~90s
+		// and an ordinary sixty-reference show at ~8s. The per-element resolution
+		// rule is the same rule the precondition asks, so a reference that must not
+		// resolve is absent from the index exactly as it refused the save; the
+		// version guard keeps the insert a no-op whenever the `UPDATE` did not
+		// commit this write's version.
+		...(indexedReferences.length === 0
+			? []
+			: [client.prepare(`
+				INSERT INTO graphic_asset_references (
+					id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+					event_id, created_at, updated_at
 				)
-		`).bind(
-			crypto.randomUUID(),
-			fact.reference.assetId,
-			fact.reference.revisionId,
-			String(input.id),
-			fact.ownerSlot,
-			input.eventId,
-			now,
-			now,
-			...graphicAssetReferenceBindings(fact),
-			input.id,
-			input.eventId,
-			referenceVersion,
-		)),
+				SELECT
+					json_extract(item.value, '$.id'),
+					json_extract(item.value, '$.assetId'),
+					json_extract(item.value, '$.revisionId'),
+					'screen', ?, json_extract(item.value, '$.ownerSlot'), ?, ?, ?
+				FROM json_each(?) AS item
+				WHERE EXISTS (
+					SELECT 1
+					${jsonElementGraphicAssetRevisionResolution('item')}
+				)
+					AND EXISTS (
+						SELECT 1 FROM screens
+						WHERE id = ? AND event_id = ?
+							AND graphic_asset_reference_version = ?
+					)
+			`).bind(
+					String(input.id),
+					input.eventId,
+					now,
+					now,
+					boundFacts,
+					input.id,
+					input.eventId,
+					referenceVersion,
+				)]),
 	];
 	const [updateResult] = await client.batch(statements);
 	if (updateResult?.meta.changes !== 1) {
