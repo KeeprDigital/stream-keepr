@@ -76,6 +76,52 @@ describe('error-handler mapping logic', () => {
 				.toMatchObject({ errorCode: null });
 		});
 
+		it('walks the cause chain for a code the nearest cause does not carry, keeping the class name', () => {
+			// #323: GraphicsAuthorSessionUnavailableError names the failure class but
+			// carries no code, so before this walk the store exception's own code —
+			// the one thing that says WHY the store refused — never reached the log.
+			const error = failed({
+				cause: new GraphicsAuthorSessionUnavailableError({ name: 'KVError', code: 'KV_CONNECTION_LOST' }),
+			});
+			expect(errorLogFields(error, '/api/events/1')).toMatchObject({
+				errorName: 'GraphicsAuthorSessionUnavailableError',
+				errorCode: 'KV_CONNECTION_LOST',
+			});
+		});
+
+		it('prefers the nearest valid code over a deeper one', () => {
+			// A domain error's own code is the classification; the store code under it
+			// is only the fallback for a level that classifies nothing.
+			const error = failed({
+				cause: { name: 'GraphicsAssetLibraryError', code: 'invalid-ingestion-input', cause: { code: 'ENOENT' } },
+			});
+			expect(errorLogFields(error, '/api/events/1')).toMatchObject({
+				errorName: 'GraphicsAssetLibraryError',
+				errorCode: 'invalid-ingestion-input',
+			});
+		});
+
+		it('skips an invalid code and keeps walking', () => {
+			// An object in `code` is not an identifier anyone can look up; the number
+			// beneath it is.
+			expect(errorLogFields(failed({ cause: { code: { value: 1 }, cause: { code: 40400 } } }), '/api/events/1'))
+				.toMatchObject({ errorCode: 40400 });
+		});
+
+		it('bounds the walk, so a cycle terminates and a too-deep code stays absent', () => {
+			const cyclic: { code?: unknown; cause?: unknown } = {};
+			cyclic.cause = cyclic;
+			expect(errorLogFields(failed({ cause: cyclic }), '/api/events/1'))
+				.toMatchObject({ errorCode: null });
+
+			const tooDeep = [...Array.from({ length: 5 })].reduce<object>(
+				cause => ({ cause }),
+				{ code: 'BURIED' },
+			);
+			expect(errorLogFields(failed({ cause: tooDeep }), '/api/events/1'))
+				.toMatchObject({ errorCode: null });
+		});
+
 		it('reports an absent unhandled flag as handled, and a set one as unhandled', () => {
 			// The field decides how a reader triages the line: `unhandled` is Nitro's
 			// mark for an error nothing classified, and the mapper clears it for every

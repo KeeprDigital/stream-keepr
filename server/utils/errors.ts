@@ -57,9 +57,10 @@ export class ServiceConfigurationError extends Error {
  *
  * It names the subsystem and never the store's own words: the exception that
  * caused it is kept as `cause`, where debugging can reach it and no response
- * carries it. The failure log does not — `errorLogFields` reads a single level
- * of cause and takes only its `name` and `code`, so the line names this class
- * rather than the store's refusal.
+ * carries it. The failure log names this class — `errorLogFields` takes its
+ * `name` from the nearest cause — and, because this class declares no `code`,
+ * walks on to carry the store exception's own code beside it (#323), so one
+ * line says both what failed and why the store refused.
  */
 export class GraphicsAuthorSessionUnavailableError extends Error {
 	statusCode = 503;
@@ -89,11 +90,11 @@ export class GraphicsAuthorSessionUnavailableError extends Error {
  *
  * It says a subsystem is unreachable and never why, so nothing a store threw travels
  * with it. Pass the underlying failure as `cause` where there is one: the exception is
- * kept there for a debugger to reach, and no response carries it. The failure log does
- * not either — `errorLogFields` reads a single level of cause and takes only its `name`
- * and `code`, so the line names this class rather than the store's refusal, with or
- * without an inner cause. The same judgement as `GraphicsAuthorSessionUnavailableError`
- * above.
+ * kept there for a debugger to reach, and no response carries it. The failure log names
+ * this class — `errorLogFields` takes its `name` from the nearest cause — and, since
+ * this class declares no `code`, walks on to carry the underlying refusal's code beside
+ * it (#323), with or without an inner cause. The same judgement as
+ * `GraphicsAuthorSessionUnavailableError` above.
  */
 export class TemporarilyUnavailableError extends Error {
 	statusCode = 503;

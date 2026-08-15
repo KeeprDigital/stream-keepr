@@ -31,23 +31,58 @@ function errorCodeOf(code: unknown): string | number | null {
 }
 
 /**
+ * How far down a cause chain the code search reaches. Deep enough for every
+ * wrapping this codebase does (a route's classified error around a subsystem
+ * class around a store exception is three), and a bound at all so a cyclic
+ * cause terminates.
+ */
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * The nearest valid code in the cause chain (#323).
+ *
+ * Nearest, not deepest: a domain error's own code is the classification, and a
+ * store code beneath it is only the fallback for levels that classify nothing.
+ * Before this walk the read stopped at one level, so a class like
+ * `GraphicsAuthorSessionUnavailableError` — which names the failure but carries
+ * no code — logged `errorCode: null` over the store exception whose code said
+ * why the store refused.
+ */
+function nearestCauseCode(cause: unknown): string | number | null {
+	for (
+		let record = cause, depth = 0;
+		record && typeof record === 'object' && depth < MAX_CAUSE_DEPTH;
+		record = (record as { cause?: unknown }).cause, depth += 1
+	) {
+		const code = errorCodeOf((record as { code?: unknown }).code);
+		if (code !== null)
+			return code;
+	}
+	return null;
+}
+
+/**
  * The structured record of a failed request.
  *
  * Separate from the plugin that emits it so it can be exercised directly: what a
  * failure log says is the only account anybody gets of a production refusal, and
  * a field that silently reports `null` is worse than an absent one.
+ *
+ * The name comes from the nearest cause, so the line names the failure class;
+ * the code may come from deeper, so the same line still carries the underlying
+ * refusal's identifier when the class declares none.
  */
 export function errorLogFields(error: LoggedNitroError, path: string | undefined) {
 	const cause = error.cause;
 	const causeRecord = cause && typeof cause === 'object'
-		? cause as { name?: unknown; code?: unknown }
+		? cause as { name?: unknown }
 		: null;
 	return {
 		message: 'api_request_failed',
 		path: path ?? null,
 		statusCode: error.statusCode,
 		errorName: typeof causeRecord?.name === 'string' ? causeRecord.name : error.name,
-		errorCode: errorCodeOf(causeRecord?.code),
+		errorCode: nearestCauseCode(cause),
 		unhandled: error.unhandled ?? false,
 	};
 }
