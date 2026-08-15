@@ -37,6 +37,11 @@ jobs:
     name: Unit, Nuxt, integration, browser gates
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The Nuxt/Vite production build exceeds Node's default ~2GB heap on
+      # hosted runners (OOM during "building client"); the integration tier
+      # builds the app the same way.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -56,6 +61,9 @@ jobs:
     name: Build and wrangler dry run
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # nuxt build OOMs Node's default ~2GB heap on hosted runners.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
