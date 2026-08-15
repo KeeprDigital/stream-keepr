@@ -112,7 +112,7 @@ pnpm test:browser:still-images
 Run the same representative browser gate against a deployed staging Worker:
 
 ```bash
-STREAM_KEEPR_BROWSER_ACCEPTANCE_URL=https://staging.example.workers.dev \
+STREAM_KEEPR_BROWSER_ACCEPTANCE_URL=https://stream.keepr.digital \
 	pnpm test:browser:still-images:deployed
 ```
 
@@ -165,15 +165,57 @@ After `wrangler deploy` promotes the Worker, `pnpm deploy` chains into
 `pnpm deploy:verify` (`scripts/deploy-verify.sh`), which curls the deployed
 `GET /api/time` health endpoint a few times (`curl --retry 3
 --retry-all-errors`, 15s timeout) to ride out cold starts and confirm the new
-Worker is actually serving traffic. It reads the target from
-`STREAM_KEEPR_DEPLOY_HEALTH_URL`, the production Worker's base URL (e.g.
-`https://stream-keepr.example.workers.dev`); no domain is committed to the
-repo, so set this env var before running `pnpm deploy` or the script fails
-immediately with a clear message. If `deploy:verify` fails, roll back manually:
+Worker is actually serving traffic. The production hostname is
+**`https://stream.keepr.digital`**, committed as a `custom_domain` route in
+`wrangler.jsonc` and the default for `STREAM_KEEPR_DEPLOY_HEALTH_URL`; set that
+env var only to verify a different target. If `deploy:verify` fails, roll back manually:
 redeploy the previous Worker version (Cloudflare dashboard → Workers & Pages →
 this Worker → Deployments, or `wrangler versions` / `wrangler rollback`), then
 reconcile any D1 migration that already applied using the Time Travel recovery
 point or export identified above.
+
+### Deploy day, in order
+
+The full procedure — including what each gate proves, the Safari automation
+setup, and the manual fault-injection steps — is
+`docs/operations/graphics-staging-acceptance.md`. The short form:
+
+1. **Pre-flight**: Docker running (the silent-video validator is a Container);
+   Worker secrets present (`pnpm exec wrangler secret list --name stream`); no
+   leftover `workerd` processes from local suites.
+2. **Deploy both Workers, validator first** so the service binding resolves:
+
+   ```bash
+   pnpm deploy:validator
+   pnpm deploy
+   ```
+
+   `pnpm deploy` ends in `deploy:verify` against `https://stream.keepr.digital`;
+   do not continue past a failure — see the rollback path above.
+
+3. **Run the deployed gates, in order, stopping at the first failure**:
+
+   ```bash
+   pnpm test:validator:silent-video:deployed
+   pnpm test:delivery:graphics:deployed
+   pnpm test:browser:still-images:deployed
+   pnpm test:browser:silent-video:deployed
+   pnpm test:browser:fonts:deployed
+   pnpm test:browser:safari-vp9-alpha:deployed
+   pnpm test:delivery:graphics:package:deployed
+   ```
+
+   Each provisions real Events and assets in the production installation and
+   deletes them on the way out; a harness that dies mid-run names the Event to
+   remove before rerunning.
+
+4. **Fault injection** (`docs/operations/graphics-staging-acceptance.md`,
+   step 8) is manual, breaks real delivery while armed, and is never run while
+   anything is on air.
+
+Realtime stays within the Ably **Free** plan by decision (#189): validate
+against free-tier limits, and report — never work around — anything that would
+exceed them.
 
 ### Worker secrets
 

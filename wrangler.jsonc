@@ -4,6 +4,13 @@
 	// bindings to .output/server/wrangler.json. Keep each binding in one source.
 	"compatibility_date": "2026-07-16",
 	"compatibility_flags": ["nodejs_compat", "no_nodejs_compat_v2"],
+	// The production hostname. The keepr.digital zone lives on the same
+	// Cloudflare account, so wrangler keeps this custom domain attached on
+	// every deploy; it was previously attached only in the dashboard, which
+	// left the repo unable to name its own installation (#189).
+	"routes": [
+		{ "pattern": "stream.keepr.digital", "custom_domain": true }
+	],
 	"r2_buckets": [
 		{
 			"binding": "GRAPHICS_ASSET_STAGING",

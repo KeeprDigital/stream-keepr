@@ -4,7 +4,9 @@
 # done. See README.md "Deploy" section for the rollback path if this fails.
 set -euo pipefail
 
-: "${STREAM_KEEPR_DEPLOY_HEALTH_URL:?Set STREAM_KEEPR_DEPLOY_HEALTH_URL to the deployed Worker base URL, e.g. https://stream-keepr.example.workers.dev, before running deploy:verify.}"
+# The committed production hostname (wrangler.jsonc `routes`). Override for a
+# different target; the default is the installation this repo deploys.
+: "${STREAM_KEEPR_DEPLOY_HEALTH_URL:=https://stream.keepr.digital}"
 
 url="${STREAM_KEEPR_DEPLOY_HEALTH_URL%/}/api/time"
 

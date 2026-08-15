@@ -43,13 +43,15 @@ prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
 
 3. **Set the two environment variables the harnesses read:**
 
-   | Variable                              | Used by                                                         | Value                                                               |
-   | ------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-   | `STREAM_KEEPR_DEPLOY_HEALTH_URL`      | `deploy:verify`, and as the fallback base URL for every harness | The deployed Worker base URL                                        |
-   | `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL` | Every `:deployed` harness                                       | The base URL to accept against, when it differs from the health URL |
+   | Variable                              | Used by                                                         | Value                                                                                                                                            |
+   | ------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | `STREAM_KEEPR_DEPLOY_HEALTH_URL`      | `deploy:verify`, and as the fallback base URL for every harness | The deployed Worker base URL — `https://stream.keepr.digital`, the committed `custom_domain` in `wrangler.jsonc`; `deploy:verify` defaults to it |
+   | `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL` | Every `:deployed` harness                                       | The base URL to accept against, when it differs from the health URL                                                                              |
 
    A `:deployed` harness refuses to start without one of them rather than
-   guessing at an installation.
+   guessing at an installation — deliberately kept even with the hostname
+   committed, because an acceptance run provisions real state into whatever it
+   is pointed at, and that should be a stated choice per session.
 
 Local (non-deployed) modes of the same harnesses run against `pnpm preview` and
 need `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY` in `.dev.vars` at the
