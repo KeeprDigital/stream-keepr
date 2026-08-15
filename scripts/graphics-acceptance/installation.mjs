@@ -186,6 +186,29 @@ export async function openInstallation(origin) {
 }
 
 /**
+ * Trash one Graphic Asset a run provisioned, best-effort (#375).
+ *
+ * Callable only after whatever referenced the asset has been torn down, since
+ * Trash refuses an asset in use. Failures are swallowed on purpose: a
+ * left-behind acceptance asset is noise, never a failure of the gate — and
+ * Trash keeps the 30-day recovery window, so nothing is destroyed.
+ */
+export async function trashGraphicAssetBestEffort(session, assetId) {
+	if (!assetId)
+		return;
+	try {
+		await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
+			method: 'POST',
+			author: true,
+			body: { action: 'trash' },
+		});
+	}
+	catch {
+		// Best-effort by design.
+	}
+}
+
+/**
  * Publish one still image through the ordinary ingestion routes and hand the
  * settled operation back for the caller to judge (#302).
  *
@@ -340,19 +363,10 @@ export async function provisionScreenOutputScenario(session, { label }) {
 			}
 			// The Event's deletion released the Screen's references, so the pixel
 			// is trashable now and stops accumulating in the installation's
-			// library (#375). Trash keeps the 30-day recovery window; a pixel a
-			// fault-injection run still needs is kept by the armed scenario file,
-			// which deliberately never reaches this dispose.
-			try {
-				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
-					method: 'POST',
-					author: true,
-					body: { action: 'trash' },
-				});
-			}
-			catch {
-				// A left-behind acceptance pixel is noise, never a failure of the gate.
-			}
+			// library (#375). A pixel a fault-injection run still needs is kept
+			// by the armed scenario file, which deliberately never reaches this
+			// dispose.
+			await trashGraphicAssetBestEffort(session, assetId);
 		},
 	};
 }
@@ -462,18 +476,7 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 		catch {
 			// A left-behind acceptance Event is noise, never a failure of the gate.
 		}
-		if (!publishedAssetId)
-			return;
-		try {
-			await session.request(acceptanceRoutes.assetLifecycleActions(publishedAssetId), {
-				method: 'POST',
-				author: true,
-				body: { action: 'trash' },
-			});
-		}
-		catch {
-			// A left-behind acceptance video is noise, never a failure of the gate.
-		}
+		await trashGraphicAssetBestEffort(session, publishedAssetId);
 	}
 
 	try {
@@ -513,6 +516,10 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 				reason: `the video settled at ${settled.stage}`,
 			});
 		}
+		// Assigned the moment ingestion has published, before any later check can
+		// throw: a video refused for its compatibility facts is already in the
+		// library, and the failure path's dispose must take it with it (#375).
+		publishedAssetId = settled.result.assetId;
 		if (settled.report?.facts?.targetCompatibility !== 'chromium-transparency') {
 			throw new AcceptanceFailure('harness-precondition-unmet', {
 				reason: 'the ingested video is not restricted to chromium transparency',
@@ -520,7 +527,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 		}
 
 		const { assetId, revisionId } = settled.result;
-		publishedAssetId = assetId;
 		await session.json(
 			acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 			{

@@ -102,9 +102,9 @@ const playoutNow = useBroadcastGraphicsPlayoutClock(
 );
 const onAirGraphicIds = computed(() => new Set(sessionStore.onAirGraphicIds(
 	props.screen.id,
-	[...props.graphics],
+	props.graphics,
 	playoutNow.value,
-	[...props.channels],
+	props.channels,
 )));
 
 /** One edited Broadcast Graphic back into the Screen's stack. */

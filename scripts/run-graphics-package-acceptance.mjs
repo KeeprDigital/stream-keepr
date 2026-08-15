@@ -22,6 +22,7 @@ import {
 	acceptanceOrigin,
 	openInstallation,
 	provisionScreenOutputScenario,
+	trashGraphicAssetBestEffort,
 } from './graphics-acceptance/installation.mjs';
 import { requireLocalAcceptanceConfiguration } from './graphics-acceptance/local-configuration.mjs';
 import {
@@ -314,13 +315,8 @@ export async function main(argv = process.argv) {
 				try {
 					const remaining = await listAssetIds();
 					for (const assetId of remaining) {
-						if (baselineAssets.has(assetId))
-							continue;
-						await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
-							method: 'POST',
-							author: true,
-							body: { action: 'trash' },
-						});
+						if (!baselineAssets.has(assetId))
+							await trashGraphicAssetBestEffort(session, assetId);
 					}
 				}
 				catch {

@@ -52,7 +52,7 @@ async function mountComponent(options: {
 			canvasHeight: 1080,
 			writable: options.writable ?? true,
 		},
-		slots: (options.slots ?? {}) as never,
+		slots: (options.slots ?? {}) as Parameters<typeof mount>[1] extends { slots?: infer S } ? S : never,
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,

@@ -62,6 +62,7 @@ import {
 	acceptanceOrigin,
 	openInstallation,
 	provisionScreenOutputScenario,
+	trashGraphicAssetBestEffort,
 } from './graphics-acceptance/installation.mjs';
 import { requireLocalAcceptanceConfiguration } from './graphics-acceptance/local-configuration.mjs';
 import { acceptanceRoutes } from './graphics-acceptance/routes.mjs';
@@ -470,6 +471,11 @@ export async function main(argv = process.argv) {
 								author: true,
 							}).catch(() => undefined);
 						}
+						// A passed run has nothing left to restore, so its two armed
+						// pixels go with it (#375) — the Events above released their
+						// references. A failed run keeps both, per the comment above.
+						for (const assetId of new Set([armed.warm.assetId, armed.cold.assetId]))
+							await trashGraphicAssetBestEffort(session, assetId);
 					}
 					const { kept } = await releaseArmedScenario(scenarioPath, { passed: faultPassed });
 					if (kept) {
