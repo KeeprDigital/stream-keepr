@@ -14,19 +14,24 @@ const holdingTextInitialData = computed(() => {
 	};
 });
 
+/**
+ * The form holds talent ids and the dropdowns display names (#298).
+ *
+ * Names carry no uniqueness constraint, so a form addressing talents by name
+ * had two live inconsistencies: two talents sharing one exact name collapsed
+ * to whichever id a Map kept last, and a save could only ever mean "whoever
+ * has this string". Ids dissolve both — each option is one row, and the save
+ * sends the row the operator chose. The exclusion below still works on names,
+ * case-insensitively, which is #128's decision standing: two rows differing
+ * only in case are one person to this form.
+ */
 const commentatorInitialData = computed(() => {
 	if (!event.value)
 		return null;
 
-	const talentMap = new Map(event.value.talents.map(t => [t.id, t.name]));
-
 	return {
-		commentator1Name: event.value.commentator1TalentId
-			? talentMap.get(event.value.commentator1TalentId)
-			: undefined,
-		commentator2Name: event.value.commentator2TalentId
-			? talentMap.get(event.value.commentator2TalentId)
-			: undefined,
+		commentator1TalentId: event.value.commentator1TalentId ?? undefined,
+		commentator2TalentId: event.value.commentator2TalentId ?? undefined,
 	};
 });
 
@@ -44,21 +49,26 @@ const commentatorCreating = ref(false);
 
 useRegisterDirtyState(computed(() => isHoldingTextDirty.value || isCommentatorsDirty.value));
 
-const talentNames = computed(() => {
+const talentOptions = computed(() => {
 	return (event.value?.talents || [])
-		.map(t => t.name)
-		.sort((a, b) => a.localeCompare(b));
+		.map(talent => ({ label: talent.name, id: talent.id }))
+		.sort((a, b) => a.label.localeCompare(b.label));
 });
 
-const commentator1Options = computed(() => {
-	const exclude = commentatorFormData.value.commentator2Name?.toLowerCase();
-	return exclude ? talentNames.value.filter(n => n.toLowerCase() !== exclude) : talentNames.value;
-});
+/**
+ * The other position's talent is excluded by name rather than by id, and
+ * case-insensitively, so every casing of that name goes with it (#128).
+ */
+function optionsExcluding(otherTalentId: number | undefined) {
+	const other = event.value?.talents.find(talent => talent.id === otherTalentId);
+	if (!other)
+		return talentOptions.value;
+	const excluded = other.name.toLowerCase();
+	return talentOptions.value.filter(option => option.label.toLowerCase() !== excluded);
+}
 
-const commentator2Options = computed(() => {
-	const exclude = commentatorFormData.value.commentator1Name?.toLowerCase();
-	return exclude ? talentNames.value.filter(n => n.toLowerCase() !== exclude) : talentNames.value;
-});
+const commentator1Options = computed(() => optionsExcluding(commentatorFormData.value.commentator2TalentId));
+const commentator2Options = computed(() => optionsExcluding(commentatorFormData.value.commentator1TalentId));
 
 function findTalentNamed(name: string) {
 	const wanted = name.toLowerCase();
@@ -93,9 +103,10 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 	const existing = findTalentNamed(trimmedName);
 	if (existing) {
 		const otherNumber = commentatorNumber === 1 ? 2 : 1;
-		const otherName = commentatorFormData.value[`commentator${otherNumber}Name`];
+		const otherId = commentatorFormData.value[`commentator${otherNumber}TalentId`];
+		const other = event.value.talents.find(talent => talent.id === otherId);
 
-		if (otherName?.toLowerCase() === existing.name.toLowerCase()) {
+		if (other && other.name.toLowerCase() === existing.name.toLowerCase()) {
 			toast.add({
 				title: 'Error',
 				description: `${existing.name} is already assigned to the other commentator position`,
@@ -104,7 +115,7 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 			return;
 		}
 
-		commentatorFormData.value[`commentator${commentatorNumber}Name`] = existing.name;
+		commentatorFormData.value[`commentator${commentatorNumber}TalentId`] = existing.id;
 		return;
 	}
 
@@ -114,8 +125,8 @@ async function handleCreateCommentator(name: string, commentatorNumber: 1 | 2) {
 			loadingRef: commentatorCreating,
 			success: false,
 			error: { title: 'Error', description: 'Failed to create commentator', color: 'error' },
-			onSuccess: () => {
-				commentatorFormData.value[`commentator${commentatorNumber}Name`] = trimmedName;
+			onSuccess: (created) => {
+				commentatorFormData.value[`commentator${commentatorNumber}TalentId`] = created.id;
 			},
 			onFailure: ({ error }) => {
 				console.error('Failed to create talent:', error);
@@ -150,16 +161,13 @@ async function saveCommentatorSettings() {
 	if (!event.value)
 		return;
 	const changes = getCommentatorChanges();
-	const talentNameToId = new Map(event.value.talents.map(t => [t.name, t.id]));
 	const updates: Record<string, number | null> = {};
 
-	if ('commentator1Name' in changes) {
-		updates.commentator1TalentId = changes.commentator1Name ? talentNameToId.get(changes.commentator1Name) ?? null : null;
-	}
+	if ('commentator1TalentId' in changes)
+		updates.commentator1TalentId = changes.commentator1TalentId ?? null;
 
-	if ('commentator2Name' in changes) {
-		updates.commentator2TalentId = changes.commentator2Name ? talentNameToId.get(changes.commentator2Name) ?? null : null;
-	}
+	if ('commentator2TalentId' in changes)
+		updates.commentator2TalentId = changes.commentator2TalentId ?? null;
 
 	await runRequest(
 		() => eventStore.updateEvent(updates),
@@ -175,9 +183,9 @@ async function saveCommentatorSettings() {
 }
 
 function swapCommentators() {
-	const temp = commentatorFormData.value.commentator1Name;
-	commentatorFormData.value.commentator1Name = commentatorFormData.value.commentator2Name;
-	commentatorFormData.value.commentator2Name = temp;
+	const temp = commentatorFormData.value.commentator1TalentId;
+	commentatorFormData.value.commentator1TalentId = commentatorFormData.value.commentator2TalentId;
+	commentatorFormData.value.commentator2TalentId = temp;
 }
 </script>
 
@@ -204,10 +212,11 @@ function swapCommentators() {
 		<UForm :state="commentatorFormData" @submit="saveCommentatorSettings">
 			<UCard variant="subtle" title="Commentators">
 				<div class="flex gap-4 items-end max-md:flex-col max-md:items-stretch">
-					<UFormField name="commentator1Name" label="Commentator 1" class="w-full">
+					<UFormField name="commentator1TalentId" label="Commentator 1" class="w-full">
 						<USelectMenu
-							v-model="commentatorFormData.commentator1Name"
+							v-model="commentatorFormData.commentator1TalentId"
 							:items="commentator1Options"
+							value-key="id"
 							:clearable="true"
 							searchable
 							create-item
@@ -224,11 +233,12 @@ function swapCommentators() {
 						aria-label="Swap commentators"
 						@click="swapCommentators"
 					/>
-					<UFormField name="commentator2Name" label="Commentator 2" class="w-full">
+					<UFormField name="commentator2TalentId" label="Commentator 2" class="w-full">
 						<USelectMenu
-							v-model="commentatorFormData.commentator2Name"
+							v-model="commentatorFormData.commentator2TalentId"
 							class="w-full"
 							:items="commentator2Options"
+							value-key="id"
 							:clearable="true"
 							searchable
 							create-item
