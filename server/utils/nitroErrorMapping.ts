@@ -3,7 +3,6 @@ import { meleeKeyringConfigurationFaultSentence } from '~~/server/services/melee
 import {
 	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
-	ServiceWiringError,
 	StateConflictError,
 	TemporarilyUnavailableError,
 } from './errors';
@@ -42,29 +41,11 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}
-	else if (cause instanceof ServiceWiringError) {
-		// Its message survives for the same reason as the branch above: it names
-		// a component and a missing collaborator rather than describing the
-		// server's insides, and the reader is the one who has to get the build
-		// fixed. #243.
-		error.statusCode = cause.statusCode;
-		error.statusMessage = 'Service Unavailable';
-		error.message = cause.message;
-		hasMappedPublicServerMessage = true;
-		// Clearing `unhandled` below is what lets that message reach the caller at
-		// all. Nitro's handler runs after this hook and builds the response body as
-		// `message: (unhandled || fatal) ? 'Server Error' : error.message`, so an
-		// error that arrives unhandled is masked there no matter what is written
-		// here. A wiring fault can genuinely arrive that way: h3 marks any
-		// non-H3Error unhandled, and a bare `throw new ServiceWiringError(...)` is
-		// one.
-		mappedOperationalError = true;
-	}
 	else if (cause instanceof RealtimePublishError) {
 		// The realtime service refused a publish this request could not go on
 		// without. A Bad Gateway rather than an Internal Server Error because this
 		// server's own work succeeded, and a public message for the same reason the
-		// two branches above have one: it names which dependency failed, and the
+		// branch above has one: it names which dependency failed, and the
 		// caller cannot fix what it is not told about. The provider's own account of
 		// the refusal stays in the log — see `realtimePublishFailure`.
 		error.statusCode = cause.statusCode;

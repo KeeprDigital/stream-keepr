@@ -43,36 +43,11 @@ export class ServiceConfigurationError extends Error {
 }
 
 /**
- * The server was assembled wrong: a component is missing a collaborator it was
- * supposed to be constructed with.
- *
- * The sibling of `ServiceConfigurationError` with the opposite cause — nothing
- * is missing from the environment, so no setting will fix it — and public for
- * the same reason. A sanitized 'Internal Server Error' tells the operator only
- * that something broke; naming the component and the collaborator it did not
- * get is what lets them report a build fault as a build fault instead of
- * hunting for an environment variable that was never the problem.
- *
- * It names a component and a collaborator, never runtime data, so it carries no
- * more about the server's insides than the module layout a reader could infer
- * from the API surface anyway. See #243.
- */
-export class ServiceWiringError extends Error {
-	statusCode = 503;
-	constructor(readonly component: string, readonly dependency: string) {
-		super(
-			`${component} was constructed without ${dependency}. `
-			+ 'This is a defect in how the server was assembled, not a setting that can be changed.',
-		);
-		this.name = 'ServiceWiringError';
-	}
-}
-
-/**
  * The store a Graphics Author Session lives in could not be reached.
  *
- * Public for the same reason as the two above, and it exists at all for a reason
- * they do not have: the refusal it becomes is raised around whatever the store
+ * Public for the same reason as `ServiceConfigurationError` above, and it exists
+ * at all for a reason that class does not have: the refusal it becomes is raised
+ * around whatever the store
  * threw, and a raw KV exception carries nothing `mapPublicNitroError` can
  * discriminate on — so before this class the sentence below was written, sent,
  * and then overwritten with 'Internal Server Error' on the way out (#294). What

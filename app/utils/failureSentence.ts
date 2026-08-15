@@ -20,7 +20,7 @@
  * authority's own words, which is worse than the status line — a status line at least
  * reads as machinery. `preservedServerSentence` is what tells the two apart, and #286
  * is why it has to: the families that name a deployment fault rather than a fact about
- * the show are the ones an operator can actually act on (#233, #243).
+ * the show are the ones an operator can actually act on (#233).
  *
  * One exception to "a 4xx is the authority": h3's own router mints a 404 before any
  * handler runs, and its body message is machinery — 'Cannot find any route matching
@@ -60,10 +60,10 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * The sentence a 5xx carries when the server meant it to be read.
  *
  * `mapPublicNitroError` sanitizes every 5xx on the way out **except** the families it
- * flags `hasMappedPublicServerMessage`: a missing setting (#233), an unwired component
- * (#243), a realtime publish the show could not go without, an exhausted byte store, a
- * Graphics Asset Library store that cannot be reached, a Graphics Author Session store in
- * the same state (#294), a subsystem a route classified as momentarily out of reach
+ * flags `hasMappedPublicServerMessage`: a missing setting (#233), a realtime publish the
+ * show could not go without, an exhausted byte store, a Graphics Asset Library store
+ * that cannot be reached, a Graphics Author Session store in the same state (#294), a
+ * subsystem a route classified as momentarily out of reach
  * (#321), and the three upstream-unavailable codes. Those name a deployment fault or a
  * named dependency rather than a fact about the show, and the only reader who can act on
  * one is the operator this function exists to get the words to.
@@ -101,10 +101,11 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * Established by execution rather than reasoned about. Driving the real route with the
  * signing key invalid — `GET /api/events/1/screens/1/asset-capability` — answers a
  * `FetchError` with `statusCode` 503 and `data.message` naming the setting, which is the
- * shape. The enumeration is separate: `mapPublicNitroError` was driven across all twelve
+ * shape. The enumeration is separate: `mapPublicNitroError` was driven across all eleven
  * preserved branches and they come out at 502/503/504/507, never 500, while an unmapped
- * 5xx keeps its own non-500 status and carries the placeholder (#286's review; the
- * twelfth branch and the disappearance of the live unmapped examples are #321's).
+ * 5xx keeps its own non-500 status and carries the placeholder (#286's review; #321
+ * added the shared branch and closed the live unmapped examples; #344 retired the
+ * wiring branch #243 had added).
  *
  * A `useFetch` error is that failure rebuilt by `createError`, which keeps `statusCode`
  * and `data` and does not always keep `status` — imported from `@nuxt/nitro-server/h3` in
@@ -150,7 +151,7 @@ function preservedServerSentence(caught: unknown): string | undefined {
  * machinery; that is #245's judgement and this is the same one.
  *
  * A 5xx carrying a preserved sentence is **not** sanitized, and that exclusion is #286.
- * Without it the refusal suppresses exactly the messages #233 and #243 exist to deliver,
+ * Without it the refusal suppresses exactly the messages #233 exists to deliver,
  * and it does so silently: the sentence naming the setting an operator has to go and set
  * becomes '503 Service Unavailable'. Asking `preservedServerSentence` here rather than at
  * each surface keeps the question "may this body be quoted?" with one answer in this

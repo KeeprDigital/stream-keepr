@@ -8,8 +8,8 @@ import { transportFailure } from '~~/test/helpers/transportFailure';
  * answering *this* request and its words could be shown, at or above it the server was
  * failing and `mapPublicNitroError` had already replaced its words with a placeholder.
  * #286 is the exclusion that rule was missing. Some 5xx bodies are deliberately spared
- * the sanitizer — a missing setting (#233), an unwired component (#243), an exhausted
- * byte store, a named dependency that is down — and those are the only 5xx an operator
+ * the sanitizer — a missing setting (#233), an exhausted byte store, a named dependency
+ * that is down — and those are the only 5xx an operator
  * can act on, so refusing them suppressed exactly the messages the server went to the
  * trouble of preserving.
  *
@@ -34,17 +34,6 @@ describe('failureSentence', () => {
 
 			expect(failureSentence(failure)).toBe(MISSING_SETTING);
 			expect(isSanitizedFailure(failure)).toBe(false);
-		});
-
-		it('quotes the component a 503 says was assembled without its collaborator', () => {
-			const wiring = 'The Broadcast Graphics Live Session module was constructed without '
-				+ 'the Graphics Asset Library. This is a defect in how the server was assembled, '
-				+ 'not a setting that can be changed.';
-
-			expect(failureSentence(transportFailure({
-				status: 503,
-				body: { message: wiring },
-			}))).toBe(wiring);
 		});
 
 		it('quotes the dependency a 502 names', () => {

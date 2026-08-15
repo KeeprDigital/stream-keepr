@@ -18,8 +18,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
  * can no longer be assembled without it and the two 503s #246 named are
  * unrepresentable — a construction site that omits it fails to compile. This file
  * supersedes `broadcastGraphicsLiveSessionWiring.sqlite.test.ts`, whose subject was
- * exactly those 503s; the mapper behaviour they also proved is still pinned by
- * `error-handler.test.ts`, which raises `ServiceWiringError` directly.
+ * exactly those 503s; the wiring-fault class and mapper arm they also proved were
+ * retired outright by #344, once nothing could raise them.
  *
  * What is left to prove is the half a type cannot state: that the thunk is invoked
  * only where the library is actually asked something. Two of the commands below reach

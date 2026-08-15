@@ -95,9 +95,9 @@ export function useRequestFeedback() {
 	 *
 	 * The refusal has one exclusion, and #286 is where it was made. Some 5xx bodies carry
 	 * prose the server deliberately preserves through sanitizing — a missing setting
-	 * (`ServiceConfigurationError`, #233), an unwired component (`ServiceWiringError`,
-	 * #243), and the dependency-unavailable families beside them. They name a deployment
-	 * fault rather than a fact about the show, so they are the one kind of 5xx an operator
+	 * (`ServiceConfigurationError`, #233) and the dependency-unavailable families beside
+	 * it. They name a deployment fault rather than a fact about the show, so they are the
+	 * one kind of 5xx an operator
 	 * can act on, and `failureSentence` now quotes them: `preservedServerSentence` reads
 	 * the two marks the mapper leaves on the response, since its own flag never crosses the
 	 * wire. One such failure already arrives here — rotating a Screen's asset access

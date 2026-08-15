@@ -934,26 +934,25 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		it('quotes a 5xx whose prose the server preserved through sanitizing', async () => {
 			// The decided inversion, and the reason #286 had to land before any Graphics
 			// Administrator surface could be converted. Some 5xx bodies are spared the
-			// sanitizer on purpose — a missing setting (#233), an unwired component (#243),
-			// a named dependency that is down — because they describe a deployment fault
-			// rather than a fact about the show, and they are the one kind of 5xx the person
+			// sanitizer on purpose — a missing setting (#233), a named dependency that is
+			// down — because they describe a deployment fault rather than a fact about the
+			// show, and they are the one kind of 5xx the person
 			// reading has anything to do about. Refusing them turned the sentence naming a
 			// missing setting into '503 Service Unavailable', which is the failure mode the
 			// blanket refusal was introduced to prevent, pointed the other way.
-			const wiring = 'The Broadcast Graphics Live Session module was constructed without '
-				+ 'the Graphics Asset Library. This is a defect in how the server was assembled, '
-				+ 'not a setting that can be changed.';
+			const missingSetting = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set, '
+				+ 'so Screen Output asset capabilities are unavailable';
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.sendCommand.mockRejectedValue(transportFailure({
 				status: 503,
-				body: { statusCode: 503, statusMessage: 'Service Unavailable', message: wiring },
+				body: { statusCode: 503, statusMessage: 'Service Unavailable', message: missingSetting },
 				request: COMMANDS_REQUEST,
 			}));
 
 			await store.take(EVENT_ID, SCREEN_ID, 'slate');
 
-			expect(store.error).toBe(wiring);
+			expect(store.error).toBe(missingSetting);
 		});
 
 		it('keeps its own message for a failure that never reached the server', async () => {

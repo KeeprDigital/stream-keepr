@@ -10,7 +10,6 @@ import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
 import {
 	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
-	ServiceWiringError,
 	StateConflictError,
 	TemporarilyUnavailableError,
 } from '~~/server/utils/errors';
@@ -148,62 +147,6 @@ describe('error-handler mapping logic', () => {
 		});
 	});
 
-	describe('serviceWiringError mapping', () => {
-		it('names the collaborator a component was assembled without', () => {
-			// #243: the sibling of the above with the opposite cause — nothing is
-			// missing from the environment, the server was built wrong. Sanitizing
-			// it leaves the operator with 'Internal Server Error' and nothing to
-			// report to whoever can fix it.
-			//
-			// The component named is the Broadcast Graphics Live Session module, but no
-			// production code raises a ServiceWiringError any more: #247 made screen
-			// write's collaborators required at the type level and #265 did the same to
-			// this module's, so both branches #243 and #246 wrote are gone. The class
-			// and this mapping stay for the next component that needs them, which makes
-			// these tests the only thing holding the behaviour in place — and the reason
-			// they construct the cause directly rather than driving a module to throw.
-			const error: MappableNitroError = {
-				statusCode: 503,
-				message: 'The Broadcast Graphics Live Session module was constructed without the Graphics Asset Library',
-				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
-			};
-
-			mapPublicNitroError(error);
-
-			expect(error).toMatchObject({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: expect.stringContaining('was constructed without the Graphics Asset Library'),
-			});
-		});
-
-		it('clears unhandled, without which Nitro masks the message regardless', () => {
-			// Nitro's own handler builds the response body as
-			// `message: (unhandled || fatal) ? 'Server Error' : error.message`, and it
-			// runs after this hook. So leaving `unhandled` set would reinstate exactly
-			// the masking #243 removed — whatever is written above would never reach
-			// the caller.
-			//
-			// A wiring fault can genuinely arrive unhandled: h3 marks any non-H3Error
-			// that way, and a bare `throw new ServiceWiringError(...)` is one.
-			const error: MappableNitroError = {
-				statusCode: 500,
-				message: 'Something went wrong',
-				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
-				unhandled: true,
-			};
-
-			mapPublicNitroError(error);
-
-			expect(error).toMatchObject({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: expect.stringContaining('was constructed without the Graphics Asset Library'),
-				unhandled: false,
-			});
-		});
-	});
-
 	describe('realtimePublishError mapping', () => {
 		it('answers a refused publish in its own name rather than the provider\'s status', () => {
 			// #264: `publishScreenCommand` used to propagate Ably's `ErrorInfo`
@@ -229,10 +172,10 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('clears unhandled, without which Nitro masks the message regardless', () => {
-			// The same reason as the wiring branch above: a bare `throw` of a
-			// non-H3Error arrives unhandled, and Nitro's handler runs after this hook
-			// and rewrites the body message to 'Server Error' when it still is. The
-			// integration diagnosis reads that message, so leaving it masked would
+			// A bare `throw` of a non-H3Error arrives unhandled, and Nitro's handler
+			// runs after this hook and rewrites the body message to 'Server Error' when
+			// it still is. The integration diagnosis reads that message, so leaving it
+			// masked would
 			// cost the whole classification.
 			const error: MappableNitroError = {
 				statusCode: 500,
@@ -687,11 +630,6 @@ describe('error-handler mapping logic', () => {
 				sentence: 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set',
 			},
 			{
-				family: 'a component assembled without a collaborator (#243)',
-				cause: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library'),
-				sentence: new ServiceWiringError('The Broadcast Graphics Live Session module', 'the Graphics Asset Library').message,
-			},
-			{
 				family: 'a realtime publish the request could not go on without',
 				cause: new RealtimePublishError(providerRefusal()),
 				sentence: REALTIME_PUBLISH_FAILED_MESSAGE,
@@ -768,13 +706,13 @@ describe('error-handler mapping logic', () => {
 
 		/**
 		 * The count `failureSentence`'s docstring quotes. It was nine until #294 added
-		 * two and eleven until #321 added the shared one, and the number is load-bearing
-		 * on the client's side of the boundary: it is the enumeration behind "every
-		 * preserved family comes out non-500", which is the whole reason the status mark
-		 * can be trusted.
+		 * two, eleven until #321 added the shared one, and twelve until #344 retired
+		 * the wiring family, and the number is load-bearing on the client's side of the
+		 * boundary: it is the enumeration behind "every preserved family comes out
+		 * non-500", which is the whole reason the status mark can be trusted.
 		 */
-		it('is twelve families wide', () => {
-			expect(preserved).toHaveLength(12);
+		it('is eleven families wide', () => {
+			expect(preserved).toHaveLength(11);
 		});
 	});
 
@@ -815,7 +753,7 @@ describe('error-handler mapping logic', () => {
 	 * **Read the site before satisfying the failure.** A cause is not a formality: it is
 	 * what `mapPublicNitroError` classifies by, so the fix is to raise a class the mapper
 	 * recognises — `TemporarilyUnavailableError` and friends in `server/utils/errors.ts`,
-	 * enumerated as the twelve families above. Attaching whatever a store threw satisfies
+	 * enumerated as the eleven families above. Attaching whatever a store threw satisfies
 	 * this row and still answers 'Internal Server Error', which is the shape pinned under
 	 * 'does not exempt a store failure that merely reached the same route'.
 	 *
