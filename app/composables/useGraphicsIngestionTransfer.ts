@@ -26,8 +26,31 @@ const ingestion = '/api/graphics-assets/ingestion-operations';
  * whoever started it, and no amount of resuming brings it back. Callers get a
  * sentence saying that instead of a status code they cannot act on.
  */
-export function useGraphicsIngestionTransfer() {
+
+/**
+ * Whether re-sending the same part can end differently (#150, decided once for
+ * every caller). A failure that never reached the server, a timeout, a 429, and
+ * a 5xx are all about the moment rather than the bytes; every other 4xx is the
+ * library refusing what was sent, and re-sending it spends attempts on the
+ * same answer.
+ */
+function retryCanChangeTheAnswer(caught: unknown): boolean {
+	const status = failureStatus(caught);
+	if (status === undefined)
+		return true;
+	return status === 408 || status === 429 || status >= 500;
+}
+export function useGraphicsIngestionTransfer(options: {
+	/**
+	 * Observes every operation snapshot the transfer learns along the way: the
+	 * started multipart transfer and each verified part's checkpoint. Snapshots
+	 * may arrive out of order under concurrent parts, so a caller presenting
+	 * progress judges freshness itself (`transferredByteLength` only grows).
+	 */
+	onOperation?: (operation: GraphicsIngestionOperation) => void;
+} = {}) {
 	const apiHeaders = useApiHeaders();
+	const observe = (operation: GraphicsIngestionOperation) => options.onOperation?.(operation);
 
 	function refuseWithoutSession(caught: unknown): never {
 		if (!graphicsAuthorSessionLapsed(caught))
@@ -38,14 +61,50 @@ export function useGraphicsIngestionTransfer() {
 		);
 	}
 
+	/**
+	 * Reports the operation's progress while one request is pending, by asking.
+	 *
+	 * A request that carries the whole body — the single-request transfer, the
+	 * multipart completion — produces no checkpoints of its own, so while the
+	 * library works the only progress to report is what a read returns. The
+	 * in-flight request stays authoritative: a poll that fails says nothing,
+	 * and the poller stops the moment the request settles.
+	 */
+	const observeOperationRequest = async <T>(
+		operationId: GraphicsIngestionOperation['id'],
+		request: Promise<T>,
+	): Promise<T> => {
+		let pollPending = false;
+		const interval = setInterval(async () => {
+			if (pollPending)
+				return;
+			pollPending = true;
+			try {
+				observe(await $fetch<GraphicsIngestionOperation>(`${ingestion}/${operationId}`));
+			}
+			catch {
+				// The in-flight request remains authoritative; its response handles errors.
+			}
+			finally {
+				pollPending = false;
+			}
+		}, 250);
+		try {
+			return await request;
+		}
+		finally {
+			clearInterval(interval);
+		}
+	};
+
 	const transferInOneRequest = async (
 		operation: GraphicsIngestionOperation,
 		source: Blob,
 	): Promise<GraphicsIngestionOperation> => {
-		return await $fetch<GraphicsIngestionOperation>(
+		return await observeOperationRequest(operation.id, $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/content`,
 			{ method: 'PUT', headers: apiHeaders.getHeaders(), body: source },
-		);
+		));
 	};
 
 	const transferInParts = async (
@@ -56,6 +115,7 @@ export function useGraphicsIngestionTransfer() {
 			`${ingestion}/${operation.id}/multipart`,
 			{ method: 'POST', headers: apiHeaders.getHeaders() },
 		);
+		observe(started);
 		if (!started.transfer)
 			throw new Error('Server did not return multipart transfer facts.');
 		const transfer: NonNullable<GraphicsIngestionOperation['transfer']> = started.transfer;
@@ -77,19 +137,25 @@ export function useGraphicsIngestionTransfer() {
 				);
 				for (let attempt = 1; attempt <= transfer.maximumPartAttempts; attempt++) {
 					try {
-						await $fetch(
+						observe(await $fetch<GraphicsIngestionOperation>(
 							`${ingestion}/${operation.id}/multipart/parts/${partNumber}`,
 							{ method: 'PUT', headers: apiHeaders.getHeaders(), body: part },
-						);
+						));
 						break;
 					}
 					catch (caught) {
 						// The library holds a part only once it has verified it, so a
-						// re-sent part is the same part rather than a second one. A part
-						// refused for want of an author is the exception: every remaining
-						// attempt would be refused identically.
-						if (graphicsAuthorSessionLapsed(caught) || attempt === transfer.maximumPartAttempts)
+						// re-sent part is the same part rather than a second one. A
+						// refusal a retry cannot change — an author lapse or any other
+						// non-retryable 4xx — stops here: every remaining attempt would
+						// be refused identically.
+						if (
+							graphicsAuthorSessionLapsed(caught)
+							|| !retryCanChangeTheAnswer(caught)
+							|| attempt === transfer.maximumPartAttempts
+						) {
 							throw caught;
+						}
 					}
 				}
 			}
@@ -102,10 +168,10 @@ export function useGraphicsIngestionTransfer() {
 		);
 		await Promise.all(Array.from({ length: senderCount }, () => sendOutstandingParts()));
 
-		return await $fetch<GraphicsIngestionOperation>(
+		return await observeOperationRequest(operation.id, $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/multipart/complete`,
 			{ method: 'POST', headers: apiHeaders.getHeaders() },
-		);
+		));
 	};
 
 	const transfer = async (
@@ -122,5 +188,5 @@ export function useGraphicsIngestionTransfer() {
 		}
 	};
 
-	return { transfer };
+	return { transfer, observeOperationRequest };
 }

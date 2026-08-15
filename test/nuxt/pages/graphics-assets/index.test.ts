@@ -377,11 +377,10 @@ describe('the Graphics Asset Library Workspace', () => {
 				revisionId: 'revision-2' as never,
 			},
 		};
-		mockApiFetch.mockResolvedValueOnce(created).mockResolvedValueOnce([]);
-		mockTransferFetch.mockResolvedValueOnce(new Response(JSON.stringify(replaced), {
-			status: 200,
-			headers: { 'content-type': 'application/json' },
-		}));
+		mockApiFetch
+			.mockResolvedValueOnce(created)
+			.mockResolvedValueOnce(replaced)
+			.mockResolvedValueOnce([]);
 		const wrapper = await mountPage();
 
 		const replace = wrapper.findAll('button')
@@ -408,11 +407,12 @@ describe('the Graphics Asset Library Workspace', () => {
 				}),
 			}),
 		);
-		expect(mockTransferFetch).toHaveBeenCalledWith(
+		// The shared ingestion transfer carries the body now (#150); the File's
+		// own type still names the content type at the fetch layer.
+		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations/operation-1/content',
 			expect.objectContaining({
 				method: 'PUT',
-				headers: { 'content-type': 'image/jpeg' },
 				body: replacementFile,
 			}),
 		);
@@ -438,17 +438,16 @@ describe('the Graphics Asset Library Workspace', () => {
 			width: 1,
 			height: 1,
 		});
-		mockApiFetch.mockResolvedValue({
-			...completedJpegOperation,
-			stage: 'created',
-			report: undefined,
-			result: undefined,
-			transferredByteLength: 0,
-		});
-		mockTransferFetch.mockResolvedValueOnce(new Response(JSON.stringify(completedJpegOperation), {
-			status: 200,
-			headers: { 'content-type': 'application/json' },
-		}));
+		mockApiFetch.mockImplementation((path: string, request?: { method?: string }) =>
+			Promise.resolve(path.endsWith('/content') && request?.method === 'PUT'
+				? completedJpegOperation
+				: {
+						...completedJpegOperation,
+						stage: 'created',
+						report: undefined,
+						result: undefined,
+						transferredByteLength: 0,
+					}));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -479,11 +478,10 @@ describe('the Graphics Asset Library Workspace', () => {
 				}),
 			}),
 		);
-		expect(mockTransferFetch).toHaveBeenCalledWith(
+		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations/operation-1/content',
 			expect.objectContaining({
 				method: 'PUT',
-				headers: { 'content-type': 'image/jpeg' },
 				body: file,
 			}),
 		);
@@ -560,13 +558,14 @@ describe('the Graphics Asset Library Workspace', () => {
 				return Promise.resolve(created);
 			if (path.endsWith('/multipart'))
 				return Promise.resolve(started);
+			if (path.includes('/multipart/parts/1'))
+				return Promise.resolve(afterFirst);
+			if (path.includes('/multipart/parts/2'))
+				return Promise.resolve(ready);
 			if (path.endsWith('/multipart/complete'))
 				return Promise.resolve(completed);
 			return Promise.resolve(ready);
 		});
-		mockTransferFetch
-			.mockResolvedValueOnce(new Response(JSON.stringify(afterFirst), { status: 200 }))
-			.mockResolvedValueOnce(new Response(JSON.stringify(ready), { status: 200 }));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -575,14 +574,16 @@ describe('the Graphics Asset Library Workspace', () => {
 
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations/operation-1/multipart',
-			{ method: 'POST' },
+			expect.objectContaining({ method: 'POST' }),
 		);
-		expect(mockTransferFetch).toHaveBeenCalledTimes(2);
-		expect(mockTransferFetch.mock.calls.map(([, request]) =>
-			(request.body as Blob).size)).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
+		const partUploads = mockApiFetch.mock.calls
+			.filter(([path]) => String(path).includes('/multipart/parts/'));
+		expect(partUploads).toHaveLength(2);
+		expect(partUploads.map(([, request]) =>
+			((request as { body: Blob }).body).size)).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
 		expect(mockApiFetch).toHaveBeenCalledWith(
 			'/api/graphics-assets/ingestion-operations/operation-1/multipart/complete',
-			{ method: 'POST' },
+			expect.objectContaining({ method: 'POST' }),
 		);
 		expect(wrapper.text()).toContain(
 			`Transferred ${formatByteCount(bytes.byteLength)} of ${formatByteCount(bytes.byteLength)}`,
@@ -677,11 +678,8 @@ describe('the Graphics Asset Library Workspace', () => {
 				message: 'Image did not satisfy the compatibility profile.',
 			},
 		};
-		mockApiFetch.mockResolvedValue(created);
-		mockTransferFetch.mockResolvedValue(new Response(JSON.stringify(failed), {
-			status: 200,
-			headers: { 'content-type': 'application/json' },
-		}));
+		mockApiFetch.mockImplementation((_path: string, request?: { method?: string }) =>
+			Promise.resolve(request?.method === 'PUT' ? failed : created));
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', malformed);
 		await flushPromises();
@@ -714,13 +712,17 @@ describe('the Graphics Asset Library Workspace', () => {
 			result: undefined,
 			transferredByteLength: 0,
 		};
-		mockApiFetch
-			.mockRejectedValueOnce(new Error('Response connection lost'))
-			.mockResolvedValueOnce(createdOperation);
-		mockTransferFetch.mockResolvedValue(new Response(JSON.stringify(completedOperation), {
-			status: 200,
-			headers: { 'content-type': 'application/json' },
-		}));
+		let initiationAttempts = 0;
+		mockApiFetch.mockImplementation((path: string, request?: { method?: string }) => {
+			if (path === '/api/graphics-assets/ingestion-operations' && request?.method === 'POST') {
+				return ++initiationAttempts === 1
+					? Promise.reject(new Error('Response connection lost'))
+					: Promise.resolve(createdOperation);
+			}
+			if (request?.method === 'PUT')
+				return Promise.resolve(completedOperation);
+			return Promise.resolve(createdOperation);
+		});
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -740,7 +742,8 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(initiationCalls).toHaveLength(2);
 		expect(initiationCalls[0]![1].body.idempotencyKey)
 			.toBe(initiationCalls[1]![1].body.idempotencyKey);
-		expect(mockTransferFetch).toHaveBeenCalledOnce();
+		expect(mockApiFetch.mock.calls
+			.filter(([path]) => String(path).endsWith('/content'))).toHaveLength(1);
 	});
 
 	it('reconnects a durable initiation after the page reloads before receiving its response', async () => {
@@ -1517,10 +1520,11 @@ describe('the Library Workspace when its graphics author session decides ownersh
 				completedParts: [],
 			},
 		};
-		mockApiFetch.mockImplementation((path: string) =>
-			Promise.resolve(path.endsWith('/multipart') ? started : created),
-		);
-		mockTransferFetch.mockResolvedValue(new Response('', { status: 401 }));
+		mockApiFetch.mockImplementation((path: string) => {
+			if (path.includes('/multipart/parts/'))
+				return Promise.reject(lapsedSession());
+			return Promise.resolve(path.endsWith('/multipart') ? started : created);
+		});
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -1531,7 +1535,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 			.toContain('Your graphics author session has lapsed');
 		// A part the library refused for want of an author is not a part worth
 		// sending again, so the transfer stops instead of exhausting its attempts.
-		expect(mockTransferFetch).toHaveBeenCalledOnce();
+		expect(mockApiFetch.mock.calls
+			.filter(([path]) => String(path).includes('/multipart/parts/'))).toHaveLength(1);
 	});
 
 	it('names a lapsed session when an approved remote copy is refused', async () => {

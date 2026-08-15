@@ -14,8 +14,6 @@ import type {
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import {
-	GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_SILENT_VIDEO_INGESTION_BYTES,
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
@@ -30,6 +28,15 @@ definePageMeta({
 
 const eventStore = useEventStore();
 const authorSession = useGraphicsAuthorSession();
+/**
+ * The shared ingestion transfer (#150). It owns single-request versus
+ * multipart dispatch, resume, the retry budget, and the 250ms operation
+ * poller; this page keeps presentation, which is `observeNewerOperation`
+ * deciding whether a reported snapshot is fresher than the one on show.
+ */
+const ingestionTransfer = useGraphicsIngestionTransfer({
+	onOperation: operation => observeNewerOperation(operation),
+});
 const search = ref('');
 const lifecycleState = ref<GraphicAssetLifecycleState>('active');
 const lifecycleViews: {
@@ -486,21 +493,7 @@ async function transferGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
-	let completed: GraphicsIngestionOperation;
-	if (file.size > GRAPHICS_MULTIPART_PART_BYTES) {
-		completed = await transferMultipartGraphicAsset(operation, file);
-	}
-	else {
-		const response = await observeOperationRequest(
-			operation.id,
-			fetch(`/api/graphics-assets/ingestion-operations/${operation.id}/content`, {
-				method: 'PUT',
-				headers: file.type ? { 'content-type': file.type } : undefined,
-				body: file,
-			}),
-		);
-		completed = await operationFromResponse(response, 'Graphic Asset transfer');
-	}
+	let completed = await ingestionTransfer.transfer(operation, file);
 	if (
 		completed.stage === 'awaiting-confirmation'
 		&& completed.report?.outcome === 'accepted'
@@ -510,7 +503,7 @@ async function transferGraphicAsset(
 			file,
 			completed.report.facts.browserChallenge,
 		);
-		completed = await observeOperationRequest(
+		completed = await ingestionTransfer.observeOperationRequest(
 			completed.id,
 			$fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${completed.id}/font-browser-evidence`,
@@ -587,35 +580,6 @@ async function replaceAsset(asset: GraphicAsset) {
 	}
 }
 
-async function observeOperationRequest<T>(
-	operationId: string,
-	request: Promise<T>,
-): Promise<T> {
-	let pollPending = false;
-	const interval = window.setInterval(async () => {
-		if (pollPending)
-			return;
-		pollPending = true;
-		try {
-			currentOperation.value = await $fetch<GraphicsIngestionOperation>(
-				`/api/graphics-assets/ingestion-operations/${operationId}`,
-			);
-		}
-		catch {
-			// The in-flight mutation remains authoritative; its response handles errors.
-		}
-		finally {
-			pollPending = false;
-		}
-	}, 250);
-	try {
-		return await request;
-	}
-	finally {
-		window.clearInterval(interval);
-	}
-}
-
 function operationMatchesSelectedFile(
 	operation: GraphicsIngestionOperation,
 	file: File,
@@ -628,23 +592,11 @@ function operationMatchesSelectedFile(
 }
 
 /**
- * The status travels with the failure, not only in its sentence.
- *
- * These branches are hand-rolled `fetch` rather than `$fetch`, so nothing
- * attaches a status for them. Without one a refused request is a string that
- * reads like every other string, and the surface cannot tell a lapsed graphics
- * author session from a byte store that was briefly unavailable.
+ * Whether a reported snapshot is fresher than the one on show. Snapshots
+ * arrive from concurrent part uploads and the transfer's poller, so they may
+ * arrive out of order; `transferredByteLength` only grows, which makes it the
+ * freshness the presentation judges by.
  */
-async function operationFromResponse(response: Response, action: string) {
-	if (!response.ok) {
-		throw Object.assign(
-			new Error(`${action} failed with status ${response.status}`),
-			{ status: response.status },
-		);
-	}
-	return await response.json() as GraphicsIngestionOperation;
-}
-
 function observeNewerOperation(operation: GraphicsIngestionOperation) {
 	if (
 		!currentOperation.value
@@ -652,72 +604,6 @@ function observeNewerOperation(operation: GraphicsIngestionOperation) {
 	) {
 		currentOperation.value = operation;
 	}
-}
-
-async function transferMultipartGraphicAsset(
-	operation: GraphicsIngestionOperation,
-	file: File,
-) {
-	let checkpoint = await $fetch<GraphicsIngestionOperation>(
-		`/api/graphics-assets/ingestion-operations/${operation.id}/multipart`,
-		{ method: 'POST' },
-	);
-	currentOperation.value = checkpoint;
-	if (!checkpoint.transfer)
-		throw new Error('Server did not return multipart transfer facts.');
-	const transfer: NonNullable<GraphicsIngestionOperation['transfer']> = checkpoint.transfer;
-	const completedPartNumbers = new Set(transfer.completedParts.map(part => part.partNumber));
-	const pendingPartNumbers = Array.from(
-		{ length: transfer.partCount },
-		(_, index) => index + 1,
-	).filter(partNumber => !completedPartNumbers.has(partNumber));
-	let nextPartIndex = 0;
-
-	async function uploadNextParts() {
-		while (nextPartIndex < pendingPartNumbers.length) {
-			const partNumber = pendingPartNumbers[nextPartIndex++]!;
-			const offset = (partNumber - 1) * transfer.partByteLength;
-			const part = file.slice(offset, Math.min(file.size, offset + transfer.partByteLength));
-			for (let attempt = 1; attempt <= transfer.maximumPartAttempts; attempt++) {
-				try {
-					const response = await fetch(
-						`/api/graphics-assets/ingestion-operations/${operation.id}/multipart/parts/${partNumber}`,
-						{ method: 'PUT', body: part },
-					);
-					checkpoint = await operationFromResponse(
-						response,
-						`Multipart part ${partNumber}`,
-					);
-					observeNewerOperation(checkpoint);
-					break;
-				}
-				catch (caught) {
-					// A part refused for want of an author will be refused again by
-					// every remaining attempt, and the operation it belongs to is
-					// already unreachable. Stop rather than spend the attempts.
-					if (graphicsAuthorSessionLapsed(caught) || attempt === transfer.maximumPartAttempts)
-						throw caught;
-				}
-			}
-		}
-	}
-
-	const workerCount = Math.min(
-		pendingPartNumbers.length,
-		transfer.maximumConcurrentParts,
-		GRAPHICS_MULTIPART_MAXIMUM_CONCURRENT_PARTS,
-	);
-	await Promise.all(Array.from({ length: workerCount }, () => uploadNextParts()));
-	currentOperation.value = await $fetch<GraphicsIngestionOperation>(
-		`/api/graphics-assets/ingestion-operations/${operation.id}`,
-	);
-	return await observeOperationRequest(
-		operation.id,
-		$fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/multipart/complete`,
-			{ method: 'POST' },
-		),
-	);
 }
 
 async function refreshAfterTerminalOperation() {
@@ -799,7 +685,7 @@ async function confirmStagedGraphicAssetSource(operation: GraphicsIngestionOpera
 	const evidence = operation.report.facts.kind === 'font'
 		? await verifyStaticFontBrowserLoad(staged, operation.report.facts.browserChallenge)
 		: await verifyStillImageBrowserDecode(staged);
-	return await observeOperationRequest(
+	return await ingestionTransfer.observeOperationRequest(
 		operation.id,
 		$fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/browser-evidence`,
@@ -812,7 +698,7 @@ async function sendRemoteSourceCopy(
 	operation: GraphicsIngestionOperation,
 	sourceUrl: string,
 ) {
-	const copied = await observeOperationRequest(
+	const copied = await ingestionTransfer.observeOperationRequest(
 		operation.id,
 		$fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}/remote-copy`,
@@ -916,11 +802,11 @@ async function retryOperation() {
 					'Reselect the same source file to resume from the verified multipart checkpoint.',
 				);
 			}
-			currentOperation.value = await transferMultipartGraphicAsset(operation, file);
+			currentOperation.value = await ingestionTransfer.transfer(operation, file);
 			await refreshAfterTerminalOperation();
 			return;
 		}
-		currentOperation.value = await observeOperationRequest(
+		currentOperation.value = await ingestionTransfer.observeOperationRequest(
 			operationId,
 			$fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${operationId}/retry`,
