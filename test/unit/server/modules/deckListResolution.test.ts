@@ -249,22 +249,26 @@ describe('deck List Resolution server module', () => {
 	});
 
 	it('maps an unavailable card provider to a safe gateway error before writing', async () => {
+		// Asserted at the public seam since #355 — the throw site no longer spells the
+		// refusal, so the raw throw carries nothing a caller receives. What is this
+		// row's: the provider's own response body never reaches a caller, and nothing
+		// is written before the refusal.
 		mockFetchScryfallCardById.mockRejectedValue({
 			code: 'SCRYFALL_UPSTREAM_FAILURE',
 			notFound: false,
 			message: 'private upstream response body',
 		});
 
-		await expect(deckListResolutionModule().resolveUnresolvedDeckCard({
+		const refusal = await refusalFrom(deckListResolutionModule().resolveUnresolvedDeckCard({
 			eventId: 1,
 			unresolvedCardId: 11,
 			scryfallId: '11111111-1111-4111-8111-111111111111',
 			requestEvent,
-		})).rejects.toMatchObject({
-			statusCode: 502,
-			message: 'Card data provider is temporarily unavailable. Try again later.',
-		});
+		}));
 
+		expect(refusal.statusCode).toBe(502);
+		expect(refusal.message).toBe('Card data provider is temporarily unavailable. Try again later.');
+		expect(refusal.message).not.toContain('private upstream response body');
 		expect(mockDb.batch).not.toHaveBeenCalled();
 	});
 

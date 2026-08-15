@@ -127,33 +127,27 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 						&& error.upstreamStatus !== null
 						&& [400, 401, 403, 404, 422].includes(error.upstreamStatus);
 					if (!rejectedConfiguration) {
-						// The sentence says *temporarily*, so the response owes the caller an
-						// interval: #346, the same defect #337 fixed at the author-session 503.
-						// The number is the 5 seconds every retryable site here uses — a floor
-						// on how hard to retry, not an estimate of when Melee.gg returns, and it
-						// is the same for both statuses below because a timeout and a bad
-						// gateway are the same advice to a caller. Set inside this branch rather
-						// than the enclosing `MeleeTransportError` one on purpose: the refusal
-						// below it is credentials Melee.gg rejected, which no waiting resolves.
+						// The sentence a caller receives says *temporarily*, so the response
+						// owes the caller an interval: #346, the same defect #337 fixed at the
+						// author-session 503. The number is the 5 seconds every retryable site
+						// here uses — a floor on how hard to retry, not an estimate of when
+						// Melee.gg returns, and it is the same whether the upstream timed out
+						// or answered badly because both are the same advice to a caller. Set
+						// inside this branch rather than the enclosing `MeleeTransportError`
+						// one on purpose: the refusal below it is credentials Melee.gg
+						// rejected, which no waiting resolves.
 						//
-						// The status on the next line is not the one a caller receives.
-						// `mapPublicNitroError` fires on any cause carrying
-						// `MELEE_UPSTREAM_FAILURE` — every `MeleeTransportError` does — and
-						// recomputes the status from the same `category` this line reads, so
-						// the two spellings agree by construction and the mapper's is
-						// authoritative. Collapsing this to a bare `502` is invisible to every
-						// public-seam test (#346, row M9); only the raw-throw row in
-						// `melee-config.put.test.ts` holds the 502 half, and nothing holds the
-						// 504 half. Left unpinned deliberately: a pin at the raw throw would fix
-						// behaviour no caller can observe. The redundancy itself is recorded for
-						// a follow-up rather than resolved here.
+						// The payload carries only the cause, on purpose (#355). Every
+						// `MeleeTransportError` carries `MELEE_UPSTREAM_FAILURE`, so
+						// `mapPublicNitroError` owns the whole public spelling — status from
+						// the error's `category`, sentence, all of it. A status or sentence
+						// written here would be dead to every caller and free to drift from
+						// the mapper's; #346's verification proved exactly that of the ones
+						// this used to restate. If the mapper somehow did not fire, the h3
+						// defaults (500, empty message) sanitize to a bare Internal Server
+						// Error rather than publish anything.
 						setResponseHeader(requestEvent, 'retry-after', 5);
-						throw createError({
-							statusCode: error.category === 'timeout' ? 504 : 502,
-							statusMessage: error.category === 'timeout' ? 'Gateway Timeout' : 'Bad Gateway',
-							message: 'Melee.gg is temporarily unavailable. Try again later.',
-							cause: error,
-						});
+						throw createError({ cause: error });
 					}
 					throwInvalidMeleeConfiguration();
 				}

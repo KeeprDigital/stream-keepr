@@ -764,16 +764,16 @@ describe('error-handler mapping logic', () => {
 	 *
 	 * **What the readability filter costs, stated so nobody reads more into a pass.** The
 	 * scan reads syntax, so `statusCode: cause.statusCode` — the idiom #321's own fixes
-	 * landed on — has no readable status and is out of scope here. Thirteen calls under
+	 * landed on — has no readable status and is out of scope here. Twelve calls under
 	 * `server/` have an unreadable status, but not all for that reason: **seven** are the
 	 * property-access idiom (six spelled `cause.statusCode`, one `failure.statusCode`),
-	 * and the other **six** are unreadable for reasons of their own — two ternary statuses
-	 * (`melee-sync/configuration.ts`, `templatePackageExportApi.ts`), two shorthand
-	 * properties (`graphicsAssetApi.ts`, `routeGuards.ts`), one element access
-	 * (`broadcastGraphicsState.ts`), and `screen-output-assets/runtime.ts`, whose status
-	 * is a plain literal 503 defeated only by the shorthand `cause` beside it. The seven
-	 * are each pinned by their own route's tests; the other six are a mix, and the last of
-	 * them is this filter's blind spot in its purest form.
+	 * and the other **five** are unreadable for reasons of their own — one ternary status
+	 * (`templatePackageExportApi.ts`; `melee-sync/configuration.ts`'s went with #355),
+	 * two shorthand properties (`graphicsAssetApi.ts`, `routeGuards.ts`), one element
+	 * access (`broadcastGraphicsState.ts`), and `screen-output-assets/runtime.ts`, whose
+	 * status is a plain literal 503 defeated only by the shorthand `cause` beside it. The
+	 * seven are each pinned by their own route's tests; the other five are a mix, and the
+	 * last of them is this filter's blind spot in its purest form.
 	 * What is in scope is the shape the defect actually takes when it regrows: a fresh
 	 * `createError({ statusCode: 503, message: '…' })` written by someone who had not read
 	 * #321. That is what the planted-regression proof on this ticket exercised.
@@ -798,10 +798,17 @@ describe('error-handler mapping logic', () => {
 			// the defect class one level up, and the one this file keeps meeting.
 			expect(typeScriptFilesUnder(serverDirectory).length).toBeGreaterThan(100);
 			expect(scanned.length).toBeGreaterThan(100);
-			// And the band itself is non-empty, so the assertion below is quantifying over
-			// something. It is one site today — `deck-list-resolution`'s 502 — which is
-			// thin, and the reason the sanity marker above is separate from it.
-			expect(banded.length).toBeGreaterThan(0);
+			// The band itself is empty since #355 retired its last site —
+			// `deck-list-resolution`'s 502 now throws only a cause and lets the mapper
+			// spell the refusal. So the row below quantifies over nothing today, and its
+			// power to catch the fresh bare 503 it exists for rests on the synthetic-shape
+			// rows in `realtimeDiagnosis.test.ts`, which prove the scan reads
+			// `carriesCause` off exactly that shape. Pinned at zero rather than dropped:
+			// a readable in-band literal reappearing means someone is hand-spelling a 5xx
+			// again, and that deserves a conscious look — either it is #355's defect
+			// regrowing, or the band has a legitimate new resident and this becomes
+			// `toBeGreaterThan(0)` once more.
+			expect(banded.length).toBe(0);
 		});
 
 		it('names a cause, so the sentence it wrote reaches the operator it wrote it for', () => {

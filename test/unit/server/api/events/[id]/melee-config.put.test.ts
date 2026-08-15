@@ -254,6 +254,10 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	});
 
 	it('does not misreport an upstream outage as invalid credentials', async () => {
+		// What this row pins is the discrimination: a 503 from Melee.gg is an outage
+		// (502), not credentials Melee.gg rejected (422), and nothing is persisted.
+		// Asserted at the public seam since #355 — the throw site no longer spells the
+		// refusal, so the raw throw carries nothing a caller receives.
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request failed with status 503',
 			'http',
@@ -261,11 +265,11 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		));
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-		await expect(handler({} as any)).rejects.toMatchObject({
-			statusCode: 502,
-			statusMessage: 'Bad Gateway',
-			message: 'Melee.gg is temporarily unavailable. Try again later.',
-		});
+		const refusal = await refusalFrom(handler(requestEvent));
+
+		expect(refusal.statusCode).toBe(502);
+		expect(refusal.statusMessage).toBe('Bad Gateway');
+		expect(refusal.message).toBe('Melee.gg is temporarily unavailable. Try again later.');
 		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
 		expect(warn).not.toHaveBeenCalled();
 		warn.mockRestore();
@@ -296,18 +300,13 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	});
 
 	it('gives the same interval when the upstream timed out rather than answered', async () => {
-		// What this row pins is the *public* 504 and the header — not the site's own
-		// status expression, which an earlier version of this comment implied.
-		// `mapPublicNitroError` recomputes the status from the same `category` it reads
-		// off the cause, so collapsing the site's `category === 'timeout' ? 504 : 502`
-		// to a bare `502` leaves this row green (#346, row M9). The two spellings agree
-		// by construction and the mapper's is the one a caller meets. The site's 502
-		// half is held by the raw-throw row above; nothing holds its 504 half, on
-		// purpose — see the note at the throw site.
+		// What this row pins is the *public* 504 and the header. Since #355 the throw
+		// site spells nothing — `mapPublicNitroError` computes the status from the
+		// `category` on the cause and there is no second spelling left to drift.
 		//
-		// What is genuinely this row's is the interval. The header sits outside the
-		// status conditional, so a caller who timed out and a caller who got a bad
-		// gateway are told the same thing.
+		// What is genuinely this row's is the interval: the header is the site's, set
+		// for a timeout and a bad gateway alike, because both are the same advice to
+		// a caller.
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request timed out',
 			'timeout',
