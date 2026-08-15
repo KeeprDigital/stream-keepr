@@ -282,6 +282,11 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 **Graphics Administrator**:
 An installation operator authorised to inspect Graphics Asset Library health and change installation-wide Graphics Asset Library Capacity limits.
 
+**Library Workspace**:
+The graphics-author-facing surface over the Graphics Asset Library, where an author discovers and ingests Graphic Assets, renames and re-associates them with Events, inspects their recovery and cleanup state, and moves them through Retire, Trash, and Restore.
+It works under a Graphics Author Session and is the author-facing counterpart to the administrator-only Operations Cockpit.
+_Avoid_: Graphics Asset Library Workspace, asset manager, library page
+
 **Graphic Asset**:
 A stable-identity library resource for a validated image, silent video, or font owned by the installation-wide Graphics Asset Library and reusable across Events.
 Events may associate with or reference a Graphic Asset but never own it.
