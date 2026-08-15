@@ -67,6 +67,17 @@ mockNuxtImport('useScreenConfigUpdate', () => () => ({
 	updateScreenConfig: mockUpdateScreenConfig,
 	resetScreenConfig: vi.fn(),
 }));
+/**
+ * The hoisted Live Session sync (#373): loaded here so the Program monitor and
+ * the Edit workspace's on-air marks project from a loaded session whichever
+ * workspace is open. The sync's own behaviour has its own suite; the settings
+ * surface only reads its disconnection signal.
+ */
+const mockPlayoutDisconnected = ref(false);
+mockNuxtImport('useBroadcastGraphicsLiveSessionSync', () => () => ({
+	disconnected: mockPlayoutDisconnected,
+	reload: vi.fn(),
+}));
 
 const EditWorkspaceStub = defineComponent({
 	props: {
@@ -75,6 +86,7 @@ const EditWorkspaceStub = defineComponent({
 		selectedGraphicId: { type: String, default: null },
 		writable: { type: Boolean, default: true },
 		canTakeOver: { type: Boolean, default: false },
+		playoutDisconnected: { type: Boolean, default: false },
 	},
 	emits: ['update:graphics', 'update:selectedTarget', 'takeOver'],
 	template: `<div
@@ -83,6 +95,7 @@ const EditWorkspaceStub = defineComponent({
 		:data-selected-target="JSON.stringify(selectedTarget)"
 		:data-writable="String(writable)"
 		:data-can-take-over="String(canTakeOver)"
+		:data-playout-disconnected="String(playoutDisconnected)"
 	/>`,
 });
 
@@ -160,6 +173,7 @@ async function mountComponent() {
 describe('broadcastGraphicsSettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockPlayoutDisconnected.value = false;
 		mockConfig.value = {
 			graphics: [
 				{ id: 'lower-third', name: 'Lower Third', items: [] },
@@ -188,6 +202,21 @@ describe('broadcastGraphicsSettings', () => {
 
 		expect(wrapper.find('[data-testid="edit-workspace"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="live-workspace"]').exists()).toBe(false);
+	});
+
+	/**
+	 * The hoisted sync's disconnection signal reaches the Edit workspace (#373):
+	 * its on-air marks must say "unknown" while the connection is down, and the
+	 * Edit workspace can only say so if the surface holding the sync tells it.
+	 */
+	it('hands the Edit workspace the playout disconnection signal', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockPlayoutDisconnected.value = true;
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="edit-workspace"]').attributes('data-playout-disconnected')).toBe('true');
 	});
 
 	it('preserves the selected Broadcast Graphic when moving between workspaces', async () => {

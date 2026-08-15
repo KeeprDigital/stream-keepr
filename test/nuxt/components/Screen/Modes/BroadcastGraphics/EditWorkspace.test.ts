@@ -2,12 +2,23 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { defineComponent, h, ref } from 'vue';
 
 enableAutoUnmount(afterEach);
 
 mockNuxtImport('useEventStore', () => () => ({ event: { id: 7, name: 'Regional', game: 'mtg' } }));
+
+/**
+ * The playout facts the on-air badge reads (#373): the Live Session store's
+ * on-air set, per test. The store itself is the Program monitor's authority and
+ * has its own suite; here it only has to answer for the badge.
+ */
+const onAirIds = { value: [] as string[] };
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
+	onAirGraphicIds: () => onAirIds.value,
+}));
+mockNuxtImport('useBroadcastGraphicsPlayoutClock', () => () => ref(1_000));
 
 /**
  * Where the Broadcast Graphic Template library is allowed to appear.
@@ -22,7 +33,17 @@ mockNuxtImport('useEventStore', () => () => ({ event: { id: 7, name: 'Regional',
 const lowerThird: BroadcastGraphicConfig = { id: 'lower-third', name: 'Lower Third', items: [] };
 const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
 
-const StackTreeStub = defineComponent({ template: '<div data-testid="stack-tree" />' });
+/**
+ * Renders the host's graphic-badge slot for each graphic it is given, the way
+ * the real tree does, so the badge logic is observable through the stub.
+ */
+const StackTreeStub = defineComponent({
+	props: { graphics: { type: Array, default: () => [] } },
+	setup(props, { slots }) {
+		return () => h('div', { 'data-testid': 'stack-tree' }, (props.graphics as Array<{ id: string }>).map(graphic =>
+			h('div', { 'data-testid': 'stack-tree-row', 'data-graphic-id': graphic.id }, slots['graphic-badge']?.({ graphic }))));
+	},
+});
 const PreviewStub = defineComponent({ template: '<div data-testid="preview" />' });
 /** Stands in for the inspector, reporting the Event facts the workspace hands it. */
 const InspectorStub = defineComponent({
@@ -116,6 +137,49 @@ async function mountWorkspace(props: Record<string, unknown> = {}) {
 }
 
 describe('broadcastGraphicsEditWorkspace', () => {
+	beforeEach(() => {
+		onAirIds.value = [];
+	});
+
+	/**
+	 * The sharpest collision guard an author has (#373): a Graphic Input with a
+	 * live On-air Update Policy applies an Edit-workspace change to program
+	 * immediately, so the graphic that would carry it is marked in the authoring
+	 * tree itself. The mark is binary and covers every state that composes into
+	 * the frame — entering, on-air, updating, exiting — because the author's
+	 * question is "can my edit touch program?", which is yes in all four.
+	 */
+	it('marks the Broadcast Graphics that are on a program output, and only those', async () => {
+		onAirIds.value = ['slate'];
+		const wrapper = await mountWorkspace();
+
+		const marked = wrapper.findAll('[data-testid="graphic-on-air"]');
+		expect(marked).toHaveLength(1);
+		expect(wrapper.get('[data-graphic-id="slate"] [data-testid="graphic-on-air"]').text()).toContain('On air');
+		expect(wrapper.find('[data-graphic-id="lower-third"] [data-testid="graphic-on-air"]').exists()).toBe(false);
+	});
+
+	/**
+	 * Reconnect Resync's rule, applied to a badge: expose the disconnection
+	 * rather than act on it. While the realtime connection is down this client
+	 * cannot know what is on air, and a frozen or absent mark would read as
+	 * "not on air" on exactly the surface guarding live edits.
+	 */
+	it('says playout is unknown on every graphic while the realtime connection is down', async () => {
+		onAirIds.value = ['slate'];
+		const wrapper = await mountWorkspace({ playoutDisconnected: true });
+
+		expect(wrapper.findAll('[data-testid="graphic-playout-unknown"]')).toHaveLength(2);
+		expect(wrapper.findAll('[data-testid="graphic-on-air"]')).toHaveLength(0);
+	});
+
+	it('marks nothing while nothing is on air and the connection holds', async () => {
+		const wrapper = await mountWorkspace();
+
+		expect(wrapper.findAll('[data-testid="graphic-on-air"]')).toHaveLength(0);
+		expect(wrapper.findAll('[data-testid="graphic-playout-unknown"]')).toHaveLength(0);
+	});
+
 	it('carries the Broadcast Graphic Template library for this Screen', async () => {
 		const wrapper = await mountWorkspace();
 

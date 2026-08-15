@@ -3,7 +3,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, h } from 'vue';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
@@ -37,6 +37,7 @@ async function mountComponent(options: {
 	selectedTarget?: GraphicsSelectionTarget;
 	writable?: boolean;
 	contract?: GraphicsHostContract;
+	slots?: Record<string, unknown>;
 }) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
 	const { default: StackTree } = await import(componentPath);
@@ -51,6 +52,7 @@ async function mountComponent(options: {
 			canvasHeight: 1080,
 			writable: options.writable ?? true,
 		},
+		slots: (options.slots ?? {}) as never,
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
@@ -115,6 +117,31 @@ function groupStack(): BroadcastGraphicConfig {
 }
 
 describe('graphicsCompositorStackTree', () => {
+	/**
+	 * The graphic-badge slot is host capability, not compositor vocabulary: only a
+	 * Broadcast Graphics host has playout state to mark (#373), so the tree offers
+	 * the seam per graphic and carries no opinion about what a badge says. A host
+	 * that supplies nothing gets exactly the tree it had.
+	 */
+	it('renders a host-supplied badge beside each Broadcast Graphic in the stack', async () => {
+		const wrapper = await mountComponent({
+			graphics: [
+				{ id: 'lower-third', name: 'Lower Third', items: [] },
+				{ id: 'slate', name: 'Slate', items: [] },
+			],
+			slots: {
+				'graphic-badge': ({ graphic }: { graphic: BroadcastGraphicConfig }) =>
+					h('span', { 'data-testid': 'host-badge' }, graphic.id),
+			},
+		});
+
+		const badges = wrapper.findAll('[data-testid="host-badge"]');
+		expect(badges.map(badge => badge.text())).toEqual(['lower-third', 'slate']);
+		// Inside the graphic's own node, so the badge reads as a fact about that
+		// graphic rather than tree furniture.
+		expect(wrapper.findAll('[data-testid="broadcast-graphic-node"] [data-testid="host-badge"]')).toHaveLength(2);
+	});
+
 	it('adds a Broadcast Graphic to the front of the Screen stack and selects it', async () => {
 		const wrapper = await mountComponent({ graphics: [{ id: 'a', name: 'Graphic 1', items: [] }] });
 

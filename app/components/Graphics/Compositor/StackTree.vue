@@ -249,6 +249,13 @@ function removeItem(itemId: string) {
 						<span class="block truncate text-sm font-medium">{{ graphic.name }}</span>
 						<span class="mt-0.5 block truncate text-xs text-muted">{{ graphic.items.length }} items</span>
 					</span>
+					<!--
+						Host capability, not compositor vocabulary: only a Broadcast
+						Graphics host has playout state to mark on a graphic (#373), so
+						the tree offers the seam and carries no opinion about what a
+						badge says. A host that supplies nothing gets the tree it had.
+					-->
+					<slot name="graphic-badge" :graphic="graphic" />
 				</button>
 				<GraphicsCompositorReorderControls
 					v-if="canAuthor"

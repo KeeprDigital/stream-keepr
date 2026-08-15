@@ -76,6 +76,22 @@ const editLease = useGraphicsAuthoringLease({
 	endpoint: () => `/api/events/${props.eventId}/screens/${props.screen.id}/graphics-authoring-lease`,
 	enabled: () => workspace.value === 'edit',
 });
+
+/**
+ * The Broadcast Graphics Live Session, kept honest for both workspaces (#373).
+ *
+ * The Program monitor is hoisted above the workspace switch, and the facts it
+ * and the Edit workspace's on-air marks project — playout, rendered input
+ * values — come from the Live Session store. Before this, only the Live
+ * workspace loaded that store, so an operator landing straight in Edit
+ * projected from a session never loaded. The Live workspace keeps its own sync
+ * for its own `disconnected` reading; a second load of the same snapshot is
+ * superseded by the store's keyed guarded sequence, never doubled.
+ */
+const { disconnected: playoutDisconnected } = useBroadcastGraphicsLiveSessionSync(
+	() => props.eventId,
+	() => props.screen.id,
+);
 const selectedGraphicId = computed(() => resolveSelectedBroadcastGraphicId(
 	route.query[BROADCAST_GRAPHICS_GRAPHIC_QUERY_KEY],
 	graphics.value,
@@ -234,6 +250,7 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 				:writable="editLease.writable.value"
 				:lease-status="editLease.status.value"
 				:can-take-over="editLease.canTakeOver.value"
+				:playout-disconnected="playoutDisconnected"
 				@update:graphics="updateGraphics"
 				@update:channels="updateChannels"
 				@update:selected-target="setSelectedTarget"

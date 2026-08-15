@@ -32,6 +32,13 @@ const props = defineProps<{
 	writable?: boolean;
 	leaseStatus?: GraphicsAuthoringLeaseStatus;
 	canTakeOver?: boolean;
+	/**
+	 * Whether the realtime connection feeding the Broadcast Graphics Live Session
+	 * is currently down, from the sync the settings surface holds. While it is,
+	 * this client cannot know what is on air, and the on-air marks below say so
+	 * instead of claiming anything.
+	 */
+	playoutDisconnected?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -75,6 +82,30 @@ const styleSetAuthoring = useGraphicStyleSetAuthoring(selectedGraphic);
  */
 const eventStore = useEventStore();
 const game = computed(() => eventStore.event?.game);
+
+/**
+ * The Broadcast Graphics currently composing into a program output (#373).
+ *
+ * Read from the same Broadcast Graphics Live Session store the hoisted Program
+ * monitor projects from — one authority, so the mark in the tree can never
+ * disagree with the monitor beside it — at this surface's own playout clock
+ * instant. The set covers entering, on-air, updating, and exiting, because a
+ * graphic composes into the frame in all four, and that is exactly when an
+ * Edit-workspace change under a live On-air Update Policy can reach program.
+ * `waiting` is deliberately outside it: a waiting graphic is on no output yet.
+ */
+const sessionStore = useBroadcastGraphicsLiveSessionStore();
+const playoutNow = useBroadcastGraphicsPlayoutClock(
+	() => props.screen.id,
+	() => props.graphics,
+	() => props.channels,
+);
+const onAirGraphicIds = computed(() => new Set(sessionStore.onAirGraphicIds(
+	props.screen.id,
+	[...props.graphics],
+	playoutNow.value,
+	[...props.channels],
+)));
 
 /** One edited Broadcast Graphic back into the Screen's stack. */
 function replaceSelectedGraphic(graphic: BroadcastGraphicConfig) {
@@ -138,7 +169,39 @@ const leaseNotice = computed(() => {
 					:writable="canAuthor"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
-				/>
+				>
+					<template #graphic-badge="{ graphic }">
+						<!--
+							Reconnect Resync's rule, applied to a badge: while the
+							connection is down this client cannot know what is on air,
+							so every graphic says so — a frozen or absent mark would
+							read as "not on air" on exactly the surface guarding live
+							edits.
+						-->
+						<UBadge
+							v-if="playoutDisconnected"
+							data-testid="graphic-playout-unknown"
+							color="neutral"
+							variant="outline"
+							size="sm"
+							icon="i-lucide-wifi-off"
+							title="Disconnected: whether this graphic is on air cannot be known until the connection returns."
+						>
+							Playout unknown
+						</UBadge>
+						<UBadge
+							v-else-if="onAirGraphicIds.has(graphic.id)"
+							data-testid="graphic-on-air"
+							color="error"
+							variant="subtle"
+							size="sm"
+							icon="i-lucide-radio"
+							title="This Broadcast Graphic is composing into a program output. An edit under a live On-air Update Policy reaches it immediately."
+						>
+							On air
+						</UBadge>
+					</template>
+				</GraphicsCompositorStackTree>
 
 				<!--
 					The Broadcast Graphic Template library lives in the Edit workspace and
