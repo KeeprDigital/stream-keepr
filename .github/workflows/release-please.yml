@@ -1,0 +1,35 @@
+# Maintains the rolling Release PR from conventional commits on main:
+# fix → patch, feat → minor, feat!/BREAKING CHANGE → major. Merging that PR
+# is the formal release act — it tags vX.Y.Z, publishes a GitHub Release
+# with the changelog section, and bumps package.json's version.
+#
+# Needs the repo setting Settings → Actions → General →
+# "Allow GitHub Actions to create and approve pull requests" enabled, or
+# the action cannot open its PR. Known limitation: PRs created by the
+# default GITHUB_TOKEN do not trigger CI on themselves — harmless while
+# main has no required status checks; if that protection is ever added,
+# feed this action a PAT via `token:` so its PRs run CI.
+
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

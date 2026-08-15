@@ -94,6 +94,27 @@ the original already ran, and the repair only ever changes what a replay does.
 `test/unit/server/db/migrationJournalReplay.test.ts` replays the whole journal
 against populated tables and is what catches the omission.
 
+## Releases
+
+Versioning is automated from the conventional commit history by
+[release-please](https://github.com/googleapis/release-please)
+(`.github/workflows/release-please.yml`): `fix:` bumps patch, `feat:` bumps
+minor, `feat!:`/`BREAKING CHANGE` bumps major. It maintains a single rolling
+**Release PR** against main showing the pending version and `CHANGELOG.md`
+diff. **Merging that PR is the release**: it tags `vX.Y.Z`, publishes a GitHub
+Release, and bumps `package.json`. The baseline is the `v1.0.0` tag, cut at
+adoption from what production was then running.
+
+Releases exist so deploys have something formal to ship: the Deploy workflow
+below promotes released tags, never main's HEAD. There is no `develop` branch
+by decision — main is trunk, tags are the releasable snapshots.
+
+Requires the repo setting Settings → Actions → General → **"Allow GitHub
+Actions to create and approve pull requests"**, or release-please cannot open
+its PR. Its PRs don't trigger CI on themselves (default-token limitation) —
+acceptable while main has no required status checks; wire a PAT before ever
+adding that protection.
+
 ## Deploy
 
 NuxtHub generates the deployable configuration at
@@ -148,7 +169,10 @@ pnpm deploy
 The same deploy can be triggered from GitHub Actions instead: the **Deploy**
 workflow (`.github/workflows/deploy.yml`) is `workflow_dispatch`-only — never
 merge-triggered — and runs exactly what `pnpm deploy` runs, with an optional
-input to deploy the validator Worker first. It requires the
+input to deploy the validator Worker first. Unlike the local path it ships a
+**released tag**, never main's HEAD: its `version` input takes `latest` (the
+default) or an explicit tag like `v1.2.0`, resolved through GitHub Releases —
+which also makes rollback "dispatch Deploy with the previous tag". It requires the
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets, and
 refuses to start until its `d1_recovery_point` input is the word `confirmed`,
 mirroring the recovery-point check below. Either way, the deployed acceptance
