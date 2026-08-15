@@ -175,6 +175,16 @@ export async function main(argv = process.argv) {
 
 			const scenario = await provisionScreenOutputScenario(session, { label: 'Package Publication' });
 			evidence.addSecret(scenario.capability);
+			// What this run adds to the installation-wide library, so the way out
+			// can trash whatever is trashable (#375). The successfully installed
+			// package is not: an Installed Graphics Template is undeletable by
+			// design (the FML library DELETE answers 409 "installed from a
+			// Template Package and cannot be deleted here"), and its Graphic
+			// Asset References keep the packaged asset in-use, so each completed
+			// deployed run permanently adds one template and one asset. Recorded
+			// on #375 as a residual needing a domain decision, not silently
+			// retried here.
+			const baselineAssets = await listAssetIds();
 			let interruption;
 			try {
 				const exportRoute = acceptanceRoutes.featureMatchLayoutPackage(
@@ -297,6 +307,25 @@ export async function main(argv = process.argv) {
 					: [{ code: 'package-partial-assets-visible', detail: { stage: 'cancelled' } }]);
 			}
 			finally {
+				// Best-effort, pass or fail: every asset this run added over the
+				// baseline. The installed package's own asset answers in-use and
+				// stays, per the comment above; what this catches is everything
+				// else a partial or cancelled run can leave unpinned.
+				try {
+					const remaining = await listAssetIds();
+					for (const assetId of remaining) {
+						if (baselineAssets.has(assetId))
+							continue;
+						await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
+							method: 'POST',
+							author: true,
+							body: { action: 'trash' },
+						});
+					}
+				}
+				catch {
+					// A left-behind acceptance asset is noise, never a gate failure.
+				}
 				await scenario.dispose();
 			}
 

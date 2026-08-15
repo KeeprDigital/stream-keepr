@@ -338,6 +338,21 @@ export async function provisionScreenOutputScenario(session, { label }) {
 			catch {
 				// A left-behind acceptance Event is noise, never a failure of the gate.
 			}
+			// The Event's deletion released the Screen's references, so the pixel
+			// is trashable now and stops accumulating in the installation's
+			// library (#375). Trash keeps the 30-day recovery window; a pixel a
+			// fault-injection run still needs is kept by the armed scenario file,
+			// which deliberately never reaches this dispose.
+			try {
+				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
+					method: 'POST',
+					author: true,
+					body: { action: 'trash' },
+				});
+			}
+			catch {
+				// A left-behind acceptance pixel is noise, never a failure of the gate.
+			}
 		},
 	};
 }
@@ -437,12 +452,27 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 		body: { name: 'Acceptance Restricted Overlay', slug, currentMode: 'feature-match-overlay' },
 	});
 
+	// Set once the ingestion settles, so the failure path's dispose can trash
+	// whatever was already published before the throw (#375).
+	let publishedAssetId;
 	async function dispose() {
 		try {
 			await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE', author: true });
 		}
 		catch {
 			// A left-behind acceptance Event is noise, never a failure of the gate.
+		}
+		if (!publishedAssetId)
+			return;
+		try {
+			await session.request(acceptanceRoutes.assetLifecycleActions(publishedAssetId), {
+				method: 'POST',
+				author: true,
+				body: { action: 'trash' },
+			});
+		}
+		catch {
+			// A left-behind acceptance video is noise, never a failure of the gate.
 		}
 	}
 
@@ -490,6 +520,7 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 		}
 
 		const { assetId, revisionId } = settled.result;
+		publishedAssetId = assetId;
 		await session.json(
 			acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 			{
