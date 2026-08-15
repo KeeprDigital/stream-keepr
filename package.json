@@ -24,7 +24,6 @@
 		"db:migrations:list:remote": "wrangler d1 migrations list DB --remote --config .output/server/wrangler.json",
 		"db:migrate:remote": "wrangler d1 migrations apply DB --remote --config .output/server/wrangler.json",
 		"test": "pnpm test:unit:run && pnpm test:nuxt:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video && pnpm test:browser:fonts",
-		"test:watch": "vitest",
 		"test:unit": "vitest",
 		"test:unit:run": "vitest run",
 		"test:nuxt": "vitest --config vitest.nuxt.config.ts",
@@ -47,10 +46,7 @@
 		"test:delivery:graphics": "node scripts/run-graphics-delivery-acceptance.mjs",
 		"test:delivery:graphics:deployed": "node scripts/run-graphics-delivery-acceptance.mjs --deployed",
 		"test:validator:silent-video": "node scripts/run-silent-video-validator-acceptance.mjs",
-		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed",
-		"test:e2e": "pnpm test:integration:run",
-		"test:ui": "vitest --ui",
-		"test:coverage": "vitest run --coverage && vitest run --coverage --config vitest.nuxt.config.ts"
+		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed"
 	},
 	"dependencies": {
 		"@jsquash/jpeg": "1.6.0",
