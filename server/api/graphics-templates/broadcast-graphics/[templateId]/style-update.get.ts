@@ -1,3 +1,4 @@
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
@@ -15,8 +16,11 @@ import { graphicStyleUpdateReview } from '~~/shared/modules/graphic-style-sets';
  * template already renders. That is the whole test — not "is there a newer revision"
  * — which is what makes renaming an entry, adding one, and editing one this template
  * never references all produce nothing to review.
+ *
+ * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
+	await requireGraphicsAuthorSession(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 
 	const template = await broadcastGraphicTemplateService().findById(templateId);

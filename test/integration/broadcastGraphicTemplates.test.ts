@@ -408,6 +408,14 @@ describe('broadcast Graphic Template library', () => {
 		expect(saved).not.toHaveProperty('document');
 	});
 
+	it('refuses to browse the library without a graphics author session', async () => {
+		// #206: reads ask for the same session the writes do — session-scoping,
+		// not access control (ADR-0008).
+		const anonymous = await request(TEMPLATES_PATH);
+
+		expect(anonymous.status).toBe(401);
+	});
+
 	it('places a template on a Screen in a different Event as a new Broadcast Graphic', async () => {
 		const placed = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
 

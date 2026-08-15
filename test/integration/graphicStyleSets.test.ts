@@ -247,6 +247,16 @@ describe('graphic Style Sets', () => {
 		expect(anonymous.status).toBe(401);
 	});
 
+	it('refuses the Graphic Style Set reads without a graphics author session', async () => {
+		// #206: reads ask for the same session the writes do — session-scoping,
+		// not access control (ADR-0008).
+		const anonymousList = await request(STYLE_SETS);
+		expect(anonymousList.status).toBe(401);
+
+		const anonymousSet = await request(`${STYLE_SETS}/${styleSetId}`);
+		expect(anonymousSet.status).toBe(401);
+	});
+
 	it('refuses an over-sized initial draft on create, as editing one is refused', async () => {
 		// Creating a Style Set accepts the same unbounded draft array editing one does, so
 		// it is bounded by the same number. Sized to land in the gap that bound exists to
@@ -395,6 +405,15 @@ describe('graphic Style Sets', () => {
 		expect(review.styleSet).toMatchObject({ id: styleSetId, linkedRevision: 1, publishedRevision: 1 });
 		expect(review.available).toBe(false);
 		expect(review.changes).toEqual([]);
+	});
+
+	it('refuses the style update review without a graphics author session', async () => {
+		// #206: the review is a read on the author surface, so it asks for the
+		// same session as its siblings — session-scoping, not access control
+		// (ADR-0008).
+		const anonymous = await request(`${TEMPLATES}/${templateId}/style-update`);
+
+		expect(anonymous.status).toBe(401);
 	});
 
 	it('offers no update for a rename, because a rename changes no resolved value', async () => {

@@ -2,6 +2,7 @@ import {
 	broadcastGraphicTemplateLibrarySummary,
 	findBroadcastGraphicTemplateLibraryEntry,
 } from '~~/server/modules/broadcast-graphic-template-library';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 
 /**
@@ -11,8 +12,14 @@ import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broa
  * reads exactly like one authored here — same shape, same identity, same route. Only
  * `authored` tells them apart, and only because what a caller may *do* with them
  * differs.
+ *
+ * The session is asked for as authentication and never consulted again —
+ * session-scoping, not access control (ADR-0008). The document embeds Graphic
+ * Asset identities, so before this guard the identifiers #172 hid from the
+ * Asset Library stayed reachable one layer over (#206).
  */
 export default defineEventHandler(async (event) => {
+	await requireGraphicsAuthorSession(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 
 	const entry = await findBroadcastGraphicTemplateLibraryEntry(event, templateId);

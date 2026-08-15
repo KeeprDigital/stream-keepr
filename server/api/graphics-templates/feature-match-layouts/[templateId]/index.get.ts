@@ -2,6 +2,7 @@ import {
 	featureMatchLayoutTemplateLibrarySummary,
 	findFeatureMatchLayoutTemplateLibraryEntry,
 } from '~~/server/modules/feature-match-layout-template-library';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 
 /**
@@ -10,8 +11,13 @@ import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/fe
  * Resolved from the library as a whole, so an entry a Template Package installed
  * reads exactly like one authored here. Only `authored` tells them apart, and only
  * because what a caller may *do* with them differs.
+ *
+ * The session is session-scoping, not access control (ADR-0008). The document
+ * embeds Graphic Asset identities, the same reach-around #206 named on the
+ * Broadcast Graphic Template entry.
  */
 export default defineEventHandler(async (event) => {
+	await requireGraphicsAuthorSession(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
 
 	const entry = await findFeatureMatchLayoutTemplateLibraryEntry(event, templateId);

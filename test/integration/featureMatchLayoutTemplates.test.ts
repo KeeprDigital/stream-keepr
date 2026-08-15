@@ -209,7 +209,7 @@ describe('feature Match Layout Template library', () => {
 		const assigned = await storedOverlayConfig(sourceEventId, sourceScreenId);
 		expect(assigned.featureMatchId).toBe(sourceSlotId);
 
-		const entry = await request(`${LIBRARY_PATH}/${templateId}`);
+		const entry = await request(`${LIBRARY_PATH}/${templateId}`, { cookie: authorCookie });
 		expect(entry.status).toBe(200);
 		const document = (entry.data as FeatureMatchLayoutTemplateResponse).document;
 		expect(JSON.stringify(document)).not.toContain('featureMatchId');
@@ -217,11 +217,23 @@ describe('feature Match Layout Template library', () => {
 	});
 
 	it('lists the saved template in the installation-scoped library', async () => {
-		const listed = await request(LIBRARY_PATH);
+		const listed = await request(LIBRARY_PATH, { cookie: authorCookie });
 
 		expect(listed.status).toBe(200);
 		const templates = (listed.data as { templates: FeatureMatchLayoutTemplateSummary[] }).templates;
 		expect(templates.some(template => template.id === templateId)).toBe(true);
+	});
+
+	it('refuses the library reads without a graphics author session', async () => {
+		// #206: reads ask for the same session the writes do — session-scoping,
+		// not access control (ADR-0008) — so the Graphic Asset identities a
+		// document embeds are not enumerable one layer over from the Asset
+		// Library's own guarded routes.
+		const anonymousList = await request(LIBRARY_PATH);
+		expect(anonymousList.status).toBe(401);
+
+		const anonymousEntry = await request(`${LIBRARY_PATH}/${templateId}`);
+		expect(anonymousEntry.status).toBe(401);
 	});
 
 	/**
@@ -314,7 +326,7 @@ describe('feature Match Layout Template library', () => {
 		expect(savedGraphic.status).toBe(201);
 		const graphicTemplateId = savedGraphic.data.id as string;
 
-		const crossRead = await request(`${LIBRARY_PATH}/${graphicTemplateId}`);
+		const crossRead = await request(`${LIBRARY_PATH}/${graphicTemplateId}`, { cookie: authorCookie });
 		expect(crossRead.status).toBe(404);
 
 		const crossPlace = await place(

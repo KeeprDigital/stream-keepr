@@ -2,6 +2,7 @@ import {
 	featureMatchLayoutTemplateLibrarySummary,
 	listFeatureMatchLayoutTemplateLibrary,
 } from '~~/server/modules/feature-match-layout-template-library';
+import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 
 /**
  * Browse the installation's Feature Match Layout Template library.
@@ -13,8 +14,11 @@ import {
  *
  * Layouts authored here and layouts a `.sklayout` Template Package installed appear
  * in one list, because "what can I place" is one question.
+ *
+ * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
+	await requireGraphicsAuthorSession(event);
 	const entries = await listFeatureMatchLayoutTemplateLibrary(event);
 
 	return { templates: entries.map(featureMatchLayoutTemplateLibrarySummary) };
