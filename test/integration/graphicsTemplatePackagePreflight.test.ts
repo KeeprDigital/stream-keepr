@@ -146,7 +146,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 
 /**
  * The installation's retained canonical source bytes, read through the
- * capacity surface.
+ * capacity surface, guarded against a dead observable.
  *
  * This suite's "publishes nothing" claims read the library listing before and
  * after an operation, which pins them by absence: a listing blinded into
@@ -154,12 +154,21 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
  * cannot distinguish "nothing was published" from "the listing is blind"
  * (#369). No cheap mutation makes preflight actually publish — deleting the
  * `template-package` early return in `continueGraphicsIngestion` fails on the
- * stage assertion before any listing read — so the claim is pinned through a
- * second observable computed independently of the listing route: capacity's
- * retained source bytes, summed by SQL over the contents revisions retain.
- * Publishing an asset must grow this figure. Positive coverage of the listing
- * itself stays with the installation suite, which installs and sees the
- * listing grow (#369's recorded decision).
+ * stage assertion before any listing read — so these capacity pins likewise
+ * have no mutation that kills them. They exist to make the absence claim
+ * require two independently computed observables to be blind at once;
+ * positive coverage of the listing itself stays with the installation suite
+ * (#369's recorded decision).
+ *
+ * What the figure can and cannot see: it sums, by SQL independent of the
+ * listing route, the byte lengths of stored contents that some revision
+ * retains — so a publish moves it only when it retains NOVEL content bytes.
+ * The exact-origin and warnings packages repackage this suite's
+ * already-retained PNG, so a byte-identical rogue publish there would dedupe
+ * invisibly (`canonicalGrowthBytes` is 0 for already-stored content); their
+ * pins exclude only a publish that writes new bytes. The large-package test
+ * carries content this installation has never held, so its pin is the one any
+ * rogue publish must move.
  *
  * Only `retainedSourceBytes` is compared: `metadataBytes` grows with every
  * operation row this suite creates, and the staging figures move with
@@ -170,7 +179,12 @@ async function retainedCanonicalSourceBytes(): Promise<number> {
 	const capacity = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
 	});
-	return capacity.canonical.breakdown.retainedSourceBytes;
+	const retained = capacity.canonical.breakdown.retainedSourceBytes;
+	// Anti-vacuity: this suite's own source asset is retained, so a live read is
+	// never zero — zero would mean the observable itself went dead, and every
+	// equality pin on it would hold vacuously.
+	expect(retained).toBeGreaterThan(0);
+	return retained;
 }
 
 describe('template Package preflight through the API boundary', () => {
@@ -256,9 +270,6 @@ describe('template Package preflight through the API boundary', () => {
 	it('maps a package back to its exact origins and publishes nothing', async () => {
 		const before = await libraryAssets();
 		const retainedBefore = await retainedCanonicalSourceBytes();
-		// Anti-vacuity: this suite's own source asset is retained, so the capacity
-		// observable is live rather than an empty default.
-		expect(retainedBefore).toBeGreaterThan(0);
 
 		const operation = await receivePackage(exportedPackage);
 
@@ -306,6 +317,7 @@ describe('template Package preflight through the API boundary', () => {
 	 * `test/nuxt/composables/repositories/templatePackageImport.test.ts`.
 	 */
 	it('receives a package larger than a single Graphic Asset transfer may carry', async () => {
+		const retainedBefore = await retainedCanonicalSourceBytes();
 		const parts = readTemplatePackageParts(exportedPackage);
 		const packaged = parts.manifest.packagedAssets[0]!;
 		// One still image at its own limit, which is all it takes to put the archive
@@ -364,6 +376,11 @@ describe('template Package preflight through the API boundary', () => {
 		const report = operation.templatePackagePreflight!;
 		expect(report.outcome).toBe('ready');
 		expect(report.observed.archiveByteLength).toBe(archive.byteLength);
+
+		// This package's content is novel to the installation, so it is the one
+		// package here a rogue publish could not dedupe away: retaining it would
+		// have to grow the listing-independent capacity figure (#369).
+		expect(await retainedCanonicalSourceBytes()).toBe(retainedBefore);
 	});
 
 	it('pauses on warnings and installs nothing until the exact report is confirmed', async () => {
