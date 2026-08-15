@@ -42,6 +42,29 @@ pnpm install
 pnpm dev
 ```
 
+## Testing
+
+Which script, when:
+
+| When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`                                  | Watch mode for the tier you are touching; append `:run` for a single pass.                                                                                                                                                                              |
+| Before commit / PR                          | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                   |
+| Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                    |
+| Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`. |
+| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                            |
+| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                    |
+| Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                  |
+
+CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
+and push to main: lint, typecheck, `pnpm test`, and `pnpm build` +
+`pnpm worker:dry-run` (the #302 Wasm guard). Realtime integration tests
+self-skip there — no Ably key is configured in CI by decision (#189). The
+prerequisite-bound suites in the table above stay local.
+
+Ad-hoc vitest modes still work without dedicated scripts: `pnpm exec vitest --ui`,
+`pnpm exec vitest run --coverage`.
+
 ## Database
 
 ```bash
@@ -70,6 +93,27 @@ one: D1 records applied migrations **by name**, so an edit is a no-op wherever
 the original already ran, and the repair only ever changes what a replay does.
 `test/unit/server/db/migrationJournalReplay.test.ts` replays the whole journal
 against populated tables and is what catches the omission.
+
+## Releases
+
+Versioning is automated from the conventional commit history by
+[release-please](https://github.com/googleapis/release-please)
+(`.github/workflows/release-please.yml`): `fix:` bumps patch, `feat:` bumps
+minor, `feat!:`/`BREAKING CHANGE` bumps major. It maintains a single rolling
+**Release PR** against main showing the pending version and `CHANGELOG.md`
+diff. **Merging that PR is the release**: it tags `vX.Y.Z`, publishes a GitHub
+Release, and bumps `package.json`. The baseline is the `v1.0.0` tag, cut at
+adoption from what production was then running.
+
+Releases exist so deploys have something formal to ship: the Deploy workflow
+below promotes released tags, never main's HEAD. There is no `develop` branch
+by decision — main is trunk, tags are the releasable snapshots.
+
+Requires the repo setting Settings → Actions → General → **"Allow GitHub
+Actions to create and approve pull requests"**, or release-please cannot open
+its PR. Its PRs don't trigger CI on themselves (default-token limitation) —
+acceptable while main has no required status checks; wire a PAT before ever
+adding that protection.
 
 ## Deploy
 
@@ -121,6 +165,19 @@ Deploy production, including pending D1 migrations:
 ```bash
 pnpm deploy
 ```
+
+The same deploy can be triggered from GitHub Actions instead: the **Deploy**
+workflow (`.github/workflows/deploy.yml`) is `workflow_dispatch`-only — never
+merge-triggered — and runs exactly what `pnpm deploy` runs, with an optional
+input to deploy the validator Worker first. Unlike the local path it ships a
+**released tag**, never main's HEAD: its `version` input takes `latest` (the
+default) or an explicit tag like `v1.2.0`, resolved through GitHub Releases —
+which also makes rollback "dispatch Deploy with the previous tag". It requires the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets, and
+refuses to start until its `d1_recovery_point` input is the word `confirmed`,
+mirroring the recovery-point check below. Either way, the deployed acceptance
+gates and the "nothing on air" call remain the operator's, run locally per
+[Deploy day, in order](#deploy-day-in-order).
 
 Production uses the versioned D1 and KV IDs hardcoded in `nuxt.config.ts`.
 
