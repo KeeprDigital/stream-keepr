@@ -14,6 +14,7 @@ import {
 import { graphicsSelectionGraphicId } from '~/modules/graphics/selection';
 import BroadcastGraphicsEditWorkspace from './EditWorkspace.vue';
 import BroadcastGraphicsLiveWorkspace from './LiveWorkspace.vue';
+import BroadcastGraphicsProgramMonitor from './ProgramMonitor.vue';
 
 const props = defineProps<{
 	screen: Screen;
@@ -198,35 +199,58 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 			</div>
 		</section>
 
-		<BroadcastGraphicsEditWorkspace
-			v-if="workspace === 'edit'"
-			:event-id="eventId"
-			:screen="screen"
-			:graphics="graphics"
-			:channels="channels"
-			:selected-target="selectedTarget"
-			:selected-graphic-id="selectedGraphicId"
-			:canvas-width="canvasWidth"
-			:canvas-height="canvasHeight"
-			:writable="editLease.writable.value"
-			:lease-status="editLease.status.value"
-			:can-take-over="editLease.canTakeOver.value"
-			@update:graphics="updateGraphics"
-			@update:channels="updateChannels"
-			@update:selected-target="setSelectedTarget"
-			@take-over="editLease.takeOver"
-		/>
+		<!--
+			The Program monitor is hoisted above the workspace switch so it is one
+			persistent instance in both workspaces (story 23, #335): the same element
+			across a switch, so program never reloads in front of the operator. It sits
+			first in this container in both layouts, which is what keeps its iframe in
+			place while the workspace beside it changes.
+		-->
+		<div
+			:class="workspace === 'edit'
+				? 'space-y-4'
+				: 'grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,24rem)]'"
+		>
+			<BroadcastGraphicsProgramMonitor
+				:event-id="eventId"
+				:screen="screen"
+				:graphics="graphics"
+				:channels="channels"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				:compact="workspace === 'edit'"
+			/>
 
-		<BroadcastGraphicsLiveWorkspace
-			v-else
-			:event-id="eventId"
-			:screen="screen"
-			:graphics="graphics"
-			:channels="channels"
-			:selected-graphic-id="selectedGraphicId"
-			:canvas-width="canvasWidth"
-			:canvas-height="canvasHeight"
-			@select="setSelectedTarget({ type: 'graphic', graphicId: $event })"
-		/>
+			<BroadcastGraphicsEditWorkspace
+				v-if="workspace === 'edit'"
+				:event-id="eventId"
+				:screen="screen"
+				:graphics="graphics"
+				:channels="channels"
+				:selected-target="selectedTarget"
+				:selected-graphic-id="selectedGraphicId"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				:writable="editLease.writable.value"
+				:lease-status="editLease.status.value"
+				:can-take-over="editLease.canTakeOver.value"
+				@update:graphics="updateGraphics"
+				@update:channels="updateChannels"
+				@update:selected-target="setSelectedTarget"
+				@take-over="editLease.takeOver"
+			/>
+
+			<BroadcastGraphicsLiveWorkspace
+				v-else
+				:event-id="eventId"
+				:screen="screen"
+				:graphics="graphics"
+				:channels="channels"
+				:selected-graphic-id="selectedGraphicId"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				@select="setSelectedTarget({ type: 'graphic', graphicId: $event })"
+			/>
+		</div>
 	</div>
 </template>

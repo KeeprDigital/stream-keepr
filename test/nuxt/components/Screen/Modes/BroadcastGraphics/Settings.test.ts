@@ -99,6 +99,18 @@ const LiveWorkspaceStub = defineComponent({
 	/>`,
 });
 
+const ProgramMonitorStub = defineComponent({
+	props: {
+		graphics: { type: Array, required: true },
+		compact: { type: Boolean, default: false },
+	},
+	template: `<div
+		data-testid="program-monitor-card"
+		:data-compact="String(compact)"
+		:data-graphics="graphics.length"
+	/>`,
+});
+
 const UFormFieldStub = defineComponent({
 	props: { label: { type: String, required: false } },
 	template: '<div><span>{{ label }}</span><slot /></div>',
@@ -135,6 +147,7 @@ async function mountComponent() {
 			stubs: {
 				BroadcastGraphicsEditWorkspace: EditWorkspaceStub,
 				BroadcastGraphicsLiveWorkspace: LiveWorkspaceStub,
+				BroadcastGraphicsProgramMonitor: ProgramMonitorStub,
 				UFormField: UFormFieldStub,
 				UFieldGroup: UFieldGroupStub,
 				UButton: UButtonStub,
@@ -315,6 +328,71 @@ describe('broadcastGraphicsSettings', () => {
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
+	});
+
+	/**
+	 * Story 23 (#60, carried as #335): a persistent Program monitor in BOTH
+	 * workspaces, so the operator always knows what is on air — an Edit-workspace
+	 * change can reach program instantly through a live On-air Update Policy, and
+	 * the person making it must be able to see that happen.
+	 */
+	describe('the persistent Program monitor', () => {
+		it('shows the Program monitor in the Live workspace, at full size', async () => {
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			const monitor = wrapper.get('[data-testid="program-monitor-card"]');
+			expect(monitor.attributes('data-compact')).toBe('false');
+			expect(monitor.attributes('data-graphics')).toBe('2');
+		});
+
+		it('shows the same monitor in the Edit workspace, drawn compactly', async () => {
+			mockRoute.query = { workspace: 'edit' };
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			const monitor = wrapper.get('[data-testid="program-monitor-card"]');
+			expect(monitor.attributes('data-compact')).toBe('true');
+		});
+
+		/**
+		 * Persistent means one instance: the monitor must survive a workspace switch
+		 * as the same element, or the switch reloads program in front of the operator
+		 * — a black frame on the one surface that exists to show what is on air.
+		 */
+		it('keeps one monitor instance across a workspace switch', async () => {
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			const element = wrapper.get('[data-testid="program-monitor-card"]').element;
+
+			await wrapper.get('[data-testid="workspace-edit"]').trigger('click');
+			await nextTick();
+
+			expect(wrapper.find('[data-testid="edit-workspace"]').exists()).toBe(true);
+			expect(wrapper.get('[data-testid="program-monitor-card"]').element).toBe(element);
+
+			await wrapper.get('[data-testid="workspace-live"]').trigger('click');
+			await nextTick();
+
+			expect(wrapper.find('[data-testid="live-workspace"]').exists()).toBe(true);
+			expect(wrapper.get('[data-testid="program-monitor-card"]').element).toBe(element);
+		});
+
+		/**
+		 * Awareness is not gated by writability: an observer watching a colleague
+		 * compose still needs to know what is on air.
+		 */
+		it('shows the monitor to a session observing the Edit workspace read-only', async () => {
+			mockRoute.query = { workspace: 'edit' };
+			mockLeaseWritable.value = false;
+
+			const wrapper = await mountComponent();
+			await flushPromises();
+
+			expect(wrapper.find('[data-testid="program-monitor-card"]').exists()).toBe(true);
+		});
 	});
 
 	it('closes the canvas to a session observing the Edit workspace read-only', async () => {
