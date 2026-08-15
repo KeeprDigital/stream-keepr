@@ -4,7 +4,6 @@ import { eventDataPublicationModule } from '~~/server/modules/event-data-publica
 import { inspectMeleeGameCompatibility } from '~~/server/modules/melee-sync/gameCompatibility';
 import { eventService } from '~~/server/services/event';
 import { meleeService } from '~~/server/services/melee';
-import { meleeKeyringConfigurationFaultSentence } from '~~/server/services/meleeCredentials';
 import { requireMeleeIntegration } from '~~/server/services/meleeIntegration';
 import { MeleeTransportError } from '~~/server/services/meleeTransport';
 import { MeleeCredentialCryptoError } from '~~/server/utils/meleeCredentialCrypto';
@@ -24,26 +23,17 @@ interface UpdateMeleeConfigurationParams {
 }
 
 /**
- * #347's split of the crypto failure family. A keyring-configuration fault is the
- * #233 family — an unfinished deployment — so it answers 503 with a sentence
- * naming the setting to fix; anything else (a corrupt envelope, a failed crypto
- * operation) is a genuine internal failure and stays a 500 the sanitizer closes.
- * Both carry the crypto error as `cause`: that is what the mapper discriminates
- * on — its sentence is authoritative over the one written here, the way the
- * upstream-outage throw below also defers — and what puts the code in the failure
- * log. The code rides nowhere else; a `data: { code }` here used to slip through
- * the sanitizer, which never touches `data`.
+ * #347: the `cause` is the whole classification. `mapPublicNitroError` splits the
+ * crypto failure family by the code it finds there — a keyring-configuration
+ * fault answers 503 with a sentence naming the setting to fix (the #233 family:
+ * an unfinished deployment), everything else stays a 500 the sanitizer closes —
+ * and the same cause is what puts the code in the failure log. The status and
+ * message written here reach no caller either way, so this site does not repeat
+ * the mapper's work; see `meleeKeyringConfigurationFaultSentence` for the split.
+ * The code rides nowhere else; a `data: { code }` here used to slip through the
+ * sanitizer, which never touched `data`.
  */
 function throwMeleeCredentialCryptoError(error: MeleeCredentialCryptoError): never {
-	const keyringFaultSentence = meleeKeyringConfigurationFaultSentence(error);
-	if (keyringFaultSentence !== null) {
-		throw createError({
-			statusCode: 503,
-			statusMessage: 'Service Unavailable',
-			message: keyringFaultSentence,
-			cause: error,
-		});
-	}
 	throw createError({
 		statusCode: 500,
 		message: 'Melee credential encryption is unavailable',

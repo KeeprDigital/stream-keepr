@@ -14,6 +14,7 @@ export interface MappableNitroError {
 	statusMessage?: string;
 	message: string;
 	cause?: unknown;
+	data?: unknown;
 	unhandled?: boolean;
 }
 
@@ -201,5 +202,12 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 	if (error.statusCode >= 500 && !hasMappedPublicServerMessage) {
 		error.message = 'Internal Server Error';
 		error.statusMessage = 'Internal Server Error';
+		// `data` rides the response body untouched by the message rewrite above,
+		// so a `createError(5xx, { data })` used to hand callers whatever a throw
+		// site attached while its sentence was being sanitized — #347 found a
+		// crypto code travelling that way. An unmapped 5xx publishes nothing; the
+		// two deliberate 5xx `data` payloads (the Template Package export report,
+		// the graphics capacity descriptor) ride mapped errors and never get here.
+		delete error.data;
 	}
 }

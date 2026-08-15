@@ -314,6 +314,24 @@ describe('error-handler mapping logic', () => {
 			expect(error.statusMessage).toBe('Internal Server Error');
 		});
 
+		it('strips data from an unmapped 5xx along with its message', () => {
+			// #347: the message rewrite below never touched `data`, so a throw site
+			// that attached a payload to a 5xx handed it to every caller while its
+			// sentence was being sanitized. An unmapped 5xx publishes nothing; the
+			// deliberate 5xx payloads all ride mapped errors, which never get here.
+			const error: MappableNitroError = {
+				statusCode: 500,
+				message: 'internal detail',
+				data: { code: 'MELEE_CREDENTIAL_DECRYPTION_FAILED' },
+				cause: new Error('a cause the mapper does not classify'),
+			};
+
+			mapPublicNitroError(error);
+
+			expect(error.message).toBe('Internal Server Error');
+			expect(error.data).toBeUndefined();
+		});
+
 		it('sanitizes explicit 500 errors even when they have no cause', () => {
 			const error: MappableNitroError = {
 				statusCode: 500,
