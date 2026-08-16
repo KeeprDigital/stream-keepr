@@ -13,6 +13,7 @@ import type { Flight } from '~/utils/guardedSequence';
 import { toRaw } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import { isStateConflictFetchFailure } from '~~/shared/utils/stateConflict';
 import { createCancelableDebounce } from '~/utils/cancelableDebounce';
 import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 import { createKeyedQueue } from '~/utils/keyedQueue';
@@ -47,10 +48,15 @@ interface ScreenRuntimeState {
 	executeAction: ExecuteAction;
 }
 
-function isConflictError(err: unknown): boolean {
-	const httpErr = err as { statusCode?: number; status?: number };
-	return httpErr?.statusCode === 409 || httpErr?.status === 409;
-}
+/*
+ * Only a marked lost race may be absorbed by the refresh-and-retry below. A 409
+ * is also how the server refuses a write outright — an unselectable Graphic
+ * Asset Reference, most visibly — and a refusal replayed onto refreshed state
+ * fails identically, costing a second multi-second save before anyone is told
+ * (#381). `mapPublicNitroError` marks the curable kind; everything else
+ * propagates to whoever owes the author an answer.
+ */
+const isConflictError = isStateConflictFetchFailure;
 
 function stripNullValues<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
 	return Object.fromEntries(

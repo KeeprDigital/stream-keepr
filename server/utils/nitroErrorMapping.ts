@@ -1,5 +1,6 @@
 import { GraphicsAssetLibraryError, graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
 import { meleeKeyringConfigurationFaultSentence } from '~~/server/services/meleeCredentials';
+import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import {
 	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
@@ -28,6 +29,10 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		error.statusCode = 409;
 		error.statusMessage = 'Conflict';
 		error.message = cause.message;
+		// A lost race is the one 409 a refresh-and-retry can cure, and the client's
+		// conflict retry replays a write only when this mark says so — an unmarked
+		// 409 is a refusal, surfaced instead of re-run (#381).
+		error.data = { code: STATE_CONFLICT_CODE };
 		mappedOperationalError = true;
 	}
 	else if (cause instanceof ServiceConfigurationError) {

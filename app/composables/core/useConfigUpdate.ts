@@ -44,6 +44,22 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	const saving = ref(false);
 	const inFlight = ref(false);
 	const saveError = ref<string | null>(null);
+	const hasCommitted = ref(false);
+
+	/**
+	 * The save's answer as one state a surface can show (#381): `committed` is an
+	 * affirmative fact, not the mere absence of `saving` — which is exactly what
+	 * an author who looked away during a multi-second save cannot distinguish
+	 * from a failure whose toast they missed. `idle` only before the first edit;
+	 * once something has been saved the surface keeps saying so.
+	 */
+	const saveState = computed<'idle' | 'saving' | 'committed' | 'failed'>(() => {
+		if (saving.value)
+			return 'saving';
+		if (saveError.value !== null)
+			return 'failed';
+		return hasCommitted.value ? 'committed' : 'idle';
+	});
 	const pendingUpdates = ref<U>({} as U);
 	const failedUpdates = ref<U>({} as U);
 	const localOverrides = ref<U>({} as U);
@@ -103,11 +119,14 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 					return true;
 				},
 				{
-					error: {
+					// Quote the failure's own sentence where it wrote one — a refusal
+					// names the slot to repair — and keep the caller's static wording
+					// for a failure that carries none. The widening #286 made safe.
+					error: ({ message }) => ({
 						title: 'Error',
-						description: errorMessage,
+						description: message || errorMessage,
 						color: 'error',
-					},
+					}),
 					onFailure: ({ message }) => {
 						saveError.value = message || errorMessage;
 						failedUpdates.value = { ...failedUpdates.value, ...updates };
@@ -121,6 +140,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 
 		if (saved) {
 			saveError.value = null;
+			hasCommitted.value = true;
 			// Clear overrides for keys that were successfully saved,
 			// but preserve any NEW overrides that arrived while the request was in flight.
 			clearOverridesForSettledKeys(updates);
@@ -188,5 +208,5 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		saveDebounce.flushIfPending();
 	});
 
-	return { config, saving, saveError, updateConfig, retry };
+	return { config, saving, saveState, saveError, updateConfig, retry };
 }

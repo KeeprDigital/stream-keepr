@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
@@ -201,19 +202,25 @@ describe('useScreenStore error reporting', () => {
 	it('leaves the conflict retry able to recognise the conflict it retries', async () => {
 		// Where the substitution sits is load-bearing, and true by construction is not
 		// pinned: it wraps the whole action, so `withConflictRetry` — nested further in —
-		// still meets the raw FetchError and can read its 409. Substitute one level
-		// deeper and `isConflictError` sees an Error carrying no status, the refresh and
-		// the retry never run, and a write that should have settled reports a sentence
-		// instead. The existing conflict fixtures cannot see that: their failures carry
-		// no body sentence, so nothing about them changes when the substitution moves.
+		// still meets the raw FetchError and can read its 409 and marked body. Substitute
+		// one level deeper and `isConflictError` sees an Error carrying no status, the
+		// refresh and the retry never run, and a write that should have settled reports a
+		// sentence instead. The fixture carries the state-conflict mark because since
+		// #381 only a marked 409 — a lost race — is retried at all; an unmarked one is a
+		// refusal, pinned in the config-and-realtime suite.
 		store.screens = [createMockScreen({ id: 5, name: 'Old', stateVersion: 1 })];
 		mockRepo.update
-			.mockRejectedValueOnce(explainedRefusal(
-				409,
-				'Conflict',
-				'Another operator changed this Screen',
-				`[PATCH] "/api/events/1/screens/5"`,
-			))
+			.mockRejectedValueOnce(transportFailure({
+				status: 409,
+				statusText: 'Conflict',
+				body: {
+					statusCode: 409,
+					statusMessage: 'Conflict',
+					message: 'Screen 5 state was modified concurrently',
+					data: { code: STATE_CONFLICT_CODE },
+				},
+				request: `[PATCH] "/api/events/1/screens/5"`,
+			}))
 			.mockResolvedValueOnce(createMockScreen({ id: 5, name: 'Renamed', stateVersion: 3 }));
 		mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Refreshed', stateVersion: 2 }));
 

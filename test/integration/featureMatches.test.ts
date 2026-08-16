@@ -271,6 +271,11 @@ describe('feature match slots API', () => {
 		// already exists" any unique index violation would otherwise produce.
 		const losing = responses.find(response => response.status === 409)!;
 		expect(losing._data.message).toContain('state was modified concurrently');
+		// And marked as a lost race on the wire, because the client's conflict
+		// retry replays only a marked 409 — an unmarked one is a refusal it must
+		// surface instead (#381). This is the end-to-end proof the mark the
+		// error hook stamps actually serializes through Nitro.
+		expect(losing._data.data).toEqual({ code: 'state-conflict' });
 
 		const stored = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);

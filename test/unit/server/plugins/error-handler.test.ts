@@ -16,6 +16,7 @@ import {
 import { MeleeCredentialCryptoError } from '~~/server/utils/meleeCredentialCrypto';
 import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
+import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusal';
 import { scanSourceForRefusals, typeScriptFilesUnder } from '~~/test/helpers/routeRefusalScan';
 
@@ -158,6 +159,32 @@ describe('error-handler mapping logic', () => {
 			expect(error.statusMessage).toBe('Conflict');
 			expect(error.message).toContain('match 42 state was modified concurrently');
 			expect(error.unhandled).toBe(false);
+		});
+
+		// The client's conflict retry replays a write only for a lost race, never
+		// for a refusal — and the two arrive as the same 409 unless the race is
+		// marked (#381). The mark rides the body's `data.code`, the seam the
+		// Broadcast Graphics rejection codes already cross the wire on.
+		it('marks the body as a state conflict, so a refusal 409 stays distinguishable', () => {
+			const error: MappableNitroError = {
+				statusCode: 500,
+				message: 'Something went wrong',
+				cause: new StateConflictError('Screen', 3),
+				unhandled: true,
+			};
+			mapPublicNitroError(error);
+			expect(error.data).toEqual({ code: STATE_CONFLICT_CODE });
+		});
+
+		it('leaves a refusal 409 unmarked', () => {
+			const error: MappableNitroError = {
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
+				unhandled: false,
+			};
+			mapPublicNitroError(error);
+			expect(error.data).toBeUndefined();
 		});
 	});
 

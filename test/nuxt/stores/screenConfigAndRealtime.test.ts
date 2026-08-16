@@ -1,8 +1,18 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
+import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+
+/**
+ * A lost concurrency race as `$fetch` delivers it: the 409 whose body
+ * `mapPublicNitroError` marked as a state conflict. Only this shape may be
+ * absorbed by a refresh-and-retry; an unmarked 409 is a refusal (#381).
+ */
+function stateConflictFailure() {
+	return { statusCode: 409, data: { data: { code: STATE_CONFLICT_CODE } } };
+}
 
 // ── Mock Dependencies ──
 
@@ -266,7 +276,7 @@ describe('useScreenStore config and realtime', () => {
 			const updated = createMockScreen({ id: 1, screenConfig: { height: 1080, width: 1920 }, stateVersion: 4 });
 			store.screens = [stale];
 			mockRepo.updateScreenConfig
-				.mockRejectedValueOnce({ statusCode: 409 })
+				.mockRejectedValueOnce(stateConflictFailure())
 				.mockResolvedValueOnce(updated);
 			mockRepo.getById.mockResolvedValue(fresh);
 
@@ -276,6 +286,28 @@ describe('useScreenStore config and realtime', () => {
 			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(1, 1, 1, { width: 1920 }, 2);
 			expect(mockRepo.updateScreenConfig).toHaveBeenNthCalledWith(2, 1, 1, { width: 1920 }, 3);
 			expect(store.screens[0]).toEqual(updated);
+		});
+
+		// A refusal is the authority's judgement about the request itself — a
+		// reference that is not selectable, a template that cannot be revised —
+		// and no refresh changes it. Replaying one silently cost a second
+		// multi-second save before surfacing generically (#381).
+		it('surfaces an unmarked 409 refusal without refreshing or replaying the write', async () => {
+			const stale = createMockScreen({ id: 1, screenConfig: {}, stateVersion: 2 });
+			store.screens = [stale];
+			mockRepo.updateScreenConfig.mockRejectedValue({
+				statusCode: 409,
+				data: { message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable' },
+			});
+
+			// The write path re-raises through `withFailureSentence`, so what
+			// propagates carries the authority's own sentence as its message.
+			await expect(store.updateScreenConfig(1, 1, { width: 1920 })).rejects.toThrow(
+				'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
+			);
+
+			expect(mockRepo.getById).not.toHaveBeenCalled();
+			expect(mockRepo.updateScreenConfig).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -492,7 +524,7 @@ describe('useScreenStore config and realtime', () => {
 
 				const merged = createMockScreen({ id: 10, screenConfig: { width: 1920, background: '#fff' }, stateVersion: 5 });
 				mockRepo.updateScreenConfig
-					.mockRejectedValueOnce({ statusCode: 409 })
+					.mockRejectedValueOnce(stateConflictFailure())
 					.mockResolvedValueOnce(merged);
 
 				const save = store.updateScreenConfig(1, 10, { width: 1920 });

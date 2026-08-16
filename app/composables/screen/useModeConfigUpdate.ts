@@ -32,7 +32,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 
 	const screenStore = useScreenStore();
 
-	const { config, saving, saveError, updateConfig, retry } = useConfigUpdate<ConfigType>({
+	const { config, saving, saveState, saveError, updateConfig, retry } = useConfigUpdate<ConfigType>({
 		getStoreConfig: () => {
 			const screen = screenStore.screens.find(s => s.id === toValue(screenId));
 			const modeConfigs = (screen?.modeConfigs ?? {}) as ModeConfigsMap;
@@ -51,5 +51,5 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 		updateConfig(displayDefaults as Partial<ConfigType>);
 	}
 
-	return { config, saving, saveError, updateConfig, resetConfig, retry };
+	return { config, saving, saveState, saveError, updateConfig, resetConfig, retry };
 }

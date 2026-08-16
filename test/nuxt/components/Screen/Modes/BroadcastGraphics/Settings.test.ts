@@ -39,11 +39,17 @@ mockNuxtImport('useRouter', () => () => ({
 	beforeResolve: () => () => {},
 }));
 mockNuxtImport('useScreenStore', () => () => ({ updateScreenConfig: vi.fn().mockResolvedValue(undefined) }));
+const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
+const mockSaveError = ref<string | null>(null);
+const mockRetry = vi.fn();
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
 	saving: ref(false),
+	saveState: mockSaveState,
+	saveError: mockSaveError,
 	updateConfig: mockUpdateConfig,
 	resetConfig: vi.fn(),
+	retry: mockRetry,
 }));
 const mockLeaseWritable = ref(true);
 const mockLeaseEnabled = ref<boolean | null>(null);
@@ -87,8 +93,10 @@ const EditWorkspaceStub = defineComponent({
 		writable: { type: Boolean, default: true },
 		canTakeOver: { type: Boolean, default: false },
 		playoutDisconnected: { type: Boolean, default: false },
+		saveState: { type: String, default: 'idle' },
+		saveError: { type: String, default: null },
 	},
-	emits: ['update:graphics', 'update:selectedTarget', 'takeOver'],
+	emits: ['update:graphics', 'update:selectedTarget', 'takeOver', 'retrySave'],
 	template: `<div
 		data-testid="edit-workspace"
 		:data-selected-graphic="selectedGraphicId ?? ''"
@@ -96,6 +104,8 @@ const EditWorkspaceStub = defineComponent({
 		:data-writable="String(writable)"
 		:data-can-take-over="String(canTakeOver)"
 		:data-playout-disconnected="String(playoutDisconnected)"
+		:data-save-state="saveState"
+		:data-save-error="saveError ?? ''"
 	/>`,
 });
 
@@ -184,6 +194,8 @@ describe('broadcastGraphicsSettings', () => {
 		mockRoute.query = {};
 		mockLeaseWritable.value = true;
 		mockLeaseEnabled.value = null;
+		mockSaveState.value = 'idle';
+		mockSaveError.value = null;
 	});
 
 	it('opens the Screen configuration page on the Live workspace', async () => {
@@ -308,6 +320,35 @@ describe('broadcastGraphicsSettings', () => {
 		await nextTick();
 
 		expect(mockTakeOver).toHaveBeenCalled();
+	});
+
+	// The save state travels from the mode-config write to the workspace that
+	// asked for the write, and a retry travels back (#381).
+	it('hands the Edit workspace the authored save\'s state and sentence', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockSaveState.value = 'failed';
+		mockSaveError.value = 'Graphic Asset Reference at graphics.slate.items.logo.asset is not selectable';
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const workspace = wrapper.get('[data-testid="edit-workspace"]');
+		expect(workspace.attributes('data-save-state')).toBe('failed');
+		expect(workspace.attributes('data-save-error'))
+			.toBe('Graphic Asset Reference at graphics.slate.items.logo.asset is not selectable');
+	});
+
+	it('re-sends the failed save on the workspace\'s retry', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		mockSaveState.value = 'failed';
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		wrapper.getComponent(EditWorkspaceStub).vm.$emit('retrySave');
+		await nextTick();
+
+		expect(mockRetry).toHaveBeenCalled();
 	});
 
 	it('asks for the Graphics Authoring Lease only while the Edit workspace is open', async () => {

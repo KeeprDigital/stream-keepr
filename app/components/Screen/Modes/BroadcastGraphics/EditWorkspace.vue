@@ -39,6 +39,19 @@ const props = defineProps<{
 	 * instead of claiming anything.
 	 */
 	playoutDisconnected?: boolean;
+	/**
+	 * The authored save's answer, from the mode-config write this workspace's
+	 * edits funnel into (#381). `committed` is an affirmative fact rather than
+	 * the absence of `saving`: a save can run for seconds against deployed
+	 * remote D1 (#374), and an author who looked away needs the difference
+	 * between "it landed" and "the failure toast was missed" said out loud.
+	 */
+	saveState?: 'idle' | 'saving' | 'committed' | 'failed';
+	/**
+	 * The sentence the authority wrote about a failed save — a CAS refusal names
+	 * the slot to repair — shown verbatim in place of generic wording.
+	 */
+	saveError?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -51,6 +64,8 @@ const emit = defineEmits<{
 	'update:channels': [next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 	'takeOver': [];
+	/** Re-send the failed save's still-held updates. */
+	'retrySave': [];
 }>();
 
 /**
@@ -123,6 +138,17 @@ function selectPlacedGraphic(graphicId: string) {
  */
 const canAuthor = computed(() => props.writable === true);
 
+/**
+ * Only the session whose write it is may be told about it. An observer's
+ * workspace has no save in flight, and a failure strip on it would prescribe
+ * retrying a colleague's write.
+ */
+const visibleSaveState = computed(() => {
+	if (!canAuthor.value || !props.saveState || props.saveState === 'idle')
+		return null;
+	return props.saveState;
+});
+
 const leaseNotice = computed(() => {
 	if (canAuthor.value)
 		return null;
@@ -155,6 +181,43 @@ const leaseNotice = computed(() => {
 			>
 				Take over
 			</UButton>
+		</div>
+
+		<div
+			v-if="visibleSaveState === 'failed'"
+			class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-error/40 bg-error/10 p-3"
+			data-testid="edit-save-state"
+			data-save-state="failed"
+		>
+			<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 text-error" />
+			<p class="min-w-0 flex-1 text-sm">
+				{{ saveError ?? 'The last save of this Screen\'s authored graphics failed.' }}
+			</p>
+			<UButton
+				size="xs"
+				color="error"
+				variant="soft"
+				icon="i-lucide-rotate-cw"
+				data-testid="edit-save-retry"
+				@click="emit('retrySave')"
+			>
+				Retry
+			</UButton>
+		</div>
+		<div
+			v-else-if="visibleSaveState"
+			class="mb-2 flex items-center justify-end gap-1.5 text-xs text-muted"
+			data-testid="edit-save-state"
+			:data-save-state="visibleSaveState"
+		>
+			<template v-if="visibleSaveState === 'saving'">
+				<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
+				Saving changes…
+			</template>
+			<template v-else>
+				<UIcon name="i-lucide-check" class="size-3.5 text-success" />
+				All changes saved
+			</template>
 		</div>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">

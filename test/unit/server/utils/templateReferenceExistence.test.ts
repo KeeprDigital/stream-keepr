@@ -95,7 +95,8 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 		]);
 
 		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
-			.rejects.toMatchObject({
+			.rejects
+			.toMatchObject({
 				statusCode: 409,
 				message: 'Broadcast Graphic Template references Graphic Asset Revisions that do not exist: '
 					+ 'graphics.lower-third.items.logo.asset, graphics.lower-third.items.badge.asset',
@@ -107,7 +108,8 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 		const document = broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]);
 
 		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
-			.resolves.toBeUndefined();
+			.resolves
+			.toBeUndefined();
 	});
 
 	it('asks the library nothing for a document with no references', async () => {
@@ -146,7 +148,8 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 		});
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
-			.rejects.toMatchObject({
+			.rejects
+			.toMatchObject({
 				statusCode: 409,
 				message: 'Feature Match Layout Template references Graphic Asset Revisions that do not exist: '
 					+ 'layout.frame.backgroundImage, layout.composition.items.logo.asset',
@@ -158,7 +161,8 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 		const document = featureMatchLayout({ backgroundImage: reference('asset-1', 'revision-1') });
 
 		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
-			.resolves.toBeUndefined();
+			.resolves
+			.toBeUndefined();
 	});
 
 	it('asks the library nothing for a document with no references', async () => {

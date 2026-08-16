@@ -34,7 +34,7 @@ const {
 	() => props.screen.id,
 );
 
-const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'broadcast-graphics',
@@ -251,10 +251,13 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 				:lease-status="editLease.status.value"
 				:can-take-over="editLease.canTakeOver.value"
 				:playout-disconnected="playoutDisconnected"
+				:save-state="saveState"
+				:save-error="saveError"
 				@update:graphics="updateGraphics"
 				@update:channels="updateChannels"
 				@update:selected-target="setSelectedTarget"
 				@take-over="editLease.takeOver"
+				@retry-save="retry"
 			/>
 
 			<BroadcastGraphicsLiveWorkspace

@@ -229,4 +229,58 @@ describe('broadcastGraphicsEditWorkspace', () => {
 
 		expect(wrapper.get('[data-testid="inspector"]').attributes('data-game')).toBe('mtg');
 	});
+
+	/**
+	 * The save's answer, on the surface where the question is asked (#381). A
+	 * first authored save of an ordinary show measured ~8.3 s against deployed
+	 * remote D1 (#374), and an author tempted to navigate away mid-save had
+	 * nothing here saying whether the write landed.
+	 */
+	describe('save state', () => {
+		it('says a save is in flight', async () => {
+			const wrapper = await mountWorkspace({ saveState: 'saving' });
+
+			const state = wrapper.get('[data-testid="edit-save-state"]');
+			expect(state.attributes('data-save-state')).toBe('saving');
+			expect(state.text()).toContain('Saving');
+		});
+
+		// Committed is an affirmative fact, not the absence of "Saving…" — the
+		// distinction an author who looked away cannot otherwise make.
+		it('confirms a committed save', async () => {
+			const wrapper = await mountWorkspace({ saveState: 'committed' });
+
+			const state = wrapper.get('[data-testid="edit-save-state"]');
+			expect(state.attributes('data-save-state')).toBe('committed');
+			expect(state.text()).toMatch(/saved/i);
+		});
+
+		it('reports a failed save in the authority\'s own words, with a retry', async () => {
+			const wrapper = await mountWorkspace({
+				saveState: 'failed',
+				saveError: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
+			});
+
+			const state = wrapper.get('[data-testid="edit-save-state"]');
+			expect(state.attributes('data-save-state')).toBe('failed');
+			expect(state.text()).toContain('Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable');
+
+			await wrapper.get('[data-testid="edit-save-retry"]').trigger('click');
+			expect(wrapper.emitted('retrySave')).toHaveLength(1);
+		});
+
+		it('shows nothing before the first edit', async () => {
+			const wrapper = await mountWorkspace({ saveState: 'idle' });
+
+			expect(wrapper.find('[data-testid="edit-save-state"]').exists()).toBe(false);
+		});
+
+		// An observer's workspace projects a colleague's accepted changes; it has
+		// no write in flight and must not claim one.
+		it('shows no save state to an observing session', async () => {
+			const wrapper = await mountWorkspace({ writable: false, saveState: 'failed', saveError: 'refused' });
+
+			expect(wrapper.find('[data-testid="edit-save-state"]').exists()).toBe(false);
+		});
+	});
 });

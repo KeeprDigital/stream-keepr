@@ -178,6 +178,101 @@ describe('useConfigUpdate', () => {
 	});
 
 	/*
+	 * The save's answer, as a state a surface can show (#381). An author mid-way
+	 * through an 8-second save (#374's measurement) has exactly one question —
+	 * "did my write land?" — and `saving` alone cannot answer it: the flag
+	 * clearing is indistinguishable from a failure whose toast was missed.
+	 */
+	describe('saveState', () => {
+		function createSaveStateSetup(saveToStore: (updates: Partial<TestConfig>) => Promise<unknown>) {
+			const storeConfig = ref<Partial<TestConfig>>({});
+			const { saveState, saveError, updateConfig, retry } = useConfigUpdate<TestConfig>({
+				getStoreConfig: () => storeConfig.value,
+				saveToStore,
+				defaults: { color: 'red', size: 10 },
+				debounceMs: 100,
+				errorMessage: 'Test error',
+			});
+			return { saveState, saveError, updateConfig, retry };
+		}
+
+		it('is idle before any edit, saving while one is pending, and committed once the flush lands', async () => {
+			const { saveState, updateConfig } = createSaveStateSetup(vi.fn().mockResolvedValue({ ok: true }));
+
+			expect(saveState.value).toBe('idle');
+
+			updateConfig({ color: 'green' });
+			expect(saveState.value).toBe('saving');
+
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveState.value).toBe('committed');
+		});
+
+		it('is failed after a refused flush, carrying the failure\'s own sentence', async () => {
+			const { saveState, saveError, updateConfig } = createSaveStateSetup(
+				vi.fn().mockRejectedValue(new Error('Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable')),
+			);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable');
+			// The toast quotes the same sentence rather than the caller's static
+			// wording — the widening #286 made safe (see useRequestFeedback).
+			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+				description: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
+			}));
+		});
+
+		it('falls back to the caller\'s static wording when the failure wrote no sentence', async () => {
+			const { updateConfig } = createSaveStateSetup(vi.fn().mockResolvedValue(null));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+				description: 'Test error',
+			}));
+		});
+
+		it('returns to saving on a retry, and commits when the retry lands', async () => {
+			const { saveState, updateConfig, retry } = createSaveStateSetup(
+				vi.fn()
+					.mockRejectedValueOnce(new Error('refused'))
+					.mockResolvedValueOnce({ ok: true }),
+			);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveState.value).toBe('failed');
+
+			const retried = retry();
+			expect(saveState.value).toBe('saving');
+			await retried;
+			expect(saveState.value).toBe('committed');
+		});
+
+		it('returns to saving when the author edits again after a failure', async () => {
+			const { saveState, updateConfig } = createSaveStateSetup(
+				vi.fn()
+					.mockRejectedValueOnce(new Error('refused'))
+					.mockResolvedValueOnce({ ok: true }),
+			);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveState.value).toBe('failed');
+
+			updateConfig({ color: 'blue' });
+			expect(saveState.value).toBe('saving');
+
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveState.value).toBe('committed');
+		});
+	});
+
+	/*
 	 * Disposal used to cancel the pending write, and this suite pinned that (#308).
 	 *
 	 * Local-first is what made it silent: the edit is applied to `localOverrides` the
