@@ -172,8 +172,10 @@ merge-triggered — and runs exactly what `pnpm deploy` runs. It decides for
 itself whether the silent-video validator Worker must deploy first: the
 `validator` input defaults to `auto`, which diffs
 `workers/silent-video-validator` between the commit the last successful
-production deployment shipped (read from the GitHub `production` environment's
-records) and the target release; `always`/`never` override the detection.
+production deployment shipped and the target release; `always`/`never`
+override the detection. The deployed commit is read from the `production` git
+tag, which a successful deploy moves to exactly what it shipped (with the
+GitHub `production` environment's deployment records as a pre-tag fallback).
 Unlike the local path it ships a
 **released tag**, never main's HEAD: its `version` input takes `latest` (the
 default) or an explicit tag like `v1.2.0`, resolved through GitHub Releases —

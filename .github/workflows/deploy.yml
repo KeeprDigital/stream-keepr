@@ -61,9 +61,13 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  # The validator auto-detection reads this environment's deployment records
-  # to learn which commit production is actually running.
+  # write: a successful deploy moves the `production` git tag to the commit
+  # it shipped — the authoritative deployed-state marker the validator
+  # auto-detection diffs against.
+  contents: write
+  # Fallback for the auto-detection while no `production` tag exists yet:
+  # the environment's deployment records. Less precise — a record carries
+  # the dispatch-time main commit, not the deployed tag's commit.
   deployments: read
 
 jobs:
@@ -115,25 +119,34 @@ jobs:
               always) echo "true|forced by the always input"; return ;;
               never) echo "false|suppressed by the never input"; return ;;
             esac
-            # Newest-first; the first deployment whose latest status is
-            # success is what production is running. This run's own record
-            # is still in_progress, so it never matches.
-            deployed_sha=""
-            for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=20" --jq '.[].id'); do
-              state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
-              if [ "$state" = "success" ]; then
-                deployed_sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq .sha)
-                break
-              fi
-            done
+            # The `production` tag marks the exact commit the last successful
+            # deploy shipped (moved by this workflow's final step).
+            deployed_sha=$(git rev-parse -q --verify 'refs/tags/production^{commit}' || true)
+            baseline="the production tag"
+            if [ -z "$deployed_sha" ]; then
+              # Fallback: the environment's deployment records. Imprecise —
+              # a record's sha is main at dispatch time, not the deployed
+              # tag's commit — but pre-tag history is better than nothing.
+              # Newest-first; the first record whose latest status is success
+              # is what production runs. This run's own record is still
+              # in_progress, so it never matches.
+              baseline="deployment records"
+              for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=20" --jq '.[].id'); do
+                state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
+                if [ "$state" = "success" ]; then
+                  deployed_sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq .sha)
+                  break
+                fi
+              done
+            fi
             if [ -z "$deployed_sha" ]; then
               echo "true|no successful production deployment on record — deploying it is the safe default"
             elif ! git cat-file -e "$deployed_sha" 2> /dev/null; then
               echo "true|deployed commit $deployed_sha is unknown to this history — deploying it is the safe default"
             elif git diff --quiet "$deployed_sha" HEAD -- workers/silent-video-validator; then
-              echo "false|workers/silent-video-validator unchanged since deployed $deployed_sha"
+              echo "false|workers/silent-video-validator unchanged since deployed $deployed_sha ($baseline)"
             else
-              echo "true|workers/silent-video-validator changed since deployed $deployed_sha"
+              echo "true|workers/silent-video-validator changed since deployed $deployed_sha ($baseline)"
             fi
           }
           result=$(decide)
@@ -153,6 +166,8 @@ jobs:
         run: pnpm deploy:validator
       - name: Deploy (build, dry run, migrate D1, promote, verify)
         run: pnpm deploy
+      - name: Move the production tag to the deployed commit
+        run: git push origin +HEAD:refs/tags/production
       - name: Remind the operator what is still owed
         run: |
           echo "Release ${{ steps.release.outputs.tag }} promoted and verified against https://stream.keepr.digital." >> "$GITHUB_STEP_SUMMARY"
