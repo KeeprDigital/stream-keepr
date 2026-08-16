@@ -41,8 +41,12 @@ export async function assertBroadcastGraphicTemplateReferencesExist(
 			revisionId: graphicAssetRevisionId(item.reference.revisionId),
 		})),
 	});
+	// A hole in the batch answer fails closed, as the Screen write path's does: a
+	// reference the library did not answer for has not been shown to exist, and
+	// accepting it would store exactly the unresolvable reference this check
+	// refuses writes to prevent.
 	const missing = references
-		.filter((_, index) => statuses[index]?.outcome === 'missing')
+		.filter((_, index) => statuses[index] === undefined || statuses[index]?.outcome === 'missing')
 		.map(item => item.ownerSlot);
 
 	if (missing.length > 0) {

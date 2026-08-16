@@ -119,6 +119,26 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 	});
+
+	// The batch's refusal hole, pinned the way the Screen write path pins its own
+	// (c8a3b121): a reference the answer is silent about fails closed. Fail-open
+	// here would store exactly the unresolvable reference the check exists to
+	// refuse.
+	it('refuses a reference the batch answer is silent about', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
+		const document = broadcastGraphic([
+			media('logo', reference('asset-1', 'revision-1')),
+			media('badge', reference('asset-2', 'revision-2')),
+		]);
+
+		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: 'Broadcast Graphic Template references Graphic Asset Revisions that do not exist: '
+					+ 'graphics.lower-third.items.badge.asset',
+			});
+	});
 });
 
 describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
@@ -171,5 +191,21 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 		await assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, featureMatchLayout({}));
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
+	});
+
+	it('refuses a reference the batch answer is silent about', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
+		const document = featureMatchLayout({
+			backgroundImage: reference('asset-1', 'revision-1'),
+			items: [media('logo', reference('asset-2', 'revision-2'))],
+		});
+
+		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: 'Feature Match Layout Template references Graphic Asset Revisions that do not exist: '
+					+ 'layout.composition.items.logo.asset',
+			});
 	});
 });
