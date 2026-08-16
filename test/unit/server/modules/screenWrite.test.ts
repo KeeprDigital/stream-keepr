@@ -26,7 +26,7 @@ const mockScreenOutputAssetCapabilities = {
 	prepare: vi.fn(),
 };
 const mockGraphicsAssets = {
-	inspectGraphicAssetRevision: vi.fn(),
+	inspectGraphicAssetRevisions: vi.fn(),
 };
 
 /**
@@ -479,23 +479,25 @@ describe('screenWriteModule', () => {
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
-			const inspectGraphicAssetRevision = vi.fn().mockResolvedValue({
+			const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([{
 				outcome: 'available',
 				lifecycleState: 'active',
 				kind: 'image',
-			});
+			}]);
 
 			await screenWriteModule().updateModeConfig({
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
 				config: { layout: config.layout },
-				graphicsAssets: () => ({ inspectGraphicAssetRevision }),
+				graphicsAssets: () => ({ inspectGraphicAssetRevisions }),
 			});
 
-			expect(inspectGraphicAssetRevision).toHaveBeenCalledWith({
-				assetId: graphicAssetId('asset-1'),
-				revisionId: graphicAssetRevisionId('revision-1'),
+			expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
+				references: [{
+					assetId: graphicAssetId('asset-1'),
+					revisionId: graphicAssetRevisionId('revision-1'),
+				}],
 			});
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
 		});
@@ -513,16 +515,66 @@ describe('screenWriteModule', () => {
 				mode: 'feature-match-overlay',
 				config: { layout: config.layout },
 				graphicsAssets: () => ({
-					inspectGraphicAssetRevision: vi.fn().mockResolvedValue({
+					inspectGraphicAssetRevisions: vi.fn().mockResolvedValue([{
 						outcome: 'unavailable',
 						retryable: true,
-					}),
+					}]),
 				}),
 			})).rejects.toMatchObject({
 				statusCode: 409,
 				message: expect.stringContaining('layout.frame.backgroundImage'),
 			});
 
+			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
+		});
+
+		// The batching pin. One selectability question per changed reference was one
+		// remote catalogue round-trip each — the #374 mechanism that priced the
+		// documented-cap save at ~90 s — so the module promises to ask the library
+		// exactly once, with every changed reference in discovery order, and to keep
+		// refusing with the first unselectable slot's name.
+		it('asks the library once for every changed reference and refuses with the first unselectable slot', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = {
+				assetId: graphicAssetId('asset-1'),
+				revisionId: graphicAssetRevisionId('revision-1'),
+			};
+			const [topBar] = config.layout.composition.items;
+			if (topBar?.type !== 'group')
+				throw new Error('Fixture expects the default layout to lead with the Top Player Bar group');
+			const [nameRecord] = topBar.children;
+			if (nameRecord?.type !== 'text')
+				throw new Error('Fixture expects the Top Player Bar to lead with a Text Graphic Item');
+			nameRecord.typography.font = {
+				kind: 'asset',
+				reference: {
+					assetId: graphicAssetId('asset-2'),
+					revisionId: graphicAssetRevisionId('revision-1'),
+				},
+			};
+			const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([
+				{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+				{ outcome: 'missing' },
+			]);
+
+			await expect(screenWriteModule().updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+				graphicsAssets: () => ({ inspectGraphicAssetRevisions }),
+			})).rejects.toMatchObject({
+				statusCode: 409,
+				message: expect.stringContaining('typography.font'),
+			});
+
+			expect(inspectGraphicAssetRevisions).toHaveBeenCalledTimes(1);
+			expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
+				references: [
+					{ assetId: graphicAssetId('asset-1'), revisionId: graphicAssetRevisionId('revision-1') },
+					{ assetId: graphicAssetId('asset-2'), revisionId: graphicAssetRevisionId('revision-1') },
+				],
+			});
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 
@@ -567,17 +619,17 @@ describe('screenWriteModule', () => {
 			// asks nothing must not build the thing it would have asked.
 			expect(mockScreenService.updateModeConfig).toHaveBeenCalled();
 			expect(provideGraphicsAssets).not.toHaveBeenCalled();
-			expect(mockGraphicsAssets.inspectGraphicAssetRevision).not.toHaveBeenCalled();
+			expect(mockGraphicsAssets.inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 
 			// The control the assertion above needs: the same submission with the
 			// revision moved does build one. Without it this test would pass just as
 			// happily if the reference were never discovered in the merged
 			// configuration at all.
-			mockGraphicsAssets.inspectGraphicAssetRevision.mockResolvedValue({
+			mockGraphicsAssets.inspectGraphicAssetRevisions.mockResolvedValue([{
 				outcome: 'available',
 				lifecycleState: 'active',
 				kind: 'image',
-			});
+			}]);
 			const moved = structuredClone(config);
 			moved.layout.frame.backgroundImage = {
 				assetId: graphicAssetId('asset-1'),
@@ -593,9 +645,11 @@ describe('screenWriteModule', () => {
 			});
 
 			expect(provideGraphicsAssets).toHaveBeenCalledTimes(1);
-			expect(mockGraphicsAssets.inspectGraphicAssetRevision).toHaveBeenCalledWith({
-				assetId: 'asset-1',
-				revisionId: 'revision-2',
+			expect(mockGraphicsAssets.inspectGraphicAssetRevisions).toHaveBeenCalledWith({
+				references: [{
+					assetId: 'asset-1',
+					revisionId: 'revision-2',
+				}],
 			});
 		});
 

@@ -574,6 +574,31 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		compatibilityProfile: string;
 		facts: GraphicAsset['facts'];
 	} | undefined>;
+	/**
+	 * `findRevisionContent`, set-wise: one lookup for every pair an authored
+	 * save changes, because paying one catalogue round-trip per reference is
+	 * what put the documented-cap save at ~90 s on deployed remote D1 (#374).
+	 *
+	 * Input pairs are treated as a set — duplicates resolve to one row — and a
+	 * pair that does not resolve contributes no row rather than a hole.
+	 */
+	findRevisionContents: (references: Array<{
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}>) => Promise<Array<{
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+		digest: string;
+		byteLength: number;
+		canonicalMime: GraphicAssetCanonicalMime;
+		kind: 'image' | 'silent-video' | 'font';
+		lifecycleState: 'active' | 'retired' | 'trashed';
+		/** The catalogue metadata snapshot a Template Package carries as provenance. */
+		name: string;
+		revisionNumber: number;
+		compatibilityProfile: string;
+		facts: GraphicAsset['facts'];
+	}>>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
 	/**
 	 * The preview content for one Graphic Asset, with the facts a reader needs to
@@ -813,6 +838,21 @@ export interface GraphicsAssetLibrary {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
 	}) => Promise<GraphicAssetReferenceStatus>;
+	/**
+	 * `inspectGraphicAssetRevision`, set-wise: every reference an authored save
+	 * changes, answered in one catalogue round-trip plus one canonical
+	 * observation per distinct content digest — never one of each per
+	 * reference, which is what put the documented-cap save at ~90 s (#374).
+	 *
+	 * Statuses align with the input by index; duplicate pairs share one
+	 * resolution.
+	 */
+	inspectGraphicAssetRevisions: (input: {
+		references: Array<{
+			assetId: GraphicAssetId;
+			revisionId: GraphicAssetRevisionId;
+		}>;
+	}) => Promise<GraphicAssetReferenceStatus[]>;
 	inspectGraphicAssetRevisionContent: (input: {
 		assetId: GraphicAssetId;
 		revisionId: GraphicAssetRevisionId;
@@ -5224,6 +5264,43 @@ export function createGraphicsAssetLibrary(
 					? { targetCompatibility: content.facts.targetCompatibility }
 					: {}),
 			};
+		},
+		async inspectGraphicAssetRevisions(input) {
+			if (input.references.length === 0)
+				return [];
+			const contents = await catalogueRequest(
+				() => requireCatalogue().findRevisionContents(input.references),
+				'Graphic Asset Revision lookup is temporarily unavailable',
+			);
+			const contentByPair = new Map(
+				contents.map(content => [`${content.assetId}\n${content.revisionId}`, content]),
+			);
+			// One observation per distinct digest: revisions sharing content share
+			// the canonical object, so they cannot disagree with it differently.
+			const contentByDigest = new Map(contents.map(content => [content.digest, content]));
+			const observations = new Map(await Promise.all(
+				[...contentByDigest].map(async ([digest, content]) =>
+					[digest, await observeCanonicalContent(content)] as const),
+			));
+			for (const [digest, observation] of observations) {
+				if (observation.outcome !== 'available' && observation.disagreement)
+					await observeCanonicalDisagreement({ digest });
+			}
+			return input.references.map((reference) => {
+				const content = contentByPair.get(`${reference.assetId}\n${reference.revisionId}`);
+				if (!content)
+					return { outcome: 'missing' };
+				if (observations.get(content.digest)?.outcome !== 'available')
+					return { outcome: 'unavailable', retryable: true };
+				return {
+					outcome: 'available',
+					lifecycleState: content.lifecycleState,
+					kind: content.kind,
+					...(content.facts.kind === 'silent-video'
+						? { targetCompatibility: content.facts.targetCompatibility }
+						: {}),
+				};
+			});
 		},
 		async inspectGraphicAssetRevisionContent(input) {
 			const content = await catalogueRequest(

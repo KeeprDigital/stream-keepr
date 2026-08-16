@@ -2633,6 +2633,53 @@ export function createD1GraphicsAssetCatalogue(
 					}
 				: undefined;
 		},
+		async findRevisionContents(references) {
+			if (references.length === 0)
+				return [];
+			// One statement whatever the save's size, mirroring the reference
+			// write's own json_each shape (#374): the bound array joins against
+			// the same three tables the singular lookup reads, and DISTINCT is
+			// what makes duplicate input pairs resolve to one row.
+			const result = await database.prepare(`
+				SELECT DISTINCT
+					r.asset_id, r.id AS revision_id,
+					c.digest, c.byte_length, c.canonical_mime, a.kind, a.lifecycle_state,
+					a.name, r.revision_number, r.compatibility_profile, r.technical_facts
+				FROM json_each(?) AS pair
+				JOIN graphic_asset_revisions r
+					ON r.asset_id = json_extract(pair.value, '$.assetId')
+					AND r.id = json_extract(pair.value, '$.revisionId')
+				JOIN graphic_asset_contents c ON c.digest = r.content_digest
+				JOIN graphic_assets a ON a.id = r.asset_id
+			`).bind(JSON.stringify(references)).all<{
+				asset_id: string;
+				revision_id: string;
+				digest: string;
+				byte_length: number;
+				canonical_mime: GraphicAssetCanonicalMime;
+				kind: GraphicAsset['kind'];
+				lifecycle_state: 'active' | 'retired' | 'trashed';
+				name: string;
+				revision_number: number;
+				compatibility_profile: string;
+				technical_facts: string;
+			}>();
+			if (!result.success)
+				throw new Error('Graphic Asset Revision lookup failed');
+			return result.results.map(row => ({
+				assetId: row.asset_id as GraphicAssetId,
+				revisionId: row.revision_id as GraphicAssetRevisionId,
+				digest: row.digest,
+				byteLength: row.byte_length,
+				canonicalMime: row.canonical_mime,
+				kind: row.kind,
+				lifecycleState: row.lifecycle_state,
+				name: row.name,
+				revisionNumber: row.revision_number,
+				compatibilityProfile: row.compatibility_profile,
+				facts: JSON.parse(row.technical_facts) as GraphicAsset['facts'],
+			}));
+		},
 		async listGraphicAssetUsage(assetId) {
 			const result = await database.prepare(usageSelect()).bind(assetId).all<UsageRow>();
 			if (!result.success)

@@ -86,7 +86,7 @@ interface UpdateModeConfigParams {
 	config: Record<string, unknown>;
 	stateVersion?: number;
 	originConnectionId?: string;
-	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>>;
+	graphicsAssets: Provides<Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>>;
 }
 
 const MODE_CONFIG_ENDPOINT_REQUIRED
@@ -324,35 +324,41 @@ export function screenWriteModule() {
 				screenModeGraphicAssetReferences(mode, existing.modeConfigs)
 					.map(item => [item.ownerSlot, item.reference] as const),
 			);
-			// Built at most once, and only once a reference this write actually
-			// changes has been found. Eight of the ten Screen Modes pin nothing at
-			// all, and a write to either of the other two that changes no reference
-			// asks the library nothing — none of them should build one.
-			let library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'> | undefined;
 			// A newly chosen revision must be one an author could legitimately select
 			// right now. An unchanged one is deliberately not re-checked: a pinned
 			// revision keeps resolving after its asset is retired, so re-checking it
 			// would make every later edit of an unrelated property fail.
-			for (const item of screenModeGraphicAssetReferences(mode, nextConfigs)) {
-				const current = currentReferences.get(item.ownerSlot);
-				if (sameGraphicAssetReference(current, item.reference)) {
-					continue;
-				}
-				library ??= graphicsAssets();
-				const status = await library.inspectGraphicAssetRevision({
-					assetId: graphicAssetId(item.reference.assetId),
-					revisionId: graphicAssetRevisionId(item.reference.revisionId),
+			const changed = screenModeGraphicAssetReferences(mode, nextConfigs)
+				.filter(item => !sameGraphicAssetReference(
+					currentReferences.get(item.ownerSlot),
+					item.reference,
+				));
+			// The library is built only once a reference this write actually changes
+			// has been found — eight of the ten Screen Modes pin nothing at all, and
+			// a write that changes no reference asks it nothing — and it is asked
+			// exactly once whatever the save's size: one selectability question per
+			// changed reference was one remote catalogue round-trip each, which is
+			// what put the documented-cap save at ~90 s on deployed remote D1 (#374).
+			if (changed.length > 0) {
+				const statuses = await graphicsAssets().inspectGraphicAssetRevisions({
+					references: changed.map(item => ({
+						assetId: graphicAssetId(item.reference.assetId),
+						revisionId: graphicAssetRevisionId(item.reference.revisionId),
+					})),
 				});
-				if (
-					status.outcome !== 'available'
-					|| status.lifecycleState !== 'active'
-					|| status.kind !== item.kind
-				) {
-					throw createError({
-						statusCode: 409,
-						statusMessage: 'Conflict',
-						message: `Graphic Asset Reference at ${item.ownerSlot} is not selectable`,
-					});
+				for (const [index, item] of changed.entries()) {
+					const status = statuses[index];
+					if (
+						status?.outcome !== 'available'
+						|| status.lifecycleState !== 'active'
+						|| status.kind !== item.kind
+					) {
+						throw createError({
+							statusCode: 409,
+							statusMessage: 'Conflict',
+							message: `Graphic Asset Reference at ${item.ownerSlot} is not selectable`,
+						});
+					}
 				}
 			}
 		}

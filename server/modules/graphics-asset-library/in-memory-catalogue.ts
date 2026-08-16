@@ -1162,6 +1162,34 @@ export function createInMemoryGraphicsAssetCatalogue(
 				facts: structuredClone(revision.facts),
 			};
 		},
+		async findRevisionContents(references) {
+			const seen = new Set<string>();
+			const found: Awaited<ReturnType<GraphicsAssetCatalogue['findRevisionContents']>> = [];
+			for (const reference of references) {
+				const key = `${reference.assetId}\n${reference.revisionId}`;
+				if (seen.has(key))
+					continue;
+				seen.add(key);
+				const revision = revisions.get(reference.revisionId);
+				if (!revision || revision.assetId !== reference.assetId)
+					continue;
+				const asset = assets.get(revision.assetId);
+				found.push({
+					assetId: reference.assetId,
+					revisionId: reference.revisionId,
+					digest: revision.facts.sha256,
+					byteLength: revision.facts.byteLength,
+					canonicalMime: revision.facts.canonicalMime,
+					kind: revision.facts.kind,
+					lifecycleState: asset?.lifecycle.state ?? 'active',
+					name: asset?.name ?? '',
+					revisionNumber: revision.revisionNumber,
+					compatibilityProfile: revision.compatibilityProfile,
+					facts: structuredClone(revision.facts),
+				});
+			}
+			return found;
+		},
 		async listGraphicAssetUsage(assetId) {
 			return allUsage()
 				.filter(item => item.reference.assetId === assetId)

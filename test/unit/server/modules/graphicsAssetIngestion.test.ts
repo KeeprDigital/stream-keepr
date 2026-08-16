@@ -423,6 +423,79 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 	});
 
+	// The #374 pin: a batched inspection answers by input position from one
+	// catalogue lookup and one canonical observation per distinct content digest,
+	// never one round-trip per reference.
+	it('inspects a batch of revisions with one observation per distinct content', async () => {
+		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
+		const readMetadata = vi.fn(canonicalDelegate.readMetadata);
+		const { library } = createLibrary(
+			createInMemoryStagingGraphicsObjectStore(),
+			{ ...canonicalDelegate, readMetadata },
+		);
+
+		async function ingested(key: string, bytes: Uint8Array, declaredMime?: string) {
+			const operation = await library.initiateGraphicsIngestion({
+				idempotencyKey: key,
+				initiatedBy: 'graphics-author-1',
+				name: key,
+				declaredMime,
+				duplicateContentPolicy: 'create-separate',
+				declaredByteLength: bytes.byteLength,
+			});
+			const completed = await library.uploadGraphicAsset({
+				operationId: operation.id,
+				initiatedBy: 'graphics-author-1',
+				declaredMime,
+				bytes: createBoundedByteStream(bytes, {
+					byteLength: bytes.byteLength,
+					maximumByteLength: 16 * 1024 * 1024,
+				}),
+			});
+			return {
+				assetId: completed.result!.assetId,
+				revisionId: completed.result!.revisionId,
+				report: completed.report,
+			};
+		}
+
+		const png = await ingested('batch-logo-png', transparentPixelPng);
+		const jpeg = await ingested('batch-logo-jpeg', jpegPixel, 'image/jpeg');
+		// Same bytes as `png` under create-separate: a second revision pinning the
+		// same content digest, which the observation dedupe must fold into one.
+		const pngTwin = await ingested('batch-logo-png-twin', transparentPixelPng);
+		const missing = {
+			assetId: png.assetId,
+			revisionId: graphicAssetRevisionId('missing-revision'),
+		};
+
+		readMetadata.mockClear();
+		const statuses = await library.inspectGraphicAssetRevisions({
+			references: [png, jpeg, pngTwin, png, missing],
+		});
+
+		expect(statuses).toEqual([
+			{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			{ outcome: 'missing' },
+		]);
+		// Five references, three revisions, two distinct contents: two observations.
+		expect(readMetadata).toHaveBeenCalledTimes(2);
+
+		canonicalDelegate.markUnavailable(
+			graphicsObjectIdentity(`sha256/${acceptedReport(png.report).facts.sha256}`),
+		);
+		await expect(library.inspectGraphicAssetRevisions({
+			references: [png, jpeg, pngTwin],
+		})).resolves.toEqual([
+			{ outcome: 'unavailable', retryable: true },
+			{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			{ outcome: 'unavailable', retryable: true },
+		]);
+	});
+
 	it('threads an exact requested byte range to canonical storage', async () => {
 		const canonicalDelegate = createInMemoryCanonicalGraphicsObjectStore();
 		const read = vi.fn(canonicalDelegate.read);
