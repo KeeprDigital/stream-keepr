@@ -171,8 +171,13 @@ async function main() {
 		body: JSON.stringify(body),
 	});
 
-	// A Graphics Author Session is minted on any HTML page navigation.
-	storeCookies(await fetch(`${base}/graphics-assets`, { redirect: 'manual' }));
+	// A Graphics Author Session is minted on any HTML page navigation — and the
+	// minting middleware (server/middleware/graphics-author-session.ts) acts only
+	// when the request Accepts text/html, which fetch's default `*/*` does not.
+	storeCookies(await fetch(`${base}/graphics-assets`, {
+		redirect: 'manual',
+		headers: { accept: 'text/html' },
+	}));
 	if (jar.size === 0)
 		throw new Error('No graphics author session cookie was issued by the page navigation.');
 
