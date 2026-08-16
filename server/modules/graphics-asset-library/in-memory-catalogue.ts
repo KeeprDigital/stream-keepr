@@ -128,6 +128,28 @@ export function createInMemoryGraphicsAssetCatalogue(
 		return [...values].reduce((total, value) => total + value, 0);
 	}
 
+	/** One revision's content answer, shared by the singular and set-wise lookups. */
+	function revisionContentFor(reference: {
+		assetId: GraphicAssetId;
+		revisionId: GraphicAssetRevisionId;
+	}) {
+		const revision = revisions.get(reference.revisionId);
+		if (!revision || revision.assetId !== reference.assetId)
+			return undefined;
+		const asset = assets.get(revision.assetId);
+		return {
+			digest: revision.facts.sha256,
+			byteLength: revision.facts.byteLength,
+			canonicalMime: revision.facts.canonicalMime,
+			kind: revision.facts.kind,
+			lifecycleState: asset?.lifecycle.state ?? 'active',
+			name: asset?.name ?? '',
+			revisionNumber: revision.revisionNumber,
+			compatibilityProfile: revision.compatibilityProfile,
+			facts: structuredClone(revision.facts),
+		};
+	}
+
 	/**
 	 * Everything pinning a Graphic Asset: the usage a test injected, plus every
 	 * reference an installed Template actually persisted.
@@ -1146,21 +1168,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return { outcome: 'updated', asset: structuredClone(restored) };
 		},
 		async findRevisionContent(input) {
-			const revision = revisions.get(input.revisionId);
-			if (!revision || revision.assetId !== input.assetId)
-				return undefined;
-			const asset = assets.get(revision.assetId);
-			return {
-				digest: revision.facts.sha256,
-				byteLength: revision.facts.byteLength,
-				canonicalMime: revision.facts.canonicalMime,
-				kind: revision.facts.kind,
-				lifecycleState: asset?.lifecycle.state ?? 'active',
-				name: asset?.name ?? '',
-				revisionNumber: revision.revisionNumber,
-				compatibilityProfile: revision.compatibilityProfile,
-				facts: structuredClone(revision.facts),
-			};
+			return revisionContentFor(input);
 		},
 		async findRevisionContents(references) {
 			const seen = new Set<string>();
@@ -1170,23 +1178,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 				if (seen.has(key))
 					continue;
 				seen.add(key);
-				const revision = revisions.get(reference.revisionId);
-				if (!revision || revision.assetId !== reference.assetId)
-					continue;
-				const asset = assets.get(revision.assetId);
-				found.push({
-					assetId: reference.assetId,
-					revisionId: reference.revisionId,
-					digest: revision.facts.sha256,
-					byteLength: revision.facts.byteLength,
-					canonicalMime: revision.facts.canonicalMime,
-					kind: revision.facts.kind,
-					lifecycleState: asset?.lifecycle.state ?? 'active',
-					name: asset?.name ?? '',
-					revisionNumber: revision.revisionNumber,
-					compatibilityProfile: revision.compatibilityProfile,
-					facts: structuredClone(revision.facts),
-				});
+				const content = revisionContentFor(reference);
+				if (content)
+					found.push({ assetId: reference.assetId, revisionId: reference.revisionId, ...content });
 			}
 			return found;
 		},

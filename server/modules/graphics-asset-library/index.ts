@@ -1799,6 +1799,25 @@ export function createGraphicsAssetLibrary(
 		return { outcome: 'unavailable', disagreement: result.outcome !== 'unavailable' };
 	}
 
+	/**
+	 * The `available` reference status both inspect methods answer for a
+	 * resolvable, observed revision — one shape, so the set-wise batch can never
+	 * drift from the singular's answer.
+	 */
+	function availableReferenceStatus(content: Pick<
+		NonNullable<Awaited<ReturnType<GraphicsAssetCatalogue['findRevisionContent']>>>,
+		'lifecycleState' | 'kind' | 'facts'
+	>): GraphicAssetReferenceStatus {
+		return {
+			outcome: 'available',
+			lifecycleState: content.lifecycleState,
+			kind: content.kind,
+			...(content.facts.kind === 'silent-video'
+				? { targetCompatibility: content.facts.targetCompatibility }
+				: {}),
+		};
+	}
+
 	function timestampAfter(updatedAt: string) {
 		return new Date(Math.max(
 			now().getTime(),
@@ -5256,14 +5275,7 @@ export function createGraphicsAssetLibrary(
 					await observeCanonicalDisagreement(input);
 				return { outcome: 'unavailable', retryable: true };
 			}
-			return {
-				outcome: 'available',
-				lifecycleState: content.lifecycleState,
-				kind: content.kind,
-				...(content.facts.kind === 'silent-video'
-					? { targetCompatibility: content.facts.targetCompatibility }
-					: {}),
-			};
+			return availableReferenceStatus(content);
 		},
 		async inspectGraphicAssetRevisions(input) {
 			if (input.references.length === 0)
@@ -5292,14 +5304,7 @@ export function createGraphicsAssetLibrary(
 					return { outcome: 'missing' };
 				if (observations.get(content.digest)?.outcome !== 'available')
 					return { outcome: 'unavailable', retryable: true };
-				return {
-					outcome: 'available',
-					lifecycleState: content.lifecycleState,
-					kind: content.kind,
-					...(content.facts.kind === 'silent-video'
-						? { targetCompatibility: content.facts.targetCompatibility }
-						: {}),
-				};
+				return availableReferenceStatus(content);
 			});
 		},
 		async inspectGraphicAssetRevisionContent(input) {

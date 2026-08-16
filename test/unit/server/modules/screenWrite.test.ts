@@ -576,6 +576,41 @@ describe('screenWriteModule', () => {
 				],
 			});
 			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
+
+			// When both fail, the refusal still names the FIRST slot in discovery
+			// order — the batch must not change which reference an author is sent
+			// to repair.
+			inspectGraphicAssetRevisions.mockResolvedValue([
+				{ outcome: 'missing' },
+				{ outcome: 'missing' },
+			]);
+			await expect(screenWriteModule().updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+				graphicsAssets: () => ({ inspectGraphicAssetRevisions }),
+			})).rejects.toMatchObject({
+				statusCode: 409,
+				message: expect.stringContaining('layout.frame.backgroundImage'),
+			});
+
+			// A statuses array shorter than the changed list is a library answering
+			// out of contract; the hole refuses the write rather than admitting it.
+			inspectGraphicAssetRevisions.mockResolvedValue([
+				{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
+			]);
+			await expect(screenWriteModule().updateModeConfig({
+				eventId: 1,
+				screenId: 7,
+				mode: 'feature-match-overlay',
+				config: { layout: config.layout },
+				graphicsAssets: () => ({ inspectGraphicAssetRevisions }),
+			})).rejects.toMatchObject({
+				statusCode: 409,
+				message: expect.stringContaining('typography.font'),
+			});
+			expect(mockScreenService.updateModeConfig).not.toHaveBeenCalled();
 		});
 
 		// The two laziness pins below. This operation serves all ten Screen Modes
