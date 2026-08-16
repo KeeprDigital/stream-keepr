@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.2.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.1.0...v1.2.0) (2026-08-16)
+
+
+### Features
+
+* **broadcast-graphics:** the Edit workspace answers "did my save land?" ([#381](https://github.com/KeeprDigital/stream-keepr/issues/381)) ([1108737](https://github.com/KeeprDigital/stream-keepr/commit/1108737f5c9c60c175efa7fc850c64e69ce89b70))
+* **deploy:** auto-detect whether the validator Worker must deploy ([51cae69](https://github.com/KeeprDigital/stream-keepr/commit/51cae6999e909681acfe5576e7137c5c7ecdb8b2))
+* **deploy:** validator promotion decides itself from deployment records ([57e2a14](https://github.com/KeeprDigital/stream-keepr/commit/57e2a148158f50fd372934156d8f227757589586))
+
+
+### Bug Fixes
+
+* **graphics-templates:** fail the template asserts closed on a batch-answer hole ([#382](https://github.com/KeeprDigital/stream-keepr/issues/382)) ([56ca316](https://github.com/KeeprDigital/stream-keepr/commit/56ca316f5c657f95db8fd23e9ea013d71cd85bdf))
+* **scripts:** mint the [#374](https://github.com/KeeprDigital/stream-keepr/issues/374) probe's session with an Accept: text/html header ([2d213d2](https://github.com/KeeprDigital/stream-keepr/commit/2d213d26fd81818f9ec375106ba33b077b46d856))
+
+
+### Performance
+
+* **graphics-templates:** batch both template saves' reference-existence checks ([#382](https://github.com/KeeprDigital/stream-keepr/issues/382)) ([8efc901](https://github.com/KeeprDigital/stream-keepr/commit/8efc901b29b25c492496c6ad41a6a41cabd3a7c8))
+* **screens:** batch an authored save's selectability checks into one library question ([#374](https://github.com/KeeprDigital/stream-keepr/issues/374)) ([ca8fca9](https://github.com/KeeprDigital/stream-keepr/commit/ca8fca94b56b8e04a9b97fb2dde577cd7047f0f5))
+
+
+### Refactoring
+
+* **graphics-assets:** fold the inspect status shape the review flagged, pin the batch's refusal holes ([#374](https://github.com/KeeprDigital/stream-keepr/issues/374)) ([c8a3b12](https://github.com/KeeprDigital/stream-keepr/commit/c8a3b12180dbec5d4c5399d412771b0baa9cfce5))
+
 ## [1.1.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.0.0...v1.1.0) (2026-08-15)
 
 
