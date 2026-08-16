@@ -21,20 +21,25 @@ import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphi
  * reference.
  */
 export async function assertFeatureMatchLayoutTemplateReferencesExist(
-	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevision'>,
+	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
 	document: FeatureMatchLayoutConfig,
 ): Promise<void> {
 	const references = featureMatchLayoutGraphicAssetReferences(document);
-	const missing: string[] = [];
+	if (references.length === 0)
+		return;
 
-	for (const item of references) {
-		const status = await library.inspectGraphicAssetRevision({
+	// One catalogue round-trip for the whole document, statuses aligned by input
+	// index — the #374 batching, which a template save needs for the same reason a
+	// Screen config save did: its item stacks are the same order of size (#382).
+	const statuses = await library.inspectGraphicAssetRevisions({
+		references: references.map(item => ({
 			assetId: graphicAssetId(item.reference.assetId),
 			revisionId: graphicAssetRevisionId(item.reference.revisionId),
-		});
-		if (status.outcome === 'missing')
-			missing.push(item.ownerSlot);
-	}
+		})),
+	});
+	const missing = references
+		.filter((_, index) => statuses[index]?.outcome === 'missing')
+		.map(item => item.ownerSlot);
 
 	if (missing.length > 0) {
 		throw createError({
