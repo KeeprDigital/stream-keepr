@@ -120,10 +120,16 @@ export interface EnsureAdminOutcome {
 }
 
 /**
- * Better Auth lowercases an email before storing one, so a lookup that did not
- * would miss the account it is about to duplicate — and `createUser` refuses a
- * duplicate email, which would turn a break-glass reset into a 400 at exactly
- * the worst moment.
+ * The email an account is keyed on, which is not necessarily the one that was
+ * typed: Better Auth lowercases before it stores.
+ *
+ * Not a lookup fix — `internalAdapter.findUserByEmail` lowercases its own
+ * argument, so the Better Auth port finds the account either way, and a
+ * mutation run proved as much by leaving that path green. It is here because
+ * the `AdminBootstrapPort` interface promises no such thing, and a decision
+ * that depends on a courtesy of the implementation it happens to be handed is a
+ * decision that changes when the implementation does. It also settles what the
+ * response reports: the key, not the operator's capitalisation.
  */
 export function normalizeBootstrapEmail(email: string) {
 	return email.trim().toLowerCase();

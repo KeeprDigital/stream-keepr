@@ -302,9 +302,11 @@ describe('ensuring the first admin account', () => {
 	});
 
 	it('looks the account up under the email Better Auth would have stored', async () => {
-		// Better Auth lowercases before it writes, so a lookup that did not would
-		// miss the account and fall into the create branch — which then refuses the
-		// duplicate email, turning a break-glass reset into a 400.
+		// The port interface promises nothing about case, so the decision normalizes
+		// rather than relying on whoever implements it. The Better Auth port would
+		// survive this being removed — `findUserByEmail` lowercases its own argument
+		// — which is exactly why the contract is pinned here, against a port that
+		// does not.
 		const { ensureAdminAccount } = await adminBootstrap();
 		const lookups: string[] = [];
 		const { port } = stubPort(undefined, {

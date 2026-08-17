@@ -151,8 +151,10 @@ describe('the first-admin bootstrap against a real Better Auth', () => {
 
 		const second = await ensureAdminAccount(port, { email: 'First@Keepr.Digital', password: PASSWORD });
 
-		// Not a second account, and not the duplicate-email 400 that `createUser`
-		// would have answered had the lookup missed.
+		// One account, found again — whether by the module's normalization or by
+		// `findUserByEmail` lowercasing its own argument, which it also does. Both
+		// belts hold here; the module's own is pinned in `adminBootstrap.test.ts`
+		// against a port that offers no such courtesy.
 		expect(second).toMatchObject({ outcome: 'updated', userId: created.userId });
 	});
 

@@ -129,8 +129,9 @@ describe('first-admin bootstrap', () => {
 		const response = await ensureAdmin({ email: EMAIL.toUpperCase(), password: RECOVERY_PASSWORD });
 
 		expect(response.status).toBe(200);
-		// Not a second account, and not the duplicate-email 400 a missed lookup
-		// would have answered.
+		// One account, reported under the email it is keyed on rather than the one
+		// that was typed — which is what an operator repeating a curl from their
+		// shell history needs to see.
 		expect(await response.json()).toMatchObject({ outcome: 'updated', email: EMAIL });
 	});
 
