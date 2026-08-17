@@ -145,6 +145,34 @@ describe('the first-admin bootstrap against a real Better Auth', () => {
 		expect((await signIn(PASSWORD)).user.id).toBe(user.id);
 	});
 
+	/**
+	 * Reads the comma back out of Better Auth's role column, which nothing else
+	 * here does: every other account in this file holds one role, and one role
+	 * survives being split on the wrong character. A mutation row that changed
+	 * `decodeRoles`'s separator survived until this test existed — the encoding
+	 * moved into the port during #394's review remediation and took its coverage
+	 * with it, since the module's own tests now hand it a list.
+	 */
+	it('reads an account already holding several roles as holding each of them', async () => {
+		const context = await auth.$context;
+		const user = await context.internalAdapter.createUser({
+			email: EMAIL,
+			name: 'An Ordinary Admin',
+			role: 'user,admin',
+		});
+
+		const outcome = await ensureAdminAccount(await betterAuthBootstrapPort(auth), {
+			email: EMAIL,
+			password: PASSWORD,
+		});
+
+		// Already an admin, so nothing is granted and the column is left exactly as
+		// it was — a decode that read 'user,admin' as one role would append a
+		// second 'admin' to it.
+		expect(outcome).toMatchObject({ outcome: 'updated', userId: user.id, grantedAdminRole: false });
+		expect(await context.internalAdapter.findUserById(user.id)).toMatchObject({ role: 'user,admin' });
+	});
+
 	it('finds the account whatever case the operator typed the email in', async () => {
 		const port = await betterAuthBootstrapPort(auth);
 		const created = await ensureAdminAccount(port, { email: EMAIL, password: PASSWORD });
