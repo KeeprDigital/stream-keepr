@@ -183,6 +183,13 @@
       "when": 1786529536040,
       "tag": "0025_single_slot_match",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1786934761377,
+      "tag": "0026_nifty_hellcat",
+      "breakpoints": true
     }
   ]
 }

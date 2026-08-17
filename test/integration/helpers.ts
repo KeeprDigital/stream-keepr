@@ -11,6 +11,7 @@ const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', imp
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-token';
 export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+export const INTEGRATION_BETTER_AUTH_SECRET = 'integration-better-auth-secret-0000000000';
 
 /**
  * The realtime notices and the diagnosis behind them live in `realtimeDiagnosis`,
@@ -139,6 +140,7 @@ export const integrationSetupOptions = {
 		[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: getIntegrationWranglerPersistDir(),
 		NUXT_GRAPHICS_ADMIN_TOKEN: INTEGRATION_GRAPHICS_ADMIN_TOKEN,
 		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
+		NUXT_BETTER_AUTH_SECRET: INTEGRATION_BETTER_AUTH_SECRET,
 		NODE_OPTIONS: nodeOptions,
 	},
 	nuxtConfig: {
