@@ -33,6 +33,23 @@ import { ADMIN_ROLE } from '.';
  * paragraphs above can be facts a test establishes rather than claims a
  * docblock makes.
  */
+/**
+ * Better Auth packs an account's roles into one comma-separated column, and
+ * this pair of functions is the whole of where that is known. Its own
+ * `parseRoles` joins an array the same way (`plugins/admin/routes.mjs`); these
+ * are the reading half it has no export for.
+ */
+function decodeRoles(role: string | null | undefined): string[] {
+	return (role ?? '')
+		.split(',')
+		.map(entry => entry.trim())
+		.filter(entry => entry.length > 0);
+}
+
+function encodeRoles(roles: readonly string[]): string {
+	return roles.join(',');
+}
+
 export async function betterAuthBootstrapPort(
 	auth: ServerAuth = serverAuth(),
 ): Promise<AdminBootstrapPort> {
@@ -55,7 +72,7 @@ export async function betterAuthBootstrapPort(
 			// rather than anywhere the decision can see it, so exactly one line in
 			// this module knows the library's typing stops short of its own storage.
 			const { role } = found.user as { role?: string | null };
-			return { id: found.user.id, role };
+			return { id: found.user.id, roles: decodeRoles(role) };
 		},
 
 		createAdmin: async ({ email, password, name }) => {
@@ -70,7 +87,7 @@ export async function betterAuthBootstrapPort(
 			// response is typed without the admin plugin's fields, and reading it
 			// through a cast would be inventing a fact. The role is asserted where
 			// it can be — against the stored account, in the tests.
-			return { id: user.id, role: ADMIN_ROLE };
+			return { id: user.id, roles: [ADMIN_ROLE] };
 		},
 
 		setPassword: async (userId, password) => {
@@ -88,7 +105,7 @@ export async function betterAuthBootstrapPort(
 		},
 
 		setRoles: async (userId, roles) => {
-			await context.internalAdapter.updateUser(userId, { role: roles });
+			await context.internalAdapter.updateUser(userId, { role: encodeRoles(roles) });
 		},
 	};
 }

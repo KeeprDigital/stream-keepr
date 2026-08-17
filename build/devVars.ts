@@ -17,11 +17,16 @@ const EXPORT_PREFIX = /^export\s+/;
  * The `NUXT_` names a local checkout has to be given before the surfaces that read
  * them stop refusing, and the whole of what the #130 notice is asserting.
  *
- * These are `.dev.vars.example`'s assignments minus `NUXT_ABLY_API_KEY`, which is
- * deliberately not here: it reaches a third party, an empty one is the *expected*
- * state of a checkout that never claimed to have realtime, and #223 already owns
- * saying so. `devVars.test.ts` pins the partition against the example file, so a
- * fourth name added there fails until someone decides which side it belongs on.
+ * These are `.dev.vars.example`'s assignments minus everything in
+ * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
+ * `devVars.test.ts` pins the partition against the example file, so a new name
+ * added there fails until someone decides which side it belongs on.
+ *
+ * The subtraction was written as "minus `NUXT_ABLY_API_KEY`" when that was the
+ * only exception and stayed that way through two names that were not it (#393's
+ * auth secret, #394's bootstrap token) — the count in the sentence was wrong
+ * before either arrived. Stated as a reference to the list rather than a
+ * transcription of it, so the next name cannot falsify it again.
  *
  * The Melee names in `.env.example` are absent for the same reason in a different
  * key: nothing refuses without them at boot, so a notice naming them would be

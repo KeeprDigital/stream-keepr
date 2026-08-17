@@ -128,7 +128,7 @@ describe('the first-admin bootstrap guard', () => {
 /** A port over an in-memory account, recording what the decision asked of it. */
 function stubPort(existing?: AdminBootstrapAccount, overrides: Partial<AdminBootstrapPort> = {}) {
 	const passwords: string[] = [];
-	const roleWrites: string[] = [];
+	const roleWrites: string[][] = [];
 	const created: { email: string; password: string; name: string }[] = [];
 
 	const port: AdminBootstrapPort = {
@@ -137,13 +137,13 @@ function stubPort(existing?: AdminBootstrapAccount, overrides: Partial<AdminBoot
 		findByEmail: async () => existing ?? null,
 		createAdmin: async (input) => {
 			created.push(input);
-			return { id: 'created-user-id', role: 'admin' };
+			return { id: 'created-user-id', roles: ['admin'] };
 		},
 		setPassword: async (_userId, password) => {
 			passwords.push(password);
 		},
 		setRoles: async (_userId, roles) => {
-			roleWrites.push(roles);
+			roleWrites.push([...roles]);
 		},
 		...overrides,
 	};
@@ -205,7 +205,7 @@ describe('ensuring the first admin account', () => {
 	 */
 	it('sets the password on an account that already exists', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, passwords, created } = stubPort({ id: 'existing-user-id', role: 'admin' });
+		const { port, passwords, created } = stubPort({ id: 'existing-user-id', roles: ['admin'] });
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -228,7 +228,7 @@ describe('ensuring the first admin account', () => {
 		// is the only port operation that carries a name, so the name given cannot
 		// reach the account unless that is called.
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, created } = stubPort({ id: 'existing-user-id', role: 'admin' });
+		const { port, created } = stubPort({ id: 'existing-user-id', roles: ['admin'] });
 
 		await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -241,7 +241,7 @@ describe('ensuring the first admin account', () => {
 
 	it('grants the admin role to an existing account that lacks it', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, roleWrites } = stubPort({ id: 'existing-user-id', role: 'user' });
+		const { port, roleWrites } = stubPort({ id: 'existing-user-id', roles: ['user'] });
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -250,21 +250,21 @@ describe('ensuring the first admin account', () => {
 
 		expect(outcome.grantedAdminRole).toBe(true);
 		// Appended, not replaced: whatever else this account was, it stays.
-		expect(roleWrites).toEqual(['user,admin']);
+		expect(roleWrites).toEqual([['user', 'admin']]);
 	});
 
 	it('grants the admin role to an account carrying no role at all', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, roleWrites } = stubPort({ id: 'existing-user-id', role: null });
+		const { port, roleWrites } = stubPort({ id: 'existing-user-id', roles: [] });
 
 		await ensureAdminAccount(port, { email: 'first@keepr.digital', password: VALID_PASSWORD });
 
-		expect(roleWrites).toEqual(['admin']);
+		expect(roleWrites).toEqual([['admin']]);
 	});
 
 	it('leaves the roles alone when admin is already among several', async () => {
 		const { ensureAdminAccount } = await adminBootstrap();
-		const { port, roleWrites } = stubPort({ id: 'existing-user-id', role: 'user,admin' });
+		const { port, roleWrites } = stubPort({ id: 'existing-user-id', roles: ['user', 'admin'] });
 
 		const outcome = await ensureAdminAccount(port, {
 			email: 'first@keepr.digital',
@@ -285,7 +285,7 @@ describe('ensuring the first admin account', () => {
 			findByEmail: async () => account,
 			createAdmin: async (input) => {
 				created.push(input);
-				account = { id: 'created-user-id', role: 'admin' };
+				account = { id: 'created-user-id', roles: ['admin'] };
 				return account;
 			},
 			setPassword: async () => {},

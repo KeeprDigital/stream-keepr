@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3';
-import { ServiceConfigurationError } from '~~/server/utils/errors';
-import { secretTokensMatch } from '~~/server/utils/secretTokenComparison';
+import { requireSharedSecret } from '~~/server/utils/sharedSecretSurface';
 
 /**
  * The first-admin bootstrap (#394, ADR-0010): the one way an installation with
@@ -48,41 +47,28 @@ export const ADMIN_ROLE = 'admin';
  * Graphics Administrator operations.
  */
 export async function requireAdminBootstrapToken(event: H3Event) {
-	const configuredToken = useRuntimeConfig(event).adminBootstrapToken.trim();
-	if (!configuredToken) {
-		// Both the H3 error and its cause: the status is right on its own, and the
-		// cause is what carries the message past the 5xx sanitizer in
-		// `mapPublicNitroError` (#321). Without it a disarmed installation answers
-		// 'Internal Server Error', which reads as a broken route rather than as the
-		// deliberate resting state of this one. No `retry-after`: an unset name is
-		// not something waiting fixes, and here the unset state is usually correct.
-		const cause = new ServiceConfigurationError(
-			ADMIN_BOOTSTRAP_TOKEN_ENV_NAME,
-			'is not configured, so first-admin bootstrap is unavailable',
-		);
-		throw createError({
-			statusCode: cause.statusCode,
-			statusMessage: 'Service Unavailable',
-			message: cause.message,
-			cause,
-		});
-	}
-
-	const suppliedToken = getRequestHeader(event, ADMIN_BOOTSTRAP_TOKEN_HEADER)?.trim() ?? '';
-	if (!suppliedToken || !(await secretTokensMatch(suppliedToken, configuredToken))) {
-		throw createError({
-			statusCode: 403,
-			statusMessage: 'Forbidden',
-			message: 'First-admin bootstrap authorization is required',
-		});
-	}
+	await requireSharedSecret(event, {
+		configuredToken: useRuntimeConfig(event).adminBootstrapToken,
+		settingName: ADMIN_BOOTSTRAP_TOKEN_ENV_NAME,
+		unavailableClause: 'is not configured, so first-admin bootstrap is unavailable',
+		headerName: ADMIN_BOOTSTRAP_TOKEN_HEADER,
+		forbiddenMessage: 'First-admin bootstrap authorization is required',
+	});
 }
 
 /** As much of an existing account as the ensure decision reads. */
 export interface AdminBootstrapAccount {
 	readonly id: string;
-	/** Better Auth stores roles as one comma-separated string, or null for none. */
-	readonly role?: string | null;
+	/**
+	 * The roles the account holds, as a list.
+	 *
+	 * Better Auth stores them as one comma-separated string, and that encoding
+	 * stops at `./betterAuthPort` — the decision below deals in roles, not in how
+	 * a library happens to pack them. Otherwise the comma would be split in this
+	 * file and joined again in that one, which is one encoding maintained in two
+	 * places, and the shorter half of it looked like an ordinary string.
+	 */
+	readonly roles: readonly string[];
 }
 
 /**
@@ -98,8 +84,8 @@ export interface AdminBootstrapPort {
 	findByEmail: (email: string) => Promise<AdminBootstrapAccount | null>;
 	createAdmin: (input: { email: string; password: string; name: string }) => Promise<AdminBootstrapAccount>;
 	setPassword: (userId: string, password: string) => Promise<void>;
-	/** Writes the whole role string, as Better Auth stores it. */
-	setRoles: (userId: string, roles: string) => Promise<void>;
+	/** Replaces the account's roles with exactly these. */
+	setRoles: (userId: string, roles: readonly string[]) => Promise<void>;
 }
 
 export interface EnsureAdminRequest {
@@ -135,14 +121,6 @@ export function normalizeBootstrapEmail(email: string) {
 	return email.trim().toLowerCase();
 }
 
-/** The roles a stored role string names; an absent or empty one names none. */
-function parseRoles(role: string | null | undefined): string[] {
-	return (role ?? '')
-		.split(',')
-		.map(entry => entry.trim())
-		.filter(entry => entry.length > 0);
-}
-
 /**
  * Create-or-reset, as ADR-0010 specifies it: a new email becomes an admin
  * account, an existing one is given the supplied password and the admin role if
@@ -163,6 +141,12 @@ function parseRoles(role: string | null | undefined): string[] {
  * quietly undoing it would make this route the way around it. An installation
  * whose only admin is banned is a lockout this route does not answer, recorded
  * rather than half-answered.
+ *
+ * **Existing sessions are not revoked.** A reset changes what the password is,
+ * not who is already signed in — the same as Better Auth's own
+ * `setUserPassword`, which is the endpoint this stands in for. Worth knowing
+ * before reaching for this route as an answer to a compromised account: it is
+ * not one, and revocation is #399's surface.
  */
 export async function ensureAdminAccount(
 	port: AdminBootstrapPort,
@@ -203,12 +187,11 @@ export async function ensureAdminAccount(
 
 	await port.setPassword(existing.id, request.password);
 
-	const roles = parseRoles(existing.role);
-	const grantedAdminRole = !roles.includes(ADMIN_ROLE);
+	const grantedAdminRole = !existing.roles.includes(ADMIN_ROLE);
 	if (grantedAdminRole) {
 		// Appended rather than replaced: whatever else this account is, it stays
 		// that as well as an admin.
-		await port.setRoles(existing.id, [...roles, ADMIN_ROLE].join(','));
+		await port.setRoles(existing.id, [...existing.roles, ADMIN_ROLE]);
 	}
 
 	return { outcome: 'updated', userId: existing.id, email, grantedAdminRole };
