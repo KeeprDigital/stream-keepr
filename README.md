@@ -49,7 +49,8 @@ Which script, when:
 | When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                   |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`                                  | Watch mode for the tier you are touching; append `:run` for a single pass.                                                                                                                                                                              |
-| Before commit / PR                          | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                   |
+| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                   |
+| Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the dry run at its tail uniquely covers.                                                                                              |
 | Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                    |
 | Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`. |
 | Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                            |
@@ -57,10 +58,10 @@ Which script, when:
 | Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                  |
 
 CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
-and push to main: lint, typecheck, `pnpm test`, and `pnpm build` +
-`pnpm worker:dry-run` (the #302 Wasm guard). Realtime integration tests
-self-skip there — no Ably key is configured in CI by decision (#189). The
-prerequisite-bound suites in the table above stay local.
+and push to main — the same gates `pnpm verify` runs locally, split across
+three jobs. Realtime integration tests self-skip there — no Ably key is
+configured in CI by decision (#189). The prerequisite-bound suites in the table
+above stay local.
 
 Ad-hoc vitest modes still work without dedicated scripts: `pnpm exec vitest --ui`,
 `pnpm exec vitest run --coverage`.
