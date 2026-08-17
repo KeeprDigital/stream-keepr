@@ -56,6 +56,15 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  * `.dev.vars.example` regardless, because ADR-0010 wants dev and preview arming
  * the bootstrap route as a matter of course rather than discovering it once, on
  * the day of the first deploy.
+ *
+ * **That ticket is #396**, and it is written down there as well as here. A
+ * promise recorded only in the code of the thing being deferred is one the
+ * deferring ticket can keep and the inheriting ticket never sees — #396 could
+ * land the boundary and leave both names sitting here with the notice silent,
+ * at the exact moment the notice becomes true and useful. Moving one is not a
+ * one-line edit: `LOCAL_NUXT_NAME_SURFACES` owes it a sentence in the surface's
+ * own refusal wording, and `devVars.test.ts` pins both against
+ * `.dev.vars.example`.
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
