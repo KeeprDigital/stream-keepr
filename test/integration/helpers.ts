@@ -12,6 +12,15 @@ const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport]
 export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-token';
 export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 export const INTEGRATION_BETTER_AUTH_SECRET = 'integration-better-auth-secret-0000000000';
+/**
+ * The suite runs with the first-admin bootstrap armed (#394), which a deployed
+ * installation does only for the length of one curl. That is deliberate: it is
+ * the only way to exercise the route at all, and ADR-0010 asks for dev and
+ * preview to arm it as a matter of course. The disarmed 503 — the state a
+ * deployed installation lives in — is covered by the unit suite, which can hold
+ * both states in one run where a spawned server cannot.
+ */
+export const INTEGRATION_ADMIN_BOOTSTRAP_TOKEN = 'integration-admin-bootstrap-token';
 
 /**
  * The realtime notices and the diagnosis behind them live in `realtimeDiagnosis`,
@@ -141,6 +150,7 @@ export const integrationSetupOptions = {
 		NUXT_GRAPHICS_ADMIN_TOKEN: INTEGRATION_GRAPHICS_ADMIN_TOKEN,
 		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
 		NUXT_BETTER_AUTH_SECRET: INTEGRATION_BETTER_AUTH_SECRET,
+		NUXT_ADMIN_BOOTSTRAP_TOKEN: INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
 		NODE_OPTIONS: nodeOptions,
 	},
 	nuxtConfig: {

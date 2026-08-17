@@ -17,11 +17,17 @@ const EXPORT_PREFIX = /^export\s+/;
  * The `NUXT_` names a local checkout has to be given before the surfaces that read
  * them stop refusing, and the whole of what the #130 notice is asserting.
  *
- * These are `.dev.vars.example`'s assignments minus `NUXT_ABLY_API_KEY`, which is
- * deliberately not here: it reaches a third party, an empty one is the *expected*
- * state of a checkout that never claimed to have realtime, and #223 already owns
- * saying so. `devVars.test.ts` pins the partition against the example file, so a
- * fourth name added there fails until someone decides which side it belongs on.
+ * These are `.dev.vars.example`'s assignments minus everything in
+ * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
+ * `devVars.test.ts` pins the partition against the example file, so a new name
+ * added there fails until someone decides which side it belongs on.
+ *
+ * The subtraction was written as "minus `NUXT_ABLY_API_KEY`" when that was the
+ * only exception, and was correct when written — three assignments, one of them
+ * the Ably key. #393's auth secret falsified it and #394's bootstrap token
+ * compounded it, neither noticing that the sentence enumerated a list it was
+ * adding to. Stated as a reference to the list rather than a transcription of
+ * it, so the next name cannot falsify it again.
  *
  * The Melee names in `.env.example` are absent for the same reason in a different
  * key: nothing refuses without them at boot, so a notice naming them would be
@@ -43,8 +49,29 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  * `NUXT_BETTER_AUTH_SECRET` itself (the `ServiceConfigurationError` in
  * `serverAuth`), while every present surface works. The ticket that puts a
  * boundary in front of real routes is the one that moves it to required.
+ *
+ * `NUXT_ADMIN_BOOTSTRAP_TOKEN` (#394) sits here for the same reason and moves
+ * with it: until a boundary and a login page exist, an admin account is
+ * something a developer can go without entirely, and the notice above would be
+ * telling them a surface they have never opened is unavailable. It is in
+ * `.dev.vars.example` regardless, because ADR-0010 wants dev and preview arming
+ * the bootstrap route as a matter of course rather than discovering it once, on
+ * the day of the first deploy.
+ *
+ * **That ticket is #396**, and it is written down there as well as here. A
+ * promise recorded only in the code of the thing being deferred is one the
+ * deferring ticket can keep and the inheriting ticket never sees — #396 could
+ * land the boundary and leave both names sitting here with the notice silent,
+ * at the exact moment the notice becomes true and useful. Moving one is not a
+ * one-line edit: `LOCAL_NUXT_NAME_SURFACES` owes it a sentence in the surface's
+ * own refusal wording, and `devVars.test.ts` pins both against
+ * `.dev.vars.example`.
  */
-export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY', 'NUXT_BETTER_AUTH_SECRET'] as const;
+export const LOCALLY_OPTIONAL_NUXT_NAMES = [
+	'NUXT_ABLY_API_KEY',
+	'NUXT_BETTER_AUTH_SECRET',
+	'NUXT_ADMIN_BOOTSTRAP_TOKEN',
+] as const;
 
 /**
  * What stops working per name, in the words its own refusal uses.

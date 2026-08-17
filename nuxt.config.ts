@@ -24,6 +24,7 @@ export default defineNuxtConfig({
 
 	runtimeConfig: {
 		ablyApiKey: '',
+		adminBootstrapToken: '',
 		betterAuthSecret: '',
 		graphicsAdminToken: '',
 		screenOutputCapabilitySigningKey: '',
@@ -54,6 +55,52 @@ export default defineNuxtConfig({
 			styles: ['normal', 'italic'],
 			subsets: ['latin'],
 		},
+		// The names below are fonts we expect to find on the *viewer's* machine,
+		// written into `font-family` stacks as fallbacks behind a real webfont.
+		//
+		// `@nuxt/fonts` cannot tell a fallback from a request: it reads every name
+		// in every stack and asks its providers for each one, and
+		// `processCSSVariables` widens that to the stacks held in CSS variables.
+		// Any name a provider happens to recognise is then downloaded and bundled.
+		//
+		// That is how the build broke (#405). Google Fonts carries a `Cascadia
+		// Mono` — a Microsoft font, sitting in a monospace fallback stack purely
+		// so Windows machines have something to use — so the build fetched it,
+		// and when Google began answering 404 for that file every cold build
+		// failed. Nothing rendered it; nothing would have missed it.
+		//
+		// `provider: 'none'` is the module's documented way to say a name is not
+		// a request. Be honest about its shape: it is a denylist, so it fails
+		// open. A stack that gains a system font tomorrow is fetched again. Add
+		// the name here when that happens.
+		//
+		// The obvious structural fix — `provider: 'npm'` against `@fontsource`
+		// packages, resolving from disk with no CDN at all — was tried and does
+		// not work yet. The npm provider reads each package's `index.css`
+		// (`unifont/dist/index.mjs:683`), and a *static* `@fontsource` package
+		// exposes only weight 400 there, so weights 500-900 and every italic
+		// silently vanish. `@fontsource-variable` packages carry the full range,
+		// but `Saira Condensed` — this app's display face — has no variable
+		// build. #406 holds the working notes.
+		families: [
+			// Monospace fallbacks — `--font-system-mono` in app/assets/css/main.css
+			// and the clock stack in Screen/Modes/FeatureMatch/Display.vue.
+			{ name: 'Cascadia Mono', provider: 'none' },
+			{ name: 'Segoe UI Mono', provider: 'none' },
+			{ name: 'Liberation Mono', provider: 'none' },
+			{ name: 'SFMono-Regular', provider: 'none' },
+			{ name: 'Menlo', provider: 'none' },
+			{ name: 'Monaco', provider: 'none' },
+			{ name: 'Consolas', provider: 'none' },
+			// Sans and serif fallbacks — `--font-system-sans`, `--font-system-serif`.
+			{ name: 'Segoe UI', provider: 'none' },
+			{ name: 'Georgia', provider: 'none' },
+			{ name: 'Times New Roman', provider: 'none' },
+			// Already self-hosted, by the hand-written `@font-face` at the top of
+			// main.css pointing at public/fonts/mplantin.woff. A provider lookup
+			// for this name could only find a different font wearing it.
+			{ name: 'MPlantin', provider: 'none' },
+		],
 	},
 
 	echarts: {
