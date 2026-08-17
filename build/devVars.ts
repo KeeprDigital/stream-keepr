@@ -43,8 +43,20 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  * `NUXT_BETTER_AUTH_SECRET` itself (the `ServiceConfigurationError` in
  * `serverAuth`), while every present surface works. The ticket that puts a
  * boundary in front of real routes is the one that moves it to required.
+ *
+ * `NUXT_ADMIN_BOOTSTRAP_TOKEN` (#394) sits here for the same reason and moves
+ * with it: until a boundary and a login page exist, an admin account is
+ * something a developer can go without entirely, and the notice above would be
+ * telling them a surface they have never opened is unavailable. It is in
+ * `.dev.vars.example` regardless, because ADR-0010 wants dev and preview arming
+ * the bootstrap route as a matter of course rather than discovering it once, on
+ * the day of the first deploy.
  */
-export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY', 'NUXT_BETTER_AUTH_SECRET'] as const;
+export const LOCALLY_OPTIONAL_NUXT_NAMES = [
+	'NUXT_ABLY_API_KEY',
+	'NUXT_BETTER_AUTH_SECRET',
+	'NUXT_ADMIN_BOOTSTRAP_TOKEN',
+] as const;
 
 /**
  * What stops working per name, in the words its own refusal uses.

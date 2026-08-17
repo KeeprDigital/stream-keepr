@@ -24,6 +24,7 @@ export default defineNuxtConfig({
 
 	runtimeConfig: {
 		ablyApiKey: '',
+		adminBootstrapToken: '',
 		betterAuthSecret: '',
 		graphicsAdminToken: '',
 		screenOutputCapabilitySigningKey: '',

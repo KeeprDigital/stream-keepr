@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import { ServiceConfigurationError } from '~~/server/utils/errors';
+import { secretTokensMatch } from '~~/server/utils/secretTokenComparison';
 
 /**
  * The environment name, not the runtimeConfig one, because the only reader who can
@@ -7,23 +8,6 @@ import { ServiceConfigurationError } from '~~/server/utils/errors';
  * refusal in the notice a dev server prints when the name is missing.
  */
 const ADMIN_TOKEN_ENV_NAME = 'NUXT_GRAPHICS_ADMIN_TOKEN';
-
-async function tokenDigest(token: string) {
-	return new Uint8Array(
-		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)),
-	);
-}
-
-async function tokensMatch(candidate: string, expected: string) {
-	const [candidateDigest, expectedDigest] = await Promise.all([
-		tokenDigest(candidate),
-		tokenDigest(expected),
-	]);
-	let difference = 0;
-	for (let index = 0; index < expectedDigest.length; index++)
-		difference |= candidateDigest[index]! ^ expectedDigest[index]!;
-	return difference === 0;
-}
 
 export async function requireGraphicsAdministrator(event: H3Event) {
 	const configuredToken = useRuntimeConfig(event).graphicsAdminToken.trim();
@@ -46,7 +30,7 @@ export async function requireGraphicsAdministrator(event: H3Event) {
 		});
 	}
 	const suppliedToken = getRequestHeader(event, 'x-graphics-admin-token')?.trim() ?? '';
-	if (!suppliedToken || !(await tokensMatch(suppliedToken, configuredToken))) {
+	if (!suppliedToken || !(await secretTokensMatch(suppliedToken, configuredToken))) {
 		throw createError({
 			statusCode: 403,
 			statusMessage: 'Forbidden',
