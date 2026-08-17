@@ -1,6 +1,6 @@
 # ADR-0008: The installation has no authentication boundary yet, by design
 
-- **Status**: Accepted
+- **Status**: Superseded in its "no boundary" clause by [ADR-0010](./0010-authentication-replaces-the-anonymous-author-session.md); the seam inventory below remains the accurate map of where that design attaches
 - **Date**: 2026-08-06 (decision recorded on the issue; promoted to this record 2026-08-07)
 - **Issue**: [#205](https://github.com/KeeprDigital/stream-keepr/issues/205)
 - **Decided by**: the owner, on #205; this record carries that decision verbatim in substance
@@ -21,7 +21,7 @@ The Graphics Author Session remains what ADR-0003 and CONTEXT.md describe: an an
 
 - Deployments must treat the network perimeter as the security boundary. A browser source, operator console, or output page that can reach the server can mint an author session and read the whole Graphics Asset Library; `CONTEXT.md`'s capability-bound delivery rule ("a Screen Output may resolve only the Graphic Assets referenced by its Screen") holds within the delivery surface, not for the browser rendering it.
 - Guards added in this codebase are session-scoping and attribution, and must not be described as authentication. A future guard inherits this record rather than the ambiguity it replaced.
-- When app-level authentication lands, the existing `requireGraphicsAuthorSession` / capability seams are where a real credential attaches; that work supersedes this record's "no boundary" clause and should say so here.
+- When app-level authentication lands, the existing `requireGraphicsAuthorSession` / capability seams are where a real credential attaches; that work supersedes this record's "no boundary" clause and should say so here. **It now does**: [ADR-0010](./0010-authentication-replaces-the-anonymous-author-session.md) is that design — the authenticated user replaces the author session, and a deny-by-default boundary over `/api/**` replaces perimeter trust at its cutover.
 
 ## Alternatives rejected
 
