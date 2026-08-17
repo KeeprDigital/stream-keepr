@@ -21,6 +21,11 @@
  * which is also why this guard scans exactly the files its sibling
  * `assert-no-runtime-wasm.mjs` skips.
  *
+ * One honesty note on what a pass proves: `workerd` and `node` both map to
+ * `password.node.mjs` in the exports map, and a source map cannot say which
+ * condition fired — only that the resolution landed on the native module,
+ * which is the fact the ADR's decision rests on either way.
+ *
  * A build that emits no source maps, or none naming `@better-auth/utils`,
  * fails the scan rather than passing it: a scan that cannot see the password
  * module cannot certify it, and "found nothing" must never read as "found
@@ -33,20 +38,19 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 /** The resolution the `workerd` condition must have produced. */
-const NATIVE_PASSWORD_MODULE = '@better-auth/utils/dist/password.node.';
+const NATIVE_PASSWORD_MODULE = /@better-auth\/utils\/dist\/password\.node\.[mc]js$/;
 /** The pure-JS fallback that means the condition was not honoured. */
-const FALLBACK_PASSWORD_MODULE = '@better-auth/utils/dist/password.';
+const FALLBACK_PASSWORD_MODULE = /@better-auth\/utils\/dist\/password\.[mc]js$/;
 
 /**
- * Classify one source map's `sources` against the two password modules.
- * The fallback check must not match the native file — `password.node.mjs`
- * contains `password.` as a prefix — so fallback hits are native misses.
+ * Classify one source map's `sources` against the two password modules. Both
+ * patterns anchor on the full basename, so neither can match the other's file.
  */
 export function classifySources(sources) {
-	const native = sources.filter(source => source.includes(NATIVE_PASSWORD_MODULE));
-	const fallback = sources.filter(source =>
-		source.includes(FALLBACK_PASSWORD_MODULE) && !source.includes(NATIVE_PASSWORD_MODULE));
-	return { native, fallback };
+	return {
+		native: sources.filter(source => NATIVE_PASSWORD_MODULE.test(source)),
+		fallback: sources.filter(source => FALLBACK_PASSWORD_MODULE.test(source)),
+	};
 }
 
 function* sourceMapFiles(directory) {

@@ -39,8 +39,9 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  *
  * `NUXT_BETTER_AUTH_SECRET` sits here for now because #393 mounts the auth
  * foundation and nothing yet demands a session: a checkout without the secret
- * loses only the `/api/auth/**` routes, which answer by naming the setting
- * (`serverAuth`), while every present surface works. The ticket that puts a
+ * loses only the `/api/auth/**` routes, which answer by naming
+ * `NUXT_BETTER_AUTH_SECRET` itself (the `ServiceConfigurationError` in
+ * `serverAuth`), while every present surface works. The ticket that puts a
  * boundary in front of real routes is the one that moves it to required.
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = ['NUXT_ABLY_API_KEY', 'NUXT_BETTER_AUTH_SECRET'] as const;
