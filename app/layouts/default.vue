@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '#ui/types';
+import { LOGIN_PATH } from '~/modules/auth/pageGate';
+import { useAuthSession } from '~/modules/auth/session';
 
 interface Props {
 	flush?: boolean;
@@ -35,6 +37,47 @@ const colorModeItem = computed<NavigationMenuItem[]>(() => [{
 		colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark';
 	},
 }]);
+
+const session = useAuthSession();
+const currentUser = session.user;
+const toast = useToast();
+
+/**
+ * Sign-out lives in the sidebar footer, beside the colour mode, because that
+ * is where the things belonging to this browser rather than to the Event sit.
+ *
+ * The operator's address is shown next to it: this is a small invited team on
+ * shared production machines, and "whose session is this laptop holding" is a
+ * question the shell should answer without being asked.
+ */
+const accountItems = computed<NavigationMenuItem[]>(() => [{
+	label: 'Sign out',
+	icon: 'i-lucide-log-out',
+	onSelect: () => {
+		void signOut();
+	},
+}]);
+
+/**
+ * Navigating only after the server agreed the session is over. A sign-out that
+ * failed leaves the operator where they were with the failure said out loud —
+ * dropping them on the login page over a session that is still live would be
+ * the app telling them something untrue about their own credentials.
+ */
+async function signOut() {
+	const result = await session.signOut();
+
+	if (!result.ok) {
+		toast.add({
+			title: 'Sign out failed',
+			description: result.message,
+			color: 'error',
+		});
+		return;
+	}
+
+	await navigateTo(LOGIN_PATH);
+}
 
 interface NavGroup {
 	label: string;
@@ -187,15 +230,29 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 				/>
 			</template>
 			<template #footer="{ collapsed }">
-				<div class="flex w-full items-center" :class="collapsed ? 'flex-col gap-1' : 'gap-1'">
+				<div class="flex w-full flex-col gap-1">
+					<div
+						v-if="!collapsed && currentUser"
+						class="px-3 pb-1 text-xs text-muted truncate"
+						:title="currentUser.email"
+					>
+						{{ currentUser.email }}
+					</div>
 					<UNavigationMenu
 						:collapsed="collapsed"
-						:items="colorModeItem"
-						class="flex-1"
+						:items="accountItems"
 						orientation="vertical"
 					/>
-					<UIRealtimeStatus />
-					<UIServerTimeStatus />
+					<div class="flex w-full items-center" :class="collapsed ? 'flex-col gap-1' : 'gap-1'">
+						<UNavigationMenu
+							:collapsed="collapsed"
+							:items="colorModeItem"
+							class="flex-1"
+							orientation="vertical"
+						/>
+						<UIRealtimeStatus />
+						<UIServerTimeStatus />
+					</div>
 				</div>
 			</template>
 		</UDashboardSidebar>

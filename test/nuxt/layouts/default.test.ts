@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive } from 'vue';
 
@@ -7,8 +7,19 @@ vi.mock('~/composables/workflows/useEventLiveRefresh', () => ({
 	useEventLiveRefresh: vi.fn(),
 }));
 
-const { mockClearPlayerDeckCache } = vi.hoisted(() => ({
+const { mockClearPlayerDeckCache, mockNavigateTo, mockSignOut, mockToastAdd, mockUser } = vi.hoisted(() => ({
 	mockClearPlayerDeckCache: vi.fn(),
+	mockNavigateTo: vi.fn(),
+	mockSignOut: vi.fn(),
+	mockToastAdd: vi.fn(),
+	mockUser: { value: null as { id: string; email: string; name: string } | null },
+}));
+
+// `user` has to be a real ref for the layout's template to unwrap it, and a
+// hoisted factory cannot call `ref`; a computed over the hoisted container is
+// both, and each test sets the container before it mounts.
+vi.mock('~/modules/auth/session', () => ({
+	useAuthSession: () => ({ signOut: mockSignOut, user: computed(() => mockUser.value) }),
 }));
 
 const mockEventStore = reactive({
@@ -64,7 +75,8 @@ mockNuxtImport('useMeleeStore', () => () => mockMeleeStore);
 mockNuxtImport('useColorMode', () => () => mockColorMode);
 mockNuxtImport('useRoute', () => () => ({ meta: { title: 'Dashboard' }, path: '/event/1', query: {} }));
 mockNuxtImport('clearPlayerDeckCache', () => mockClearPlayerDeckCache);
-mockNuxtImport('navigateTo', () => vi.fn());
+mockNuxtImport('navigateTo', () => mockNavigateTo);
+mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 
 const UDashboardGroupStub = defineComponent({
 	template: '<div><slot /></div>',
@@ -93,7 +105,9 @@ const UNavigationMenuStub = defineComponent({
 
 		return { labels };
 	},
-	template: '<nav>{{ labels }}</nav>',
+	// Each item gets a button so a test can take the action the sidebar offers,
+	// not merely read the label it offers it under.
+	template: '<nav>{{ labels }}<button v-for="item in items" :key="item.label" type="button" :data-nav-item="item.label" @click="item.onSelect?.()" /></nav>',
 });
 
 const UButtonStub = defineComponent({
@@ -162,5 +176,44 @@ describe('default layout sync navigation', () => {
 		const wrapper = await mountLayout();
 
 		expect(wrapper.text()).toContain('Sync');
+	});
+});
+
+describe('default layout sign-out', () => {
+	beforeEach(() => {
+		mockNavigateTo.mockReset();
+		mockSignOut.mockReset();
+		mockToastAdd.mockReset();
+		mockUser.value = { id: 'usr_1', email: 'operator@example.test', name: 'Operator' };
+	});
+
+	it('names the signed-in operator, so a shared machine says whose session it is', async () => {
+		const wrapper = await mountLayout();
+
+		expect(wrapper.text()).toContain('operator@example.test');
+	});
+
+	it('signs out and sends the browser to the login page', async () => {
+		mockSignOut.mockResolvedValue({ ok: true });
+
+		const wrapper = await mountLayout();
+		await wrapper.find('[data-nav-item="Sign out"]').trigger('click');
+		await flushPromises();
+
+		expect(mockSignOut).toHaveBeenCalledOnce();
+		expect(mockNavigateTo).toHaveBeenCalledWith('/login');
+	});
+
+	it('stays put and says so when the sign-out did not land', async () => {
+		mockSignOut.mockResolvedValue({ ok: false, message: 'Could not sign out — the session is still open. Try again.' });
+
+		const wrapper = await mountLayout();
+		await wrapper.find('[data-nav-item="Sign out"]').trigger('click');
+		await flushPromises();
+
+		expect(mockNavigateTo).not.toHaveBeenCalled();
+		expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
+			description: 'Could not sign out — the session is still open. Try again.',
+		}));
 	});
 });

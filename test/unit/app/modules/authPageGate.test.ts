@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest';
+import { LOGIN_PATH, loginPathFor, pageRequiresSession, safeRedirectTarget } from '~/modules/auth/pageGate';
+
+describe('pageRequiresSession', () => {
+	it('gates an ordinary operator page', () => {
+		expect(pageRequiresSession('/')).toBe(true);
+	});
+
+	it('lets the screen-output page through', () => {
+		expect(pageRequiresSession('/event/12/screen/main')).toBe(false);
+	});
+
+	it('still gates the screens control surface, which differs by one letter', () => {
+		expect(pageRequiresSession('/event/12/screens/3')).toBe(true);
+	});
+
+	it('does not gate the login page itself', () => {
+		expect(pageRequiresSession(LOGIN_PATH)).toBe(false);
+	});
+});
+
+describe('safeRedirectTarget', () => {
+	it('keeps an in-app path, query and all', () => {
+		expect(safeRedirectTarget('/event/12/matches?round=3')).toBe('/event/12/matches?round=3');
+	});
+
+	it('refuses an absolute URL to another origin', () => {
+		expect(safeRedirectTarget('https://evil.example/steal')).toBeNull();
+	});
+
+	it('refuses a protocol-relative URL, which is another origin without saying so', () => {
+		expect(safeRedirectTarget('//evil.example/steal')).toBeNull();
+	});
+
+	it('refuses the backslash spelling of protocol-relative, which browsers accept', () => {
+		expect(safeRedirectTarget('/\\evil.example/steal')).toBeNull();
+	});
+
+	it('refuses the login page, which would land back here', () => {
+		expect(safeRedirectTarget('/login?redirect=%2F')).toBeNull();
+	});
+
+	it('refuses anything that is not a single string', () => {
+		expect(safeRedirectTarget(['/a', '/b'])).toBeNull();
+		expect(safeRedirectTarget(undefined)).toBeNull();
+	});
+});
+
+describe('loginPathFor', () => {
+	it('carries the interrupted page as an encoded query value', () => {
+		expect(loginPathFor('/event/12/matches?round=3'))
+			.toBe('/login?redirect=%2Fevent%2F12%2Fmatches%3Fround%3D3');
+	});
+
+	it('omits the query for the page sign-in returns to anyway', () => {
+		expect(loginPathFor('/')).toBe('/login');
+	});
+
+	it('omits the query for a page that could not be returned to safely', () => {
+		expect(loginPathFor('//evil.example/steal')).toBe('/login');
+	});
+});
