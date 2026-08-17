@@ -23,10 +23,11 @@ const EXPORT_PREFIX = /^export\s+/;
  * added there fails until someone decides which side it belongs on.
  *
  * The subtraction was written as "minus `NUXT_ABLY_API_KEY`" when that was the
- * only exception and stayed that way through two names that were not it (#393's
- * auth secret, #394's bootstrap token) — the count in the sentence was wrong
- * before either arrived. Stated as a reference to the list rather than a
- * transcription of it, so the next name cannot falsify it again.
+ * only exception, and was correct when written — three assignments, one of them
+ * the Ably key. #393's auth secret falsified it and #394's bootstrap token
+ * compounded it, neither noticing that the sentence enumerated a list it was
+ * adding to. Stated as a reference to the list rather than a transcription of
+ * it, so the next name cannot falsify it again.
  *
  * The Melee names in `.env.example` are absent for the same reason in a different
  * key: nothing refuses without them at boot, so a notice naming them would be

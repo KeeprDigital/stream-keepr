@@ -33,23 +33,6 @@ import { ADMIN_ROLE } from '.';
  * paragraphs above can be facts a test establishes rather than claims a
  * docblock makes.
  */
-/**
- * Better Auth packs an account's roles into one comma-separated column, and
- * this pair of functions is the whole of where that is known. Its own
- * `parseRoles` joins an array the same way (`plugins/admin/routes.mjs`); these
- * are the reading half it has no export for.
- */
-function decodeRoles(role: string | null | undefined): string[] {
-	return (role ?? '')
-		.split(',')
-		.map(entry => entry.trim())
-		.filter(entry => entry.length > 0);
-}
-
-function encodeRoles(roles: readonly string[]): string {
-	return roles.join(',');
-}
-
 export async function betterAuthBootstrapPort(
 	auth: ServerAuth = serverAuth(),
 ): Promise<AdminBootstrapPort> {
@@ -108,4 +91,26 @@ export async function betterAuthBootstrapPort(
 			await context.internalAdapter.updateUser(userId, { role: encodeRoles(roles) });
 		},
 	};
+}
+
+/**
+ * Better Auth packs an account's roles into one comma-separated column, and
+ * this pair of functions is the whole of where that is known. Its own
+ * `parseRoles` joins an array the same way (`plugins/admin/routes.mjs`); these
+ * are the reading half it has no export for.
+ *
+ * Below the port rather than above it: put here first, they stood between
+ * `betterAuthBootstrapPort` and its own docblock, which then described
+ * `decodeRoles` to every tool that attaches the nearest block — including the
+ * sentence about an instance parameter `decodeRoles` does not have.
+ */
+function decodeRoles(role: string | null | undefined): string[] {
+	return (role ?? '')
+		.split(',')
+		.map(entry => entry.trim())
+		.filter(entry => entry.length > 0);
+}
+
+function encodeRoles(roles: readonly string[]): string {
+	return roles.join(',');
 }
