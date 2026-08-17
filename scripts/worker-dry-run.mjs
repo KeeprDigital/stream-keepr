@@ -24,11 +24,19 @@ import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { nativeScryptScan } from './assert-native-scrypt.mjs';
 import { runtimeWasmScan } from './assert-no-runtime-wasm.mjs';
 
 /** Both paths as the README writes them, relative to the repository root. */
 const CONFIG = '.output/server/wrangler.json';
 const OUT_DIR = '.output/wrangler-dry-run';
+/**
+ * Where the scrypt guard reads its resolution evidence. The `workerd` export
+ * condition is applied by Nitro's bundling, so the source maps recording it
+ * live in the build output — wrangler's re-bundle neither repeats nor undoes
+ * that resolution (#393).
+ */
+const NITRO_OUT_DIR = '.output/server';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const outDir = fileURLToPath(new URL(`../${OUT_DIR}`, import.meta.url));
@@ -55,8 +63,13 @@ if (dryRun.error) {
 if (dryRun.status !== 0)
 	process.exit(dryRun.status ?? 1);
 
-const scan = runtimeWasmScan(outDir);
-for (const line of scan.lines)
-	(scan.ok ? process.stdout : process.stderr).write(`${line}\n`);
+const scans = [
+	runtimeWasmScan(outDir),
+	nativeScryptScan(fileURLToPath(new URL(`../${NITRO_OUT_DIR}`, import.meta.url))),
+];
+for (const scan of scans) {
+	for (const line of scan.lines)
+		(scan.ok ? process.stdout : process.stderr).write(`${line}\n`);
+}
 
-process.exit(scan.ok ? 0 : 1);
+process.exit(scans.every(scan => scan.ok) ? 0 : 1);
