@@ -22,6 +22,15 @@ const SCREEN_OUTPUT_PAGE = /^\/event\/[^/]+\/screen\/[^/]+\/?$/;
 export const LOGIN_PATH = '/login';
 
 /**
+ * Anything a URL parser deletes before it resolves the address.
+ *
+ * Tab, newline and carriage return are removed outright by the WHATWG URL
+ * parser, so a string checked as written and a string navigated as parsed are
+ * not the same string — which is the whole of the trick.
+ */
+const CONTROL_CHARACTER = /[\t\n\r]/;
+
+/**
  * Whether this page may be rendered without a session.
  *
  * Deny-by-default in the same sense ADR-0010 gives the API boundary: a page
@@ -56,19 +65,38 @@ export function loginPathFor(fullPath: string): string {
 }
 
 /**
+ * Where a browser goes once it has a session: back to the page the gate wrote
+ * into `?redirect=`, or home.
+ *
+ * Both the gate and the login page need this answer — the gate for an operator
+ * who turns out to be signed in already, the page for one who has just signed
+ * in — and "home when there is nothing safe to return to" is a policy, not a
+ * fallback each of them should be reinventing. One function means the two
+ * cannot drift into disagreeing about where sign-in leads.
+ */
+export function postSignInPath(query: Record<string, unknown>): string {
+	return safeRedirectTarget(query[REDIRECT_QUERY]) ?? '/';
+}
+
+/**
  * The page a sign-in should return to, or `null` where the caller should pick
  * its own default.
  *
  * The gate writes the interrupted page into `?redirect=`, so by the time it is
  * read again it has been through the address bar and is attacker-typeable.
- * Only a path *within this app* is honoured. The three refusals below are the
- * three ways a string that looks like a path is not one:
+ * Only a path _within this app_ is honoured. The four refusals below are the
+ * four ways a string that looks like a path is not one:
  *
  * - `https://evil.example/…` — an origin stated outright.
  * - `//evil.example/…` — protocol-relative; an origin without the scheme, and
  *   the one that reads as a path to a `startsWith('/')` check.
  * - `/\evil.example/…` — the same trick spelled with a backslash, which
  *   browsers normalise to `//` and a naive check does not.
+ * - `/<tab>/evil.example/…` — the same trick again, hidden behind a character
+ *   the URL parser deletes before resolving, so what a checker reads and what
+ *   a browser navigates to are different strings. Refused rather than
+ *   stripped: no page in this app has a tab or a newline in its path, so a
+ *   value carrying one is not a path that lost its way.
  *
  * The login page itself is refused last, and for a different reason: it is
  * perfectly same-origin, it would just send a freshly signed-in operator back
@@ -76,6 +104,9 @@ export function loginPathFor(fullPath: string): string {
  */
 export function safeRedirectTarget(raw: unknown): string | null {
 	if (typeof raw !== 'string' || raw.length === 0)
+		return null;
+
+	if (CONTROL_CHARACTER.test(raw))
 		return null;
 
 	if (!raw.startsWith('/'))

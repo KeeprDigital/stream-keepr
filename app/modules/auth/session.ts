@@ -1,3 +1,14 @@
+/**
+ * The session this browser holds, client-side: who it belongs to, whether
+ * there is one, and the two operations that change the answer.
+ *
+ * Not in `CONTEXT.md` yet, and deliberately. ADR-0010's Consequences keep the
+ * glossary describing what actually runs until cutover, and until then the
+ * Graphics Author Session is still the only author identity the server knows —
+ * a glossary entry here would describe a boundary that is not yet load-bearing.
+ * #398 is the ticket that swaps both entries over.
+ */
+
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import { authClient } from './client';
 
@@ -74,6 +85,13 @@ let asking: Promise<AuthSessionStatus> | null = null;
  * browser as it was a moment ago, and applying it would sign the operator
  * straight back out on their next navigation. The Flight is checked at the one
  * place the answer becomes state.
+ *
+ * Supersession happens once the outcome is known, never before the await.
+ * Hoisting the `supersede()` calls to the top of `signIn`/`signOut` reads
+ * tidier and reintroduces the same bug from the other side: a read beginning
+ * _while_ the sign-out request is in the air would start a Flight of its own,
+ * outlive the sign-out, and write back the signed-in session it read a moment
+ * before that session ended.
  */
 const sessionReads = createGuardedSequence();
 

@@ -50,13 +50,13 @@ const toast = useToast();
  * shared production machines, and "whose session is this laptop holding" is a
  * question the shell should answer without being asked.
  */
-const accountItems = computed<NavigationMenuItem[]>(() => [{
+const accountItems: NavigationMenuItem[] = [{
 	label: 'Sign out',
 	icon: 'i-lucide-log-out',
 	onSelect: () => {
 		void signOut();
 	},
-}]);
+}];
 
 /**
  * Navigating only after the server agreed the session is over. A sign-out that

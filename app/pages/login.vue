@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { REDIRECT_QUERY, safeRedirectTarget } from '~/modules/auth/pageGate';
+import { postSignInPath } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
 
 definePageMeta({
@@ -33,7 +33,7 @@ async function submit() {
 		return;
 	}
 
-	await navigateTo(safeRedirectTarget(route.query[REDIRECT_QUERY]) ?? '/');
+	await navigateTo(postSignInPath(route.query));
 }
 </script>
 

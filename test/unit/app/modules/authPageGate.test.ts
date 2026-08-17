@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOGIN_PATH, loginPathFor, pageRequiresSession, safeRedirectTarget } from '~/modules/auth/pageGate';
+import { LOGIN_PATH, loginPathFor, pageRequiresSession, postSignInPath, safeRedirectTarget } from '~/modules/auth/pageGate';
 
 describe('pageRequiresSession', () => {
 	it('gates an ordinary operator page', () => {
@@ -36,6 +36,12 @@ describe('safeRedirectTarget', () => {
 		expect(safeRedirectTarget('/\\evil.example/steal')).toBeNull();
 	});
 
+	it('refuses a path hiding the protocol-relative spelling behind a character browsers strip', () => {
+		expect(safeRedirectTarget('/\t/evil.example/steal')).toBeNull();
+		expect(safeRedirectTarget('/\n/evil.example/steal')).toBeNull();
+		expect(safeRedirectTarget('/\r/evil.example/steal')).toBeNull();
+	});
+
 	it('refuses the login page, which would land back here', () => {
 		expect(safeRedirectTarget('/login?redirect=%2F')).toBeNull();
 	});
@@ -43,6 +49,20 @@ describe('safeRedirectTarget', () => {
 	it('refuses anything that is not a single string', () => {
 		expect(safeRedirectTarget(['/a', '/b'])).toBeNull();
 		expect(safeRedirectTarget(undefined)).toBeNull();
+	});
+});
+
+describe('postSignInPath', () => {
+	it('returns to the page the gate wrote into the query', () => {
+		expect(postSignInPath({ redirect: '/event/12/matches' })).toBe('/event/12/matches');
+	});
+
+	it('goes home when nothing was written there', () => {
+		expect(postSignInPath({})).toBe('/');
+	});
+
+	it('goes home rather than off-site', () => {
+		expect(postSignInPath({ redirect: 'https://evil.example/steal' })).toBe('/');
 	});
 });
 

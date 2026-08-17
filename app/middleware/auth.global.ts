@@ -1,4 +1,4 @@
-import { LOGIN_PATH, loginPathFor, pageRequiresSession, REDIRECT_QUERY, safeRedirectTarget } from '~/modules/auth/pageGate';
+import { LOGIN_PATH, loginPathFor, pageRequiresSession, postSignInPath } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
 
 /**
@@ -24,19 +24,19 @@ import { useAuthSession } from '~/modules/auth/session';
  * does not first load an Event it is not going to be shown.
  */
 export default defineNuxtRouteMiddleware(async (to) => {
-	// The login page is exempt from the gate and is still the one page whose
-	// own answer depends on the session: an operator who already has one has no
-	// business looking at a password field, and following the `?redirect=` they
-	// arrived with lands them where they were going.
-	if (to.path === LOGIN_PATH) {
-		if (await useAuthSession().ensure() === 'signed-in')
-			return navigateTo(safeRedirectTarget(to.query[REDIRECT_QUERY]) ?? '/');
+	// Every exemption is asked for in one place, so `pageRequiresSession` stays
+	// the single home of "which pages may be seen without a session" rather
+	// than one of two places that have to agree.
+	if (!pageRequiresSession(to.path)) {
+		// Of the exempt pages, the login page is the one whose own answer still
+		// depends on the session: an operator who already has one has no
+		// business looking at a password field, and the `?redirect=` they
+		// arrived with lands them where they were going.
+		if (to.path === LOGIN_PATH && await useAuthSession().ensure() === 'signed-in')
+			return navigateTo(postSignInPath(to.query));
 
 		return;
 	}
-
-	if (!pageRequiresSession(to.path))
-		return;
 
 	if (await useAuthSession().ensure() === 'signed-out')
 		return navigateTo(loginPathFor(to.fullPath));
