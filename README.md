@@ -292,6 +292,43 @@ pnpm exec wrangler secret put NUXT_ABLY_API_KEY --config .output/server/wrangler
 
 Secrets belong to a specific Worker.
 
+### The first admin account
+
+Accounts are created by an admin and there is no self sign-up, so a fresh
+installation has nobody who can create the first one. `NUXT_ADMIN_BOOTSTRAP_TOKEN`
+is what breaks that circle: while it is set, `POST /api/bootstrap/ensure-admin`
+creates the named account as an admin, or — if the email already exists — sets
+the given password on it and gives it the admin role. While it is unset, the
+route answers 503 and names the secret.
+
+Three steps, in order, and the third is not optional:
+
+```bash
+openssl rand -base64 32   # the value for the next command
+pnpm exec wrangler secret put NUXT_ADMIN_BOOTSTRAP_TOKEN --config .output/server/wrangler.json
+
+curl -X POST https://stream.keepr.digital/api/bootstrap/ensure-admin \
+  -H "x-admin-bootstrap-token: <the value above>" \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","password":"<a strong password>","name":"Your Name"}'
+
+pnpm exec wrangler secret delete NUXT_ADMIN_BOOTSTRAP_TOKEN --config .output/server/wrangler.json
+```
+
+The answer says which branch ran — `{"outcome":"created"}` or
+`{"outcome":"updated"}` — so a curl you are not sure landed can simply be
+repeated: the same body twice leaves one account in the same state.
+
+The same ceremony is the way back in if every admin loses their password. There
+is no email sender in this installation, so no reset link exists to fall back
+on; run the three steps again with the same email and a new password. It does
+not lift a ban, and it does not rename an existing account.
+
+Nothing stores "already bootstrapped" — deleting the secret is what disarms the
+route, which is why the third command matters. Locally the name lives in `.env`
+and `.dev.vars` and can stay set; a deployed installation should hold it only
+for the minute between the first and third commands.
+
 ### Screen Output asset capabilities
 
 Screen Outputs use opaque, revocable capabilities to resolve only the exact

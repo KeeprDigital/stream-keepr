@@ -7,7 +7,16 @@ import { ServiceConfigurationError } from './errors';
 /** The environment name behind `runtimeConfig.betterAuthSecret`, as the operator sets it. */
 const BETTER_AUTH_SECRET_SETTING = 'NUXT_BETTER_AUTH_SECRET';
 
-let auth: ReturnType<typeof createAuth> | null = null;
+/**
+ * This installation's Better Auth instance, as a type.
+ *
+ * Named so a caller can be handed a *different* instance of the same shape —
+ * `betterAuthBootstrapPort` takes one, which is what lets the unit suite build
+ * the first-admin bootstrap over a throwaway auth with no database behind it.
+ */
+export type ServerAuth = ReturnType<typeof createAuth>;
+
+let auth: ServerAuth | null = null;
 
 function createAuth(secret: string) {
 	return betterAuth({
