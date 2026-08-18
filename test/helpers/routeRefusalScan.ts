@@ -22,10 +22,16 @@ import ts from 'typescript';
  * drop costs them the guarantee.
  *
  * #277 also widened *where* it looks. The scan used to read the route file alone, so a
- * refusal raised from an imported helper was invisible — which is precisely what
- * `assertTrustedScreenCommandBoundary` becomes when app-level authentication lands, since
- * ADR-0008 names these guards as the seams a credential will strengthen and a 401/403 is
- * what such a guard raises. It now walks the route's first-party import graph.
+ * refusal raised from an imported helper was invisible — the shape ADR-0008 predicted for
+ * `assertTrustedScreenCommandBoundary` once app-level authentication landed, since it
+ * named these guards as the seams a credential would strengthen and a 401/403 is what such
+ * a guard raises. It now walks the route's first-party import graph.
+ *
+ * Authentication landed on #396 and that prediction came true somewhere else: the guard
+ * itself still refuses nothing, and the 401 arrived from `api-session.ts` composed around
+ * the route instead — which #292's middleware entry points, not #277's import graph, are
+ * what see. Both widenings earned their keep; neither did it the way this paragraph
+ * expected.
  *
  * #292 widened it once more, past what any import graph can reach: Nitro composes
  * `server/middleware/**` around a handler rather than importing it, so the banded 404

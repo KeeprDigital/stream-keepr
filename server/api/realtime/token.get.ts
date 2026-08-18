@@ -21,7 +21,13 @@ export default defineEventHandler(async (event) => {
 
 	// Event updates stay read-only for clients. Screen channels only need
 	// subscribe/presence; admin commands publish through the server API.
-	// TODO(auth): scope capability to the requesting client's authorized event/channel once auth is implemented.
+	// TODO(#397): narrow this grant. The condition this said "once auth is
+	// implemented" was met by #396, which left the route on the boundary's
+	// allowlist because a Screen Output has no session to present — so an
+	// unauthenticated caller still gets the full grant below. #397 is the ticket
+	// that owns the fix: ADR-0010's dual grant, where a signed-in user gets this
+	// shape with `clientId` set to their userId and a capability bearer gets one
+	// narrowed to that screen's channels.
 	const tokenRequest = await rest.auth.createTokenRequest({
 		clientId: '*',
 		capability: {

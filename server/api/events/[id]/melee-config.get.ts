@@ -14,7 +14,11 @@ export default defineEventHandler(async (event) => {
 
 	// Never return meleeClientSecret in API responses.
 	// meleeConfigured signals to the frontend whether credentials are stored.
-	// TODO(auth): gate meleeClientId behind the owning user once auth is implemented.
+	// The condition this said "once auth is implemented" was met by #396: the
+	// boundary refuses this path without a Better Auth session, so the client id
+	// no longer reaches an anonymous caller. Gating it behind *the owning user*
+	// specifically needs a permissions model, which ADR-0010 rules out of scope
+	// and names as successor work — not a task available today.
 	return {
 		meleeEnabled: eventData.meleeEnabled,
 		meleeEventId: eventData.meleeEventId,

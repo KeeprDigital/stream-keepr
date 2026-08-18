@@ -315,10 +315,12 @@ describe('the Screen-command route\'s own refusals', () => {
 
 	it('are read from the route\'s imports too, not from the route file alone', () => {
 		// #277: the scan read `command.post.ts` and nothing else, so a 401/403 raised
-		// from an imported guard was invisible — which is exactly what
-		// `assertTrustedScreenCommandBoundary` becomes once ADR-0008's authentication
-		// lands and that seam starts refusing requests. A graph that had quietly
-		// collapsed back to one file would pass every other assertion here.
+		// from an imported guard was invisible — the shape ADR-0008 predicted for
+		// `assertTrustedScreenCommandBoundary` once authentication landed and that
+		// seam started refusing. Authentication landed on #396 and the seam still
+		// refuses nothing; the 401 came from the middleware instead, which the row
+		// below is about. This row keeps its own point regardless: a graph that had
+		// quietly collapsed back to one file would pass every other assertion here.
 		expect(scan.files).toContain('server/api/events/[id]/screens/[screenId]/command.post.ts');
 		expect(scan.files).toContain('server/utils/ably.ts');
 		expect(scan.files).toContain('server/services/screen.ts');
