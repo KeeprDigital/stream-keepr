@@ -1,10 +1,20 @@
 import type { DbEventTalent } from '~~/server/db/schema';
 import type { CreateTalentInput, UpdateTalentInput } from '~~/shared/api';
+import type { SocialProfiles } from '~~/shared/socialProfiles';
 import { and, eq } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { eventTalents } from '~~/server/db/schema';
 
 export function talentService() {
+	const socialProfileColumns = (socialProfiles: SocialProfiles) => ({
+		twitchHandle: socialProfiles.twitch ?? null,
+		youtubeHandle: socialProfiles.youtube ?? null,
+		xHandle: socialProfiles.x ?? null,
+		instagramHandle: socialProfiles.instagram ?? null,
+		tiktokHandle: socialProfiles.tiktok ?? null,
+		blueskyHandle: socialProfiles.bluesky ?? null,
+	});
+
 	const findById = async (id: number, eventId: number) => {
 		return await db.query.eventTalents.findFirst({
 			where: and(
@@ -25,10 +35,12 @@ export function talentService() {
 		eventId: number,
 		data: CreateTalentInput,
 	): Promise<DbEventTalent> => {
+		const { socialProfiles, ...fields } = data;
 		const [newTalent] = await db
 			.insert(eventTalents)
 			.values({
-				...data,
+				...fields,
+				...(socialProfiles === undefined ? {} : socialProfileColumns(socialProfiles)),
 				eventId,
 			})
 			.returning();
@@ -45,9 +57,13 @@ export function talentService() {
 		eventId: number,
 		data: UpdateTalentInput,
 	): Promise<DbEventTalent | undefined> => {
+		const { socialProfiles, ...fields } = data;
 		const [updatedTalent] = await db
 			.update(eventTalents)
-			.set(data)
+			.set({
+				...fields,
+				...(socialProfiles === undefined ? {} : socialProfileColumns(socialProfiles)),
+			})
 			.where(
 				and(
 					eq(eventTalents.id, id),

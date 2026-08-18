@@ -1,6 +1,10 @@
+import type { SocialProfiles } from '~~/shared/socialProfiles';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
+
 interface TalentSummary {
 	id: number;
 	name: string;
+	socialProfiles?: SocialProfiles;
 }
 
 /**
@@ -10,14 +14,19 @@ interface TalentSummary {
 interface RequestedTalent {
 	id?: number;
 	name: string;
+	socialProfiles?: SocialProfiles;
 }
 
 interface TalentUpdateOptions<T> {
 	currentTalents: TalentSummary[];
 	requestedTalents: RequestedTalent[];
 	removeTalent: (talentId: number) => Promise<unknown>;
-	addTalent: (input: { name: string }) => Promise<T | null>;
-	renameTalent: (talentId: number, input: { name: string }) => Promise<unknown>;
+	addTalent: (input: { name: string; socialProfiles: SocialProfiles }) => Promise<T | null>;
+	updateTalent: (talentId: number, input: { name: string; socialProfiles: SocialProfiles }) => Promise<unknown>;
+}
+
+function sameSocialProfiles(first: SocialProfiles = {}, second: SocialProfiles = {}) {
+	return SUPPORTED_SOCIAL_NETWORK_KEYS.every(network => first[network] === second[network]);
 }
 
 /**
@@ -52,7 +61,7 @@ export async function applyTalentUpdates<T>(options: TalentUpdateOptions<T>) {
 	const currentById = new Map(options.currentTalents.map(talent => [talent.id, talent]));
 	const keptIds = new Set<number>();
 	const talentsToAdd: RequestedTalent[] = [];
-	const talentsToRename: Array<{ current: TalentSummary; name: string }> = [];
+	const talentsToUpdate: Array<{ current: TalentSummary; requested: RequestedTalent }> = [];
 
 	for (const requested of options.requestedTalents) {
 		const current = requested.id === undefined ? undefined : currentById.get(requested.id);
@@ -67,16 +76,19 @@ export async function applyTalentUpdates<T>(options: TalentUpdateOptions<T>) {
 
 		keptIds.add(current.id);
 
-		if (current.name !== requested.name)
-			talentsToRename.push({ current, name: requested.name });
+		if (current.name !== requested.name || !sameSocialProfiles(current.socialProfiles, requested.socialProfiles))
+			talentsToUpdate.push({ current, requested });
 	}
 
 	const talentsToRemove = options.currentTalents.filter(talent => !keptIds.has(talent.id));
 
-	for (const { current, name } of talentsToRename) {
-		const renamed = await options.renameTalent(current.id, { name });
-		if (!renamed)
-			throw new Error(`Failed to rename ${current.name}`);
+	for (const { current, requested } of talentsToUpdate) {
+		const updated = await options.updateTalent(current.id, {
+			name: requested.name,
+			socialProfiles: requested.socialProfiles ?? {},
+		});
+		if (!updated)
+			throw new Error(`Failed to update ${current.name}`);
 	}
 
 	for (const talent of talentsToRemove) {
@@ -86,7 +98,10 @@ export async function applyTalentUpdates<T>(options: TalentUpdateOptions<T>) {
 	}
 
 	for (const talent of talentsToAdd) {
-		const added = await options.addTalent({ name: talent.name });
+		const added = await options.addTalent({
+			name: talent.name,
+			socialProfiles: talent.socialProfiles ?? {},
+		});
 		if (!added)
 			throw new Error(`Failed to add ${talent.name}`);
 	}

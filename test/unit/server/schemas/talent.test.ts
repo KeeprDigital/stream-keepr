@@ -17,6 +17,36 @@ describe('createTalentSchema', () => {
 		const result = createTalentSchema.safeParse({ name: 'a'.repeat(200) });
 		expect(result.success).toBe(true);
 	});
+
+	it('normalizes a populated Social Profile subset and removes blank entries', () => {
+		const result = createTalentSchema.parse({
+			name: 'Alice',
+			socialProfiles: {
+				twitch: '  @AliceLive ',
+				youtube: 'https://youtube.com/@AliceOnVideo',
+				x: ' ',
+			},
+		});
+
+		expect(result.socialProfiles).toEqual({
+			twitch: 'AliceLive',
+			youtube: 'AliceOnVideo',
+		});
+	});
+
+	it('reports a wrong-network URL against its Social Profile field', () => {
+		const result = createTalentSchema.safeParse({
+			name: 'Alice',
+			socialProfiles: { twitch: 'https://x.com/Alice' },
+		});
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toContainEqual(expect.objectContaining({
+				path: ['socialProfiles', 'twitch'],
+			}));
+		}
+	});
 });
 
 // ──────────────── updateTalentSchema ────────────────
@@ -35,6 +65,14 @@ describe('updateTalentSchema', () => {
 	it('accepts name of exactly 200 characters', () => {
 		const result = updateTalentSchema.safeParse({ name: 'a'.repeat(200) });
 		expect(result.success).toBe(true);
+	});
+
+	it('distinguishes omitted, replacement and clearing Social Profile updates', () => {
+		expect(updateTalentSchema.parse({})).toEqual({});
+		expect(updateTalentSchema.parse({ socialProfiles: { instagram: '@Alice' } })).toEqual({
+			socialProfiles: { instagram: 'Alice' },
+		});
+		expect(updateTalentSchema.parse({ socialProfiles: {} })).toEqual({ socialProfiles: {} });
 	});
 });
 

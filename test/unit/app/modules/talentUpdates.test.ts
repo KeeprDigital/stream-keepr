@@ -5,7 +5,7 @@ function mutations() {
 	return {
 		removeTalent: vi.fn().mockResolvedValue({ success: true }),
 		addTalent: vi.fn().mockResolvedValue({ id: 99, name: 'Added' }),
-		renameTalent: vi.fn().mockImplementation((id: number, input: { name: string }) =>
+		updateTalent: vi.fn().mockImplementation((id: number, input: { name: string }) =>
 			Promise.resolve({ id, name: input.name })),
 	};
 }
@@ -37,21 +37,21 @@ describe('applyTalentUpdates', () => {
 			...calls,
 		});
 
-		expect(calls.renameTalent).toHaveBeenCalledTimes(1);
-		expect(calls.renameTalent).toHaveBeenCalledWith(1, { name: 'Robert' });
+		expect(calls.updateTalent).toHaveBeenCalledTimes(1);
+		expect(calls.updateTalent).toHaveBeenCalledWith(1, { name: 'Robert', socialProfiles: {} });
 		expect(calls.removeTalent).not.toHaveBeenCalled();
 		expect(calls.addTalent).not.toHaveBeenCalled();
 	});
 
 	it('rejects when a rename fails, before it touches anything else', async () => {
 		const calls = mutations();
-		calls.renameTalent.mockResolvedValue(null);
+		calls.updateTalent.mockResolvedValue(null);
 
 		await expect(applyTalentUpdates({
 			currentTalents: [{ id: 1, name: 'Bob' }, { id: 2, name: 'Dana' }],
 			requestedTalents: [{ id: 1, name: 'Robert' }],
 			...calls,
-		})).rejects.toThrow('Failed to rename Bob');
+		})).rejects.toThrow('Failed to update Bob');
 
 		expect(calls.removeTalent).not.toHaveBeenCalled();
 		expect(calls.addTalent).not.toHaveBeenCalled();
@@ -71,7 +71,7 @@ describe('applyTalentUpdates', () => {
 		expect(calls.removeTalent).toHaveBeenCalledTimes(1);
 		expect(calls.removeTalent).toHaveBeenCalledWith(2);
 		expect(calls.addTalent).not.toHaveBeenCalled();
-		expect(calls.renameTalent).not.toHaveBeenCalled();
+		expect(calls.updateTalent).not.toHaveBeenCalled();
 	});
 
 	it('removes the first namesake just as readily as the second', async () => {
@@ -98,7 +98,7 @@ describe('applyTalentUpdates', () => {
 
 		expect(calls.removeTalent).not.toHaveBeenCalled();
 		expect(calls.addTalent).not.toHaveBeenCalled();
-		expect(calls.renameTalent).not.toHaveBeenCalled();
+		expect(calls.updateTalent).not.toHaveBeenCalled();
 	});
 
 	it('adds an entry that carries no id, namesake or not', async () => {
@@ -111,8 +111,8 @@ describe('applyTalentUpdates', () => {
 		});
 
 		expect(calls.addTalent).toHaveBeenCalledTimes(2);
-		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Bob' });
-		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Bob', socialProfiles: {} });
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana', socialProfiles: {} });
 		expect(calls.removeTalent).not.toHaveBeenCalled();
 	});
 
@@ -125,12 +125,12 @@ describe('applyTalentUpdates', () => {
 			...calls,
 		});
 
-		expect(calls.renameTalent).toHaveBeenCalledTimes(1);
-		expect(calls.renameTalent).toHaveBeenCalledWith(2, { name: 'Robert' });
+		expect(calls.updateTalent).toHaveBeenCalledTimes(1);
+		expect(calls.updateTalent).toHaveBeenCalledWith(2, { name: 'Robert', socialProfiles: {} });
 		expect(calls.removeTalent).toHaveBeenCalledTimes(1);
 		expect(calls.removeTalent).toHaveBeenCalledWith(3);
 		expect(calls.addTalent).toHaveBeenCalledTimes(1);
-		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana', socialProfiles: {} });
 	});
 
 	// The list the operator saved is the list they want the event to have. If a
@@ -146,9 +146,9 @@ describe('applyTalentUpdates', () => {
 		});
 
 		expect(calls.addTalent).toHaveBeenCalledTimes(1);
-		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana' });
+		expect(calls.addTalent).toHaveBeenCalledWith({ name: 'Dana', socialProfiles: {} });
 		expect(calls.removeTalent).not.toHaveBeenCalled();
-		expect(calls.renameTalent).not.toHaveBeenCalled();
+		expect(calls.updateTalent).not.toHaveBeenCalled();
 	});
 
 	it('does nothing at all when nothing changed', async () => {
@@ -162,6 +162,24 @@ describe('applyTalentUpdates', () => {
 
 		expect(calls.removeTalent).not.toHaveBeenCalled();
 		expect(calls.addTalent).not.toHaveBeenCalled();
-		expect(calls.renameTalent).not.toHaveBeenCalled();
+		expect(calls.updateTalent).not.toHaveBeenCalled();
+	});
+
+	it('updates a complete Social Profile set without replacing the Talent identity', async () => {
+		const calls = mutations();
+
+		await applyTalentUpdates({
+			currentTalents: [{ id: 1, name: 'Alice', socialProfiles: { twitch: 'Old' } }],
+			requestedTalents: [{ id: 1, name: 'Alice', socialProfiles: { youtube: 'New' } }],
+			...calls,
+		});
+
+		expect(calls.updateTalent).toHaveBeenCalledOnce();
+		expect(calls.updateTalent).toHaveBeenCalledWith(1, {
+			name: 'Alice',
+			socialProfiles: { youtube: 'New' },
+		});
+		expect(calls.removeTalent).not.toHaveBeenCalled();
+		expect(calls.addTalent).not.toHaveBeenCalled();
 	});
 });
