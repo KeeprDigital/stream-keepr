@@ -295,8 +295,8 @@ describe('broadcastGraphicsRecovery', () => {
 					acceptedProfiles: [],
 					transitionAnchor: {
 						startedAt: 123_456,
-						from: Array.from({ length: 7 }, () => ({
-							values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+						from: Array.from({ length: 13 }, (_, index) => ({
+							values: { network: 'twitch', networkLabel: 'Twitch', handle: `Ava${index}`, profileUrl: `https://www.twitch.tv/Ava${index}` },
 							opacity: 1,
 							offsetX: 0,
 							offsetY: 0,
@@ -320,7 +320,7 @@ describe('broadcastGraphicsRecovery', () => {
 					},
 				} } },
 			}],
-			['duplicate networks in an interrupted Social Profile visual', {
+			['a duplicate correlated tuple in an interrupted Social Profile visual', {
 				playout: {},
 				inputs: {},
 				socialProfileProjections: { lower: { profile: {
@@ -378,6 +378,27 @@ describe('broadcastGraphicsRecovery', () => {
 			};
 
 			expect(broadcastGraphicsRecoveryFault(legacy)).toBeNull();
+			expect(broadcastGraphicsRecoveryFault(transitioning)).toBeNull();
+		});
+
+		it('accepts distinct old and new correlated tuples on one catalog network', () => {
+			const transitioning = {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: ['OldAva', 'NewAva'].map(handle => ({
+							values: { network: 'twitch', networkLabel: 'Twitch', handle, profileUrl: `https://www.twitch.tv/${handle}` },
+							opacity: 0.5,
+							offsetX: 0,
+							offsetY: 0,
+						})),
+					},
+				} } },
+			};
+
 			expect(broadcastGraphicsRecoveryFault(transitioning)).toBeNull();
 		});
 	});

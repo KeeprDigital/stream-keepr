@@ -39,7 +39,11 @@ import {
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
-import { projectSocialProfilePresentation, projectSocialProfileRotation } from './socialProfiles';
+import {
+	MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
+	projectSocialProfilePresentation,
+	projectSocialProfileRotation,
+} from './socialProfiles';
 
 /**
  * Broadcast Graphics playout reduction.
@@ -1352,7 +1356,7 @@ function transitionToSocialProfile(
 	const from = projectSocialProfilePresentation(projection, declaration, {
 		onAir,
 		now: acceptedAt,
-	}).layers;
+	}).layers.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
 	const alreadySettled = from.length === 1
 		&& from[0]!.values.network === network
 		&& from[0]!.opacity === 1

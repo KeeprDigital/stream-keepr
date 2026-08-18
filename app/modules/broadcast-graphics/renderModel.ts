@@ -39,6 +39,8 @@ export interface BroadcastGraphicsRenderModelInput {
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
 	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Correlated Social Profile values an update phase is transitioning away from. */
+	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering each updating Broadcast Graphic is transitioning away from.
 	 *
@@ -100,6 +102,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		inputValues: input.inputValues,
 		socialProfileValues: input.socialProfileValues,
 		socialProfilePresentations: input.socialProfilePresentations,
+		outgoingSocialProfileValues: input.outgoingSocialProfileValues,
 		outgoingInputValues: input.outgoingInputValues,
 		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,

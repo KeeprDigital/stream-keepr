@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	applyBroadcastGraphicsCommand,
 	createInitialBroadcastGraphicsLiveState,
+	MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
 	projectSocialProfilePresentation,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 
@@ -165,6 +166,33 @@ describe('social profile transition projection', () => {
 		]);
 	});
 
+	it.each([
+		['crossfade', [
+			{ values: twitch, opacity: 0.5, offsetX: 0, offsetY: 0 },
+			{ values: { ...twitch, handle: 'updated', profileUrl: 'https://www.twitch.tv/updated' }, opacity: 0.5, offsetX: 0, offsetY: 0 },
+		]],
+		['slide-left', [
+			{ values: twitch, opacity: 1, offsetX: -50, offsetY: 0 },
+			{ values: { ...twitch, handle: 'updated', profileUrl: 'https://www.twitch.tv/updated' }, opacity: 1, offsetX: 50, offsetY: 0 },
+		]],
+	] as const)('keeps distinct old and new tuples on the same network during %s', (transition, expected) => {
+		const updated = { ...twitch, handle: 'updated', profileUrl: 'https://www.twitch.tv/updated' };
+		const changing = state({
+			acceptedProfiles: [updated],
+			currentNetwork: 'twitch',
+			rotationAnchor: { network: 'twitch', anchoredAt: 1_000_250 },
+			transitionAnchor: {
+				startedAt: 1_000_000,
+				from: [{ values: twitch, opacity: 1, offsetX: 0, offsetY: 0 }],
+			},
+		});
+
+		expect(projectSocialProfilePresentation(changing, { ...declaration, transition }, {
+			onAir: true,
+			now: 1_000_125,
+		}).layers).toEqual(expected);
+	});
+
 	it('keeps rapid select and step actions latest-wins without building a transition backlog', () => {
 		let live: BroadcastGraphicsLiveState = {
 			...createInitialBroadcastGraphicsLiveState(),
@@ -193,6 +221,38 @@ describe('social profile transition projection', () => {
 			onAir: true,
 			now: 1_008_475,
 		}).layers).toEqual([{ values: x, opacity: 1, offsetX: 0, offsetY: 0 }]);
+	});
+
+	it('bounds a newly interrupted sampled visual at the durable layer maximum', () => {
+		const updated = { ...twitch, handle: 'updated', profileUrl: 'https://www.twitch.tv/updated' };
+		const crowded = state({
+			acceptedProfiles: [updated, youtube],
+			currentNetwork: 'twitch',
+			transitionAnchor: {
+				startedAt: 1_000_000,
+				from: Array.from({ length: MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS }, (_, index) => ({
+					values: { ...twitch, handle: `old${index}`, profileUrl: `https://www.twitch.tv/old${index}` },
+					opacity: 1 / MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
+					offsetX: 0,
+					offsetY: 0,
+				})),
+			},
+		});
+		const selected = applyBroadcastGraphicsCommand({
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { lower: { onAir: true, effectiveStartedAt: 1_000_000, cut: false } },
+			socialProfileProjections: { lower: { profile: crowded } },
+		}, {
+			type: 'Select Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'youtube' },
+		}, {
+			inputs: [],
+			acceptedAt: 1_000_125,
+			socialProfileProjections: [declaration],
+		});
+
+		expect(selected.socialProfileProjections!.lower!.profile!.transitionAnchor!.from)
+			.toHaveLength(MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
 	});
 
 	it('transitions between transparency and an available Presentation Group without fabricating content', () => {

@@ -41,8 +41,8 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
-	projectSocialProfilePresentation,
 	projectSocialProfileRotation,
+	socialProfilePresentationProjections,
 	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -690,19 +690,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	): Record<string, Record<string, SocialProfilePresentationProjection>> {
 		const state = liveState(screenId);
 		return Object.fromEntries(graphics.flatMap((graphic) => {
-			const declarations = new Map(
-				(graphic.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
+			const presentations = socialProfilePresentationProjections(
+				state,
+				graphic,
+				isClockSynced.value ? now ?? serverNow() : undefined,
 			);
-			const projections = state.socialProfileProjections?.[graphic.id] ?? {};
-			const presentations = Object.fromEntries(Object.entries(projections).flatMap(([key, projection]) => {
-				const declaration = declarations.get(key);
-				if (!declaration)
-					return [];
-				return [[key, projectSocialProfilePresentation(projection, declaration, {
-					onAir: state.playout[graphic.id]?.onAir === true,
-					now: isClockSynced.value ? now ?? serverNow() : undefined,
-				})]];
-			}));
 			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
 		}));
 	}
@@ -718,24 +710,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		const state = liveState(screenId);
 		const now = serverNow();
 		return graphics.some(graphic => state.playout[graphic.id]?.onAir === true
-			&& (graphic.socialProfileProjections ?? []).some((declaration) => {
-				const projection = state.socialProfileProjections?.[graphic.id]?.[declaration.key];
-				if (!projection)
-					return false;
-				const transitionDuration = declaration.transition === 'cut'
-					? 0
-					: Math.max(0, declaration.transitionDurationMs);
-				const transitionElapsed = projection.transitionAnchor
-					? now - projection.transitionAnchor.startedAt
-					: Number.POSITIVE_INFINITY;
-				const transitioning = transitionDuration > 0
-					&& transitionElapsed >= 0
-					&& transitionElapsed < transitionDuration;
-				const rotating = projection.automatic !== false
-					&& projection.acceptedProfiles.length > 1
-					&& projection.rotationAnchor !== undefined;
-				return transitioning || rotating;
-			}));
+			&& Object.values(socialProfilePresentationProjections(state, graphic, now))
+				.some(presentation => presentation.phase.kind !== 'static'));
 	}
 
 	/**

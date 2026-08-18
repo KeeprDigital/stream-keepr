@@ -76,6 +76,9 @@ export interface SocialProfilePresentationProjection {
 	layers: SocialProfilePresentationLayer[];
 }
 
+/** Hard recovery/render bound: two complete catalog-width sampled visuals. */
+export const MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS = SUPPORTED_SOCIAL_NETWORKS.length * 2;
+
 export type BroadcastGraphicSocialProfileProjectionStates
 	= Record<string, SocialProfileProjectionLiveState>;
 
@@ -89,6 +92,16 @@ function socialProfileTransitionSlide(
 		case 'slide-down': return { x: 0, y: 100 };
 		default: return undefined;
 	}
+}
+
+function sameSocialProfileTuple(
+	left: SocialProfileProjectionValue,
+	right: SocialProfileProjectionValue,
+): boolean {
+	return left.network === right.network
+		&& left.networkLabel === right.networkLabel
+		&& left.handle === right.handle
+		&& left.profileUrl === right.profileUrl;
 }
 
 /**
@@ -212,10 +225,10 @@ export function projectSocialProfilePresentation(
 		const durationMs = rotation.phase.durationMs;
 		const progress = Math.max(0, Math.min(1, rotation.phase.elapsedMs / durationMs));
 		const slide = socialProfileTransitionSlide(declaration.transition);
-		const targetNetwork = rotation.current?.network;
-		const hasTarget = targetNetwork !== undefined
-			&& transitionAnchor.from.some(layer => layer.values.network === targetNetwork);
-		const from = hasTarget || !rotation.current
+		const target = rotation.current;
+		const hasTarget = target !== undefined
+			&& transitionAnchor.from.some(layer => sameSocialProfileTuple(layer.values, target));
+		const from = (hasTarget || !rotation.current
 			? transitionAnchor.from
 			: [
 					...transitionAnchor.from,
@@ -225,14 +238,15 @@ export function projectSocialProfilePresentation(
 						offsetX: slide?.x === undefined ? 0 : -slide.x,
 						offsetY: slide?.y === undefined ? 0 : -slide.y,
 					},
-				];
+				])
+			.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
 		const mix = (start: number, end: number) => start + ((end - start) * progress);
 
 		return {
 			phase: rotation.phase,
 			layers: from.map((layer) => {
-				const target = targetNetwork !== undefined && layer.values.network === targetNetwork;
-				if (target) {
+				const isTarget = target !== undefined && sameSocialProfileTuple(layer.values, target);
+				if (isTarget) {
 					return {
 						values: rotation.current!,
 						opacity: mix(layer.opacity, 1),
@@ -293,25 +307,47 @@ export function projectSocialProfilePresentation(
 	};
 }
 
+function declaredSocialProfileProjections(
+	state: Pick<BroadcastGraphicsLiveState, 'socialProfileProjections'>,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+): Array<[SocialProfileProjectionDeclaration, SocialProfileProjectionLiveState]> {
+	const projections = state.socialProfileProjections?.[graphic.id] ?? {};
+	const declarations = new Map(
+		(graphic.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
+	);
+	return Object.entries(projections).flatMap(([projectionKey, projection]) => {
+		const declaration = declarations.get(projectionKey);
+		return declaration ? [[declaration, projection]] : [];
+	});
+}
+
+/** Every synchronized Presentation Group frame one live graphic supplies. */
+export function socialProfilePresentationProjections(
+	state: Pick<BroadcastGraphicsLiveState, 'playout' | 'socialProfileProjections'>,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+	now?: number,
+): Record<string, SocialProfilePresentationProjection> {
+	return Object.fromEntries(declaredSocialProfileProjections(state, graphic).map(([declaration, projection]) => [
+		declaration.key,
+		projectSocialProfilePresentation(projection, declaration, {
+			onAir: state.playout[graphic.id]?.onAir === true,
+			now,
+		}),
+	]));
+}
+
 /** The current correlated tuples one live Broadcast Graphic supplies to its renderer. */
 export function socialProfileProjectionValues(
 	state: Pick<BroadcastGraphicsLiveState, 'playout' | 'socialProfileProjections'>,
 	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
 	now?: number,
 ): SocialProfileProjectionValues {
-	const projections = state.socialProfileProjections?.[graphic.id] ?? {};
-	const declarations = new Map(
-		(graphic.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
-	);
-	return Object.fromEntries(Object.entries(projections).flatMap(([projectionKey, projection]) => {
-		const declaration = declarations.get(projectionKey);
-		if (!declaration)
-			return [];
+	return Object.fromEntries(declaredSocialProfileProjections(state, graphic).flatMap(([declaration, projection]) => {
 		const current = projectSocialProfileRotation(projection, declaration, {
 			onAir: state.playout[graphic.id]?.onAir === true,
 			now,
 		}).current;
-		return current ? [[projectionKey, current]] : [];
+		return current ? [[declaration.key, current]] : [];
 	}));
 }
 

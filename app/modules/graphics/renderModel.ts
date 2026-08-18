@@ -202,6 +202,8 @@ export interface GraphicsCompositionRenderModelInput {
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
 	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Correlated Social Profile values an update phase is transitioning away from. */
+	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
 	 * Graphic id.
@@ -1727,37 +1729,40 @@ function itemDescriptor(
 	const rotation = item.rotation ?? 0;
 
 	if (item.type === 'group' && presentation?.frame.phase.kind === 'transition') {
-		return {
-			id: item.id,
-			label: item.label,
-			kind: item.type,
-			style: {
-				...canvasPlacement(item, { x: 0, y: 0 }, motion),
-				overflow: 'hidden',
-			},
-			presentationLayers: presentation.frame.layers.map(layer => paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
-				{
-					...inputs,
-					socialProfileValues: {
-						...inputs.socialProfileValues,
-						[presentation.key]: layer.values,
+		return enclosedItemDescriptor(
+			motion,
+			item,
+			rotation,
+			values => canvasPlacement(item, { x: 0, y: 0 }, values),
+			placement => ({
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, overflow: 'hidden' },
+				presentationLayers: presentation.frame.layers.map(layer => paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					{
+						...inputs,
+						socialProfileValues: {
+							...inputs.socialProfileValues,
+							[presentation.key]: layer.values,
+						},
 					},
-				},
-				context,
-				{
-					position: 'absolute',
-					inset: '0',
-					width: '100%',
-					height: '100%',
-					opacity: layer.opacity,
-					transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
-				},
-			)),
-		};
+					context,
+					{
+						position: 'absolute',
+						inset: '0',
+						width: '100%',
+						height: '100%',
+						opacity: layer.opacity,
+						transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+					},
+				)),
+			}),
+		);
 	}
 
 	if (!context.crossing?.(item.id)) {
@@ -2177,12 +2182,12 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  * What one owner renders from the current Graphic Input values, as a string that
  * changes exactly when its rendered content does.
  *
- * Only a Graphic Text Template reads Graphic Input values, so only a Text Graphic
- * Item's content can change under a graphic that is already on air — and a Graphic
- * Group's content is its children's. A Shape or Media Graphic Item renders the same
- * thing whatever the values are, which is why an update animation is not offered to
- * it here: an update recipe runs when *that owner's* rendered content changes, and
- * its content did not.
+ * A Graphic Text Template reads Graphic Input and Social Profile values, while a
+ * dynamic Social Network Icon reads its projection's network. A Graphic Group's
+ * content is its children's. Shape and Media items render the same thing whatever
+ * the accepted values are, which is why an update animation is not offered to them:
+ * an update recipe runs when *that owner's* rendered content changes, and theirs did
+ * not.
  *
  * The context-gated kinds answer the same way, and for a stronger reason than
  * "their content did not change": their content changes constantly, but from the
@@ -2193,13 +2198,20 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  */
 function renderedContent(
 	owner: GraphicItemConfig | GraphicGroupChildConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	values: Readonly<Record<string, GraphicInputValue>>,
+	inputs: Pick<GraphicItemContentContext, 'declarations' | 'socialProfileValues' | 'values'>,
 ): string {
-	if (owner.type === 'text')
-		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
+	if (owner.type === 'text') {
+		return renderGraphicTextTemplate(owner.text, inputs.declarations, inputs.values, inputs.socialProfileValues)
+			.map(segment => segment.text)
+			.join('');
+	}
+	if (owner.type === 'social-network-icon') {
+		return typeof owner.network === 'string'
+			? owner.network
+			: inputs.socialProfileValues?.[owner.network.projectionKey]?.network ?? '';
+	}
 	if (owner.type === 'group')
-		return owner.children.map(child => renderedContent(child, declarations, values)).join(GROUP_CONTENT_SEPARATOR);
+		return owner.children.map(child => renderedContent(child, inputs)).join(GROUP_CONTENT_SEPARATOR);
 	return '';
 }
 
@@ -2230,12 +2242,11 @@ interface GraphicsUpdateCrossTransition {
 
 function updateCrossTransition(
 	graphic: BroadcastGraphicConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	current: Readonly<Record<string, GraphicInputValue>>,
-	outgoing: Readonly<Record<string, GraphicInputValue>>,
+	current: GraphicItemContentContext,
+	outgoing: GraphicItemContentContext,
 ): GraphicsUpdateCrossTransition | null {
 	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
-		renderedContent(owner, declarations, current) !== renderedContent(owner, declarations, outgoing);
+		renderedContent(owner, current) !== renderedContent(owner, outgoing);
 
 	if (!graphic.items.some(item => changed(item)))
 		return null;
@@ -2366,6 +2377,9 @@ export function resolveGraphicsCompositionRenderModel(
 			const outgoingValues = phases.includes('update')
 				? input.outgoingInputValues?.[graphic.id]
 				: undefined;
+			const outgoingSocialProfileValues = phases.includes('update')
+				? input.outgoingSocialProfileValues?.[graphic.id]
+				: undefined;
 			const outgoingInputs: GraphicItemContentContext = {
 				declarations,
 				// Substitution follows the same rule as the incoming rendering: the pair is
@@ -2374,15 +2388,15 @@ export function resolveGraphicsCompositionRenderModel(
 				// changes the value.
 				values: resolvedInputValues(
 					declarations,
-					outgoingValues ?? {},
+					outgoingValues ?? input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
-				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
-			const crossTransition = outgoingValues
-				? updateCrossTransition(graphic, declarations, inputs.values, outgoingInputs.values)
+			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
+				? updateCrossTransition(graphic, inputs, outgoingInputs)
 				: null;
 			const perItem = crossTransition !== null && !crossTransition.wholeGraphic;
 

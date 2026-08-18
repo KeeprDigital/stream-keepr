@@ -168,6 +168,30 @@ describe('programmatic Social Profile Projection rendering', () => {
 		expect(group.children?.[0]?.text).toBe('YouTube · bravo · https://www.youtube.com/@bravo');
 	});
 
+	it('uses the update recipe to cross the outgoing and incoming correlated Social Profile values', () => {
+		const social = projectedGraphic();
+		(social.items[0] as GraphicGroupItemConfig).animation = {
+			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+		};
+		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
+		const incoming = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [social],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
+			socialProfileValues: { 'lower-third': { profile: incoming } },
+			outgoingSocialProfileValues: { 'lower-third': { profile: outgoing } },
+		});
+		const transition = model.graphics[0]!.items[0]!.crossTransition!;
+
+		expect(transition.outgoing.children?.[0]?.text).toBe('Twitch · alpha · https://www.twitch.tv/alpha');
+		expect(transition.outgoing.children?.[1]?.icon?.name).toBe('i-simple-icons-twitch');
+		expect(transition.incoming.children?.[0]?.text).toBe('YouTube · bravo · https://www.youtube.com/@bravo');
+		expect(transition.incoming.children?.[1]?.icon?.name).toBe('i-simple-icons-youtube');
+	});
+
 	it.each(['enter', 'exit'] as const)('nests the synchronized Presentation Group transition inside %s motion', (phase) => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
@@ -214,5 +238,33 @@ describe('programmatic Social Profile Projection rendering', () => {
 			'translate(-50%, 0%)',
 			'translate(50%, 0%)',
 		]);
+	});
+
+	it('preserves both concurrent lifecycle reveal masks around Social Profile layers', () => {
+		const social = projectedGraphic();
+		(social.items[0] as GraphicGroupItemConfig).animation = {
+			'on-screen': { duration: 400, easing: 'linear', delay: 0, pause: 0, repeat: 1, reveal: { edge: 'top' } },
+			'exit': { duration: 400, easing: 'linear', delay: 0, reveal: { edge: 'left' } },
+		};
+		const current = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [social],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [
+				{ phase: 'on-screen', elapsed: 100 },
+				{ phase: 'exit', elapsed: 200 },
+			] },
+			socialProfilePresentations: { 'lower-third': { profile: {
+				phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
+				layers: [{ values: current, opacity: 0.5, offsetX: 0, offsetY: 0 }],
+			} } },
+		});
+		const group = model.graphics[0]!.items[0]!;
+
+		expect(group.style.maskImage).toBe('linear-gradient(to right, #ffffff 0 50%, #ffffff00 50%)');
+		expect(group.enclosed?.style.maskImage).toBe('linear-gradient(to bottom, #ffffff 0 50%, #ffffff00 50%)');
+		expect(group.enclosed?.presentationLayers).toHaveLength(1);
 	});
 });
