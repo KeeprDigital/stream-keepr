@@ -7,8 +7,10 @@ import type {
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
 	GraphicInputTrace,
+	SocialProfileProjectionLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
+import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
@@ -19,6 +21,7 @@ import type {
 	GraphicChannelConfig,
 	GraphicInputValue,
 	GraphicPlayoutState,
+	SocialProfileProjectionValues,
 } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import type { BroadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
@@ -36,6 +39,7 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
+	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
 import { broadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
@@ -613,6 +617,27 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return broadcastGraphicSourceSelections(liveState(screenId), graphicId);
 	}
 
+	/** One authored projection's accepted manual state from the authoritative snapshot. */
+	function socialProfileProjectionState(
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+	): SocialProfileProjectionLiveState | undefined {
+		return liveState(screenId).socialProfileProjections?.[graphicId]?.[projectionKey];
+	}
+
+	/** Every current correlated profile tuple a live Screen Output is allowed to render. */
+	function socialProfileValues(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id'>[],
+	): Record<string, SocialProfileProjectionValues> {
+		const state = liveState(screenId);
+		return Object.fromEntries(graphics.flatMap((graphic) => {
+			const values = socialProfileProjectionValues(state, graphic.id);
+			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+		}));
+	}
+
 	/**
 	 * What Live Control shows for each declared Graphic Input: the latest bound
 	 * value, any Graphic Input Override masking it, the working value, and the
@@ -830,6 +855,36 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		});
 	}
 
+	function selectSocialProfile(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		network: SupportedSocialNetwork,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Select Social Profile'),
+			type: 'Select Social Profile',
+			payload: { graphicId, projectionKey, network },
+		});
+	}
+
+	function previousSocialProfile(eventId: number, screenId: number, graphicId: string, projectionKey: string) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Previous Social Profile'),
+			type: 'Previous Social Profile',
+			payload: { graphicId, projectionKey },
+		});
+	}
+
+	function nextSocialProfile(eventId: number, screenId: number, graphicId: string, projectionKey: string) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Next Social Profile'),
+			type: 'Next Social Profile',
+			payload: { graphicId, projectionKey },
+		});
+	}
+
 	/*
 	 * There is deliberately no `resolveBindings` action here.
 	 *
@@ -940,6 +995,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		inputsState,
 		inputTraces,
 		sourceSelections,
+		socialProfileProjectionState,
+		socialProfileValues,
 		acceptedInputValues,
 		recoveryFault,
 		loadSession,
@@ -948,6 +1005,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		setInput,
 		setOverride,
 		selectSource,
+		selectSocialProfile,
+		previousSocialProfile,
+		nextSocialProfile,
 		updateGraphic,
 		resetLiveState,
 		applyRemoteCommand,

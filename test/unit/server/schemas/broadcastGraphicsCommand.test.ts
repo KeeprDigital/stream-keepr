@@ -71,4 +71,24 @@ describe('broadcastGraphicsCommandSchema', () => {
 			payload: { graphicId: 'a', inputKey: '2 names', value: 'x' },
 		}).success).toBe(false);
 	});
+
+	it('accepts only bounded authored Social Profile Projection commands', () => {
+		for (const command of [
+			{ commandId: 'profile:1', type: 'Select Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile', network: 'x' } },
+			{ commandId: 'profile:2', type: 'Previous Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile' } },
+			{ commandId: 'profile:3', type: 'Next Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile' } },
+		])
+			expect(broadcastGraphicsCommandSchema.safeParse(command).success).toBe(true);
+
+		expect(broadcastGraphicsCommandSchema.safeParse({
+			commandId: 'profile:4',
+			type: 'Select Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'facebook' },
+		}).success).toBe(false);
+		expect(broadcastGraphicsCommandSchema.safeParse({
+			commandId: 'profile:5',
+			type: 'Next Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'x' },
+		}).success).toBe(false);
+	});
 });

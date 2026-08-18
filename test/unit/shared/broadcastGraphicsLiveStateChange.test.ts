@@ -85,6 +85,37 @@ describe('broadcastGraphicsLiveStateChange', () => {
 		expect(applied).toEqual(after);
 	});
 
+	it('carries one manual Social Profile Projection selection and converges on the committed state', () => {
+		const before = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				lower: {
+					profile: {
+						acceptedProfiles: [
+							{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+							{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+						],
+						currentNetwork: 'twitch' as const,
+					},
+				},
+			},
+		};
+		const after = applyBroadcastGraphicsCommand(before, {
+			type: 'Select Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'x' },
+		}, {
+			inputs: [],
+			acceptedAt: 1_000,
+			socialProfileProjections: [{ key: 'profile' } as never],
+		});
+		const change = broadcastGraphicsLiveStateChange(before, after);
+
+		expect(change).toEqual({
+			socialProfileProjections: { lower: after.socialProfileProjections?.lower },
+		});
+		expect(changedBroadcastGraphicsLiveState(before, change!)).toEqual(after);
+	});
+
 	it('describes nothing when a command left the live state exactly as it was', () => {
 		const before = {
 			...createInitialBroadcastGraphicsLiveState(),

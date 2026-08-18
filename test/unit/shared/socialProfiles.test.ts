@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	canonicalSocialProfileUrl,
+	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
 	normalizeSocialProfileInput,
 	SUPPORTED_SOCIAL_NETWORKS,
 } from '~~/shared/socialProfiles';
@@ -63,5 +64,12 @@ describe('normalizeSocialProfileInput', () => {
 		['x', 'https://example.com/Caster'],
 	] as const)('rejects malformed or wrong-network %s input %s', (network, input) => {
 		expect(() => normalizeSocialProfileInput(network, input)).toThrow(`valid`);
+	});
+
+	it('bounds a handle without encoding any remote network username limit', () => {
+		expect(normalizeSocialProfileInput('twitch', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH)))
+			.toHaveLength(MAX_SOCIAL_PROFILE_HANDLE_LENGTH);
+		expect(() => normalizeSocialProfileInput('twitch', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1)))
+			.toThrow('valid');
 	});
 });

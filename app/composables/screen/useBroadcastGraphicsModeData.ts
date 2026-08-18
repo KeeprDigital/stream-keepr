@@ -109,9 +109,12 @@ export function useBroadcastGraphicsModeData() {
 
 	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => renderedInputs.value.current);
 	const outgoingInputValues = computed(() => renderedInputs.value.outgoing);
-	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(() =>
-		previewState.value?.socialProfileValues ?? {},
-	);
+	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(() => {
+		if (previewState.value)
+			return previewState.value.socialProfileValues ?? {};
+		const screenId = screen.value?.id;
+		return screenId ? sessionStore.socialProfileValues(screenId, graphics.value) : {};
+	});
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },

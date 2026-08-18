@@ -77,6 +77,30 @@ describe('broadcastGraphicsRecovery', () => {
 			// maps the reader indexes, so it is filled in rather than left absent.
 			expect(recoveredBroadcastGraphicsLiveState(state)).toEqual({ ...state, sources: {} });
 		});
+
+		it('trusts a bounded correlated Social Profile Projection state across reload and restart', () => {
+			const state = {
+				playout: {},
+				inputs: {},
+				sources: {},
+				socialProfileProjections: {
+					lower: {
+						profile: {
+							talent: { id: 7, name: 'Ava Reed' },
+							acceptedProfiles: [
+								{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+								{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+							],
+							currentNetwork: 'x',
+							manualNetwork: 'x',
+						},
+					},
+				},
+			};
+
+			expect(broadcastGraphicsRecoveryFault(state)).toBeNull();
+			expect(recoveredBroadcastGraphicsLiveState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+		});
 	});
 
 	describe('missing durable live state', () => {
@@ -105,6 +129,21 @@ describe('broadcastGraphicsRecovery', () => {
 			['a non-object playout record', { playout: { slate: true }, inputs: {} }],
 			['a non-object inputs record', { playout: {}, inputs: { slate: 'Ava' } }],
 			['a non-object working map', { playout: {}, inputs: { slate: { working: 'Ava', accepted: {} } } }],
+			['a non-object Social Profile Projection map', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: [],
+			}],
+			['a non-object Social Profile Projection record', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: null } },
+			}],
+			['a non-array accepted Social Profile set', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: { acceptedProfiles: {} } } },
+			}],
 		])('reports %s as corrupt', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('corrupt');
 		});
@@ -160,6 +199,43 @@ describe('broadcastGraphicsRecovery', () => {
 				inputs: {},
 				sources: { slate: { player: null } },
 			}],
+			['more accepted Social Profiles than the six-network catalog', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: Array.from({ length: 7 }, () => ({
+						network: 'twitch',
+						networkLabel: 'Twitch',
+						handle: 'Ava',
+						profileUrl: 'https://www.twitch.tv/Ava',
+					})),
+				} } },
+			}],
+			['a current Social Profile outside the accepted set', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+					currentNetwork: 'x',
+				} } },
+			}],
+			['a Social Profile tuple with a mismatched label', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [{ network: 'twitch', networkLabel: 'YouTube', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+				} } },
+			}],
+			['accepted Social Profiles outside catalog order', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [
+						{ network: 'x', networkLabel: 'X', handle: 'AvaX', profileUrl: 'https://x.com/AvaX' },
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+					],
+				} } },
+			}],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});
@@ -200,6 +276,21 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(next.playout).toEqual({});
 			expect(next.inputs.slate?.working).toEqual({ name: 'Ava' });
 			expect(onAirBroadcastGraphicIds(next, [{ id: 'slate' }, { id: 'bug' }])).toEqual([]);
+		});
+
+		it('drops manual Social Profile Projection state at the epoch boundary', () => {
+			const next = carriedForwardBroadcastGraphicsLiveState({
+				...ended,
+				socialProfileProjections: {
+					lower: { profile: {
+						acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+						currentNetwork: 'twitch',
+						manualNetwork: 'twitch',
+					} },
+				},
+			});
+
+			expect(next.socialProfileProjections).toBeUndefined();
 		});
 
 		const endedWithBinding = {

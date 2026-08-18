@@ -1,5 +1,5 @@
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, GraphicChannelConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig, GraphicGroupItemConfig, MediaGraphicItemConfig, ShapeGraphicItemConfig, SocialNetworkIconGraphicItemConfig, TextGraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
@@ -16,7 +16,7 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import { DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -100,6 +100,8 @@ function mockState(): BroadcastGraphicsLiveState {
 			mockOnAirGraphicIds.value.map(id => [id, { onAir: true, effectiveStartedAt: 0, cut: false }]),
 		),
 		inputs: mockAcceptedInputs.value.inputs,
+		sources: mockAcceptedInputs.value.sources,
+		socialProfileProjections: mockAcceptedInputs.value.socialProfileProjections,
 	};
 }
 
@@ -180,6 +182,16 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		}
 		return { current, outgoing };
 	},
+	socialProfileValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[]) =>
+		Object.fromEntries(graphics.flatMap((graphic) => {
+			const values = Object.fromEntries(Object.entries(
+				mockState().socialProfileProjections?.[graphic.id] ?? {},
+			).flatMap(([projectionKey, projection]) => {
+				const current = projection.acceptedProfiles.find(profile => profile.network === projection.currentNetwork);
+				return current ? [[projectionKey, current]] : [];
+			}));
+			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+		})),
 	playoutState: (
 		_screenId: number,
 		graphicId: string,
@@ -217,6 +229,37 @@ const socialGraphic: BroadcastGraphicConfig = {
 		opacity: 0.72,
 	}],
 };
+
+function projectedSocialGraphic(): BroadcastGraphicConfig {
+	let graphic = addGraphicItem(
+		{ id: 'projected-social', name: 'Projected Social', items: [] },
+		{ kind: 'group', id: 'profile-group', canvasWidth: 1920, canvasHeight: 1080 },
+	).graphic;
+	graphic = addGraphicGroupChild(graphic, {
+		kind: 'text',
+		groupId: 'profile-group',
+		id: 'profile-text',
+	}).graphic;
+	graphic = addGraphicGroupChild(graphic, {
+		kind: 'social-network-icon',
+		groupId: 'profile-group',
+		id: 'profile-icon',
+	}).graphic;
+	const group = graphic.items[0] as GraphicGroupItemConfig;
+	(group.children[0] as TextGraphicItemConfig).text = '{profile.networkLabel} — @{profile.handle}';
+	(group.children[1] as SocialNetworkIconGraphicItemConfig).network = { projectionKey: 'profile' };
+	graphic.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
+	graphic.socialProfileProjections = [{
+		key: 'profile',
+		label: 'Social Profile',
+		sourceKey: 'talent',
+		presentationGroupId: 'profile-group',
+		dwellMs: 8_000,
+		transition: 'crossfade',
+		transitionDurationMs: 250,
+	}];
+	return graphic;
+}
 
 /** A Broadcast Graphic whose Text Graphic Item renders a Graphic Text Template. */
 const templated: BroadcastGraphicConfig = {
@@ -423,6 +466,34 @@ describe('broadcastGraphicsDisplay', () => {
 		}).toEqual(previewSignature);
 		expect(liveIcon.attributes('style')).toContain('color: #e1306c');
 		expect(liveIcon.attributes('style')).toContain('opacity: 0.72');
+	});
+
+	it('renders only the authoritative current Social Profile tuple on a live Screen Output', async () => {
+		const graphic = projectedSocialGraphic();
+		mockScreen.value = screenWithStack([graphic]);
+		mockOnAirGraphicIds.value = [graphic.id];
+		mockAcceptedInputs.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				[graphic.id]: { profile: {
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'x',
+				} },
+			},
+		};
+
+		const wrapper = await mountComponent();
+		await nextTick();
+
+		expect(wrapper.get('[data-graphic-item-kind="text"] p').text()).toBe('X — @AvaCasts');
+		expect(wrapper.get('[data-social-network-icon]').classes()).toContain('i-simple-icons:x');
+
+		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
+		await nextTick();
+		expect(wrapper.find('[data-graphic-item-kind="group"]').exists()).toBe(false);
 	});
 
 	it('composes concurrent on-air Broadcast Graphics in authored stack order, not take order', async () => {

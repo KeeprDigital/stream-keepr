@@ -168,6 +168,53 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
 	});
 
+	it('reads current Social Profile tuples and sends direct, Previous, and Next commands', async () => {
+		const currentState = {
+			playout: {},
+			inputs: {},
+			socialProfileProjections: {
+				slate: { profile: {
+					acceptedProfiles: [
+						{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch' as const,
+				} },
+			},
+		};
+		mockRepository.getSession.mockResolvedValue(session({ currentState }));
+		mockRepository.sendCommand.mockImplementation(async (
+			_eventId: number,
+			_screenId: number,
+			_sessionId: number,
+			command: { type: string },
+		) => ({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: command.type,
+			currentState,
+			session: session({ sequence: 2, currentState }),
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('twitch');
+		expect(store.socialProfileValues(SCREEN_ID, [graphic('slate')])).toEqual({
+			slate: { profile: currentState.socialProfileProjections.slate.profile.acceptedProfiles[0] },
+		});
+
+		await store.selectSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile', 'x');
+		await store.previousSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+
+		expect(mockRepository.sendCommand.mock.calls.map(call => ({ type: call[3].type, payload: call[3].payload })))
+			.toEqual([
+				{ type: 'Select Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile', network: 'x' } },
+				{ type: 'Previous Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
+				{ type: 'Next Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
+			]);
+	});
+
 	it('sends a Take naming the loaded epoch, and keeps the returned snapshot', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		mockRepository.sendCommand.mockResolvedValue({
