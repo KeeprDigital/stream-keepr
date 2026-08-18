@@ -80,6 +80,49 @@ describe('graphic Input Binding field catalog', () => {
 		expect(isGraphicBindingFieldCompatible('player', 'player.wins', 'number')).toBe(true);
 	});
 
+	it('offers each fixed Talent Social Profile as a compatible handle and canonical URL text field', () => {
+		expect(graphicBindingFields('talent', 'mtg').map(field => ({
+			id: field.id,
+			label: field.label,
+			type: field.type,
+			shape: field.shape,
+		}))).toEqual([
+			{ id: 'talent.name', label: 'Name', type: 'text', shape: 'atomic' },
+			{ id: 'talent.twitchHandle', label: 'Twitch handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.twitchProfileUrl', label: 'Twitch profile URL', type: 'text', shape: 'formatted' },
+			{ id: 'talent.youtubeHandle', label: 'YouTube handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.youtubeProfileUrl', label: 'YouTube profile URL', type: 'text', shape: 'formatted' },
+			{ id: 'talent.xHandle', label: 'X handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.xProfileUrl', label: 'X profile URL', type: 'text', shape: 'formatted' },
+			{ id: 'talent.instagramHandle', label: 'Instagram handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.instagramProfileUrl', label: 'Instagram profile URL', type: 'text', shape: 'formatted' },
+			{ id: 'talent.tiktokHandle', label: 'TikTok handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.tiktokProfileUrl', label: 'TikTok profile URL', type: 'text', shape: 'formatted' },
+			{ id: 'talent.blueskyHandle', label: 'Bluesky handle', type: 'text', shape: 'atomic' },
+			{ id: 'talent.blueskyProfileUrl', label: 'Bluesky profile URL', type: 'text', shape: 'formatted' },
+		]);
+
+		expect(bindableGraphicBindingFields('talent', 'text', 'mtg').common).toHaveLength(13);
+		expect(bindableGraphicBindingFields('talent', 'number', 'mtg')).toEqual({ common: [], gameSpecific: [] });
+	});
+
+	it('resolves fixed Talent Social Profile handles and canonical URLs without substituting missing profiles', () => {
+		const talent = {
+			name: 'Jules Kim',
+			socialProfiles: { twitch: 'JulesLive', bluesky: 'jules.bsky.social' },
+		};
+
+		expect(resolveGraphicBindingField('talent', 'talent.twitchHandle', talent, dataSet())).toBe('JulesLive');
+		expect(resolveGraphicBindingField('talent', 'talent.twitchProfileUrl', talent, dataSet()))
+			.toBe('https://www.twitch.tv/JulesLive');
+		expect(resolveGraphicBindingField('talent', 'talent.blueskyProfileUrl', talent, dataSet()))
+			.toBe('https://bsky.app/profile/jules.bsky.social');
+		expect(resolveGraphicBindingField('talent', 'talent.youtubeHandle', talent, dataSet()))
+			.toBeUndefined();
+		expect(resolveGraphicBindingField('talent', 'talent.youtubeProfileUrl', talent, dataSet()))
+			.toBeUndefined();
+	});
+
 	it('offers no field for a ticking clock or collection-shaped state', () => {
 		const slot = graphicBindingFields('feature-match-slot', 'mtg').map(field => field.id);
 
@@ -149,8 +192,8 @@ describe('the fields one Graphic Input may bind to', () => {
 	});
 
 	it('offers nothing at all where the kind has no field of that type', () => {
-		// A Talent has a name and nothing else, so a number Graphic Input has nothing to
-		// bind to and the surface has a reason to state rather than an empty picker.
+		// Every current Talent binding field is text, so a number Graphic Input has
+		// nothing to bind to and the surface can state why instead of showing an empty picker.
 		expect(bindableGraphicBindingFields('talent', 'number', 'mtg')).toEqual({ common: [], gameSpecific: [] });
 	});
 });

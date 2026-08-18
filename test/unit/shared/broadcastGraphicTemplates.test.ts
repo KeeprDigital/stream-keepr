@@ -138,6 +138,33 @@ describe('placeBroadcastGraphicTemplate', () => {
 		expect(document.bindings).toHaveLength(1);
 	});
 
+	it('retains a fixed Talent Social Profile binding without embedding Event Talent data', () => {
+		const document = composed();
+		document.inputs = [{
+			type: 'text',
+			key: 'social',
+			label: 'Twitch handle',
+			required: false,
+			updatePolicy: 'staged',
+			default: '',
+			maxLength: 100,
+		}];
+		document.sources = [
+			{ key: 'event', label: 'Current Event', kind: 'event' },
+			{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+		];
+		document.bindings = [{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' }];
+
+		const placed = placeBroadcastGraphicTemplate(
+			{ id: 'template-1', name: 'Social lower third', document },
+			{ generateId: sequentialIds(), existing: [] },
+		);
+
+		expect(placed.sources).toEqual(document.sources);
+		expect(placed.bindings).toEqual(document.bindings);
+		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
+	});
+
 	it('carries the authored Graphic Asset Reference of every Media Graphic Item', () => {
 		const document = composed();
 		const media = addGraphicItem(document, { kind: 'media', id: 'brand', ...CANVAS }).graphic;
