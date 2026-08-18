@@ -128,82 +128,18 @@ async function signInAsOperator(): Promise<string> {
 }
 
 /**
- * The transport failures that mean **no verdict was produced**, and the one
- * retry they get.
+ * The one retry in this suite, re-exported so a caller needs one import.
  *
- * `requestBodyLimits.test.ts` deliberately sends bodies over the ceiling, and the
- * server answers 413 while those bytes are still arriving — so it closes a
- * connection with an unread request body on it, and the next request to reuse that
- * pooled socket dies with EPIPE or ECONNRESET before it ever reaches a handler.
- * That was latent before #396 and observable after it: the boundary resolves a
- * session before the body-limit middleware reads anything, which widens the window
- * between "the client is still writing" and "the server has already refused".
+ * It lives in `./transportRetry` rather than here because it is the only thing in
+ * this file that can be tested without a spawned server — and it needed to be,
+ * since the defect it had was a docblock promising "once" while two layers each
+ * retried. `test/unit/integration/transportRetry.test.ts` pins it now.
  *
- * Retrying is not weakening an assertion. These are failures of the socket rather
- * than answers from the server: there is no status to have been wrong about, and
- * the alternative is a run that fails in whichever file happens to inherit the
- * poisoned connection. A **real** server crash still fails, because it fails twice.
- *
- * Only once, and only where the body can be sent again — a `ReadableStream` cannot
- * be replayed, and silently sending a truncated second copy would be worse than the
- * flake.
+ * Deliberately **not** applied inside `fetch` and `$fetch` below: they cannot
+ * rebuild a streamed body, which is the shape that actually fails, so a retry there
+ * would be the layer that cannot do the job doing it twice.
  */
-const RETRYABLE_TRANSPORT_CODES = new Set(['EPIPE', 'ECONNRESET', 'UND_ERR_SOCKET']);
-
-function isRetryableTransportFailure(error: unknown): boolean {
-	const cause = (error as { cause?: unknown })?.cause;
-	const code = (cause as { code?: unknown })?.code ?? (error as { code?: unknown })?.code;
-	return typeof code === 'string' && RETRYABLE_TRANSPORT_CODES.has(code);
-}
-
-/**
- * Whether this body can be sent a second time.
- *
- * A `ReadableStream` cannot: it is consumed by the first attempt, and a silently
- * truncated second copy would be a worse outcome than the flake — those are
- * exactly `requestBodyLimits.test.ts`' streamed oversized bodies, where what the
- * server received is the whole assertion. `FormData` is excluded for no better
- * reason than that nothing here sends one, and a conservative answer costs a
- * retry rather than a wrong one.
- */
-function isReplayable(body: unknown): boolean {
-	return body === undefined
-		|| body === null
-		|| typeof body === 'string'
-		|| body instanceof Uint8Array
-		|| (typeof body === 'object' && !(body instanceof ReadableStream) && !(body instanceof FormData));
-}
-
-/** Whether this failure earns the second attempt, shared by both wrappers below. */
-function deservesSecondAttempt(body: unknown, error: unknown): boolean {
-	return isReplayable(body) && isRetryableTransportFailure(error);
-}
-
-/**
- * One request, made again if the first never reached a verdict — for the caller
- * that can rebuild its own body.
- *
- * The wrappers below cannot retry a streamed body: the stream is consumed by the
- * first attempt, and this is the shape that actually fails.
- * `requestBodyLimits.test.ts` streams bodies over the ceiling, the server answers
- * 413 with those bytes still arriving, and the request after it — its own next
- * row, streamed too — dies on the poisoned socket. Handing the whole request in
- * as a thunk is what makes the second attempt possible, because the body is
- * constructed inside it.
- *
- * It belongs to the caller that creates the condition rather than to the client,
- * which cannot know how to build a fresh stream.
- */
-export async function throughOneTransportFailure<T>(request: () => Promise<T>): Promise<T> {
-	try {
-		return await request();
-	}
-	catch (error) {
-		if (!isRetryableTransportFailure(error))
-			throw error;
-		return await request();
-	}
-}
+export { throughOneTransportFailure } from './transportRetry';
 
 /** One request's headers with the operator's session appended to whatever was there. */
 async function signed(path: string, headers: HeadersInit | undefined): Promise<Record<string, string>> {
@@ -221,15 +157,7 @@ async function signed(path: string, headers: HeadersInit | undefined): Promise<R
  * which is the point: what changed is who the suite is, not what it asserts.
  */
 export const fetch: typeof unauthenticatedFetch = async (path, options) => {
-	const request = { ...options, headers: await signed(path, options?.headers) };
-	try {
-		return await unauthenticatedFetch(path, request);
-	}
-	catch (error) {
-		if (!deservesSecondAttempt(options?.body, error))
-			throw error;
-		return await unauthenticatedFetch(path, request);
-	}
+	return await unauthenticatedFetch(path, { ...options, headers: await signed(path, options?.headers) });
 };
 
 /**
@@ -237,12 +165,11 @@ export const fetch: typeof unauthenticatedFetch = async (path, options) => {
  * wrapper only.
  *
  * Nitro types `$fetch` against every route in the application, and instantiating
- * that machinery **twice in one function** — the call and its retry — exhausts
- * TypeScript's depth budget: `vue-tsc` answers TS2321 "Excessive stack depth", the
- * family `docs/agents/parallel-rounds.md` records as revealing one error at a time.
- * Measured rather than guessed at: with the retry written through a generic helper
- * it was seven errors, inlined as a `try`/`catch` it was six, and it is nil with
- * the callee narrowed here.
+ * that machinery inside a wrapper exhausts TypeScript's depth budget: `vue-tsc`
+ * answers TS2321 "Excessive stack depth", the family
+ * `docs/agents/parallel-rounds.md` records as revealing one error at a time.
+ * Measured rather than guessed at: seven errors with the call passed through a
+ * generic helper, six with it inlined, nil with the callee narrowed here.
  *
  * Nothing is lost by narrowing, because the exported binding is declared as
  * `typeof unauthenticated$Fetch`: every **caller** keeps the real types, including
@@ -256,15 +183,10 @@ const untyped$Fetch = unauthenticated$Fetch as unknown as (
 
 /** `@nuxt/test-utils`' `$fetch`, signed in. */
 export const $fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
-	const request = { ...options, headers: await signed(path, options?.headers as HeadersInit | undefined) };
-	try {
-		return await untyped$Fetch(path, request);
-	}
-	catch (error) {
-		if (!deservesSecondAttempt(options?.body, error))
-			throw error;
-		return await untyped$Fetch(path, request);
-	}
+	return await untyped$Fetch(path, {
+		...options,
+		headers: await signed(path, options?.headers as HeadersInit | undefined),
+	});
 }) as typeof unauthenticated$Fetch;
 
 /**

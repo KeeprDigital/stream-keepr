@@ -30,8 +30,7 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import Ably from 'ably';
-import { readLocalConfigurationFiles, suppliedNames } from './graphics-acceptance/local-configuration.mjs';
-import { isLoopbackOrigin, openOperatorSession } from './graphics-acceptance/operator.mjs';
+import { openOperatorSessionForOrigin } from './graphics-acceptance/operator.mjs';
 
 /**
  * What this probe throws when it will not start. A class rather than a bare
@@ -154,11 +153,7 @@ async function main() {
 	// session comes from — an account named in the environment, or one this probe
 	// creates through the first-admin bootstrap — is `graphics-acceptance/operator.mjs`'s
 	// decision, and it is not defaulted to a local file for a remote origin.
-	const local = isLoopbackOrigin(origin);
-	const sessionCookies = await openOperatorSession(origin, {
-		deployed: !local,
-		supplied: local ? suppliedNames(readLocalConfigurationFiles()) : {},
-	});
+	const sessionCookies = await openOperatorSessionForOrigin(origin);
 
 	const bootstrap = await fetch(`${origin}/`, { headers: { accept: 'text/html' }, redirect: 'manual' });
 	const authorCookie = bootstrap.headers.getSetCookie().map(v => v.split(';', 1)[0]).find(v => v.includes('='));

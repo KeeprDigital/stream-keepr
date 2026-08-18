@@ -118,7 +118,11 @@ function canonicalPath(pathname: string): string {
  * answered without a session.
  */
 function isApiPath(path: string): boolean {
-	return path.toLowerCase().startsWith(API_PREFIX) || path.toLowerCase() === '/api';
+	const folded = path.toLowerCase();
+	// The bare form as well as the prefix: no handler answers `/api`, and a path the
+	// boundary did not recognise at all is the one shape that would reach a handler
+	// unauthenticated if that ever changed.
+	return folded === API_PREFIX.slice(0, -1) || folded.startsWith(API_PREFIX);
 }
 
 /**

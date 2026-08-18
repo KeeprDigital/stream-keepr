@@ -554,11 +554,24 @@ function isDomainLayer(file: string): boolean {
  * middleware on every request; which of them acts is a runtime decision each makes from
  * the path and method, and reading that decision out of the source means interpreting
  * guards like `if (event.method !== 'GET' || pathname.startsWith('/api/')) return;`.
- * So this over-approximates, the way module reachability already does, and the cost was
- * measured rather than assumed: across all three middleware exactly one banded refusal
- * arrives that this route can raise, and none it cannot. **When that stops being true —
- * a middleware growing a 401 for some other path — path-match here or exclude it here.
- * Do not add it to the refusal list**, for the reason spelled out above.
+ * So this over-approximates, the way module reachability already does, and the cost is
+ * measured rather than assumed: across all four middleware exactly two banded refusals
+ * arrive, and both are refusals this route can raise — `event-exists.ts`'s 404 for an
+ * absent Event, and `api-session.ts`'s 401 for a request with no session. **When that
+ * stops being true — a middleware growing a banded refusal for some path this route is
+ * not on — path-match here or exclude it here. Do not add it to the refusal list**, for
+ * the reason spelled out above.
+ *
+ * #396 is the case that distinguishes the two halves of that rule, so read it before
+ * applying it. The API boundary's 401 was **added to the list**, which is what the
+ * sentence above forbids — and legitimately, because the clause it turns on is "for some
+ * path this route is not on". The boundary refuses `/api/**` without a session, and this
+ * route is inside it: an unauthenticated request to the Screen-command path really is
+ * answered 401, so a run whose session lapsed must read as a missing cookie rather than
+ * as a fabricated Ably key. ADR-0010 pre-authorised exactly that addition, and
+ * `SCREEN_COMMAND_ROUTE_REFUSALS` carries the argument at the entry. What stays
+ * forbidden is the other thing: silencing a refusal the route **cannot** answer by
+ * teaching the diagnosis to excuse its message, which is #268's hole.
  *
  * **A middleware's graph stops at the domain layer**, which is the second half of
  * keeping that cost at nil. `DOMAIN_LAYER_ROOTS` is excluded because middleware is

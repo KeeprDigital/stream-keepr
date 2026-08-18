@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { fetch, throughOneTransportFailure } from './client';
 
 /**
@@ -39,6 +39,21 @@ function streamingMutation(method: 'DELETE' | 'PATCH' | 'POST' | 'PUT', body: Re
 }
 
 describe('request body limits', () => {
+	/**
+	 * Absorb the last poisoned socket here, rather than leaving it for whoever runs
+	 * next.
+	 *
+	 * The final row above answers 413 with bytes still arriving, so it leaves the
+	 * pool holding a connection the next request will die on — and with
+	 * `fileParallelism: false` the next request is very often in another **file**,
+	 * where the failure would read as that file's defect. One throwaway request
+	 * takes it: `/api/time` is outside the boundary and costs nothing, and its own
+	 * retry is what makes it the request that dies instead of somebody else's.
+	 */
+	afterAll(async () => {
+		await throughOneTransportFailure(() => fetch('/api/time'));
+	});
+
 	it('accepts a raw mutation stream above the general limit when the route declares a larger limit', async () => {
 		const receivedBytes = GENERAL_LIMIT_BYTES + 1;
 

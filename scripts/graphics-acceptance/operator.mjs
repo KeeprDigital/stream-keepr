@@ -34,6 +34,7 @@
 import { randomBytes } from 'node:crypto';
 import process from 'node:process';
 import { AcceptanceFailure } from './evidence.mjs';
+import { readLocalConfigurationFiles, suppliedNames } from './local-configuration.mjs';
 
 /** Where a run says it already has an account, and what it signs in with. */
 export const OPERATOR_EMAIL_ENV = 'STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL';
@@ -231,4 +232,27 @@ export async function openOperatorSession(origin, { deployed = false, env = proc
 	}
 
 	return cookies;
+}
+
+/**
+ * Sign in against one origin, deciding from the origin alone what this checkout
+ * may present to it.
+ *
+ * For the callers that have no `--deployed` flag: the measurement probes take a
+ * single mandatory origin, and both of them were writing out the same three lines
+ * — resolve loopback, invert it into `deployed`, read local files only when local.
+ * Two copies of a rule about where a secret may travel is one copy too many.
+ *
+ * The acceptance harnesses keep passing `deployed` explicitly, because they have
+ * it: a run's mode is a stated choice there, not something to infer from a
+ * hostname.
+ *
+ * @param {string} origin
+ */
+export async function openOperatorSessionForOrigin(origin) {
+	const local = isLoopbackOrigin(origin);
+	return await openOperatorSession(origin, {
+		deployed: !local,
+		supplied: local ? suppliedNames(readLocalConfigurationFiles()) : {},
+	});
 }
