@@ -44,6 +44,15 @@ describe('what is not a token', () => {
 		expect(passwordResetTokenFromHash('#other=value')).toBeNull();
 	});
 
+	it('reads a token offered in a query string as no token', () => {
+		// The fail-safe direction, and pinned because the tempting "fix" is a query
+		// fallback. Better Auth's own `/reset-password/:token` callback redirects
+		// with `?token=`, so a link built through it would arrive this way — and
+		// accepting it would put the token back in the request logs the fragment
+		// exists to keep it out of.
+		expect(passwordResetTokenFromHash('?token=a-token-long-enough-to-be-one')).toBeNull();
+	});
+
 	it('reads a truncated paste as no token', () => {
 		// Answered as "no token" rather than presented and refused, so a partial
 		// copy out of a chat window asks for a fresh link instead of looking like
