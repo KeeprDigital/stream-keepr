@@ -37,6 +37,7 @@ import type {
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
+	SocialProfileProjectionDeclaration,
 	TextGraphicItemConfig,
 	TextOverflowPolicy,
 } from '../../types/graphics';
@@ -44,11 +45,20 @@ import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import {
+	DEFAULT_SOCIAL_PROFILE_DWELL_MS,
+	DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_INPUT_KEY_PATTERN,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_SOCIAL_PROFILE_DWELL_MS,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
+	MIN_SOCIAL_PROFILE_DWELL_MS,
+	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
+	SOCIAL_PROFILE_TRANSITION_VALUES,
 } from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
 import { isGraphicBindingFieldCompatible } from './bindingCatalog';
@@ -56,6 +66,7 @@ import { canDeriveGraphicSource } from './bindingResolution';
 import { createDefaultGraphicInputDeclaration } from './inputs';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, GRAPHIC_GROUP_CHILD_KINDS, graphicItemKindLabel } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
+import { graphicTextTemplateProjectedValueReferences, readSocialProfileProjectedValueReference } from './textTemplate';
 
 /**
  * Authoring operations for a Screen's back-to-front stack of Broadcast
@@ -560,6 +571,8 @@ export function deleteGraphicSourceSelection(
 				}
 			}
 		}
+		if ((graphic.socialProfileProjections ?? []).some(projection => removed.has(projection.sourceKey)))
+			return graphic;
 
 		return {
 			...graphic,
@@ -612,6 +625,243 @@ export function deleteGraphicInputBinding(
 	return graphics.map(graphic => graphic.id === graphicId
 		? { ...graphic, bindings: (graphic.bindings ?? []).filter(binding => binding.inputKey !== inputKey) }
 		: graphic);
+}
+
+/* ────────────────────────────────────────────────
+ * Social Profile Projections
+ * ──────────────────────────────────────────────── */
+
+export interface AddSocialProfileProjectionOptions {
+	label: string;
+	sourceKey: string;
+	projectionKey: string;
+	presentationGroupId: string;
+	iconItemId: string;
+	handleItemId: string;
+	canvasWidth: number;
+	canvasHeight: number;
+}
+
+export interface AssociateSocialProfileProjectionOptions {
+	label: string;
+	sourceKey: string;
+	projectionKey: string;
+	presentationGroupId: string;
+}
+
+/** Associate an existing, otherwise-unassigned ordinary Graphic Group. */
+export function associateSocialProfileProjection(
+	graphic: BroadcastGraphicConfig,
+	options: AssociateSocialProfileProjectionOptions,
+): BroadcastGraphicConfig {
+	const source = (graphic.sources ?? []).find(entry => entry.key === options.sourceKey);
+	const group = graphic.items.find(entry => entry.id === options.presentationGroupId);
+	if (
+		!source
+		|| source.kind !== 'talent'
+		|| group?.type !== 'group'
+		|| options.label.trim() === ''
+		|| options.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
+		|| !GRAPHIC_INPUT_KEY_PATTERN.test(options.projectionKey)
+		|| options.projectionKey.length > MAX_GRAPHIC_INPUT_KEY_LENGTH
+		|| (graphic.socialProfileProjections?.length ?? 0) >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC
+		|| (graphic.socialProfileProjections ?? []).some(entry =>
+			entry.key === options.projectionKey || entry.presentationGroupId === options.presentationGroupId,
+		)
+	) {
+		return graphic;
+	}
+
+	const projection: SocialProfileProjectionDeclaration = {
+		key: options.projectionKey,
+		label: options.label.trim(),
+		sourceKey: options.sourceKey,
+		presentationGroupId: options.presentationGroupId,
+		dwellMs: DEFAULT_SOCIAL_PROFILE_DWELL_MS,
+		transition: 'crossfade',
+		transitionDurationMs: DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
+	};
+	return {
+		...graphic,
+		socialProfileProjections: [...(graphic.socialProfileProjections ?? []), projection],
+	};
+}
+
+/**
+ * Declare one Social Profile Projection and create its ordinary starter items.
+ *
+ * The starter is convenience, not a special item tree: once returned, its Graphic
+ * Group, Social Network Icon, and Text Item are edited by the same compositor
+ * operations as every other item. The operation is atomic so no strict save can
+ * observe a projection without its Presentation Group or consumers.
+ */
+export function addSocialProfileProjection(
+	graphic: BroadcastGraphicConfig,
+	options: AddSocialProfileProjectionOptions,
+): BroadcastGraphicConfig {
+	const source = (graphic.sources ?? []).find(entry => entry.key === options.sourceKey);
+	if (
+		!source
+		|| source.kind !== 'talent'
+		|| options.label.trim() === ''
+		|| options.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
+		|| !GRAPHIC_INPUT_KEY_PATTERN.test(options.projectionKey)
+		|| options.projectionKey.length > MAX_GRAPHIC_INPUT_KEY_LENGTH
+		|| (graphic.socialProfileProjections?.length ?? 0) >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC
+		|| (graphic.socialProfileProjections ?? []).some(entry => entry.key === options.projectionKey)
+		|| findGraphicItem(graphic, options.presentationGroupId)
+		|| findGraphicItem(graphic, options.iconItemId)
+		|| findGraphicItem(graphic, options.handleItemId)
+	) {
+		return graphic;
+	}
+
+	const group = getGraphicItemDefinition('group').createDefault({
+		id: options.presentationGroupId,
+		label: nextSequentialName('Social Profile', usedLabels(graphic)),
+		canvasWidth: options.canvasWidth,
+		canvasHeight: options.canvasHeight,
+	}) as GraphicGroupItemConfig;
+	const icon = getGraphicItemDefinition('social-network-icon').createDefault({
+		id: options.iconItemId,
+		label: nextSequentialName('Social Network Icon', [...usedLabels(graphic), group.label]),
+		canvasWidth: group.width,
+		canvasHeight: group.height,
+	});
+	const handle = getGraphicItemDefinition('text').createDefault({
+		id: options.handleItemId,
+		label: nextSequentialName('Text', [...usedLabels(graphic), group.label, icon.label]),
+		canvasWidth: group.width,
+		canvasHeight: group.height,
+	});
+	const withStarter: BroadcastGraphicConfig = {
+		...graphic,
+		items: [...graphic.items, {
+			...group,
+			children: [
+				{ ...icon, network: { projectionKey: options.projectionKey } },
+				{ ...handle, text: `{${options.projectionKey}.handle}` },
+			] as GraphicGroupChildConfig[],
+		}],
+	};
+	return associateSocialProfileProjection(withStarter, options);
+}
+
+export type SocialProfileProjectionPatch = Partial<Pick<
+	SocialProfileProjectionDeclaration,
+	'label' | 'sourceKey' | 'dwellMs' | 'transition' | 'transitionDurationMs'
+>>;
+
+const SOCIAL_PROFILE_PROJECTION_PATCH_KEYS = new Set<keyof SocialProfileProjectionPatch>([
+	'label',
+	'sourceKey',
+	'dwellMs',
+	'transition',
+	'transitionDurationMs',
+]);
+
+/** Edit authored projection properties without allowing a strict-save-invalid state. */
+export function patchSocialProfileProjection(
+	graphic: BroadcastGraphicConfig,
+	key: string,
+	patch: SocialProfileProjectionPatch,
+): BroadcastGraphicConfig {
+	const current = (graphic.socialProfileProjections ?? []).find(entry => entry.key === key);
+	if (
+		!current
+		|| Object.keys(patch).some(
+			patchKey => !SOCIAL_PROFILE_PROJECTION_PATCH_KEYS.has(patchKey as keyof SocialProfileProjectionPatch),
+		)
+	) {
+		return graphic;
+	}
+	const candidate = { ...current, ...patch };
+	const source = (graphic.sources ?? []).find(entry => entry.key === candidate.sourceKey);
+	const group = graphic.items.find(entry => entry.id === candidate.presentationGroupId);
+	const groupAssignedElsewhere = (graphic.socialProfileProjections ?? []).some(entry =>
+		entry.key !== key && entry.presentationGroupId === candidate.presentationGroupId,
+	);
+	if (
+		candidate.label.trim() === ''
+		|| candidate.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
+		|| !source
+		|| source.kind !== 'talent'
+		|| group?.type !== 'group'
+		|| groupAssignedElsewhere
+		|| !Number.isInteger(candidate.dwellMs)
+		|| candidate.dwellMs < MIN_SOCIAL_PROFILE_DWELL_MS
+		|| candidate.dwellMs > MAX_SOCIAL_PROFILE_DWELL_MS
+		|| !SOCIAL_PROFILE_TRANSITION_VALUES.includes(candidate.transition)
+		|| !Number.isInteger(candidate.transitionDurationMs)
+		|| candidate.transitionDurationMs < MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS
+		|| candidate.transitionDurationMs > MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS
+	) {
+		return graphic;
+	}
+
+	return {
+		...graphic,
+		socialProfileProjections: graphic.socialProfileProjections?.map(entry =>
+			entry.key === key ? { ...candidate, label: candidate.label.trim() } : entry,
+		),
+	};
+}
+
+/** The ordinary items that still read one projection's correlated values. */
+export function socialProfileProjectionConsumerIds(
+	graphic: BroadcastGraphicConfig,
+	key: string,
+): string[] {
+	return flattenGraphicItems(graphic).flatMap((item) => {
+		if (
+			item.type === 'social-network-icon'
+			&& typeof item.network === 'object'
+			&& item.network.projectionKey === key
+		) {
+			return [item.id];
+		}
+		if (item.type === 'text') {
+			const textReferencesProjection = graphicTextTemplateProjectedValueReferences(item.text)
+				.some(reference => reference.projectionKey === key);
+			const styleReferencesProjection = Object.keys(item.placeholderStyles ?? {})
+				.some(styleKey => readSocialProfileProjectedValueReference(styleKey)?.projectionKey === key);
+			if (textReferencesProjection || styleReferencesProjection)
+				return [item.id];
+		}
+		return [];
+	});
+}
+
+export interface DeleteSocialProfileProjectionOptions {
+	/** Delete the associated ordinary Graphic Group and its children in the same edit. */
+	deletePresentationGroup: boolean;
+}
+
+/**
+ * Delete one projection without ever leaving an authored dangling reference.
+ *
+ * Keeping the Presentation Group is allowed only after its projected placeholders
+ * and dynamic icons have been replaced or moved away. The common combined path
+ * removes the whole associated group atomically.
+ */
+export function deleteSocialProfileProjection(
+	graphic: BroadcastGraphicConfig,
+	key: string,
+	options: DeleteSocialProfileProjectionOptions,
+): BroadcastGraphicConfig {
+	const projection = (graphic.socialProfileProjections ?? []).find(entry => entry.key === key);
+	if (!projection)
+		return graphic;
+	if (!options.deletePresentationGroup && socialProfileProjectionConsumerIds(graphic, key).length > 0)
+		return graphic;
+
+	const withoutProjection: BroadcastGraphicConfig = {
+		...graphic,
+		socialProfileProjections: (graphic.socialProfileProjections ?? []).filter(entry => entry.key !== key),
+	};
+	return options.deletePresentationGroup
+		? deleteGraphicItem(withoutProjection, projection.presentationGroupId)
+		: withoutProjection;
 }
 
 /* ────────────────────────────────────────────────
@@ -736,6 +986,12 @@ export function moveGraphicItem(
  */
 export function deleteGraphicItem(graphic: BroadcastGraphicConfig, itemId: string): BroadcastGraphicConfig {
 	const location = findGraphicItem(graphic, itemId);
+	if (
+		location?.item.type === 'group'
+		&& (graphic.socialProfileProjections ?? []).some(projection => projection.presentationGroupId === itemId)
+	) {
+		return graphic;
+	}
 	if (location?.group) {
 		const group = location.group;
 		return replaceGraphicItem(graphic, {

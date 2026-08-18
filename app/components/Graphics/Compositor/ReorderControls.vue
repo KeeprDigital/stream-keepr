@@ -4,12 +4,14 @@
  * a Broadcast Graphic in the Screen stack, or a Graphic Item in a Graphic
  * Layer Order. The list is back-to-front, so "forward" moves towards the end.
  */
-defineProps<{
+withDefaults(defineProps<{
 	/** Names the entry in each control's accessible label. */
 	label: string;
 	canMoveForward: boolean;
 	canMoveBackward: boolean;
-}>();
+	/** False when deletion must go through a referentially safe combined operation. */
+	canRemove?: boolean;
+}>(), { canRemove: true });
 
 const emit = defineEmits<{
 	move: [delta: 1 | -1];
@@ -42,6 +44,7 @@ const emit = defineEmits<{
 			variant="ghost"
 			color="error"
 			icon="i-lucide-trash-2"
+			:disabled="canRemove === false"
 			:aria-label="`Delete ${label}`"
 			@click="emit('remove')"
 		/>

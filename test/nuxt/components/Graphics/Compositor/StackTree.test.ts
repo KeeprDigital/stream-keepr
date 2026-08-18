@@ -298,6 +298,28 @@ describe('graphicsCompositorStackTree', () => {
 		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
 	});
 
+	it('prevents deleting a Presentation Group outside the projection combined-delete path', async () => {
+		const projected = groupStack();
+		projected.socialProfileProjections = [{
+			key: 'profile',
+			label: 'Talent profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'cluster',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}];
+		const wrapper = await mountComponent({
+			graphics: [projected],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
+		});
+
+		expect(wrapper.get('[aria-label="Delete Name block"]').attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-testid="presentation-group-delete-feedback"]').text())
+			.toContain('delete the projection and Presentation Group together');
+	});
+
 	it('nests the children of a Graphic Group under it as one layer', async () => {
 		const wrapper = await mountComponent({
 			graphics: [{

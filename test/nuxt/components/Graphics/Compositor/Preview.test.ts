@@ -55,6 +55,13 @@ const USelectStub = defineComponent({
 	template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="item in items" :key="item.value" :value="item.value">{{ item.label }}</option></select>',
 });
 
+const UInputStub = defineComponent({
+	name: 'UInput',
+	props: { modelValue: { type: String, required: false } },
+	emits: ['update:modelValue'],
+	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
+});
+
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	emits: ['click'],
@@ -84,12 +91,64 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 				UButton: UButtonStub,
 				USelectMenu: USelectMenuStub,
 				USelect: USelectStub,
+				UInput: UInputStub,
 			},
 		},
 	});
 }
 
 describe('graphicsCompositorPreview', () => {
+	it('previews each projection with non-persisted network and long-handle samples', async () => {
+		const projectedGraphics = [{
+			...graphics[0]!,
+			socialProfileProjections: [{
+				key: 'talent-profile',
+				label: 'Talent profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade' as const,
+				transitionDurationMs: 250,
+			}],
+		}];
+		const wrapper = await mountComponent({ graphics: projectedGraphics });
+		const frame = wrapper.get('iframe').element;
+		const posted: Array<{ state: Record<string, unknown> }> = [];
+		Object.defineProperty(frame, 'contentWindow', {
+			configurable: true,
+			value: { postMessage: (message: unknown) => posted.push(message as never) },
+		});
+
+		const sample = wrapper.get('[data-social-profile-sample="talent-profile"]');
+		expect(sample.get('[data-testid="social-profile-sample-network"]').getComponent(USelectStub).props('items'))
+			.toEqual([
+				{ label: 'Twitch', value: 'twitch' },
+				{ label: 'YouTube', value: 'youtube' },
+				{ label: 'X', value: 'x' },
+				{ label: 'Instagram', value: 'instagram' },
+				{ label: 'TikTok', value: 'tiktok' },
+				{ label: 'Bluesky', value: 'bluesky' },
+			]);
+		expect(sample.get('[data-testid="social-profile-sample-handle"]').attributes('value')).toBe('example');
+
+		await sample.get('[data-testid="social-profile-sample-network"]').setValue('bluesky');
+		await sample.get('[data-testid="social-profile-sample-handle"]').setValue('a-very-long-authoring-sample-handle-for-layout');
+		await wrapper.get('iframe').trigger('load');
+
+		expect(posted.at(-1)?.state.socialProfileValues).toEqual({
+			'lower-third': {
+				'talent-profile': {
+					network: 'bluesky',
+					networkLabel: 'Bluesky',
+					handle: 'a-very-long-authoring-sample-handle-for-layout',
+					profileUrl: 'https://bsky.app/profile/a-very-long-authoring-sample-handle-for-layout',
+				},
+			},
+		});
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		expect(projectedGraphics[0]!.socialProfileProjections![0]!.label).toBe('Talent profile');
+	});
+
 	it('embeds a Screen Output frame that asks for item guides but not safe areas by default', async () => {
 		const wrapper = await mountComponent();
 		const src = wrapper.get('iframe').attributes('src') ?? '';

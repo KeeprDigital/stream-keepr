@@ -943,6 +943,50 @@ describe('graphicsCompositorInspector', () => {
 			});
 		});
 
+		it('binds the icon to the current network of one declared projection', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([groupWith(
+					[{ ...socialNetworkIconItem, network: { projectionKey: 'left-profile' } }],
+					{ id: 'left-group' },
+				)])
+					.map(graphic => ({
+						...graphic,
+						socialProfileProjections: [
+							{ key: 'left-profile', label: 'Left profile', sourceKey: 'left', presentationGroupId: 'left-group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 },
+							{ key: 'right-profile', label: 'Right profile', sourceKey: 'right', presentationGroupId: 'right-group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 },
+						],
+					})),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
+			});
+
+			expect(selectField(wrapper, 'social-network-icon-source')?.props('items')).toEqual([
+				{ label: 'Static network', value: 'static' },
+				{ label: 'Social Profile Projection', value: 'projection' },
+			]);
+			expect(selectField(wrapper, 'social-network-icon-projection')?.props('items')).toEqual([
+				{ label: 'Left profile', value: 'left-profile' },
+			]);
+
+			selectField(wrapper, 'social-network-icon-projection')?.vm.$emit('update:modelValue', 'left-profile');
+			await nextTick();
+			expect(childOf(emittedGraphics(wrapper))).toMatchObject({ network: { projectionKey: 'left-profile' } });
+		});
+
+		it('reports a dynamic icon outside its projection Presentation Group', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{ ...socialNetworkIconItem, network: { projectionKey: 'profile' } }])
+					.map(graphic => ({
+						...graphic,
+						socialProfileProjections: [{ key: 'profile', label: 'Profile', sourceKey: 'talent', presentationGroupId: 'group', dwellMs: 8_000, transition: 'crossfade', transitionDurationMs: 250 }],
+					})),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
+			});
+
+			expect(selectField(wrapper, 'social-network-icon-projection')?.props('items')).toEqual([]);
+			expect(wrapper.get('[data-testid="social-network-icon-projection-invalid"]').text())
+				.toContain('outside that projection\'s Presentation Group');
+		});
+
 		it('edits colour and opacity independently of the shared geometry and visibility controls', async () => {
 			const wrapper = await selectedIcon();
 
@@ -1128,6 +1172,35 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ text: 'Commentator{input-1}' });
+		});
+
+		it('offers each projection read-only value separately from editable Graphic Inputs', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([groupWith([textItem], { id: 'profile-group' })]).map(graphic => ({
+					...graphic,
+					inputs: [namedInput('title', 'Title')],
+					socialProfileProjections: [{
+						key: 'talent-profile',
+						label: 'Talent profile',
+						sourceKey: 'talent',
+						presentationGroupId: 'profile-group',
+						dwellMs: 8_000,
+						transition: 'crossfade',
+						transitionDurationMs: 250,
+					}],
+				})),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			const offered = wrapper.findAllComponents(UButtonStub)
+				.filter(button => button.attributes('data-host-token') !== undefined);
+			expect(offered.map(button => button.attributes('data-host-token'))).toEqual([
+				'title',
+				'talent-profile.networkLabel',
+				'talent-profile.handle',
+				'talent-profile.profileUrl',
+			]);
+			expect(offered[1]!.text()).toContain('Projected network label');
 		});
 	});
 
@@ -1877,6 +1950,22 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.find('[data-testid="graphic-source-add"]').exists()).toBe(true);
 	});
 
+	it('authors Social Profile Projections in a surface distinct from Graphic Inputs and sources', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([]).map(graphic => ({
+				...graphic,
+				sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			})),
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+
+		const projectionSurface = wrapper.get('[data-testid="social-profile-projections"]');
+		expect(projectionSurface.text()).toContain('Social Profile Projections');
+		expect(projectionSurface.find('[data-testid="graphic-input-add"]').exists()).toBe(false);
+		expect(projectionSurface.find('[data-testid="graphic-source-add"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-event-data-bindings"]').exists()).toBe(true);
+	});
+
 	it('withholds them from a host that binds host tokens', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]),
@@ -1885,6 +1974,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		expect(wrapper.find('[data-testid="graphic-event-data-bindings"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="social-profile-projections"]').exists()).toBe(false);
 	});
 
 	it('refuses a read-only observer’s Graphic Input declaration', async () => {
