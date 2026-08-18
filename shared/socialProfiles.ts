@@ -11,6 +11,9 @@ export type SupportedSocialNetwork = typeof SUPPORTED_SOCIAL_NETWORK_KEYS[number
 
 export type SocialProfiles = Partial<Record<SupportedSocialNetwork, string>>;
 
+/** A transport/document ceiling, deliberately not a remote network username rule. */
+export const MAX_SOCIAL_PROFILE_HANDLE_LENGTH = 1_000;
+
 interface SupportedSocialNetworkDefinition {
 	key: SupportedSocialNetwork;
 	label: string;
@@ -147,7 +150,7 @@ function decodedPathSegments(url: URL, network: SupportedSocialNetwork) {
 
 function normalizeHandle(network: SupportedSocialNetwork, handle: string | undefined) {
 	const normalized = handle?.startsWith('@') ? handle.slice(1) : handle;
-	if (!normalized || /\s/.test(normalized))
+	if (!normalized || normalized.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH || /\s/.test(normalized))
 		throw inputError(network);
 
 	return normalized;

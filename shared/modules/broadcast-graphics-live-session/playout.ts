@@ -1,4 +1,5 @@
 import type { GraphicChannelStack, GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
+import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
@@ -8,12 +9,14 @@ import type {
 	GraphicInputValue,
 	GraphicPlayoutState,
 	GraphicSourceSelectionDeclaration,
+	SocialProfileProjectionDeclaration,
 } from '~~/shared/types/graphics';
 import type {
 	BroadcastGraphicInputsState,
 	GraphicInputValues,
 	NormalizedBroadcastGraphicInputsState,
 } from './inputs';
+import type { BroadcastGraphicSocialProfileProjectionStates } from './socialProfiles';
 import {
 	broadcastGraphicHasPhaseAnimation,
 	broadcastGraphicPhaseDurations,
@@ -217,12 +220,17 @@ export interface BroadcastGraphicsLiveState {
 	 * Source Selections existed carries no such key, and every read normalizes.
 	 */
 	sources?: Record<string, GraphicSourceSelectionsState>;
+	/** Accepted manual Social Profile Projection state, per placed Broadcast Graphic. */
+	socialProfileProjections?: Record<string, BroadcastGraphicSocialProfileProjectionStates>;
 }
 
 /** The actions a Broadcast Graphics Live Session accepts. */
 export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = [
 	'Take',
 	'Out',
+	'Select Social Profile',
+	'Previous Social Profile',
+	'Next Social Profile',
 	'Update Graphic',
 	'Set Input',
 	'Set Override',
@@ -334,8 +342,23 @@ export interface BroadcastGraphicsResolveBindingsPayload {
 	graphicId: string;
 }
 
+/** One accepted profile chosen directly for one authored projection. */
+export interface BroadcastGraphicsSelectSocialProfilePayload {
+	graphicId: string;
+	projectionKey: string;
+	network: SupportedSocialNetwork;
+}
+
+/** One relative manual step within a projection's accepted catalog-ordered profiles. */
+export interface BroadcastGraphicsStepSocialProfilePayload {
+	graphicId: string;
+	projectionKey: string;
+}
+
 export type BroadcastGraphicsCommandPayload
 	= | BroadcastGraphicsPlayoutPayload
+		| BroadcastGraphicsSelectSocialProfilePayload
+		| BroadcastGraphicsStepSocialProfilePayload
 		| BroadcastGraphicsUpdatePayload
 		| BroadcastGraphicsSetInputPayload
 		| BroadcastGraphicsSetOverridePayload
@@ -345,6 +368,8 @@ export type BroadcastGraphicsCommandPayload
 /** One command as the reducer reads it: what kind of intent, and its content. */
 export type BroadcastGraphicsCommandInput
 	= | { type: 'Take' | 'Out'; payload: BroadcastGraphicsPlayoutPayload }
+		| { type: 'Select Social Profile'; payload: BroadcastGraphicsSelectSocialProfilePayload }
+		| { type: 'Previous Social Profile' | 'Next Social Profile'; payload: BroadcastGraphicsStepSocialProfilePayload }
 		| { type: 'Update Graphic'; payload: BroadcastGraphicsUpdatePayload }
 		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload }
 		| { type: 'Set Override'; payload: BroadcastGraphicsSetOverridePayload }
@@ -376,6 +401,12 @@ export interface BroadcastGraphicsReductionContext {
 	 * correctly means.
 	 */
 	resolveBindings?: (selections: GraphicSourceSelectionsState) => Record<string, GraphicInputValue>;
+	/** Authored projection declarations for the addressed Broadcast Graphic. */
+	socialProfileProjections?: readonly SocialProfileProjectionDeclaration[];
+	/** Resolve the bounded accepted profile set from authoritative Event Data. */
+	resolveSocialProfileProjections?: (
+		selections: GraphicSourceSelectionsState,
+	) => BroadcastGraphicSocialProfileProjectionStates;
 	/**
 	 * The authoritative instant this command was accepted at.
 	 *
@@ -1190,8 +1221,37 @@ function reduceTake(
 			handoff.entersAt,
 		),
 	};
+
+	let socialProfileProjections = state.socialProfileProjections;
+	if (
+		(context.socialProfileProjections?.length ?? 0) > 0
+		&& context.resolveSocialProfileProjections
+	) {
+		const previous = state.socialProfileProjections?.[payload.graphicId] ?? {};
+		const resolved = context.resolveSocialProfileProjections(
+			broadcastGraphicSourceSelections(state, payload.graphicId),
+		);
+		const accepted = Object.fromEntries(Object.entries(resolved).map(([projectionKey, projection]) => {
+			const retained = previous[projectionKey]?.manualNetwork;
+			const manualNetwork = retained !== undefined
+				&& projection.acceptedProfiles.some(profile => profile.network === retained)
+				? retained
+				: undefined;
+			const currentNetwork = manualNetwork ?? projection.acceptedProfiles[0]?.network;
+			return [projectionKey, {
+				...projection,
+				...(currentNetwork === undefined ? {} : { currentNetwork }),
+				...(manualNetwork === undefined ? {} : { manualNetwork }),
+			}];
+		}));
+		socialProfileProjections = {
+			...state.socialProfileProjections,
+			[payload.graphicId]: accepted,
+		};
+	}
+
 	if (current?.onAir)
-		return { ...state, playout };
+		return { ...state, playout, ...(socialProfileProjections ? { socialProfileProjections } : {}) };
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
 	const bound = boundValuesFor(state, payload.graphicId, context);
@@ -1213,6 +1273,90 @@ function reduceTake(
 			acceptedRevision: inputs.acceptedRevision + 1,
 		}),
 		playout,
+		...(socialProfileProjections ? { socialProfileProjections } : {}),
+	};
+}
+
+/** Select one populated accepted profile without turning projected values into inputs. */
+function reduceSelectSocialProfile(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSelectSocialProfilePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	if (!context.socialProfileProjections?.some(projection => projection.key === payload.projectionKey)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-social-profile-projection',
+			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
+		);
+	}
+
+	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
+	if (!projection?.acceptedProfiles.some(profile => profile.network === payload.network)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'social-profile-unavailable',
+			`${payload.network} is not an accepted Social Profile for this projection`,
+		);
+	}
+
+	return {
+		...state,
+		socialProfileProjections: {
+			...state.socialProfileProjections,
+			[payload.graphicId]: {
+				...state.socialProfileProjections?.[payload.graphicId],
+				[payload.projectionKey]: {
+					...projection,
+					currentNetwork: payload.network,
+					manualNetwork: payload.network,
+				},
+			},
+		},
+	};
+}
+
+/** Step in Supported Social Network catalog order, wrapping across populated profiles only. */
+function reduceStepSocialProfile(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsStepSocialProfilePayload,
+	context: BroadcastGraphicsReductionContext,
+	direction: -1 | 1,
+): BroadcastGraphicsLiveState {
+	if (!context.socialProfileProjections?.some(projection => projection.key === payload.projectionKey)) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-social-profile-projection',
+			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
+		);
+	}
+
+	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
+	if (!projection || projection.acceptedProfiles.length === 0) {
+		throw new BroadcastGraphicsCommandRejection(
+			'social-profile-unavailable',
+			'This Social Profile Projection has no accepted profiles',
+		);
+	}
+
+	const currentIndex = projection.acceptedProfiles.findIndex(
+		profile => profile.network === projection.currentNetwork,
+	);
+	const from = currentIndex < 0 ? 0 : currentIndex;
+	const nextIndex = (from + direction + projection.acceptedProfiles.length)
+		% projection.acceptedProfiles.length;
+	const network = projection.acceptedProfiles[nextIndex]!.network;
+
+	return {
+		...state,
+		socialProfileProjections: {
+			...state.socialProfileProjections,
+			[payload.graphicId]: {
+				...state.socialProfileProjections?.[payload.graphicId],
+				[payload.projectionKey]: {
+					...projection,
+					currentNetwork: network,
+					manualNetwork: network,
+				},
+			},
+		},
 	};
 }
 
@@ -1704,6 +1848,9 @@ export function broadcastGraphicsResolveBindingsDue(
 		playout: state.playout ?? {},
 		inputs: state.inputs ?? {},
 		sources: state.sources ?? {},
+		...(state.socialProfileProjections === undefined
+			? {}
+			: { socialProfileProjections: state.socialProfileProjections }),
 	};
 	const inputs = broadcastGraphicInputsState(normalized, graphicId);
 
@@ -1733,6 +1880,9 @@ export function applyBroadcastGraphicsCommand(
 		playout: state.playout ?? {},
 		inputs: state.inputs ?? {},
 		sources: state.sources ?? {},
+		...(state.socialProfileProjections === undefined
+			? {}
+			: { socialProfileProjections: state.socialProfileProjections }),
 	};
 
 	switch (command.type) {
@@ -1740,6 +1890,12 @@ export function applyBroadcastGraphicsCommand(
 			return reduceTake(normalized, command.payload, context);
 		case 'Out':
 			return reduceOut(normalized, command.payload, context);
+		case 'Select Social Profile':
+			return reduceSelectSocialProfile(normalized, command.payload, context);
+		case 'Previous Social Profile':
+			return reduceStepSocialProfile(normalized, command.payload, context, -1);
+		case 'Next Social Profile':
+			return reduceStepSocialProfile(normalized, command.payload, context, 1);
 		case 'Update Graphic':
 			return reduceUpdateGraphic(normalized, command.payload, context);
 		case 'Set Input':

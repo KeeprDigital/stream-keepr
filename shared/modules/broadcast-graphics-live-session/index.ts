@@ -58,9 +58,11 @@ export type {
 	BroadcastGraphicsPlayoutPayload,
 	BroadcastGraphicsReductionContext,
 	BroadcastGraphicsResolveBindingsPayload,
+	BroadcastGraphicsSelectSocialProfilePayload,
 	BroadcastGraphicsSelectSourcePayload,
 	BroadcastGraphicsSetInputPayload,
 	BroadcastGraphicsSetOverridePayload,
+	BroadcastGraphicsStepSocialProfilePayload,
 	BroadcastGraphicsUpdatePayload,
 } from './playout';
 export {
@@ -90,3 +92,12 @@ export {
 	BROADCAST_GRAPHICS_REJECTION_CODES,
 	BroadcastGraphicsCommandRejection,
 } from './rejection';
+export type {
+	BroadcastGraphicSocialProfileProjectionStates,
+	SocialProfileProjectionLiveState,
+	SocialProfileProjectionTalent,
+} from './socialProfiles';
+export {
+	resolveSocialProfileProjectionAcceptances,
+	socialProfileProjectionValues,
+} from './socialProfiles';

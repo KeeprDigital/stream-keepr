@@ -4,6 +4,7 @@ import {
 	talentParamsSchema,
 	updateTalentSchema,
 } from '~~/server/schemas/api/talent';
+import { MAX_SOCIAL_PROFILE_HANDLE_LENGTH } from '~~/shared/socialProfiles';
 
 // ──────────────── createTalentSchema ────────────────
 
@@ -46,6 +47,13 @@ describe('createTalentSchema', () => {
 				path: ['socialProfiles', 'twitch'],
 			}));
 		}
+	});
+
+	it('rejects a Social Profile handle beyond the bounded live-document ceiling', () => {
+		expect(createTalentSchema.safeParse({
+			name: 'Alice',
+			socialProfiles: { twitch: 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1) },
+		}).success).toBe(false);
 	});
 });
 

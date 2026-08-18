@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { resolveSocialProfileProjectionAcceptances } from '~~/shared/modules/broadcast-graphics-live-session';
 import {
 	canonicalSocialProfileUrl,
+	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
 	normalizeSocialProfileInput,
 	SUPPORTED_SOCIAL_NETWORKS,
 } from '~~/shared/socialProfiles';
@@ -63,5 +65,54 @@ describe('normalizeSocialProfileInput', () => {
 		['x', 'https://example.com/Caster'],
 	] as const)('rejects malformed or wrong-network %s input %s', (network, input) => {
 		expect(() => normalizeSocialProfileInput(network, input)).toThrow(`valid`);
+	});
+
+	it('bounds a handle without encoding any remote network username limit', () => {
+		expect(normalizeSocialProfileInput('twitch', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH)))
+			.toHaveLength(MAX_SOCIAL_PROFILE_HANDLE_LENGTH);
+		expect(() => normalizeSocialProfileInput('twitch', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1)))
+			.toThrow('valid');
+	});
+});
+
+describe('social Profile Projection acceptance', () => {
+	function acceptance(handle: string) {
+		return resolveSocialProfileProjectionAcceptances({
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}],
+		}, { talent: 7 }, {
+			event: null,
+			players: {},
+			talents: { 7: { name: 'Legacy Talent', socialProfiles: { twitch: handle } } },
+			phases: {},
+			rounds: {},
+			matches: {},
+			featureMatchSlots: {},
+			archetypes: {},
+		});
+	}
+
+	it('accepts the document ceiling and preserves its Talent identity', () => {
+		const resolved = acceptance('a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH));
+
+		expect(resolved.profile?.talent).toEqual({ id: 7, name: 'Legacy Talent' });
+		expect(resolved.profile?.acceptedProfiles[0]?.handle).toHaveLength(MAX_SOCIAL_PROFILE_HANDLE_LENGTH);
+	});
+
+	it('omits a legacy over-bound profile instead of persisting state recovery would reject', () => {
+		const resolved = acceptance('a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1));
+
+		expect(resolved.profile).toEqual({
+			talent: { id: 7, name: 'Legacy Talent' },
+			acceptedProfiles: [],
+		});
 	});
 });

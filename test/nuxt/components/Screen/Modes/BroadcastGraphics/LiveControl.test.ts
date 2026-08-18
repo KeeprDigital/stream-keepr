@@ -24,6 +24,9 @@ const mockSetInput = vi.fn();
 const mockSetOverride = vi.fn();
 const mockSelectSource = vi.fn();
 const mockUpdateGraphic = vi.fn();
+const mockSelectSocialProfile = vi.fn();
+const mockPreviousSocialProfile = vi.fn();
+const mockNextSocialProfile = vi.fn();
 /** The Event Data Live Control resolves its bound values and picker options from. */
 const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingDataSet());
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
@@ -40,6 +43,11 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	setOverride: mockSetOverride,
 	selectSource: mockSelectSource,
 	updateGraphic: mockUpdateGraphic,
+	selectSocialProfile: mockSelectSocialProfile,
+	previousSocialProfile: mockPreviousSocialProfile,
+	nextSocialProfile: mockNextSocialProfile,
+	socialProfileProjectionState: (_screenId: number, graphicId: string, projectionKey: string) =>
+		mockLiveState.value.socialProfileProjections?.[graphicId]?.[projectionKey],
 	inputRefusal: (_screenId: number, _graphicId: string, inputKey: string) =>
 		mockInputRefusals.value[inputKey],
 	sourceSelections: (_screenId: number, graphicId: string) =>
@@ -193,6 +201,7 @@ async function mountComponent(
 	config: BroadcastGraphicConfig,
 	playoutState: GraphicPlayoutState = 'off',
 	disconnected = false,
+	pending = false,
 ) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 	const { default: LiveControl } = await import(componentPath);
@@ -204,6 +213,7 @@ async function mountComponent(
 			graphic: config,
 			playoutState,
 			disconnected,
+			pending,
 		},
 		global: {
 			stubs: {
@@ -273,6 +283,119 @@ describe('broadcastGraphicsLiveControl', () => {
 		const wrapper = await mountComponent(graphic([]));
 
 		expect(wrapper.get('[data-testid="empty-state"]').text()).toContain('No Graphic Inputs');
+	});
+
+	it('shows authoritative Social Profile Projection controls and read-only authored timing', async () => {
+		mockLiveState.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				'lower-third': { profile: {
+					talent: { id: 7, name: 'Ava Reed' },
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch',
+				} },
+			},
+		};
+		const wrapper = await mountComponent(graphic([], {
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}],
+		}));
+		const control = wrapper.get('[data-social-profile-projection="profile"]');
+
+		expect(control.text()).toContain('Ava Reed');
+		expect(control.text()).toContain('Available');
+		expect(control.get('[data-testid="live-control-social-profile-profile"]').findAll('option').map(option => option.text()))
+			.toEqual(['Twitch — @AvaLive', 'X — @AvaCasts']);
+		expect(control.get('[data-testid="live-control-social-profile-timing"]').text())
+			.toContain('8 seconds · Crossfade · 250 ms');
+		expect(control.find('input').exists()).toBe(false);
+
+		await control.get('[data-testid="live-control-social-profile-profile"]').setValue('x');
+		await control.get('[data-testid="live-control-social-profile-previous-profile"]').trigger('click');
+		await control.get('[data-testid="live-control-social-profile-next-profile"]').trigger('click');
+
+		expect(mockSelectSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile', 'x');
+		expect(mockPreviousSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
+		expect(mockNextSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
+	});
+
+	it('keeps many-profile controls operable while an earlier command is pending', async () => {
+		mockLiveState.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				'lower-third': { profile: {
+					talent: { id: 7, name: 'Ava Reed' },
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch',
+				} },
+			},
+		};
+		const wrapper = await mountComponent(graphic([], {
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}],
+		}), 'on-air', false, true);
+		const control = wrapper.get('[data-social-profile-projection="profile"]');
+
+		expect(control.get('[data-testid="live-control-social-profile-profile"]').attributes('disabled')).toBeUndefined();
+		expect(control.get('[data-testid="live-control-social-profile-previous-profile"]').attributes('disabled')).toBeUndefined();
+		expect(control.get('[data-testid="live-control-social-profile-next-profile"]').attributes('disabled')).toBeUndefined();
+		await control.get('[data-testid="live-control-social-profile-next-profile"]').trigger('click');
+		expect(mockNextSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
+	});
+
+	it.each([
+		['zero', [], undefined, 'Unavailable'],
+		['one', [{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'SoloLive', profileUrl: 'https://www.twitch.tv/SoloLive' }], 'twitch', 'Available'],
+	] as const)('disables stepping for %s populated Social Profiles', async (_case, acceptedProfiles, currentNetwork, status) => {
+		mockLiveState.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				'lower-third': { profile: {
+					talent: { id: 7, name: 'Solo Caster' },
+					acceptedProfiles: [...acceptedProfiles],
+					...(currentNetwork ? { currentNetwork } : {}),
+				} },
+			},
+		};
+		const wrapper = await mountComponent(graphic([], {
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}],
+		}));
+		const control = wrapper.get('[data-social-profile-projection="profile"]');
+
+		expect(control.text()).toContain(status);
+		expect(control.get('[data-testid="live-control-social-profile-previous-profile"]').attributes('disabled')).toBeDefined();
+		expect(control.get('[data-testid="live-control-social-profile-next-profile"]').attributes('disabled')).toBeDefined();
+		expect(control.get('[data-testid="live-control-social-profile-profile"]').attributes('disabled'))
+			.toBe(acceptedProfiles.length === 0 ? '' : undefined);
 	});
 
 	it('shows the latest bound value, the staged value, and the accepted on-air value apart', async () => {

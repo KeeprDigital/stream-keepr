@@ -47,6 +47,8 @@ const REJECTION_STATUS: Record<BroadcastGraphicsCommandRejection['code'], number
 	'override-unbound': 409,
 	'missing-asset-reference': 409,
 	'unavailable-asset-content': 409,
+	'unknown-social-profile-projection': 404,
+	'social-profile-unavailable': 409,
 };
 
 /**

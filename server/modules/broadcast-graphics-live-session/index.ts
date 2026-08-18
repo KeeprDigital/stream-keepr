@@ -36,6 +36,7 @@ import {
 	broadcastGraphicSourceSelections,
 	broadcastGraphicsResolveBindingsDue,
 	recoveredBroadcastGraphicsLiveState,
+	resolveSocialProfileProjectionAcceptances,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import {
 	broadcastGraphicHasPhaseAnimation,
@@ -457,8 +458,11 @@ export function broadcastGraphicsLiveSessionModule() {
 			inputs: graphic.inputs ?? [],
 			sources: graphic.sources ?? [],
 			bindings: graphic.bindings ?? [],
+			socialProfileProjections: graphic.socialProfileProjections ?? [],
 			resolveBindings: (selections: Readonly<Record<string, number>>) =>
 				resolveGraphicInputBindings(graphic, selections, data),
+			resolveSocialProfileProjections: (selections: Readonly<Record<string, number>>) =>
+				resolveSocialProfileProjectionAcceptances(graphic, selections, data),
 			// How long this graphic's lifecycle phases last, resolved from the placed
 			// graphic this module already had to find. Authored Screen configuration, which
 			// is exactly why the reducer is handed it rather than reaching for it.

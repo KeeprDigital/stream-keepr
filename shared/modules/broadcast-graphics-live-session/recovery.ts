@@ -1,5 +1,12 @@
+import type { SupportedSocialNetwork } from '../../socialProfiles';
 import type { NormalizedBroadcastGraphicInputsState } from './inputs';
 import type { BroadcastGraphicsLiveState } from './playout';
+import {
+	canonicalSocialProfileUrl,
+	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
+	SUPPORTED_SOCIAL_NETWORK_BY_KEY,
+	SUPPORTED_SOCIAL_NETWORK_KEYS,
+} from '../../socialProfiles';
 import { createInitialBroadcastGraphicInputsState } from './inputs';
 import { createInitialBroadcastGraphicsLiveState } from './playout';
 
@@ -148,6 +155,77 @@ function sourcesFault(sources: unknown): BroadcastGraphicsRecoveryFault | null {
 	return null;
 }
 
+function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsRecoveryFault | null {
+	if (projections === undefined || projections === null)
+		return null;
+	if (!isRecord(projections))
+		return fault('corrupt', 'the Social Profile Projection map is not a set of Broadcast Graphic records');
+
+	const supportedNetworks = new Set<string>(SUPPORTED_SOCIAL_NETWORK_KEYS);
+	for (const [graphicId, graphic] of Object.entries(projections)) {
+		if (!isRecord(graphic))
+			return fault('corrupt', `the Social Profile Projection record for ${graphicId} is not a record`);
+		for (const [projectionKey, projection] of Object.entries(graphic)) {
+			const identity = `${graphicId}.${projectionKey}`;
+			if (!isRecord(projection))
+				return fault('corrupt', `the Social Profile Projection ${identity} is not a record`);
+			if (!Array.isArray(projection.acceptedProfiles))
+				return fault('corrupt', `the accepted Social Profiles for ${identity} are not a list`);
+			if (projection.acceptedProfiles.length > SUPPORTED_SOCIAL_NETWORK_KEYS.length)
+				return fault('incompatible', `the accepted Social Profiles for ${identity} exceed the supported catalog`);
+
+			if ('talent' in projection) {
+				if (!isRecord(projection.talent))
+					return fault('corrupt', `the accepted Talent for ${identity} is not a record`);
+				if (!Number.isFinite(projection.talent.id) || typeof projection.talent.name !== 'string')
+					return fault('incompatible', `the accepted Talent for ${identity} cannot be interpreted`);
+			}
+			else if (
+				projection.acceptedProfiles.length > 0
+				|| 'currentNetwork' in projection
+				|| 'manualNetwork' in projection
+			) {
+				return fault('incompatible', `the Social Profile Projection ${identity} has no accepted Talent`);
+			}
+
+			const accepted = new Set<SupportedSocialNetwork>();
+			let previousCatalogIndex = -1;
+			for (const profile of projection.acceptedProfiles) {
+				if (!isRecord(profile))
+					return fault('corrupt', `an accepted Social Profile for ${identity} is not a record`);
+				if (typeof profile.network !== 'string' || !supportedNetworks.has(profile.network))
+					return fault('incompatible', `an accepted Social Profile network for ${identity} is unsupported`);
+				const network = profile.network as SupportedSocialNetwork;
+				const catalogIndex = SUPPORTED_SOCIAL_NETWORK_KEYS.indexOf(network);
+				if (
+					typeof profile.handle !== 'string'
+					|| profile.handle.length === 0
+					|| profile.handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
+					|| typeof profile.networkLabel !== 'string'
+					|| typeof profile.profileUrl !== 'string'
+					|| profile.networkLabel !== SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].label
+					|| profile.profileUrl !== canonicalSocialProfileUrl(network, profile.handle)
+					|| accepted.has(network)
+					|| catalogIndex <= previousCatalogIndex
+				) {
+					return fault('incompatible', `an accepted Social Profile tuple for ${identity} is not correlated`);
+				}
+				accepted.add(network);
+				previousCatalogIndex = catalogIndex;
+			}
+
+			for (const field of ['currentNetwork', 'manualNetwork'] as const) {
+				if (!(field in projection))
+					continue;
+				if (typeof projection[field] !== 'string' || !accepted.has(projection[field] as SupportedSocialNetwork))
+					return fault('incompatible', `the ${field} for ${identity} is not an accepted Social Profile`);
+			}
+		}
+	}
+
+	return null;
+}
+
 /**
  * Judge one durable live state, or report why it cannot be trusted.
  *
@@ -160,7 +238,10 @@ export function broadcastGraphicsRecoveryFault(raw: unknown): BroadcastGraphicsR
 	if (!isRecord(raw))
 		return fault('corrupt', 'the durable live state is not a live state record');
 
-	return playoutFault(raw.playout) ?? inputsFault(raw.inputs) ?? sourcesFault(raw.sources);
+	return playoutFault(raw.playout)
+		?? inputsFault(raw.inputs)
+		?? sourcesFault(raw.sources)
+		?? socialProfileProjectionsFault(raw.socialProfileProjections);
 }
 
 /**
