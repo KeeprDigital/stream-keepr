@@ -3,6 +3,8 @@
  * instead.
  */
 
+import { PASSWORD_RESET_PAGE_PATH } from '~~/shared/utils/passwordResetLink';
+
 /**
  * The Screen Output page, the one page that renders without a session.
  *
@@ -34,11 +36,19 @@ const CONTROL_CHARACTER = /[\t\n\r]/;
  * Whether this page may be rendered without a session.
  *
  * Deny-by-default in the same sense ADR-0010 gives the API boundary: a page
- * added tomorrow is gated without anyone remembering to gate it, and the two
+ * added tomorrow is gated without anyone remembering to gate it, and the three
  * exemptions are the whole of the exception list.
+ *
+ * The password reset page (#399) is the third, and gating it would be a
+ * circular refusal: everybody following one of those links is signed out, and
+ * an invited account has no credential at all until the link is redeemed — so
+ * requiring a session there would mean an invite only somebody who did not need
+ * it could accept. The page carries no authority of its own; the token in its
+ * URL fragment is what `/api/auth/reset-password` accepts or refuses, and the
+ * page is the form that presents it.
  */
 export function pageRequiresSession(path: string): boolean {
-	if (path === LOGIN_PATH)
+	if (path === LOGIN_PATH || path === PASSWORD_RESET_PAGE_PATH)
 		return false;
 
 	return !SCREEN_OUTPUT_PAGE.test(path);

@@ -146,7 +146,9 @@ export function normalizeBootstrapEmail(email: string) {
  * not who is already signed in — the same as Better Auth's own
  * `setUserPassword`, which is the endpoint this stands in for. Worth knowing
  * before reaching for this route as an answer to a compromised account: it is
- * not one, and revocation is #399's surface.
+ * not one. Revocation lives on the user administration surface (#399,
+ * `server/api/admin/users/[userId]/sessions.delete.ts`), which is also where
+ * banning is.
  */
 export async function ensureAdminAccount(
 	port: AdminBootstrapPort,

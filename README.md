@@ -340,6 +340,36 @@ route, which is why the third command matters. Locally the name lives in `.env`
 and `.dev.vars` and can stay set; a deployed installation should hold it only
 for the minute between the first and third commands.
 
+### Everybody else's account
+
+Once one admin exists, the rest of the team is invited from **`/admin/users`**,
+which asks for the Graphics Administrator token the other administrator surfaces
+ask for. The bootstrap ceremony above is for the first account and for a total
+lockout; it is not the way to add a colleague.
+
+There is still no email sender, so **an invite is a link you hand over
+yourself**. Creating an account makes it with no password at all and answers with
+a single-use link that expires in 24 hours; copy it, send it to the person in
+team chat, and they choose their own password on the page it opens. Nothing
+stores the link, and no page shows it again — if you lose it before handing it
+over, issue another.
+
+The same page does the other three things an account needs over its life:
+
+- **Issue a reset link** — the same one-use link, for somebody who has forgotten
+  their password. It does not sign them out of anywhere.
+- **Revoke sessions** — ends every session the account holds and nothing else.
+  This is the answer to a laptop left open in the production office: they keep
+  their password and sign back in on their own machine. Sessions last seven days
+  (ADR-0010), so this is the only thing that ends one early.
+- **Ban** — refuses future sign-ins _and_ ends every current session, because a
+  ban that left somebody working for the rest of the week would not be one.
+  Lifting it restores the password they already had.
+
+"Set password" is also there, for the operator locked out mid-show with an
+administrator beside them. Prefer a link: setting a password directly leaves you
+holding one that works.
+
 ### Screen Output asset capabilities
 
 Screen Outputs use opaque, revocable capabilities to resolve only the exact
