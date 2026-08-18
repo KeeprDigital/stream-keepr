@@ -103,11 +103,14 @@ const HOST_NETWORKS: Readonly<Record<string, SupportedSocialNetwork>> = {
 };
 
 export class SocialProfileInputError extends Error {
+	public readonly network: SupportedSocialNetwork;
+
 	constructor(
-		public readonly network: SupportedSocialNetwork,
+		network: SupportedSocialNetwork,
 		message: string,
 	) {
 		super(message);
+		this.network = network;
 		this.name = 'SocialProfileInputError';
 	}
 }

@@ -1,6 +1,7 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { reactive } from 'vue';
 import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 
 /**
@@ -39,7 +40,14 @@ const LOADED_SESSION = {
 	currentState: state(20),
 };
 
-const mockEventStore = { event: { id: 1, name: 'Regional', game: 'mtg', talents: [] } };
+const mockEventStore = reactive({
+	event: {
+		id: 1,
+		name: 'Regional',
+		game: 'mtg',
+		talents: [] as Array<{ id: number; name: string; socialProfiles: Record<string, string> }>,
+	},
+});
 const SLOT_ROW = {
 	id: 5,
 	matchId: 40,
@@ -95,6 +103,37 @@ describe('useGraphicBindingData', () => {
 		mockFeatureMatchStore.featureMatches = [SLOT_ROW];
 		mockPlayerStore.players = [];
 		mockMatchStore.matches = [];
+		mockEventStore.event.talents = [];
+	});
+
+	it('resolves fixed Social Profiles from the complete Talent data kept current by realtime', () => {
+		mockEventStore.event.talents = [{
+			id: 8,
+			name: 'Jules Kim',
+			socialProfiles: { twitch: 'JulesLive' },
+		}];
+		const { dataSet } = useGraphicBindingData();
+		const graphic = {
+			inputs: [{ ...LIFE_INPUT, key: 'profile', type: 'text' as const, default: '', maxLength: 100 }],
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' as const }],
+			bindings: [{ inputKey: 'profile', sourceKey: 'talent', fieldId: 'talent.twitchProfileUrl' }],
+		};
+
+		expect(resolveGraphicInputBindings(graphic, { talent: 8 }, dataSet.value)).toEqual({
+			profile: 'https://www.twitch.tv/JulesLive',
+		});
+
+		// A complete realtime Talent update replaces this map in the Event store. The
+		// computed binding dataset reads it directly, so no polling or parallel cache is
+		// required before Live Control sees the new derived URL.
+		mockEventStore.event.talents = [{
+			id: 8,
+			name: 'Jules Kim',
+			socialProfiles: { twitch: 'JulesOnAir' },
+		}];
+		expect(resolveGraphicInputBindings(graphic, { talent: 8 }, dataSet.value)).toEqual({
+			profile: 'https://www.twitch.tv/JulesOnAir',
+		});
 	});
 
 	it('reads a Feature Match Slot\'s live scalars from the realtime state store', () => {

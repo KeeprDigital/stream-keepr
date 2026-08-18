@@ -44,7 +44,7 @@ function data(overrides: Partial<GraphicBindingDataSet> = {}): GraphicBindingDat
 	return {
 		event: { name: 'Regional', game: 'mtg', displayRecordSeparator: '-', displayHideZeroDraws: true, commentator1TalentId: 5 },
 		players: { 1: { name: 'Ava Reed', wins: 5, gameData: { type: 'mtg', deckName: 'Dimir Midrange' } } },
-		talents: { 5: { name: 'Jules Kim' } },
+		talents: { 5: { name: 'Jules Kim', socialProfiles: {} } },
 		phases: { 20: { name: 'Swiss' } },
 		rounds: { 30: { name: 'Round 5', roundNumber: 5, phaseId: 20 } },
 		matches: {
