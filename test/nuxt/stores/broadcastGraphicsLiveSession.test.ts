@@ -262,11 +262,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
 			slate: { profile: acceptedProfiles[1] },
 		});
-		expect(store.socialProfileProjectionState(
+		expect(store.projectedSocialProfileProjectionState(
 			SCREEN_ID,
 			'slate',
 			'profile',
-			socialGraphic('slate').socialProfileProjections![0],
+			socialGraphic('slate').socialProfileProjections![0]!,
 			1_008_100,
 		)?.currentNetwork).toBe('x');
 		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
@@ -281,11 +281,11 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
 			slate: { profile: acceptedProfiles[0] },
 		});
-		expect(store.socialProfileProjectionState(
+		expect(store.projectedSocialProfileProjectionState(
 			SCREEN_ID,
 			'slate',
 			'profile',
-			socialGraphic('slate').socialProfileProjections![0],
+			socialGraphic('slate').socialProfileProjections![0]!,
 			1_008_100,
 		)?.currentNetwork).toBe('twitch');
 		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);

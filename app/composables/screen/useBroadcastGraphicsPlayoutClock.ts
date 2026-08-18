@@ -54,7 +54,9 @@ export function useBroadcastGraphicsPlayoutClock(
 	watch(
 		() => {
 			const session = sessionStore.sessions.get(toValue(screenId));
-			return session ? `${session.id}:${session.sequence}` : null;
+			return session
+				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+				: null;
 		},
 		() => {
 			if (!import.meta.client)

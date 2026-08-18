@@ -106,7 +106,7 @@ const pickers = computed(() =>
 const socialProfileProjectionControls = computed(() =>
 	(props.graphic.socialProfileProjections ?? []).map(declaration => ({
 		declaration,
-		state: sessionStore.socialProfileProjectionState(
+		state: sessionStore.projectedSocialProfileProjectionState(
 			props.screen.id,
 			props.graphic.id,
 			declaration.key,

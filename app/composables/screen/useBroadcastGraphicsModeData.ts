@@ -180,7 +180,9 @@ export function useBroadcastGraphicsModeData() {
 		() => {
 			const screenId = screen.value?.id;
 			const session = screenId ? sessionStore.sessions.get(screenId) : undefined;
-			return session ? `${session.id}:${session.sequence}` : null;
+			return session
+				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+				: null;
 		},
 		() => startLiveClock(),
 		{ immediate: true },

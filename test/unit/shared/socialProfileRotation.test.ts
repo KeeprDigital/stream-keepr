@@ -131,6 +131,30 @@ describe('social profile rotation projection', () => {
 		).current).toEqual(profiles[0]);
 	});
 
+	it.each([
+		['Next Social Profile', 'twitch'],
+		['Previous Social Profile', 'youtube'],
+	] as const)('%s steps from the automatically projected profile', (type, expectedNetwork) => {
+		const stepped = applyBroadcastGraphicsCommand({
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { lower: { onAir: true, effectiveStartedAt: 999_000, cut: false } },
+			socialProfileProjections: { lower: { profile: state() } },
+		}, {
+			type,
+			payload: { graphicId: 'lower', projectionKey: 'profile' },
+		}, {
+			inputs: [],
+			acceptedAt: 1_008_100,
+			socialProfileProjections: [declaration],
+		});
+
+		expect(stepped.socialProfileProjections?.lower?.profile).toMatchObject({
+			currentNetwork: expectedNetwork,
+			manualNetwork: expectedNetwork,
+			rotationAnchor: { network: expectedNetwork, anchoredAt: 1_008_100 },
+		});
+	});
+
 	it('freezes the authoritative projected profile when Automatic is disabled and re-anchors it on resume', () => {
 		const onAir = {
 			...createInitialBroadcastGraphicsLiveState(),
@@ -234,6 +258,38 @@ describe('social profile rotation projection', () => {
 			declaration,
 			{ onAir: false, now: 9_000_000 },
 		).current).toEqual(profiles[2]);
+	});
+
+	it('starts a queued Graphic Channel member\'s full dwell when it reaches program', () => {
+		const queued = applyBroadcastGraphicsCommand({
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { outgoing: { onAir: true, effectiveStartedAt: 900_000, cut: false } },
+		}, {
+			type: 'Take',
+			payload: { graphicId: 'lower' },
+		}, {
+			inputs: [],
+			acceptedAt: 1_000_000,
+			socialProfileProjections: [declaration],
+			resolveSocialProfileProjections: () => ({ profile: { acceptedProfiles: profiles } }),
+			channel: {
+				handoff: 'out-then-in',
+				members: [
+					{ graphicId: 'outgoing', durations: { exit: 10_000 } },
+					{ graphicId: 'lower' },
+				],
+			},
+		});
+		const projection = queued.socialProfileProjections!.lower!.profile!;
+
+		expect(queued.playout.lower?.effectiveStartedAt).toBe(1_010_000);
+		expect(projectSocialProfileRotation(projection, declaration, {
+			onAir: true,
+			now: 1_010_000,
+		})).toMatchObject({
+			current: profiles[0],
+			phase: { kind: 'dwell', elapsedMs: 0, durationMs: 8_000 },
+		});
 	});
 
 	it('holds a bounded static presentation for zero or one profile and without trustworthy synchronized time', () => {

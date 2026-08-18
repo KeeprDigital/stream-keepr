@@ -20,7 +20,7 @@ export interface SocialProfileProjectionTalent {
 	name: string;
 }
 
-/** Manual authoritative state for one authored Social Profile Projection. */
+/** Authoritative Social Profile Rotation operator state for one authored projection. */
 export interface SocialProfileProjectionLiveState {
 	talent?: SocialProfileProjectionTalent;
 	/** Populated profiles in Supported Social Network catalog order, never more than six. */

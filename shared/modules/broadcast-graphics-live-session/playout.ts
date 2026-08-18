@@ -1270,7 +1270,7 @@ function reduceTake(
 				...(manualNetwork === undefined ? {} : { manualNetwork }),
 				...(currentNetwork === undefined
 					? {}
-					: { rotationAnchor: { network: currentNetwork, anchoredAt: context.acceptedAt } }),
+					: { rotationAnchor: { network: currentNetwork, anchoredAt: handoff.entersAt } }),
 			}];
 		}));
 		socialProfileProjections = {
@@ -1306,13 +1306,19 @@ function reduceTake(
 	};
 }
 
-/** Select one populated accepted profile without turning projected values into inputs. */
-function reduceSelectSocialProfile(
+/** Resolve one declared projection and its accepted operator state or reject the command. */
+function requireSocialProfileProjection(
 	state: BroadcastGraphicsLiveState,
-	payload: BroadcastGraphicsSelectSocialProfilePayload,
+	payload: BroadcastGraphicsStepSocialProfilePayload,
 	context: BroadcastGraphicsReductionContext,
-): BroadcastGraphicsLiveState {
-	if (!context.socialProfileProjections?.some(projection => projection.key === payload.projectionKey)) {
+): {
+	declaration: SocialProfileProjectionDeclaration;
+	projection: BroadcastGraphicSocialProfileProjectionStates[string];
+} {
+	const declaration = context.socialProfileProjections?.find(
+		projection => projection.key === payload.projectionKey,
+	);
+	if (!declaration) {
 		throw new BroadcastGraphicsCommandRejection(
 			'unknown-social-profile-projection',
 			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
@@ -1320,7 +1326,24 @@ function reduceSelectSocialProfile(
 	}
 
 	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
-	if (!projection?.acceptedProfiles.some(profile => profile.network === payload.network)) {
+	if (!projection) {
+		throw new BroadcastGraphicsCommandRejection(
+			'social-profile-unavailable',
+			'This Social Profile Projection has no accepted state',
+		);
+	}
+
+	return { declaration, projection };
+}
+
+/** Select one populated accepted profile without turning projected values into inputs. */
+function reduceSelectSocialProfile(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSelectSocialProfilePayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const { projection } = requireSocialProfileProjection(state, payload, context);
+	if (!projection.acceptedProfiles.some(profile => profile.network === payload.network)) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
 			`${payload.network} is not an accepted Social Profile for this projection`,
@@ -1351,24 +1374,19 @@ function reduceStepSocialProfile(
 	context: BroadcastGraphicsReductionContext,
 	direction: -1 | 1,
 ): BroadcastGraphicsLiveState {
-	if (!context.socialProfileProjections?.some(projection => projection.key === payload.projectionKey)) {
-		throw new BroadcastGraphicsCommandRejection(
-			'unknown-social-profile-projection',
-			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
-		);
-	}
-
-	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
-	if (!projection || projection.acceptedProfiles.length === 0) {
+	const { declaration, projection } = requireSocialProfileProjection(state, payload, context);
+	if (projection.acceptedProfiles.length === 0) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
 			'This Social Profile Projection has no accepted profiles',
 		);
 	}
 
-	const currentIndex = projection.acceptedProfiles.findIndex(
-		profile => profile.network === projection.currentNetwork,
-	);
+	const projectedNetwork = projectSocialProfileRotation(projection, declaration, {
+		onAir: state.playout[payload.graphicId]?.onAir === true,
+		now: context.acceptedAt,
+	}).current?.network ?? projection.currentNetwork;
+	const currentIndex = projection.acceptedProfiles.findIndex(profile => profile.network === projectedNetwork);
 	const from = currentIndex < 0 ? 0 : currentIndex;
 	const nextIndex = (from + direction + projection.acceptedProfiles.length)
 		% projection.acceptedProfiles.length;
@@ -1397,23 +1415,7 @@ function reduceSetSocialProfileAutomatic(
 	payload: BroadcastGraphicsSetSocialProfileAutomaticPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
-	const declaration = context.socialProfileProjections?.find(
-		projection => projection.key === payload.projectionKey,
-	);
-	if (!declaration) {
-		throw new BroadcastGraphicsCommandRejection(
-			'unknown-social-profile-projection',
-			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
-		);
-	}
-
-	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
-	if (!projection) {
-		throw new BroadcastGraphicsCommandRejection(
-			'social-profile-unavailable',
-			'This Social Profile Projection has no accepted state',
-		);
-	}
+	const { declaration, projection } = requireSocialProfileProjection(state, payload, context);
 
 	const currentAutomatic = projection.automatic !== false;
 	if (currentAutomatic === payload.automatic)

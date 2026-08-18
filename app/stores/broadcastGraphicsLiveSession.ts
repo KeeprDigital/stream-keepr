@@ -85,6 +85,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * never disagree about what time it is.
 	 */
 	const { getServerTime, isSynced: isClockSynced } = useServerTime();
+	const clockSynchronized = computed(() => isClockSynced.value);
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	/**
 	 * Snapshot loads in flight, one Screen at a time.
@@ -629,18 +630,27 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return broadcastGraphicSourceSelections(liveState(screenId), graphicId);
 	}
 
-	/** One authored projection's accepted manual state from the authoritative snapshot. */
+	/** One authored Social Profile Rotation's authoritative operator state. */
 	function socialProfileProjectionState(
 		screenId: number,
 		graphicId: string,
 		projectionKey: string,
-		declaration?: SocialProfileProjectionDeclaration,
+	): SocialProfileProjectionLiveState | undefined {
+		return liveState(screenId).socialProfileProjections?.[graphicId]?.[projectionKey];
+	}
+
+	/** One Social Profile Rotation projected for a rendering at synchronized server time. */
+	function projectedSocialProfileProjectionState(
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		declaration: SocialProfileProjectionDeclaration,
 		now?: number,
 	): SocialProfileProjectionLiveState | undefined {
 		const state = liveState(screenId);
 		const projection = state.socialProfileProjections?.[graphicId]?.[projectionKey];
-		if (!projection || !declaration)
-			return projection;
+		if (!projection)
+			return undefined;
 
 		const current = projectSocialProfileRotation(projection, declaration, {
 			onAir: state.playout[graphicId]?.onAir === true,
@@ -1050,6 +1060,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		error,
 		refusal,
 		serverNow,
+		clockSynchronized,
 		channelContexts,
 		playoutState,
 		onAirGraphicIds,
@@ -1061,6 +1072,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		inputTraces,
 		sourceSelections,
 		socialProfileProjectionState,
+		projectedSocialProfileProjectionState,
 		socialProfileValues,
 		hasActiveSocialProfileRotation,
 		acceptedInputValues,

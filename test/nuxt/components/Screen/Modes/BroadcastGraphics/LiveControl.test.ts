@@ -48,7 +48,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	previousSocialProfile: mockPreviousSocialProfile,
 	nextSocialProfile: mockNextSocialProfile,
 	setSocialProfileAutomatic: mockSetSocialProfileAutomatic,
-	socialProfileProjectionState: (_screenId: number, graphicId: string, projectionKey: string) =>
+	projectedSocialProfileProjectionState: (_screenId: number, graphicId: string, projectionKey: string) =>
 		mockLiveState.value.socialProfileProjections?.[graphicId]?.[projectionKey],
 	inputRefusal: (_screenId: number, _graphicId: string, inputKey: string) =>
 		mockInputRefusals.value[inputKey],
