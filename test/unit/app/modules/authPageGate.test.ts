@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PASSWORD_RESET_PAGE_PATH } from '~~/shared/utils/passwordResetLink';
 import { LOGIN_PATH, loginPathFor, pageRequiresSession, postSignInPath, safeRedirectTarget } from '~/modules/auth/pageGate';
 
 describe('pageRequiresSession', () => {
@@ -16,6 +17,21 @@ describe('pageRequiresSession', () => {
 
 	it('does not gate the login page itself', () => {
 		expect(pageRequiresSession(LOGIN_PATH)).toBe(false);
+	});
+
+	it('does not gate the password reset page, which only signed-out people reach', () => {
+		// An invited account has no credential until its link is redeemed, so
+		// gating this would be an invite only somebody who did not need it could
+		// accept.
+		expect(pageRequiresSession(PASSWORD_RESET_PAGE_PATH)).toBe(false);
+	});
+
+	it('gates a page that merely starts like the reset page', () => {
+		// The exemption is the exact path. `/reset-password-policy` is not the
+		// redemption form, and a prefix reading would publish every future sibling
+		// without anybody deciding to.
+		expect(pageRequiresSession('/reset-password-policy')).toBe(true);
+		expect(pageRequiresSession('/reset-password/admin')).toBe(true);
 	});
 });
 

@@ -100,6 +100,14 @@ function graphicsAssetLibraryHealthItem(): NavigationMenuItem {
 	};
 }
 
+function userAdministrationItem(): NavigationMenuItem {
+	return {
+		label: 'User Administration',
+		icon: 'i-lucide-users',
+		to: '/admin/users',
+	};
+}
+
 function graphicsAssetLibraryItem(): NavigationMenuItem {
 	return {
 		label: 'Graphics Asset Library',
@@ -173,6 +181,7 @@ const navGroups = computed<NavGroup[]>(() => {
 				graphicsAssetLibraryItem(),
 				graphicsOperationsCockpitItem(),
 				graphicsAssetLibraryHealthItem(),
+				userAdministrationItem(),
 			],
 		},
 	];
@@ -183,7 +192,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 	label: 'Events',
 	icon: 'i-lucide-calendar',
 	to: '/',
-}, graphicsAssetLibraryItem(), graphicsOperationsCockpitItem(), graphicsAssetLibraryHealthItem()]);
+}, graphicsAssetLibraryItem(), graphicsOperationsCockpitItem(), graphicsAssetLibraryHealthItem(), userAdministrationItem()]);
 </script>
 
 <template>

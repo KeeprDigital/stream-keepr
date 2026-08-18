@@ -26,6 +26,33 @@ export const authStaticOptions = {
 	emailAndPassword: {
 		enabled: true,
 		disableSignUp: true,
+		/**
+		 * Redeeming a password reset link ends every session the account holds
+		 * (#399).
+		 *
+		 * On, because otherwise "I have reset my password" does not mean what
+		 * everybody assumes it means: an account whose session was stolen gets a
+		 * new password while the thief keeps the session, until an administrator
+		 * separately remembers to revoke. That second step is the one people
+		 * forget, and it is the step that actually evicts anybody.
+		 *
+		 * The cost this was weighed against — signing an operator out mid-show —
+		 * turned out not to exist. A Screen Output holds **no session at all**: it
+		 * is authorized by the Screen Output Asset Capability in its URL hash
+		 * (ADR-0010), so nothing here can blank program output. What loses access
+		 * is an operator control surface, whose user is the person who has this
+		 * moment chosen the password they would sign back in with. And whoever
+		 * redeems a link is either a new invite with no sessions to lose, or
+		 * somebody who could not sign in to begin with.
+		 *
+		 * **It governs the link path only.** Better Auth reads this in
+		 * `/api/auth/reset-password`, so an administrator *setting* a password
+		 * directly (`PUT /api/admin/users/:id/password`) still revokes nothing —
+		 * that path is for handing somebody back in mid-show, where ending their
+		 * sessions is the opposite of the point. The explicit revoke and ban on
+		 * the same surface remain the way to end sessions deliberately.
+		 */
+		revokeSessionsOnPasswordReset: true,
 	},
 	session: {
 		expiresIn: AUTH_SESSION_EXPIRES_IN_SECONDS,
