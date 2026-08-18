@@ -191,15 +191,19 @@ export async function createUserAccount(
 /**
  * A fresh reset link for an account that already exists.
  *
- * Minting one does **not** revoke the account's existing sessions, and that is
- * a decision rather than an omission: the commonest reason to issue a link is
- * that somebody forgot a password they are not currently signed in with, and
- * ending every session of theirs to answer it could sign an operator out of a
- * control surface mid-show. When the reason *is* a compromise, the
- * administrator has `revokeUserSessions` and `banUserAccount` on the same
- * surface and knows which of the two they mean. Better Auth's
- * `revokeSessionsOnPasswordReset` would make that choice for them, at
- * redemption time, hours after the administrator had stopped watching.
+ * **Minting one revokes nothing; redeeming one revokes everything.** The two
+ * halves are deliberately split. Issuing a link is an administrator offering
+ * somebody a way back in, and ending their sessions at that moment would punish
+ * an account for being *sent* a link it has not used — a link an administrator
+ * might issue and the person never open. Redemption is the account itself
+ * saying "this is my password now", and `revokeSessionsOnPasswordReset` (see
+ * `authOptions.ts`) ends every older session at that point, so a stolen session
+ * does not outlive the password it was stolen alongside.
+ *
+ * Nothing in that can cost a show its output: a Screen Output holds no session,
+ * being authorized by the capability in its URL hash. When an administrator
+ * wants sessions ended *now*, without waiting for anybody to redeem anything,
+ * `revokeUserSessions` and `banUserAccount` are on the same surface.
  */
 export async function issuePasswordResetLinkForUser(
 	port: UserAdministrationPort,

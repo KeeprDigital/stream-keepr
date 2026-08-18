@@ -212,6 +212,43 @@ describe('the reset link an administrator hands over', () => {
 		await expect(signIn(EMAIL, PASSWORD)).rejects.toBeDefined();
 	});
 
+	it('ends every older session when it is redeemed', async () => {
+		// `revokeSessionsOnPasswordReset` (authOptions.ts). Without it a stolen
+		// session outlives the password it was stolen alongside: the account gets a
+		// new credential and the thief keeps the session, until an administrator
+		// separately remembers to revoke — the step people forget, and the only one
+		// that actually evicts anybody.
+		const { configured, created } = await invite();
+		await setUserAccountPassword(configured, created.user.id, PASSWORD);
+		const session = await signIn(EMAIL, PASSWORD);
+		const context = await auth.$context;
+		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
+
+		const issued = await issuePasswordResetLinkForUser(configured, created.user.id, CONTEXT);
+		// Issuing revokes nothing — a link an administrator sent and nobody opened
+		// must not sign its owner out.
+		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
+
+		await redeem(tokenFrom(issued.passwordResetLink.url), 'the-replacement-password');
+
+		expect(await context.internalAdapter.findSession(session.token)).toBeNull();
+	});
+
+	it('leaves sessions alone when an administrator sets a password directly', async () => {
+		// The other half of the split: this path exists to hand somebody back in
+		// mid-show, where ending their sessions is the opposite of the point.
+		// Better Auth reads the option in `/reset-password` only, so the two paths
+		// differ by construction rather than by our remembering to make them.
+		const { configured, created } = await invite();
+		await setUserAccountPassword(configured, created.user.id, PASSWORD);
+		const session = await signIn(EMAIL, PASSWORD);
+		const context = await auth.$context;
+
+		await setUserAccountPassword(configured, created.user.id, 'the-replacement-password');
+
+		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
+	});
+
 	it('mints a different token every time, so two links are two credentials', async () => {
 		const { configured, created } = await invite();
 

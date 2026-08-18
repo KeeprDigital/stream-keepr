@@ -241,6 +241,26 @@ describe('user administration', () => {
 			expect((await signIn(INVITED_EMAIL, FIRST_PASSWORD)).status).toBe(401);
 		});
 
+		it('ends every other session when the link is used, but not when it is issued', async () => {
+			// `revokeSessionsOnPasswordReset`, end to end. The split is the point:
+			// issuing signs nobody out, because an administrator may send a link
+			// nobody opens; redeeming does, because that is the account itself
+			// saying "this is my password now" — so a stolen session cannot outlive
+			// the password it was stolen alongside.
+			const cookie = cookieFrom(await signIn(INVITED_EMAIL, SECOND_PASSWORD));
+			expect(await sessionStillLive(cookie)).toBe(true);
+
+			const response = await administer(`/${invitedUserId}/password-reset-link`, { method: 'POST' });
+			expect(response.status).toBe(200);
+			const issued = await response.json() as IssuedPasswordResetLink;
+			expect(await sessionStillLive(cookie)).toBe(true);
+
+			expect((await redeem(issued.passwordResetLink.url, THIRD_PASSWORD)).status).toBe(200);
+
+			expect(await sessionStillLive(cookie)).toBe(false);
+			expect((await signIn(INVITED_EMAIL, THIRD_PASSWORD)).status).toBe(200);
+		});
+
 		it('sets one outright for the administrator standing next to somebody', async () => {
 			const response = await administer(`/${invitedUserId}/password`, {
 				method: 'PUT',

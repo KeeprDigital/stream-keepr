@@ -177,7 +177,8 @@ async function issueResetLink(user: AdministeredUser) {
 			{ method: 'POST', headers: administratorHeaders() },
 		);
 		showIssuedLink(user.email, issued.passwordResetLink);
-		return `A new reset link for ${user.email} is ready to hand over.`;
+		return `A new reset link for ${user.email} is ready to hand over. Using it will `
+			+ 'end their other sessions.';
 	}, 'The reset link could not be issued.');
 }
 
@@ -191,7 +192,8 @@ async function setPassword(user: AdministeredUser) {
 		});
 		openAction.value = null;
 		actionInput.password = '';
-		return `The password for ${user.email} was set. Their existing sessions are untouched.`;
+		return `The password for ${user.email} was set. Their existing sessions are untouched — `
+			+ 'revoke them separately if that is what you meant.';
 	}, 'The password could not be set.');
 }
 
@@ -362,7 +364,8 @@ const hiddenAccountCount = computed(() =>
 							<p class="text-sm">
 								Hand this over yourself — in team chat, or in person. It can be used
 								once, and expires {{ formatInstant(issuedLink.expiresAt) }}. It is
-								shown here once and is not stored anywhere.
+								shown here once and is not stored anywhere. Using it ends every other
+								session the account has.
 							</p>
 							<div class="flex flex-wrap items-center gap-2">
 								<UInput

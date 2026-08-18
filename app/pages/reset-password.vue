@@ -87,7 +87,8 @@ async function submit() {
 					Password set
 				</h1>
 				<p class="text-sm text-muted">
-					You can sign in with it now. This link has been used and will not work again.
+					You can sign in with it now. This link has been used and will not work again,
+					and anywhere else this account was signed in has been signed out.
 				</p>
 				<UButton :to="LOGIN_PATH" color="primary" block>
 					Go to sign in

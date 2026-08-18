@@ -357,7 +357,9 @@ over, issue another.
 The same page does the other three things an account needs over its life:
 
 - **Issue a reset link** — the same one-use link, for somebody who has forgotten
-  their password. It does not sign them out of anywhere.
+  their password. Issuing it signs nobody out; _using_ it ends every other
+  session that account had, so a reset actually evicts anyone holding a stolen
+  one. Screen Outputs are unaffected — they carry a capability, not a session.
 - **Revoke sessions** — ends every session the account holds and nothing else.
   This is the answer to a laptop left open in the production office: they keep
   their password and sign back in on their own machine. Sessions last seven days
