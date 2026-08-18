@@ -192,8 +192,8 @@ describe('the fields one Graphic Input may bind to', () => {
 	});
 
 	it('offers nothing at all where the kind has no field of that type', () => {
-		// A Talent has a name and nothing else, so a number Graphic Input has nothing to
-		// bind to and the surface has a reason to state rather than an empty picker.
+		// Every current Talent binding field is text, so a number Graphic Input has
+		// nothing to bind to and the surface can state why instead of showing an empty picker.
 		expect(bindableGraphicBindingFields('talent', 'number', 'mtg')).toEqual({ common: [], gameSpecific: [] });
 	});
 });
