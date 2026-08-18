@@ -68,6 +68,11 @@ deploy rewrites a row of graphics data.
    should name the person holding it. Two windows of _one_ account is the case worth
    checking, because it is the one a user-scoped lease would get wrong.
 
+   An account with a blank name is named by nobody — the notice falls back to
+   "Another session holds…", which is the surface being honest rather than the
+   lease being broken. Verify with an account that has a name, which is what the
+   bootstrap asks for.
+
 ## The known wart
 
 An anonymous-era operation can be revived by the administrator retry action
