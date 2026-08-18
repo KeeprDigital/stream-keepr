@@ -1148,6 +1148,24 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 
 			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
 		});
+
+		it('keeps dynamic Social Profile Projection icons and declarations out of Feature Match documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+			config.layout.composition.items = [socialNetworkIconItem('social-icon', {
+				network: { projectionKey: 'profile' },
+			})];
+			config.layout.composition.socialProfileProjections = [{
+				key: 'profile',
+				label: 'Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
 	});
 
 	describe('media Graphic Items', () => {

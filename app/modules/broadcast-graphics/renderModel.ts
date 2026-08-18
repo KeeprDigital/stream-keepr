@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicMediaIncompatibilityCode, GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
@@ -34,6 +34,8 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * nothing, never its authored default.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/** Current correlated values for every Social Profile Projection on program. */
+	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering each updating Broadcast Graphic is transitioning away from.
 	 *
@@ -93,6 +95,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		animation: input.animation,
 		inputValues: input.inputValues,
+		socialProfileValues: input.socialProfileValues,
 		outgoingInputValues: input.outgoingInputValues,
 		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,

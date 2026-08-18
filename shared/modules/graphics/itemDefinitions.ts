@@ -192,7 +192,8 @@ const DEFINITIONS = {
 	},
 	'social-network-icon': {
 		kind: 'social-network-icon',
-		configurationVersion: 1,
+		// Version 2 adds the projection-bound network source arm.
+		configurationVersion: 2,
 		label: 'Social Network Icon',
 		icon: 'i-lucide-at-sign',
 		requiredHost: 'broadcast-graphics',
@@ -208,7 +209,9 @@ const DEFINITIONS = {
 			opacity: 1,
 		}),
 		summary: item => item.type === 'social-network-icon'
-			? `${SUPPORTED_SOCIAL_NETWORK_BY_KEY[item.network].label} • ${item.color}`
+			? `${typeof item.network === 'string'
+				? SUPPORTED_SOCIAL_NETWORK_BY_KEY[item.network].label
+				: `Projection ${item.network.projectionKey}`} • ${item.color}`
 			: 'Social Network Icon',
 	},
 	'group': {

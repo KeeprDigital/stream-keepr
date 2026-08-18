@@ -1,5 +1,13 @@
-import type { GraphicInputDeclaration, GraphicInputValue } from '../../types/graphics';
-import { GRAPHIC_INPUT_KEY_PATTERN } from '../../types/graphics';
+import type {
+	GraphicInputDeclaration,
+	GraphicInputValue,
+	SocialProfileProjectedTextValue,
+	SocialProfileProjectionValues,
+} from '../../types/graphics';
+import {
+	GRAPHIC_INPUT_KEY_PATTERN,
+	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
+} from '../../types/graphics';
 import { findGraphicInputDeclaration, graphicInputTextValue } from './inputs';
 
 /**
@@ -29,6 +37,33 @@ function isInputKey(candidate: string): boolean {
 	return GRAPHIC_INPUT_KEY_PATTERN.test(candidate);
 }
 
+export interface SocialProfileProjectedValueReference {
+	projectionKey: string;
+	value: SocialProfileProjectedTextValue;
+}
+
+/** A dotted, bounded reference to one projection's read-only text value. */
+export function readSocialProfileProjectedValueReference(
+	candidate: string,
+): SocialProfileProjectedValueReference | undefined {
+	const separator = candidate.lastIndexOf('.');
+	if (separator <= 0)
+		return undefined;
+	const projectionKey = candidate.slice(0, separator);
+	const value = candidate.slice(separator + 1) as SocialProfileProjectedTextValue;
+	if (
+		!isInputKey(projectionKey)
+		|| !SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES.includes(value)
+	) {
+		return undefined;
+	}
+	return { projectionKey, value };
+}
+
+function isPlaceholderKey(candidate: string): boolean {
+	return isInputKey(candidate) || readSocialProfileProjectedValueReference(candidate) !== undefined;
+}
+
 /**
  * The template's runs, with every placeholder still empty.
  *
@@ -41,7 +76,7 @@ export function parseGraphicTextTemplate(template: string): GraphicTextTemplateS
 
 	for (const match of template.matchAll(PLACEHOLDER)) {
 		const key = match[1] ?? '';
-		if (!isInputKey(key))
+		if (!isPlaceholderKey(key))
 			continue;
 
 		const literal = template.slice(literalStart, match.index);
@@ -62,7 +97,32 @@ export function parseGraphicTextTemplate(template: string): GraphicTextTemplateS
 export function graphicTextTemplateInputKeys(template: string): string[] {
 	const keys = parseGraphicTextTemplate(template)
 		.map(segment => segment.inputKey)
-		.filter((key): key is string => key !== undefined);
+		.filter((key): key is string => key !== undefined && isInputKey(key));
+	return [...new Set(keys)];
+}
+
+/** The projection value references in template order, once each. */
+export function graphicTextTemplateProjectedValueReferences(
+	template: string,
+): SocialProfileProjectedValueReference[] {
+	const references = parseGraphicTextTemplate(template)
+		.map(segment => segment.inputKey && readSocialProfileProjectedValueReference(segment.inputKey))
+		.filter((reference): reference is SocialProfileProjectedValueReference => reference !== undefined);
+	const seen = new Set<string>();
+	return references.filter((reference) => {
+		const key = `${reference.projectionKey}.${reference.value}`;
+		if (seen.has(key))
+			return false;
+		seen.add(key);
+		return true;
+	});
+}
+
+/** Dotted placeholder candidates, including unsupported projection fields. */
+export function graphicTextTemplateDottedPlaceholderKeys(template: string): string[] {
+	const keys = [...template.matchAll(PLACEHOLDER)]
+		.map(match => match[1] ?? '')
+		.filter(key => key.includes('.'));
 	return [...new Set(keys)];
 }
 
@@ -79,10 +139,18 @@ export function renderGraphicTextTemplate(
 	template: string,
 	declarations: readonly GraphicInputDeclaration[] | undefined,
 	values: Readonly<Record<string, GraphicInputValue>>,
+	socialProfileValues?: SocialProfileProjectionValues,
 ): GraphicTextTemplateSegment[] {
 	return parseGraphicTextTemplate(template).map((segment) => {
 		if (segment.inputKey === undefined)
 			return segment;
+		const projected = readSocialProfileProjectedValueReference(segment.inputKey);
+		if (projected) {
+			return {
+				text: socialProfileValues?.[projected.projectionKey]?.[projected.value] ?? '',
+				inputKey: segment.inputKey,
+			};
+		}
 
 		const declaration = findGraphicInputDeclaration(declarations, segment.inputKey);
 		return {

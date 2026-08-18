@@ -165,6 +165,33 @@ describe('placeBroadcastGraphicTemplate', () => {
 		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
 	});
 
+	it('places Social Profile Projections onto the copied Presentation Group identities', () => {
+		const document = composed();
+		document.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
+		document.socialProfileProjections = [{
+			key: 'profile',
+			label: 'Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'cluster',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}];
+
+		const placed = placeBroadcastGraphicTemplate(
+			{ id: 'template-1', name: 'Social lower third', document },
+			{ generateId: sequentialIds(), existing: [] },
+		);
+
+		expect(placed.socialProfileProjections).toEqual([{
+			...document.socialProfileProjections[0],
+			presentationGroupId: groupOf(placed).id,
+		}]);
+		expect(placed.socialProfileProjections![0]!.presentationGroupId).not.toBe('cluster');
+		expect(placed.sources).toEqual(document.sources);
+		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
+	});
+
 	it('carries the authored Graphic Asset Reference of every Media Graphic Item', () => {
 		const document = composed();
 		const media = addGraphicItem(document, { kind: 'media', id: 'brand', ...CANVAS }).graphic;

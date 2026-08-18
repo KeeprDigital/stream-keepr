@@ -244,7 +244,7 @@ describe('broadcast Graphic Template Packages', () => {
 		// names. Compared against the shared vocabulary so this also pins that the
 		// design still exercises every kind.
 		expect(parts.manifest.applicationCapabilities.map(entry => entry.identity).sort())
-			.toEqual([...GRAPHIC_ITEM_KINDS, 'inter'].sort());
+			.toEqual([...GRAPHIC_ITEM_KINDS, 'inter', 'social-profile-projection'].sort());
 	});
 
 	/**
