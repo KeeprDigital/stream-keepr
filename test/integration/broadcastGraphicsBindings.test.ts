@@ -29,6 +29,7 @@ const NAME = integrationTextInput('name', { default: 'Unnamed', maxLength: 40 })
 const REQUIRED_NAME = integrationTextInput('name', { required: true, maxLength: 40 });
 const LIVE_NAME = integrationTextInput('name', { updatePolicy: 'live', maxLength: 40 });
 const RECORD = integrationTextInput('title', { maxLength: 40 });
+const PROFILE_URL = integrationTextInput('title', { maxLength: 200 });
 
 const PLAYER_SOURCE = { key: 'player', label: 'Player', kind: 'player' as const };
 const EVENT_SOURCE = { key: 'event', label: 'Current Event', kind: 'event' as const };
@@ -535,6 +536,7 @@ describe('broadcast graphics re-resolution driven by Event Data', () => {
 describe('broadcast graphics binding to the Event, its Talents, and its game', () => {
 	let eventId: number;
 	let talent1Id: number;
+	let talent2Id: number;
 	let pickedTalentId: number;
 	let deckPlayerId: number;
 
@@ -549,18 +551,19 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		// reading whichever Talent the Event happens to list first: nothing names or picks
 		// the one created first, the Event names the second as its Talent 1, and the
 		// operator picks the third.
-		await $fetch(`/api/events/${eventId}/talents`, {
+		const talent2 = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Rhys Delacroix' },
+			body: { name: 'Rhys Delacroix', socialProfiles: { bluesky: 'rhys.bsky.social' } },
 		});
+		talent2Id = talent2.id;
 		const named = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Imani Okoye' },
+			body: { name: 'Imani Okoye', socialProfiles: { twitch: 'ImaniLive' } },
 		});
 		talent1Id = named.id;
 		const picked = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
-			body: { name: 'Noor Haddad' },
+			body: { name: 'Noor Haddad', socialProfiles: { youtube: 'NoorOnAir' } },
 		});
 		pickedTalentId = picked.id;
 
@@ -568,7 +571,7 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		// (bindingResolution.ts's GRAPHIC_SOURCE_RELATION_LABELS).
 		await $fetch(`/api/events/${eventId}`, {
 			method: 'PATCH',
-			body: { commentator1TalentId: talent1Id },
+			body: { commentator1TalentId: talent1Id, commentator2TalentId: talent2Id },
 		});
 
 		const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
@@ -645,6 +648,122 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		});
 
 		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Noor Haddad' });
+	});
+
+	it('resolves fixed Social Profile handles and canonical URLs from a directly selected Talent', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-direct', graphicWith(
+			[NAME, PROFILE_URL],
+			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[
+				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.youtubeHandle' },
+				{ inputKey: 'title', sourceKey: 'talent', fieldId: 'talent.youtubeProfileUrl' },
+			],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'talent', pickedTalentId);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-talent-social-direct-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({
+			name: 'NoorOnAir',
+			title: 'https://www.youtube.com/@NoorOnAir',
+		});
+	});
+
+	it('resolves fixed Social Profiles through both Event Talent relationships', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-derived', graphicWith(
+			[NAME, PROFILE_URL],
+			[
+				EVENT_SOURCE,
+				{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+				{ key: 'talent2', label: 'Talent 2', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator2' } },
+			],
+			[
+				{ inputKey: 'name', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
+				{ inputKey: 'title', sourceKey: 'talent2', fieldId: 'talent.blueskyProfileUrl' },
+			],
+		));
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-talent-social-derived-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({
+			name: 'ImaniLive',
+			title: 'https://bsky.app/profile/rhys.bsky.social',
+		});
+	});
+
+	it('makes a missing fixed Social Profile unavailable instead of substituting a default', async () => {
+		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-missing', graphicWith(
+			[NAME],
+			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.twitchHandle' }],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'talent', pickedTalentId);
+		const taken = await harness.send({
+			commandId: playoutCommandId('bind-talent-social-missing-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({});
+	});
+
+	it('re-resolves profile edits with existing live and staged On-air Update Policies', async () => {
+		const talent = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Marisol Vega', socialProfiles: { instagram: 'MarisolCasts' } },
+		});
+		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-edit', graphicWith(
+			[LIVE_NAME, PROFILE_URL],
+			[{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			[
+				{ inputKey: 'name', sourceKey: 'talent', fieldId: 'talent.instagramHandle' },
+				{ inputKey: 'title', sourceKey: 'talent', fieldId: 'talent.instagramProfileUrl' },
+			],
+		));
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC, 'talent', talent.id);
+		await harness.send({
+			commandId: playoutCommandId('bind-talent-social-edit-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC },
+		});
+
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { socialProfiles: { instagram: 'MarisolOnAir' } },
+		});
+		const reloaded = await harness.reload();
+
+		// The complete Talent update drives the authoritative re-resolution path.
+		// Live policy accepts the handle immediately; staged policy keeps the URL that
+		// program already accepted until the operator updates the graphic.
+		expect(reloaded.currentState.inputs[GRAPHIC]!.accepted).toEqual({
+			name: 'MarisolOnAir',
+			title: 'https://www.instagram.com/MarisolCasts',
+		});
+
+		const updated = await harness.send({
+			commandId: playoutCommandId('bind-talent-social-edit-update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId: GRAPHIC,
+				basedOnAcceptedRevision: reloaded.currentState.inputs[GRAPHIC]!.acceptedRevision,
+			},
+		} as BroadcastGraphicsCommand);
+
+		expect(updated.currentState.inputs[GRAPHIC]!.accepted).toEqual({
+			name: 'MarisolOnAir',
+			title: 'https://www.instagram.com/MarisolOnAir',
+		});
 	});
 
 	it('resolves a Magic-only Player field on a Magic Event', async () => {

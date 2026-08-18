@@ -1,3 +1,4 @@
+import type { SocialProfiles } from '../../socialProfiles';
 import type { Game, PositionFormat, RecordSeparator } from '../../types/enums';
 import type { FeatureMatchState } from '../../types/featureMatchState';
 import type { PlayerGameData } from '../../types/game';
@@ -6,6 +7,7 @@ import type {
 	GraphicInputValue,
 	GraphicSourceSelectionKind,
 } from '../../types/graphics';
+import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORKS } from '../../socialProfiles';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 
@@ -93,6 +95,7 @@ export interface GraphicBindingPlayer {
 
 export interface GraphicBindingTalent {
 	name: string;
+	socialProfiles: SocialProfiles;
 }
 
 export interface GraphicBindingPhase {
@@ -361,6 +364,25 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 
 const TALENT_FIELDS: readonly GraphicBindingField<GraphicBindingTalent>[] = [
 	{ id: 'talent.name', label: 'Name', type: 'text', shape: 'atomic', resolve: talent => textOf(talent.name) },
+	...SUPPORTED_SOCIAL_NETWORKS.flatMap(network => [
+		{
+			id: `talent.${network.key}Handle`,
+			label: `${network.label} handle`,
+			type: 'text' as const,
+			shape: 'atomic' as const,
+			resolve: (talent: GraphicBindingTalent) => textOf(talent.socialProfiles[network.key]),
+		},
+		{
+			id: `talent.${network.key}ProfileUrl`,
+			label: `${network.label} profile URL`,
+			type: 'text' as const,
+			shape: 'formatted' as const,
+			resolve: (talent: GraphicBindingTalent) => {
+				const handle = textOf(talent.socialProfiles[network.key]);
+				return handle === undefined ? undefined : canonicalSocialProfileUrl(network.key, handle);
+			},
+		},
+	]),
 ];
 
 const PHASE_FIELDS: readonly GraphicBindingField<GraphicBindingPhase>[] = [
