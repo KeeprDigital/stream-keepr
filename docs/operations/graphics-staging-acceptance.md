@@ -63,7 +63,7 @@ prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
    length of the run.
 
 Local (non-deployed) modes of the same harnesses run against `pnpm preview` and
-need three names in `.dev.vars` at the repository root — see `.dev.vars.example`:
+need three names in `.env` at the repository root — see `.env.example`:
 
 - `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY`, without which capability minting
   and Screen Output delivery answer 503;
@@ -75,11 +75,14 @@ need three names in `.dev.vars` at the repository root — see `.dev.vars.exampl
 
 `pnpm preview` stages that file into `.output/server/`, which is where Wrangler
 resolves it from the config. Until issue #274 it did not, so a checkout with a
-perfectly good `.dev.vars` still answered 503 from the first authored request.
-The harnesses now check all three before opening an installation and stop with a
-named cause rather than 503s nobody can trace. They prove the invariants that do
-not depend on Cloudflare, and are the fast way to find a break before spending a
-deploy on it.
+perfectly good local configuration still answered 503 from the first authored
+request. Until #412 the file it staged was a second one, `.dev.vars`, which the
+Melee names were never written into — so a previewed Worker answered 503 for a
+Melee credential however full the root `.env` was. One file now, and it is the
+one every name is in. The harnesses check all three names before opening an
+installation and stop with a named cause rather than 503s nobody can trace. They
+prove the invariants that do not depend on Cloudflare, and are the fast way to
+find a break before spending a deploy on it.
 
 `NUXT_GRAPHICS_ADMIN_TOKEN` is deliberately not required for any of this: no
 route these harnesses call is an admin route, so a blank one cannot stop a run.

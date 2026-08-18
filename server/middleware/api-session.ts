@@ -44,8 +44,8 @@ export default defineEventHandler(async (event) => {
 	// deployment answered with the name of the thing to go and set, rather than
 	// with a 401 that would send an operator looking for their password. It is
 	// also why that name is locally *required* as of this ticket
-	// (`build/devVars.ts`): with a boundary in front of `/api/**`, a checkout
-	// without the secret has no way to sign in to anything.
+	// (`build/localConfiguration.ts`): with a boundary in front of `/api/**`, a
+	// checkout without the secret has no way to sign in to anything.
 	//
 	// Through `requestUserSession` rather than `serverAuth()` directly, so this
 	// resolution is the one the handler behind it reuses (#398). Since the

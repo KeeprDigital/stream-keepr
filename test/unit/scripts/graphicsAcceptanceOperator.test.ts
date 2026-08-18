@@ -21,7 +21,7 @@ import {
  *
  * The decision is pure so it can be read in every state without an installation
  * in front of it. The state that matters most is the one no test could reach by
- * accident: a **deployed** run must not be able to take a local `.dev.vars`
+ * accident: a **deployed** run must not be able to take a local `.env`
  * secret and send it to a remote host.
  */
 
@@ -72,7 +72,7 @@ describe('how an acceptance run acquires an operator', () => {
 	});
 
 	it('takes the token from the checkout for a local run', () => {
-		// The ordinary local path: `.env` or `.dev.vars` carries the token, which is
+		// The ordinary local path: `.env` carries the token, which is
 		// why #396 made that name one a local run is checked for.
 		const plan = planFor({ supplied: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN }, newPassword: PASSWORD });
 
@@ -81,7 +81,7 @@ describe('how an acceptance run acquires an operator', () => {
 
 	it('never sends a checkout\'s own secret to a deployed installation', () => {
 		// The one state a default must not reach. A deployed origin is a remote
-		// host, and this checkout's `.dev.vars` is not its secret to present.
+		// host, and this checkout's `.env` is not its secret to present.
 		expect(() => planFor({
 			deployed: true,
 			supplied: { [BOOTSTRAP_TOKEN_NAME]: A_TOKEN },
@@ -149,7 +149,7 @@ describe('how an acceptance run acquires an operator', () => {
  * The measurement probes in `scripts/` take one mandatory origin and nothing else,
  * so for them the question really is about the host. The expensive direction is
  * unmistakable: reading `true` for a remote origin means presenting this
- * checkout's `.dev.vars` secret to somebody else's installation.
+ * checkout's `.env` secret to somebody else's installation.
  */
 describe('whether local secrets may reach an origin', () => {
 	it('says yes to a server on this machine', () => {
@@ -190,7 +190,7 @@ describe('what a run with no operator says', () => {
 	it('does not send a deployed reader after a local file, which it never reads', () => {
 		const notice = operatorUnavailableNotice({ deployed: true });
 
-		expect(notice).not.toContain('.dev.vars');
+		expect(notice).not.toContain('.env');
 		expect(notice).not.toContain('worktree');
 		expect(notice).toContain(OPERATOR_EMAIL_ENV);
 		expect(notice).toContain(OPERATOR_PASSWORD_ENV);

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/devVars';
+import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/localConfiguration';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 /**
  * The refusal a blank `NUXT_BETTER_AUTH_SECRET` produces, and the one thing about
  * it that lives in two files.
  *
- * `build/devVars.ts` quotes each required name's surface in the notice a dev
+ * `build/localConfiguration.ts` quotes each required name's surface in the notice a dev
  * server prints, in that surface's own words, so a reader can match the notice to
  * the 503 they are looking at. For the two shared-secret surfaces that quotation
  * is held to account by their own unit tests (`graphicsAdministrator.test.ts`
@@ -49,7 +49,7 @@ describe('the Better Auth instance', () => {
 	});
 
 	it('counts a whitespace-only secret as missing, the way the boot notice counts it', () => {
-		// The notice in `build/devVars.ts` treats a name that trims to nothing as
+		// The notice in `build/localConfiguration.ts` treats a name that trims to nothing as
 		// absent, and says it does so because that is how the readers count it. It
 		// was not how this reader counted it until #396: a space passed the test and
 		// every session in the installation was signed with it, rather than the

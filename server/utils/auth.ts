@@ -11,9 +11,10 @@ const BETTER_AUTH_SECRET_SETTING = 'NUXT_BETTER_AUTH_SECRET';
 /**
  * What is unavailable without the secret, completing "<name> is not configured, so …".
  *
- * `build/devVars.ts` quotes this surface verbatim in the notice a dev server prints when
- * the name is missing, the way it quotes `requireGraphicsAdministrator`'s clause — which
- * is why the wording lives here, beside the refusal, rather than being invented there.
+ * `build/localConfiguration.ts` quotes this surface verbatim in the notice a dev server
+ * prints when the name is missing, the way it quotes `requireGraphicsAdministrator`'s
+ * clause — which is why the wording lives here, beside the refusal, rather than being
+ * invented there.
  *
  * It said only "is not configured" until #396. That was accurate and useless: this is the
  * instance every `/api/**` request now resolves a session through
@@ -56,8 +57,8 @@ function createAuth(secret: string) {
  * stack-free 500 — same reasoning as `getAblyClient`.
  *
  * **Blank means whitespace as well as empty**, which it did not until #396. The
- * `.env`-and-`.dev.vars` notice in `build/devVars.ts` counts a name as missing
- * when it trims to nothing, and says it does so "because that is how the readers
+ * local-configuration notice in `build/localConfiguration.ts` counts a name as
+ * missing when it trims to nothing, and says it does so "because that is how the readers
  * count it" — true of `requireGraphicsAdministrator` and of the capability
  * signing key, and false here while this test was `!config.betterAuthSecret`. A
  * name set to a space is the likeliest way to hold one at all (`cp
