@@ -104,7 +104,13 @@ vi.stubGlobal('defineNuxtPlugin', vi.fn(handler => handler));
 vi.stubGlobal('randomUuid', vi.fn(() => 'uuid-1'));
 vi.stubGlobal('ref', vi.fn(value => ({ value })));
 vi.stubGlobal('$fetch', vi.fn());
-vi.stubGlobal('window', { addEventListener: vi.fn() });
+/**
+ * `location.hash` is where a Screen Output keeps its Screen Output Asset
+ * Capability, and since #397 the auth callback reads it to decide which credential
+ * this document has. Stubbed empty by default — the operator's own pages carry no
+ * fragment — and set per test where the bearer arm is what is being read.
+ */
+vi.stubGlobal('window', { addEventListener: vi.fn(), location: { hash: '' } });
 
 async function createTransport() {
 	vi.resetModules();
@@ -132,6 +138,7 @@ describe('realtime plugin', () => {
 		vi.mocked(window.addEventListener).mockClear();
 		vi.mocked(randomUuid).mockReturnValue('uuid-1');
 		vi.mocked($fetch).mockReset();
+		window.location.hash = '';
 	});
 
 	it('connects immediately and updates exposed connection state from Ably events', async () => {
@@ -174,9 +181,71 @@ describe('realtime plugin', () => {
 		realtime.setRoom('event:7');
 		await authCallbackPromise;
 
-		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', { query: { eventId: 7 } });
+		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
+			query: { eventId: 7 },
+			// No fragment on an operator's page, so no bearer to present: the session
+			// cookie rides along and the token route reads that arm instead (#397).
+			headers: undefined,
+		});
 		expect(callback).toHaveBeenCalledWith(null, { token: 'token-request' });
 		expect(realtimeInstances[0]!.auth.authorize).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * The Screen Output's half of #397's dual grant.
+	 *
+	 * An output has no session, so the capability in its URL fragment is the only
+	 * thing that can get it a token — and the grant it comes back with is narrowed to
+	 * its own Screen. Presenting nothing here would have taken every Screen Output's
+	 * realtime down the moment the route stopped issuing anonymously, which is the
+	 * one failure in this ticket that reaches program.
+	 */
+	it('presents the capability in its fragment, which is a Screen Output\'s only credential', async () => {
+		window.location.hash = '#asset-capability=a-screen-output-capability-token';
+		vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
+			.mockResolvedValueOnce({ token: 'token-request' });
+		const realtime = await createTransport();
+		const callback = vi.fn();
+
+		const authCallbackPromise = (realtimeInstances[0]!.options as any).authCallback({}, callback);
+		realtime.setRoom('event:7');
+		await authCallbackPromise;
+
+		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
+			query: { eventId: 7 },
+			headers: { authorization: 'Bearer a-screen-output-capability-token' },
+		});
+	});
+
+	it('presents nothing when the fragment carries no capability it can read', async () => {
+		// A mistyped or truncated fragment is no credential rather than a bad one: the
+		// document falls back to whatever session it has, which for a real output is
+		// none — and an output with no media is a better failure than one that cannot
+		// connect at all.
+		window.location.hash = '#asset-capability=too-short';
+		vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
+			.mockResolvedValueOnce({ token: 'token-request' });
+		const realtime = await createTransport();
+		const callback = vi.fn();
+
+		const authCallbackPromise = (realtimeInstances[0]!.options as any).authCallback({}, callback);
+		realtime.setRoom('event:7');
+		await authCallbackPromise;
+
+		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
+			query: { eventId: 7 },
+			headers: undefined,
+		});
+	});
+
+	it('declares no clientId of its own, because the token pins one', async () => {
+		// Ably refuses a connection whose declared `clientId` conflicts with its
+		// token's, and #397 pins the identity in the token — the userId for an
+		// operator, `screen-output:<screenId>` for an output. Declaring one here would
+		// break every connection rather than merely duplicate a value.
+		await createTransport();
+
+		expect(realtimeInstances[0]!.options).not.toHaveProperty('clientId');
 	});
 
 	it('re-mints a newly scoped token when a room for a different event is set', async () => {

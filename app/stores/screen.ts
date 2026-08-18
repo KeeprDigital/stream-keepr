@@ -147,12 +147,12 @@ export const useScreenStore = defineStore('screen', () => {
 	 * is `screens` — which is where a writing client's save lands anyway, since every
 	 * write path refuses a Screen it does not hold there.
 	 */
-	async function loadScreenBySlug(eventId: number, slug: string) {
+	async function loadScreenBySlug(eventId: number, slug: string, assetCapability?: string | null) {
 		const flight = activeScreenLoads.begin();
 		const token = beginLoad();
 		activeScreen.value = null;
 		try {
-			const screen = await screenRepo.getBySlug(eventId, slug);
+			const screen = await screenRepo.getBySlug(eventId, slug, assetCapability);
 			if (!screen)
 				throw new Error('Screen not found');
 			if (flight.stale)
@@ -189,10 +189,10 @@ export const useScreenStore = defineStore('screen', () => {
 	 * supersedes it rather than racing it, and it answers `null` rather than
 	 * throwing: nothing is waiting on this to decide what to render.
 	 */
-	async function refreshActiveScreen(eventId: number, slug: string) {
+	async function refreshActiveScreen(eventId: number, slug: string, assetCapability?: string | null) {
 		const flight = activeScreenLoads.begin();
 		try {
-			const screen = await screenRepo.getBySlug(eventId, slug);
+			const screen = await screenRepo.getBySlug(eventId, slug, assetCapability);
 			if (!screen || flight.stale)
 				return null;
 			const kept = keptRevision(screen);

@@ -1,6 +1,7 @@
 import {
 	$fetch as unauthenticated$Fetch,
 	fetch as unauthenticatedFetch,
+	url,
 } from '@nuxt/test-utils/e2e';
 import {
 	INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
@@ -105,7 +106,17 @@ async function signInAsOperator(): Promise<string> {
 
 	const signIn = await unauthenticatedFetch('/api/auth/sign-in/email', {
 		method: 'POST',
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			// Better Auth refuses a state-changing request with no `Origin` —
+			// `403 MISSING_OR_NULL_ORIGIN`, its CSRF defence. `nuxt dev` does not
+			// enforce it and a built Worker does, so this suite would have gone on
+			// passing while every non-browser sign-in against a real deployment was
+			// refused. Found by running the fan-out probe against `pnpm preview`;
+			// sent here too so the suite's own client asks the way a browser does
+			// rather than the way only the dev server tolerates.
+			'origin': url('/'),
+		},
 		body: JSON.stringify({
 			email: INTEGRATION_OPERATOR_EMAIL,
 			password: INTEGRATION_OPERATOR_PASSWORD,

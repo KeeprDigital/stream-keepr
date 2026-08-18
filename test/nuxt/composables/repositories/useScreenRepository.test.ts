@@ -21,13 +21,34 @@ describe('useScreenRepository', () => {
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/screens/1');
 	});
 
-	it('gets screen by slug', async () => {
+	/**
+	 * On the capability surface since #397, and asking with a credential.
+	 *
+	 * Both halves matter to a Screen Output: the path, because the old one is private
+	 * and would answer 401; and the bearer, because that is what the route now
+	 * requires of a caller with no session.
+	 */
+	it('gets screen by slug, presenting the capability as a bearer', async () => {
 		const screen = { id: 1, slug: 'test-screen' };
 		mockFetch.mockResolvedValue(screen);
 		const repo = useScreenRepository();
-		const result = await repo.getBySlug(1, 'test-screen');
+		const result = await repo.getBySlug(1, 'test-screen', 'a-screen-output-capability-token');
 		expect(result).toEqual(screen);
-		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/screens/slug/test-screen');
+		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/slug/test-screen', {
+			headers: { authorization: 'Bearer a-screen-output-capability-token' },
+		});
+	});
+
+	it('sends no authorization when there is no capability, as the preview embeds do', async () => {
+		// `embed=preview` holds none by design and is admitted by its operator's
+		// session instead, which rides on the request without being asked for.
+		const screen = { id: 1, slug: 'test-screen' };
+		mockFetch.mockResolvedValue(screen);
+		const repo = useScreenRepository();
+		await repo.getBySlug(1, 'test-screen');
+		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/slug/test-screen', {
+			headers: undefined,
+		});
 	});
 
 	it('updates mode config with PATCH', async () => {

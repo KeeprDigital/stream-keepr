@@ -97,6 +97,37 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 		},
 
 		/**
+		 * Which Screen a capability is for, without being told (#397).
+		 *
+		 * `authorizeCapability` above answers "is this capability *this* Screen's",
+		 * which is the right question for a route that already has a screenId in its
+		 * path. The realtime token has none: a Screen Output asks for a token with the
+		 * capability it holds and nothing else, and the grant it gets back has to be
+		 * narrowed to that Screen's channels — so the capability has to name the
+		 * Screen rather than merely confirm one.
+		 *
+		 * It can, because `screens_asset_capability_digest_idx` is **unique**: a digest
+		 * identifies at most one Screen, so this is a lookup rather than a search, and
+		 * a rotation cannot leave two Screens answering to the same bearer.
+		 *
+		 * The Event comes back with it because every channel in the grant is
+		 * Event-scoped (`shared/utils/realtimeChannels.ts`), and deriving the Event
+		 * from the capability rather than trusting the caller's query is what stops a
+		 * bearer for one Event's Screen asking for a grant on another's.
+		 */
+		async screenForCapability(input: { capabilityDigest: string }) {
+			const row = await database.prepare(`
+				SELECT screen.id AS id, screen.event_id AS eventId
+				FROM screens screen
+				WHERE screen.asset_capability_digest = ?
+				LIMIT 1
+			`).bind(
+				input.capabilityDigest,
+			).first<{ id: number; eventId: number }>();
+			return row ? { screenId: row.id, eventId: row.eventId } : null;
+		},
+
+		/**
 		 * Which of the Screen's published revisions this engine will be refused.
 		 *
 		 * A forecast, not a gate. `authorizeCapability` above still says nothing about

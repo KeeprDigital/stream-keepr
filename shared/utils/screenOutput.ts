@@ -109,6 +109,52 @@ export interface ScreenOutputPathOptions {
 }
 
 /**
+ * The shape a value has to be to be a Screen Output Asset Capability.
+ *
+ * **The one definition of that shape.** `bearerScreenOutputCapability` on the
+ * server matches the same run of characters inside its `Bearer ` wrapper, and
+ * before #397's review it did so with a second copy of this pattern — while the
+ * docblock below argued, correctly, that one encoding read in two places is how the
+ * two stop agreeing. `shared/` is importable from `server/`, so there is one.
+ *
+ * A value that cannot be a capability is treated as no capability rather than
+ * presented and refused, so a mistyped fragment renders an output without media
+ * instead of one that fails its bootstrap.
+ */
+export const SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN = /^[\w-]{20,200}$/;
+
+/**
+ * Read the Screen Output Asset Capability back out of a URL fragment — the
+ * inverse of the fragment `screenOutputPath` writes.
+ *
+ * Here rather than in the one page that used to parse it, because #397 gave the
+ * capability two more readers: the realtime plugin presents it to
+ * `/api/realtime/token` for its narrowed grant, and the Screen lookup by slug
+ * presents it as the credential that route now requires. Three parsers for one
+ * encoding is how a fragment written in one place stops being readable in
+ * another; this file already owns writing it, so it owns reading it.
+ */
+export function screenOutputAssetCapabilityFromHash(hash: string): string | null {
+	const value = new URLSearchParams(hash.replace(/^#/, '')).get('asset-capability');
+	return value && SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN.test(value) ? value : null;
+}
+
+/**
+ * How a capability is presented on a request, or nothing to present.
+ *
+ * Both callers wrote this ternary out — the Screen lookup by slug and the realtime
+ * token request — which is two places to get a scheme name right. `undefined`
+ * rather than an empty object because that is what `$fetch` wants for "no headers",
+ * and because a document with no capability is making an ordinary request that its
+ * session speaks for.
+ */
+export function screenOutputCapabilityHeaders(
+	assetCapability: string | null | undefined,
+): { authorization: string } | undefined {
+	return assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined;
+}
+
+/**
  * The one stable Screen URL for a Screen Output, with its output selection, any
  * embed role and preview flags, and any asset capability. Built here so every
  * embedder agrees on the query — and so an embedder cannot forget the capability its
