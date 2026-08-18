@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-	authorSessionCookie,
+	browserCookie,
 	initialTarget,
 	openAuthoredPage,
 	verdictFailureCode,
@@ -24,6 +24,16 @@ const COOKIE_VALUE = '3f9c1a72-5d84-4e21-9b6f-0a7c2e8d41b5'
 const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
 
 /**
+ * The operator session that travels beside it since #396.
+ *
+ * Two identities reach the browser now, and they answer different questions: this
+ * one gets a request past the API boundary at all, the author cookie says whose
+ * operation is being read. A page given only the second is answered 401 by every
+ * library route, which no assertion inside the page can tell from a broken one.
+ */
+const SESSION_COOKIE = 'better-auth.session_token=0f8b1c2d3e4f5a6b.7c8d9e0f1a2b3c4d';
+
+/**
  * The `--library` font gate stages an ingestion from Node and then reads it
  * back in a browser. A Graphics Ingestion Operation is owned by the session
  * that created it and is a `404` to any other (ADR-0003), so the browser has to
@@ -39,7 +49,7 @@ const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
  */
 describe('the author session the acceptance browser is given', () => {
 	it('splits the pair the installation issued at its first separator', () => {
-		const cookie = authorSessionCookie('http://127.0.0.1:8787/_acceptance/static-font-v1.html', COOKIE);
+		const cookie = browserCookie('http://127.0.0.1:8787/_acceptance/static-font-v1.html', COOKIE);
 		expect(cookie.name).toBe(COOKIE_NAME);
 		expect(cookie.value).toBe(COOKIE_VALUE);
 	});
@@ -50,7 +60,7 @@ describe('the author session the acceptance browser is given', () => {
 	 * the split is at the first separator, not the last.
 	 */
 	it('keeps a value containing an "=" whole', () => {
-		expect(authorSessionCookie('http://127.0.0.1:8787/', 'session=YWJjZA==').value).toBe('YWJjZA==');
+		expect(browserCookie('http://127.0.0.1:8787/', 'session=YWJjZA==').value).toBe('YWJjZA==');
 	});
 
 	/**
@@ -61,7 +71,7 @@ describe('the author session the acceptance browser is given', () => {
 	 * cause.
 	 */
 	it('mirrors the attributes the installation issued it with', () => {
-		expect(authorSessionCookie('https://stream.example.workers.dev/_acceptance/x.html', COOKIE))
+		expect(browserCookie('https://stream.example.workers.dev/_acceptance/x.html', COOKIE))
 			.toMatchObject({
 				url: 'https://stream.example.workers.dev/_acceptance/x.html',
 				path: '/',
@@ -69,12 +79,12 @@ describe('the author session the acceptance browser is given', () => {
 				sameSite: 'Strict',
 				secure: true,
 			});
-		expect(authorSessionCookie('http://127.0.0.1:8787/_acceptance/x.html', COOKIE).secure).toBe(false);
+		expect(browserCookie('http://127.0.0.1:8787/_acceptance/x.html', COOKIE).secure).toBe(false);
 	});
 
 	it('refuses something that is not a name=value pair rather than setting a nameless cookie', () => {
-		expect(() => authorSessionCookie('http://127.0.0.1:8787/', 'nonsense')).toThrow();
-		expect(() => authorSessionCookie('http://127.0.0.1:8787/', '=value')).toThrow();
+		expect(() => browserCookie('http://127.0.0.1:8787/', 'nonsense')).toThrow();
+		expect(() => browserCookie('http://127.0.0.1:8787/', '=value')).toThrow();
 	});
 });
 
@@ -112,23 +122,30 @@ function recordingPage(answers: Record<string, unknown> = {}) {
  * defect with an extra step.
  */
 describe('opening the acceptance page as the author that staged the ingestion', () => {
-	it('creates the target blank when it has a session to install, and at the destination otherwise', () => {
-		expect(initialTarget(PAGE_URL, COOKIE)).toBe('about:blank');
+	it('creates the target blank when it has cookies to install, and at the destination otherwise', () => {
+		expect(initialTarget(PAGE_URL, [COOKIE])).toBe('about:blank');
 		expect(initialTarget(PAGE_URL, undefined)).toBe(PAGE_URL);
+		// An empty list is a run with no identity, not a run with one to install.
+		expect(initialTarget(PAGE_URL, [])).toBe(PAGE_URL);
 	});
 
-	it('installs the cookie before it navigates, and enables the runtime last', async () => {
+	it('installs every cookie before it navigates, and enables the runtime last', async () => {
 		const page = recordingPage();
 
-		await openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE });
+		await openAuthoredPage(page, { url: PAGE_URL, cookies: [SESSION_COOKIE, COOKIE] });
 
 		expect(page.methods()).toEqual([
 			'Network.enable',
 			'Network.setCookie',
+			'Network.setCookie',
 			'Page.navigate',
 			'Runtime.enable',
 		]);
-		expect(page.paramsFor('Network.setCookie')).toEqual(authorSessionCookie(PAGE_URL, COOKIE));
+		// Both of them, because a page carrying one of the two is the failure this
+		// list exists to prevent — and it is the kind that reads as a working page
+		// right up to the request that needs the other.
+		expect(page.commands.filter(({ method }) => method === 'Network.setCookie').map(({ params }) => params))
+			.toEqual([browserCookie(PAGE_URL, SESSION_COOKIE), browserCookie(PAGE_URL, COOKIE)]);
 		expect(page.paramsFor('Page.navigate')).toEqual({ url: PAGE_URL });
 	});
 
@@ -153,7 +170,7 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	it('fails with a named cause when the browser refuses the cookie', async () => {
 		const page = recordingPage({ 'Network.setCookie': { success: false } });
 
-		const opening = openAuthoredPage(page, { url: PAGE_URL, authorCookie: COOKIE });
+		const opening = openAuthoredPage(page, { url: PAGE_URL, cookies: [COOKIE] });
 
 		await expect(opening).rejects.toMatchObject({ code: 'author-session-cookie-refused' });
 		expect(page.methods()).not.toContain('Page.navigate');
@@ -168,12 +185,16 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	 * this test was the stand-in; since #345 the call site is pinned directly in
 	 * `runFontBrowserAcceptance.test.ts`, and this holds just the helper.
 	 */
-	it('pairs a staged page with the session that staged it', () => {
-		const session = { origin: 'http://127.0.0.1:8787', authorCookie: COOKIE };
+	it('pairs a staged page with both identities that staged it', () => {
+		const session = {
+			origin: 'http://127.0.0.1:8787',
+			authorCookie: COOKIE,
+			sessionCookies: [SESSION_COOKIE],
+		};
 
 		expect(authoredPageRequest(session, PAGE_URL)).toEqual({
 			url: PAGE_URL,
-			authorCookie: COOKIE,
+			cookies: [SESSION_COOKIE, COOKIE],
 		});
 	});
 

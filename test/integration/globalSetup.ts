@@ -1,9 +1,23 @@
-import { createTest, exposeContextToEnv, fetch } from '@nuxt/test-utils/e2e';
+import { createTest, exposeContextToEnv, fetch } from './client';
 import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationRealtimeConfigured, integrationSetupOptions } from './helpers';
 import { prepareIntegrationD1 } from './integrationD1';
 import { announceIntegrationMode, resetIntegrationWranglerState } from './state';
 import './disable-fs-watch.mjs';
 
+/**
+ * That the server is up, its database is migrated, and an operator can get in.
+ *
+ * `/api/events` is the readiness probe because it reads D1 — a server that
+ * answers it has run its migrations. Since #396 it is also behind the API
+ * boundary, so this now proves the second thing as well: that the suite's
+ * operator exists and its session is accepted. Both facts are worth failing here
+ * for. Without the second, a broken sign-in would surface as every test in the
+ * run answering 401, with nothing naming the cause.
+ *
+ * The `fetch` imported here is the suite's own signed-in client (`./client.ts`),
+ * so the sign-in it performs on first use happens here — before any test file
+ * runs, where a failure names itself.
+ */
 async function assertIntegrationServerReady() {
 	const response = await fetch('/api/events');
 	if (!response.ok) {

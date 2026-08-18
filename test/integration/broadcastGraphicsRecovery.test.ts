@@ -1,5 +1,4 @@
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createGraphicsHarness,
@@ -12,6 +11,7 @@ import {
 	setBroadcastGraphicInput,
 	setScreenMode,
 } from './broadcastGraphicsPlayoutHelpers';
+import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 

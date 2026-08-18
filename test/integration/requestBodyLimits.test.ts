@@ -1,6 +1,22 @@
-import { fetch } from '@nuxt/test-utils/e2e';
 import { describe, expect, it } from 'vitest';
+import { fetch, throughOneTransportFailure } from './client';
 
+/**
+ * Every request here goes through `throughOneTransportFailure`, and the reason is
+ * this file's own doing.
+ *
+ * The rows below send bodies deliberately over the ceiling, and the server answers
+ * 413 while those bytes are still arriving — so it closes a connection with an
+ * unread request body on it, and the next request to reuse that pooled socket dies
+ * with ECONNRESET or EPIPE before it reaches a handler at all. Observed on the
+ * first `it.each` row twice over, in both spellings, once #396's boundary widened
+ * the window by resolving a session ahead of the body-limit middleware.
+ *
+ * A streamed body cannot be replayed once it has been consumed, which is why the
+ * request is handed over as a thunk: the second attempt builds a fresh one. This is
+ * not a softened assertion — a transport failure is the absence of an answer, and a
+ * server that is really broken fails both attempts.
+ */
 const GENERAL_LIMIT_BYTES = 1024 * 1024;
 const RAW_TRANSFER_LIMIT_BYTES = 2 * 1024 * 1024;
 
@@ -26,29 +42,29 @@ describe('request body limits', () => {
 	it('accepts a raw mutation stream above the general limit when the route declares a larger limit', async () => {
 		const receivedBytes = GENERAL_LIMIT_BYTES + 1;
 
-		const response = await fetch(
+		const response = await throughOneTransportFailure(() => fetch(
 			'/api/_test/bounded-raw-mutation',
 			streamingMutation('POST', chunkedBody(GENERAL_LIMIT_BYTES, 1)),
-		);
+		));
 
 		expect(response.status).toBe(200);
 		await expect(response.json()).resolves.toEqual({ receivedBytes });
 	});
 
 	it('rejects a raw mutation whose declared length exceeds its route limit', async () => {
-		const response = await fetch('/api/_test/bounded-raw-mutation', {
+		const response = await throughOneTransportFailure(() => fetch('/api/_test/bounded-raw-mutation', {
 			method: 'POST',
 			body: new Uint8Array(RAW_TRANSFER_LIMIT_BYTES + 1),
-		});
+		}));
 
 		expect(response.status).toBe(413);
 	});
 
 	it('rejects a raw mutation when unknown-length streamed bytes exceed its route limit', async () => {
-		const response = await fetch(
+		const response = await throughOneTransportFailure(() => fetch(
 			'/api/_test/bounded-raw-mutation',
 			streamingMutation('POST', chunkedBody(RAW_TRANSFER_LIMIT_BYTES, 1)),
-		);
+		));
 
 		expect(response.status).toBe(413);
 	});
@@ -56,20 +72,20 @@ describe('request body limits', () => {
 	it.each(['DELETE', 'PATCH', 'POST', 'PUT'] as const)(
 		'keeps the general limit on ordinary %s mutations',
 		async (method) => {
-			const response = await fetch(
+			const response = await throughOneTransportFailure(() => fetch(
 				'/api/_test/ordinary-mutation',
 				streamingMutation(method, chunkedBody(GENERAL_LIMIT_BYTES, 1)),
-			);
+			));
 
 			expect(response.status).toBe(413);
 		},
 	);
 
 	it('does not apply a registered limit to another method at the same path', async () => {
-		const response = await fetch('/api/_test/bounded-raw-mutation', {
+		const response = await throughOneTransportFailure(() => fetch('/api/_test/bounded-raw-mutation', {
 			method: 'PUT',
 			body: new Uint8Array(GENERAL_LIMIT_BYTES + 1),
-		});
+		}));
 
 		expect(response.status).toBe(413);
 	});

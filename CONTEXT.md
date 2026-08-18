@@ -143,7 +143,7 @@ Other sessions may observe accepted authoring changes but cannot modify the leas
 The anonymous, self-issued identity that makes a browser a graphics author: minted on any HTML page navigation, carried as an httpOnly cookie, lasting eight hours from its last request.
 It is the only author identity in the Graphics Asset Library: every author-facing route requires it, a Graphics Ingestion Operation records it as the initiator, idempotency keys are unique within it, and the Evidence Ledger names it as actor.
 It belongs to one browser session rather than a person — the same author in a second browser is a second author — because the installation has no accounts and nothing more durable exists to own an operation (ADR-0003).
-It is attribution, not authentication: the installation has no authentication boundary yet by design and trusts its network perimeter (ADR-0008).
+It is attribution, not authentication: what admits a request is the Better Auth session the deny-by-default API boundary requires over `/api/**` (ADR-0010, which supersedes ADR-0008's perimeter-trust stance), and this identity only says which author owns the work behind it.
 _Avoid_: Graphics Authoring Lease — a lease is an exclusive edit right on one authoring artifact and describes what a session may currently edit, not who the session is; a session may hold leases, an identity is not a lease.
 
 **Graphic Style Set**:

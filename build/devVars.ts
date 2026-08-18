@@ -32,10 +32,20 @@ const EXPORT_PREFIX = /^export\s+/;
  * The Melee names in `.env.example` are absent for the same reason in a different
  * key: nothing refuses without them at boot, so a notice naming them would be
  * telling a developer to go and find a secret they do not need yet.
+ *
+ * The last two arrived here on #396, which is the ticket the comment on
+ * `LOCALLY_OPTIONAL_NUXT_NAMES` used to promise them to. Before it, a checkout
+ * needed neither: there was no boundary and no login page, so a notice naming a
+ * surface a developer could not reach yet would have been the cell-H false
+ * notice #130's own verification caught. With `/api/**` denying by default, a
+ * checkout without them cannot sign in to anything — which is the moment the
+ * notice becomes both true and useful.
  */
 export const LOCALLY_REQUIRED_NUXT_NAMES = [
 	'NUXT_GRAPHICS_ADMIN_TOKEN',
 	'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY',
+	'NUXT_BETTER_AUTH_SECRET',
+	'NUXT_ADMIN_BOOTSTRAP_TOKEN',
 ] as const;
 
 export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number];
@@ -43,34 +53,20 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
 /**
  * Deliberately optional, and named here so the partition above is legible.
  *
- * `NUXT_BETTER_AUTH_SECRET` sits here for now because #393 mounts the auth
- * foundation and nothing yet demands a session: a checkout without the secret
- * loses only the `/api/auth/**` routes, which answer by naming
- * `NUXT_BETTER_AUTH_SECRET` itself (the `ServiceConfigurationError` in
- * `serverAuth`), while every present surface works. The ticket that puts a
- * boundary in front of real routes is the one that moves it to required.
+ * One name, and it is the only one here that reaches a third party. An empty
+ * Ably key is the expected state of a checkout that never claimed to have
+ * realtime, and #223 already owns saying so: the integration suite skips the two
+ * tests that reach the service and announces the reason once. Requiring it would
+ * warn every such checkout about a secret it does not need.
  *
- * `NUXT_ADMIN_BOOTSTRAP_TOKEN` (#394) sits here for the same reason and moves
- * with it: until a boundary and a login page exist, an admin account is
- * something a developer can go without entirely, and the notice above would be
- * telling them a surface they have never opened is unavailable. It is in
- * `.dev.vars.example` regardless, because ADR-0010 wants dev and preview arming
- * the bootstrap route as a matter of course rather than discovering it once, on
- * the day of the first deploy.
- *
- * **That ticket is #396**, and it is written down there as well as here. A
- * promise recorded only in the code of the thing being deferred is one the
- * deferring ticket can keep and the inheriting ticket never sees — #396 could
- * land the boundary and leave both names sitting here with the notice silent,
- * at the exact moment the notice becomes true and useful. Moving one is not a
- * one-line edit: `LOCAL_NUXT_NAME_SURFACES` owes it a sentence in the surface's
- * own refusal wording, and `devVars.test.ts` pins both against
- * `.dev.vars.example`.
+ * The two auth names that sat here from #393 and #394 moved to required on #396
+ * — see the note above. The promise that they would was recorded in this
+ * docblock *and* on the ticket that inherits it, because a promise living only
+ * in the code of the thing being deferred is one the deferring ticket can keep
+ * and the inheriting ticket never sees.
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
-	'NUXT_BETTER_AUTH_SECRET',
-	'NUXT_ADMIN_BOOTSTRAP_TOKEN',
 ] as const;
 
 /**
@@ -93,10 +89,22 @@ export const LOCALLY_OPTIONAL_NUXT_NAMES = [
  * Error', so the notice quoted a sentence nobody could see. `satisfies` makes a new
  * required name a type error here rather than a name whose surface the notice silently
  * omits.
+ *
+ * The two auth entries are #396's, and they are quoted from the same two places: the
+ * bootstrap token's clause is `requireAdminBootstrapToken`'s
+ * (`server/modules/admin-bootstrap`), and the secret's is `serverAuth`'s
+ * (`server/utils/auth.ts`) — reworded on that ticket, because "is not configured" named
+ * no surface at all and there was none to name until the boundary existed. The secret's
+ * surface is the widest of the four by a distance: with a boundary over `/api/**`, a blank
+ * secret is every authenticated route answering 503 as well as sign-in itself, and a notice
+ * that said only "signing in" would leave a developer to discover the rest one route at a
+ * time.
  */
 export const LOCAL_NUXT_NAME_SURFACES = {
 	NUXT_GRAPHICS_ADMIN_TOKEN: 'Graphics Administrator operations',
 	NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'Screen Output asset capabilities',
+	NUXT_BETTER_AUTH_SECRET: 'signing in and every authenticated API route',
+	NUXT_ADMIN_BOOTSTRAP_TOKEN: 'first-admin bootstrap',
 } as const satisfies Record<LocallyRequiredNuxtName, string>;
 
 /**
@@ -109,6 +117,26 @@ export const LOCAL_NUXT_NAME_SURFACES = {
  */
 export function missingLocalNuxtNames(env: Record<string, string | undefined>): LocallyRequiredNuxtName[] {
 	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name => (env[name] ?? '').trim().length === 0);
+}
+
+/**
+ * A list of names or surfaces, as a sentence rather than as a join.
+ *
+ * `join(' and ')` was right while two was the most this could ever be, and #396 made it
+ * four: "Graphics Administrator operations and Screen Output asset capabilities and
+ * signing in and every authenticated API route and first-admin bootstrap" is not a list
+ * a reader can parse, and the reason is that one of the surfaces contains an `and` of
+ * its own. The serial comma is what separates the items from the conjunction inside one
+ * of them, so it is load-bearing here rather than a house style.
+ *
+ * Two items keep the plain `a and b`, which is both better English and the form every
+ * existing assertion about these notices was written against.
+ */
+export function sentenceList(items: readonly string[], conjunction: 'and' | 'or'): string {
+	if (items.length <= 2)
+		return items.join(` ${conjunction} `);
+
+	return `${items.slice(0, -1).join(', ')}, ${conjunction} ${items[items.length - 1]}`;
 }
 
 /**
@@ -141,14 +169,14 @@ export function missingLocalNuxtNames(env: Record<string, string | undefined>): 
 export function devVarsAbsentNotice(missing: readonly LocallyRequiredNuxtName[]): string {
 	const names = missing.length === 1
 		? `${missing[0]}, so it keeps its empty default`
-		: `${missing.join(' or ')}, so they keep their empty default`;
+		: `${sentenceList(missing, 'or')}, so they keep their empty default`;
 
 	// Only the surfaces belonging to the names that are missing, and only the
 	// "each says so on its own" clause when there is more than one to say it.
 	const surfaces = missing.map(name => LOCAL_NUXT_NAME_SURFACES[name]);
 	const consequence = surfaces.length === 1
 		? `${surfaces[0]} answer 503 without naming this as the cause`
-		: `${surfaces.join(' and ')} answer 503, and each says so on its own without naming a common cause`;
+		: `${sentenceList(surfaces, 'and')} answer 503, and each says so on its own without naming a common cause`;
 
 	return `Nothing in this checkout sets ${names}: ${consequence}. `
 		+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, so a new '

@@ -18,6 +18,8 @@
  */
 
 import process from 'node:process';
+import { readLocalConfigurationFiles, suppliedNames } from './graphics-acceptance/local-configuration.mjs';
+import { isLoopbackOrigin, openOperatorSession } from './graphics-acceptance/operator.mjs';
 
 /**
  * A Broadcast Graphics configuration publishing exactly `count` Graphic Asset
@@ -180,6 +182,20 @@ async function main() {
 	}));
 	if (jar.size === 0)
 		throw new Error('No graphics author session cookie was issued by the page navigation.');
+
+	// And an operator session, because #396 put a deny-by-default boundary in front
+	// of `/api/**`: the author cookie above says who owns the work, not that the
+	// request is allowed in. The jar carries both from here on, so every `request`
+	// below is unchanged. Local secrets go only to a local origin — see
+	// `isLoopbackOrigin`.
+	const local = isLoopbackOrigin(base);
+	for (const pair of await openOperatorSession(base, {
+		deployed: !local,
+		supplied: local ? suppliedNames(readLocalConfigurationFiles()) : {},
+	})) {
+		const separator = pair.indexOf('=');
+		jar.set(pair.slice(0, separator).trim(), pair.slice(separator + 1).trim());
+	}
 
 	const active = await json('/api/graphics-assets?lifecycleStates=active');
 	const images = active.filter(asset => asset.kind === 'image');

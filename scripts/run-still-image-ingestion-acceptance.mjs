@@ -35,6 +35,7 @@ import {
 	distinctPixelPng,
 	distinctPixelWebp,
 	openInstallation,
+	registerSessionSecrets,
 	stageStillImagePublication,
 } from './graphics-acceptance/installation.mjs';
 
@@ -67,8 +68,8 @@ export async function main(argv = process.argv) {
 	await runAcceptanceHarness({
 		harness: HARNESS,
 		async run({ evidence, record }) {
-			const session = await openInstallation(acceptanceOrigin({ deployed }));
-			evidence.addSecret(session.authorCookie);
+			const session = await openInstallation(acceptanceOrigin({ deployed }), { deployed });
+			registerSessionSecrets(evidence, session);
 			const marker = randomUUID();
 			const staged = [];
 			try {

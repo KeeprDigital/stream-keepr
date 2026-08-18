@@ -62,6 +62,7 @@ import {
 	acceptanceOrigin,
 	openInstallation,
 	provisionScreenOutputScenario,
+	registerSessionSecrets,
 	trashGraphicAssetBestEffort,
 } from './graphics-acceptance/installation.mjs';
 import { requireLocalAcceptanceConfiguration } from './graphics-acceptance/local-configuration.mjs';
@@ -128,8 +129,8 @@ export async function main(argv = process.argv) {
 			requireLocalAcceptanceConfiguration({ deployed });
 
 			const origin = acceptanceOrigin({ deployed });
-			const session = await openInstallation(origin);
-			evidence.addSecret(session.authorCookie);
+			const session = await openInstallation(origin, { deployed });
+			registerSessionSecrets(evidence, session);
 
 			async function runCapabilityRoute(scenario) {
 				const path = scenario.capabilityContentPath();

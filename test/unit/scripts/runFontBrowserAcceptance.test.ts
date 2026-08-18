@@ -32,10 +32,18 @@ vi.mock('../../../scripts/graphics-acceptance/installation.mjs', async importOri
 
 const ORIGIN = 'https://stream.example.workers.dev';
 const COOKIE = 'stream_keepr_graphics_author_session=3f9c1a72-5d84-4e21-9b6f-0a7c2e8d41b5';
+/** The operator session #396 put beside the author cookie; both are secrets. */
+const SESSION_COOKIE = '__Secure-better-auth.session_token=0f8b1c2d3e4f5a6b.7c8d9e0f1a2b3c4d';
 
 /** Shaped like `openInstallation`'s session; only identity matters here. */
 function fakeSession() {
-	return { origin: ORIGIN, authorCookie: COOKIE, request: vi.fn(), json: vi.fn() };
+	return {
+		origin: ORIGIN,
+		authorCookie: COOKIE,
+		sessionCookies: [SESSION_COOKIE],
+		request: vi.fn(),
+		json: vi.fn(),
+	};
 }
 
 /**
@@ -68,7 +76,7 @@ async function capturedRun(argv: string[]) {
 }
 
 describe('the font acceptance run', () => {
-	it('registers the session as a secret and hands the browser the page paired with it', async () => {
+	it('registers both credentials as secrets and hands the browser the page paired with them', async () => {
 		const session = fakeSession();
 		vi.mocked(acceptanceOrigin).mockReturnValue(ORIGIN);
 		vi.mocked(openInstallation).mockResolvedValue(session);
@@ -85,17 +93,21 @@ describe('the font acceptance run', () => {
 		const run = await capturedRun(['--library']);
 		await run({ evidence, record, ...rest });
 
-		// Registered before the ingestion is staged: from the staging call on, the
-		// cookie is in flight, so a failure there must already print it masked.
+		// Registered before the ingestion is staged: from the staging call on, both
+		// cookies are in flight, so a failure there must already print them masked.
+		// Both, because #396 added the second and a run that registered one of two
+		// would print a live session token the first time a request failed.
 		expect(evidence.addSecret).toHaveBeenCalledWith(COOKIE);
+		expect(evidence.addSecret).toHaveBeenCalledWith(SESSION_COOKIE);
 		expect(evidence.addSecret.mock.invocationCallOrder[0]!)
 			.toBeLessThan(vi.mocked(stageFontIngestion).mock.invocationCallOrder[0]!);
 
 		// One object: the staged operation is a 404 to every session but this one
-		// (ADR-0003), so the URL and the identity reading it are inseparable.
+		// (ADR-0003) and every library route is a 401 without the operator session
+		// (#396), so the URL and the identities reading it are inseparable.
 		expect(observeChromiumVerdict).toHaveBeenCalledWith({
 			url: `${ORIGIN}/_acceptance/static-font-v1.html?operation=gio-acceptance-1`,
-			authorCookie: COOKIE,
+			cookies: [SESSION_COOKIE, COOKIE],
 		});
 
 		expect(record).toHaveBeenCalledWith([]);

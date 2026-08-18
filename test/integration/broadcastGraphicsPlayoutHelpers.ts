@@ -10,7 +10,7 @@ import type {
 	GraphicChannelConfig,
 	GraphicInputDeclaration,
 } from '~~/shared/types/graphics';
-import { $fetch } from '@nuxt/test-utils/e2e';
+import { $fetch } from './client';
 
 const SQUARE_CORNER = { treatment: 'square', size: 0 } as const;
 

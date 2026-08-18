@@ -8,8 +8,8 @@ import type { GraphicAssetUsage, GraphicsIngestionOperation } from '~~/shared/ty
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { $fetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';

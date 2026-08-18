@@ -1,7 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { $fetch, fetch } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { integrationRealtimeConfigured } from './helpers';

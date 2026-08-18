@@ -41,27 +41,45 @@ prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
    Worker is not serving. Do not continue past a failed `deploy:verify`; see the
    rollback path in README.md.
 
-3. **Set the two environment variables the harnesses read:**
+3. **Set the environment variables the harnesses read:**
 
-   | Variable                              | Used by                                                         | Value                                                                                                                                            |
-   | ------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-   | `STREAM_KEEPR_DEPLOY_HEALTH_URL`      | `deploy:verify`, and as the fallback base URL for every harness | The deployed Worker base URL — `https://stream.keepr.digital`, the committed `custom_domain` in `wrangler.jsonc`; `deploy:verify` defaults to it |
-   | `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL` | Every `:deployed` harness                                       | The base URL to accept against, when it differs from the health URL                                                                              |
+   | Variable                                    | Used by                                                         | Value                                                                                                                                            |
+   | ------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | `STREAM_KEEPR_DEPLOY_HEALTH_URL`            | `deploy:verify`, and as the fallback base URL for every harness | The deployed Worker base URL — `https://stream.keepr.digital`, the committed `custom_domain` in `wrangler.jsonc`; `deploy:verify` defaults to it |
+   | `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`       | Every `:deployed` harness                                       | The base URL to accept against, when it differs from the health URL                                                                              |
+   | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL`    | Every `:deployed` harness that calls the API                    | An existing operator's account — a `:deployed` run has no bootstrap secret to create one with                                                    |
+   | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD` | Every `:deployed` harness that calls the API                    | That account's password                                                                                                                          |
 
-   A `:deployed` harness refuses to start without one of them rather than
+   A `:deployed` harness refuses to start without one of the URLs rather than
    guessing at an installation — deliberately kept even with the hostname
    committed, because an acceptance run provisions real state into whatever it
    is pointed at, and that should be a stated choice per session.
 
+   The operator pair is #396's addition: `/api/**` denies by default, so a
+   harness with no session gets 401 from its first provisioning request. Without
+   the pair a `:deployed` run stops with `harness-operator-unavailable` and says
+   which two names to set. Setting `NUXT_ADMIN_BOOTSTRAP_TOKEN` in the shell
+   works instead, if you have armed that secret on the installation for the
+   length of the run.
+
 Local (non-deployed) modes of the same harnesses run against `pnpm preview` and
-need `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY` in `.dev.vars` at the
-repository root; see `.dev.vars.example`. `pnpm preview` stages that file into
-`.output/server/`, which is where Wrangler resolves it from the config. Until
-issue #274 it did not, so a checkout with a perfectly good `.dev.vars` still
-answered 503 from the first authored request. The harnesses now check it before
-opening an installation and stop with a named cause rather than 503s nobody can
-trace. They prove the invariants that do not depend on Cloudflare, and are the
-fast way to find a break before spending a deploy on it.
+need three names in `.dev.vars` at the repository root — see `.dev.vars.example`:
+
+- `NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY`, without which capability minting
+  and Screen Output delivery answer 503;
+- `NUXT_BETTER_AUTH_SECRET`, without which the installation cannot admit anybody
+  at all, sign-in included;
+- `NUXT_ADMIN_BOOTSTRAP_TOKEN`, which is how a local run acquires its operator —
+  it creates its own account (`graphics-acceptance@keepr.digital`, with a
+  password generated per run and kept nowhere) through the first-admin bootstrap.
+
+`pnpm preview` stages that file into `.output/server/`, which is where Wrangler
+resolves it from the config. Until issue #274 it did not, so a checkout with a
+perfectly good `.dev.vars` still answered 503 from the first authored request.
+The harnesses now check all three before opening an installation and stop with a
+named cause rather than 503s nobody can trace. They prove the invariants that do
+not depend on Cloudflare, and are the fast way to find a break before spending a
+deploy on it.
 
 `NUXT_GRAPHICS_ADMIN_TOKEN` is deliberately not required for any of this: no
 route these harnesses call is an admin route, so a blank one cannot stop a run.

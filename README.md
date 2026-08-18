@@ -284,14 +284,24 @@ exceed them.
 
 ### Worker secrets
 
-After building the intended environment, configure its Ably server key against
-the generated Worker config:
+After building the intended environment, configure its secrets against the
+generated Worker config:
 
 ```bash
 pnpm exec wrangler secret put NUXT_ABLY_API_KEY --config .output/server/wrangler.json
+pnpm exec wrangler secret put NUXT_BETTER_AUTH_SECRET --config .output/server/wrangler.json
+pnpm exec wrangler secret put NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY --config .output/server/wrangler.json
 ```
 
 Secrets belong to a specific Worker.
+
+`NUXT_BETTER_AUTH_SECRET` is the one an installation cannot open without.
+`/api/**` denies by default — every route requires a signed-in session unless
+ADR-0010's short allowlist exempts it — and that check resolves through the
+Better Auth instance this secret constructs. Unset, sign-in and every
+authenticated route answer 503 naming the secret, which is an accurate message
+and a completely unusable installation. Generate both of the last two with
+`openssl rand -base64 32`.
 
 ### The first admin account
 

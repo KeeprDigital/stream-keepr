@@ -4,7 +4,6 @@ import type {
 } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleSetPackagePreflightReport } from '~~/shared/types/graphicStyleSetPackage';
 import { randomUUID } from 'node:crypto';
-import { fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	GRAPHIC_STYLE_SET_PACKAGE_MANIFEST_ENTRY,
@@ -12,6 +11,7 @@ import {
 	GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 } from '../../shared/types/graphicStyleSetPackage';
 import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive';
+import { fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**

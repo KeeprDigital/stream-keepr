@@ -29,30 +29,51 @@ import {
 	LOCAL_NUXT_NAME_SURFACES,
 	missingLocalNuxtNames,
 	parseDevVars,
+	sentenceList,
 } from '../../build/devVars.ts';
 import { AcceptanceFailure } from './evidence.mjs';
 
 /**
  * The required names a **local acceptance run** cannot proceed without.
  *
- * One of the two, not both, and the distinction is #130's cell-H lesson applied
- * to a different caller: a notice that fires where its words are false is worse
- * than no notice. `NUXT_GRAPHICS_ADMIN_TOKEN` guards
- * `requireGraphicsAdministrator`, which is mounted only under the
- * `server/api/admin` tree — and no path in `routes.mjs` is an admin path, so no
- * harness can reach it. Blocking a run on that name would refuse a checkout
- * that would have passed.
+ * Not all of them, and the distinction is #130's cell-H lesson applied to a
+ * different caller: a notice that fires where its words are false is worse than
+ * no notice. `NUXT_GRAPHICS_ADMIN_TOKEN` guards `requireGraphicsAdministrator`,
+ * which is mounted only under the `server/api/admin` tree — and no path in
+ * `routes.mjs` is an admin path, so no harness can reach it. Blocking a run on
+ * that name would refuse a checkout that would have passed.
  *
  * `.dev.vars.example` and `docs/operations/graphics-staging-acceptance.md` both
- * already say the signing key is the load-bearing one; this is that sentence
- * made executable.
+ * already say the signing key is load-bearing; this is that sentence made
+ * executable.
+ *
+ * The two auth names joined it on #396, when `/api/**` began denying by default
+ * and every route in `routes.mjs` became a route that needs a signed-in
+ * operator (`./operator.mjs`):
+ *
+ * - `NUXT_BETTER_AUTH_SECRET`, because an installation without it cannot admit
+ *   anybody at all — sign-in itself answers 503 naming the setting — however the
+ *   harness came by its credentials.
+ * - `NUXT_ADMIN_BOOTSTRAP_TOKEN`, because a local run acquires its operator by
+ *   calling the first-admin bootstrap with it. A deployed run is not checked
+ *   here at all and takes the other path, signing in with credentials from the
+ *   environment; that is why this name being required *locally* is not the false
+ *   alarm it would otherwise look like.
+ *
+ * @type {import('../../build/devVars.ts').LocallyRequiredNuxtName[]}
  */
-export const LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES = ['NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY'];
+export const LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES = [
+	'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY',
+	'NUXT_BETTER_AUTH_SECRET',
+	'NUXT_ADMIN_BOOTSTRAP_TOKEN',
+];
 
 /**
  * Required of a checkout, but not of an acceptance run — named here so the
  * partition is total and legible, exactly as `LOCALLY_OPTIONAL_NUXT_NAMES` is
  * in `build/devVars.ts`.
+ *
+ * @type {import('../../build/devVars.ts').LocallyRequiredNuxtName[]}
  */
 export const LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES = ['NUXT_GRAPHICS_ADMIN_TOKEN'];
 
@@ -170,13 +191,9 @@ export function localAcceptanceConfiguration({ deployed, env = {}, readSources }
  * @param {readonly import('../../build/devVars.ts').LocallyRequiredNuxtName[]} missing
  */
 export function localConfigurationNotice(missing) {
-	const names = missing.length === 1
-		? missing[0]
-		: missing.join(' or ');
+	const names = sentenceList(missing, 'or');
 	const surfaces = missing.map(name => LOCAL_NUXT_NAME_SURFACES[name]);
-	const consequence = surfaces.length === 1
-		? `${surfaces[0]} answer 503`
-		: `${surfaces.join(' and ')} answer 503`;
+	const consequence = `${sentenceList(surfaces, 'and')} answer 503`;
 
 	// Why the other required names are absent from this sentence, said rather
 	// than left to be rediscovered. Derived from the partition instead of
@@ -192,7 +209,7 @@ export function localConfigurationNotice(missing) {
 	const unnamed = LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES.filter(name => !missing.includes(name));
 	const unreached = unnamed.length === 0
 		? ''
-		: `${unnamed.join(' and ')} ${unnamed.length === 1 ? 'is' : 'are'} not checked here and a blank one `
+		: `${sentenceList(unnamed, 'and')} ${unnamed.length === 1 ? 'is' : 'are'} not checked here and a blank one `
 			+ 'is not what stopped this: no route an acceptance run calls reads it. ';
 
 	return `Nothing this checkout can give a local installation sets ${names}, so ${consequence} `
@@ -300,6 +317,6 @@ export function requireLocalAcceptanceConfiguration({
 
 	process.stderr.write(`${localConfigurationNotice(decision.missing)}\n`);
 	throw new AcceptanceFailure('harness-local-configuration-missing', {
-		surface: decision.missing.map(name => LOCAL_NUXT_NAME_SURFACES[name]).join(' and '),
+		surface: sentenceList(decision.missing.map(name => LOCAL_NUXT_NAME_SURFACES[name]), 'and'),
 	});
 }

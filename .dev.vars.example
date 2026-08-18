@@ -25,10 +25,21 @@
 # and screen creation would answer 503 under plain `pnpm dev` while every test
 # stayed green. A name already set in `.env` or the shell wins.
 #
-# One of them is load-bearing for a local acceptance run:
-# NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY. Without it, capability minting and
-# Screen Output delivery answer 503, and `pnpm test:delivery:graphics` never
-# reaches anything to assert.
+# Three of them are load-bearing for a local acceptance run, and the harness
+# checks for all three before it opens an installation:
+#
+#   NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY — without it, capability minting
+#   and Screen Output delivery answer 503, and `pnpm test:delivery:graphics`
+#   never reaches anything to assert.
+#
+#   NUXT_BETTER_AUTH_SECRET — since #396 every /api/** route but a handful
+#   requires a signed-in operator, and without this the installation cannot
+#   admit anybody at all: sign-in itself answers 503 naming this name.
+#
+#   NUXT_ADMIN_BOOTSTRAP_TOKEN — how a local harness run acquires that operator.
+#   It creates its own account through the first-admin bootstrap route with this
+#   token. A --deployed run reads no local file and signs in with
+#   STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL and _PASSWORD instead.
 #
 # NUXT_ABLY_API_KEY is the one name here that reaches a third party, so leave it
 # empty unless you have a real key. Neither wrong state announces itself in the

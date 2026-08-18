@@ -2,9 +2,9 @@ import type { GraphicAsset, GraphicsIngestionOperation } from '~~/shared/types/g
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
+import { $fetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 

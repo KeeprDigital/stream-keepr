@@ -1,6 +1,6 @@
-import { fetch } from '@nuxt/test-utils/e2e';
 import { hashPassword } from 'better-auth/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { fetch } from './client';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**

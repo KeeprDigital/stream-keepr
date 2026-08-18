@@ -1,4 +1,4 @@
-import { fetch } from '@nuxt/test-utils/e2e';
+import { fetch } from './client';
 
 let suiteCookie: Promise<string> | undefined;
 

@@ -8,7 +8,6 @@ import type { GraphicAssetReference, GraphicsIngestionOperation } from '~~/share
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHIC_ITEM_KINDS } from '../../shared/modules/graphics/itemDefinitions';
 import { maximalBroadcastGraphicDocument } from '../helpers/broadcastGraphicDocument';
@@ -17,6 +16,7 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
+import { $fetch, fetch } from './client';
 import {
 	createGraphicsAuthorSessionCookie,
 	suiteGraphicsAuthorSessionCookie,

@@ -2,9 +2,9 @@ import type {
 	GraphicAsset,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
+import { $fetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 

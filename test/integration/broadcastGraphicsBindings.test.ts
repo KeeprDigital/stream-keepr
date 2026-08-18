@@ -1,6 +1,5 @@
 import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { GraphicInputDeclaration, GraphicSourceSelectionDeclaration } from '~~/shared/types/graphics';
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createGraphicsHarness,
@@ -11,6 +10,7 @@ import {
 	selectBroadcastGraphicSource,
 	setBroadcastGraphicOverride,
 } from './broadcastGraphicsPlayoutHelpers';
+import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 
 /**

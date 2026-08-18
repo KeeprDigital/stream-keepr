@@ -4,7 +4,7 @@ import type {
 	FeatureMatchSessionCommandResult,
 	FeatureMatchSessionResponse,
 } from '~~/shared/types/featureMatchSession';
-import { $fetch } from '@nuxt/test-utils/e2e';
+import { $fetch } from './client';
 
 let nextCommandId = 0;
 

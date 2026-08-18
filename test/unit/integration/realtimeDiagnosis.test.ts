@@ -337,6 +337,23 @@ describe('the Screen-command route\'s own refusals', () => {
 		);
 	});
 
+	it('are read from the API boundary, whose 401 is composed around every route there is', () => {
+		// #396: the deny-by-default boundary refuses an unauthenticated request to
+		// this path before the handler runs, so 'Authentication is required' is now
+		// as much this route's refusal as 'Event not found' is. ADR-0010 named this
+		// addition in advance — a run whose session lapsed must read as a missing
+		// cookie rather than as a fabricated Ably key.
+		//
+		// Read off the middleware's own literals, which is why they are literals:
+		// the scan resolves a `const` only within the file it is reading, so a
+		// status or a message imported from elsewhere would arrive here as a
+		// refusal it could not read and could not excuse.
+		expect(scan.files).toContain('server/middleware/api-session.ts');
+		expect(scan.refusals).toContainEqual(
+			expect.objectContaining({ statusCode: 401, message: 'Authentication is required' }),
+		);
+	});
+
 	it('are read from a middleware\'s own refusal helpers, not from its body alone', () => {
 		// A middleware that refuses through an imported helper is the shape #277 closed
 		// for routes, and it exists here: `request-body-limit.ts` raises nothing itself
@@ -819,6 +836,7 @@ describe('the middleware the scan is given as entry points', () => {
 	it('is every middleware on disk, so a new one is scanned without anyone remembering', () => {
 		const named = serverMiddlewareFiles().map(file => file.slice(file.lastIndexOf('/') + 1));
 
+		expect(named).toContain('api-session.ts');
 		expect(named).toContain('event-exists.ts');
 		expect(named).toContain('graphics-author-session.ts');
 		expect(named).toContain('request-body-limit.ts');

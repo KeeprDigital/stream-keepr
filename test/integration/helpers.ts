@@ -3,24 +3,33 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
-import { fetch } from '@nuxt/test-utils/e2e';
+import { fetch } from './client';
+import {
+	INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
+	INTEGRATION_BETTER_AUTH_SECRET,
+	INTEGRATION_GRAPHICS_ADMIN_TOKEN,
+	INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
+} from './environment';
 import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis';
 import { getIntegrationWranglerPersistDir, INTEGRATION_MODE_ENV, INTEGRATION_WRANGLER_PERSIST_DIR_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
-export const INTEGRATION_GRAPHICS_ADMIN_TOKEN = 'integration-graphics-admin-token';
-export const INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-export const INTEGRATION_BETTER_AUTH_SECRET = 'integration-better-auth-secret-0000000000';
+
 /**
- * The suite runs with the first-admin bootstrap armed (#394), which a deployed
- * installation does only for the length of one curl. That is deliberate: it is
- * the only way to exercise the route at all, and ADR-0010 asks for dev and
- * preview to arm it as a matter of course. The disarmed 503 — the state a
- * deployed installation lives in — is covered by the unit suite, which can hold
- * both states in one run where a spawned server cannot.
+ * The invented secrets and the suite's operator, re-exported because this file is
+ * where every suite already looks for them. They live in `./environment` so the
+ * authenticated client can read the bootstrap token without this file and that one
+ * importing each other — see the docblock there.
  */
-export const INTEGRATION_ADMIN_BOOTSTRAP_TOKEN = 'integration-admin-bootstrap-token';
+export {
+	INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
+	INTEGRATION_BETTER_AUTH_SECRET,
+	INTEGRATION_GRAPHICS_ADMIN_TOKEN,
+	INTEGRATION_OPERATOR_EMAIL,
+	INTEGRATION_OPERATOR_PASSWORD,
+	INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
+} from './environment';
 
 /**
  * The realtime notices and the diagnosis behind them live in `realtimeDiagnosis`,

@@ -7,8 +7,8 @@ import type {
 	GraphicStyleUpdateReview,
 } from '~~/shared/types/graphicStyleSet';
 import { randomUUID } from 'node:crypto';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { $fetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**
