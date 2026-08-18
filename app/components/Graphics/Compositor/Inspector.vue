@@ -62,6 +62,7 @@ import {
 	graphicItemKindLabel,
 	graphicItemSummary,
 	graphicsHostTokenCatalogue,
+	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
@@ -113,10 +114,12 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
+	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
+import GraphicsCompositorSocialProfileProjections from './SocialProfileProjections.vue';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
@@ -202,6 +205,10 @@ const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
 	label: network.label,
 	value: network.key,
 }));
+const SOCIAL_NETWORK_ICON_SOURCE_OPTIONS = [
+	{ label: 'Static network', value: 'static' },
+	{ label: 'Social Profile Projection', value: 'projection' },
+];
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
 	value: preset.id,
@@ -270,6 +277,31 @@ const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
 const selectedSocialNetworkIcon = computed<SocialNetworkIconGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'social-network-icon' ? selectedItem.value : null,
 );
+const socialProfileProjectionOptions = computed(() => {
+	const current = selection.value;
+	if (current.kind !== 'item' || !current.group)
+		return [];
+	return (current.graphic.socialProfileProjections ?? [])
+		.filter(projection => projection.presentationGroupId === current.group?.id)
+		.map(projection => ({ label: projection.label, value: projection.key }));
+});
+const invalidSocialNetworkIconProjection = computed(() => {
+	const icon = selectedSocialNetworkIcon.value;
+	const network = icon?.network;
+	if (!network || typeof network === 'string')
+		return false;
+	return !socialProfileProjectionOptions.value.some(option => option.value === network.projectionKey);
+});
+
+function updateSocialNetworkIconSource(source: 'static' | 'projection') {
+	if (source === 'static') {
+		patchSelectedItem({ network: 'twitch' });
+		return;
+	}
+	const projectionKey = socialProfileProjectionOptions.value[0]?.value;
+	if (projectionKey)
+		patchSelectedItem({ network: { projectionKey } });
+}
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
@@ -719,7 +751,24 @@ const availablePlaceholders = computed<Array<{ key: string; label: string }>>(()
 	const current = selection.value;
 	if (current.kind !== 'graphic' && current.kind !== 'item')
 		return [];
-	return (current.graphic.inputs ?? []).map(input => ({ key: input.key, label: input.label }));
+	const inputs = (current.graphic.inputs ?? []).map(input => ({ key: input.key, label: input.label }));
+	const valueLabels = {
+		networkLabel: 'Projected network label',
+		handle: 'Projected handle',
+		profileUrl: 'Projected profile URL',
+	} as const;
+	const projections = current.kind === 'item'
+		? (current.graphic.socialProfileProjections ?? []).filter(projection =>
+				projection.presentationGroupId === current.group?.id,
+			)
+		: current.graphic.socialProfileProjections ?? [];
+	const projected = projections.flatMap(projection =>
+		SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES.map(value => ({
+			key: `${projection.key}.${value}`,
+			label: `${valueLabels[value]} — ${projection.label}`,
+		})),
+	);
+	return [...inputs, ...projected];
 });
 
 const availablePlaceholderKeys = computed(() => availablePlaceholders.value.map(entry => entry.key));
@@ -740,7 +789,10 @@ const unresolvedPlaceholders = computed<string[]>(() => {
 		return [];
 
 	const available = new Set(availablePlaceholderKeys.value);
-	return graphicTextTemplateInputKeys(item.text).filter(key => !available.has(key));
+	return [
+		...graphicTextTemplateInputKeys(item.text),
+		...graphicTextTemplateDottedPlaceholderKeys(item.text),
+	].filter(key => !available.has(key));
 });
 
 const INPUT_TYPE_OPTIONS = GRAPHIC_INPUT_TYPE_VALUES.map(value => ({ label: value, value }));
@@ -914,7 +966,10 @@ const styleablePlaceholders = computed(() => {
 		return [];
 
 	const available = new Set(availablePlaceholderKeys.value);
-	return graphicTextTemplateInputKeys(current.item.text).filter(key => available.has(key));
+	return [
+		...graphicTextTemplateInputKeys(current.item.text),
+		...graphicTextTemplateDottedPlaceholderKeys(current.item.text),
+	].filter(key => available.has(key));
 });
 
 function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
@@ -1228,6 +1283,21 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				@update:graphics="emit('update:graphics', $event)"
 			/>
 		</template>
+
+		<!--
+			Social Profile Projections expose correlated, read-only values and own one
+			Presentation Group, so they are authored beside — never as — Graphic Inputs
+			and Graphic Source Selections. Feature Match hosts do not offer this vocabulary.
+		-->
+		<GraphicsCompositorSocialProfileProjections
+			v-if="selection.kind === 'graphic' && authorsInputs"
+			:graphics="graphics"
+			:selected-target="selectedTarget"
+			:canvas-width="canvasWidth"
+			:canvas-height="canvasHeight"
+			:writable="writable"
+			@update:graphics="emit('update:graphics', $event)"
+		/>
 
 		<template v-if="selectedItem">
 			<UFormField label="Label" size="sm">
@@ -1897,11 +1967,19 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				<p class="text-xs font-semibold text-muted">
 					Social Network Icon
 				</p>
-				<UFormField label="Social network" size="sm">
+				<UFormField label="Network source" size="sm">
 					<USelect
-						:model-value="typeof selectedSocialNetworkIcon.network === 'string'
-							? selectedSocialNetworkIcon.network
-							: undefined"
+						:model-value="typeof selectedSocialNetworkIcon.network === 'string' ? 'static' : 'projection'"
+						:items="SOCIAL_NETWORK_ICON_SOURCE_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-source"
+						@update:model-value="updateSocialNetworkIconSource($event as 'static' | 'projection')"
+					/>
+				</UFormField>
+				<UFormField v-if="typeof selectedSocialNetworkIcon.network === 'string'" label="Social network" size="sm">
+					<USelect
+						:model-value="selectedSocialNetworkIcon.network"
 						:items="SOCIAL_NETWORK_OPTIONS"
 						value-key="value"
 						class="w-full"
@@ -1909,6 +1987,23 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@update:model-value="patchSelectedItem({ network: $event as SupportedSocialNetwork })"
 					/>
 				</UFormField>
+				<UFormField v-else label="Social Profile Projection" size="sm">
+					<USelect
+						:model-value="selectedSocialNetworkIcon.network.projectionKey"
+						:items="socialProfileProjectionOptions"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-projection"
+						@update:model-value="patchSelectedItem({ network: { projectionKey: String($event) } })"
+					/>
+				</UFormField>
+				<p
+					v-if="invalidSocialNetworkIconProjection"
+					class="text-xs text-warning"
+					data-testid="social-network-icon-projection-invalid"
+				>
+					This icon is outside that projection's Presentation Group. Move or replace it before saving.
+				</p>
 				<div class="grid grid-cols-2 gap-2">
 					<UFormField label="Colour" size="sm">
 						<UIColorPicker

@@ -3,14 +3,18 @@ import { describe, expect, it } from 'vitest';
 import {
 	addGraphicGroupChild,
 	addGraphicItem,
+	addSocialProfileProjection,
 	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
+	associateSocialProfileProjection,
 	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
 	clearMediaGraphicItemAsset,
 	createBroadcastGraphic,
 	deleteBroadcastGraphic,
 	deleteGraphicItem,
+	deleteGraphicSourceSelection,
+	deleteSocialProfileProjection,
 	findGraphicItem,
 	flattenGraphicItems,
 	GRAPHIC_RULE_PRESET_HEIGHT,
@@ -34,6 +38,7 @@ import {
 	patchPlayerLifeGraphicItem,
 	patchShapeCorner,
 	patchShapeGeometry,
+	patchSocialProfileProjection,
 	selectMediaGraphicItemAsset,
 	setGraphicFillKind,
 	setMediaClipGeometry,
@@ -67,6 +72,150 @@ function surfaced(item: GraphicItemConfig | GraphicGroupChildConfig | undefined)
 }
 
 describe('broadcastGraphicAuthoring', () => {
+	it('creates a Social Profile Projection with an ordinary starter Presentation Group', () => {
+		const source = { key: 'talent', label: 'Talent', kind: 'talent' as const };
+		const initial = { ...graphic('a'), sources: [source] };
+
+		const projected = addSocialProfileProjection(initial, {
+			label: 'Talent social profile',
+			sourceKey: source.key,
+			projectionKey: 'talent-social-profile',
+			presentationGroupId: 'profile-group',
+			iconItemId: 'profile-icon',
+			handleItemId: 'profile-handle',
+			...CANVAS,
+		});
+
+		expect(projected.socialProfileProjections).toEqual([{
+			key: 'talent-social-profile',
+			label: 'Talent social profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'profile-group',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}]);
+		expect(projected.items).toEqual([
+			expect.objectContaining({
+				type: 'group',
+				id: 'profile-group',
+				children: [
+					expect.objectContaining({
+						type: 'social-network-icon',
+						id: 'profile-icon',
+						network: { projectionKey: 'talent-social-profile' },
+					}),
+					expect.objectContaining({
+						type: 'text',
+						id: 'profile-handle',
+						text: '{talent-social-profile.handle}',
+					}),
+				],
+			}),
+		]);
+		expect(initial.items).toEqual([]);
+	});
+
+	it('associates an eligible existing Graphic Group with only one Social Profile Projection', () => {
+		const initial = addGraphicItem({
+			...graphic('a'),
+			sources: [
+				{ key: 'left-talent', label: 'Left Talent', kind: 'talent' },
+				{ key: 'right-talent', label: 'Right Talent', kind: 'talent' },
+			],
+		}, { kind: 'group', id: 'existing', ...CANVAS }).graphic;
+
+		const left = associateSocialProfileProjection(initial, {
+			label: 'Left profile',
+			projectionKey: 'left-profile',
+			sourceKey: 'left-talent',
+			presentationGroupId: 'existing',
+		});
+		const refused = associateSocialProfileProjection(left, {
+			label: 'Right profile',
+			projectionKey: 'right-profile',
+			sourceKey: 'right-talent',
+			presentationGroupId: 'existing',
+		});
+
+		expect(left.socialProfileProjections).toEqual([
+			expect.objectContaining({ key: 'left-profile', presentationGroupId: 'existing' }),
+		]);
+		expect(refused).toEqual(left);
+		expect(left.items).toEqual(initial.items);
+	});
+
+	it('edits a Social Profile Projection within its authored dwell and transition bounds', () => {
+		const initial = addSocialProfileProjection({
+			...graphic('a'),
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+		}, {
+			label: 'Profile',
+			sourceKey: 'talent',
+			projectionKey: 'profile',
+			presentationGroupId: 'group',
+			iconItemId: 'icon',
+			handleItemId: 'handle',
+			...CANVAS,
+		});
+
+		const edited = patchSocialProfileProjection(initial, 'profile', {
+			label: 'Main Talent',
+			dwellMs: 60_000,
+			transition: 'slide-left',
+			transitionDurationMs: 2_000,
+		});
+		const refused = patchSocialProfileProjection(edited, 'profile', { dwellMs: 60_001 });
+
+		expect(edited.socialProfileProjections?.[0]).toMatchObject({
+			label: 'Main Talent',
+			dwellMs: 60_000,
+			transition: 'slide-left',
+			transitionDurationMs: 2_000,
+		});
+		expect(refused).toEqual(edited);
+	});
+
+	it('requires an explicit combined deletion for a projection with dependent content', () => {
+		const projected = addSocialProfileProjection({
+			...graphic('a'),
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+		}, {
+			label: 'Profile',
+			sourceKey: 'talent',
+			projectionKey: 'profile',
+			presentationGroupId: 'group',
+			iconItemId: 'icon',
+			handleItemId: 'handle',
+			...CANVAS,
+		});
+
+		expect(deleteGraphicItem(projected, 'group')).toEqual(projected);
+		expect(deleteSocialProfileProjection(projected, 'profile', { deletePresentationGroup: false }))
+			.toEqual(projected);
+
+		const removed = deleteSocialProfileProjection(projected, 'profile', { deletePresentationGroup: true });
+		expect(removed.socialProfileProjections).toEqual([]);
+		expect(removed.items).toEqual([]);
+	});
+
+	it('keeps a Talent source while a Social Profile Projection still references it', () => {
+		const projected = addSocialProfileProjection({
+			...graphic('a'),
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+		}, {
+			label: 'Profile',
+			sourceKey: 'talent',
+			projectionKey: 'profile',
+			presentationGroupId: 'group',
+			iconItemId: 'icon',
+			handleItemId: 'handle',
+			...CANVAS,
+		});
+
+		expect(deleteGraphicSourceSelection([projected], 'a', 'talent')).toEqual([projected]);
+	});
+
 	it('adds a Broadcast Graphic to the front of the Screen stack without mutating the stack', () => {
 		const stack = [graphic('a')];
 
