@@ -143,7 +143,7 @@ Other sessions may observe accepted authoring changes but cannot modify the leas
 An account an administrator created for one person, holding the credential they sign in with and the name every surface shows for them.
 It is the installation's only durable identity and the one that owns work: a Graphics Ingestion Operation records the user as its initiator, idempotency keys are unique within the user, and the Evidence Ledger names the user as actor with the display name resolved when the ledger is read.
 Because ownership belongs to the person rather than to a browser, an operation survives the browser that started it and is resumed by signing in anywhere; the same idempotency key sent from a second browser continues the first operation instead of starting a second.
-There is no self-signup: an administrator creates the account, and a single-use expiring reset link is how its password is first set (ADR-0010).
+There is no self-signup: an administrator creates the account, and a **Password Reset Link** is how its password is first set (ADR-0010).
 _Avoid_: author, graphics author — those name a role a user may be acting in, not the identity; account is acceptable when the subject is the credential rather than the person.
 
 **Session**:
@@ -151,6 +151,14 @@ One signed-in browser: server-side, revocable, and expiring seven days after its
 It is what admits a request — the deny-by-default API boundary over `/api/**` requires one (ADR-0010, which supersedes ADR-0008's perimeter-trust stance) — and it is the granularity of a Graphics Authoring Lease, because one person signed in from two browsers is two concurrent editors and a lease held per user would let them overwrite each other in silence.
 A session never owns work; it says which browser is asking, and the takeover surface resolves it back to a user for display.
 _Avoid_: Graphics Author Session — the anonymous self-issued identity this replaced, retired at ADR-0010's cutover; login, which names the act rather than the thing.
+
+**Password Reset Link**:
+The single-use, expiring credential an administrator hands to a person out of band so they can set their own password.
+It is how an account acquires its first password and how a forgotten one is replaced: this installation has no email sender and no self sign-up, so nothing is ever sent anywhere and the link itself is the whole of an invite (ADR-0010).
+Creating an account mints one and returns it exactly once; nothing stores it and no route reads it back, so a link lost before handover is replaced by issuing another rather than recovered.
+Its token travels in the URL fragment rather than the query, so it is never sent to the server as part of the navigation and stays out of every request log between the browser and the Worker — the same reason a Screen Output Asset Capability travels there.
+Redeeming one consumes it and sets the password; it never creates a session, and it neither ends the account's existing sessions nor lifts a ban.
+_Avoid_: invite token, activation link — the same artifact issues an invite and replaces a forgotten password, and a name for only the first would leave the second unnamed.
 
 **Graphic Style Set**:
 A named reusable authoring resource in the shared scope of the graphics template libraries that maintains a cohesive visual and motion language across independently portable Broadcast Graphic Templates and Feature Match Layout Templates.

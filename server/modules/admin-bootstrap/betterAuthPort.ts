@@ -1,6 +1,7 @@
 import type { ServerAuth } from '~~/server/utils/auth';
 import type { AdminBootstrapPort } from '.';
 import { serverAuth } from '~~/server/utils/auth';
+import { setCredentialPassword } from '~~/server/utils/betterAuthCredentials';
 import { ADMIN_ROLE } from '.';
 
 /**
@@ -73,19 +74,11 @@ export async function betterAuthBootstrapPort(
 			return { id: user.id, roles: [ADMIN_ROLE] };
 		},
 
-		setPassword: async (userId, password) => {
-			const hashedPassword = await context.password.hash(password);
-			const accounts = await context.internalAdapter.findAccounts(userId);
-			// A user created for a future sign-in method — or by a version that
-			// stopped writing one — has no credential account to update. Creating it
-			// is what `setUserPassword` does in the same case, and skipping it would
-			// leave a break-glass reset reporting success over an account that still
-			// cannot sign in.
-			if (accounts.some(account => account.providerId === 'credential'))
-				await context.internalAdapter.updatePassword(userId, hashedPassword);
-			else
-				await context.internalAdapter.createAccount({ userId, providerId: 'credential', accountId: userId, password: hashedPassword });
-		},
+		// A user created for a future sign-in method — or by a version that stopped
+		// writing one — has no credential account to update, which is the shared
+		// writer's create-where-absent arm; skipping it would leave a break-glass
+		// reset reporting success over an account that still cannot sign in.
+		setPassword: async (userId, password) => setCredentialPassword(context, userId, password),
 
 		setRoles: async (userId, roles) => {
 			await context.internalAdapter.updateUser(userId, { role: encodeRoles(roles) });

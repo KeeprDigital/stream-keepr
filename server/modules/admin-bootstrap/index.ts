@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import { assertPasswordWithinBounds, normalizeAccountEmail } from '~~/server/utils/betterAuthCredentials';
 import { requireSharedSecret } from '~~/server/utils/sharedSecretSurface';
 
 /**
@@ -106,22 +107,6 @@ export interface EnsureAdminOutcome {
 }
 
 /**
- * The email an account is keyed on, which is not necessarily the one that was
- * typed: Better Auth lowercases before it stores.
- *
- * Not a lookup fix — `internalAdapter.findUserByEmail` lowercases its own
- * argument, so the Better Auth port finds the account either way, and a
- * mutation run proved as much by leaving that path green. It is here because
- * the `AdminBootstrapPort` interface promises no such thing, and a decision
- * that depends on a courtesy of the implementation it happens to be handed is a
- * decision that changes when the implementation does. It also settles what the
- * response reports: the key, not the operator's capitalisation.
- */
-export function normalizeBootstrapEmail(email: string) {
-	return email.trim().toLowerCase();
-}
-
-/**
  * Create-or-reset, as ADR-0010 specifies it: a new email becomes an admin
  * account, an existing one is given the supplied password and the admin role if
  * it lacks it.
@@ -146,34 +131,22 @@ export function normalizeBootstrapEmail(email: string) {
  * not who is already signed in — the same as Better Auth's own
  * `setUserPassword`, which is the endpoint this stands in for. Worth knowing
  * before reaching for this route as an answer to a compromised account: it is
- * not one, and revocation is #399's surface.
+ * not one. Revocation lives on the user administration surface (#399,
+ * `server/api/admin/users/[userId]/sessions.delete.ts`), which is also where
+ * banning is.
  */
 export async function ensureAdminAccount(
 	port: AdminBootstrapPort,
 	request: EnsureAdminRequest,
 ): Promise<EnsureAdminOutcome> {
-	const email = normalizeBootstrapEmail(request.email);
+	const email = normalizeAccountEmail(request.email);
 
 	// Better Auth's own bounds, read from the running configuration rather than
-	// copied, so a changed `minPasswordLength` cannot leave this route admitting
-	// a password the sign-in path would then reject. The check has to be here:
-	// `createUser` — unlike `signUpEmail` and `setUserPassword` — enforces
-	// neither bound, so without it an empty password hashes and stores happily
-	// and the installation's first admin has no password at all.
-	if (request.password.length < port.minPasswordLength) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: `Password must be at least ${port.minPasswordLength} characters`,
-		});
-	}
-	if (request.password.length > port.maxPasswordLength) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: `Password must be at most ${port.maxPasswordLength} characters`,
-		});
-	}
+	// copied. The check has to be here: `createUser` — unlike `signUpEmail` and
+	// `setUserPassword` — enforces neither bound, so without it an empty password
+	// hashes and stores happily and the installation's first admin has no
+	// password at all.
+	assertPasswordWithinBounds(port, request.password);
 
 	const existing = await port.findByEmail(email);
 	if (!existing) {

@@ -76,15 +76,16 @@ export const SESSION_EXEMPT_API_PATHS: readonly string[] = [
  *   ADR-0010 leaves the shared token untouched until a roles-and-permissions
  *   effort redraws that seam, and it names that as the successor work.
  *
- * **The admin exemption is an exemption, not a second guard.** Each of the
- * eighteen routes under `/api/admin/` calls `requireGraphicsAdministrator`
+ * **The admin exemption is an exemption, not a second guard.** Every route
+ * under `/api/admin/` calls `requireGraphicsAdministrator`
  * itself, and that — not this file — is what refuses a caller with no token.
  * Checking the token here instead would look stronger and be worse: the guard
  * lives in `server/modules/**`, which a middleware's refusal graph deliberately
  * stops short of (`test/helpers/routeRefusalScan.ts`), so its 403 would become
  * a refusal composed around every route in the application that no
  * exhaustiveness check could see. The residual — an admin route added without
- * its own guard — is closed by a test that reads all eighteen graphs instead.
+ * its own guard — is closed by a test that reads every one of those graphs
+ * instead.
  */
 export const SESSION_EXEMPT_API_PREFIXES: readonly string[] = [
 	'/api/auth/',

@@ -184,8 +184,9 @@ describe('useRequestFeedback', () => {
 
 		/**
 		 * And the other direction: a 503 is not itself evidence of a preserved message.
-		 * `requireGraphicsAuthorSession` raises one whose cause matches no mapper branch,
-		 * and it reaches a client carrying the placeholder written over it.
+		 * A route that raises one whose cause matches no mapper branch — which is
+		 * every hand-rolled `createError` the #321 sweep did not classify — reaches a
+		 * client carrying the placeholder written over it.
 		 */
 		it('still shows the transport line for a 503 the sanitizer got to', async () => {
 			const reported = await reportedMessage(transportFailure({

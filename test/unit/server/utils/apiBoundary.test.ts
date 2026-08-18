@@ -165,7 +165,9 @@ describe('which API paths require a session', () => {
 describe('the public surface, counted against the routes on disk', () => {
 	it('is found at all, so this cannot pass by scanning nothing', () => {
 		expect(routeFiles.length).toBeGreaterThan(150);
-		expect(adminRouteFiles.length).toBe(18);
+		// Eighteen until #399 added the seven user administration routes, which
+		// join the surface `x-graphics-admin-token` alone admits.
+		expect(adminRouteFiles.length).toBe(25);
 	});
 
 	it('is exactly these routes, and every one of them is a decision ADR-0010 records', () => {
@@ -196,7 +198,7 @@ describe('the public surface, counted against the routes on disk', () => {
 	});
 
 	it('exempts the whole admin surface and nothing else by that clause', () => {
-		// Stated as "all eighteen" rather than as a list, because the clause
+		// Stated as "all of them" rather than as a list, because the clause
 		// ADR-0010 records is about the surface: `x-graphics-admin-token` alone
 		// satisfies the boundary there, which is exactly today's posture.
 		expect(publicRouteFiles.filter(file => file.startsWith('server/api/admin/'))).toEqual(adminRouteFiles);

@@ -36,31 +36,23 @@ short — nothing here reshapes data.
    to answer anything sitting at `awaiting-confirmation`. The Operations Cockpit
    (`/admin/graphics-assets`) lists exactly what is unfinished, under Graphics
    Ingestion Operations.
-3. **Decide how every author gets an account.** Every author needs one before
-   the cutover, or they arrive on the new build with nothing to sign in as. At
-   this tip the first-admin bootstrap is the only thing that makes one, and
-   **it makes administrators** — `role: admin`, which carries Better Auth's
-   admin API: creating accounts, banning, revoking sessions, setting other
-   people's passwords. Run once per author and every author holds that. It also
-   grants the role to an existing account that lacks it, so it is not a way to
-   make an ordinary user by accident either.
+3. **Give every author an account.** Every author needs one before the cutover,
+   or they arrive on the new build with nothing to sign in as.
 
-   So this is a decision rather than a step, and it is the owner's:
+   Use the user administration surface at `/admin/users` (#399), which is what
+   creating an account here means: it makes an **ordinary** account with no
+   password at all and answers with a single-use, expiring **Password Reset
+   Link** you hand over out of band. Nothing is emailed — this installation has
+   no sender — so the link _is_ the invite, it is returned exactly once, and a
+   link lost before handover is replaced by issuing another.
 
-   - **Wait for #399**, which lands the invite-and-reset surface that creates
-     ordinary accounts. Authors sign in after that ticket rather than at this
-     one. Nothing in this cutover requires them to sign in on day one — an
-     operation started before it is drained or reclaimed either way.
-   - **Pre-create them now**, accepting that every author is an administrator of
-     this installation until #399 can make them otherwise. Reasonable for a
-     small trusted team, which is the installation ADR-0010 is designed for; it
-     is still worth saying out loud rather than discovering from a role column.
-
-   If you pre-create, the ceremony changes shape: the README and
-   `server/api/bootstrap/ensure-admin.post.ts` both describe it as "set the
-   secret, call this once, delete the secret", and here it is one call **per
-   author** before the secret is deleted. Delete it when the last one is made —
-   the arming window is what the ceremony bounds, not the number of calls.
+   **Do not use the first-admin bootstrap for this.** It is the break-glass
+   route, and every account it makes is an administrator: `role: admin`, which
+   carries the admin API — creating accounts, banning, revoking sessions,
+   setting other people's passwords. It also appends that role to an existing
+   account that lacks it, so it cannot be used to make an ordinary user even
+   deliberately. Reserve it for install #1 and for a lockout that has lost every
+   administrator.
 
 Anything still unfinished when the window closes is not a blocker. It is
 reclaimed by the ordinary 24-hour staged-input retention sweep.
@@ -89,8 +81,8 @@ deploy rewrites a row of graphics data.
 
    An account with a blank name is named by nobody — the notice falls back to
    "Another session holds…", which is the surface being honest rather than the
-   lease being broken. Verify with an account that has a name, which is what the
-   bootstrap asks for.
+   lease being broken. Verify with an account that has a name, which is what
+   `/admin/users` asks for when it creates one.
 
 ## The known wart
 
