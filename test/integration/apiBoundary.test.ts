@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anonymousFetch, fetch } from './client';
+import { anonymousFetch, fetch, url } from './client';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 /**
@@ -138,9 +138,15 @@ describe('the surfaces the boundary exempts', () => {
 		// that the boundary did not stand in front of the router. Better Auth's own
 		// 401 is a different refusal from the boundary's, and the message is what
 		// tells them apart.
+		//
+		// `Origin` because the request has to get past Better Auth's own CSRF
+		// defence to reach the password check at all: since #410 that defence is
+		// live in this suite, and without the header the answer is its 403 rather
+		// than the 401 this test is about. Anonymous is not the same as unattributed
+		// — a signed-out browser still says where it came from.
 		const { status, message } = await anonymous('/api/auth/sign-in/email', {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+			headers: { 'content-type': 'application/json', 'origin': url('/') },
 			body: JSON.stringify({ email: 'nobody@keepr.digital', password: 'not-a-password' }),
 		});
 

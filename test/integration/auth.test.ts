@@ -1,6 +1,6 @@
 import { hashPassword } from 'better-auth/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fetch } from './client';
+import { fetch, url } from './client';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -28,12 +28,22 @@ function cookieHeaderFrom(response: Awaited<ReturnType<typeof fetch>>): string {
 		.join('; ');
 }
 
-async function postJson(path: string, body: unknown, cookie?: string) {
+/**
+ * A POST that says where it came from, because a browser does.
+ *
+ * `origin` defaults to this spawned server's own address and is overridable so
+ * the refusals below can send something else. Better Auth compares it against
+ * the trusted origins it builds from `AUTH_ALLOWED_HOSTS`, which is why the
+ * spawned server's random port has to be admitted by a loopback pattern rather
+ * than by a fixed name (#410).
+ */
+async function postJson(path: string, body: unknown, cookie?: string, origin: string | null = url('/')) {
 	return fetch(path, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			...(cookie ? { Cookie: cookie } : {}),
+			...(origin === null ? {} : { Origin: origin }),
 		},
 		body: JSON.stringify(body),
 	});
@@ -92,6 +102,41 @@ describe('auth foundation', () => {
 			password: 'not-the-password',
 		});
 		expect(signIn.status).toBe(401);
+	});
+
+	/**
+	 * #410's half, and the reason every request in this file now carries an
+	 * `Origin`: the CSRF defence is live against the mounted handler.
+	 *
+	 * It was not, until `authStaticOptions` stated `advanced.disableOriginCheck`.
+	 * Better Auth turns the check off under `NODE_ENV === 'test'`, and the server
+	 * this suite spawns inherits vitest's — so these two requests both answered
+	 * 200 here while a built Worker refused them. The behaviour itself is pinned
+	 * where it can be reasoned about without a spawned server, in
+	 * `test/unit/server/utils/authOriginCheck.test.ts`; what these two add is that
+	 * the mounted route really is the configured instance.
+	 */
+	it('refuses a session-carrying request that sends no Origin', async () => {
+		const signIn = await postJson('/api/auth/sign-in/email', {
+			email: FIXTURE_EMAIL,
+			password: FIXTURE_PASSWORD,
+		});
+		expect(signIn.status).toBe(200);
+
+		const signOut = await postJson('/api/auth/sign-out', {}, cookieHeaderFrom(signIn), null);
+
+		expect(signOut.status).toBe(403);
+	});
+
+	it('refuses a sign-in offered by another site', async () => {
+		const signIn = await postJson(
+			'/api/auth/sign-in/email',
+			{ email: FIXTURE_EMAIL, password: FIXTURE_PASSWORD },
+			undefined,
+			'https://not-this-installation.example',
+		);
+
+		expect(signIn.status).toBe(403);
 	});
 
 	it('refuses public sign-up, which is disabled by design', async () => {

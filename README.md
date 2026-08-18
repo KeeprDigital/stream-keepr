@@ -303,6 +303,19 @@ authenticated route answer 503 naming the secret, which is an accurate message
 and a completely unusable installation. Generate both of the last two with
 `openssl rand -base64 32`.
 
+### The hostnames the installation answers on
+
+`AUTH_ALLOWED_HOSTS` in `server/utils/authOptions.ts` is the list, and it is not
+a deploy setting — it is the allowlist Better Auth compares a state-changing
+request's `Origin` against, so a hostname missing from it answers `403` at
+sign-in rather than failing to route. It holds the custom domain
+`wrangler.jsonc` attaches, plus loopback with any port for `pnpm preview` and
+the integration suite.
+
+A deploy's `*.workers.dev` address is deliberately absent (#410): admitting the
+whole subdomain would trust hosts nobody here controls. Signing in against one
+means adding that exact hostname to the list and rebuilding.
+
 ### The first admin account
 
 Accounts are created by an admin and there is no self sign-up, so a fresh
