@@ -97,6 +97,12 @@ export function createMockTalent(overrides?: Partial<DbEventTalent>): DbEventTal
 		id: 1,
 		eventId: 1,
 		name: 'Test Commentator',
+		twitchHandle: null,
+		youtubeHandle: null,
+		xHandle: null,
+		instagramHandle: null,
+		tiktokHandle: null,
+		blueskyHandle: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

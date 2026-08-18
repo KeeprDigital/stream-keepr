@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
+import type { SocialProfiles, SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Talent } from '~/types';
+import {
+	normalizeSocialProfileInput,
+	SocialProfileInputError,
+	SUPPORTED_SOCIAL_NETWORKS,
+} from '~~/shared/socialProfiles';
 
-/** A row of the card: `id` is the talent it came from, absent on one just added. */
 interface TalentRow {
 	id?: number;
 	name: string;
+	socialProfiles: SocialProfiles;
+}
+
+interface TalentEditorValue {
+	name: string;
+	socialProfiles: Record<SupportedSocialNetwork, string>;
 }
 
 const props = defineProps<{
@@ -17,109 +28,112 @@ const emit = defineEmits<{
 	(e: 'submit', talents: TalentRow[]): void;
 }>();
 
-const editingTalents = ref<Set<number>>(new Set());
-const editingValues = ref<Record<number, string>>({});
+const editingIndex = ref<number | null>(null);
+const editingValue = ref<TalentEditorValue | null>(null);
+const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
+const hasActiveEdit = computed(() => editingIndex.value !== null);
 
-// Computed to check if any talents are being edited
-const hasActiveEdits = computed(() => editingTalents.value.size > 0);
+function rowFromTalent(talent: Talent): TalentRow {
+	return {
+		id: talent.id,
+		name: talent.name,
+		socialProfiles: { ...talent.socialProfiles },
+	};
+}
 
-// Each row carries the id of the talent it came from, so the save can tell one
-// namesake from another and can rename in place instead of replacing the row —
-// which would hand the same person a new id and drop their commentator seat. A
-// row the operator just added has no talent behind it yet, hence no id.
 const { formData: talentsData, isDirty, reset: resetForm } = useForm({
-	initialData: computed<TalentRow[]>(() => props.talents.map(t => ({ id: t.id, name: t.name }))),
-	onReset: () => {
-		// Clear edit states on reset
-		editingTalents.value.clear();
-		editingValues.value = {};
-	},
+	initialData: computed<TalentRow[]>(() => props.talents.map(rowFromTalent)),
+	onReset: closeEditor,
 });
 
-// Register dirty state with page's navigation guard
 useRegisterDirtyState(isDirty);
 
-// Computed to determine if save should be disabled
-const canSave = computed(() => isDirty.value && !hasActiveEdits.value);
+const canSave = computed(() => isDirty.value && !hasActiveEdit.value);
+
+function editorValue(row: TalentRow): TalentEditorValue {
+	return {
+		name: row.name,
+		socialProfiles: Object.fromEntries(
+			SUPPORTED_SOCIAL_NETWORKS.map(network => [network.key, row.socialProfiles[network.key] ?? '']),
+		) as Record<SupportedSocialNetwork, string>,
+	};
+}
 
 function addTalent() {
-	const newTalent: TalentRow = { name: '' };
-	talentsData.value.push(newTalent);
-
-	const newIndex = talentsData.value.length - 1;
-	startEditing(newIndex);
+	talentsData.value.push({ name: '', socialProfiles: {} });
+	startEditing(talentsData.value.length - 1);
 }
 
 function startEditing(index: number) {
-	editingTalents.value.add(index);
-	editingValues.value[index] = talentsData.value[index]?.name || '';
+	const row = talentsData.value[index];
+	if (!row)
+		return;
+
+	editingIndex.value = index;
+	editingValue.value = editorValue(row);
+	editingErrors.value = {};
 }
 
-function stopEditing(index: number) {
-	editingTalents.value.delete(index);
-	delete editingValues.value[index];
+function closeEditor() {
+	editingIndex.value = null;
+	editingValue.value = null;
+	editingErrors.value = {};
 }
 
-function saveTalentEdit(index: number) {
-	if (talentsData.value[index] && editingValues.value[index] !== undefined) {
-		const trimmedValue = editingValues.value[index].trim();
+function cancelTalentEdit() {
+	const index = editingIndex.value;
+	if (index !== null && !talentsData.value[index]?.name)
+		talentsData.value.splice(index, 1);
+	closeEditor();
+}
 
-		if (trimmedValue) {
-			talentsData.value[index].name = trimmedValue;
-			stopEditing(index);
+function saveTalentEdit() {
+	const index = editingIndex.value;
+	const value = editingValue.value;
+	if (index === null || !value || !talentsData.value[index])
+		return;
+
+	const name = value.name.trim();
+	const errors: typeof editingErrors.value = {};
+	if (!name)
+		errors.name = 'Enter a Talent name';
+
+	const socialProfiles: SocialProfiles = {};
+	for (const network of SUPPORTED_SOCIAL_NETWORKS) {
+		try {
+			const handle = normalizeSocialProfileInput(network.key, value.socialProfiles[network.key]);
+			if (handle !== undefined)
+				socialProfiles[network.key] = handle;
+		}
+		catch (error) {
+			errors[network.key] = error instanceof SocialProfileInputError
+				? error.message
+				: 'Invalid Social Profile';
 		}
 	}
-}
 
-function cancelTalentEdit(index: number) {
-	if (talentsData.value[index]) {
-		// If this is a new talent (empty name), remove it
-		if (!talentsData.value[index].name) {
-			removeTalent(index);
-		}
-		else {
-			stopEditing(index);
-		}
-	}
+	editingErrors.value = errors;
+	if (Object.keys(errors).length > 0)
+		return;
+
+	talentsData.value[index] = {
+		...talentsData.value[index],
+		name,
+		socialProfiles,
+	};
+	closeEditor();
 }
 
 function removeTalent(index: number) {
-	if (talentsData.value) {
-		talentsData.value.splice(index, 1);
-		stopEditing(index);
-
-		// Update edit state indices after removal
-		const newEditingTalents = new Set<number>();
-		const newEditingValues: Record<number, string> = {};
-
-		editingTalents.value.forEach((editIndex) => {
-			if (editIndex > index) {
-				newEditingTalents.add(editIndex - 1);
-				// Fix: Check if the value exists before using it
-				const editValue = editingValues.value[editIndex];
-				if (editValue !== undefined) {
-					newEditingValues[editIndex - 1] = editValue;
-				}
-			}
-			else if (editIndex < index) {
-				newEditingTalents.add(editIndex);
-				// Fix: Check if the value exists before using it
-				const editValue = editingValues.value[editIndex];
-				if (editValue !== undefined) {
-					newEditingValues[editIndex] = editValue;
-				}
-			}
-		});
-
-		editingTalents.value = newEditingTalents;
-		editingValues.value = newEditingValues;
-	}
+	talentsData.value.splice(index, 1);
+	if (editingIndex.value === index)
+		closeEditor();
 }
 
 function getDropdownItems(index: number): DropdownMenuItem[] {
 	return [
 		{
-			label: 'Edit Name',
+			label: 'Edit',
 			icon: 'i-lucide-edit',
 			onSelect: () => startEditing(index),
 		},
@@ -132,21 +146,9 @@ function getDropdownItems(index: number): DropdownMenuItem[] {
 	];
 }
 
-function handleKeydown(event: KeyboardEvent, index: number) {
-	if (event.key === 'Enter') {
-		event.preventDefault();
-		saveTalentEdit(index);
-	}
-	else if (event.key === 'Escape') {
-		event.preventDefault();
-		cancelTalentEdit(index);
-	}
-}
-
 function handleSubmit() {
-	if (canSave.value) {
+	if (canSave.value)
 		emit('submit', talentsData.value);
-	}
 }
 
 defineExpose({ resetForm });
@@ -164,72 +166,30 @@ defineExpose({ resetForm });
 		<ul v-else role="list" class="divide-y divide-default">
 			<li
 				v-for="(talent, index) in talentsData"
-				:key="index"
+				:key="talent.id ?? `new-${index}`"
 				class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
 			>
-				<div class="flex items-center gap-3 min-w-0 flex-1">
-					<!-- Edit Mode -->
-					<div v-if="editingTalents.has(index)" class="flex items-center gap-2 flex-1">
-						<UInput
-							v-model="editingValues[index]"
-							placeholder="Enter talent name"
-							class="flex-1"
-							:ui="{ root: 'flex-1' }"
-							autofocus
-							@keydown="handleKeydown($event, index)"
+				<div class="text-sm min-w-0 flex-1">
+					<p class="text-highlighted truncate font-medium">
+						{{ talent.name || 'New Talent' }}
+					</p>
+					<div v-if="Object.keys(talent.socialProfiles).length" class="mt-1 flex items-center gap-1 text-muted">
+						<UIcon
+							v-for="network in SUPPORTED_SOCIAL_NETWORKS.filter(item => talent.socialProfiles[item.key])"
+							:key="network.key"
+							:name="network.icon"
+							:aria-label="network.label"
 						/>
-						<div class="flex items-center gap-1">
-							<UButton
-								icon="i-lucide-check"
-								color="success"
-								variant="ghost"
-								size="xs"
-								:disabled="!editingValues[index]?.trim()"
-								@click="saveTalentEdit(index)"
-							/>
-							<UButton
-								icon="i-lucide-x"
-								color="neutral"
-								variant="ghost"
-								size="xs"
-								@click="cancelTalentEdit(index)"
-							/>
-						</div>
-					</div>
-
-					<!-- Display Mode -->
-					<div v-else class="text-sm min-w-0 flex-1">
-						<p class="text-highlighted truncate font-medium">
-							{{ talent.name }}
-						</p>
 					</div>
 				</div>
 
-				<!-- Actions (only show when not editing) -->
-				<div v-if="!editingTalents.has(index)" class="flex items-center gap-3">
-					<UDropdownMenu
-						:items="getDropdownItems(index)"
-						:content="{ align: 'end' }"
-					>
-						<UButton
-							icon="i-lucide-ellipsis-vertical"
-							color="neutral"
-							variant="ghost"
-						/>
-					</UDropdownMenu>
-				</div>
+				<UDropdownMenu :items="getDropdownItems(index)" :content="{ align: 'end' }">
+					<UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" />
+				</UDropdownMenu>
 			</li>
 		</ul>
 
 		<template #footer>
-			<!--
-				This card is not a form. There is no `<form>` or `UForm` above these
-				controls and saving runs entirely off the click handler, so every button
-				here is an ordinary one. `EventConfigFormFooter`'s Save is a
-				`type="submit"` because each of its seven consumers does wrap it in a
-				real form; copying that attribute across gives a Save that reads as
-				though pressing it submits something and does nothing of the sort (#328).
-			-->
 			<div class="flex justify-between items-center gap-4">
 				<UButton
 					label="Reset"
@@ -240,18 +200,15 @@ defineExpose({ resetForm });
 					@click="resetForm"
 				/>
 				<UButton
-					v-if="!hasActiveEdits"
 					label="Add talent"
 					icon="i-lucide-plus"
 					color="neutral"
 					variant="outline"
 					type="button"
+					:disabled="hasActiveEdit"
 					@click="addTalent"
 				/>
-				<UTooltip
-					v-if="hasActiveEdits && isDirty"
-					text="Complete or cancel active edits before saving"
-				>
+				<UTooltip v-if="hasActiveEdit && isDirty" text="Complete or cancel the Talent editor before saving">
 					<UButton
 						label="Save"
 						color="primary"
@@ -275,4 +232,59 @@ defineExpose({ resetForm });
 			</div>
 		</template>
 	</UCard>
+
+	<UModal
+		:open="hasActiveEdit"
+		:dismissible="false"
+		title="Edit Talent"
+		description="Manage the Talent name and optional Social Profiles."
+		:close="{ onClick: cancelTalentEdit }"
+	>
+		<template #body>
+			<UForm
+				v-if="editingValue"
+				:state="editingValue"
+				class="flex flex-col gap-4"
+				@submit="saveTalentEdit"
+			>
+				<UFormField label="Name" name="name" :error="editingErrors.name">
+					<UInput v-model="editingValue.name" autofocus class="w-full" />
+				</UFormField>
+
+				<UFormField
+					v-for="network in SUPPORTED_SOCIAL_NETWORKS"
+					:key="network.key"
+					:label="network.label"
+					:name="`socialProfiles.${network.key}`"
+					:error="editingErrors[network.key]"
+				>
+					<UInput
+						v-model="editingValue.socialProfiles[network.key]"
+						:icon="network.icon"
+						:data-social-network="network.key"
+						placeholder="Handle or profile URL"
+						class="w-full"
+					/>
+				</UFormField>
+			</UForm>
+		</template>
+
+		<template #footer>
+			<div class="flex justify-end gap-2 w-full">
+				<UButton
+					label="Cancel"
+					color="neutral"
+					variant="ghost"
+					type="button"
+					@click="cancelTalentEdit"
+				/>
+				<UButton
+					label="Done"
+					color="primary"
+					type="button"
+					@click="saveTalentEdit"
+				/>
+			</div>
+		</template>
+	</UModal>
 </template>

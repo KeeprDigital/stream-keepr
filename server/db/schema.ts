@@ -133,6 +133,12 @@ export const eventTalents = sqliteTable('event_talents', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 	name: text('name').notNull(),
+	twitchHandle: text('twitch_handle'),
+	youtubeHandle: text('youtube_handle'),
+	xHandle: text('x_handle'),
+	instagramHandle: text('instagram_handle'),
+	tiktokHandle: text('tiktok_handle'),
+	blueskyHandle: text('bluesky_handle'),
 	...timestamps,
 }, table => [
 	index('talents_event_id_idx').on(table.eventId),

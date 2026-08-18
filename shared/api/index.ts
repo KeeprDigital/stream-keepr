@@ -78,6 +78,7 @@
  * If that trade is ever re-taken, the pins named above will fail and say so.
  */
 
+import type { SocialProfiles } from '~~/shared/socialProfiles';
 import type {
 	ClockType,
 	DeckListCompartment,
@@ -100,16 +101,19 @@ export interface TalentResponse {
 	id: number;
 	eventId: number;
 	name: string;
+	socialProfiles: SocialProfiles;
 	createdAt: Date;
 	updatedAt: Date;
 }
 
 export interface CreateTalentInput {
 	name: string;
+	socialProfiles?: SocialProfiles;
 }
 
 export interface UpdateTalentInput {
 	name?: string;
+	socialProfiles?: SocialProfiles;
 }
 
 export interface EventListResponse {

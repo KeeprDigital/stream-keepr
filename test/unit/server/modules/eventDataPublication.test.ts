@@ -85,6 +85,12 @@ function createTalent(overrides: Record<string, unknown> = {}) {
 		id: 5,
 		eventId: 1,
 		name: 'Casey',
+		twitchHandle: null,
+		youtubeHandle: null,
+		xHandle: null,
+		instagramHandle: null,
+		tiktokHandle: null,
+		blueskyHandle: null,
 		createdAt: NOW,
 		updatedAt: NOW,
 		...overrides,
@@ -290,7 +296,7 @@ describe('event Data publication module', () => {
 		});
 		const updatedTalent = await publication.talentUpdated({
 			eventId: 1,
-			entity: createTalent({ name: 'Riley' }) as any,
+			entity: createTalent({ name: 'Riley', twitchHandle: 'RileyLive', xHandle: 'RileyX' }) as any,
 			originConnectionId: 'origin-1',
 		});
 		await publication.talentDeleted({
@@ -299,13 +305,21 @@ describe('event Data publication module', () => {
 			originConnectionId: 'origin-1',
 		});
 
-		expect(createdTalent).toEqual(expect.objectContaining({ id: 5, name: 'Casey' }));
-		expect(updatedTalent).toEqual(expect.objectContaining({ id: 5, name: 'Riley' }));
+		expect(createdTalent).toEqual(expect.objectContaining({ id: 5, name: 'Casey', socialProfiles: {} }));
+		expect(updatedTalent).toEqual(expect.objectContaining({
+			id: 5,
+			name: 'Riley',
+			socialProfiles: { twitch: 'RileyLive', x: 'RileyX' },
+		}));
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:created', {
-			talent: expect.objectContaining({ id: 5, name: 'Casey' }),
+			talent: expect.objectContaining({ id: 5, name: 'Casey', socialProfiles: {} }),
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:updated', {
-			talent: expect.objectContaining({ id: 5, name: 'Riley' }),
+			talent: expect.objectContaining({
+				id: 5,
+				name: 'Riley',
+				socialProfiles: { twitch: 'RileyLive', x: 'RileyX' },
+			}),
 		}, 'origin-1');
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:deleted', {
 			talentId: 5,

@@ -105,8 +105,8 @@ describe('event mapper', () => {
 			expect(result.initialSetupCompletedAt).toEqual(new Date('2026-06-02T15:00:00.000Z'));
 		});
 
-		it('includes talents in the response', () => {
-			const talent = createMockTalent({ id: 5, name: 'Cedric Phillips' });
+		it('includes mapped Talents and their complete Social Profile maps in the response', () => {
+			const talent = createMockTalent({ id: 5, name: 'Cedric Phillips', twitchHandle: 'Cedric' });
 			const event = {
 				...createMockEvent(),
 				talents: [talent],
@@ -115,6 +115,8 @@ describe('event mapper', () => {
 
 			expect(result.talents).toHaveLength(1);
 			expect(result!.talents[0]!.name).toBe('Cedric Phillips');
+			expect(result.talents[0]!.socialProfiles).toEqual({ twitch: 'Cedric' });
+			expect(result.talents[0]).not.toHaveProperty('twitchHandle');
 		});
 
 		it('handles empty talents array', () => {
