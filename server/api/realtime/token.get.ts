@@ -6,7 +6,12 @@ import { eventService } from '~~/server/services/event';
 import { getAblyClient } from '~~/server/utils/ably';
 import { optionalUserSession } from '~~/server/utils/auth';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
-import { eventRealtimeChannel, screenChannelWildcard, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import {
+	eventRealtimeChannel,
+	screenChannelWildcard,
+	screenOutputRealtimeClientId,
+	screenRealtimeChannel,
+} from '~~/shared/utils/realtimeChannels';
 
 /**
  * `GET /api/realtime/token` — an Ably token request, granted to whoever asked
@@ -43,16 +48,6 @@ import { eventRealtimeChannel, screenChannelWildcard, screenRealtimeChannel } fr
 const tokenQuerySchema = z.object({
 	eventId: z.coerce.number().int().positive(),
 });
-
-/**
- * The Ably identity a Screen Output connects as.
- *
- * Legible on purpose: it appears in Ably's own dashboards and in presence, and
- * "which Screen is this" is the only question anybody asks of it there.
- */
-export function screenOutputRealtimeClientId(screenId: number): string {
-	return `screen-output:${screenId}`;
-}
 
 export default defineEventHandler(async (event) => {
 	const { eventId } = await getValidatedQuery(event, tokenQuerySchema.parse);

@@ -62,7 +62,19 @@ export default defineEventHandler(async (event) => {
 	// capability is checked *against this Screen's* digest — there is nothing to
 	// compare a bearer to until the slug has named a row. Reading a row is not
 	// disclosing one: every path out of here that is not fully credentialed raises
-	// the same 404.
+	// the same 404, with the same sentence.
+	//
+	// **That settles the response and not the clock**, which is worth admitting
+	// rather than leaving a reader to infer from a sentence about bodies. A slug that
+	// exists costs this lookup plus an HMAC digest, two SHA-256s and a session read;
+	// one that does not returns after the lookup alone. Elapsed time therefore
+	// separates "this slug exists" from "it does not". Accepted, on three grounds: no
+	// secret is on that channel — a slug is a name an operator hands out, not a
+	// credential; the capability comparison itself is constant-time
+	// (`secretTokensMatch`), so nothing leaks about how nearly a bearer was right;
+	// and the difference sits under D1's own latency spread. Closing it would mean
+	// doing equal work for an absent row, which is a real cost for a guess this
+	// route's 404 already refuses to confirm.
 	const screen = await screenService().findBySlug(eventId, slug);
 	if (!screen)
 		screenNotFound();

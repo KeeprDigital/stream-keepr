@@ -99,10 +99,21 @@ export function serverAuth() {
  * answer — it names the setting to an operator who can go and set it. Here it
  * would take the credential-free surface down with the configuration fault: an
  * output machine showing program has no session to lose, and refusing it because
- * somebody else's* sign-in is unconfigured would be the boundary reaching past
- * what it protects. On such a checkout an operator cannot sign in to anything
- * anyway, every other route says so with the name, and `pnpm dev` warned at boot;
- * so nothing is hidden by this that is not already being said loudly.
+ * sign-in is unconfigured would be the boundary reaching past what it protects. On
+ * such a checkout an operator cannot sign in to anything anyway, every other route
+ * says so with the name, and `pnpm dev` warned at boot; so nothing is hidden by
+ * this that is not already being said loudly.
+ *
+ * **Which makes it fail-open, so the invariant is a precondition on the caller,
+ * not on this function: only a route with a credential-free arm may use it.** Both
+ * callers have one — the capability admits the Screen lookup and the realtime token
+ * on its own — and for them a blank secret costs an operator's *convenience* arm
+ * while the output keeps working. A route where the session is the only way in must
+ * use the middleware, or demand `serverAuth()` itself and let the 503 out; asking
+ * this instead would turn an unconfigured deployment into a plain refusal, which is
+ * the diagnosis #233 spent three tickets learning to give. Pinned in
+ * `test/unit/server/utils/auth.test.ts` so the fail-open half is a behaviour on
+ * record rather than a sentence.
  */
 export async function optionalUserSession(event: H3Event) {
 	try {

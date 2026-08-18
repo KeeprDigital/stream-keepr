@@ -9,7 +9,10 @@ import type {
 } from '~/types/realtime';
 import Ably from 'ably';
 import { realtimeChannelEventId } from '~~/shared/utils/realtimeChannels';
-import { screenOutputAssetCapabilityFromHash } from '~~/shared/utils/screenOutput';
+import {
+	screenOutputAssetCapabilityFromHash,
+	screenOutputCapabilityHeaders,
+} from '~~/shared/utils/screenOutput';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 type Unsubscribe = () => void;
@@ -74,10 +77,11 @@ export default defineNuxtPlugin({
 					// both and issues the grant that belongs to the one presented
 					// (#397) — read fresh per attempt, because a token is re-minted on
 					// reconnect and on every Event switch.
-					const assetCapability = screenOutputAssetCapabilityFromHash(window.location.hash);
 					const tokenRequest = await $fetch('/api/realtime/token', {
 						query: { eventId },
-						headers: assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined,
+						headers: screenOutputCapabilityHeaders(
+							screenOutputAssetCapabilityFromHash(window.location.hash),
+						),
 					});
 					callback(null, tokenRequest);
 				}

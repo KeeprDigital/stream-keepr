@@ -109,25 +109,19 @@ export interface ScreenOutputPathOptions {
 }
 
 /**
- * The one stable Screen URL for a Screen Output, with its output selection, any
- * embed role and preview flags, and any asset capability. Built here so every
- * embedder agrees on the query — and so an embedder cannot forget the capability its
- * output needs to show media.
+ * The shape a value has to be to be a Screen Output Asset Capability.
  *
- * Deliberately carries no scaling flag. Uniform viewport-fit scaling is registered
- * by the Screen Mode Definition and applies to every output of a mode that
- * registers it; it was a URL option only for as long as it took someone to open an
- * output the editor had not built the URL for (#232).
- */
-/**
- * The shape a capability has to be to be one, matching the server's own
- * `bearerScreenOutputCapability`.
+ * **The one definition of that shape.** `bearerScreenOutputCapability` on the
+ * server matches the same run of characters inside its `Bearer ` wrapper, and
+ * before #397's review it did so with a second copy of this pattern — while the
+ * docblock below argued, correctly, that one encoding read in two places is how the
+ * two stop agreeing. `shared/` is importable from `server/`, so there is one.
  *
  * A value that cannot be a capability is treated as no capability rather than
  * presented and refused, so a mistyped fragment renders an output without media
  * instead of one that fails its bootstrap.
  */
-const ASSET_CAPABILITY = /^[\w-]{20,200}$/;
+export const SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN = /^[\w-]{20,200}$/;
 
 /**
  * Read the Screen Output Asset Capability back out of a URL fragment — the
@@ -142,9 +136,35 @@ const ASSET_CAPABILITY = /^[\w-]{20,200}$/;
  */
 export function screenOutputAssetCapabilityFromHash(hash: string): string | null {
 	const value = new URLSearchParams(hash.replace(/^#/, '')).get('asset-capability');
-	return value && ASSET_CAPABILITY.test(value) ? value : null;
+	return value && SCREEN_OUTPUT_ASSET_CAPABILITY_PATTERN.test(value) ? value : null;
 }
 
+/**
+ * How a capability is presented on a request, or nothing to present.
+ *
+ * Both callers wrote this ternary out — the Screen lookup by slug and the realtime
+ * token request — which is two places to get a scheme name right. `undefined`
+ * rather than an empty object because that is what `$fetch` wants for "no headers",
+ * and because a document with no capability is making an ordinary request that its
+ * session speaks for.
+ */
+export function screenOutputCapabilityHeaders(
+	assetCapability: string | null | undefined,
+): { authorization: string } | undefined {
+	return assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined;
+}
+
+/**
+ * The one stable Screen URL for a Screen Output, with its output selection, any
+ * embed role and preview flags, and any asset capability. Built here so every
+ * embedder agrees on the query — and so an embedder cannot forget the capability its
+ * output needs to show media.
+ *
+ * Deliberately carries no scaling flag. Uniform viewport-fit scaling is registered
+ * by the Screen Mode Definition and applies to every output of a mode that
+ * registers it; it was a URL option only for as long as it took someone to open an
+ * output the editor had not built the URL for (#232).
+ */
 export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	const query = new URLSearchParams({ output: options.output ?? 'overlay' });
 	if (options.embed)

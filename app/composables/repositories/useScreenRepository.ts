@@ -3,6 +3,7 @@ import type {
 	Screen,
 	UpdateScreenInput,
 } from '~/types';
+import { screenOutputCapabilityHeaders } from '~~/shared/utils/screenOutput';
 import { useEventDataFetch, useEventDataResource } from '~/modules/event-data/client';
 
 export function useScreenRepository() {
@@ -45,7 +46,7 @@ export function useScreenRepository() {
 	): Promise<Screen | null> => {
 		try {
 			return await $fetch<Screen>(`/api/screen-output/events/${eventId}/screens/slug/${slug}`, {
-				headers: assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined,
+				headers: screenOutputCapabilityHeaders(assetCapability),
 			});
 		}
 		catch {
