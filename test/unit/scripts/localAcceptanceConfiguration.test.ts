@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	LOCAL_NUXT_NAME_SURFACES,
 	LOCALLY_REQUIRED_NUXT_NAMES,
+	sentenceList,
 } from '../../../build/devVars';
 import {
 	ACCEPTANCE_FAILURE_CODES,
@@ -24,12 +25,29 @@ import {
 
 const SIGNING_KEY = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY';
 const ADMIN_TOKEN = 'NUXT_GRAPHICS_ADMIN_TOKEN';
+const AUTH_SECRET = 'NUXT_BETTER_AUTH_SECRET';
+const BOOTSTRAP_TOKEN = 'NUXT_ADMIN_BOOTSTRAP_TOKEN';
 /** A real one is 32 bytes base64; nothing here decodes it, only measures emptiness. */
 const A_KEY = 'Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE=';
 
+/**
+ * Every name a local run needs, as a `.dev.vars` body — because "configured" has
+ * meant three names since #396 and a fixture that supplies one of them is a
+ * fixture about a broken checkout wearing the name of a working one.
+ */
+function configuredBody() {
+	return LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES
+		.map(name => `${name}=${name === SIGNING_KEY ? A_KEY : 'a-value'}`)
+		.join('\n');
+}
+
 /** The three states a checkout's files can be in, as bodies the reader gets. */
 const noFiles = () => [null, null, null];
-const blankFiles = () => [null, `${SIGNING_KEY}=""\n${ADMIN_TOKEN}=""\n`, null];
+
+function blankFiles() {
+	const blanks = [...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES, ADMIN_TOKEN].map(name => `${name}=""`).join('\n');
+	return [null, `${blanks}\n`, null];
+}
 
 describe('which required names a local acceptance run needs', () => {
 	/**
@@ -57,10 +75,33 @@ describe('which required names a local acceptance run needs', () => {
 	 */
 	it('does not need the admin token, which no acceptance route can reach', () => {
 		expect(LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES).not.toContain(ADMIN_TOKEN);
-		expect(missingLocalAcceptanceNames({})).toEqual([SIGNING_KEY]);
+		expect(missingLocalAcceptanceNames({})).not.toContain(ADMIN_TOKEN);
+	});
+
+	/**
+	 * #396's addition, and the distinction that makes it not a cell-H false alarm.
+	 *
+	 * Both names are things a local run genuinely cannot proceed without once
+	 * `/api/**` denies by default: the installation cannot admit anybody at all
+	 * without the secret, and the harness acquires its operator by calling the
+	 * first-admin bootstrap with the token. What makes requiring the *token* honest
+	 * is that a deployed run — the one that has no bootstrap secret to read — is
+	 * not checked here at all.
+	 */
+	it('needs the auth secret and the bootstrap token a local run signs in with', () => {
+		expect(missingLocalAcceptanceNames({})).toEqual([SIGNING_KEY, AUTH_SECRET, BOOTSTRAP_TOKEN]);
+		expect(localAcceptanceConfiguration({ deployed: true, env: {}, readSources: noFiles }).missing).toEqual([]);
 	});
 });
 
+/**
+ * The fold, read one name at a time.
+ *
+ * On the signing key rather than on "nothing is missing", because three names are
+ * required of a local run since #396 and a fixture that supplies one of them is a
+ * checkout that would still be refused. What these rows are about is whether a
+ * value survives the fold, which is a question about one name.
+ */
 describe('folding the checkout\'s sources into one answer', () => {
 	it('reads the name out of any one of them', () => {
 		for (const source of [
@@ -68,7 +109,13 @@ describe('folding the checkout\'s sources into one answer', () => {
 			`${SIGNING_KEY}=${A_KEY}`,
 			`export ${SIGNING_KEY}="${A_KEY}"`,
 		])
-			expect(missingLocalAcceptanceNames(suppliedNames([source]))).toEqual([]);
+			expect(missingLocalAcceptanceNames(suppliedNames([source]))).not.toContain(SIGNING_KEY);
+	});
+
+	it('reads every name a local run needs, not only the first', () => {
+		// The negative control for the rows above: they would all pass against a
+		// fold that had stopped reading anything but the signing key.
+		expect(missingLocalAcceptanceNames(suppliedNames([configuredBody()]))).toEqual([]);
 	});
 
 	/**
@@ -82,11 +129,11 @@ describe('folding the checkout\'s sources into one answer', () => {
 			`${SIGNING_KEY}=${A_KEY}`,
 		]);
 		expect(supplied[SIGNING_KEY]).toBe(A_KEY);
-		expect(missingLocalAcceptanceNames(supplied)).toEqual([]);
+		expect(missingLocalAcceptanceNames(supplied)).not.toContain(SIGNING_KEY);
 	});
 
 	it('counts whitespace as blank, the way the readers do', () => {
-		expect(missingLocalAcceptanceNames(suppliedNames([{ [SIGNING_KEY]: '   ' }]))).toEqual([SIGNING_KEY]);
+		expect(missingLocalAcceptanceNames(suppliedNames([{ [SIGNING_KEY]: '   ' }]))).toContain(SIGNING_KEY);
 	});
 
 	/**
@@ -100,7 +147,7 @@ describe('folding the checkout\'s sources into one answer', () => {
 	it('does not let a whitespace-only earlier source shadow a real later one', () => {
 		const supplied = suppliedNames([{ [SIGNING_KEY]: '   ' }, `${SIGNING_KEY}=${A_KEY}`]);
 		expect(supplied[SIGNING_KEY]).toBe(A_KEY);
-		expect(missingLocalAcceptanceNames(supplied)).toEqual([]);
+		expect(missingLocalAcceptanceNames(supplied)).not.toContain(SIGNING_KEY);
 	});
 
 	it('skips a source that is not there at all', () => {
@@ -141,15 +188,15 @@ describe('a local run', () => {
 	it('is checked, and reads the sources to decide', () => {
 		const readSources = vi.fn(noFiles);
 		expect(localAcceptanceConfiguration({ deployed: false, env: {}, readSources }))
-			.toEqual({ checked: true, missing: [SIGNING_KEY] });
+			.toEqual({ checked: true, missing: [...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES] });
 		expect(readSources).toHaveBeenCalledTimes(1);
 	});
 
-	it('passes silently when a source supplies the name', () => {
+	it('passes silently when a source supplies the names', () => {
 		expect(requireLocalAcceptanceConfiguration({
 			deployed: false,
 			env: {},
-			readSources: () => [null, `${SIGNING_KEY}=${A_KEY}`, null],
+			readSources: () => [null, configuredBody(), null],
 		})).toEqual({ checked: true, missing: [] });
 	});
 
@@ -163,7 +210,10 @@ describe('a local run', () => {
 			readSources: noFiles,
 		})).toThrow(expect.objectContaining({
 			code: 'harness-local-configuration-missing',
-			detail: { surface: 'Screen Output asset capabilities' },
+			detail: {
+				surface: 'Screen Output asset capabilities, signing in and every authenticated API route, '
+					+ 'and first-admin bootstrap',
+			},
 		}));
 	});
 
@@ -175,7 +225,8 @@ describe('a local run', () => {
 			readSources: noFiles,
 		})).toThrow();
 		expect(written).toHaveBeenCalledTimes(1);
-		expect(written.mock.calls[0]![0]).toBe(`${localConfigurationNotice([SIGNING_KEY])}\n`);
+		expect(written.mock.calls[0]![0])
+			.toBe(`${localConfigurationNotice([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES])}\n`);
 	});
 });
 
@@ -195,7 +246,9 @@ describe('the notice, read as prose', () => {
 		expect(noticeFor(noFiles)).toBe(noticeFor(blankFiles));
 		expect(noticeFor(noFiles)).toBe(
 			'Nothing this checkout can give a local installation sets '
-			+ 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, so Screen Output asset capabilities answer 503 '
+			+ 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, NUXT_BETTER_AUTH_SECRET, or NUXT_ADMIN_BOOTSTRAP_TOKEN, '
+			+ 'so Screen Output asset capabilities, signing in and every authenticated API route, '
+			+ 'and first-admin bootstrap answer 503 '
 			+ 'and this run would never reach anything to assert. Nothing was proved and nothing was disproved. '
 			+ 'NUXT_GRAPHICS_ADMIN_TOKEN is not checked here and a blank one is not what stopped this: '
 			+ 'no route an acceptance run calls reads it. '
@@ -247,28 +300,43 @@ describe('the notice, read as prose', () => {
 	 * run is fine — so there must be no sentence at all.
 	 */
 	it('says nothing when only the name no harness reaches is blank', () => {
-		expect(noticeFor(() => [null, `${ADMIN_TOKEN}=""\n${SIGNING_KEY}=${A_KEY}`, null])).toBeUndefined();
+		expect(noticeFor(() => [null, `${ADMIN_TOKEN}=""\n${configuredBody()}`, null])).toBeUndefined();
 	});
 
-	it('says nothing when the shell alone carries the name', () => {
-		expect(noticeFor(noFiles, { [SIGNING_KEY]: A_KEY })).toBeUndefined();
+	it('says nothing when the shell alone carries the names', () => {
+		const env = Object.fromEntries(LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => [name, A_KEY]));
+
+		expect(noticeFor(noFiles, env)).toBeUndefined();
 	});
 
-	it('says nothing when only the built worker\'s own copy carries it', () => {
-		expect(noticeFor(() => [null, null, `${SIGNING_KEY}=${A_KEY}`])).toBeUndefined();
+	it('says nothing when only the built worker\'s own copy carries them', () => {
+		expect(noticeFor(() => [null, null, configuredBody()])).toBeUndefined();
 	});
 
-	/**
-	 * Unreachable today with one name required, and pinned anyway because the
-	 * partition test above is designed to let a second name in. A sentence that
-	 * has never been read in the plural is how #130's cell-H got written.
-	 */
-	it('joins names and surfaces when more than one is missing', () => {
+	it('joins two names and surfaces with a plain conjunction', () => {
 		const both = localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]);
 		expect(both).toContain(
 			'sets NUXT_GRAPHICS_ADMIN_TOKEN or NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, '
 			+ 'so Graphics Administrator operations and Screen Output asset capabilities answer 503',
 		);
+	});
+
+	/**
+	 * Three is the reachable state as of #396, and the serial comma in it is
+	 * load-bearing rather than decorative: one of the surfaces contains an `and` of
+	 * its own ('signing in and every authenticated API route'), so a list joined
+	 * with bare conjunctions reads as five surfaces where there are three. The
+	 * plural sentence had never been read in this state, which is exactly how
+	 * #130's cell-H got written.
+	 */
+	it('separates three surfaces from the conjunction inside one of them', () => {
+		const all = localConfigurationNotice([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES]);
+
+		expect(all).toContain(
+			'so Screen Output asset capabilities, signing in and every authenticated API route, '
+			+ 'and first-admin bootstrap answer 503',
+		);
+		expect(all).not.toContain('capabilities and signing in');
 	});
 
 	/**
@@ -409,8 +477,19 @@ describe('the failure this preflight raises', () => {
 	 * instead of the notice it was trying to print.
 	 */
 	it('prints through the evidence gate without tripping it', () => {
+		// The **worst case this failure can actually produce**, which is every name a
+		// local run is checked for and not every name a checkout is required to have:
+		// the admin token is never in this list, because no acceptance route reads it.
+		// Read as the worst case rather than as one name, because the gate refuses a
+		// detail over 120 characters and three surfaces come to 103 — so a fourth
+		// required-here name would turn a helpful notice into a leak error about the
+		// notice, and this row is what says so first.
 		const evidence = createAcceptanceEvidence({ harness: 'graphics-delivery-v1', secrets: [] });
-		const surface = [...LOCALLY_REQUIRED_NUXT_NAMES].map(name => LOCAL_NUXT_NAME_SURFACES[name]).join(' and ');
+		const surface = sentenceList(
+			LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => LOCAL_NUXT_NAME_SURFACES[name]),
+			'and',
+		);
+
 		expect(evidence.report([{ code: 'harness-local-configuration-missing', detail: { surface } }]))
 			.toBe(`graphics-delivery-v1 harness-local-configuration-missing surface=${surface}`);
 	});

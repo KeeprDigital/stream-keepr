@@ -1,5 +1,5 @@
-import { fetch } from '@nuxt/test-utils/e2e';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { fetch } from './client';
 import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN, INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 

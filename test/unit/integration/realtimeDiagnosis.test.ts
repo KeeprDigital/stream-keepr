@@ -315,10 +315,12 @@ describe('the Screen-command route\'s own refusals', () => {
 
 	it('are read from the route\'s imports too, not from the route file alone', () => {
 		// #277: the scan read `command.post.ts` and nothing else, so a 401/403 raised
-		// from an imported guard was invisible — which is exactly what
-		// `assertTrustedScreenCommandBoundary` becomes once ADR-0008's authentication
-		// lands and that seam starts refusing requests. A graph that had quietly
-		// collapsed back to one file would pass every other assertion here.
+		// from an imported guard was invisible — the shape ADR-0008 predicted for
+		// `assertTrustedScreenCommandBoundary` once authentication landed and that
+		// seam started refusing. Authentication landed on #396 and the seam still
+		// refuses nothing; the 401 came from the middleware instead, which the row
+		// below is about. This row keeps its own point regardless: a graph that had
+		// quietly collapsed back to one file would pass every other assertion here.
 		expect(scan.files).toContain('server/api/events/[id]/screens/[screenId]/command.post.ts');
 		expect(scan.files).toContain('server/utils/ably.ts');
 		expect(scan.files).toContain('server/services/screen.ts');
@@ -334,6 +336,23 @@ describe('the Screen-command route\'s own refusals', () => {
 		expect(scan.files).toContain('server/middleware/event-exists.ts');
 		expect(scan.refusals).toContainEqual(
 			expect.objectContaining({ statusCode: 404, message: 'Event not found' }),
+		);
+	});
+
+	it('are read from the API boundary, whose 401 is composed around every route there is', () => {
+		// #396: the deny-by-default boundary refuses an unauthenticated request to
+		// this path before the handler runs, so 'Authentication is required' is now
+		// as much this route's refusal as 'Event not found' is. ADR-0010 named this
+		// addition in advance — a run whose session lapsed must read as a missing
+		// cookie rather than as a fabricated Ably key.
+		//
+		// Read off the middleware's own literals, which is why they are literals:
+		// the scan resolves a `const` only within the file it is reading, so a
+		// status or a message imported from elsewhere would arrive here as a
+		// refusal it could not read and could not excuse.
+		expect(scan.files).toContain('server/middleware/api-session.ts');
+		expect(scan.refusals).toContainEqual(
+			expect.objectContaining({ statusCode: 401, message: 'Authentication is required' }),
 		);
 	});
 
@@ -819,6 +838,7 @@ describe('the middleware the scan is given as entry points', () => {
 	it('is every middleware on disk, so a new one is scanned without anyone remembering', () => {
 		const named = serverMiddlewareFiles().map(file => file.slice(file.lastIndexOf('/') + 1));
 
+		expect(named).toContain('api-session.ts');
 		expect(named).toContain('event-exists.ts');
 		expect(named).toContain('graphics-author-session.ts');
 		expect(named).toContain('request-body-limit.ts');

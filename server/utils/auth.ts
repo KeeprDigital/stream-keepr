@@ -8,6 +8,22 @@ import { ServiceConfigurationError } from './errors';
 const BETTER_AUTH_SECRET_SETTING = 'NUXT_BETTER_AUTH_SECRET';
 
 /**
+ * What is unavailable without the secret, completing "<name> is not configured, so …".
+ *
+ * `build/devVars.ts` quotes this surface verbatim in the notice a dev server prints when
+ * the name is missing, the way it quotes `requireGraphicsAdministrator`'s clause — which
+ * is why the wording lives here, beside the refusal, rather than being invented there.
+ *
+ * It said only "is not configured" until #396. That was accurate and useless: this is the
+ * instance every `/api/**` request now resolves a session through
+ * (`server/middleware/api-session.ts`), so a blank secret is the whole authenticated
+ * surface answering 503, not just the sign-in form. A clause naming only sign-in would
+ * leave a developer to find the rest one route at a time.
+ */
+const BETTER_AUTH_SECRET_UNAVAILABLE_CLAUSE
+	= 'is not configured, so signing in and every authenticated API route are unavailable';
+
+/**
  * This installation's Better Auth instance, as a type.
  *
  * Named so a caller can be handed a *different* instance of the same shape —
@@ -37,13 +53,28 @@ function createAuth(secret: string) {
  * exists at runtime. A missing secret is an unfinished deployment, and the
  * classification is what lets the response name the setting instead of a
  * stack-free 500 — same reasoning as `getAblyClient`.
+ *
+ * **Blank means whitespace as well as empty**, which it did not until #396. The
+ * `.env`-and-`.dev.vars` notice in `build/devVars.ts` counts a name as missing
+ * when it trims to nothing, and says it does so "because that is how the readers
+ * count it" — true of `requireGraphicsAdministrator` and of the capability
+ * signing key, and false here while this test was `!config.betterAuthSecret`. A
+ * name set to a space is the likeliest way to hold one at all (`cp
+ * .env.example .env` and a stray keystroke), and the old reading answered it by
+ * signing every session in the installation with that space instead of naming
+ * the setting. Made to matter by this ticket, which is where the name became one
+ * a checkout is required to have.
+ *
+ * The configured value is passed on **as written**, not trimmed: what a blank
+ * test decides is whether the surface is armed, and quietly signing with a
+ * different string than the operator set is not this function's business.
  */
 export function serverAuth() {
 	if (!auth) {
 		const config = useRuntimeConfig();
 
-		if (!config.betterAuthSecret) {
-			throw new ServiceConfigurationError(BETTER_AUTH_SECRET_SETTING, 'is not configured');
+		if (!config.betterAuthSecret?.trim()) {
+			throw new ServiceConfigurationError(BETTER_AUTH_SECRET_SETTING, BETTER_AUTH_SECRET_UNAVAILABLE_CLAUSE);
 		}
 
 		auth = createAuth(config.betterAuthSecret);

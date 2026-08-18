@@ -256,13 +256,27 @@ a future change that introduces SSR would have to revisit this.
 
 ### What is still unauthenticated
 
-Two administrator reads: `GET /api/admin/graphics-assets/capacity` and
-`GET /api/admin/graphics-assets/health`. Both carry an in-code note deferring
-authorization until auth exists, and there is no `/api/admin/**` middleware. The
-capacity one returns the same payload as the now-gated
-`GET /api/graphics-assets/capacity`, so the installation's storage occupancy is
-still readable without a session by that route. The administrator _mutations_
-are gated by the admin token and are unaffected.
+Nothing under `/api/**`, as of #396. One global middleware
+(`server/middleware/api-session.ts`) requires a Better Auth session on every path
+ADR-0010's short allowlist does not exempt, and the allowlist is the clock, Better
+Auth's own router, the capability-authorized Screen Output surface, the
+secret-armed first-admin bootstrap, and the `/api/admin/**` tree — which answers
+to `x-graphics-admin-token` instead, route by route.
+
+This section previously named two administrator reads —
+`GET /api/admin/graphics-assets/capacity` and
+`GET /api/admin/graphics-assets/health` — as ungated, on the strength of an
+in-code note deferring authorization until auth existed. That was already false
+before the boundary landed: both call `requireGraphicsAdministrator`, and
+`test/unit/server/utils/apiBoundary.test.ts` now proves every one of the eighteen
+admin routes reaches that guard, because the boundary exempts that tree and each
+route's own guard is therefore the only thing protecting it. The installation's
+storage occupancy is not readable without a credential by either route.
+
+What is unauthenticated is what always was and cannot be otherwise: the SPA shell
+and its static assets, unavoidably public under `ssr: false` and gated
+client-side for UX only (`app/middleware/auth.global.ts`). The wall is the API
+boundary.
 
 ## Platform limitation: DNS rebinding
 

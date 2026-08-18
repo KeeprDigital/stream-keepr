@@ -136,10 +136,25 @@ export interface RouteRefusal {
  * inserted the Event from being answered with "check your Ably key". The narrow reading
  * matters — 404 only. A 401 or 403 carrying those same words is nothing this route says,
  * and stays diagnosed.
+ *
+ * 'Authentication is required' is the third, and it is the one ADR-0010 said in advance
+ * would be added here: `server/middleware/api-session.ts` requires a Better Auth session
+ * on every `/api/**` path the boundary does not exempt, and this route is inside it.
+ * **The route really raises this**, which is the only ground on which anything may join
+ * this list — the scan's own policy is to narrow the scan rather than widen the list, and
+ * it is a policy about refusals the route *cannot* answer. A run whose session lapsed, or
+ * a fixture that forgot the cookie, is answered by this 401 and not by Ably; diagnosing it
+ * as a fabricated key would send a reader to their Ably dashboard over a missing header.
+ *
+ * The wording is the middleware's own literal, deliberately uniform across the whole
+ * boundary, so this stays one entry rather than one per reason a session was absent. The
+ * status pairing still matters as much as it does above: a 403 or a 404 carrying these
+ * words is nothing this route says.
  */
 export const SCREEN_COMMAND_ROUTE_REFUSALS: readonly RouteRefusal[] = [
 	{ statusCode: 404, message: 'Screen not found' },
 	{ statusCode: 404, message: 'Event not found' },
+	{ statusCode: 401, message: 'Authentication is required' },
 ];
 
 /** Nitro's own miss, when no handler matched: a renamed route, not a rejected key. */

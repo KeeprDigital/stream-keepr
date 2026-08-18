@@ -14,6 +14,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import process from 'node:process';
 import { crc32 } from 'node:zlib';
 import { AcceptanceFailure, deliveryRouteLabel } from './evidence.mjs';
+import { readLocalConfigurationFiles, suppliedNames } from './local-configuration.mjs';
+import { openOperatorSession } from './operator.mjs';
 import {
 	featureMatchLayoutReferencing,
 	featureMatchLayoutWithRestrictedVideo,
@@ -134,9 +136,30 @@ async function observe(response) {
 }
 
 /**
+ * Open an installation as somebody, and as the author of what this run stages.
+ *
+ * Two credentials, and they answer different questions. The **session** says a
+ * request is allowed past #396's boundary at all — every route in `routes.mjs`
+ * outside the Screen Output surface requires one, so it rides on every request
+ * rather than being asked for. The **author cookie** says which Graphics Author
+ * owns a Graphics Ingestion Operation, which is why it is opt-in per request:
+ * a helper that staged an operation as one author and then read it as another
+ * would get a 404 and read as a broken route (ADR-0003, #276).
+ *
+ * `deployed` decides where the session's credentials may come from, and the
+ * decision is `./operator.mjs`'s. It is a parameter rather than something
+ * inferred from `origin`, because the wrong inference sends a local checkout's
+ * bootstrap secret to a remote host.
+ *
  * @param {string} origin
+ * @param {{ deployed?: boolean }} [options]
  */
-export async function openInstallation(origin) {
+export async function openInstallation(origin, { deployed = false } = {}) {
+	const sessionCookies = await openOperatorSession(origin, {
+		deployed,
+		supplied: deployed ? {} : suppliedNames(readLocalConfigurationFiles()),
+	});
+
 	const bootstrap = await fetch(`${origin}/`, { headers: { accept: 'text/html' }, redirect: 'manual' });
 	const authorCookie = bootstrap.headers.getSetCookie()
 		.map(value => value.split(';', 1)[0])
@@ -153,6 +176,10 @@ export async function openInstallation(origin) {
 	 */
 	async function request(path, init = {}) {
 		const headers = new Headers(init.headers ?? {});
+		// Unconditionally, because the boundary is unconditional: a request
+		// without this is a 401 from every path here but the Screen Output ones,
+		// where an extra cookie is ignored.
+		headers.set('cookie', [headers.get('cookie'), ...sessionCookies].filter(Boolean).join('; '));
 		if (init.author)
 			headers.set('cookie', [headers.get('cookie'), authorCookie].filter(Boolean).join('; '));
 		let body = init.body;
@@ -182,7 +209,7 @@ export async function openInstallation(origin) {
 		return observation.bytes.byteLength === 0 ? undefined : JSON.parse(observation.text());
 	}
 
-	return { origin, authorCookie, request, json };
+	return { origin, authorCookie, sessionCookies, request, json };
 }
 
 /**
@@ -263,18 +290,40 @@ export async function stageStillImagePublication(session, { name, sourceFileName
 }
 
 /**
- * The browser's half of a staged run: where to go, and whose session to go as.
+ * Register every credential this session holds with the evidence formatter,
+ * before anything can print one.
+ *
+ * One call rather than one per cookie, because the list grew on #396 and the
+ * failure mode of the old shape was silent: a harness that registered the author
+ * cookie and not the operator session would still pass every assertion, and
+ * would print a live session token the first time a request failed. Somewhere a
+ * caller has to say "these are this run's secrets"; what it must not have to do
+ * is enumerate them.
+ *
+ * @param {{ addSecret: (value: string) => void }} evidence
+ * @param {{ authorCookie: string, sessionCookies: readonly string[] }} session
+ */
+export function registerSessionSecrets(evidence, session) {
+	for (const secret of [session.authorCookie, ...session.sessionCookies])
+		evidence.addSecret(secret);
+}
+
+/**
+ * The browser's half of a staged run: where to go, and whose identities to go as.
  *
  * Anything the harness stages belongs to the session that staged it and is a
  * `404` to any other (ADR-0003), so a page opened for that work has to carry
  * this session — and "the harness forgot to pass the cookie" is a defect no
  * assertion in the page can see, because the page simply becomes a different,
- * perfectly valid author (#276). Pairing the two here means the call site says
- * `open this page as this session` in one expression, rather than assembling an
- * identity from two arguments that can be separated by an edit.
+ * perfectly valid author (#276). Since #396 the operator session travels beside
+ * it, and its absence is louder but no more visible from inside the page: every
+ * library route the page reads answers 401 rather than serving a face. Pairing
+ * them here means the call site says `open this page as this session` in one
+ * expression, rather than assembling an identity from arguments that can be
+ * separated by an edit.
  */
 export function authoredPageRequest(session, url) {
-	return { url, authorCookie: session.authorCookie };
+	return { url, cookies: [...session.sessionCookies, session.authorCookie] };
 }
 
 /**

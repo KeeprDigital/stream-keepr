@@ -1,5 +1,5 @@
 import type { GraphicAsset } from '~~/shared/types/graphicsAsset';
-import { $fetch } from '@nuxt/test-utils/e2e';
+import { $fetch } from './client';
 import { suiteGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**

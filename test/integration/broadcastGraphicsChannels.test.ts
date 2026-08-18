@@ -1,5 +1,4 @@
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createGraphicsHarness,
@@ -7,6 +6,7 @@ import {
 	integrationGraphicAnimation,
 	playoutCommandId,
 } from './broadcastGraphicsPlayoutHelpers';
+import { $fetch } from './client';
 
 /**
  * Graphic Channels, proven through the authoritative surface: one command in, the

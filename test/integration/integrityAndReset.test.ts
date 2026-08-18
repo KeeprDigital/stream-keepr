@@ -1,5 +1,5 @@
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, describe, expect, it } from 'vitest';
+import { $fetch } from './client';
 import { executeIntegrationD1 } from './integrationD1';
 
 describe('event integrity and melee reset', () => {

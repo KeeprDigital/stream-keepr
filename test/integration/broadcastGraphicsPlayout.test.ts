@@ -1,4 +1,3 @@
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createBroadcastGraphicsScreen,
@@ -14,6 +13,7 @@ import {
 	setBroadcastGraphicInput,
 	setScreenMode,
 } from './broadcastGraphicsPlayoutHelpers';
+import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 
 /**

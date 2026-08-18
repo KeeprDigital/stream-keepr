@@ -1,6 +1,6 @@
 import type { GraphicsAssetLibraryHealth } from '~~/shared/types/graphicsAsset';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { describe, expect, it } from 'vitest';
+import { $fetch, fetch } from './client';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 describe('the Graphics Asset Library health API', () => {

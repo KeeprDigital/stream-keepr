@@ -109,6 +109,11 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// one failure with a fix the reader can carry out, and the prose above it
 	// says what that fix is (#274).
 	'harness-local-configuration-missing',
+	// No operator to run as, so every route behind #396's API boundary would
+	// answer 401. Named apart from an unreachable installation because the
+	// installation is fine — this run has no credential for it, and the fix is
+	// two environment variables rather than a server to start.
+	'harness-operator-unavailable',
 ]);
 
 const FAILURE_CODES = new Set(ACCEPTANCE_FAILURE_CODES);

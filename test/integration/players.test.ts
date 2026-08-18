@@ -1,5 +1,5 @@
-import { $fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 
 describe('players API', () => {

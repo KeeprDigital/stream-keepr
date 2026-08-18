@@ -46,6 +46,7 @@ import {
 	acceptanceOrigin,
 	authoredPageRequest,
 	openInstallation,
+	registerSessionSecrets,
 	stageFontIngestion,
 } from './graphics-acceptance/installation.mjs';
 
@@ -142,11 +143,11 @@ export async function main(argv = process.argv) {
 				let page;
 				if (library) {
 					const origin = acceptanceOrigin({ deployed });
-					const session = await openInstallation(origin);
+					const session = await openInstallation(origin, { deployed });
 					// The session travels to a browser from here on, so it is registered
 					// before anything else can print it, exactly as the three sibling
 					// harnesses register theirs (#276).
-					evidence.addSecret(session.authorCookie);
+					registerSessionSecrets(evidence, session);
 					staged = await stageFontIngestion(session, {
 						bytes: new Uint8Array(await readFile(fromRepository(LIBRARY_FACE))),
 						declaredMime: 'font/woff2',

@@ -1,3 +1,4 @@
+import type { LocallyRequiredNuxtName } from '~~/build/devVars';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -14,12 +15,32 @@ import {
 	parseDevVars,
 } from '~~/build/devVars';
 
-/** A `.env`-configured environment: both required names set, no `.dev.vars` needed. */
+/**
+ * A `.env`-configured environment: every required name set, no `.dev.vars` needed.
+ *
+ * Built from `LOCALLY_REQUIRED_NUXT_NAMES` rather than written out, because the
+ * cells below mean "a configured checkout" and a transcription of the list stops
+ * meaning that the moment the list grows — silently, since a fourth name absent
+ * from a fixture called `configuredEnv` reads as configured to every reader and as
+ * missing to every assertion. #396 added two names and found this the hard way.
+ *
+ * The values are per-name only where the shape matters: the signing key is read as
+ * 32-byte base64 by the surface that needs it, and a fixture that could not be one
+ * would be a lie about what a configured checkout holds.
+ */
+const CONFIGURED_VALUES: Partial<Record<LocallyRequiredNuxtName, string>> = {
+	NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+};
+
 function configuredEnv(): Record<string, string | undefined> {
-	return {
-		NUXT_GRAPHICS_ADMIN_TOKEN: 'from-dotenv',
-		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-	};
+	return Object.fromEntries(
+		LOCALLY_REQUIRED_NUXT_NAMES.map(name => [name, CONFIGURED_VALUES[name] ?? 'from-dotenv']),
+	);
+}
+
+/** The same names as a `.dev.vars` body, for the cell where the file supplies them. */
+function configuredDevVarsBody(): string {
+	return `${Object.entries(configuredEnv()).map(([name, value]) => `${name}=${value}`).join('\n')}\n`;
 }
 
 describe('which processes adopt `.dev.vars` at all', () => {
@@ -129,7 +150,7 @@ describe('the decision the Nuxt module delegates', () => {
 		const adoption = adoptDevVarsInto({
 			dev: true,
 			env,
-			read: () => 'NUXT_GRAPHICS_ADMIN_TOKEN=token\nNUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=key\n',
+			read: configuredDevVarsBody,
 		});
 
 		expect(adoption.missing).toEqual([]);
@@ -147,15 +168,17 @@ describe('the decision the Nuxt module delegates', () => {
  */
 describe('which names a local checkout has to be given', () => {
 	it('counts a blank as missing, the way the readers that refuse count it', () => {
-		// `requireGraphicsAdministrator` trims before testing and `signingKey` rejects
-		// the empty string, so a name set to '' is not configured. It is also the
-		// likeliest wrong state there is: `cp .env.example .env` produces exactly it,
-		// and this notice is where that advice comes from.
-		expect(missingLocalNuxtNames({ NUXT_GRAPHICS_ADMIN_TOKEN: '', NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: '   ' }))
-			.toEqual([...LOCALLY_REQUIRED_NUXT_NAMES]);
+		// `requireGraphicsAdministrator` trims before testing, `signingKey` rejects
+		// the empty string, and `serverAuth` trims as of #396 — so a name set to ''
+		// or to a space is not configured. It is also the likeliest wrong state there
+		// is: `cp .env.example .env` produces exactly it, and this notice is where
+		// that advice comes from.
+		const blanks = Object.fromEntries(LOCALLY_REQUIRED_NUXT_NAMES.map((name, index) => [name, index % 2 === 0 ? '' : '   ']));
+
+		expect(missingLocalNuxtNames(blanks)).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES]);
 	});
 
-	it('counts nothing as missing once both are set', () => {
+	it('counts nothing as missing once they are all set', () => {
 		expect(missingLocalNuxtNames(configuredEnv())).toEqual([]);
 	});
 
@@ -184,6 +207,8 @@ describe('which names a local checkout has to be given', () => {
 		expect(Object.keys(LOCAL_NUXT_NAME_SURFACES).sort()).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES].sort());
 		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_GRAPHICS_ADMIN_TOKEN).toBe('Graphics Administrator operations');
 		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY).toBe('Screen Output asset capabilities');
+		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_BETTER_AUTH_SECRET).toBe('signing in and every authenticated API route');
+		expect(LOCAL_NUXT_NAME_SURFACES.NUXT_ADMIN_BOOTSTRAP_TOKEN).toBe('first-admin bootstrap');
 	});
 
 	it('leaves the Ably key deliberately optional, because #223 already owns it', () => {
@@ -192,6 +217,22 @@ describe('which names a local checkout has to be given', () => {
 		// third-party secret it does not need, which is #223's failure mode inverted.
 		expect(LOCALLY_REQUIRED_NUXT_NAMES).not.toContain('NUXT_ABLY_API_KEY');
 		expect(LOCALLY_OPTIONAL_NUXT_NAMES).toContain('NUXT_ABLY_API_KEY');
+	});
+
+	/**
+	 * #396's half of the #394 handoff, pinned rather than left to a docblock.
+	 *
+	 * Both names sat in the optional list from #393 and #394 with a written promise
+	 * that the boundary ticket would move them, and the shape of the failure if it
+	 * did not is a silent one: the boundary lands, a checkout without either name
+	 * can sign in to nothing at all, and the boot notice says nothing because these
+	 * two are still "deliberately optional". A comment cannot fail; this can.
+	 */
+	it('requires the two auth names, now that a checkout without them can sign in to nothing', () => {
+		expect(LOCALLY_REQUIRED_NUXT_NAMES).toContain('NUXT_BETTER_AUTH_SECRET');
+		expect(LOCALLY_REQUIRED_NUXT_NAMES).toContain('NUXT_ADMIN_BOOTSTRAP_TOKEN');
+		expect(LOCALLY_OPTIONAL_NUXT_NAMES).not.toContain('NUXT_BETTER_AUTH_SECRET');
+		expect(LOCALLY_OPTIONAL_NUXT_NAMES).not.toContain('NUXT_ADMIN_BOOTSTRAP_TOKEN');
 	});
 });
 
@@ -213,8 +254,8 @@ describe('what a dev server says about its local configuration', () => {
 		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env: {}, read: () => null }));
 
 		expect(line?.level).toBe('warn');
-		expect(line?.message).toContain('NUXT_GRAPHICS_ADMIN_TOKEN');
-		expect(line?.message).toContain('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY');
+		for (const name of LOCALLY_REQUIRED_NUXT_NAMES)
+			expect(line?.message).toContain(name);
 	});
 
 	/** Cell B: the file supplies them. The primary checkout. */
@@ -222,11 +263,11 @@ describe('what a dev server says about its local configuration', () => {
 		const line = devVarsLogLine(adoptDevVarsInto({
 			dev: true,
 			env: {},
-			read: () => 'NUXT_GRAPHICS_ADMIN_TOKEN=token\nNUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=key\n',
+			read: configuredDevVarsBody,
 		}));
 
 		expect(line?.level).toBe('info');
-		expect(line?.message).toBe('Using NUXT_GRAPHICS_ADMIN_TOKEN, NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY from .dev.vars');
+		expect(line?.message).toBe(`Using ${LOCALLY_REQUIRED_NUXT_NAMES.join(', ')} from .dev.vars`);
 	});
 
 	/** Cell C: a file that exists and is empty — `cp .dev.vars.example .dev.vars`. */
@@ -236,7 +277,7 @@ describe('what a dev server says about its local configuration', () => {
 		const line = devVarsLogLine(adoptDevVarsInto({
 			dev: true,
 			env: {},
-			read: () => 'NUXT_GRAPHICS_ADMIN_TOKEN=""\nNUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=""\n',
+			read: () => LOCALLY_REQUIRED_NUXT_NAMES.map(name => `${name}=""`).join('\n'),
 		}));
 
 		expect(line?.level).toBe('warn');
@@ -309,6 +350,32 @@ describe('what a dev server says about its local configuration', () => {
 
 		expect(line?.message).toContain('Graphics Administrator operations');
 		expect(line?.message).not.toContain('Screen Output asset capabilities');
+	});
+
+	/**
+	 * Cell H for each of #396's two names, because the lesson of cell H is that a
+	 * surface named where its words are false is worse than no notice — and these two
+	 * are the ones a reader is least able to check for themselves. A developer told
+	 * that signing in is unavailable, on a checkout where it works, would go looking
+	 * for a boundary defect.
+	 */
+	it.each([
+		['NUXT_BETTER_AUTH_SECRET', 'signing in and every authenticated API route'],
+		['NUXT_ADMIN_BOOTSTRAP_TOKEN', 'first-admin bootstrap'],
+	] as const)('names only %s\'s surface when only it is missing', (missing, surface) => {
+		const env = configuredEnv();
+		delete env[missing];
+
+		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env, read: () => null }));
+
+		expect(line?.level).toBe('warn');
+		expect(line?.message).toContain(missing);
+		expect(line?.message).toContain(surface);
+		expect(line?.message).toContain('it keeps its');
+		for (const other of LOCALLY_REQUIRED_NUXT_NAMES.filter(name => name !== missing)) {
+			expect(line?.message).not.toContain(other);
+			expect(line?.message).not.toContain(LOCAL_NUXT_NAME_SURFACES[other]);
+		}
 	});
 });
 

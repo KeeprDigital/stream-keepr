@@ -18,6 +18,7 @@
  */
 
 import process from 'node:process';
+import { openOperatorSessionForOrigin } from './graphics-acceptance/operator.mjs';
 
 /**
  * A Broadcast Graphics configuration publishing exactly `count` Graphic Asset
@@ -143,12 +144,15 @@ async function main() {
 	const base = options.url.replace(/\/$/, '');
 	const jar = new Map();
 
+	/** One `name=value` pair into the jar, wherever it came from. */
+	function rememberCookie(pair) {
+		const separator = pair.indexOf('=');
+		jar.set(pair.slice(0, separator).trim(), pair.slice(separator + 1).trim());
+	}
+
 	function storeCookies(response) {
-		for (const header of response.headers.getSetCookie?.() ?? []) {
-			const [pair] = header.split(';');
-			const separator = pair.indexOf('=');
-			jar.set(pair.slice(0, separator).trim(), pair.slice(separator + 1).trim());
-		}
+		for (const header of response.headers.getSetCookie?.() ?? [])
+			rememberCookie(header.split(';')[0]);
 	}
 	const cookieHeader = () => [...jar.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
 
@@ -180,6 +184,14 @@ async function main() {
 	}));
 	if (jar.size === 0)
 		throw new Error('No graphics author session cookie was issued by the page navigation.');
+
+	// And an operator session, because #396 put a deny-by-default boundary in front
+	// of `/api/**`: the author cookie above says who owns the work, not that the
+	// request is allowed in. Into the same jar, so every `request` below is
+	// unchanged. Local secrets go only to a local origin — see
+	// `openOperatorSessionForOrigin`.
+	for (const pair of await openOperatorSessionForOrigin(base))
+		rememberCookie(pair);
 
 	const active = await json('/api/graphics-assets?lifecycleStates=active');
 	const images = active.filter(asset => asset.kind === 'image');

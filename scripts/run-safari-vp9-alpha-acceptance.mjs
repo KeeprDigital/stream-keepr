@@ -42,6 +42,7 @@ import {
 	acceptanceOrigin,
 	openInstallation,
 	provisionRestrictedVideoScenario,
+	registerSessionSecrets,
 } from './graphics-acceptance/installation.mjs';
 
 const HARNESS = 'vp9-alpha-safari-v1';
@@ -198,8 +199,8 @@ export async function main(argv = process.argv) {
 				// tested.
 				let url = `${origin}${ACCEPTANCE_PATH}`;
 				if (deployed) {
-					const session = await openInstallation(origin);
-					evidence.addSecret(session.authorCookie);
+					const session = await openInstallation(origin, { deployed });
+					registerSessionSecrets(evidence, session);
 					const { webmBase64 } = JSON.parse(await readFile(
 						new URL('../public/_acceptance/vp9-alpha-v1.json', import.meta.url),
 						'utf8',

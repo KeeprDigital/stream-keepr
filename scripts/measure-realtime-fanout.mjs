@@ -30,6 +30,7 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import Ably from 'ably';
+import { openOperatorSessionForOrigin } from './graphics-acceptance/operator.mjs';
 
 /**
  * What this probe throws when it will not start. A class rather than a bare
@@ -146,10 +147,19 @@ async function main() {
 	const marker = randomUUID().slice(0, 8);
 
 	// ------------------------------------------------------------ provisioning
+	// Two credentials, and #396 is why there are two. The session is what gets a
+	// request past the deny-by-default boundary over `/api/**` at all; the author
+	// cookie says which Graphics Author owns what this probe provisions. Where the
+	// session comes from — an account named in the environment, or one this probe
+	// creates through the first-admin bootstrap — is `graphics-acceptance/operator.mjs`'s
+	// decision, and it is not defaulted to a local file for a remote origin.
+	const sessionCookies = await openOperatorSessionForOrigin(origin);
+
 	const bootstrap = await fetch(`${origin}/`, { headers: { accept: 'text/html' }, redirect: 'manual' });
-	cookie = bootstrap.headers.getSetCookie().map(v => v.split(';', 1)[0]).find(v => v.includes('='));
-	if (!cookie)
+	const authorCookie = bootstrap.headers.getSetCookie().map(v => v.split(';', 1)[0]).find(v => v.includes('='));
+	if (!authorCookie)
 		throw new Error('no author session issued');
+	cookie = [...sessionCookies, authorCookie].join('; ');
 
 	const event = await api('/api/events', {
 		method: 'POST',

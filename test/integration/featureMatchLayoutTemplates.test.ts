@@ -5,9 +5,9 @@ import type {
 } from '~~/shared/types/featureMatchLayoutTemplate';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { randomUUID } from 'node:crypto';
-import { $fetch, fetch } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { $fetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 
 /**
