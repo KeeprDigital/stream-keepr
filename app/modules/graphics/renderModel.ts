@@ -1724,6 +1724,7 @@ function itemDescriptor(
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
 	presentation?: { key: string; frame: SocialProfilePresentationProjection },
+	updateAvailability?: { incoming: boolean; outgoing: boolean },
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
@@ -1808,6 +1809,27 @@ function itemDescriptor(
 		parent: context.parent,
 		motionOf,
 	});
+	const updateHalf = (
+		halfInputs: GraphicItemContentContext,
+		halfMotion: GraphicsItemAnimationContext['motionOf'],
+		placement: CSSProperties,
+		available: boolean,
+	): GraphicItemRenderDescriptor => available
+		? paintedItemDescriptor(
+				output,
+				graphicId,
+				item,
+				assetContent,
+				halfInputs,
+				halfContext(halfMotion),
+				placement,
+			)
+		: {
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, visibility: 'hidden' },
+			};
 
 	return {
 		id: item.id,
@@ -1815,23 +1837,17 @@ function itemDescriptor(
 		kind: item.type,
 		style: placement,
 		crossTransition: {
-			outgoing: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			outgoing: updateHalf(
 				context.outgoing!.inputs,
-				halfContext(context.outgoing!.motionOf),
+				context.outgoing!.motionOf,
 				half(context.outgoing!.motionOf(item, context.staggerOffsets, context.parent)),
+				updateAvailability?.outgoing ?? true,
 			),
-			incoming: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			incoming: updateHalf(
 				inputs,
-				halfContext(context.motionOf),
+				context.motionOf,
 				half(motion),
+				updateAvailability?.incoming ?? true,
 			),
 		},
 	};
@@ -2442,10 +2458,13 @@ export function resolveGraphicsCompositionRenderModel(
 					const projection = projectionByGroupId.get(item.id);
 					if (!projection)
 						return true;
-					const presentation = values.socialProfilePresentations?.[projection.key];
+					const presentation = phases.includes('update')
+						? undefined
+						: values.socialProfilePresentations?.[projection.key];
 					return presentation
 						? presentation.layers.length > 0
-						: values.socialProfileValues?.[projection.key] !== undefined;
+						: values.socialProfileValues?.[projection.key] !== undefined
+							|| pairing?.inputs.socialProfileValues?.[projection.key] !== undefined;
 				})
 				.map((item) => {
 					const projection = projectionByGroupId.get(item.id);
@@ -2465,6 +2484,12 @@ export function resolveGraphicsCompositionRenderModel(
 								},
 							}
 						: values;
+					const updateAvailability = projection && pairing
+						? {
+								incoming: itemValues.socialProfileValues?.[projection.key] !== undefined,
+								outgoing: pairing.inputs.socialProfileValues?.[projection.key] !== undefined,
+							}
+						: undefined;
 					return itemDescriptor(
 						input.output,
 						graphic.id,
@@ -2478,6 +2503,7 @@ export function resolveGraphicsCompositionRenderModel(
 								: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
 						},
 						presentation,
+						updateAvailability,
 					);
 				});
 

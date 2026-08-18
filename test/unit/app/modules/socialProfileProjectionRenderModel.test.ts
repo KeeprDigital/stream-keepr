@@ -192,6 +192,31 @@ describe('programmatic Social Profile Projection rendering', () => {
 		expect(transition.incoming.children?.[1]?.icon?.name).toBe('i-simple-icons-youtube');
 	});
 
+	it('uses the update recipe to animate an available Presentation Group to transparency', () => {
+		const social = projectedGraphic();
+		(social.items[0] as GraphicGroupItemConfig).animation = {
+			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+		};
+		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [social],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
+			socialProfilePresentations: { 'lower-third': { profile: {
+				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+				layers: [],
+			} } },
+			outgoingSocialProfileValues: { 'lower-third': { profile: outgoing } },
+		});
+		const transition = model.graphics[0]!.items[0]!.crossTransition!;
+
+		expect(transition.outgoing.children?.[0]?.text).toBe('Twitch · alpha · https://www.twitch.tv/alpha');
+		expect(transition.outgoing.children?.[1]?.icon?.name).toBe('i-simple-icons-twitch');
+		expect(transition.incoming.style.visibility).toBe('hidden');
+	});
+
 	it.each(['enter', 'exit'] as const)('nests the synchronized Presentation Group transition inside %s motion', (phase) => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {
