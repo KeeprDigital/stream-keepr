@@ -445,14 +445,25 @@ describe('the Graphic Channel context read from authored Screen configuration', 
 	});
 
 	it('gives every member of one channel the same context, and nothing to a graphic in none', () => {
+		const alpha = graphic('alpha', 'thirds');
+		alpha.socialProfileProjections = [{
+			key: 'profile',
+			label: 'Social profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'presentation',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}];
 		const contexts = broadcastGraphicChannelContexts({
-			graphics: [graphic('alpha', 'thirds'), graphic('bug'), graphic('bravo', 'thirds')],
+			graphics: [alpha, graphic('bug'), graphic('bravo', 'thirds')],
 			channels,
 		});
 
 		expect(contexts.alpha).toBe(contexts.bravo);
 		expect(contexts.alpha?.handoff).toBe('out-then-in');
 		expect(contexts.alpha?.members.map(member => member.graphicId)).toEqual(['alpha', 'bravo']);
+		expect(contexts.alpha?.members[0]?.socialProfileProjections).toEqual(alpha.socialProfileProjections);
 		expect(contexts.bug).toBeUndefined();
 	});
 

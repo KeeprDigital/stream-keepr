@@ -39,6 +39,7 @@ import {
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
+import { projectSocialProfileRotation } from './socialProfiles';
 
 /**
  * Broadcast Graphics playout reduction.
@@ -220,7 +221,7 @@ export interface BroadcastGraphicsLiveState {
 	 * Source Selections existed carries no such key, and every read normalizes.
 	 */
 	sources?: Record<string, GraphicSourceSelectionsState>;
-	/** Accepted manual Social Profile Projection state, per placed Broadcast Graphic. */
+	/** Accepted Social Profile Projection operator state, per placed Broadcast Graphic. */
 	socialProfileProjections?: Record<string, BroadcastGraphicSocialProfileProjectionStates>;
 }
 
@@ -231,6 +232,7 @@ export const BROADCAST_GRAPHICS_COMMAND_TYPE_VALUES = [
 	'Select Social Profile',
 	'Previous Social Profile',
 	'Next Social Profile',
+	'Set Social Profile Automatic',
 	'Update Graphic',
 	'Set Input',
 	'Set Override',
@@ -355,10 +357,16 @@ export interface BroadcastGraphicsStepSocialProfilePayload {
 	projectionKey: string;
 }
 
+/** Enable or pause the authoritative automatic rotation for one projection. */
+export interface BroadcastGraphicsSetSocialProfileAutomaticPayload extends BroadcastGraphicsStepSocialProfilePayload {
+	automatic: boolean;
+}
+
 export type BroadcastGraphicsCommandPayload
 	= | BroadcastGraphicsPlayoutPayload
 		| BroadcastGraphicsSelectSocialProfilePayload
 		| BroadcastGraphicsStepSocialProfilePayload
+		| BroadcastGraphicsSetSocialProfileAutomaticPayload
 		| BroadcastGraphicsUpdatePayload
 		| BroadcastGraphicsSetInputPayload
 		| BroadcastGraphicsSetOverridePayload
@@ -370,6 +378,7 @@ export type BroadcastGraphicsCommandInput
 	= | { type: 'Take' | 'Out'; payload: BroadcastGraphicsPlayoutPayload }
 		| { type: 'Select Social Profile'; payload: BroadcastGraphicsSelectSocialProfilePayload }
 		| { type: 'Previous Social Profile' | 'Next Social Profile'; payload: BroadcastGraphicsStepSocialProfilePayload }
+		| { type: 'Set Social Profile Automatic'; payload: BroadcastGraphicsSetSocialProfileAutomaticPayload }
 		| { type: 'Update Graphic'; payload: BroadcastGraphicsUpdatePayload }
 		| { type: 'Set Input'; payload: BroadcastGraphicsSetInputPayload }
 		| { type: 'Set Override'; payload: BroadcastGraphicsSetOverridePayload }
@@ -466,6 +475,8 @@ export interface BroadcastGraphicsReductionContext {
 export interface BroadcastGraphicChannelMember {
 	graphicId: string;
 	durations?: BroadcastGraphicPhaseDurations;
+	/** Authored rotations to freeze if a Take of another member hides this one. */
+	socialProfileProjections?: readonly SocialProfileProjectionDeclaration[];
 }
 
 /**
@@ -1206,10 +1217,23 @@ function reduceTake(
 	const cut = payload.cut === true;
 	const current = state.playout[payload.graphicId];
 	const restated = current?.onAir === true && !cut;
+	let acceptanceState = state;
+	if (!restated) {
+		for (const member of context.channel?.members ?? []) {
+			if (member.graphicId === payload.graphicId || acceptanceState.playout[member.graphicId]?.onAir !== true)
+				continue;
+			acceptanceState = freezeSocialProfileRotations(
+				acceptanceState,
+				member.graphicId,
+				member.socialProfileProjections,
+				context.acceptedAt,
+			);
+		}
+	}
 
 	const handoff = restated
-		? { playout: state.playout, entersAt: context.acceptedAt }
-		: channelHandoff(state, payload.graphicId, cut, context);
+		? { playout: acceptanceState.playout, entersAt: context.acceptedAt }
+		: channelHandoff(acceptanceState, payload.graphicId, cut, context);
 
 	const playout = {
 		...handoff.playout,
@@ -1222,17 +1246,18 @@ function reduceTake(
 		),
 	};
 
-	let socialProfileProjections = state.socialProfileProjections;
+	let socialProfileProjections = acceptanceState.socialProfileProjections;
 	if (
 		(context.socialProfileProjections?.length ?? 0) > 0
 		&& context.resolveSocialProfileProjections
 	) {
-		const previous = state.socialProfileProjections?.[payload.graphicId] ?? {};
+		const previous = acceptanceState.socialProfileProjections?.[payload.graphicId] ?? {};
 		const resolved = context.resolveSocialProfileProjections(
-			broadcastGraphicSourceSelections(state, payload.graphicId),
+			broadcastGraphicSourceSelections(acceptanceState, payload.graphicId),
 		);
 		const accepted = Object.fromEntries(Object.entries(resolved).map(([projectionKey, projection]) => {
-			const retained = previous[projectionKey]?.manualNetwork;
+			const previousProjection = previous[projectionKey];
+			const retained = previousProjection?.manualNetwork;
 			const manualNetwork = retained !== undefined
 				&& projection.acceptedProfiles.some(profile => profile.network === retained)
 				? retained
@@ -1240,21 +1265,25 @@ function reduceTake(
 			const currentNetwork = manualNetwork ?? projection.acceptedProfiles[0]?.network;
 			return [projectionKey, {
 				...projection,
+				automatic: previousProjection?.automatic !== false,
 				...(currentNetwork === undefined ? {} : { currentNetwork }),
 				...(manualNetwork === undefined ? {} : { manualNetwork }),
+				...(currentNetwork === undefined
+					? {}
+					: { rotationAnchor: { network: currentNetwork, anchoredAt: context.acceptedAt } }),
 			}];
 		}));
 		socialProfileProjections = {
-			...state.socialProfileProjections,
+			...acceptanceState.socialProfileProjections,
 			[payload.graphicId]: accepted,
 		};
 	}
 
 	if (current?.onAir)
-		return { ...state, playout, ...(socialProfileProjections ? { socialProfileProjections } : {}) };
+		return { ...acceptanceState, playout, ...(socialProfileProjections ? { socialProfileProjections } : {}) };
 
-	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
-	const bound = boundValuesFor(state, payload.graphicId, context);
+	const inputs = broadcastGraphicInputsState(acceptanceState, payload.graphicId);
+	const bound = boundValuesFor(acceptanceState, payload.graphicId, context);
 	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs, context.bindings, bound);
 	if (blocked.length > 0) {
 		throw new BroadcastGraphicsCommandRejection(
@@ -1267,7 +1296,7 @@ function reduceTake(
 	// An off-air acceptance: a Take composes its values afresh rather than holding a
 	// value from the last time this graphic was on air.
 	return {
-		...withInputs(state, payload.graphicId, {
+		...withInputs(acceptanceState, payload.graphicId, {
 			...inputs,
 			accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, false),
 			acceptedRevision: inputs.acceptedRevision + 1,
@@ -1308,6 +1337,7 @@ function reduceSelectSocialProfile(
 					...projection,
 					currentNetwork: payload.network,
 					manualNetwork: payload.network,
+					rotationAnchor: { network: payload.network, anchoredAt: context.acceptedAt },
 				},
 			},
 		},
@@ -1354,6 +1384,62 @@ function reduceStepSocialProfile(
 					...projection,
 					currentNetwork: network,
 					manualNetwork: network,
+					rotationAnchor: { network, anchoredAt: context.acceptedAt },
+				},
+			},
+		},
+	};
+}
+
+/** Pause on, or resume from, the profile every synchronized renderer projects now. */
+function reduceSetSocialProfileAutomatic(
+	state: BroadcastGraphicsLiveState,
+	payload: BroadcastGraphicsSetSocialProfileAutomaticPayload,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicsLiveState {
+	const declaration = context.socialProfileProjections?.find(
+		projection => projection.key === payload.projectionKey,
+	);
+	if (!declaration) {
+		throw new BroadcastGraphicsCommandRejection(
+			'unknown-social-profile-projection',
+			`This Broadcast Graphic declares no Social Profile Projection named ${payload.projectionKey}`,
+		);
+	}
+
+	const projection = state.socialProfileProjections?.[payload.graphicId]?.[payload.projectionKey];
+	if (!projection) {
+		throw new BroadcastGraphicsCommandRejection(
+			'social-profile-unavailable',
+			'This Social Profile Projection has no accepted state',
+		);
+	}
+
+	const currentAutomatic = projection.automatic !== false;
+	if (currentAutomatic === payload.automatic)
+		return state;
+
+	const current = projectSocialProfileRotation(projection, declaration, {
+		onAir: state.playout[payload.graphicId]?.onAir === true,
+		now: context.acceptedAt,
+	}).current;
+	const network = current?.network ?? projection.currentNetwork;
+
+	return {
+		...state,
+		socialProfileProjections: {
+			...state.socialProfileProjections,
+			[payload.graphicId]: {
+				...state.socialProfileProjections?.[payload.graphicId],
+				[payload.projectionKey]: {
+					...projection,
+					automatic: payload.automatic,
+					...(network === undefined
+						? {}
+						: {
+								currentNetwork: network,
+								rotationAnchor: { network, anchoredAt: context.acceptedAt },
+							}),
 				},
 			},
 		},
@@ -1433,6 +1519,43 @@ function exitCarryingInterruptedPhases(
 	return { playout, inputs: carried };
 }
 
+/** Persist the last clock-projected profile once an Out stops the rotation clock. */
+function freezeSocialProfileRotations(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	declarations: readonly SocialProfileProjectionDeclaration[] | undefined,
+	acceptedAt: number,
+): BroadcastGraphicsLiveState {
+	const projections = state.socialProfileProjections?.[graphicId];
+	if (!projections || (declarations?.length ?? 0) === 0)
+		return state;
+
+	let changed = false;
+	const frozen = Object.fromEntries(Object.entries(projections).map(([projectionKey, projection]) => {
+		const declaration = declarations?.find(entry => entry.key === projectionKey);
+		if (!declaration)
+			return [projectionKey, projection];
+		const current = projectSocialProfileRotation(projection, declaration, {
+			onAir: true,
+			now: acceptedAt,
+		}).current?.network;
+		if (current === undefined || current === projection.currentNetwork)
+			return [projectionKey, projection];
+		changed = true;
+		return [projectionKey, { ...projection, currentNetwork: current }];
+	}));
+
+	return changed
+		? {
+				...state,
+				socialProfileProjections: {
+					...state.socialProfileProjections,
+					[graphicId]: frozen,
+				},
+			}
+		: state;
+}
+
 /**
  * Out: state that this Broadcast Graphic is no longer the operator's desired on-air
  * intent.
@@ -1450,11 +1573,20 @@ function exitCarryingInterruptedPhases(
  * does not exist here.
  */
 function reduceOut(
-	state: BroadcastGraphicsLiveState,
+	inputState: BroadcastGraphicsLiveState,
 	payload: BroadcastGraphicsPlayoutPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
 	const { acceptedAt, channel } = context;
+	const inputPlayout = inputState.playout[payload.graphicId];
+	const state = inputPlayout?.onAir
+		? freezeSocialProfileRotations(
+				inputState,
+				payload.graphicId,
+				context.socialProfileProjections,
+				context.acceptedAt,
+			)
+		: inputState;
 	const current = state.playout[payload.graphicId];
 	const started = channelHoldsWaiting(state.playout, payload.graphicId, channel, acceptedAt)
 		? cutOff(acceptedAt)
@@ -1896,6 +2028,8 @@ export function applyBroadcastGraphicsCommand(
 			return reduceStepSocialProfile(normalized, command.payload, context, -1);
 		case 'Next Social Profile':
 			return reduceStepSocialProfile(normalized, command.payload, context, 1);
+		case 'Set Social Profile Automatic':
+			return reduceSetSocialProfileAutomatic(normalized, command.payload, context);
 		case 'Update Graphic':
 			return reduceUpdateGraphic(normalized, command.payload, context);
 		case 'Set Input':
@@ -1959,7 +2093,11 @@ export function broadcastGraphicChannelContexts(
 
 	for (const channel of stack.channels ?? []) {
 		const members = graphicChannelMembers(stack, channel.id)
-			.map(graphic => ({ graphicId: graphic.id, durations: broadcastGraphicPhaseDurations(graphic) }));
+			.map(graphic => ({
+				graphicId: graphic.id,
+				durations: broadcastGraphicPhaseDurations(graphic),
+				socialProfileProjections: graphic.socialProfileProjections ?? [],
+			}));
 		if (members.length === 0)
 			continue;
 

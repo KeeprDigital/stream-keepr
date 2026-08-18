@@ -77,18 +77,24 @@ describe('broadcastGraphicsCommandSchema', () => {
 			{ commandId: 'profile:1', type: 'Select Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile', network: 'x' } },
 			{ commandId: 'profile:2', type: 'Previous Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile' } },
 			{ commandId: 'profile:3', type: 'Next Social Profile', payload: { graphicId: 'lower', projectionKey: 'profile' } },
+			{ commandId: 'profile:4', type: 'Set Social Profile Automatic', payload: { graphicId: 'lower', projectionKey: 'profile', automatic: false } },
 		])
 			expect(broadcastGraphicsCommandSchema.safeParse(command).success).toBe(true);
 
 		expect(broadcastGraphicsCommandSchema.safeParse({
-			commandId: 'profile:4',
+			commandId: 'profile:5',
 			type: 'Select Social Profile',
 			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'facebook' },
 		}).success).toBe(false);
 		expect(broadcastGraphicsCommandSchema.safeParse({
-			commandId: 'profile:5',
+			commandId: 'profile:6',
 			type: 'Next Social Profile',
 			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'x' },
+		}).success).toBe(false);
+		expect(broadcastGraphicsCommandSchema.safeParse({
+			commandId: 'profile:7',
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: 'lower', projectionKey: 'profile', automatic: 'yes' },
 		}).success).toBe(false);
 	});
 });

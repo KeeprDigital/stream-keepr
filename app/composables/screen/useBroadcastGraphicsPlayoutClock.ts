@@ -41,7 +41,10 @@ export function useBroadcastGraphicsPlayoutClock(
 			now.value,
 			toValue(channels),
 		);
-		if (Object.keys(projection).length === 0) {
+		if (
+			Object.keys(projection).length === 0
+			&& !sessionStore.hasActiveSocialProfileRotation(toValue(screenId), toValue(graphics))
+		) {
 			stopClock();
 			return;
 		}

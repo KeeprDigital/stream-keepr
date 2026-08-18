@@ -113,7 +113,7 @@ export function useBroadcastGraphicsModeData() {
 		if (previewState.value)
 			return previewState.value.socialProfileValues ?? {};
 		const screenId = screen.value?.id;
-		return screenId ? sessionStore.socialProfileValues(screenId, graphics.value) : {};
+		return screenId ? sessionStore.socialProfileValues(screenId, graphics.value, liveNow.value) : {};
 	});
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
@@ -142,7 +142,7 @@ export function useBroadcastGraphicsModeData() {
 		if (previewState.value || !screenId)
 			return false;
 
-		return Object.keys(
+		return sessionStore.hasActiveSocialProfileRotation(screenId, graphics.value) || Object.keys(
 			sessionStore.animationProjection(screenId, graphics.value, liveNow.value, channels.value),
 		).length > 0;
 	}
