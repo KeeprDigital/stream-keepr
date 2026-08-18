@@ -5,7 +5,7 @@ import type {
 } from '~/modules/graphics/renderModel';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { nextTick } from 'vue';
+import { defineComponent, nextTick } from 'vue';
 
 enableAutoUnmount(afterEach);
 
@@ -26,7 +26,18 @@ async function mountItem(render: GraphicItemRenderDescriptor) {
 	const componentPath = '../../../../../app/components/Graphics/Compositor/Item.vue';
 	const { default: Item } = await import(componentPath);
 
-	return mount(Item, { props: { render } });
+	return mount(Item, {
+		props: { render },
+		global: {
+			stubs: {
+				UIcon: defineComponent({
+					name: 'UIcon',
+					props: { name: { type: String, required: true } },
+					template: '<i :data-icon-name="name" />',
+				}),
+			},
+		},
+	});
 }
 
 /**
@@ -101,6 +112,26 @@ describe('graphicsCompositorItem player life', () => {
 
 		expect(lifeParagraph(wrapper)).toBe(before);
 		expect(lifeClasses(wrapper).join(' ')).not.toContain('graphics-compositor-item--life');
+	});
+});
+
+describe('graphicsCompositorItem social network icon', () => {
+	it('renders the application vector identity with its authored colour and opacity', async () => {
+		const wrapper = await mountItem({
+			id: 'social-icon',
+			label: 'Social Network Icon',
+			kind: 'social-network-icon',
+			style: { position: 'absolute', left: '120px', top: '80px' },
+			icon: {
+				name: 'i-simple-icons-bluesky',
+				style: { display: 'block', width: '100%', height: '100%', color: '#1185fe', opacity: '0.65' },
+			},
+		});
+
+		const icon = wrapper.get('[data-social-network-icon]');
+		expect(icon.attributes('data-icon-name')).toBe('i-simple-icons-bluesky');
+		expect(icon.attributes('style')).toContain('color: #1185fe');
+		expect(icon.attributes('style')).toContain('opacity: 0.65');
 	});
 });
 

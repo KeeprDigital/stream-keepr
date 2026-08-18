@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackagePreflightReport } from '~~/shared/types/templatePackage';
 import { Buffer } from 'node:buffer';
@@ -148,7 +148,7 @@ function reportOf(operation: { templatePackagePreflight?: TemplatePackagePreflig
  * object the export path reads, so nothing about the seam is simulated.
  */
 async function withGraphicItemDefinitionAt<T>(
-	kind: 'media',
+	kind: GraphicItemKind,
 	configurationVersion: number,
 	work: () => Promise<T>,
 ): Promise<T> {
@@ -250,6 +250,21 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		const parts = readTemplatePackageParts(archive);
 		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
 			declaration => declaration.identity === 'media'
+				? { ...declaration, configurationVersion: 2 }
+				: declaration,
+		);
+
+		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+
+		expect(report.outcome).toBe('rejected');
+		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
+	});
+
+	it('refuses a future Social Network Icon configuration version', async () => {
+		const { archive } = await exportedPackage();
+		const parts = readTemplatePackageParts(archive);
+		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
+			declaration => declaration.identity === 'social-network-icon'
 				? { ...declaration, configurationVersion: 2 }
 				: declaration,
 		);

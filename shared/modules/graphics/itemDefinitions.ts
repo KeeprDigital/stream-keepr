@@ -6,7 +6,8 @@ import type {
 	GraphicSurfaceStyle,
 	GraphicTypography,
 } from '../../types/graphics';
-import type { GraphicsContextKind, GraphicsHostContract } from './hostContract';
+import type { GraphicsContextKind, GraphicsHostContract, GraphicsHostId } from './hostContract';
+import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
 import { applicationGraphicFont } from '../../types/graphics';
 import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
 import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
@@ -53,6 +54,8 @@ export interface GraphicItemDefinition {
 	icon: string;
 	/** A context the host must declare before the definition palette offers this kind. */
 	requiredContext?: GraphicsContextKind;
+	/** A single Screen Mode host this Definition is reserved for. */
+	requiredHost?: GraphicsHostId;
 	createDefault: (options: GraphicItemDefaultsOptions) => GraphicItemConfig;
 	summary: (item: GraphicItemConfig) => string;
 }
@@ -88,6 +91,17 @@ function defaultRect(options: GraphicItemDefaultsOptions) {
 		y: Math.round(options.canvasHeight * 0.1),
 		width: Math.round(options.canvasWidth * 0.4),
 		height: Math.round(options.canvasHeight * 0.1),
+	};
+}
+
+/** A square icon sized from the shorter canvas axis. */
+function defaultIconRect(options: GraphicItemDefaultsOptions) {
+	const size = Math.round(Math.min(options.canvasWidth, options.canvasHeight) * 0.1);
+	return {
+		x: Math.round(options.canvasWidth * 0.1),
+		y: Math.round(options.canvasHeight * 0.1),
+		width: size,
+		height: size,
 	};
 }
 
@@ -175,6 +189,27 @@ const DEFINITIONS = {
 				return 'No Graphic Asset';
 			return `${item.mediaKind === 'silent-video' ? 'silent video' : 'image'} • ${item.fit}`;
 		},
+	},
+	'social-network-icon': {
+		kind: 'social-network-icon',
+		configurationVersion: 1,
+		label: 'Social Network Icon',
+		icon: 'i-lucide-at-sign',
+		requiredHost: 'broadcast-graphics',
+		createDefault: options => ({
+			type: 'social-network-icon',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultIconRect(options),
+			network: 'twitch',
+			color: '#ffffff',
+			opacity: 1,
+		}),
+		summary: item => item.type === 'social-network-icon'
+			? `${SUPPORTED_SOCIAL_NETWORK_BY_KEY[item.network].label} • ${item.color}`
+			: 'Social Network Icon',
 	},
 	'group': {
 		kind: 'group',
@@ -300,8 +335,9 @@ export function isGraphicItemDefinitionAvailable(
 	definition: GraphicItemDefinition,
 	contract: GraphicsHostContract,
 ): boolean {
-	return definition.requiredContext === undefined
-		|| contract.contextKinds.includes(definition.requiredContext);
+	return (definition.requiredHost === undefined || definition.requiredHost === contract.hostId)
+		&& (definition.requiredContext === undefined
+			|| contract.contextKinds.includes(definition.requiredContext));
 }
 
 export function graphicItemDefinitionsForHost(contract: GraphicsHostContract): readonly GraphicItemDefinition[] {

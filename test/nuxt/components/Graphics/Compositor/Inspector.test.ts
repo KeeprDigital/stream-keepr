@@ -101,6 +101,21 @@ const mediaItem: GraphicItemConfig = {
 	loop: true,
 };
 
+const socialNetworkIconItem: GraphicItemConfig = {
+	type: 'social-network-icon',
+	id: 'social-icon',
+	label: 'Social Network Icon 1',
+	visible: true,
+	anchor: 'top-left',
+	x: 40,
+	y: 60,
+	width: 96,
+	height: 96,
+	network: 'twitch',
+	color: '#9146ff',
+	opacity: 0.75,
+};
+
 function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
 	return [{ id: 'lower-third', name: 'Lower Third', items }];
 }
@@ -264,12 +279,12 @@ function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
  */
 function surfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const item = itemOf(graphics, index);
-	return item && item.type !== 'media' ? item.surfaceStyle : undefined;
+	return item && item.type !== 'media' && item.type !== 'social-network-icon' ? item.surfaceStyle : undefined;
 }
 
 function childSurfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const child = childOf(graphics, index);
-	return child && child.type !== 'media' ? child.surfaceStyle : undefined;
+	return child && child.type !== 'media' && child.type !== 'social-network-icon' ? child.surfaceStyle : undefined;
 }
 
 function textInput(key: string): GraphicInputDeclaration {
@@ -893,6 +908,55 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		});
+	});
+
+	describe('social network icon Graphic Items', () => {
+		function selectedIcon() {
+			return mountComponent({
+				graphics: stack([socialNetworkIconItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
+			});
+		}
+
+		it('offers the complete Supported Social Network catalog', async () => {
+			const wrapper = await selectedIcon();
+			const network = selectField(wrapper, 'social-network-icon-network');
+
+			expect(network?.props('items')).toEqual([
+				{ label: 'Twitch', value: 'twitch' },
+				{ label: 'YouTube', value: 'youtube' },
+				{ label: 'X', value: 'x' },
+				{ label: 'Instagram', value: 'instagram' },
+				{ label: 'TikTok', value: 'tiktok' },
+				{ label: 'Bluesky', value: 'bluesky' },
+			]);
+
+			network?.vm.$emit('update:modelValue', 'youtube');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
+				type: 'social-network-icon',
+				network: 'youtube',
+				color: '#9146ff',
+				opacity: 0.75,
+			});
+		});
+
+		it('edits colour and opacity independently of the shared geometry and visibility controls', async () => {
+			const wrapper = await selectedIcon();
+
+			wrapper.get('[data-testid="social-network-icon-color"]').getComponent(UInputStub).vm.$emit('update:modelValue', '#ffcc00');
+			await nextTick();
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ color: '#ffcc00', opacity: 0.75 });
+
+			await wrapper.setProps({ graphics: emittedGraphics(wrapper) });
+			numberFieldByTestId(wrapper, 'social-network-icon-opacity')?.vm.$emit('update:modelValue', 0.4);
+			await nextTick();
+			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ color: '#ffcc00', opacity: 0.4 });
+
+			expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(true);
+			expect(wrapper.find('[data-testid="graphic-item-rotation"]').exists()).toBe(true);
 		});
 	});
 
@@ -1900,7 +1964,9 @@ describe('graphicsCompositorInspector', () => {
 			await switchField(wrapper, 'surface-style-own')?.trigger('click');
 
 			const item = itemOf(emittedGraphics(wrapper));
-			expect(item?.type !== 'media' && item?.surfaceStyle).toMatchObject({ fillOpacity: 1 });
+			expect(
+				item?.type !== 'media' && item?.type !== 'social-network-icon' && item?.surfaceStyle,
+			).toMatchObject({ fillOpacity: 1 });
 		});
 
 		it('sets the life-change animation a Player Life Item marks a change with', async () => {

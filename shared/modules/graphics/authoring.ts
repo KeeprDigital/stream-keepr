@@ -1549,7 +1549,7 @@ function withoutStaggeredItem(
 }
 
 /** The kinds that may own a Graphic Animation: every Graphic Item kind. */
-const ANIMATION_KINDS = ['text', 'shape', 'group'] as const;
+const ANIMATION_KINDS = ['text', 'shape', 'group', 'social-network-icon'] as const;
 
 /** Only a Graphic Group has direct Graphic Items of its own to stagger. */
 const STAGGER_KINDS = ['group'] as const;

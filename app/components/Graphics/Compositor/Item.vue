@@ -412,6 +412,14 @@ watch(
 			>
 		</template>
 
+		<UIcon
+			v-if="render.icon"
+			:name="render.icon.name"
+			:style="render.icon.style"
+			aria-hidden="true"
+			data-social-network-icon
+		/>
+
 		<Item
 			v-for="child in render.children"
 			:key="child.id"
