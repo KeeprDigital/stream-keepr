@@ -1,4 +1,4 @@
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from 'hub:db';
 import { chunkArray, SAFE_INARRAY_SIZE } from './db';
 
@@ -73,4 +73,28 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 		actor,
 		found.get(actor) ?? (ANONYMOUS_ERA_ACTOR.test(actor) ? ANONYMOUS_ERA_ACTOR_NAME : actor),
 	]));
+}
+
+/**
+ * What to call the person whose browser holds a Graphics Authoring Lease (#398).
+ *
+ * A lease is held by a session id, and a session id is neither a name nor
+ * something an editor may be handed — it is another browser's credential
+ * identifier. So the resolution happens here, where the session table is, and
+ * only the name crosses to the client.
+ *
+ * `null` rather than a placeholder when the session has since ended or its user
+ * is gone: a holder whose name cannot be resolved is still a holder, and the
+ * surface that shows this says so in its own words rather than being handed an
+ * invented one.
+ */
+export async function sessionHolderName(sessionId: string): Promise<string | null> {
+	const [holder] = await db
+		.select({ name: schema.user.name, email: schema.user.email })
+		.from(schema.session)
+		.innerJoin(schema.user, eq(schema.session.userId, schema.user.id))
+		.where(eq(schema.session.id, sessionId))
+		.limit(1);
+
+	return holder ? holder.name.trim() || holder.email : null;
 }

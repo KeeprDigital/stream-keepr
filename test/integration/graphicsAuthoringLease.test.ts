@@ -12,6 +12,7 @@ interface LeaseState {
 	role: 'holder' | 'observer';
 	writable: boolean;
 	heldByAnotherSession: boolean;
+	heldBy: string | null;
 	expiresAt: number | null;
 	heldSince: number | null;
 	heartbeatIntervalMs: number;
@@ -226,6 +227,24 @@ describe('graphics Authoring Leases', () => {
 		expect(asked.data.lease.role).toBe('observer');
 		expect(asked.data.lease.writable).toBe(false);
 		expect(asked.data.lease.heldByAnotherSession).toBe(true);
+	});
+
+	/**
+	 * The takeover surface is shown a person, never a session id (#398,
+	 * ADR-0010).
+	 *
+	 * Both browsers here are the same operator, so the name that comes back is
+	 * their own — which is the honest answer and the useful one: what an observer
+	 * has to decide is whether to go and ask a colleague or close their own second
+	 * window, and only a name can tell them.
+	 */
+	it('names the person holding it, rather than handing over a session id', async () => {
+		await askForLease(browserA);
+
+		const asked = await askForLease(browserB);
+
+		expect(asked.data.lease.heldBy).toBe('Integration Operator');
+		expect(JSON.stringify(asked.data.lease)).not.toContain(browserA.split('=')[1]!.slice(0, 12));
 	});
 
 	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {

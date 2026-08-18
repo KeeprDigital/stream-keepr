@@ -7,6 +7,7 @@ import type {
 import { and, eq, lte, or } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { graphicsAuthoringLeases } from '~~/server/db/schema';
+import { sessionHolderName } from '~~/server/utils/actorNames';
 import {
 	graphicsAuthoringLeaseDeadline,
 	graphicsAuthoringLeaseState,
@@ -106,12 +107,18 @@ export function graphicsAuthoringLeaseModule() {
 		ref: GraphicsAuthoringLeaseRef,
 		sessionId: string | undefined,
 	): Promise<GraphicsAuthoringLeaseState> {
-		return graphicsAuthoringLeaseState(
-			ref.artifact,
-			await loadRecord(ref.artifact),
-			sessionId,
-			Date.now(),
-		);
+		const record = await loadRecord(ref.artifact);
+		const state = graphicsAuthoringLeaseState(ref.artifact, record, sessionId, Date.now());
+
+		// Only for an observer, and only here. A holder needs no name for
+		// themselves, and the branches that grant, renew, or take over all answer
+		// the asking session as holder — so this is the one shape that can carry
+		// somebody else's name, and it costs a read exactly where an editor is
+		// about to be told it cannot write (#398, ADR-0010).
+		if (!state.heldByAnotherSession || !record)
+			return state;
+
+		return { ...state, heldBy: await sessionHolderName(record.holderSessionId) };
 	}
 
 	/**

@@ -56,6 +56,22 @@ export interface GraphicsAuthoringLeaseState {
 	writable: boolean;
 	/** A live lease belongs to someone else — the only reason to offer a takeover. */
 	heldByAnotherSession: boolean;
+	/**
+	 * Who is holding it, where that is somebody else and their name could be
+	 * resolved (ADR-0010, #398).
+	 *
+	 * A lease is held by a **session**, and a session id is not something to show
+	 * an operator or to put in front of a Take over button — "another session" was
+	 * all this surface could say while the holder was an anonymous cookie. The
+	 * server resolves session → user when it answers, because that resolution
+	 * needs the session table and the editor must never be handed another
+	 * browser's session id.
+	 *
+	 * `null` where nobody else holds it, and also where the holder resolves to no
+	 * user: an unnamed holder is still a holder, and the surface falls back to
+	 * saying so rather than inventing a name.
+	 */
+	heldBy: string | null;
 	/** When the current holder's claim lapses, so an observer can show the wait. */
 	expiresAt: number | null;
 	heldSince: number | null;
@@ -155,6 +171,9 @@ export function graphicsAuthoringLeaseState(
 		role: held ? 'holder' : 'observer',
 		writable: graphicsAuthoringLeaseAllowsWrite(record, sessionId, now),
 		heldByAnotherSession: live && !held,
+		// Names are resolved by the caller that can reach the session table; this
+		// function is pure and shared with the browser, which must never see one.
+		heldBy: null,
 		expiresAt: live ? record.expiresAt : null,
 		heldSince: live ? record.acquiredAt : null,
 		heartbeatIntervalMs: GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS,

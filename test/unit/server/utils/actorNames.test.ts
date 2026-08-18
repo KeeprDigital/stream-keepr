@@ -16,17 +16,34 @@ import { describe, expect, it, vi } from 'vitest';
  */
 
 const mockWhere = vi.fn();
+/** The holder lookup, which joins the session table before it filters. */
+const mockJoinedWhere = vi.fn();
 
 vi.mock('hub:db', () => ({
 	db: {
-		select: () => ({ from: () => ({ where: mockWhere }) }),
+		select: () => ({
+			from: () => ({
+				where: mockWhere,
+				innerJoin: () => ({ where: () => ({ limit: mockJoinedWhere }) }),
+			}),
+		}),
 	},
-	schema: { user: { id: 'id', name: 'name', email: 'email' } },
+	schema: {
+		user: { id: 'id', name: 'name', email: 'email' },
+		session: { id: 'id', userId: 'user_id' },
+	},
 }));
 
-vi.mock('drizzle-orm', () => ({ inArray: (_column: unknown, values: string[]) => values }));
+vi.mock('drizzle-orm', () => ({
+	inArray: (_column: unknown, values: string[]) => values,
+	eq: (_column: unknown, value: unknown) => value,
+}));
 
-const { ANONYMOUS_ERA_ACTOR_NAME, graphicsActorNames } = await import('~~/server/utils/actorNames');
+const {
+	ANONYMOUS_ERA_ACTOR_NAME,
+	graphicsActorNames,
+	sessionHolderName,
+} = await import('~~/server/utils/actorNames');
 
 /** The user table holding exactly these people. */
 function directoryOf(...users: Array<{ id: string; name: string; email: string }>) {
@@ -111,5 +128,37 @@ describe('the names an administrator reading shows for its actors', () => {
 		expect(mockWhere).toHaveBeenCalledTimes(3);
 		for (const [asked] of mockWhere.mock.calls)
 			expect((asked as string[]).length).toBeLessThanOrEqual(50);
+	});
+});
+
+/**
+ * Who is holding a Graphics Authoring Lease, for the surface that offers to take
+ * it from them (#398).
+ *
+ * A lease is held by a session id, and a session id is another browser's
+ * credential identifier — never something to hand an editor or print beside a
+ * Take over button. That is the whole reason this resolution lives on the server
+ * rather than in the composable that renders the notice.
+ */
+describe('the name behind a lease holder\'s session', () => {
+	it('answers the person the holding session belongs to', async () => {
+		mockJoinedWhere.mockResolvedValue([{ name: 'Marcus Angel', email: 'marcus@keepr.digital' }]);
+
+		await expect(sessionHolderName('a-session')).resolves.toBe('Marcus Angel');
+	});
+
+	it('falls back to the address where the account carries no name', async () => {
+		mockJoinedWhere.mockResolvedValue([{ name: '  ', email: 'marcus@keepr.digital' }]);
+
+		await expect(sessionHolderName('a-session')).resolves.toBe('marcus@keepr.digital');
+	});
+
+	it('answers nothing for a session that has since ended', async () => {
+		// The artifact is still held — the lease row outlives the session row by up
+		// to its deadline — so the caller says so in its own words rather than being
+		// handed a placeholder to print.
+		mockJoinedWhere.mockResolvedValue([]);
+
+		await expect(sessionHolderName('a-session')).resolves.toBeNull();
 	});
 });
