@@ -83,9 +83,24 @@ export interface AdministeredUserOutcome {
  *
  * The count is what makes the action legible: "revoked 3 sessions" tells an
  * administrator the person really was signed in somewhere, and "revoked 0"
- * tells them the compromise they were chasing is not a live session.
+ * tells them the compromise they were chasing is not a live session. Only
+ * sessions that had not already lapsed are counted — an expired row is not
+ * something this action ended.
  */
 export interface RevokedUserSessions {
+	readonly user: AdministeredUser;
+	readonly revokedSessionCount: number;
+}
+
+/**
+ * The account after a ban, and how many sessions the ban ended.
+ *
+ * Structurally what a revocation answers, and named separately because it is
+ * not one: Better Auth enforces a ban when a session is *created*, so banning
+ * has to revoke as well, and a response typed `RevokedUserSessions` would read
+ * as though the ban were the side effect rather than the point.
+ */
+export interface BannedUserAccount {
 	readonly user: AdministeredUser;
 	readonly revokedSessionCount: number;
 }

@@ -3,11 +3,13 @@ import type {
 	AdministeredUser,
 	AdministeredUserList,
 	AdministeredUserOutcome,
+	BannedUserAccount,
 	CreatedUserAccount,
 	IssuedPasswordResetLink,
 	PasswordResetLink,
 	RevokedUserSessions,
 } from '~~/shared/types/userAdministration';
+import { assertPasswordWithinBounds, normalizeAccountEmail } from '~~/server/utils/betterAuthCredentials';
 import { passwordResetLinkPath } from '~~/shared/utils/passwordResetLink';
 
 /**
@@ -67,9 +69,6 @@ export const PASSWORD_RESET_LINK_LIFETIME_SECONDS = 60 * 60 * 24;
  */
 export const USER_LIST_CAP = 200;
 
-/** As much of an account as this module's decisions read. */
-export type UserAdministrationAccount = AdministeredUser;
-
 /**
  * What administering users needs from Better Auth, named as an interface so
  * every decision below can be exercised without a database.
@@ -81,14 +80,14 @@ export interface UserAdministrationPort {
 	/** Better Auth's configured bounds, read rather than restated. */
 	readonly minPasswordLength: number;
 	readonly maxPasswordLength: number;
-	listUsers: (limit: number) => Promise<{ users: readonly UserAdministrationAccount[]; total: number }>;
-	findByEmail: (email: string) => Promise<UserAdministrationAccount | null>;
-	findById: (userId: string) => Promise<UserAdministrationAccount | null>;
-	createUser: (input: { email: string; name: string }) => Promise<UserAdministrationAccount>;
+	listUsers: (limit: number) => Promise<{ users: readonly AdministeredUser[]; total: number }>;
+	findByEmail: (email: string) => Promise<AdministeredUser | null>;
+	findById: (userId: string) => Promise<AdministeredUser | null>;
+	createUser: (input: { email: string; name: string }) => Promise<AdministeredUser>;
 	setPassword: (userId: string, password: string) => Promise<void>;
 	/** Mints one single-use reset token redeemable until `expiresAt`. */
 	issuePasswordResetToken: (userId: string, expiresAt: Date) => Promise<string>;
-	setBan: (userId: string, ban: { banned: boolean; banReason: string | null }) => Promise<UserAdministrationAccount>;
+	setBan: (userId: string, ban: { banned: boolean; banReason: string | null }) => Promise<AdministeredUser>;
 	countSessions: (userId: string) => Promise<number>;
 	revokeSessions: (userId: string) => Promise<void>;
 }
@@ -132,21 +131,6 @@ export function administeredUserIdFrom(event: H3Event): string {
 export interface CreateUserAccountRequest {
 	readonly email: string;
 	readonly name: string;
-}
-
-/**
- * The email an account is keyed on, which is not necessarily the one that was
- * typed — Better Auth lowercases before it stores.
- *
- * The same normalization the first-admin bootstrap does, and here for the same
- * reason: the `UserAdministrationPort` interface promises no such courtesy, so
- * a decision that relies on the implementation happening to offer one changes
- * when the implementation does. It also settles what a duplicate is — `A@b.c`
- * and `a@b.c` are one account, and a create that did not know that would fail
- * at the database's unique index with nothing useful to say.
- */
-export function normalizeAccountEmail(email: string) {
-	return email.trim().toLowerCase();
 }
 
 /** Every account this installation holds, capped. */
@@ -268,7 +252,7 @@ export async function banUserAccount(
 	port: UserAdministrationPort,
 	userId: string,
 	banReason: string | null,
-): Promise<RevokedUserSessions> {
+): Promise<BannedUserAccount> {
 	await requireAccount(port, userId);
 
 	const user = await port.setBan(userId, { banned: true, banReason: banReason?.trim() || null });
@@ -317,7 +301,7 @@ export async function revokeUserSessions(
 async function requireAccount(
 	port: UserAdministrationPort,
 	userId: string,
-): Promise<UserAdministrationAccount> {
+): Promise<AdministeredUser> {
 	const user = await port.findById(userId);
 
 	if (!user) {
@@ -329,23 +313,6 @@ async function requireAccount(
 	}
 
 	return user;
-}
-
-function assertPasswordWithinBounds(port: UserAdministrationPort, password: string) {
-	if (password.length < port.minPasswordLength) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: `Password must be at least ${port.minPasswordLength} characters`,
-		});
-	}
-	if (password.length > port.maxPasswordLength) {
-		throw createError({
-			statusCode: 400,
-			statusMessage: 'Bad Request',
-			message: `Password must be at most ${port.maxPasswordLength} characters`,
-		});
-	}
 }
 
 /**

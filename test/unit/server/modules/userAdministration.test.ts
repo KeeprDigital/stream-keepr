@@ -1,7 +1,5 @@
-import type {
-	UserAdministrationAccount,
-	UserAdministrationPort,
-} from '~~/server/modules/user-administration';
+import type { UserAdministrationPort } from '~~/server/modules/user-administration';
+import type { AdministeredUser } from '~~/shared/types/userAdministration';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
@@ -12,7 +10,6 @@ const {
 	createUserAccount,
 	issuePasswordResetLinkForUser,
 	listUserAccounts,
-	normalizeAccountEmail,
 	PASSWORD_RESET_LINK_LIFETIME_SECONDS,
 	revokeUserSessions,
 	setUserAccountPassword,
@@ -39,7 +36,7 @@ const NOW = new Date('2026-08-18T09:00:00.000Z');
 const ORIGIN = 'https://stream.keepr.digital';
 const CONTEXT = { now: NOW, origin: ORIGIN };
 
-function accountFor(overrides: Partial<UserAdministrationAccount> = {}): UserAdministrationAccount {
+function accountFor(overrides: Partial<AdministeredUser> = {}): AdministeredUser {
 	return {
 		id: 'user-1',
 		email: 'operator@keepr.digital',
@@ -53,14 +50,14 @@ function accountFor(overrides: Partial<UserAdministrationAccount> = {}): UserAdm
 }
 
 interface FakePort extends UserAdministrationPort {
-	accounts: Map<string, UserAdministrationAccount>;
+	accounts: Map<string, AdministeredUser>;
 	sessionCounts: Map<string, number>;
 	issuedTokens: { userId: string; expiresAt: Date }[];
 	revoked: string[];
 	setPasswords: { userId: string; password: string }[];
 }
 
-function fakePort(seed: UserAdministrationAccount[] = []): FakePort {
+function fakePort(seed: AdministeredUser[] = []): FakePort {
 	const accounts = new Map(seed.map(account => [account.id, account]));
 	const sessionCounts = new Map<string, number>();
 	const issuedTokens: { userId: string; expiresAt: Date }[] = [];
@@ -352,11 +349,5 @@ describe('revoking sessions on their own', () => {
 		await expect(revokeUserSessions(fakePort(), 'user-404'))
 			.rejects
 			.toMatchObject({ statusCode: 404 });
-	});
-});
-
-describe('the email an account is keyed on', () => {
-	it('is trimmed and lowercased, because that is what Better Auth stores', () => {
-		expect(normalizeAccountEmail('  Operator@Keepr.Digital ')).toBe('operator@keepr.digital');
 	});
 });

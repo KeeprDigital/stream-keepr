@@ -314,4 +314,20 @@ describe('banning and revoking against a real Better Auth', () => {
 		expect(await revokeUserSessions(configured, created.user.id))
 			.toMatchObject({ revokedSessionCount: 0 });
 	});
+
+	it('does not count sessions that had already lapsed', async () => {
+		// Nothing prunes an expired session row, so a count taken without
+		// `onlyActiveSessions` reports sessions that ended by themselves weeks ago
+		// as sessions this action just ended. "Revoked 0" is how an administrator
+		// learns the compromise they are chasing is not live, and an inflated count
+		// tells them the opposite.
+		const { configured, created, session } = await signedInOperator();
+		const context = await auth.$context;
+		await context.internalAdapter.updateSession(session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		expect(await revokeUserSessions(configured, created.user.id))
+			.toMatchObject({ revokedSessionCount: 0 });
+	});
 });

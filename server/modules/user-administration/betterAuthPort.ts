@@ -1,6 +1,8 @@
 import type { ServerAuth } from '~~/server/utils/auth';
-import type { UserAdministrationAccount, UserAdministrationPort } from '.';
+import type { AdministeredUser } from '~~/shared/types/userAdministration';
+import type { UserAdministrationPort } from '.';
 import { serverAuth } from '~~/server/utils/auth';
+import { setCredentialPassword } from '~~/server/utils/betterAuthCredentials';
 
 /**
  * User administration's `UserAdministrationPort`, in terms of Better Auth.
@@ -86,18 +88,10 @@ export async function betterAuthUserAdministrationPort(
 			return stored ? toAccount(stored) : toAccount({ ...user, role: null });
 		},
 
-		setPassword: async (userId, password) => {
-			const hashedPassword = await context.password.hash(password);
-			const accounts = await context.internalAdapter.findAccounts(userId);
-			// An invited account has no `credential` row until its link is redeemed,
-			// and creating one here is what `setUserPassword` does in the same case.
-			// Skipping it would leave this reporting success over an account that
-			// still cannot sign in.
-			if (accounts.some(account => account.providerId === 'credential'))
-				await context.internalAdapter.updatePassword(userId, hashedPassword);
-			else
-				await context.internalAdapter.createAccount({ userId, providerId: 'credential', accountId: userId, password: hashedPassword });
-		},
+		// An invited account has no `credential` row until its link is redeemed, so
+		// the shared writer's create-where-absent arm is the ordinary case here
+		// rather than the edge one.
+		setPassword: async (userId, password) => setCredentialPassword(context, userId, password),
 
 		issuePasswordResetToken: async (userId, expiresAt) => {
 			const token = mintResetToken();
@@ -133,7 +127,14 @@ export async function betterAuthUserAdministrationPort(
 			return toAccount(updated);
 		},
 
-		countSessions: async userId => (await context.internalAdapter.listSessions(userId)).length,
+		// `onlyActiveSessions`, or the count includes rows that had already lapsed:
+		// nothing prunes an expired session, so without the flag a ban on a
+		// long-dormant account reports "4 sessions ended" for four sessions that
+		// ended by themselves weeks ago. The number is the whole point of reporting
+		// it — "revoked 0" is how an administrator learns the compromise they are
+		// chasing is not a live session — so an inflated one is worse than none.
+		countSessions: async userId =>
+			(await context.internalAdapter.listSessions(userId, { onlyActiveSessions: true })).length,
 
 		revokeSessions: async (userId) => {
 			await context.internalAdapter.deleteUserSessions(userId);
@@ -180,7 +181,7 @@ function mintResetToken(): string {
  * spread-and-send would put whatever a future version adds to the table onto an
  * administrator's screen without anybody deciding to.
  */
-function toAccount(row: Record<string, unknown>): UserAdministrationAccount {
+function toAccount(row: Record<string, unknown>): AdministeredUser {
 	const { id, email, name, role, banned, banReason, createdAt } = row as {
 		id: string;
 		email: string;

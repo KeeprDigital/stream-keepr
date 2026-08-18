@@ -4,6 +4,7 @@ import type {
 	AdministeredUserList,
 	CreatedUserAccount,
 	IssuedPasswordResetLink,
+	PasswordResetLink,
 	RevokedUserSessions,
 } from '~~/shared/types/userAdministration';
 import { formatInstant } from '~~/shared/utils/formatInstant';
@@ -28,7 +29,15 @@ definePageMeta({
 });
 
 const invitation = reactive({ email: '', name: '' });
-const invitePending = ref(false);
+
+/**
+ * The key the invite form's pending state is held under.
+ *
+ * `runAction` keys on an account id, and an invite has no account yet — so it
+ * gets a name no account id can collide with rather than a second pending flag
+ * beside the shared one.
+ */
+const INVITE_FORM = 'invite-form';
 
 /**
  * The one link currently on screen, and which account it belongs to.
@@ -37,7 +46,16 @@ const invitePending = ref(false);
  * accumulating them would leave a screen full of live passwords, and the
  * administrator only ever hands over one at a time.
  */
-const issuedLink = ref<{ userId: string; email: string; url: string; expiresAt: string } | null>(null);
+const issuedLink = ref<{ email: string; url: string; expiresAt: string } | null>(null);
+
+/**
+ * Which administrative action a button stands for.
+ *
+ * A union rather than a bare string because `runAction` and `isPending` agree on
+ * a `userId:kind` key by spelling it twice — a typo in one of them silently
+ * never spins a button, which looks like a hung request rather than a typo.
+ */
+type ActionKind = 'invite' | 'reset-link' | 'password' | 'ban' | 'unban' | 'sessions';
 
 /** Which row has a form open, so only one is ever collecting a secret. */
 const openAction = ref<{ userId: string; kind: 'password' | 'ban' } | null>(null);
@@ -73,7 +91,7 @@ const {
 
 const { copy, copied, isSupported: clipboardSupported } = useClipboard();
 
-function isPending(userId: string, kind: string) {
+function isPending(userId: string, kind: ActionKind) {
 	return actionPending.value === `${userId}:${kind}`;
 }
 
@@ -97,7 +115,7 @@ function isFormOpen(userId: string, kind: 'password' | 'ban') {
  */
 async function runAction(
 	userId: string,
-	kind: string,
+	kind: ActionKind,
 	perform: () => Promise<string>,
 	failureMessage: string,
 ) {
@@ -120,38 +138,35 @@ async function runAction(
 	}
 }
 
+/**
+ * Put a freshly minted link on screen, replacing whatever was there.
+ *
+ * One writer, because this is the only state on the page that is a credential:
+ * two call sites building the object meant two places to remember that it is
+ * shown once and stored nowhere.
+ */
+function showIssuedLink(email: string, link: PasswordResetLink) {
+	issuedLink.value = { email, url: link.url, expiresAt: link.expiresAt };
+}
+
+/**
+ * The invite runs through `runAction` like every other action — keyed on the
+ * form rather than a row, since there is no account yet to key it on.
+ */
 async function invite() {
-	if (invitePending.value)
-		return;
-
-	invitePending.value = true;
-	actionError.value = null;
-	actionSummary.value = null;
 	issuedLink.value = null;
-
-	try {
+	await runAction(INVITE_FORM, 'invite', async () => {
 		const created = await $fetch<CreatedUserAccount>('/api/admin/users', {
 			method: 'POST',
 			headers: administratorHeaders(),
 			body: { email: invitation.email.trim(), name: invitation.name.trim() },
 		});
 
-		issuedLink.value = {
-			userId: created.user.id,
-			email: created.user.email,
-			url: created.passwordResetLink.url,
-			expiresAt: created.passwordResetLink.expiresAt,
-		};
+		showIssuedLink(created.user.email, created.passwordResetLink);
 		invitation.email = '';
 		invitation.name = '';
-		await loadAccounts();
-	}
-	catch (caught) {
-		actionError.value = describeFailure(caught, 'The account could not be created.');
-	}
-	finally {
-		invitePending.value = false;
-	}
+		return `${created.user.email} has an account. Hand the link below over yourself.`;
+	}, 'The account could not be created.');
 }
 
 async function issueResetLink(user: AdministeredUser) {
@@ -161,12 +176,7 @@ async function issueResetLink(user: AdministeredUser) {
 			`/api/admin/users/${user.id}/password-reset-link`,
 			{ method: 'POST', headers: administratorHeaders() },
 		);
-		issuedLink.value = {
-			userId: user.id,
-			email: user.email,
-			url: issued.passwordResetLink.url,
-			expiresAt: issued.passwordResetLink.expiresAt,
-		};
+		showIssuedLink(user.email, issued.passwordResetLink);
 		return `A new reset link for ${user.email} is ready to hand over.`;
 	}, 'The reset link could not be issued.');
 }
@@ -311,7 +321,7 @@ const hiddenAccountCount = computed(() =>
 										type="email"
 										autocomplete="off"
 										class="w-full"
-										:disabled="invitePending"
+										:disabled="isPending(INVITE_FORM, 'invite')"
 									/>
 								</UFormField>
 								<UFormField name="name" label="Name">
@@ -319,7 +329,7 @@ const hiddenAccountCount = computed(() =>
 										v-model="invitation.name"
 										autocomplete="off"
 										class="w-full"
-										:disabled="invitePending"
+										:disabled="isPending(INVITE_FORM, 'invite')"
 									/>
 								</UFormField>
 							</div>
@@ -332,7 +342,7 @@ const hiddenAccountCount = computed(() =>
 									type="submit"
 									icon="i-lucide-user-plus"
 									label="Create account"
-									:loading="invitePending"
+									:loading="isPending(INVITE_FORM, 'invite')"
 									:disabled="!invitation.email.trim() || !invitation.name.trim()"
 								/>
 							</div>

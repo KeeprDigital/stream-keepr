@@ -139,6 +139,14 @@ Each library Template has a stable identity and an automatically managed revisio
 The exclusive, session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template.
 Other sessions may observe accepted authoring changes but cannot modify the leased artifact.
 
+**Password Reset Link**:
+The single-use, expiring credential an administrator hands to a person out of band so they can set their own password.
+It is how an account acquires its first password and how a forgotten one is replaced: this installation has no email sender and no self sign-up, so nothing is ever sent anywhere and the link itself is the whole of an invite (ADR-0010).
+Creating an account mints one and returns it exactly once; nothing stores it and no route reads it back, so a link lost before handover is replaced by issuing another rather than recovered.
+Its token travels in the URL fragment rather than the query, so it is never sent to the server as part of the navigation and stays out of every request log between the browser and the Worker — the same reason a Screen Output Asset Capability travels there.
+Redeeming one consumes it and sets the password; it never creates a session, and it neither ends the account's existing sessions nor lifts a ban.
+_Avoid_: invite token, activation link — the same artifact issues an invite and replaces a forgotten password, and a name for only the first would leave the second unnamed.
+
 **Graphics Author Session**:
 The anonymous, self-issued identity that makes a browser a graphics author: minted on any HTML page navigation, carried as an httpOnly cookie, lasting eight hours from its last request.
 It is the only author identity in the Graphics Asset Library: every author-facing route requires it, a Graphics Ingestion Operation records it as the initiator, idempotency keys are unique within it, and the Evidence Ledger names it as actor.
