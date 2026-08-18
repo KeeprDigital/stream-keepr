@@ -75,12 +75,28 @@ describe('social Profile Projection document validation', () => {
 	});
 
 	it('parses projected text references as existing placeholder runs', () => {
-		expect(parseGraphicTextTemplate('On {profile.networkLabel} as {profile.handle}')).toEqual([
+		expect(parseGraphicTextTemplate(
+			'On {profile.networkLabel} as {profile.handle}',
+			new Set(['profile']),
+		)).toEqual([
 			{ text: 'On ' },
 			{ text: '', inputKey: 'profile.networkLabel' },
 			{ text: ' as ' },
 			{ text: '', inputKey: 'profile.handle' },
 		]);
+	});
+
+	it('preserves projection-shaped literal text in a document with no projections', () => {
+		const graphic = addGraphicItem(
+			{ id: 'plain', name: 'Plain', items: [] },
+			{ kind: 'text', id: 'plain-text', canvasWidth: 1920, canvasHeight: 1080 },
+		).graphic;
+		const text = graphic.items[0];
+		if (text?.type !== 'text')
+			throw new Error('expected a Text Graphic Item');
+		text.text = 'Literal {profile.handle}';
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [graphic], channels: [] }).success).toBe(true);
 	});
 
 	it('accepts multiple named projections onto distinct Presentation Groups', () => {

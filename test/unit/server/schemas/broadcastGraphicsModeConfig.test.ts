@@ -16,7 +16,7 @@ import {
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
-import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
+import { addGraphicItem, graphicBindingFieldIds } from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
@@ -1163,6 +1163,20 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 				transition: 'crossfade',
 				transitionDurationMs: 250,
 			}];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
+
+		it('keeps Social Profile Projection placeholder styles out of Feature Match documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+			const authored = addGraphicItem(
+				{ id: 'feature-match', name: 'Feature Match', items: [] },
+				{ kind: 'text', id: 'player-name', canvasWidth: 1920, canvasHeight: 1080 },
+			).graphic.items[0];
+			if (authored?.type !== 'text')
+				throw new Error('expected a Feature Match Text Graphic Item');
+			authored.placeholderStyles = { 'profile.handle': { color: '#ffffff' } };
+			config.layout.composition.items = [authored];
 
 			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
 		});

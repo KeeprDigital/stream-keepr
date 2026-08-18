@@ -1367,6 +1367,16 @@ function hasSocialNetworkIcon(items: readonly { type: string; children?: readonl
 		|| (item.type === 'group' && item.children?.some(child => child.type === 'social-network-icon')));
 }
 
+/** A projected placeholder style is meaningful only in Broadcast Graphics. */
+function hasSocialProfilePlaceholderStyle(items: readonly GraphicItemConfig[]): boolean {
+	function projectedStyle(item: GraphicItemConfig | GraphicGroupChildConfig): boolean {
+		return item.type === 'text' && Object.keys(item.placeholderStyles ?? {})
+			.some(key => readSocialProfileProjectedValueReference(key) !== undefined);
+	}
+	return items.some(item => projectedStyle(item)
+		|| (item.type === 'group' && item.children.some(projectedStyle)));
+}
+
 /** Every projected consumer stays inside the Presentation Group that supplies it. */
 function socialProfileProjectionConsumersResolve(graphic: BroadcastGraphicConfig): boolean {
 	const presentationGroupByProjection = new Map(
@@ -1383,18 +1393,20 @@ function socialProfileProjectionConsumersResolve(graphic: BroadcastGraphicConfig
 		}
 		if (item.type !== 'text')
 			return true;
+		const styleReferences = Object.keys(item.placeholderStyles ?? {})
+			.map(readSocialProfileProjectedValueReference)
+			.filter(reference => reference !== undefined);
+		if (presentationGroupByProjection.size === 0)
+			return styleReferences.length === 0;
 		if (
-			presentationGroupByProjection.size > 0
-			&& graphicTextTemplateDottedPlaceholderKeys(item.text)
+			graphicTextTemplateDottedPlaceholderKeys(item.text)
 				.some(key => readSocialProfileProjectedValueReference(key) === undefined)
 		) {
 			return false;
 		}
 		const references = [
 			...graphicTextTemplateProjectedValueReferences(item.text),
-			...Object.keys(item.placeholderStyles ?? {})
-				.map(readSocialProfileProjectedValueReference)
-				.filter(reference => reference !== undefined),
+			...styleReferences,
 		];
 		return references.every((reference) => {
 			const presentationGroupId = presentationGroupByProjection.get(reference.projectionKey);
@@ -1555,6 +1567,10 @@ const featureMatchLayoutCompositionSchema = z.object({
 		.refine(
 			items => !hasSocialNetworkIcon(items),
 			'Social Network Icon Graphic Items are available only in Broadcast Graphics',
+		)
+		.refine(
+			items => !hasSocialProfilePlaceholderStyle(items),
+			'Social Profile Projection placeholder styles are available only in Broadcast Graphics',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict().refine(

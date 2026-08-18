@@ -46,6 +46,19 @@ describe('graphicTextTemplate', () => {
 		]);
 	});
 
+	it('keeps projection-shaped braces literal unless a Broadcast Graphic opts in that projection', () => {
+		const template = 'Contact {profile.handle} at {profile.profileUrl}';
+
+		expect(parseGraphicTextTemplate(template)).toEqual([{ text: template }]);
+		expect(renderGraphicTextTemplate(template, [], {}).map(segment => segment.text).join('')).toBe(template);
+		expect(parseGraphicTextTemplate(template, new Set(['profile']))).toEqual([
+			{ text: 'Contact ' },
+			{ text: '', inputKey: 'profile.handle' },
+			{ text: ' at ' },
+			{ text: '', inputKey: 'profile.profileUrl' },
+		]);
+	});
+
 	it('lists the referenced input keys once each, in template order', () => {
 		expect(graphicTextTemplateInputKeys('{name} vs {name} in {round}')).toEqual(['name', 'round']);
 	});

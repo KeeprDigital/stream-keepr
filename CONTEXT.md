@@ -259,11 +259,13 @@ The operator-facing controls generated for a placed Broadcast Graphic from its G
 The rule that determines whether a Graphic Input change is staged for operator confirmation or applied immediately to an on-air Broadcast Graphic. Staged values are accepted atomically through Update Graphic; a template recommends the policy and the operator may override it for a placed graphic.
 
 **Graphic Text Template**:
-A string that combines literal text with `{inputKey}` placeholders for Graphic Inputs, rendered by a text Graphic Item. Placeholders reference stable input keys and do not contain property access, formatting, fallbacks, conditionals, or expressions.
+A string that combines literal text with `{inputKey}` placeholders for Graphic Inputs, rendered by a Text Graphic Item.
+A Broadcast Graphic may also consume a declared Social Profile Projection through the bounded `{projectionKey.networkLabel}`, `{projectionKey.handle}`, or `{projectionKey.profileUrl}` reference vocabulary. These are named read-only projection values rather than general property access; ordinary and Feature Match templates keep the same brace runs as literal text.
+Placeholders and projection references use stable keys and do not contain any other property access, formatting, fallbacks, conditionals, or expressions.
 _Avoid_: Expression when referring to placeholder substitution
 
 **Graphic Placeholder Style**:
-An optional typography-only override for one `{inputKey}` placeholder in a Text Graphic Item.
+An optional typography-only override for one `{inputKey}` placeholder or one declared Social Profile Projection text reference in a Text Graphic Item.
 Literal text uses the Text Graphic Item's base typography, and placeholder styles do not add rich-text ranges, markup, fills, outlines, or other surface styling.
 
 **Graphic Font Selection**:
