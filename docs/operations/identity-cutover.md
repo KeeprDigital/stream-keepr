@@ -36,12 +36,31 @@ short — nothing here reshapes data.
    to answer anything sitting at `awaiting-confirmation`. The Operations Cockpit
    (`/admin/graphics-assets`) lists exactly what is unfinished, under Graphics
    Ingestion Operations.
-3. **Check every author has an account.** Every author needs one before the
-   cutover, or they arrive on the new build with nothing to sign in as. At this
-   tip the first-admin bootstrap is the only way to make one — it is
-   create-or-reset by email address, so running it once per author works, and
-   each of them signs in with the password it was given. The invite-and-reset
-   surface that replaces that ceremony lands on #399.
+3. **Decide how every author gets an account.** Every author needs one before
+   the cutover, or they arrive on the new build with nothing to sign in as. At
+   this tip the first-admin bootstrap is the only thing that makes one, and
+   **it makes administrators** — `role: admin`, which carries Better Auth's
+   admin API: creating accounts, banning, revoking sessions, setting other
+   people's passwords. Run once per author and every author holds that. It also
+   grants the role to an existing account that lacks it, so it is not a way to
+   make an ordinary user by accident either.
+
+   So this is a decision rather than a step, and it is the owner's:
+
+   - **Wait for #399**, which lands the invite-and-reset surface that creates
+     ordinary accounts. Authors sign in after that ticket rather than at this
+     one. Nothing in this cutover requires them to sign in on day one — an
+     operation started before it is drained or reclaimed either way.
+   - **Pre-create them now**, accepting that every author is an administrator of
+     this installation until #399 can make them otherwise. Reasonable for a
+     small trusted team, which is the installation ADR-0010 is designed for; it
+     is still worth saying out loud rather than discovering from a role column.
+
+   If you pre-create, the ceremony changes shape: the README and
+   `server/api/bootstrap/ensure-admin.post.ts` both describe it as "set the
+   secret, call this once, delete the secret", and here it is one call **per
+   author** before the secret is deleted. Delete it when the last one is made —
+   the arming window is what the ceremony bounds, not the number of calls.
 
 Anything still unfinished when the window closes is not a blocker. It is
 reclaimed by the ordinary 24-hour staged-input retention sweep.

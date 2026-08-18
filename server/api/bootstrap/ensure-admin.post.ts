@@ -7,6 +7,13 @@ import { ensureAdminSchema } from '~~/server/schemas/api/adminBootstrap';
  * (#394, ADR-0010). Curl-only; the operator ceremony is in the README's Worker
  * secrets section: set the secret, call this once, delete the secret.
  *
+ * "Once" bounds the **arming window**, not the call count. Until #399 lands an
+ * account-creating surface this is the only thing in the installation that makes
+ * a user, so `docs/operations/identity-cutover.md` has an operator calling it
+ * once per author inside one window — and every account it makes is an
+ * administrator, which is why that runbook treats pre-creating authors as a
+ * decision rather than a step.
+ *
  * **Not under `/api/admin/` or `/api/auth/`, deliberately.** Both prefixes
  * already mean something in the boundary ADR-0010 describes — `/api/admin/**`
  * is exempted by the Graphics Administrator token and `/api/auth/**` is Better

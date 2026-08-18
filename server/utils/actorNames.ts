@@ -1,3 +1,4 @@
+import type { GraphicsActorNaming } from '~~/shared/types/graphicsAsset';
 import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from 'hub:db';
 import { chunkArray, SAFE_INARRAY_SIZE } from './db';
@@ -98,7 +99,7 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 export async function withActorNames<Reading>(
 	reading: Reading,
 	actors: Iterable<string>,
-): Promise<Reading & { actorNames: Record<string, string> }> {
+): Promise<Reading & GraphicsActorNaming> {
 	return { ...reading, actorNames: await graphicsActorNames(actors) };
 }
 
