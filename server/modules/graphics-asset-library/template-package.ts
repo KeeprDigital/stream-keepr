@@ -20,6 +20,10 @@ import {
 import { getGraphicItemDefinition, GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics/typography';
 import {
+	SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID,
+	SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION,
+} from '~~/shared/types/graphics';
+import {
 	TEMPLATE_PACKAGE_ARTIFACTS,
 	TEMPLATE_PACKAGE_LIMITS,
 	TEMPLATE_PACKAGE_MANIFEST_ENTRY,
@@ -284,11 +288,10 @@ function supportedGraphicItemDefinitionVersion(
  *
  * - **Graphic Item Definitions** route by kind, because Source Item is a
  *   Definition only a Feature Match Layout may place.
- * - **Host vocabularies** route by kind for a stronger reason: Source Roles, Frame
- *   animation effects, and Feature Match tokens exist only inside a Feature Match
- *   Layout. A Broadcast Graphic declares its own Graphic Inputs in its document and
- *   has no host vocabulary at all, so a `.skgraphic` naming one of these terms is a
- *   package no exporter here could have written.
+ * - **Host vocabularies** route by kind because the hosts own different terms:
+ *   Feature Match owns Source Roles, Frame animation effects, and its text tokens;
+ *   Broadcast Graphics owns Social Profile Projections. A package naming a term
+ *   outside its host is one no exporter here could have written.
  * - **Application fonts** deliberately do *not* route by kind. There is one
  *   application font registry and both hosts share it — `GRAPHIC_FONT_IDS` is that
  *   registry — so routing would invent a divergence that does not exist and would
@@ -307,7 +310,9 @@ function supportedCapabilityVersion(
 		case 'host-vocabulary':
 			return CAPABILITY_VOCABULARY[packageKind] === 'feature-match'
 				? supportedFeatureMatchLayoutVocabularyVersion(requirement.identity)
-				: undefined;
+				: requirement.identity === SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID
+					? SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION
+					: undefined;
 		case 'graphic-item-definition':
 			return supportedGraphicItemDefinitionVersion(packageKind, requirement.identity);
 		default: {

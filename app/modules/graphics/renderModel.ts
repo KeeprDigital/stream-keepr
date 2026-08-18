@@ -22,6 +22,7 @@ import type {
 	PlayerLifeGraphicItemConfig,
 	ShapeGeometry,
 	SocialNetworkIconGraphicItemConfig,
+	SocialProfileProjectionValues,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
@@ -193,6 +194,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 * here renders nothing.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * Correlated Social Profile values supplied by the Broadcast Graphics host,
+	 * keyed by Broadcast Graphic id and Social Profile Projection key.
+	 */
+	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
 	 * Graphic id.
@@ -1192,7 +1198,12 @@ function textDescriptor(
 	surfaceStyle: GraphicSurfaceStyle | undefined,
 	inputs: GraphicItemContentContext,
 ): GraphicItemRenderDescriptor {
-	const segments = renderGraphicTextTemplate(item.text, inputs.declarations, inputs.values)
+	const segments = renderGraphicTextTemplate(
+		item.text,
+		inputs.declarations,
+		inputs.values,
+		inputs.socialProfileValues,
+	)
 		.map(segment => ({
 			text: segment.text,
 			inputKey: segment.inputKey,
@@ -1518,22 +1529,28 @@ function socialNetworkIconDescriptor(
 	output: ScreenOutput,
 	item: SocialNetworkIconGraphicItemConfig,
 	placement: CSSProperties,
+	inputs: GraphicItemContentContext,
 ): GraphicItemRenderDescriptor {
+	const network = typeof item.network === 'string'
+		? item.network
+		: inputs.socialProfileValues?.[item.network.projectionKey]?.network;
 	return {
 		id: item.id,
 		label: item.label,
 		kind: 'social-network-icon',
 		style: placement,
-		icon: {
-			name: SUPPORTED_SOCIAL_NETWORK_BY_KEY[item.network].icon,
-			style: {
-				display: 'block',
-				width: '100%',
-				height: '100%',
-				color: paintColour(output, item.color),
-				opacity: clampOpacity(item.opacity),
-			},
-		},
+		icon: network
+			? {
+					name: SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].icon,
+					style: {
+						display: 'block',
+						width: '100%',
+						height: '100%',
+						color: paintColour(output, item.color),
+						opacity: clampOpacity(item.opacity),
+					},
+				}
+			: undefined,
 	};
 }
 
@@ -1550,6 +1567,7 @@ function socialNetworkIconDescriptor(
 interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
+	socialProfileValues?: SocialProfileProjectionValues;
 	featureMatch?: GraphicsFeatureMatchContext;
 }
 
@@ -1580,7 +1598,7 @@ function childDescriptor(
 	if (child.type === 'media')
 		return mediaItemDescriptor(output, child, placement, assetContent, stackedChildClipSize(group, child));
 	if (child.type === 'social-network-icon')
-		return socialNetworkIconDescriptor(output, child, placement);
+		return socialNetworkIconDescriptor(output, child, placement, inputs);
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -1791,7 +1809,7 @@ function paintedItemDescriptor(
 	if (item.type === 'media')
 		return mediaItemDescriptor(output, item, placement, assetContent, item);
 	if (item.type === 'social-network-icon')
-		return socialNetworkIconDescriptor(output, item, placement);
+		return socialNetworkIconDescriptor(output, item, placement, inputs);
 
 	if (item.type === 'shape') {
 		return {
@@ -2291,6 +2309,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				socialProfileValues: input.socialProfileValues?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
@@ -2316,6 +2335,7 @@ export function resolveGraphicsCompositionRenderModel(
 					outgoingValues ?? {},
 					input.substituteAuthoredDefaults ?? false,
 				),
+				socialProfileValues: input.socialProfileValues?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const crossTransition = outgoingValues
@@ -2348,12 +2368,23 @@ export function resolveGraphicsCompositionRenderModel(
 				'top-left',
 			);
 
+			const projectionByGroupId = new Map(
+				(graphic.socialProfileProjections ?? []).map(projection => [
+					projection.presentationGroupId,
+					projection,
+				]),
+			);
 			const buildItems = (
 				values: GraphicItemContentContext,
 				context: (item: GraphicItemConfig) => GraphicsItemAnimationContext,
 				pairing: GraphicsItemAnimationContext['outgoing'],
 			) => graphic.items
-				.filter(item => item.visible)
+				.filter((item) => {
+					if (!item.visible)
+						return false;
+					const projection = projectionByGroupId.get(item.id);
+					return !projection || values.socialProfileValues?.[projection.key] !== undefined;
+				})
 				.map(item => itemDescriptor(
 					input.output,
 					graphic.id,

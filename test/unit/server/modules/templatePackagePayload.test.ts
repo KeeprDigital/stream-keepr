@@ -54,11 +54,15 @@ describe('the `.skgraphic` payload', () => {
 		// pins that the fixture still uses every kind. A Definition added to
 		// `GRAPHIC_ITEM_KINDS` and never placed in the fixture is a branch of the
 		// transfer nobody is holding to anything, and this is where that shows up.
-		const definitions = outcome.capabilities
+		const definitions = [...new Set(outcome.capabilities
 			.filter(requirement => requirement.capability === 'graphic-item-definition')
-			.map(requirement => requirement.identity)
+			.map(requirement => requirement.identity))]
 			.sort();
 		expect(definitions).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+		expect(outcome.capabilities.some(requirement =>
+			requirement.capability === 'host-vocabulary'
+			&& requirement.identity === 'social-profile-projection',
+		)).toBe(true);
 		// And the application fonts, which travel as identifiers rather than bytes.
 		expect(outcome.capabilities.some(requirement =>
 			requirement.capability === 'application-font' && requirement.identity === 'inter',

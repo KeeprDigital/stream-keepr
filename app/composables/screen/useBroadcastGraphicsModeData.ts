@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -109,6 +109,9 @@ export function useBroadcastGraphicsModeData() {
 
 	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => renderedInputs.value.current);
 	const outgoingInputValues = computed(() => renderedInputs.value.outgoing);
+	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(() =>
+		previewState.value?.socialProfileValues ?? {},
+	);
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
@@ -334,6 +337,7 @@ export function useBroadcastGraphicsModeData() {
 		onAirGraphicIds,
 		inputValues,
 		outgoingInputValues,
+		socialProfileValues,
 		isAuthoringPreview,
 		selectedTarget,
 		publishSelection,

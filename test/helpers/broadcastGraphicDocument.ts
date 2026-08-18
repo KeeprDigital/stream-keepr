@@ -104,7 +104,15 @@ export function maximalBroadcastGraphicDocument(
 	// three of the seven branches is a transfer nobody has tested.
 	const withGroup = addGraphicItem(base, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	const withChild = addGraphicGroupChild(withGroup, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
-	const withHeadline = addGraphicItem(withChild, { kind: 'text', id: 'headline', ...CANVAS }).graphic;
+	const withProjectedText = addGraphicGroupChild(
+		withChild,
+		{ kind: 'text', groupId: 'cluster', id: 'projected-handle' },
+	).graphic;
+	const withProjectedIcon = addGraphicGroupChild(
+		withProjectedText,
+		{ kind: 'social-network-icon', groupId: 'cluster', id: 'projected-icon' },
+	).graphic;
+	const withHeadline = addGraphicItem(withProjectedIcon, { kind: 'text', id: 'headline', ...CANVAS }).graphic;
 	const withBackdrop = addGraphicItem(withHeadline, { kind: 'media', id: 'backdrop', ...CANVAS }).graphic;
 	const withSocialIcon = addGraphicItem(
 		withBackdrop,
@@ -120,6 +128,12 @@ export function maximalBroadcastGraphicDocument(
 	const child = group.children[0];
 	if (child?.type !== 'shape')
 		throw new Error('expected a Shape Graphic Item inside the Graphic Group');
+	const projectedText = group.children.find(item => item.id === 'projected-handle');
+	if (projectedText?.type !== 'text')
+		throw new Error('expected projected text inside the Graphic Group');
+	const projectedIcon = group.children.find(item => item.id === 'projected-icon');
+	if (projectedIcon?.type !== 'social-network-icon')
+		throw new Error('expected a projected Social Network Icon inside the Graphic Group');
 	const headline = document.items.find(item => item.id === 'headline');
 	if (headline?.type !== 'text')
 		throw new Error('expected a Text Graphic Item');
@@ -159,6 +173,13 @@ export function maximalBroadcastGraphicDocument(
 	socialIcon.color = '#1185fe';
 	socialIcon.opacity = 0.65;
 	socialIcon.rotation = 8;
+	projectedText.text = '{talent-profile.networkLabel} · {talent-profile.handle} · {talent-profile.profileUrl}';
+	projectedText.placeholderStyles = {
+		'talent-profile.handle': { color: '#ffcc00', fontWeight: 900 },
+	};
+	projectedIcon.network = { projectionKey: 'talent-profile' };
+	projectedIcon.color = '#ffffff';
+	projectedIcon.opacity = 0.8;
 
 	headline.text = 'Match point for {headline}';
 	// Every key a Graphic Placeholder Style may carry, not a representative few.
@@ -328,8 +349,18 @@ export function maximalBroadcastGraphicDocument(
 	document.sources = [
 		{ key: 'match', label: 'Match', kind: 'match' },
 		{ key: 'player', label: 'Player', kind: 'player', from: { sourceKey: 'match', relation: 'player1' } },
+		{ key: 'talent', label: 'Talent', kind: 'talent' },
 	];
 	document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.name' }];
+	document.socialProfileProjections = [{
+		key: 'talent-profile',
+		label: 'Talent Profile',
+		sourceKey: 'talent',
+		presentationGroupId: 'cluster',
+		dwellMs: 8_000,
+		transition: 'crossfade',
+		transitionDurationMs: 250,
+	}];
 
 	return document;
 }

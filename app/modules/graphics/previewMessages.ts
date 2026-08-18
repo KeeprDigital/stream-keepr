@@ -1,5 +1,6 @@
-import type { BroadcastGraphicConfig, GraphicAnimationPhase } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicAnimationPhase, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from './selection';
+import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
 import { GRAPHIC_ANIMATION_PHASE_VALUES } from '~~/shared/types/graphics';
 import { isGraphicsSelectionTarget } from './selection';
 
@@ -90,6 +91,11 @@ export interface GraphicsPreviewState {
 	 * Broadcast Graphic and Graphic Item are under authoring.
 	 */
 	selectedTarget: GraphicsSelectionTarget;
+	/**
+	 * Non-persisted representative values for programmatically authored Social
+	 * Profile Projections. The editor may replace these with its own sample controls.
+	 */
+	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The current Graphic Animation Preview run, if the author has started one.
 	 * Absent composes every Broadcast Graphic at its Graphic Resting State, which is
@@ -204,8 +210,22 @@ export function isGraphicsPreviewStateMessage(
  * so it normalises to null rather than rejecting the whole push.
  */
 export function readGraphicsPreviewState(state: GraphicsPreviewState): GraphicsPreviewState {
+	const socialProfileValues = state.socialProfileValues ?? Object.fromEntries(
+		state.graphics.flatMap(graphic => (graphic.socialProfileProjections ?? []).length === 0
+			? []
+			: [[graphic.id, Object.fromEntries(graphic.socialProfileProjections!.map(projection => [
+					projection.key,
+					{
+						network: 'twitch' as const,
+						networkLabel: SUPPORTED_SOCIAL_NETWORK_BY_KEY.twitch.label,
+						handle: 'example',
+						profileUrl: canonicalSocialProfileUrl('twitch', 'example'),
+					},
+				]))]]),
+	);
 	return {
 		...state,
+		...(Object.keys(socialProfileValues).length > 0 ? { socialProfileValues } : {}),
 		animation: state.animation === undefined || state.animation === null
 			? null
 			: readGraphicsPreviewAnimationPlan(state.animation),

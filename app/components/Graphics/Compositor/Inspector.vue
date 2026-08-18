@@ -1899,7 +1899,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				</p>
 				<UFormField label="Social network" size="sm">
 					<USelect
-						:model-value="selectedSocialNetworkIcon.network"
+						:model-value="typeof selectedSocialNetworkIcon.network === 'string'
+							? selectedSocialNetworkIcon.network
+							: undefined"
 						:items="SOCIAL_NETWORK_OPTIONS"
 						value-key="value"
 						class="w-full"
