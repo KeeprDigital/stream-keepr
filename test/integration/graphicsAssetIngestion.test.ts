@@ -7,8 +7,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /** Filled with the graphics author session cookie, the only author identity. */
@@ -157,7 +156,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 	let eventId: number;
 
 	beforeAll(async () => {
-		authorHeaders.cookie = await createGraphicsAuthorSessionCookie();
+		authorHeaders.cookie = await operatorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -267,11 +266,6 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		expect(pinnedContent.headers.get('accept-ranges')).toBe('bytes');
 		expect(pinnedContent.headers.get('etag')).toBeTruthy();
 		expect(new Uint8Array(await pinnedContent.arrayBuffer())).toEqual(transparentPixelPng);
-
-		const anonymousContent = await fetch(
-			`/api/graphics-assets/${completed.result!.assetId}/revisions/${completed.result!.revisionId}/content`,
-		);
-		expect(anonymousContent.status).toBe(401);
 
 		const missingRevision = await fetch(
 			`/api/graphics-assets/${completed.result!.assetId}/revisions/missing-revision/content`,

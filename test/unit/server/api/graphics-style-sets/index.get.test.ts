@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
-	mockRequireGraphicsAuthorSession,
+	mockRequireUserId,
 	mockFindAll,
 } = vi.hoisted(() => ({
-	mockRequireGraphicsAuthorSession: vi.fn(),
+	mockRequireUserId: vi.fn(),
 	mockFindAll: vi.fn(),
 }));
 
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	requireGraphicsAuthorSession: mockRequireGraphicsAuthorSession,
+vi.mock('~~/server/utils/auth', () => ({
+	requireUserId: mockRequireUserId,
 }));
 
 vi.mock('~~/server/services/graphicStyleSet', () => ({
@@ -26,7 +26,7 @@ vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 describe('graphic Style Set browsing', () => {
 	beforeEach(() => {
 		vi.resetModules();
-		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
+		mockRequireUserId.mockReset().mockResolvedValue('author-1');
 		mockFindAll.mockReset().mockResolvedValue([{ id: 'style-set-1' }]);
 	});
 
@@ -34,7 +34,7 @@ describe('graphic Style Set browsing', () => {
 		// #206: the same session the sibling writes ask for, asked as
 		// authentication and never consulted again — session-scoping, not access
 		// control (ADR-0008).
-		mockRequireGraphicsAuthorSession.mockRejectedValue(
+		mockRequireUserId.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);
 		const handler = (await import('../../../../../server/api/graphics-style-sets/index.get')).default;

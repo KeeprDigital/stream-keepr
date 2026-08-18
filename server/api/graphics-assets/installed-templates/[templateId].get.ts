@@ -1,6 +1,6 @@
 import { installedGraphicsTemplateId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -10,7 +10,7 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
  * partial installation is discoverable.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	try {
 		return await graphicsAssetLibraryForEvent(event).inspectInstalledGraphicsTemplate({
 			templateId: installedGraphicsTemplateId(getRouterParam(event, 'templateId') ?? ''),

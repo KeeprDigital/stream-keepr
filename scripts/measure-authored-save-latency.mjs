@@ -175,23 +175,15 @@ async function main() {
 		body: JSON.stringify(body),
 	});
 
-	// A Graphics Author Session is minted on any HTML page navigation — and the
-	// minting middleware (server/middleware/graphics-author-session.ts) acts only
-	// when the request Accepts text/html, which fetch's default `*/*` does not.
-	storeCookies(await fetch(`${base}/graphics-assets`, {
-		redirect: 'manual',
-		headers: { accept: 'text/html' },
-	}));
-	if (jar.size === 0)
-		throw new Error('No graphics author session cookie was issued by the page navigation.');
-
-	// And an operator session, because #396 put a deny-by-default boundary in front
-	// of `/api/**`: the author cookie above says who owns the work, not that the
-	// request is allowed in. Into the same jar, so every `request` below is
-	// unchanged. Local secrets go only to a local origin — see
-	// `openOperatorSessionForOrigin`.
+	// An operator session, which since #398 is the whole identity: it gets a
+	// request past the deny-by-default boundary over `/api/**` and names the user
+	// who owns the work. The page navigation that used to mint a second,
+	// author-only cookie is gone with the thing it minted. Local secrets go only
+	// to a local origin — see `openOperatorSessionForOrigin`.
 	for (const pair of await openOperatorSessionForOrigin(base))
 		rememberCookie(pair);
+	if (jar.size === 0)
+		throw new Error('No operator session cookie was issued; the probe has no identity to save as.');
 
 	const active = await json('/api/graphics-assets?lifecycleStates=active');
 	const images = active.filter(asset => asset.kind === 'image');

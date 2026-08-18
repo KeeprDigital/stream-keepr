@@ -1,6 +1,6 @@
 import type {
 	GraphicsOperationalQueuesOverview,
-	GraphicsQueueInspection,
+	GraphicsQueueInspectionReading,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -175,7 +175,7 @@ function overview(): GraphicsOperationalQueuesOverview {
 	};
 }
 
-function unavailableInspection(): GraphicsQueueInspection {
+function unavailableInspection(): GraphicsQueueInspectionReading {
 	return {
 		key: 'unavailable-content:discrepancy-unavailable',
 		queue: 'unavailable-content',
@@ -225,10 +225,12 @@ function unavailableInspection(): GraphicsQueueInspection {
 			detail: { affectedRevisionCount: 1 },
 			expiresAt: '2027-07-30T08:00:00.000Z',
 		}],
+		// A sweep is not a person, so the reading gives its own spelling back (#398).
+		actorNames: { 'graphics-reconciliation-policy': 'graphics-reconciliation-policy' },
 	};
 }
 
-function trashedInspection(): GraphicsQueueInspection {
+function trashedInspection(): GraphicsQueueInspectionReading {
 	return {
 		key: 'trashed-asset:asset-trashed',
 		queue: 'trashed-asset',
@@ -255,10 +257,11 @@ function trashedInspection(): GraphicsQueueInspection {
 			usage: [],
 		},
 		evidence: [],
+		actorNames: {},
 	};
 }
 
-function retiredInspection(): GraphicsQueueInspection {
+function retiredInspection(): GraphicsQueueInspectionReading {
 	return {
 		key: 'retired-asset:asset-retired',
 		queue: 'retired-asset',
@@ -279,6 +282,7 @@ function retiredInspection(): GraphicsQueueInspection {
 			usage: [],
 		},
 		evidence: [],
+		actorNames: {},
 	};
 }
 
@@ -359,7 +363,7 @@ function buttonNamed(wrapper: Awaited<ReturnType<typeof mountPage>>, label: stri
 /** Each surface answers with its own payload, so nothing is proved by a uniform mock. */
 function serve(options: {
 	queues?: GraphicsOperationalQueuesOverview;
-	inspection?: GraphicsQueueInspection;
+	inspection?: GraphicsQueueInspectionReading;
 	action?: unknown;
 } = {}) {
 	mockApiFetch.mockImplementation((url: string) => {

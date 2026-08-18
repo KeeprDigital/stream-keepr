@@ -392,7 +392,7 @@ describe('graphicsStyleSetLibrary', () => {
 	 * Library's ingestion routes, and they require the same graphics author session,
 	 * so a lapse has to read the same here as it does everywhere else.
 	 */
-	it('names a lapsed graphics author session when a package is refused', async () => {
+	it('names an ended session when a package is refused', async () => {
 		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
 		// what makes the ordering here load-bearing: the session is recognised before the
 		// sentence is read, so the author gets the lapse and its reload rather than prose
@@ -407,8 +407,8 @@ describe('graphicsStyleSetLibrary', () => {
 		await choosePackage(wrapper);
 
 		expect(wrapper.get('[data-testid="style-set-error"]').text())
-			.toContain('Your graphics author session has lapsed');
-		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
+			.toContain('This browser is no longer signed in');
+		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(true);
 	});
 
 	/**
@@ -426,8 +426,8 @@ describe('graphicsStyleSetLibrary', () => {
 
 		const reported = wrapper.get('[data-testid="style-set-error"]');
 		expect(reported.text()).toContain('not a readable archive');
-		expect(reported.text()).not.toContain('lapsed');
-		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(false);
+		expect(reported.text()).not.toContain('no longer signed in');
+		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(false);
 	});
 
 	it('installs a package that has nothing for its author to weigh, without asking', async () => {

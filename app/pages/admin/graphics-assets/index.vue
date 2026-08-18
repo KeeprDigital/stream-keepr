@@ -2,7 +2,7 @@
 import type {
 	GraphicsIngestionAttentionItem,
 	GraphicsLibraryComponentCondition,
-	GraphicsOperationsCockpit,
+	GraphicsOperationsCockpitReading,
 	GraphicsReconciliationSweepResult,
 	GraphicsRetentionSweepResult,
 	GraphicsStorageHealthAlert,
@@ -13,6 +13,7 @@ import type {
 } from '~~/shared/utils/graphicsOperationsCockpit';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import { formatInstant } from '~~/shared/utils/formatInstant';
+import { graphicsActorName } from '~~/shared/utils/graphicsAssetEvidence';
 import {
 	GRAPHICS_INGESTION_ATTENTION_STATES,
 	GRAPHICS_RECENT_OUTCOME_GROUPS,
@@ -42,8 +43,8 @@ const {
 	administratorHeaders,
 	describeFailure,
 	load: loadCockpit,
-} = useGraphicsAdminReading<GraphicsOperationsCockpit>({
-	read: async headers => await $fetch<GraphicsOperationsCockpit>(
+} = useGraphicsAdminReading<GraphicsOperationsCockpitReading>({
+	read: async headers => await $fetch<GraphicsOperationsCockpitReading>(
 		'/api/admin/graphics-assets/operations-cockpit',
 		{ headers },
 	),
@@ -498,7 +499,7 @@ function boundaryMarkerStyle(fraction: number) {
 										{{ item.name }}
 									</h3>
 									<p class="mt-1 text-sm text-muted">
-										{{ item.source }} · started by {{ item.initiatedBy }} ·
+										{{ item.source }} · started by {{ graphicsActorName(cockpit.actorNames, item.initiatedBy) }} ·
 										stage {{ item.stage }}
 									</p>
 								</div>

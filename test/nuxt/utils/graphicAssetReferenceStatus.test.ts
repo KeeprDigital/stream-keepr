@@ -48,12 +48,12 @@ describe('asking the Graphics Asset Library about one exact revision', () => {
 	});
 
 	it('lets the failure through when the caller can tell why it failed', async () => {
-		// Live Control distinguishes a lapsed Graphics Author Session from unreachable
+		// Live Control distinguishes an ended session from unreachable
 		// bytes, and it can only do that if the failure reaches it.
-		const lapsed = Object.assign(new Error('Unauthorized'), { statusCode: 401 });
-		mockApiFetch.mockRejectedValue(lapsed);
+		const signedOut = Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+		mockApiFetch.mockRejectedValue(signedOut);
 
-		await expect(graphicAssetReferenceStatus(REFERENCE)).rejects.toBe(lapsed);
+		await expect(graphicAssetReferenceStatus(REFERENCE)).rejects.toBe(signedOut);
 	});
 
 	it('passes the library’s own answer through untouched', async () => {

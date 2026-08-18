@@ -1401,3 +1401,37 @@ export interface GraphicsQueueInspection {
 	/** The Evidence ledger filtered to exactly this subject, newest first. */
 	evidence: GraphicsAssetEvidenceEntry[];
 }
+
+/**
+ * What to call each actor named anywhere in one administrator reading (#398,
+ * ADR-0010).
+ *
+ * Every actor and initiator the library records is an opaque identity — a
+ * userId since the cutover, a Graphics Author Session before it, a machine
+ * actor for a sweep — and none of the three is a name. The reading carries the
+ * names beside the identities rather than in place of them, because both are
+ * used: the identity is what an inspector filters the ledger by, and the name is
+ * what a person reads.
+ *
+ * A dictionary rather than a field on each entry, because the identities are
+ * scattered through nested structures that the Graphics Asset Library builds
+ * and which know nothing about accounts. This way the naming is resolved once,
+ * where the reading is served, and the module's own shapes stay as they are.
+ *
+ * Complete for the reading it belongs to: every identity in the payload has an
+ * entry, so `graphicsActorName` is a lookup rather than a fallback chain.
+ */
+export type GraphicsActorNames = Record<string, string>;
+
+export interface GraphicsActorNaming {
+	actorNames: GraphicsActorNames;
+}
+
+/** The Operations Cockpit as its route serves it: the reading, plus its names. */
+export type GraphicsOperationsCockpitReading = GraphicsOperationsCockpit & GraphicsActorNaming;
+
+/** One queue inspection as its route serves it. */
+export interface GraphicsQueueInspectionReading extends GraphicsQueueInspection, GraphicsActorNaming {}
+
+/** One page of the Evidence ledger as its route serves it. */
+export interface GraphicsAssetEvidenceReading extends GraphicsAssetEvidencePage, GraphicsActorNaming {}

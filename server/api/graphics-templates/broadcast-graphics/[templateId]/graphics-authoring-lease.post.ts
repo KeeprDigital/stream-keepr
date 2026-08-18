@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicsAuthoringLeaseModule } from '~~/server/modules/graphics-authoring-lease';
 import { graphicsTemplateLeaseRef } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import { requireBrowserSessionId } from '~~/server/utils/auth';
 
 /**
  * Take, keep, or explicitly take over the Graphics Authoring Lease on one
@@ -20,7 +20,7 @@ const acquireSchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
-	const sessionId = await requireGraphicsAuthorSession(event);
+	const sessionId = await requireBrowserSessionId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 	const body = acquireSchema.parse(await readBody(event) ?? {});
 

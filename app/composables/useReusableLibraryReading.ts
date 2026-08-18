@@ -37,13 +37,13 @@ export interface ReusableLibraryFailures {
 	/** The one message an author is looking at, or none. */
 	error: Ref<string | null>;
 	/**
-	 * Whether the last refusal was the graphics author session ending.
+	 * Whether the last refusal was this browser's session ending.
 	 *
 	 * Separate from `error` because it is the one refusal with an action attached:
 	 * every other message tells an author what to do differently, and this one tells
-	 * them there is nobody left to do it as.
+	 * them to sign in before there is anything to do.
 	 */
-	lapsed: Ref<boolean>;
+	signedOut: Ref<boolean>;
 	failureMessage: (caught: unknown) => string;
 	refresh: (keepError?: boolean) => Promise<void>;
 }
@@ -64,18 +64,18 @@ export function useReusableLibraryReading<Entry>(options: {
 	const entries = ref<Entry[]>([]) as Ref<Entry[]>;
 	const loading = ref(false);
 	const error = ref<string | null>(null);
-	const authorSession = useGraphicsAuthorSession();
+	const authorship = useGraphicsAuthorship();
 
 	/**
 	 * Every refusal these three libraries report passes through here, which is why
-	 * the graphics author session is recognised here rather than at each call site.
+	 * an ended session is recognised here rather than at each call site.
 	 *
-	 * All three write through routes that require that session, and importing a
+	 * All three write through routes behind the API boundary, and importing a
 	 * portable artifact runs as a Graphics Ingestion Operation on the Graphics Asset
-	 * Library's own routes — so a lapse can arrive from either, and it reaches an
-	 * author as the server's sentence about a session they cannot see unless it is
-	 * named here. An import is also the surface most likely to be open when a
-	 * session runs out, because it is the one that pauses for a confirmation.
+	 * Library's own routes — so the refusal can arrive from either, and it reaches an
+	 * author as the boundary's flat 'Authentication is required' unless it is named
+	 * here. An import is also the surface most likely to be open when a session ends,
+	 * because it is the one that pauses for a confirmation.
 	 *
 	 * The refusal's own sentence is read through `failureSentence`, which is where the
 	 * judgement about *which* failures wrote one lives. This used to read `data.message`
@@ -87,8 +87,8 @@ export function useReusableLibraryReading<Entry>(options: {
 	 */
 	function failureMessage(caught: unknown): string {
 		options.inspectFailure?.(caught);
-		if (graphicsAuthorSessionLapsed(caught))
-			return authorSession.describeFailure(caught, options.unavailable);
+		if (graphicsAuthorSignedOut(caught))
+			return authorship.describeFailure(caught, options.unavailable);
 		return reportedMessage(caught, options.unavailable);
 	}
 
@@ -118,5 +118,5 @@ export function useReusableLibraryReading<Entry>(options: {
 		void refresh();
 	});
 
-	return { entries, loading, error, lapsed: authorSession.lapsed, failureMessage, refresh };
+	return { entries, loading, error, signedOut: authorship.signedOut, failureMessage, refresh };
 }

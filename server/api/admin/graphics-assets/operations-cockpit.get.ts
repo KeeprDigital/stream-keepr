@@ -1,5 +1,7 @@
+import type { GraphicsOperationsCockpitReading } from '~~/shared/types/graphicsAsset';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { graphicsActorNames } from '~~/server/utils/actorNames';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -17,10 +19,23 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
  * Inspecting and acting on an individual discrepancy, deadline, or Evidence
  * entry stays on the existing per-concern routes.
  */
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<GraphicsOperationsCockpitReading> => {
 	try {
 		await requireGraphicsAdministrator(event);
-		return await graphicsAssetLibraryForEvent(event).getOperationsCockpit();
+		const cockpit = await graphicsAssetLibraryForEvent(event).getOperationsCockpit();
+
+		// Who started each waiting operation, resolved here rather than stored
+		// beside the id (#398, ADR-0010). The catalogue-unavailable reading names
+		// nobody because it carries no operations to name — an empty naming is the
+		// accurate answer there, not a missing one.
+		return {
+			...cockpit,
+			actorNames: await graphicsActorNames(
+				cockpit.outcome === 'complete'
+					? cockpit.ingestion.operations.map(operation => operation.initiatedBy)
+					: [],
+			),
+		};
 	}
 	catch (error) {
 		return rethrowGraphicsAssetApiError(error, event);

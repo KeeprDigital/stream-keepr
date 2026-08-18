@@ -1,5 +1,5 @@
 import { apiPathRequiresSession } from '~~/server/utils/apiBoundary';
-import { serverAuth } from '~~/server/utils/auth';
+import { requestUserSession } from '~~/server/utils/auth';
 
 /**
  * The deny-by-default API boundary (#396, ADR-0010): every `/api/**` route
@@ -46,7 +46,14 @@ export default defineEventHandler(async (event) => {
 	// also why that name is locally *required* as of this ticket
 	// (`build/devVars.ts`): with a boundary in front of `/api/**`, a checkout
 	// without the secret has no way to sign in to anything.
-	const session = await serverAuth().api.getSession({ headers: event.headers });
+	//
+	// Through `requestUserSession` rather than `serverAuth()` directly, so this
+	// resolution is the one the handler behind it reuses (#398). Since the
+	// Graphics Author Session was retired, a route asks the same request who the
+	// person is and which browser they are in; without the memo those are two
+	// more reads of the row this line has just read, on routes a resumable
+	// transfer calls once per part.
+	const session = await requestUserSession(event);
 
 	if (!session) {
 		// One message for every refusal inside the boundary. A per-route or

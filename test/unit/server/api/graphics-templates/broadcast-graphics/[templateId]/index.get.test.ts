@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
-	mockRequireGraphicsAuthorSession,
+	mockRequireUserId,
 	mockFindEntry,
 } = vi.hoisted(() => ({
-	mockRequireGraphicsAuthorSession: vi.fn(),
+	mockRequireUserId: vi.fn(),
 	mockFindEntry: vi.fn(),
 }));
 
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	requireGraphicsAuthorSession: mockRequireGraphicsAuthorSession,
+vi.mock('~~/server/utils/auth', () => ({
+	requireUserId: mockRequireUserId,
 }));
 
 vi.mock('~~/server/modules/broadcast-graphic-template-library', () => ({
@@ -26,7 +26,7 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 describe('one Broadcast Graphic Template library entry', () => {
 	beforeEach(() => {
 		vi.resetModules();
-		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
+		mockRequireUserId.mockReset().mockResolvedValue('author-1');
 		mockFindEntry.mockReset().mockResolvedValue({ id: 'template-1', document: {} });
 	});
 
@@ -34,7 +34,7 @@ describe('one Broadcast Graphic Template library entry', () => {
 		// #206: the entry's document embeds Graphic Asset identities, so the
 		// identifiers #172 hid from the Asset Library stayed reachable one layer
 		// over until this read asked for the same session its sibling writes do.
-		mockRequireGraphicsAuthorSession.mockRejectedValue(
+		mockRequireUserId.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);
 		const handler = (await import(

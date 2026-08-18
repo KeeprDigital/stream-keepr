@@ -1,13 +1,13 @@
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { getBoundedRequestBodyStream } from '~~/server/utils/payloadLimits';
 import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
 export default defineEventHandler(async (event) => {
-	const initiatedBy = await requireGraphicsAuthorSession(event);
+	const initiatedBy = await requireUserId(event);
 	try {
 		const library = graphicsAssetLibraryForEvent(event);
 		const operationId = graphicsIngestionOperationId(getRouterParam(event, 'operationId') ?? '');

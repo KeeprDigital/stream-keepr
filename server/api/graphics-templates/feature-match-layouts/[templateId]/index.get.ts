@@ -2,8 +2,8 @@ import {
 	featureMatchLayoutTemplateLibrarySummary,
 	findFeatureMatchLayoutTemplateLibraryEntry,
 } from '~~/server/modules/feature-match-layout-template-library';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 
 /**
  * One library entry with the Feature Match Layout it stores.
@@ -17,7 +17,7 @@ import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/fe
  * Broadcast Graphic Template entry.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
 
 	const entry = await findFeatureMatchLayoutTemplateLibraryEntry(event, templateId);

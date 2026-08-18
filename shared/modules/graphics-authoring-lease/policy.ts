@@ -64,7 +64,7 @@ export interface GraphicsAuthoringLeaseState {
 }
 
 export interface GraphicsAuthoringLeaseRequest {
-	/** The asking graphics author session, or none for a client without one. */
+	/** The asking browser's session id, or none for a client without one. */
 	sessionId: string | undefined;
 	/** Explicit intent to displace a live holder. */
 	takeover?: boolean;

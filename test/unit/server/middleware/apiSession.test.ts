@@ -14,18 +14,25 @@ import { serverMiddlewareFiles } from '~~/test/helpers/routeRefusalScan';
  * about a session **at all**, and that a blank secret arrives as the 503 naming
  * the setting rather than as a 401 about a password.
  *
- * The last of those is not a nicety. `serverAuth()` is the first thing inside
+ * The last of those is not a nicety. The session read is the first thing inside
  * the boundary that can fail on configuration, and it now runs on every
  * `/api/**` request in the application; an operator whose deployment is missing
  * `NUXT_BETTER_AUTH_SECRET` needs the name of the setting, not an invitation to
  * sign in again with credentials that would never have worked.
  */
 
-const mockGetSession = vi.fn();
-const mockServerAuth = vi.fn(() => ({ api: { getSession: mockGetSession } }));
+/**
+ * The one session read a request makes, mocked as the middleware calls it (#398).
+ *
+ * It asks `requestUserSession` rather than `serverAuth().api.getSession` so the
+ * handler behind it reuses this answer instead of reading the same row again;
+ * what the middleware does with the answer — refuse, admit, or not ask at all —
+ * is unchanged, and is what the rows below are about.
+ */
+const mockRequestUserSession = vi.fn();
 
 vi.mock('~~/server/utils/auth', () => ({
-	serverAuth: mockServerAuth,
+	requestUserSession: mockRequestUserSession,
 }));
 
 const mockGetRequestURL = vi.fn();
@@ -45,11 +52,10 @@ function request(path: string) {
 describe('the API boundary middleware', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockServerAuth.mockReturnValue({ api: { getSession: mockGetSession } });
 	});
 
 	it('refuses a private route with no session, as one uniform 401', async () => {
-		mockGetSession.mockResolvedValue(null);
+		mockRequestUserSession.mockResolvedValue(null);
 
 		await expect(handler(request('/api/events/1/players'))).rejects.toMatchObject({
 			statusCode: 401,
@@ -62,7 +68,7 @@ describe('the API boundary middleware', () => {
 		// that have to stay exhaustive (`SCREEN_COMMAND_ROUTE_REFUSALS`), and it is
 		// also all a caller can act on: every reason a session is absent is
 		// answered by signing in again.
-		mockGetSession.mockResolvedValue(null);
+		mockRequestUserSession.mockResolvedValue(null);
 
 		const refusals = [];
 		for (const path of ['/api/events/1/screens/2/command', '/api/graphics-assets', '/api/_test/ordinary-mutation'])
@@ -72,10 +78,10 @@ describe('the API boundary middleware', () => {
 	});
 
 	it('admits a request that carries a session', async () => {
-		mockGetSession.mockResolvedValue({ session: { id: 'a-session' }, user: { id: 'a-user' } });
+		mockRequestUserSession.mockResolvedValue({ session: { id: 'a-session' }, user: { id: 'a-user' } });
 
 		await expect(handler(request('/api/events/1/players'))).resolves.toBeUndefined();
-		expect(mockGetSession).toHaveBeenCalledWith({ headers: expect.any(Headers) });
+		expect(mockRequestUserSession).toHaveBeenCalledOnce();
 	});
 
 	it('does not ask about a session on an exempt path, rather than asking and allowing', async () => {
@@ -83,7 +89,7 @@ describe('the API boundary middleware', () => {
 		// checkout with no `NUXT_BETTER_AUTH_SECRET`, would turn the clock and the
 		// capability surface into 503s — the two surfaces that have to keep working
 		// for a machine showing program.
-		mockGetSession.mockResolvedValue(null);
+		mockRequestUserSession.mockResolvedValue(null);
 
 		for (const path of [
 			'/api/time',
@@ -95,8 +101,7 @@ describe('the API boundary middleware', () => {
 		])
 			await expect(handler(request(path))).resolves.toBeUndefined();
 
-		expect(mockServerAuth).not.toHaveBeenCalled();
-		expect(mockGetSession).not.toHaveBeenCalled();
+		expect(mockRequestUserSession).not.toHaveBeenCalled();
 	});
 
 	it('sorts ahead of every other middleware, which is the order Nitro composes them in', () => {
@@ -120,9 +125,9 @@ describe('the API boundary middleware', () => {
 	});
 
 	it('lets a blank secret arrive as the 503 that names the setting', async () => {
-		mockServerAuth.mockImplementation(() => {
-			throw new ServiceConfigurationError('NUXT_BETTER_AUTH_SECRET', 'is not configured');
-		});
+		mockRequestUserSession.mockRejectedValue(
+			new ServiceConfigurationError('NUXT_BETTER_AUTH_SECRET', 'is not configured'),
+		);
 
 		await expect(handler(request('/api/events/1/players'))).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
 	});

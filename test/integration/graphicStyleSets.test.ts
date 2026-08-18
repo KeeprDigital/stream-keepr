@@ -8,8 +8,7 @@ import type {
 } from '~~/shared/types/graphicStyleSet';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 
 /**
  * Graphic Style Sets through the real API.
@@ -188,7 +187,7 @@ describe('graphic Style Sets', () => {
 	}
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
 
 		const event = await $fetch('/api/events', {
 			method: 'POST',
@@ -241,21 +240,13 @@ describe('graphic Style Sets', () => {
 		styleSetId = set.id;
 	});
 
-	it('refuses to create a Graphic Style Set without a graphics author session', async () => {
-		const anonymous = await request(STYLE_SETS, { method: 'POST', body: { name: 'Anonymous' } });
-
-		expect(anonymous.status).toBe(401);
-	});
-
-	it('refuses the Graphic Style Set reads without a graphics author session', async () => {
-		// #206: reads ask for the same session the writes do — session-scoping,
-		// not access control (ADR-0008).
-		const anonymousList = await request(STYLE_SETS);
-		expect(anonymousList.status).toBe(401);
-
-		const anonymousSet = await request(`${STYLE_SETS}/${styleSetId}`);
-		expect(anonymousSet.status).toBe(401);
-	});
+	/*
+	 * The refusal for a caller with no session at all is the API boundary's since
+	 * #398, composed around every `/api/**` route before any handler runs, and it
+	 * is proved against a genuinely anonymous client in `apiBoundary.test.ts`.
+	 * This suite's client is signed in, so asserting it here would mean sending a
+	 * request a different way to test a middleware this file is not about.
+	 */
 
 	it('refuses an over-sized initial draft on create, as editing one is refused', async () => {
 		// Creating a Style Set accepts the same unbounded draft array editing one does, so
@@ -405,15 +396,6 @@ describe('graphic Style Sets', () => {
 		expect(review.styleSet).toMatchObject({ id: styleSetId, linkedRevision: 1, publishedRevision: 1 });
 		expect(review.available).toBe(false);
 		expect(review.changes).toEqual([]);
-	});
-
-	it('refuses the style update review without a graphics author session', async () => {
-		// #206: the review is a read on the author surface, so it asks for the
-		// same session as its siblings — session-scoping, not access control
-		// (ADR-0008).
-		const anonymous = await request(`${TEMPLATES}/${templateId}/style-update`);
-
-		expect(anonymous.status).toBe(401);
 	});
 
 	it('offers no update for a rename, because a rename changes no resolved value', async () => {

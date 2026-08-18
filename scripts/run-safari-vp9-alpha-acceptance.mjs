@@ -91,9 +91,9 @@ async function observeSafariVerdict(url, { sessionUrl } = {}) {
 		body: JSON.stringify({ url: destination }),
 	});
 	try {
-		// A graphics author session is issued on an ordinary page load, and the
-		// page mints its own capability with it. Static assets do not pass through
-		// the middleware that issues it, so visit the application first.
+		// The Screen Output page mints its own Screen Output Asset Capability from
+		// the application's own origin, and a static asset URL does not load the
+		// application at all — so visit it first.
 		if (sessionUrl) {
 			await visit(sessionUrl);
 			await new Promise(resolve => setTimeout(resolve, 750));

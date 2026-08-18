@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3';
 import type { GraphicsAuthoringLeaseRef } from './index';
-import { optionalGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { screenService } from '~~/server/services/screen';
+import { optionalBrowserSessionId } from '~~/server/utils/auth';
 import { screenEditWorkspaceArtifact } from '~~/shared/modules/graphics-authoring-lease';
 import { graphicsAuthoringLeaseModule } from './index';
 
@@ -33,7 +33,7 @@ export async function requireScreenGraphicsEditWritable(
 ): Promise<void> {
 	await graphicsAuthoringLeaseModule().requireWritable(
 		screenEditWorkspaceLeaseRef(eventId, screenId),
-		await optionalGraphicsAuthorSession(event),
+		await optionalBrowserSessionId(event),
 	);
 }
 

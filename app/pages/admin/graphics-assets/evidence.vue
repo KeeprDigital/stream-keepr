@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type {
 	GraphicsAssetEvidenceEntry,
-	GraphicsAssetEvidencePage,
 	GraphicsAssetEvidencePosition,
+	GraphicsAssetEvidenceReading,
 	GraphicsAssetEvidenceSubjectKind,
 } from '~~/shared/types/graphicsAsset';
 import type { GraphicsEvidenceCategoryGroup } from '~~/shared/utils/graphicsAssetEvidence';
@@ -10,6 +10,7 @@ import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import { formatInstant } from '~~/shared/utils/formatInstant';
 import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
+	graphicsActorName,
 	graphicsEvidenceQueueFor,
 } from '~~/shared/utils/graphicsAssetEvidence';
 
@@ -136,8 +137,8 @@ const {
 	loadError,
 	hasReading,
 	load: loadLedger,
-} = useGraphicsAdminReading<GraphicsAssetEvidencePage>({
-	read: async headers => await $fetch<GraphicsAssetEvidencePage>(
+} = useGraphicsAdminReading<GraphicsAssetEvidenceReading>({
+	read: async headers => await $fetch<GraphicsAssetEvidenceReading>(
 		'/api/admin/graphics-assets/evidence',
 		{ headers, query: evidenceQuery() },
 	),
@@ -479,7 +480,7 @@ const filtered = computed(() =>
 								{{ entry.outcome }} · {{ entry.reason }}
 							</p>
 							<p class="text-xs text-dimmed">
-								{{ entry.actor }} · {{ entry.subject.kind }} {{ entry.subject.id }}
+								{{ graphicsActorName(ledger.actorNames, entry.actor) }} · {{ entry.subject.kind }} {{ entry.subject.id }}
 							</p>
 
 							<dl

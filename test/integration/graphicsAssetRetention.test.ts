@@ -16,8 +16,7 @@ import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUPS,
 } from '../../shared/utils/graphicsAssetEvidence';
 import { GRAPHICS_RETENTION_GUARANTEES } from '../../shared/utils/graphicsAssetRetention';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
@@ -60,7 +59,7 @@ describe('the Graphics Asset Library retention API', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
+		authorHeaders = { cookie: await operatorSessionCookie() };
 	});
 
 	async function ingest(name: string, idempotencyKey: string, bytes = retentionPixelPng) {

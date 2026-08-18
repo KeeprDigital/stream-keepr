@@ -3,17 +3,17 @@ import { stubH3Event } from '~~/test/helpers/h3Event';
 import { refusalFrom } from '~~/test/helpers/publicServerFailure';
 
 const {
-	mockRequireGraphicsAuthorSession,
+	mockRequireUserId,
 	mockResolveGraphicAssetRevision,
 	mockSetResponseHeader,
 } = vi.hoisted(() => ({
-	mockRequireGraphicsAuthorSession: vi.fn(),
+	mockRequireUserId: vi.fn(),
 	mockResolveGraphicAssetRevision: vi.fn(),
 	mockSetResponseHeader: vi.fn(),
 }));
 
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	requireGraphicsAuthorSession: mockRequireGraphicsAuthorSession,
+vi.mock('~~/server/utils/auth', () => ({
+	requireUserId: mockRequireUserId,
 }));
 
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
@@ -42,13 +42,13 @@ vi.stubGlobal('createError', (input: {
 describe('authenticated exact Graphic Asset Revision content delivery', () => {
 	beforeEach(() => {
 		vi.resetModules();
-		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
+		mockRequireUserId.mockReset().mockResolvedValue('author-1');
 		mockResolveGraphicAssetRevision.mockReset();
 		mockSetResponseHeader.mockReset();
 	});
 
 	it('rejects resolution before touching the library when no editor session is authenticated', async () => {
-		mockRequireGraphicsAuthorSession.mockRejectedValue(
+		mockRequireUserId.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);
 		const handler = (await import(

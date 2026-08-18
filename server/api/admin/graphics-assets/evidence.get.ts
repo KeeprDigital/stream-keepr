@@ -1,3 +1,4 @@
+import type { GraphicsAssetEvidenceReading } from '~~/shared/types/graphicsAsset';
 import { z } from 'zod';
 import {
 	GRAPHICS_ASSET_EVIDENCE_CATEGORY_VALUES,
@@ -5,6 +6,7 @@ import {
 } from '~~/server/db/schema/graphicsAsset';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
+import { graphicsActorNames } from '~~/server/utils/actorNames';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
@@ -56,7 +58,7 @@ const evidenceQuerySchema = z.object({
  * re-read everything before it and shift under a sweep writing new entries
  * while the pages are being turned.
  */
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<GraphicsAssetEvidenceReading> => {
 	try {
 		await requireGraphicsAdministrator(event);
 		const query = await getValidatedQuery(event, evidenceQuerySchema.parse);
@@ -69,7 +71,7 @@ export default defineEventHandler(async (event) => {
 				query.group === undefined ? [] : [query.group].flat(),
 			),
 		];
-		return await graphicsAssetLibraryForEvent(event).listGraphicsAssetEvidence({
+		const page = await graphicsAssetLibraryForEvent(event).listGraphicsAssetEvidence({
 			limit: query.limit,
 			categories: categories.length === 0 ? undefined : [...new Set(categories)],
 			subject: query.subjectKind === undefined || query.subjectId === undefined
@@ -84,6 +86,11 @@ export default defineEventHandler(async (event) => {
 				: { recordedAt: query.cursorRecordedAt, id: query.cursorId },
 			direction: query.direction,
 		});
+
+		// The ledger records who acted, never what they were called at the time, so
+		// the names are resolved at the moment the page is read (#398, ADR-0010) —
+		// a rename is a rename everywhere, including in evidence written years ago.
+		return { ...page, actorNames: await graphicsActorNames(page.entries.map(entry => entry.actor)) };
 	}
 	catch (error) {
 		return rethrowGraphicsAssetApiError(error, event);

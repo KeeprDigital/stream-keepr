@@ -1,6 +1,5 @@
 import { mapFeatureMatchLayoutTemplateToResponse } from '~~/server/mappers/featureMatchLayoutTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import {
 	featureMatchLayoutTemplateParamsSchema,
@@ -10,6 +9,7 @@ import {
 	FeatureMatchLayoutTemplateRevisionConflict,
 	featureMatchLayoutTemplateService,
 } from '~~/server/services/featureMatchLayoutTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import {
 	assertFeatureMatchLayoutTemplateReferencesExist,
 	refuseInstalledFeatureMatchLayoutTemplateWrite,
@@ -28,7 +28,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * session may write this template at all.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 

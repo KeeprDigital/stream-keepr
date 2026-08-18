@@ -3,7 +3,7 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -16,7 +16,7 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
  * that never went near it.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	try {
 		return await graphicsAssetLibraryForEvent(event).inspectGraphicAssetRevision({
 			assetId: graphicAssetId(getRouterParam(event, 'assetId') ?? ''),

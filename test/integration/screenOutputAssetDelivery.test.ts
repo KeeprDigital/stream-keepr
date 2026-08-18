@@ -6,8 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
-import { $fetch, anonymousFetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
@@ -52,7 +51,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 	}
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		graphicsAuthorCookie = await operatorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

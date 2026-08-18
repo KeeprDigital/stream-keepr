@@ -1,10 +1,10 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	createGraphicStyleSetSchema,
 	GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -21,7 +21,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * the opposite of what this route promises, so it has its own write.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const body = createGraphicStyleSetSchema.parse(
 		await readJsonPayloadLimited(event, GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES, 'Graphic Style Set'),
 	);

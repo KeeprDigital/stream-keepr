@@ -1,7 +1,7 @@
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import { refuseInstalledFeatureMatchLayoutTemplateWrite } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 
 /**
@@ -17,7 +17,7 @@ import { refuseInstalledFeatureMatchLayoutTemplateWrite } from '~~/server/utils/
  * author is looking straight at.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 

@@ -662,12 +662,13 @@ describe('broadcastGraphicsLiveControl', () => {
 		});
 
 		/**
-		 * A lapsed graphics author session is not the library saying anything about the
-		 * revision, and it is the one failure retrying cannot fix. Calling it
-		 * temporarily unavailable content would state the wrong fact and prescribe the
-		 * one action that provably cannot work.
+		 * An ended session is not the library saying anything about the revision, and
+		 * it is the one failure retrying cannot fix. Calling it temporarily unavailable
+		 * content would state the wrong fact and prescribe the one action that provably
+		 * cannot work — where signing in again does fix it, which is what the sentence
+		 * says since #398.
 		 */
-		it('names a lapsed graphics author session rather than blaming the revision’s bytes', async () => {
+		it('names an ended session rather than blaming the revision’s bytes', async () => {
 			mockApiFetch.mockRejectedValue(Object.assign(new Error('Unauthorized'), { statusCode: 401 }));
 			const wrapper = await mountComponent(graphic([BADGE]));
 
@@ -675,8 +676,8 @@ describe('broadcastGraphicsLiveControl', () => {
 			await flushPromises();
 
 			const refusal = wrapper.get('[data-testid="live-control-media-refused-badge"]').text();
-			expect(refusal).toContain('graphics author session has lapsed');
-			expect(refusal).toContain('Reload the page');
+			expect(refusal).toContain('browser is no longer signed in');
+			expect(refusal).toContain('Sign in again');
 			expect(refusal).not.toMatch(/temporarily unavailable|Try again/);
 			expect(mockSetInput).not.toHaveBeenCalled();
 		});

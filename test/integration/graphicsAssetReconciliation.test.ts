@@ -6,8 +6,7 @@ import type {
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
@@ -35,7 +34,7 @@ describe('the Graphics Asset Library reconciliation API', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
+		authorHeaders = { cookie: await operatorSessionCookie() };
 	});
 
 	async function ingest(name: string, idempotencyKey: string) {

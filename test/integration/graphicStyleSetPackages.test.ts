@@ -11,8 +11,7 @@ import {
 	GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 } from '../../shared/types/graphicStyleSetPackage';
 import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive';
-import { fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { fetch, operatorSessionCookie } from './client';
 
 /**
  * A show's style travelling as a `.skstyle` package, through the real API.
@@ -136,7 +135,7 @@ describe('graphic Style Set Packages', () => {
 	}
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
 		const created = await request(STYLE_SETS, {
 			method: 'POST',
 			cookie: authorCookie,

@@ -2,8 +2,7 @@ import type { GraphicsAssetLibraryCapacity, GraphicsIngestionOperation } from '~
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
@@ -17,7 +16,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 	let authorCookie: string;
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
 	});
 	const transparentPixelPng = Uint8Array.from(Buffer.from(
 		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -159,7 +158,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 			headers: { cookie: authorCookie },
 		});
-		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
+		const authorHeaders = { cookie: await operatorSessionCookie() };
 		const noGrowthBytes = pngWithTextChunks(10);
 		const upload = async (idempotencyKey: string) => {
 			const operation = await $fetch<GraphicsIngestionOperation>(
@@ -225,7 +224,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 			headers: { cookie: authorCookie },
 		});
-		const authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
+		const authorHeaders = { cookie: await operatorSessionCookie() };
 		const initiate = async (idempotencyKey: string, bytes: Uint8Array) =>
 			await $fetch<GraphicsIngestionOperation>(
 				'/api/graphics-assets/ingestion-operations',

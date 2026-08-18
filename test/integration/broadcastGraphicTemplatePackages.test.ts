@@ -16,11 +16,7 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { $fetch, fetch } from './client';
-import {
-	createGraphicsAuthorSessionCookie,
-	suiteGraphicsAuthorSessionCookie,
-} from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 /**
@@ -90,7 +86,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: {
 				idempotencyKey: `skgraphic-package-${runId}-${++packageSequence}`,
 				source: 'template-package',
@@ -103,7 +99,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{
 			method: 'PUT',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: archive,
 		},
 	);
@@ -114,7 +110,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST', headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
+		{ method: 'POST', headers: { cookie: await operatorSessionCookie() } },
 	);
 }
 
@@ -128,7 +124,7 @@ describe('broadcast Graphic Template Packages', () => {
 	const installedTemplateIds: string[] = [];
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -152,7 +148,7 @@ describe('broadcast Graphic Template Packages', () => {
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
-				headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+				headers: { cookie: await operatorSessionCookie() },
 				body: graphicsIngestionRequest({
 					idempotencyKey: `skgraphic-package-source-${runId}`,
 					name: 'Package round trip backdrop',
@@ -171,7 +167,7 @@ describe('broadcast Graphic Template Packages', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{
 				method: 'PUT',
-				headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+				headers: { cookie: await operatorSessionCookie() },
 				body: pixelPng,
 			},
 		);

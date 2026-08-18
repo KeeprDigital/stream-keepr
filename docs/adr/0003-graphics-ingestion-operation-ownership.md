@@ -1,6 +1,6 @@
 # ADR-0003: A Graphics Ingestion Operation stays owned by one graphics author session, and the session's eight hours run from its last request
 
-- **Status**: Accepted; reopened as this record pre-committed by [ADR-0010](./0010-authentication-replaces-the-anonymous-author-session.md) — a person now exists, so ownership moves to the person and the sliding-8-hour session retires at that design's cutover
+- **Status**: Superseded at ADR-0010's cutover ([#398](https://github.com/KeeprDigital/stream-keepr/issues/398)), as this record pre-committed: a person now exists, so ownership belongs to the person and the sliding-8-hour session is retired. What survives is the _argument_ — ownership bounds who reads unpublished staged bytes — which now binds to the user; what does not is the session that carried it. Read below for why the boundary was drawn where it was, not for how the installation behaves today
 - **Date**: 2026-08-02
 - **Issue**: [#176](https://github.com/KeeprDigital/stream-keepr/issues/176)
 - **Follows**: [#37](https://github.com/KeeprDigital/stream-keepr/issues/37) (the first route to require a session) and [#90](https://github.com/KeeprDigital/stream-keepr/issues/90) (the session became the only ingestion identity)

@@ -12,11 +12,7 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { $fetch, fetch } from './client';
-import {
-	createGraphicsAuthorSessionCookie,
-	suiteGraphicsAuthorSessionCookie,
-} from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
 
@@ -81,7 +77,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>, options: { fileN
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-preflight-${++preflightSequence}`,
 				source: 'template-package',
@@ -94,7 +90,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>, options: { fileN
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{
 			method: 'PUT',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: archive,
 		},
 	);
@@ -111,7 +107,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-preflight-${++preflightSequence}`,
 				source: 'template-package',
@@ -120,7 +116,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 			},
 		},
 	);
-	const authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
+	const authorHeaders = { cookie: await operatorSessionCookie() };
 	const started = await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
 		{ method: 'POST', headers: authorHeaders },
@@ -177,7 +173,7 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
  */
 async function retainedCanonicalSourceBytes(): Promise<number> {
 	const capacity = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
-		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+		headers: { cookie: await operatorSessionCookie() },
 	});
 	const retained = capacity.canonical.breakdown.retainedSourceBytes;
 	// Anti-vacuity: this suite's own source asset is retained, so a live read is
@@ -196,8 +192,8 @@ describe('template Package preflight through the API boundary', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
-		const graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		authorHeaders = { cookie: await operatorSessionCookie() };
+		const graphicsAuthorCookie = await operatorSessionCookie();
 		const created = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

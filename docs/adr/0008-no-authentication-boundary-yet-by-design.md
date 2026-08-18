@@ -1,6 +1,6 @@
 # ADR-0008: The installation has no authentication boundary yet, by design
 
-- **Status**: Superseded in its "no boundary" clause by [ADR-0010](./0010-authentication-replaces-the-anonymous-author-session.md); the seam inventory below remains the accurate map of where that design attaches
+- **Status**: Superseded in its "no boundary" clause by [ADR-0010](./0010-authentication-replaces-the-anonymous-author-session.md), whose cutover landed on [#398](https://github.com/KeeprDigital/stream-keepr/issues/398); the seam inventory below is the map of where that design attached, and is now history rather than a description of the installation
 - **Date**: 2026-08-06 (decision recorded on the issue; promoted to this record 2026-08-07)
 - **Issue**: [#205](https://github.com/KeeprDigital/stream-keepr/issues/205)
 - **Decided by**: the owner, on #205; this record carries that decision verbatim in substance

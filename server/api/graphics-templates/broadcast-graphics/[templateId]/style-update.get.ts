@@ -1,7 +1,7 @@
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { graphicStyleUpdateReview } from '~~/shared/modules/graphic-style-sets';
 
 /**
@@ -20,7 +20,7 @@ import { graphicStyleUpdateReview } from '~~/shared/modules/graphic-style-sets';
  * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 
 	const template = await broadcastGraphicTemplateService().findById(templateId);
