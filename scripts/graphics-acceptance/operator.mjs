@@ -177,10 +177,28 @@ export function sessionCookiePairs(response) {
 		.filter(pair => pair.includes('='));
 }
 
-async function postJson(url, body, headers = {}) {
-	return await fetch(url, {
+/**
+ * A JSON POST that says where it came from.
+ *
+ * **`origin` is load-bearing, and its absence is why this failed against a built
+ * Worker.** Better Auth refuses a state-changing request carrying no `Origin` with
+ * `403 MISSING_OR_NULL_ORIGIN` — its CSRF defence, and correct: a browser always
+ * sends one on a cross-document POST, so a request without one is not a browser and
+ * should not be taken for a session-issuing one on trust. `fetch` in Node sends
+ * none, so this harness has to say so itself, truthfully — it *is* the client at
+ * this origin.
+ *
+ * Found by running the fan-out probe against `pnpm preview` rather than by reading:
+ * the integration suite signs in happily because `nuxt dev` does not enforce this,
+ * so nothing on the dev server would ever have caught it and every `--deployed`
+ * acceptance run would have stopped at `harness-operator-unavailable` with a 403.
+ *
+ * @param {string} origin The installation, as the `Origin` a browser would send.
+ */
+async function postJson(origin, path, body, headers = {}) {
+	return await fetch(`${origin}${path}`, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json', ...headers },
+		headers: { 'content-type': 'application/json', origin, ...headers },
 		body: JSON.stringify(body),
 		redirect: 'manual',
 	});
@@ -203,7 +221,8 @@ export async function openOperatorSession(origin, { deployed = false, env = proc
 
 	if (plan.kind === 'bootstrap') {
 		const armed = await postJson(
-			`${origin}${BOOTSTRAP_ROUTE}`,
+			origin,
+			BOOTSTRAP_ROUTE,
 			{ email: plan.email, password: plan.password, name: 'Graphics acceptance harness' },
 			{ [BOOTSTRAP_TOKEN_HEADER]: plan.bootstrapToken },
 		);
@@ -215,7 +234,7 @@ export async function openOperatorSession(origin, { deployed = false, env = proc
 		}
 	}
 
-	const signIn = await postJson(`${origin}${SIGN_IN_ROUTE}`, { email: plan.email, password: plan.password });
+	const signIn = await postJson(origin, SIGN_IN_ROUTE, { email: plan.email, password: plan.password });
 	if (!signIn.ok) {
 		throw new AcceptanceFailure('harness-operator-unavailable', {
 			step: 'sign-in',
