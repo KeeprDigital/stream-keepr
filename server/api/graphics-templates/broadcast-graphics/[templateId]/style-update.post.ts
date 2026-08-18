@@ -1,5 +1,4 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { applyGraphicStyleUpdateSchema } from '~~/server/schemas/api/graphicStyleSet';
@@ -8,6 +7,7 @@ import {
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 
 /**
@@ -33,7 +33,7 @@ import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/
  * could never be reasoned about again.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 	const body = applyGraphicStyleUpdateSchema.parse(await readBody(event));

@@ -1,9 +1,9 @@
 import { mapFeatureMatchLayoutTemplateToResponse } from '~~/server/mappers/featureMatchLayoutTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { saveFeatureMatchLayoutTemplateSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
 import { screenService } from '~~/server/services/screen';
+import { requireUserId } from '~~/server/utils/auth';
 import { assertFeatureMatchLayoutTemplateReferencesExist } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -22,7 +22,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * Screen that later places it happens to hold.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const body = saveFeatureMatchLayoutTemplateSchema.parse(await readBody(event));
 
 	const screen = await screenService().findById(body.source.screenId, body.source.eventId);

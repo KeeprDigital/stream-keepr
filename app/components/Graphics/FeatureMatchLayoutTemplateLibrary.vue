@@ -53,7 +53,7 @@ const {
 	entries: templates,
 	loading,
 	error,
-	lapsed,
+	signedOut,
 	failureMessage,
 	refresh,
 	busyTemplateId,
@@ -150,7 +150,7 @@ async function place(templateId: string) {
 			<GraphicsReusableLibraryError
 				title="Layout template action failed"
 				:message="error"
-				:lapsed="lapsed"
+				:signed-out="signedOut"
 				test-id="layout-template-error"
 			/>
 

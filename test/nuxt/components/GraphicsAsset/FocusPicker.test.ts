@@ -763,7 +763,7 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 	 * What an author is told when the library will not answer.
 	 *
 	 * The picker used to render the failure's own `message`, which on a `$fetch` failure
-	 * is the transport's line — so an author whose session had lapsed, or whose
+	 * is the transport's line — so an author whose session had ended, or whose
 	 * installation had a setting missing, read the route's name and a status code. Since
 	 * #286 the read goes through `failureSentence`, which quotes a refusal and also the
 	 * 5xx families whose prose the server preserves through sanitizing.

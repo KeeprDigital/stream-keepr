@@ -1,7 +1,7 @@
 import { exportGraphicStyleSetPackage } from '~~/server/modules/graphic-style-set-package';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetParamsSchema } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { respondWithGraphicStyleSetPackage } from '~~/server/utils/graphicStyleSetPackageApi';
 
 /**
@@ -25,7 +25,7 @@ import { respondWithGraphicStyleSetPackage } from '~~/server/utils/graphicStyleS
  * follows it back, and this installation learns nothing about any import.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 
 	const styleSet = await graphicStyleSetService().findById(styleSetId);

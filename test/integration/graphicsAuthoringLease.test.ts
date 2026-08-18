@@ -1,10 +1,10 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { $fetch, fetch } from './client';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { integrationRealtimeConfigured } from './helpers';
+import { anotherBrowser } from './identities';
 import { diagnoseRealtimePublishFailure, SCREEN_COMMAND_ROUTE_REFUSALS } from './realtimeDiagnosis';
 
 interface LeaseState {
@@ -12,6 +12,7 @@ interface LeaseState {
 	role: 'holder' | 'observer';
 	writable: boolean;
 	heldByAnotherSession: boolean;
+	holderName?: string;
 	expiresAt: number | null;
 	heldSince: number | null;
 	heartbeatIntervalMs: number;
@@ -48,8 +49,18 @@ const LEASE_LAPSE_ATTEMPTS = 5;
 describe('graphics Authoring Leases', () => {
 	let eventId: number;
 	let screenId: number;
-	let authorA: string;
-	let authorB: string;
+	/**
+	 * Two browsers, deliberately belonging to the **same** operator (#398,
+	 * ADR-0010).
+	 *
+	 * A lease guards concurrent editors, and one person signed in from two browsers
+	 * is two editors — so `holderSessionId` carries a Better Auth session id rather
+	 * than a userId. Proving that with two different *people* would prove something
+	 * weaker and would pass just as well against a lease held per user, which is
+	 * the shape that lets one operator silently overwrite their own composition.
+	 */
+	let browserA: string;
+	let browserB: string;
 
 	function leasePath() {
 		return `/api/events/${eventId}/screens/${screenId}/graphics-authoring-lease`;
@@ -134,9 +145,9 @@ describe('graphics Authoring Leases', () => {
 	}
 
 	beforeAll(async () => {
-		authorA = await createGraphicsAuthorSessionCookie();
-		authorB = await createGraphicsAuthorSessionCookie();
-		expect(authorA).not.toBe(authorB);
+		browserA = await operatorSessionCookie();
+		browserB = await anotherBrowser();
+		expect(browserA).not.toBe(browserB);
 
 		const event = await $fetch('/api/events', {
 			method: 'POST',
@@ -172,8 +183,8 @@ describe('graphics Authoring Leases', () => {
 	 * clears the artifact whichever of them was holding it.
 	 */
 	beforeEach(async () => {
-		await releaseLease(authorA);
-		await releaseLease(authorB);
+		await releaseLease(browserA);
+		await releaseLease(browserB);
 	});
 
 	afterAll(async () => {
@@ -184,7 +195,7 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('grants one session the exclusive lease on a Screen graphics Edit workspace', async () => {
-		const acquired = await askForLease(authorA);
+		const acquired = await askForLease(browserA);
 
 		expect(acquired.status).toBe(200);
 		expect(acquired.data.outcome).toBe('grant');
@@ -197,16 +208,19 @@ describe('graphics Authoring Leases', () => {
 		expect(acquired.data.lease.expiresAt).toBeGreaterThan(Date.now());
 	});
 
-	it('refuses a lease to a client without a graphics author session', async () => {
-		const anonymous = await askForLease(undefined);
-
-		expect(anonymous.status).toBe(401);
-	});
+	/*
+	 * A lease asked for with no session at all used to be refused here. Since #398
+	 * that refusal is the API boundary's, composed around every `/api/**` route
+	 * before any handler runs, and it is proved in `apiBoundary.test.ts` against a
+	 * genuinely anonymous client — which this suite's client is not. Asserting it
+	 * from here would have to send the request a different way to test a middleware
+	 * this file is not about.
+	 */
 
 	it('leaves a second session observing the same Edit workspace read-only', async () => {
-		await askForLease(authorA);
+		await askForLease(browserA);
 
-		const asked = await askForLease(authorB);
+		const asked = await askForLease(browserB);
 
 		expect(asked.status).toBe(200);
 		expect(asked.data.outcome).toBe('observe');
@@ -215,23 +229,41 @@ describe('graphics Authoring Leases', () => {
 		expect(asked.data.lease.heldByAnotherSession).toBe(true);
 	});
 
-	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {
-		await askForLease(authorA);
+	/**
+	 * The takeover surface is shown a person, never a session id (#398,
+	 * ADR-0010).
+	 *
+	 * Both browsers here are the same operator, so the name that comes back is
+	 * their own — which is the honest answer and the useful one: what an observer
+	 * has to decide is whether to go and ask a colleague or close their own second
+	 * window, and only a name can tell them.
+	 */
+	it('names the person holding it, rather than handing over a session id', async () => {
+		await askForLease(browserA);
 
-		const accepted = await patchStack(authorA, [graphic('holder-stack')]);
+		const asked = await askForLease(browserB);
+
+		expect(asked.data.lease.holderName).toBe('Integration Operator');
+		expect(JSON.stringify(asked.data.lease)).not.toContain(browserA.split('=')[1]!.slice(0, 12));
+	});
+
+	it('accepts the holder\'s authoring write and refuses an observer\'s', async () => {
+		await askForLease(browserA);
+
+		const accepted = await patchStack(browserA, [graphic('holder-stack')]);
 		expect(accepted.status).toBe(200);
 
-		const refused = await patchStack(authorB, [graphic('observer-stack')]);
+		const refused = await patchStack(browserB, [graphic('observer-stack')]);
 		expect(refused.status).toBe(409);
 
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
 	});
 
 	it('lets an observer read every accepted authoring change', async () => {
-		await askForLease(authorA);
-		await patchStack(authorA, [graphic('holder-stack'), graphic('second-graphic')]);
+		await askForLease(browserA);
+		await patchStack(browserA, [graphic('holder-stack'), graphic('second-graphic')]);
 
-		const screen = await request(`/api/events/${eventId}/screens/${screenId}`, { cookie: authorB });
+		const screen = await request(`/api/events/${eventId}/screens/${screenId}`, { cookie: browserB });
 
 		expect(screen.status).toBe(200);
 		expect(
@@ -241,9 +273,9 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('renews the deadline for the session already holding the lease', async () => {
-		const before = await askForLease(authorA);
+		const before = await askForLease(browserA);
 		await sleep(20);
-		const renewed = await askForLease(authorA);
+		const renewed = await askForLease(browserA);
 
 		expect(renewed.data.outcome).toBe('renew');
 		expect(renewed.data.lease.role).toBe('holder');
@@ -264,12 +296,12 @@ describe('graphics Authoring Leases', () => {
 		// compare here reads as a lease regression. See `realtimeDiagnosis`.
 
 		// The lease holder is session A; every live action below is another operator.
-		await askForLease(authorA);
+		await askForLease(browserA);
 
 		const command = await request(`/api/events/${eventId}/screens/${screenId}/command`, {
 			method: 'POST',
 			body: { command: 'refresh' },
-			cookie: authorB,
+			cookie: browserB,
 		});
 		expect(command.status, diagnoseRealtimePublishFailure(command.status, command.data, SCREEN_COMMAND_ROUTE_REFUSALS)).toBe(200);
 
@@ -283,7 +315,7 @@ describe('graphics Authoring Leases', () => {
 	it('never restricts a live command session while the Edit workspace is leased', async () => {
 		// Multi-operator live operation keeps running under its own field-scoped
 		// conflict rules rather than under the lease.
-		await askForLease(authorA);
+		await askForLease(browserA);
 
 		const harness = await createCommandHarness(eventId);
 		const live = await harness.send({
@@ -296,10 +328,10 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('refuses an observer\'s resize of the leased Screen canvas', async () => {
-		expect((await askForLease(authorA)).data.lease.writable).toBe(true);
+		expect((await askForLease(browserA)).data.lease.writable).toBe(true);
 
-		expect((await patchCanvas(authorA, 1080)).status).toBe(200);
-		expect((await patchCanvas(authorB, 720)).status).toBe(409);
+		expect((await patchCanvas(browserA, 1080)).status).toBe(200);
+		expect((await patchCanvas(browserB, 720)).status).toBe(409);
 
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 		expect(screen.screenConfig?.height).toBe(1080);
@@ -308,17 +340,17 @@ describe('graphics Authoring Leases', () => {
 	it('leaves every other Screen configuration field open while the canvas is leased', async () => {
 		// The lease covers the canvas, not the route. A generic Screen field is not
 		// part of any graphics Edit workspace and stays open to every operator.
-		await askForLease(authorA);
+		await askForLease(browserA);
 
 		expect((await request(`/api/events/${eventId}/screens/${screenId}/screen-config`, {
 			method: 'PATCH',
 			body: { paddingX: 12 },
-			cookie: authorB,
+			cookie: browserB,
 		})).status).toBe(200);
 	});
 
 	it('never leases the canvas of a Screen that is not in Broadcast Graphics mode', async () => {
-		await askForLease(authorA);
+		await askForLease(browserA);
 		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Idle Screen', slug: 'lease-idle-screen', currentMode: 'idle' },
@@ -327,34 +359,34 @@ describe('graphics Authoring Leases', () => {
 		const resized = await request(`/api/events/${eventId}/screens/${other.id}/screen-config`, {
 			method: 'PATCH',
 			body: { height: 480 },
-			cookie: authorB,
+			cookie: browserB,
 		});
 
 		expect(resized.status).toBe(200);
 	});
 
 	it('hands the artifact over on an explicit takeover and demotes the previous holder', async () => {
-		await askForLease(authorA);
+		await askForLease(browserA);
 
-		const takenOver = await askForLease(authorB, { takeover: true });
+		const takenOver = await askForLease(browserB, { takeover: true });
 
 		expect(takenOver.data.outcome).toBe('takeover');
 		expect(takenOver.data.lease.role).toBe('holder');
 		expect(takenOver.data.lease.writable).toBe(true);
 
 		// The displaced author learns of it on its next heartbeat.
-		const displaced = await askForLease(authorA);
+		const displaced = await askForLease(browserA);
 		expect(displaced.data.outcome).toBe('observe');
 		expect(displaced.data.lease.writable).toBe(false);
 
-		expect((await patchStack(authorA, [graphic('stale-author')])).status).toBe(409);
-		expect((await patchStack(authorB, [graphic('new-author')])).status).toBe(200);
+		expect((await patchStack(browserA, [graphic('stale-author')])).status).toBe(409);
+		expect((await patchStack(browserB, [graphic('new-author')])).status).toBe(200);
 	});
 
 	it('ignores a release from a session that does not hold the lease', async () => {
-		await askForLease(authorB);
+		await askForLease(browserB);
 
-		const released = await releaseLease(authorA);
+		const released = await releaseLease(browserA);
 
 		expect(released.status).toBe(200);
 		expect(released.data.lease.heldByAnotherSession).toBe(true);
@@ -362,9 +394,9 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('frees the artifact when its holder releases the lease', async () => {
-		await askForLease(authorB);
+		await askForLease(browserB);
 
-		const released = await releaseLease(authorB);
+		const released = await releaseLease(browserB);
 
 		expect(released.status).toBe(200);
 		expect(released.data.lease.writable).toBe(true);
@@ -373,19 +405,19 @@ describe('graphics Authoring Leases', () => {
 	});
 
 	it('frees an artifact whose holding session disappeared without releasing it', async () => {
-		const acquired = await askForLease(authorA, { heartbeatIntervalMs: 1_000 });
+		const acquired = await askForLease(browserA, { heartbeatIntervalMs: 1_000 });
 		expect(acquired.data.outcome).toBe('grant');
 		expect(acquired.data.lease.expiresAt! - Date.now()).toBeLessThanOrEqual(3_000);
 
 		// Session A is gone: it never heartbeats again and never releases.
-		expect((await askForLease(authorB)).data.outcome).toBe('observe');
+		expect((await askForLease(browserB)).data.outcome).toBe('observe');
 
-		const recovered = await askOnceLeaseHasLapsed(authorB, acquired.data.lease.expiresAt!);
+		const recovered = await askOnceLeaseHasLapsed(browserB, acquired.data.lease.expiresAt!);
 		expect(recovered.data.outcome).toBe('grant');
 		expect(recovered.data.lease.role).toBe('holder');
 		expect(recovered.data.lease.heldByAnotherSession).toBe(false);
 
-		await releaseLease(authorB);
+		await releaseLease(browserB);
 	});
 
 	it('leaves an unleased Edit workspace writable by anyone', async () => {

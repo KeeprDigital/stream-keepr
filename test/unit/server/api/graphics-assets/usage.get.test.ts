@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
-	mockRequireGraphicsAuthorSession,
+	mockRequireUserId,
 	mockListGraphicAssetUsage,
 	mockSetResponseHeader,
 	mockRouterParam,
 } = vi.hoisted(() => ({
-	mockRequireGraphicsAuthorSession: vi.fn(),
+	mockRequireUserId: vi.fn(),
 	mockListGraphicAssetUsage: vi.fn(),
 	mockSetResponseHeader: vi.fn(),
 	mockRouterParam: vi.fn(),
 }));
 
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	requireGraphicsAuthorSession: mockRequireGraphicsAuthorSession,
+vi.mock('~~/server/utils/auth', () => ({
+	requireUserId: mockRequireUserId,
 }));
 
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
@@ -38,7 +38,7 @@ const routePath = '../../../../../server/api/graphics-assets/[assetId]/usage.get
 describe('graphic Asset usage discovery', () => {
 	beforeEach(() => {
 		vi.resetModules();
-		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
+		mockRequireUserId.mockReset().mockResolvedValue('author-1');
 		mockListGraphicAssetUsage.mockReset().mockResolvedValue([]);
 		mockSetResponseHeader.mockReset();
 		mockRouterParam.mockReset().mockReturnValue('asset-1');
@@ -61,7 +61,7 @@ describe('graphic Asset usage discovery', () => {
 	});
 
 	it('rejects the read before touching the library when no author session is authenticated', async () => {
-		mockRequireGraphicsAuthorSession.mockRejectedValue(
+		mockRequireUserId.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);
 		const handler = (await import(routePath)).default;

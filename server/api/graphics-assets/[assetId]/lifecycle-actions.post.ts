@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { GRAPHIC_ASSET_LIFECYCLE_ACTIONS } from '~~/shared/types/graphicsAsset';
 
@@ -21,7 +21,7 @@ const actionSchema = z.object({
 export default defineEventHandler(async (event) => {
 	// Who moved the asset, for the Evidence ledger. A lifecycle change is a
 	// person's decision, and the ledger is the only place it is recorded.
-	const actor = await requireGraphicsAuthorSession(event);
+	const actor = await requireUserId(event);
 	try {
 		const { action } = await readValidatedBody(event, actionSchema.parse);
 		const input = {

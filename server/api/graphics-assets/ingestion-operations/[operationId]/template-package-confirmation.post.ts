@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { graphicsIngestionOperationId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -14,7 +14,7 @@ const confirmationSchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
-	const initiatedBy = await requireGraphicsAuthorSession(event);
+	const initiatedBy = await requireUserId(event);
 	try {
 		const { fingerprint } = await readValidatedBody(event, confirmationSchema.parse);
 		return await graphicsAssetLibraryForEvent(event).confirmTemplatePackagePreflight({

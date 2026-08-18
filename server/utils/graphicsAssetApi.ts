@@ -2,21 +2,26 @@ import type { H3Event } from 'h3';
 import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library';
 import { graphicsCapacityErrorDescriptor } from '~~/server/modules/graphics-asset-library/errors';
 import { GraphicsObjectInputError } from '~~/server/modules/graphics-asset-library/object-store';
-import { optionalGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { optionalUserId } from '~~/server/utils/auth';
 
 /**
  * Who the Evidence Ledger records for a Graphics Administrator's action.
  *
  * Administrator authority comes from the installation's shared admin token,
- * which names nobody. When the same caller also carries a graphics author
- * session — an operator working the cockpit in a browser always does — that
- * session is the only identity available and is recorded. Otherwise the ledger
- * says an administrator acted and declines to invent a name for them, which is
- * the honest entry: the previous client-supplied header let any holder of the
- * admin token write any name it liked into the installation's audit trail.
+ * which names nobody. When the same caller is also signed in — an operator
+ * working the cockpit in a browser is — the ledger records the person, and since
+ * #398 that is a userId whose display name is resolved when the ledger is read,
+ * so a rename does not rewrite history. Otherwise the ledger says an
+ * administrator acted and declines to invent a name for them, which is the honest
+ * entry: the previous client-supplied header let any holder of the admin token
+ * write any name it liked into the installation's audit trail.
+ *
+ * The admin surface is exempt from the session boundary, so this asks rather than
+ * requires — the token alone is a complete credential here, and an unattributed
+ * entry is a smaller loss than refusing an administrator who holds one.
  */
 export async function graphicsAdministratorActor(event: H3Event): Promise<string> {
-	return await optionalGraphicsAuthorSession(event) ?? 'graphics-administrator';
+	return await optionalUserId(event) ?? 'graphics-administrator';
 }
 
 /**

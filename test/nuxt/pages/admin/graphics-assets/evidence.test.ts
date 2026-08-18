@@ -1,6 +1,6 @@
 import type {
 	GraphicsAssetEvidenceEntry,
-	GraphicsAssetEvidencePage,
+	GraphicsAssetEvidenceReading,
 } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
@@ -34,7 +34,7 @@ function entry(
 	};
 }
 
-function ledger(overrides: Partial<GraphicsAssetEvidencePage> = {}): GraphicsAssetEvidencePage {
+function ledger(overrides: Partial<GraphicsAssetEvidenceReading> = {}): GraphicsAssetEvidenceReading {
 	return {
 		entries: [
 			entry(),
@@ -53,6 +53,13 @@ function ledger(overrides: Partial<GraphicsAssetEvidencePage> = {}): GraphicsAss
 		],
 		older: { recordedAt: '2026-07-30T08:00:00.000Z', id: 'entry-2' },
 		newer: null,
+		// What the route resolved each actor to when it served this page (#398):
+		// a person by name, a sweep by its own spelling, an identity from before
+		// the cutover as the era it belongs to.
+		actorNames: {
+			'librarian': 'Marcus Angel',
+			'graphics-retention-policy': 'graphics-retention-policy',
+		},
 		...overrides,
 	};
 }
@@ -211,6 +218,37 @@ describe('the Graphics Asset Library Evidence ledger page', () => {
 		// An unsealed entry says it is retained rather than showing a false date.
 		expect(text).toContain('its subject is cleaned up');
 		expect(text).toContain(new Date('2027-07-30T08:00:00.000Z').toLocaleString());
+	});
+
+	/**
+	 * The ledger records who acted as an opaque identity and nothing else, so the
+	 * page shows the name the reading resolved (#398, ADR-0010) — a rename reaches
+	 * evidence written years ago, and an identity from before the cutover reads as
+	 * the era it came from rather than as a UUID nobody can place.
+	 *
+	 * The identity itself is not replaced: 'follow this actor' below filters by it,
+	 * and a name is not a filter.
+	 */
+	it('shows what each actor is called, not the identity it is recorded as', async () => {
+		const wrapper = await openLedger();
+
+		expect(wrapper.text()).toContain('Marcus Angel');
+		expect(wrapper.text()).not.toContain('librarian');
+		// A sweep is not a person and keeps its own spelling.
+		expect(wrapper.text()).toContain('graphics-retention-policy');
+	});
+
+	it('shows an identity from before the cutover as the era it belongs to', async () => {
+		const anonymous = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+		mockApiFetch.mockResolvedValue(ledger({
+			entries: [entry({ actor: anonymous })],
+			actorNames: { [anonymous]: 'anonymous era' },
+		}));
+
+		const wrapper = await openLedger();
+
+		expect(wrapper.text()).toContain('anonymous era');
+		expect(wrapper.text()).not.toContain(anonymous);
 	});
 
 	it('narrows by category group and starts the answer at the newest end', async () => {

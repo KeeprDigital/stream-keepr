@@ -4,7 +4,7 @@ import type {
 	GraphicsDiscrepancyActionOutcome,
 	GraphicsOperationalQueueItem,
 	GraphicsOperationalQueuesOverview,
-	GraphicsQueueInspection,
+	GraphicsQueueInspectionReading,
 } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicsOperationalQueueId,
@@ -14,6 +14,7 @@ import type {
 import type { GraphicsStorageHealthAlertSeverity } from '~~/shared/utils/graphicsOperationsCockpit';
 import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import { formatInstant } from '~~/shared/utils/formatInstant';
+import { graphicsActorName } from '~~/shared/utils/graphicsAssetEvidence';
 import {
 	graphicsDiscrepancyQueueOutcome,
 	graphicsPurgeQueueOutcome,
@@ -34,7 +35,7 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 
-const inspection = ref<GraphicsQueueInspection | null>(null);
+const inspection = ref<GraphicsQueueInspectionReading | null>(null);
 const inspectionError = ref<string | null>(null);
 const actionPending = ref<GraphicsQueueAction | null>(null);
 const actionOutcome = ref<GraphicsQueueActionOutcome | null>(null);
@@ -104,7 +105,7 @@ async function loadInspection() {
 	}
 	inspectionError.value = null;
 	try {
-		inspection.value = await $fetch<GraphicsQueueInspection>(
+		inspection.value = await $fetch<GraphicsQueueInspectionReading>(
 			'/api/admin/graphics-assets/queues/inspection',
 			{
 				headers: administratorHeaders(),
@@ -757,7 +758,7 @@ function actionHandler(action: GraphicsQueueAction) {
 											Started by
 										</dt>
 										<dd class="text-muted">
-											{{ operationDetail.initiatedBy }}
+											{{ graphicsActorName(inspection.actorNames, operationDetail.initiatedBy) }}
 										</dd>
 									</div>
 									<div v-if="operationDetail.failureCode">
@@ -901,7 +902,7 @@ function actionHandler(action: GraphicsQueueAction) {
 										<span class="text-highlighted">{{ entry.category }}</span>
 										<span class="text-muted"> · {{ entry.outcome }} · {{ entry.reason }}</span>
 										<span class="block text-xs text-dimmed">
-											{{ entry.actor }} · {{ formatInstant(entry.recordedAt) }}
+											{{ graphicsActorName(inspection.actorNames, entry.actor) }} · {{ formatInstant(entry.recordedAt) }}
 										</span>
 									</li>
 								</ul>

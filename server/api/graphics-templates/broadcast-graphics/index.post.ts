@@ -1,9 +1,9 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { saveBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { screenService } from '~~/server/services/screen';
+import { requireUserId } from '~~/server/utils/auth';
 import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { broadcastGraphicTemplateDocument } from '~~/shared/modules/graphics';
@@ -18,7 +18,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * reference to a template.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const body = saveBroadcastGraphicTemplateSchema.parse(await readBody(event));
 
 	const screen = await screenService().findById(body.source.screenId, body.source.eventId);

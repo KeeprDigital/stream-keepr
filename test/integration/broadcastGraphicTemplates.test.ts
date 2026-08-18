@@ -9,9 +9,9 @@ import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { anotherBrowser } from './identities';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -231,7 +231,17 @@ describe('broadcast Graphic Template library', () => {
 	let otherEventId: number;
 	let otherScreenId: number;
 	let authorCookie: string;
-	let secondAuthorCookie: string;
+	/**
+	 * A second browser of the same operator (#398, ADR-0010).
+	 *
+	 * Every use below is about two concurrent *editors* — a lease held against one
+	 * of them, a placement refused to the other, a revision written from under
+	 * them — and a lease holder is a Better Auth session, not a person. Two
+	 * different people would prove something weaker: it would pass against a lease
+	 * held per user, which is the shape that lets one operator overwrite their own
+	 * work from two windows.
+	 */
+	let secondBrowserCookie: string;
 	let asset: { assetId: string; revisionId: string };
 	let templateId: string;
 
@@ -290,9 +300,9 @@ describe('broadcast Graphic Template library', () => {
 	}
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
-		secondAuthorCookie = await createGraphicsAuthorSessionCookie();
-		expect(authorCookie).not.toBe(secondAuthorCookie);
+		authorCookie = await operatorSessionCookie();
+		secondBrowserCookie = await anotherBrowser();
+		expect(authorCookie).not.toBe(secondBrowserCookie);
 
 		const source = await createEventWithGraphicsScreen('Template Source Event', 'template-source-screen');
 		sourceEventId = source.eventId;
@@ -377,14 +387,13 @@ describe('broadcast Graphic Template library', () => {
 		templateId = template.id;
 	});
 
-	it('refuses to save a template without a graphics author session', async () => {
-		const anonymous = await request(TEMPLATES_PATH, {
-			method: 'POST',
-			body: { source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'authored-lower-third' } },
-		});
-
-		expect(anonymous.status).toBe(401);
-	});
+	/*
+	 * The refusal for a caller with no session at all is the API boundary's since
+	 * #398, composed around every `/api/**` route before any handler runs, and it
+	 * is proved against a genuinely anonymous client in `apiBoundary.test.ts`.
+	 * This suite's client is signed in, so asserting it here would mean sending a
+	 * request a different way to test a middleware this file is not about.
+	 */
 
 	it('reports a Broadcast Graphic the Screen does not carry as not found', async () => {
 		const missing = await request(TEMPLATES_PATH, {
@@ -406,14 +415,6 @@ describe('broadcast Graphic Template library', () => {
 		// A library listing is a browse, not a download: the composition itself is not
 		// in it.
 		expect(saved).not.toHaveProperty('document');
-	});
-
-	it('refuses to browse the library without a graphics author session', async () => {
-		// #206: reads ask for the same session the writes do — session-scoping,
-		// not access control (ADR-0008).
-		const anonymous = await request(TEMPLATES_PATH);
-
-		expect(anonymous.status).toBe(401);
 	});
 
 	it('places a template on a Screen in a different Event as a new Broadcast Graphic', async () => {
@@ -621,14 +622,14 @@ describe('broadcast Graphic Template library', () => {
 		expect(held.data.outcome).toBe('grant');
 		expect(held.data.lease.artifact).toEqual({ kind: 'graphics-template', id: templateId });
 
-		const observing = await request(leasePath, { method: 'POST', body: {}, cookie: secondAuthorCookie });
+		const observing = await request(leasePath, { method: 'POST', body: {}, cookie: secondBrowserCookie });
 		expect(observing.data.outcome).toBe('observe');
 		expect(observing.data.lease.writable).toBe(false);
 
 		const revision = await templateRevision(templateId);
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
-			cookie: secondAuthorCookie,
+			cookie: secondBrowserCookie,
 			body: { description: 'Taken from under the holder', revision },
 		});
 		expect(refused.status).toBe(409);
@@ -695,7 +696,7 @@ describe('broadcast Graphic Template library', () => {
 		expect((await request(screenLease, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
 			.toBe('grant');
 
-		const refused = await place(otherEventId, otherScreenId, { templateId }, secondAuthorCookie);
+		const refused = await place(otherEventId, otherScreenId, { templateId }, secondBrowserCookie);
 		expect(refused.status).toBe(409);
 
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
@@ -711,10 +712,10 @@ describe('broadcast Graphic Template library', () => {
 		});
 		expect(accepted.status).toBe(200);
 
-		// The second author had the library open and never saw the revision above.
+		// The other window had the library open and never saw the revision above.
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'PATCH',
-			cookie: secondAuthorCookie,
+			cookie: secondBrowserCookie,
 			body: { description: 'Second writer overwrites', revision: stale },
 		});
 
@@ -783,7 +784,7 @@ describe('broadcast Graphic Template library', () => {
 
 		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			method: 'DELETE',
-			cookie: secondAuthorCookie,
+			cookie: secondBrowserCookie,
 		});
 		expect(refused.status).toBe(409);
 		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(200);

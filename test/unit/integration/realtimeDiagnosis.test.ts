@@ -375,8 +375,15 @@ describe('the Screen-command route\'s own refusals', () => {
 		// which this route can answer, and listing them would have re-opened #268's hole
 		// wholesale. A middleware consults the domain layer for a boolean and refuses on
 		// its own terms; the routes that really call a service carry it in their own graph.
+		//
+		// This was a pair until #398. The second half named
+		// `server/modules/graphics-author-session.ts`, which its own middleware minted
+		// a session through and which no route imported — the cleanest possible witness
+		// for the rule. Both are retired at ADR-0010's cutover, and no middleware
+		// reaches a `server/modules/**` file any more, so the row that survives is the
+		// one whose witness still exists. The rule itself is unchanged and is stated in
+		// `routeRefusalScan.ts`, where it is enforced rather than merely observed.
 		expect(scan.files).not.toContain('server/services/featureMatch.ts');
-		expect(scan.files).not.toContain('server/modules/graphics-author-session.ts');
 	});
 
 	it('leave no first-party import unfollowed', () => {
@@ -840,8 +847,8 @@ describe('the middleware the scan is given as entry points', () => {
 
 		expect(named).toContain('api-session.ts');
 		expect(named).toContain('event-exists.ts');
-		expect(named).toContain('graphics-author-session.ts');
 		expect(named).toContain('request-body-limit.ts');
+		expect(named).toContain('retired-author-session-cookies.ts');
 	});
 
 	it('reaches a middleware one directory down, because Nitro\'s own scan does', () => {

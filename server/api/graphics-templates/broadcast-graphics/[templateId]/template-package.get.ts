@@ -1,6 +1,6 @@
 import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broadcast-graphic-template-library';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
@@ -23,7 +23,7 @@ import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templateP
  * discovered by the same walk the Screen's own reference index uses.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(
 		event,
 		broadcastGraphicTemplateParamsSchema.parse,

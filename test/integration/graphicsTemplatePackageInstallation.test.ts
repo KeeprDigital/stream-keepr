@@ -14,11 +14,7 @@ import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
-import { $fetch, fetch } from './client';
-import {
-	createGraphicsAuthorSessionCookie,
-	suiteGraphicsAuthorSessionCookie,
-} from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
 
@@ -56,7 +52,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 		'/api/graphics-assets/ingestion-operations',
 		{
 			method: 'POST',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: {
 				idempotencyKey: `template-package-installation-${++installationSequence}`,
 				source: 'template-package',
@@ -69,7 +65,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{
 			method: 'PUT',
-			headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+			headers: { cookie: await operatorSessionCookie() },
 			body: archive,
 		},
 	);
@@ -80,7 +76,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 async function installPackage(operationId: string) {
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${operationId}/template-package-installation`,
-		{ method: 'POST', headers: { cookie: await suiteGraphicsAuthorSessionCookie() } },
+		{ method: 'POST', headers: { cookie: await operatorSessionCookie() } },
 	);
 }
 
@@ -94,8 +90,8 @@ describe('template Package installation through the API boundary', () => {
 	let exportedPackage: Uint8Array<ArrayBuffer>;
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
-		authorHeaders = { cookie: await suiteGraphicsAuthorSessionCookie() };
+		graphicsAuthorCookie = await operatorSessionCookie();
+		authorHeaders = { cookie: await operatorSessionCookie() };
 		const created = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

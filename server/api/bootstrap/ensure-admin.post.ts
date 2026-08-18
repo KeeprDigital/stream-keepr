@@ -7,6 +7,14 @@ import { ensureAdminSchema } from '~~/server/schemas/api/adminBootstrap';
  * (#394, ADR-0010). Curl-only; the operator ceremony is in the README's Worker
  * secrets section: set the secret, call this once, delete the secret.
  *
+ * **Every account this makes is an administrator**, and it grants the role to an
+ * existing account that lacks one, so it cannot make an ordinary user even
+ * deliberately. That is right for what it is for — install #1, and a lockout that
+ * has lost every administrator — and wrong for everything else: since #399,
+ * ordinary accounts come from `POST /api/admin/users`, which creates them with no
+ * role and no password and answers with a Password Reset Link.
+ * `docs/operations/identity-cutover.md` says which to reach for.
+ *
  * **Not under `/api/admin/` or `/api/auth/`, deliberately.** Both prefixes
  * already mean something in the boundary ADR-0010 describes — `/api/admin/**`
  * is exempted by the Graphics Administrator token and `/api/auth/**` is Better

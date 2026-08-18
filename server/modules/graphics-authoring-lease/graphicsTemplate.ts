@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3';
 import type { GraphicsAuthoringLeaseRef } from './index';
-import { optionalGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { optionalBrowserSessionId } from '~~/server/utils/auth';
 import { graphicsTemplateArtifact } from '~~/shared/modules/graphics-authoring-lease';
 import { graphicsAuthoringLeaseModule } from './index';
 
@@ -62,6 +62,6 @@ export async function requireGraphicsTemplateWritable(
 ): Promise<void> {
 	await graphicsAuthoringLeaseModule().requireWritable(
 		graphicsTemplateLeaseRef(templateId),
-		await optionalGraphicsAuthorSession(event),
+		await optionalBrowserSessionId(event),
 	);
 }

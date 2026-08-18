@@ -18,7 +18,6 @@ import {
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
-import { GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE } from '~~/shared/utils/graphicsAuthorSessionIssue';
 import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
@@ -27,7 +26,7 @@ definePageMeta({
 });
 
 const eventStore = useEventStore();
-const authorSession = useGraphicsAuthorSession();
+const authorship = useGraphicsAuthorship();
 /**
  * The shared ingestion transfer (#150). It owns single-request versus
  * multipart dispatch, resume, the retry budget, and the 250ms operation
@@ -127,40 +126,31 @@ const {
  * `useFetch` hands its `error` on as the failure the request produced, whose own
  * `message` is the transport's line — '[GET] "/api/graphics-assets": 503 Service
  * Unavailable' where the route had written what was actually missing. `describeFailure`
- * routes to what to say: a 401 becomes the lapse notice with its reload, and everything
- * else is `reportedMessage`, whose quoting rules `failureSentence` owns — since #286
- * that includes the 5xx families whose prose the server preserves through sanitizing,
- * and a genuinely sanitized 5xx still falls back to the transport's line (#271).
+ * routes to what to say: a 401 becomes the signed-out notice with its sign-in, and
+ * everything else is `reportedMessage`, whose quoting rules `failureSentence` owns —
+ * since #286 that includes the 5xx families whose prose the server preserves through
+ * sanitizing, and a genuinely sanitized 5xx still falls back to the transport's line
+ * (#271).
  *
- * The 401 arm is #360's decision, closing what #350 left open: reads name the lapse
- * exactly as this page's writes do. A read has nothing staked on the session that went
- * — that was the argument for quoting the route — but the operator's next action is
- * the same reload either way, and one story beats two. Watchers rather than computeds,
- * because `describeFailure` records the lapse it noticed, and a computed must not
+ * The 401 arm is #360's decision, closing what #350 left open: reads name the ended
+ * session exactly as this page's writes do. A read has nothing staked on the session
+ * that went — that was the argument for quoting the route — but the operator's next
+ * action is the same sign-in either way, and one story beats two. Watchers rather than
+ * computeds, because `describeFailure` records what it noticed, and a computed must not
  * write.
  */
 const loadFailureMessage = ref<string>();
 watch(error, (caught) => {
 	loadFailureMessage.value = caught
-		? authorSession.describeFailure(caught, 'The Graphic Asset listing could not be loaded.')
+		? authorship.describeFailure(caught, 'The Graphic Asset listing could not be loaded.')
 		: undefined;
 }, { immediate: true });
 const capacityFailureMessage = ref<string>();
 watch(capacityError, (caught) => {
 	capacityFailureMessage.value = caught
-		? authorSession.describeFailure(caught, 'Storage capacity could not be loaded.')
+		? authorship.describeFailure(caught, 'Storage capacity could not be loaded.')
 		: undefined;
 }, { immediate: true });
-
-/**
- * Whether this page was never issued a session at all (#206) — the middleware's
- * marker, readable where the httpOnly session cookie is not. Sharper than the
- * lapse it would otherwise present as: the reads above still answer 401 and
- * still name the lapse, but the banner shows this diagnosis instead, because
- * "reload to start a new session" is the one prescription that does not act on
- * a store that cannot issue one.
- */
-const sessionIssueFailed = useCookie(GRAPHICS_AUTHOR_SESSION_ISSUE_FAILED_COOKIE);
 
 watch(selectedFile, (file) => {
 	if (file && !proposedName.value.trim())
@@ -429,7 +419,7 @@ async function runLifecycleAction(
 		await refresh();
 	}
 	catch (caught) {
-		lifecycleErrorByAssetId[asset.id] = authorSession.describeFailure(
+		lifecycleErrorByAssetId[asset.id] = authorship.describeFailure(
 			caught,
 			'Graphic Asset lifecycle action failed.',
 		);
@@ -473,7 +463,7 @@ async function saveMetadata(asset: GraphicAsset) {
 		await refresh();
 	}
 	catch (caught) {
-		metadataError.value = authorSession.describeFailure(
+		metadataError.value = authorship.describeFailure(
 			caught,
 			'Graphic Asset metadata could not be updated.',
 		);
@@ -570,7 +560,7 @@ async function replaceAsset(asset: GraphicAsset) {
 		}
 	}
 	catch (caught) {
-		replacementError.value = authorSession.describeFailure(
+		replacementError.value = authorship.describeFailure(
 			caught,
 			'Graphic Asset replacement failed.',
 		);
@@ -651,7 +641,7 @@ async function uploadGraphicAsset() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = authorSession.describeFailure(caught, 'Graphic Asset upload failed.');
+		uploadError.value = authorship.describeFailure(caught, 'Graphic Asset upload failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -744,7 +734,7 @@ async function copyRemoteGraphicAssetSource() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		remoteCopyError.value = authorSession.describeFailure(
+		remoteCopyError.value = authorship.describeFailure(
 			caught,
 			'The approved remote Graphic Asset copy failed.',
 		);
@@ -765,7 +755,7 @@ async function confirmStagedSource() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		remoteCopyError.value = authorSession.describeFailure(
+		remoteCopyError.value = authorship.describeFailure(
 			caught,
 			'The staged Graphic Asset source could not be confirmed.',
 		);
@@ -816,7 +806,7 @@ async function retryOperation() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = authorSession.describeFailure(caught, 'Graphic Asset retry failed.');
+		uploadError.value = authorship.describeFailure(caught, 'Graphic Asset retry failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -844,7 +834,7 @@ async function cancelOperation() {
 		await refreshCapacity();
 	}
 	catch (caught) {
-		uploadError.value = authorSession.describeFailure(caught, 'Cancellation failed.');
+		uploadError.value = authorship.describeFailure(caught, 'Cancellation failed.');
 	}
 	finally {
 		uploadPending.value = false;
@@ -886,16 +876,18 @@ onMounted(async () => {
 			return;
 		}
 		catch (caught) {
-			// The pointer names something unreachable either way, so it goes. What must
-			// not go with it is the news: this is the exact moment per-session ownership
-			// costs an author something (ADR-0003), and swallowing it left the workspace
-			// looking as though there had never been an upload at all.
+			// The pointer names something unreachable from here, so it goes. What must
+			// not go with it is the news: an operation this browser cannot reconnect to
+			// is one the author has to be told about, and swallowing it left the
+			// workspace looking as though there had never been an upload at all. Since
+			// #398 the commonest cause is a session that ended rather than ownership
+			// lost with it — the operation is still theirs once they sign in.
 			localStorage.removeItem(operationStorageKey);
-			uploadError.value = authorSession.describeFailure(
+			uploadError.value = authorship.describeFailure(
 				caught,
 				'The Graphic Asset upload from your last visit could not be reconnected.',
 			);
-			if (!authorSession.lapsed.value) {
+			if (!authorship.signedOut.value) {
 				uploadError.value
 					= `The Graphic Asset upload from your last visit could not be reconnected — ${uploadError.value}`;
 			}
@@ -1004,38 +996,23 @@ onMounted(async () => {
 			</UAlert>
 
 			<UAlert
-				v-if="sessionIssueFailed"
-				color="error"
-				variant="soft"
-				icon="i-lucide-user-x"
-				data-testid="author-session-issue-failed"
-			>
-				<p class="font-medium">
-					{{ authorSession.issueFailedNotice.title }}
-				</p>
-				<p class="mt-1 text-sm">
-					{{ authorSession.issueFailedNotice.body }}
-				</p>
-			</UAlert>
-
-			<UAlert
-				v-else-if="authorSession.lapsed.value"
+				v-if="authorship.signedOut.value"
 				color="error"
 				variant="soft"
 				icon="i-lucide-user-x"
 			>
 				<p class="font-medium">
-					{{ authorSession.lapsedNotice.title }}
+					{{ authorship.signedOutNotice.title }}
 				</p>
 				<p class="mt-1 text-sm">
-					{{ authorSession.lapsedNotice.body }}
+					{{ authorship.signedOutNotice.body }}
 				</p>
 				<UButton
 					class="mt-3"
-					data-testid="reload-graphics-author-session"
-					icon="i-lucide-rotate-ccw"
-					label="Reload and start a new session"
-					@click="authorSession.reload"
+					data-testid="sign-in-again"
+					icon="i-lucide-log-in"
+					label="Sign in again"
+					@click="authorship.signIn"
 				/>
 			</UAlert>
 
@@ -1058,10 +1035,10 @@ onMounted(async () => {
 					icon="i-lucide-id-card"
 				>
 					<p class="font-medium">
-						{{ authorSession.ownershipNotice.title }}
+						{{ authorship.ownershipNotice.title }}
 					</p>
 					<p class="mt-1 text-sm">
-						{{ authorSession.ownershipNotice.body }}
+						{{ authorship.ownershipNotice.body }}
 					</p>
 				</UAlert>
 

@@ -139,6 +139,19 @@ Each library Template has a stable identity and an automatically managed revisio
 The exclusive, session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template.
 Other sessions may observe accepted authoring changes but cannot modify the leased artifact.
 
+**User**:
+An account an administrator created for one person, holding the credential they sign in with and the name every surface shows for them.
+It is the installation's only durable identity and the one that owns work: a Graphics Ingestion Operation records the user as its initiator, idempotency keys are unique within the user, and the Evidence Ledger names the user as actor with the display name resolved when the ledger is read.
+Because ownership belongs to the person rather than to a browser, an operation survives the browser that started it and is resumed by signing in anywhere; the same idempotency key sent from a second browser continues the first operation instead of starting a second.
+There is no self-signup: an administrator creates the account, and a **Password Reset Link** is how its password is first set (ADR-0010).
+_Avoid_: author, graphics author — those name a role a user may be acting in, not the identity; account is acceptable when the subject is the credential rather than the person.
+
+**Session**:
+One signed-in browser: server-side, revocable, and expiring seven days after its last day of use.
+It is what admits a request — the deny-by-default API boundary over `/api/**` requires one (ADR-0010, which supersedes ADR-0008's perimeter-trust stance) — and it is the granularity of a Graphics Authoring Lease, because one person signed in from two browsers is two concurrent editors and a lease held per user would let them overwrite each other in silence.
+A session never owns work; it says which browser is asking, and the takeover surface resolves it back to a user for display.
+_Avoid_: Graphics Author Session — the anonymous self-issued identity this replaced, retired at ADR-0010's cutover; login, which names the act rather than the thing.
+
 **Password Reset Link**:
 The single-use, expiring credential an administrator hands to a person out of band so they can set their own password.
 It is how an account acquires its first password and how a forgotten one is replaced: this installation has no email sender and no self sign-up, so nothing is ever sent anywhere and the link itself is the whole of an invite (ADR-0010).
@@ -146,13 +159,6 @@ Creating an account mints one and returns it exactly once; nothing stores it and
 Its token travels in the URL fragment rather than the query, so it is never sent to the server as part of the navigation and stays out of every request log between the browser and the Worker — the same reason a Screen Output Asset Capability travels there.
 Redeeming one consumes it and sets the password; it never creates a session, and it neither ends the account's existing sessions nor lifts a ban.
 _Avoid_: invite token, activation link — the same artifact issues an invite and replaces a forgotten password, and a name for only the first would leave the second unnamed.
-
-**Graphics Author Session**:
-The anonymous, self-issued identity that makes a browser a graphics author: minted on any HTML page navigation, carried as an httpOnly cookie, lasting eight hours from its last request.
-It is the only author identity in the Graphics Asset Library: every author-facing route requires it, a Graphics Ingestion Operation records it as the initiator, idempotency keys are unique within it, and the Evidence Ledger names it as actor.
-It belongs to one browser session rather than a person — the same author in a second browser is a second author — because the installation has no accounts and nothing more durable exists to own an operation (ADR-0003).
-It is attribution, not authentication: what admits a request is the Better Auth session the deny-by-default API boundary requires over `/api/**` (ADR-0010, which supersedes ADR-0008's perimeter-trust stance), and this identity only says which author owns the work behind it.
-_Avoid_: Graphics Authoring Lease — a lease is an exclusive edit right on one authoring artifact and describes what a session may currently edit, not who the session is; a session may hold leases, an identity is not a lease.
 
 **Graphic Style Set**:
 A named reusable authoring resource in the shared scope of the graphics template libraries that maintains a cohesive visual and motion language across independently portable Broadcast Graphic Templates and Feature Match Layout Templates.
@@ -292,7 +298,7 @@ An installation operator authorised to inspect Graphics Asset Library health and
 
 **Library Workspace**:
 The graphics-author-facing surface over the Graphics Asset Library, where an author discovers and ingests Graphic Assets, renames and re-associates them with Events, inspects their recovery and cleanup state, and moves them through Retire, Trash, and Restore.
-It works under a Graphics Author Session and is the author-facing counterpart to the administrator-only Operations Cockpit.
+It works as the signed-in User and is the author-facing counterpart to the administrator-only Operations Cockpit.
 _Avoid_: Graphics Asset Library Workspace, asset manager, library page
 
 **Graphic Asset**:
@@ -858,8 +864,8 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Graphics Ingestion Operation** exposes reconnectable stage progress, one complete compatibility report, cancellation before publication, and retry from durable checkpoints
 - Staged bytes, provisional **Graphic Assets**, and provisional graphics Templates are visible only through the initiating operation and never appear in their libraries
 - Approved remote ingestion copies exact bytes once from a public HTTPS source and never creates a hotlink, synchronization link, or authenticated remote dependency
-- A **Graphics Ingestion Operation** is owned by the **Graphics Author Session** that initiated it; its UUID is a name, not a right, and another session that learns one is told the operation does not exist
-- A **Graphics Ingestion Operation** whose owning **Graphics Author Session** has lapsed is unreachable; retention reclaims its staged input on the ordinary schedule (ADR-0003)
+- A **Graphics Ingestion Operation** is owned by the **User** who initiated it; its UUID is a name, not a right, and another user who learns one is told the operation does not exist
+- A **Graphics Ingestion Operation** outlives the **Session** it was started in: its owner reaches it again by signing in from any browser, and retention reclaims the staged input of one nobody finishes on the ordinary schedule (ADR-0010)
 - An ordinary ingestion that exactly matches existing **Graphic Asset Content** defaults to reusing its **Graphic Asset** without overwriting library metadata, while allowing an explicit separate asset identity
 - A Template Package reuses a local **Graphic Asset Revision** only for an exact source identity, source revision, and content-digest match
 - A related packaged source revision or unrelated matching digest creates a separate local **Graphic Asset** while reusing identical **Graphic Asset Content**

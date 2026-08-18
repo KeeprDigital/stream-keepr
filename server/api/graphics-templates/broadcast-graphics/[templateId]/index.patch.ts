@@ -1,6 +1,5 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import {
 	broadcastGraphicTemplateParamsSchema,
@@ -10,6 +9,7 @@ import {
 	BroadcastGraphicTemplateRevisionConflict,
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
@@ -30,7 +30,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * lease yet, so today the compare-and-swap is the guard that actually fires.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 

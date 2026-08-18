@@ -159,12 +159,12 @@ describe('useGraphicsIngestionTransfer', () => {
 
 	/**
 	 * A part refused for want of an author is not a lost part. The graphics author
-	 * session that owns this operation has lapsed, every remaining attempt will be
+	 * session this operation was started in has ended, every remaining attempt will be
 	 * refused for the same reason, and the operation itself is already unreachable
 	 * — so the transfer stops, and says what happened rather than repeating the
 	 * status code its caller cannot act on.
 	 */
-	it('stops rather than retrying when the graphics author session has lapsed', async () => {
+	it('stops rather than retrying when the browser is no longer signed in', async () => {
 		mockFetch.mockImplementation(async (path: string) => {
 			if (path.endsWith('/multipart'))
 				return operation({ transfer: transferFacts(2) });
@@ -176,7 +176,7 @@ describe('useGraphicsIngestionTransfer', () => {
 		await expect(useGraphicsIngestionTransfer().transfer(
 			operation(),
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
-		)).rejects.toThrow('Your graphics author session has lapsed');
+		)).rejects.toThrow('This browser is no longer signed in');
 
 		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
 			.toHaveLength(1);
@@ -334,6 +334,6 @@ describe('useGraphicsIngestionTransfer', () => {
 		await expect(useGraphicsIngestionTransfer().transfer(
 			operation(),
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES),
-		)).rejects.toThrow('Your graphics author session has lapsed');
+		)).rejects.toThrow('This browser is no longer signed in');
 	});
 });

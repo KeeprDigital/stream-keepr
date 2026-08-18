@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicsAuthoringLeaseModule } from '~~/server/modules/graphics-authoring-lease';
 import { screenEditWorkspaceLeaseRef } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
+import { requireBrowserSessionId } from '~~/server/utils/auth';
 
 /**
  * Take, keep, or explicitly take over the Graphics Authoring Lease on this
@@ -24,7 +24,7 @@ const acquireSchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
-	const sessionId = await requireGraphicsAuthorSession(event);
+	const sessionId = await requireBrowserSessionId(event);
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 	const body = acquireSchema.parse(await readBody(event) ?? {});
 

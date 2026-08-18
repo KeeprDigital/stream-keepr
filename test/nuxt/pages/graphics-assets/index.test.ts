@@ -173,12 +173,6 @@ mockNuxtImport('useFetch', () => (path: string) => ({
 	refresh: path === '/api/graphics-assets/capacity' ? mockCapacityRefresh : mockRefresh,
 }));
 
-/** The middleware's failed-issue marker (#206), settable per test. */
-const sessionIssueMarker = ref<string | null>(null);
-
-mockNuxtImport('useCookie', () => (name: string) =>
-	name === 'stream_keepr_graphics_author_session_issue_failed' ? sessionIssueMarker : ref(null));
-
 const passthroughStub = defineComponent({
 	template: '<div><slot name="actions" /><slot name="header" /><slot /><slot name="footer" /></div>',
 });
@@ -243,7 +237,6 @@ describe('the Graphics Asset Library Workspace', () => {
 	beforeEach(() => {
 		listingError.value = null;
 		capacityLoadError.value = null;
-		sessionIssueMarker.value = null;
 		assets.value = [{
 			id: 'asset-1' as never,
 			name: 'Scoreboard logo',
@@ -1098,59 +1091,47 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * since #286 that includes the 5xx families whose prose the server preserves through
 	 * sanitizing: an exhausted byte store and an unavailable library are both answers this
 	 * page exists to relay, and both are 5xx. A 401 is the exception since #360: a read's
-	 * 401 means this browser holds no author session either, so it names the lapse and
-	 * lights the same reload banner the writes do, rather than quoting the route.
+	 * 401 means this browser holds no session either, so it names that and lights the
+	 * same banner the writes do, rather than quoting the route. Since #398 the banner
+	 * offers a sign-in rather than a reload — nothing is minted by reloading now.
 	 */
-	it('names the lapse when the library listing answers 401, exactly as the writes do', async () => {
+	it('names the ended session when the library listing answers 401, exactly as the writes do', async () => {
 		listingError.value = transportFailure({
 			status: 401,
 			statusText: 'Unauthorized',
-			body: { message: 'An authenticated graphics author session is required' },
+			body: { message: 'Authentication is required' },
 			request: `[GET] "/api/graphics-assets"`,
 		});
 		const wrapper = await mountPage();
 
 		const alert = wrapper.get('[data-testid="library-load-error"]');
-		expect(alert.text()).toContain('Your graphics author session has lapsed');
+		expect(alert.text()).toContain('This browser is no longer signed in');
 		expect(alert.text()).not.toContain('401');
-		expect(wrapper.text()).toContain('Reload and start a new session');
+		expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(true);
 	});
 
-	it('names the lapse when the capacity read answers 401', async () => {
+	it('names the ended session when the capacity read answers 401', async () => {
 		capacityLoadError.value = transportFailure({
 			status: 401,
 			statusText: 'Unauthorized',
-			body: { message: 'An authenticated graphics author session is required' },
+			body: { message: 'Authentication is required' },
 			request: `[GET] "/api/graphics-assets/capacity"`,
 		});
 		const wrapper = await mountPage();
 
 		const alert = wrapper.get('[data-testid="capacity-load-error"]');
-		expect(alert.text()).toContain('Your graphics author session has lapsed');
+		expect(alert.text()).toContain('This browser is no longer signed in');
 		expect(alert.text()).not.toContain('401');
 	});
 
 	/**
-	 * The sharper diagnosis outranks the lapse (#206). When the middleware could
-	 * not issue a session at all it leaves a readable marker, and the banner
-	 * shows that instead: the reads still answer 401 and still name the lapse in
-	 * their own alerts, but "reload to start a new session" is not prescribed,
-	 * because no reload starts a session while the store cannot issue one.
+	 * The never-issued-a-session diagnosis (#206) is gone with the thing it
+	 * diagnosed. It existed because the Workspace's author identity was minted by a
+	 * middleware on the page request, so a session store outage produced a page
+	 * that answered 401 to everything with nothing anywhere naming the cause — a
+	 * failure a reload would not cure. Since #398 no identity is minted: this
+	 * browser is either signed in or it is not, and the one banner says which.
 	 */
-	it('says the page was never issued a session, instead of a lapse, when the middleware left its marker', async () => {
-		sessionIssueMarker.value = '1';
-		listingError.value = transportFailure({
-			status: 401,
-			statusText: 'Unauthorized',
-			body: { message: 'An authenticated graphics author session is required' },
-			request: `[GET] "/api/graphics-assets"`,
-		});
-		const wrapper = await mountPage();
-
-		expect(wrapper.get('[data-testid="author-session-issue-failed"]').text())
-			.toContain('This page could not be issued a graphics author session');
-		expect(wrapper.text()).not.toContain('Reload and start a new session');
-	});
 
 	it('relays an exhausted byte store, whose 507 the mapper preserved', async () => {
 		capacityLoadError.value = transportFailure({
@@ -1187,7 +1168,7 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * author actually does was the one naming the route. The page has nine such catches
 	 * and five error surfaces they write to; one catch per surface is pinned below, and
 	 * the remaining four reach the same seam and are covered where it lives, in
-	 * `test/nuxt/composables/useGraphicsAuthorSession.test.ts`.
+	 * `test/nuxt/composables/useGraphicsAuthorship.test.ts`.
 	 *
 	 * #350 could pin only the two surfaces that already carried a `data-testid`, and named
 	 * the reason: the lifecycle alert renders its message in the default slot and wanted
@@ -1400,7 +1381,7 @@ describe('the Graphics Asset Library Workspace', () => {
  * `:description` renders nothing at all, and an assertion naming that alert passes
  * anyway, off whichever other element happens to carry the same words. This suite
  * shipped exactly that: two cases named for the remote-copy alert passed off the
- * top-level lapsed banner, and replacing the remote-copy message with a literal
+ * top-level signed-out banner, and replacing the remote-copy message with a literal
  * left all twenty-four green. (`title` was in that list until #365, which is why
  * three surfaces could not be pinned at all; `:description` still is.)
  *
@@ -1435,24 +1416,30 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		localStorage.clear();
 	});
 
-	function lapsedSession() {
-		return Object.assign(new Error('An authenticated graphics author session is required'), {
+	function endedSession() {
+		return Object.assign(new Error('Authentication is required'), {
 			statusCode: 401,
 		});
 	}
 
+	/**
+	 * #176's fourth acceptance criterion, restated for the identity that replaced
+	 * the Graphics Author Session (#398). What an upload is staked on is now an
+	 * account, so the two surprising consequences are the ones worth stating: an
+	 * operation outlives this browser and nobody else can finish it.
+	 */
 	it('says who an upload will belong to before one is started', async () => {
 		const wrapper = await mountPage();
 
-		expect(wrapper.text()).toContain('An upload belongs to this browser session');
-		expect(wrapper.text()).toContain('eight hours from your last request');
-		expect(wrapper.text()).toContain('cannot be resumed');
+		expect(wrapper.text()).toContain('An upload belongs to your account');
+		expect(wrapper.text()).toContain('outlives this browser');
+		expect(wrapper.text()).toContain('Nobody else can resume it');
 	});
 
-	it('names a lapsed session rather than a status code when an upload is refused', async () => {
+	it('names an ended session rather than a status code when an upload is refused', async () => {
 		const wrapper = await mountPage();
 		const file = new File([jpegPixel], 'new-scoreboard.jpg', { type: 'image/jpeg' });
-		mockApiFetch.mockRejectedValue(lapsedSession());
+		mockApiFetch.mockRejectedValue(endedSession());
 
 		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
 		await flushPromises();
@@ -1460,8 +1447,8 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await flushPromises();
 
 		expect(wrapper.get('[data-testid="upload-error"]').text())
-			.toContain('Your graphics author session has lapsed');
-		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(true);
+			.toContain('This browser is no longer signed in');
+		expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(true);
 		expect(wrapper.text()).not.toContain('401');
 	});
 
@@ -1488,11 +1475,11 @@ describe('the Library Workspace when its graphics author session decides ownersh
 
 		expect(wrapper.get('[data-testid="upload-error"]').text())
 			.toContain('Graphics Ingestion Operation does not exist');
-		expect(wrapper.text()).not.toContain('Your graphics author session has lapsed');
-		expect(wrapper.find('[data-testid="reload-graphics-author-session"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('This browser is no longer signed in');
+		expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(false);
 	});
 
-	it('names a lapsed session when a resumable part is refused mid-transfer', async () => {
+	it('names an ended session when a resumable part is refused mid-transfer', async () => {
 		const wrapper = await mountPage();
 		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
 		const file = new File([bytes], 'large-scoreboard.png', { type: 'image/png' });
@@ -1522,7 +1509,7 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		};
 		mockApiFetch.mockImplementation((path: string) => {
 			if (path.includes('/multipart/parts/'))
-				return Promise.reject(lapsedSession());
+				return Promise.reject(endedSession());
 			return Promise.resolve(path.endsWith('/multipart') ? started : created);
 		});
 
@@ -1532,16 +1519,16 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await flushPromises();
 
 		expect(wrapper.get('[data-testid="upload-error"]').text())
-			.toContain('Your graphics author session has lapsed');
+			.toContain('This browser is no longer signed in');
 		// A part the library refused for want of an author is not a part worth
 		// sending again, so the transfer stops instead of exhausting its attempts.
 		expect(mockApiFetch.mock.calls
 			.filter(([path]) => String(path).includes('/multipart/parts/'))).toHaveLength(1);
 	});
 
-	it('names a lapsed session when an approved remote copy is refused', async () => {
+	it('names an ended session when an approved remote copy is refused', async () => {
 		const wrapper = await mountPage();
-		mockApiFetch.mockRejectedValue(lapsedSession());
+		mockApiFetch.mockRejectedValue(endedSession());
 
 		await wrapper.get('[data-testid="remote-source-url"]')
 			.setValue('https://cdn.example.com/scoreboard.png');
@@ -1551,7 +1538,7 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await flushPromises();
 
 		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
-			.toContain('Your graphics author session has lapsed');
+			.toContain('This browser is no longer signed in');
 	});
 
 	/**
@@ -1579,7 +1566,7 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
 	});
 
-	it('names a lapsed session when the staged bytes of a remote copy cannot be read', async () => {
+	it('names an ended session when the staged bytes of a remote copy cannot be read', async () => {
 		const awaitingConfirmation: GraphicsIngestionOperation = {
 			...completedOperation,
 			id: 'operation-reconnected' as never,
@@ -1597,6 +1584,6 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		await flushPromises();
 
 		expect(wrapper.get('[data-testid="remote-copy-error"]').text())
-			.toContain('Your graphics author session has lapsed');
+			.toContain('This browser is no longer signed in');
 	});
 });

@@ -362,12 +362,12 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 	/**
 	 * A Template Package import is a Graphics Ingestion Operation like any other, so
 	 * it is refused the same way when the graphics author session behind it has
-	 * lapsed — and it is the import that pauses for a confirmation, which makes this
+	 * ended — and it is the import that pauses for a confirmation, which makes this
 	 * the surface most likely to still be open when a session runs out. It must name
 	 * the lapse rather than repeat the server's sentence about a session it cannot
 	 * explain, and offer the one action that helps.
 	 */
-	it('names a lapsed graphics author session when an import is refused', async () => {
+	it('names an ended session when an import is refused', async () => {
 		// A real lapse arrives as a 401 whose *body* carries the server's sentence, which is
 		// what makes the ordering here load-bearing: the session is recognised before the
 		// sentence is read, so the author gets the lapse and its reload rather than prose
@@ -382,8 +382,8 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		await chooseImportFile(wrapper);
 
 		const reported = wrapper.get('[data-testid="template-library-error"]');
-		expect(reported.text()).toContain('Your graphics author session has lapsed');
-		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(true);
+		expect(reported.text()).toContain('This browser is no longer signed in');
+		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(true);
 	});
 
 	/**
@@ -402,8 +402,8 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 
 		const reported = wrapper.get('[data-testid="template-library-error"]');
 		expect(reported.text()).toContain('not a readable archive');
-		expect(reported.text()).not.toContain('lapsed');
-		expect(wrapper.find('[data-testid="reusable-library-reload"]').exists()).toBe(false);
+		expect(reported.text()).not.toContain('no longer signed in');
+		expect(wrapper.find('[data-testid="reusable-library-sign-in"]').exists()).toBe(false);
 	});
 
 	it('installs a clean Template Package without asking anything', async () => {

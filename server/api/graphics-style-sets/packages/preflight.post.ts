@@ -1,6 +1,6 @@
 import { graphicStyleSetPackagePreflight } from '~~/server/modules/graphic-style-set-package';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetPackagePreflightQuerySchema } from '~~/server/schemas/api/graphicStyleSetPackage';
+import { requireUserId } from '~~/server/utils/auth';
 import {
 	graphicStyleSetPackagePorts,
 	readGraphicStyleSetPackageBody,
@@ -24,7 +24,7 @@ import {
  * fingerprint back with the same bytes.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const query = await getValidatedQuery(event, graphicStyleSetPackagePreflightQuerySchema.parse);
 	const archive = await readGraphicStyleSetPackageBody(event);
 

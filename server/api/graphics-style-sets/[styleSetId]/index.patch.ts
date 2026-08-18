@@ -1,11 +1,11 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 	updateGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -22,7 +22,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * other, and an omissible precondition is an inert one.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 	const body = updateGraphicStyleSetSchema.parse(
 		await readJsonPayloadLimited(event, GRAPHIC_STYLE_SET_DRAFT_BODY_BYTES, 'Graphic Style Set'),

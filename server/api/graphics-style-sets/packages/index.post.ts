@@ -1,7 +1,7 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { installGraphicStyleSetPackage } from '~~/server/modules/graphic-style-set-package';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetPackageInstallQuerySchema } from '~~/server/schemas/api/graphicStyleSetPackage';
+import { requireUserId } from '~~/server/utils/auth';
 import {
 	graphicStyleSetPackagePorts,
 	readGraphicStyleSetPackageBody,
@@ -29,7 +29,7 @@ import {
  * copy offered instead.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const query = await getValidatedQuery(event, graphicStyleSetPackageInstallQuerySchema.parse);
 	const archive = await readGraphicStyleSetPackageBody(event);
 

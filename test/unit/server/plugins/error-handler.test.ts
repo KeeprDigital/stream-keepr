@@ -8,7 +8,6 @@ import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-libr
 import { errorLogFields } from '~~/server/utils/errorLogFields';
 import { safeErrorLogPath } from '~~/server/utils/errorLogPath';
 import {
-	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
 	StateConflictError,
 	TemporarilyUnavailableError,
@@ -78,15 +77,17 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('walks the cause chain for a code the nearest cause does not carry, keeping the class name', () => {
-			// #323: GraphicsAuthorSessionUnavailableError names the failure class but
+			// #323: a class like `TemporarilyUnavailableError` names the failure but
 			// carries no code, so before this walk the store exception's own code —
 			// the one thing that says WHY the store refused — never reached the log.
 			const error = failed({
-				cause: new GraphicsAuthorSessionUnavailableError({ name: 'KVError', code: 'KV_CONNECTION_LOST' }),
+				cause: new TemporarilyUnavailableError('Graphic Asset Content is temporarily unavailable', {
+					cause: { name: 'R2Error', code: 'R2_CONNECTION_LOST' },
+				}),
 			});
 			expect(errorLogFields(error, '/api/events/1')).toMatchObject({
-				errorName: 'GraphicsAuthorSessionUnavailableError',
-				errorCode: 'KV_CONNECTION_LOST',
+				errorName: 'TemporarilyUnavailableError',
+				errorCode: 'R2_CONNECTION_LOST',
 			});
 		});
 
@@ -573,44 +574,15 @@ describe('error-handler mapping logic', () => {
 		});
 	});
 
-	describe('graphics author session store mapping', () => {
-		it('keeps the sentence a route wrote about an unreachable session store', () => {
-			// #294's other half. This one could not be discriminated in the mapper at
-			// all until the throw sites started raising a named error: their 503
-			// carried whatever `kv.get` threw as its cause, which says nothing about
-			// what failed.
-			const error: MappableNitroError = {
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Graphics author sessions are temporarily unavailable',
-				cause: new GraphicsAuthorSessionUnavailableError(new Error('KV GET failed')),
-			};
-
-			mapPublicNitroError(error);
-
-			expect(error).toMatchObject({
-				statusCode: 503,
-				statusMessage: 'Service Unavailable',
-				message: 'Graphics author sessions are temporarily unavailable',
-				unhandled: false,
-			});
-		});
-
-		it('sanitizes the raw store failure the throw sites used to hand it', () => {
-			// The shape before #294, kept as a row because it is what a throw site
-			// reverted to a bare `createError` would produce: the store's own
-			// exception as the cause, matching no branch, sanitized on the way out.
-			const error: MappableNitroError = {
-				statusCode: 503,
-				message: 'Graphics author sessions are temporarily unavailable',
-				cause: new Error('KV GET failed'),
-			};
-
-			mapPublicNitroError(error);
-
-			expect(error.message).toBe('Internal Server Error');
-		});
-	});
+	/**
+	 * The Graphics Author Session store had a mapping branch of its own here until
+	 * #398 retired the store (ADR-0010's cutover). What #294 established with it
+	 * survives in the rows above and below: a 5xx whose cause is a *named* class
+	 * keeps its sentence, and one whose cause is a raw store exception is sanitized
+	 * to 'Internal Server Error' — the second of which is pinned by the
+	 * unrecognised-cause rows in this file rather than by a session-shaped copy of
+	 * them.
+	 */
 
 	describe('temporarily unavailable mapping', () => {
 		it('keeps the sentence a route wrote about something momentarily out of reach', () => {
@@ -743,11 +715,6 @@ describe('error-handler mapping logic', () => {
 				sentence: 'Graphics Asset catalogue is unavailable',
 			},
 			{
-				family: 'a Graphics Author Session store in the same state (#294)',
-				cause: new GraphicsAuthorSessionUnavailableError(new Error('KV GET failed')),
-				sentence: 'Graphics author sessions are temporarily unavailable',
-			},
-			{
 				family: 'a subsystem a route classified as momentarily out of reach (#321)',
 				cause: new TemporarilyUnavailableError('Graphic Asset Content is temporarily unavailable'),
 				sentence: 'Graphic Asset Content is temporarily unavailable',
@@ -779,13 +746,15 @@ describe('error-handler mapping logic', () => {
 
 		/**
 		 * The count `failureSentence`'s docstring quotes. It was nine until #294 added
-		 * two, eleven until #321 added the shared one, and twelve until #344 retired
-		 * the wiring family, and the number is load-bearing on the client's side of the
-		 * boundary: it is the enumeration behind "every preserved family comes out
-		 * non-500", which is the whole reason the status mark can be trusted.
+		 * two, eleven until #321 added the shared one, twelve until #344 retired the
+		 * wiring family, and eleven until #398 retired the Graphics Author Session
+		 * store with the identity it belonged to. The number is load-bearing on the
+		 * client's side of the boundary: it is the enumeration behind "every preserved
+		 * family comes out non-500", which is the whole reason the status mark can be
+		 * trusted.
 		 */
-		it('is eleven families wide', () => {
-			expect(preserved).toHaveLength(11);
+		it('is ten families wide', () => {
+			expect(preserved).toHaveLength(10);
 		});
 	});
 

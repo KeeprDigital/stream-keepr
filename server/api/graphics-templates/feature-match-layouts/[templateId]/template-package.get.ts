@@ -1,6 +1,6 @@
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
@@ -21,7 +21,7 @@ import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templat
  * the artifact and what it requires.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(
 		event,
 		featureMatchLayoutTemplateParamsSchema.parse,

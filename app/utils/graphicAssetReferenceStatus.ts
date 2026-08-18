@@ -11,7 +11,7 @@ import { graphicAssetRevisionStatusPath } from '~~/shared/utils/graphicsAssetRef
  * came to fix a mislabelled 401 in one of them and leave the other three (#204).
  *
  * It throws rather than absorbing a failure, because what a failed request means is
- * the caller's to decide: a lapsed Graphics Author Session is not the library saying
+ * the caller's to decide: a browser whose session has ended is not the library saying
  * anything about the revision, and calling it Unavailable Graphic Asset Content would
  * prescribe the one action that provably cannot work.
  */

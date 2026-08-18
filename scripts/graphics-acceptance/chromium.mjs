@@ -198,7 +198,7 @@ async function launch(candidate, extraArgs) {
  * library route the page reads is private, so a page without it is answered
  * `401` and no assertion in it can tell that from a broken route. The **author
  * cookie** says which Graphics Author owns the operation: a Graphics Ingestion
- * Operation belongs to the graphics author session that created it, and every
+ * Operation belongs to the user who created it, and every
  * operation route matches that identity exactly (ADR-0003). The harness stages
  * the ingestion from Node, so the browser has to arrive as the same author or it
  * is reading somebody else's operation and is answered `404`. Sending it to the
