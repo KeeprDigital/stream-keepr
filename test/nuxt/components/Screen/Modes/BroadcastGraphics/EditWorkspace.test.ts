@@ -295,7 +295,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 	 */
 	describe('the notice an observing session is shown', () => {
 		it('names the person holding the lease when the server resolved one', async () => {
-			const wrapper = await mountWorkspace({ writable: false, heldBy: 'Marcus Angel' });
+			const wrapper = await mountWorkspace({ writable: false, holderName: 'Marcus Angel' });
 
 			const notice = wrapper.get('[data-testid="edit-lease-notice"]').text();
 			expect(notice).toContain('Marcus Angel holds the Graphics Authoring Lease');
@@ -306,14 +306,14 @@ describe('broadcastGraphicsEditWorkspace', () => {
 			// A session that has since ended, or a user deleted after taking it: the
 			// artifact is still held, so the notice states that rather than falling
 			// silent or inventing a name.
-			const wrapper = await mountWorkspace({ writable: false, heldBy: null });
+			const wrapper = await mountWorkspace({ writable: false, holderName: null });
 
 			expect(wrapper.get('[data-testid="edit-lease-notice"]').text())
 				.toContain('Another session holds the Graphics Authoring Lease');
 		});
 
 		it('offers the takeover beside the name rather than instead of it', async () => {
-			const wrapper = await mountWorkspace({ writable: false, heldBy: 'Marcus Angel', canTakeOver: true });
+			const wrapper = await mountWorkspace({ writable: false, holderName: 'Marcus Angel', canTakeOver: true });
 
 			expect(wrapper.get('[data-testid="edit-lease-notice"]').text()).toContain('Marcus Angel');
 			expect(wrapper.find('[data-testid="edit-lease-take-over"]').exists()).toBe(true);

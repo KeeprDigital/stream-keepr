@@ -86,10 +86,10 @@ const initiationSchema = z.preprocess(
 );
 
 /**
- * The initiating author is the signed-in user and nothing
- * else. Every later route on the operation resolves the same way, so the identity
- * an operation is created under is exactly the identity that can work it: an
- * operation UUID is a name, not a right.
+ * The initiating author is the signed-in user and nothing else. Every later
+ * route on the operation resolves the same way, so the identity an operation is
+ * created under is exactly the identity that can work it: an operation UUID is a
+ * name, not a right.
  */
 export default defineEventHandler(async (event) => {
 	const initiatedBy = await requireUserId(event);

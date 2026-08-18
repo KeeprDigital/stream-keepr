@@ -24,6 +24,16 @@ export const ANONYMOUS_ERA_ACTOR_NAME = 'anonymous era';
  * anonymous-era author rather than a deleted one; anything else unresolved is a
  * named machine actor — `graphics-administrator` for an admin-token action,
  * `graphics-retention-policy` for a sweep — whose spelling ADR-0010 keeps.
+ *
+ * **This is narrower than #398's wording, and deliberately.** The ticket says the
+ * fallback applies "when the id resolves to no user", which would also cover a
+ * userId whose account has gone. That case does not exist here: this
+ * installation bans and revokes rather than deleting, so nothing removes a `user`
+ * row, and calling such an id 'anonymous era' would be a false claim about *when*
+ * the work was done. It renders as the id — visibly odd, which is the right
+ * amount of odd for a state nothing can currently produce. A ticket that adds
+ * account deletion is the one that owes this a third label and `CONTEXT.md` the
+ * word for it.
  */
 const ANONYMOUS_ERA_ACTOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,7 +74,9 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 			// admin-created account may carry an empty string — and an empty label
 			// would read as a surface that failed rather than as a person with no
 			// name. The address is the next most identifying thing this
-			// installation holds.
+			// installation holds, and these are administrator surfaces: an
+			// administrator reading the ledger may act on the account behind an
+			// entry, so identifying it beats prettiness.
 			found.set(row.id, row.name.trim() || row.email);
 		}
 	}
@@ -76,6 +88,21 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 }
 
 /**
+ * One administrator reading, with every identity in it named (#398).
+ *
+ * The three readings that carry actors — the cockpit, one queue inspection, and
+ * a page of the ledger — each ended in the same two lines, and only the middle
+ * of them differed: which identities the payload holds. This leaves the routes
+ * that one expression, which is the part that is genuinely theirs.
+ */
+export async function withActorNames<Reading>(
+	reading: Reading,
+	actors: Iterable<string>,
+): Promise<Reading & { actorNames: Record<string, string> }> {
+	return { ...reading, actorNames: await graphicsActorNames(actors) };
+}
+
+/**
  * What to call the person whose browser holds a Graphics Authoring Lease (#398).
  *
  * A lease is held by a session id, and a session id is neither a name nor
@@ -83,18 +110,25 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
  * identifier. So the resolution happens here, where the session table is, and
  * only the name crosses to the client.
  *
- * `null` rather than a placeholder when the session has since ended or its user
- * is gone: a holder whose name cannot be resolved is still a holder, and the
- * surface that shows this says so in its own words rather than being handed an
- * invented one.
+ * **This does not fall back to the address, and `graphicsActorNames` above
+ * does.** The same-looking rule is deliberately two rules, because the readers
+ * are not alike: that one answers an administrator inspecting the ledger, who
+ * may need to act on the account behind an entry, while this one answers a
+ * colleague's editor. Publishing somebody's email address to every author in the
+ * installation to say who has a Screen open is a wider disclosure than the
+ * sentence needs, and the sentence has an honest shorter form.
+ *
+ * `null` rather than a placeholder for a nameless holder, an ended session, or a
+ * deleted user: a holder nobody can name is still a holder, and the surface that
+ * shows this says so in its own words rather than being handed an invented one.
  */
 export async function sessionHolderName(sessionId: string): Promise<string | null> {
 	const [holder] = await db
-		.select({ name: schema.user.name, email: schema.user.email })
+		.select({ name: schema.user.name })
 		.from(schema.session)
 		.innerJoin(schema.user, eq(schema.session.userId, schema.user.id))
 		.where(eq(schema.session.id, sessionId))
 		.limit(1);
 
-	return holder ? holder.name.trim() || holder.email : null;
+	return holder?.name.trim() || null;
 }

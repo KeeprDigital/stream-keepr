@@ -142,15 +142,19 @@ describe('the names an administrator reading shows for its actors', () => {
  */
 describe('the name behind a lease holder\'s session', () => {
 	it('answers the person the holding session belongs to', async () => {
-		mockJoinedWhere.mockResolvedValue([{ name: 'Marcus Angel', email: 'marcus@keepr.digital' }]);
+		mockJoinedWhere.mockResolvedValue([{ name: 'Marcus Angel' }]);
 
 		await expect(sessionHolderName('a-session')).resolves.toBe('Marcus Angel');
 	});
 
-	it('falls back to the address where the account carries no name', async () => {
-		mockJoinedWhere.mockResolvedValue([{ name: '  ', email: 'marcus@keepr.digital' }]);
+	it('answers nothing rather than an address for a holder with no name', async () => {
+		// The ledger's rule falls back to the address, and this one deliberately does
+		// not: that reader is an administrator who may act on the account, this one
+		// is every other author in the installation, and "who has this Screen open"
+		// does not need somebody's email address to be answered honestly.
+		mockJoinedWhere.mockResolvedValue([{ name: '  ' }]);
 
-		await expect(sessionHolderName('a-session')).resolves.toBe('marcus@keepr.digital');
+		await expect(sessionHolderName('a-session')).resolves.toBeNull();
 	});
 
 	it('answers nothing for a session that has since ended', async () => {

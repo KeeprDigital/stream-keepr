@@ -36,10 +36,12 @@ short — nothing here reshapes data.
    to answer anything sitting at `awaiting-confirmation`. The Operations Cockpit
    (`/admin/graphics-assets`) lists exactly what is unfinished, under Graphics
    Ingestion Operations.
-3. **Check every account can sign in.** Every author needs a user account before
-   the cutover, or they arrive on the new build with nothing to sign in as. The
-   first-admin bootstrap creates the first one; the admin surface creates the
-   rest.
+3. **Check every author has an account.** Every author needs one before the
+   cutover, or they arrive on the new build with nothing to sign in as. At this
+   tip the first-admin bootstrap is the only way to make one — it is
+   create-or-reset by email address, so running it once per author works, and
+   each of them signs in with the password it was given. The invite-and-reset
+   surface that replaces that ceremony lands on #399.
 
 Anything still unfinished when the window closes is not a blocker. It is
 reclaimed by the ordinary 24-hour staged-input retention sweep.
@@ -63,7 +65,7 @@ deploy rewrites a row of graphics data.
    expected reading for an anonymous-era operation, not a fault.
 4. **Confirm a lease still behaves.** Open a Screen's graphics Edit workspace in
    two browser windows: the second should observe read-only, and the takeover
-   should name the other session. Two windows of _one_ account is the case worth
+   should name the person holding it. Two windows of _one_ account is the case worth
    checking, because it is the one a user-scoped lease would get wrong.
 
 ## The known wart

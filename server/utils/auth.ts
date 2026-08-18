@@ -184,20 +184,16 @@ export async function requestUserSession(event: H3Event): Promise<UserSession> {
  * below is the other granularity, for the one thing that needs it.
  *
  * **The refusal is unreachable through the routes that call this, and is spelled
- * anyway.** Every caller is a private `/api/**` path, so
- * `server/middleware/api-session.ts` has already refused a request with no
- * session before the handler runs. What this closes is the day a caller stops
- * being one of those: a route moved onto the exemption list, or a helper reused
- * from the capability surface, would otherwise read `undefined` as an identity
- * and hand an anonymous caller somebody's operations.
+ * anyway** — see `requireUserSession` below, which owns it. What that closes is
+ * the day a caller stops being a private `/api/**` path.
  *
- * The 401's halves are written here as literals matching the middleware's, and
- * not imported from it, for the reason that middleware gives for writing its own:
- * `test/helpers/routeRefusalScan.ts` resolves a `const` only within the file it
- * is reading, so an imported status or message arrives at the exhaustiveness
- * check as a refusal it cannot read. Two files spelling the same sentence is the
- * cost; the pair is identical, so the census that has to stay exhaustive gains no
- * entry from this one.
+ * **Some routes call this for the refusal alone and discard the id** — the
+ * template and Style Set libraries, and the two library reads. That is
+ * deliberate rather than a leftover: it keeps each route's own graph refusing
+ * before it touches the library, which is a property the unit suites pin per
+ * route (`rejects the read before touching the library …`), and which the
+ * boundary — composed around every route at once — cannot state about any one of
+ * them.
  */
 export async function requireUserId(event: H3Event): Promise<string> {
 	return (await requireUserSession(event)).user.id;
@@ -216,6 +212,17 @@ export async function requireBrowserSessionId(event: H3Event): Promise<string> {
 	return (await requireUserSession(event)).session.id;
 }
 
+/**
+ * The session, or the boundary's own refusal.
+ *
+ * The 401's halves are written here as literals matching
+ * `server/middleware/api-session.ts`, and not imported from it, for the reason
+ * that middleware gives for writing its own: `test/helpers/routeRefusalScan.ts`
+ * resolves a `const` only within the file it is reading, so an imported status or
+ * message arrives at the exhaustiveness check as a refusal it cannot read. Two
+ * files spelling one sentence is the cost; the pair is identical, so the census
+ * that has to stay exhaustive gains no entry from this one.
+ */
 async function requireUserSession(event: H3Event): Promise<NonNullable<UserSession>> {
 	const session = await requestUserSession(event);
 	if (session)

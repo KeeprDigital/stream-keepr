@@ -33,7 +33,7 @@ const props = defineProps<{
 	leaseStatus?: GraphicsAuthoringLeaseStatus;
 	canTakeOver?: boolean;
 	/** Who holds it, where the server could resolve their session to a person. */
-	heldBy?: string | null;
+	holderName?: string | null;
 	/**
 	 * Whether the realtime connection feeding the Broadcast Graphics Live Session
 	 * is currently down, from the sync the settings surface holds. While it is,
@@ -164,8 +164,8 @@ const leaseNotice = computed(() => {
 	// name is what answers that. It falls back to the old sentence rather than to
 	// a placeholder, because a holder whose session has since ended is still
 	// holding it.
-	if (props.heldBy)
-		return `${props.heldBy} holds the Graphics Authoring Lease for this Edit workspace, in another browser. You are observing their accepted changes read-only.`;
+	if (props.holderName)
+		return `${props.holderName} holds the Graphics Authoring Lease for this Edit workspace, in another browser. You are observing their accepted changes read-only.`;
 	return 'Another session holds the Graphics Authoring Lease for this Edit workspace. You are observing its accepted changes read-only.';
 });
 </script>

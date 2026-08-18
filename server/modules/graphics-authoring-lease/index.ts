@@ -1,6 +1,7 @@
 import type {
 	GraphicsAuthoringArtifactRef,
 	GraphicsAuthoringLeaseOutcome,
+	GraphicsAuthoringLeaseReading,
 	GraphicsAuthoringLeaseRecord,
 	GraphicsAuthoringLeaseState,
 } from '~~/shared/modules/graphics-authoring-lease';
@@ -58,7 +59,7 @@ export interface AcquireGraphicsAuthoringLeaseParams extends GraphicsAuthoringLe
 }
 
 export interface GraphicsAuthoringLeaseAcquisition {
-	lease: GraphicsAuthoringLeaseState;
+	lease: GraphicsAuthoringLeaseReading;
 	outcome: GraphicsAuthoringLeaseOutcome;
 }
 
@@ -106,19 +107,35 @@ export function graphicsAuthoringLeaseModule() {
 	async function describe(
 		ref: GraphicsAuthoringLeaseRef,
 		sessionId: string | undefined,
-	): Promise<GraphicsAuthoringLeaseState> {
+	): Promise<GraphicsAuthoringLeaseReading> {
 		const record = await loadRecord(ref.artifact);
-		const state = graphicsAuthoringLeaseState(ref.artifact, record, sessionId, Date.now());
+		return await named(
+			graphicsAuthoringLeaseState(ref.artifact, record, sessionId, Date.now()),
+			record,
+		);
+	}
 
-		// Only for an observer, and only here. A holder needs no name for
-		// themselves, and the branches that grant, renew, or take over all answer
-		// the asking session as holder — so this is the one shape that can carry
-		// somebody else's name, and it costs a read exactly where an editor is
-		// about to be told it cannot write (#398, ADR-0010).
+	/**
+	 * Who is holding it, for the one shape that can be holding it for somebody
+	 * else (#398, ADR-0010).
+	 *
+	 * Grant, renew, and takeover all answer the asking session as holder and have
+	 * nobody to name, so this is reached only by an observation. That is one
+	 * indexed join per observing answer — and an observer heartbeats, so it
+	 * recurs at the lease cadence rather than once. Left uncached deliberately:
+	 * the holder can change between two heartbeats, and a name cached across them
+	 * would tell an operator that a colleague is editing something they have
+	 * already released.
+	 */
+	async function named(
+		state: GraphicsAuthoringLeaseState,
+		record: GraphicsAuthoringLeaseRecord | undefined,
+	): Promise<GraphicsAuthoringLeaseReading> {
 		if (!state.heldByAnotherSession || !record)
 			return state;
 
-		return { ...state, heldBy: await sessionHolderName(record.holderSessionId) };
+		const holderName = await sessionHolderName(record.holderSessionId);
+		return holderName === null ? state : { ...state, holderName };
 	}
 
 	/**
@@ -246,8 +263,15 @@ export function graphicsAuthoringLeaseModule() {
 		const resolution = resolveGraphicsAuthoringLease(record, params, now);
 		if (resolution.outcome !== 'observe' && isGraphicsAuthoringLeaseLive(record, now))
 			return await acquire({ ...params, takeover: true });
+		// Through `named` like every other observation: a client that loses an
+		// acquisition race is exactly the one being told somebody else has it, and
+		// answering it the unnamed sentence until its next heartbeat would make the
+		// name look intermittent.
 		return {
-			lease: graphicsAuthoringLeaseState(params.artifact, record, params.sessionId, now),
+			lease: await named(
+				graphicsAuthoringLeaseState(params.artifact, record, params.sessionId, now),
+				record,
+			),
 			outcome: resolution.outcome,
 		};
 	}
@@ -256,7 +280,7 @@ export function graphicsAuthoringLeaseModule() {
 	async function release(
 		ref: GraphicsAuthoringLeaseRef,
 		sessionId: string,
-	): Promise<GraphicsAuthoringLeaseState> {
+	): Promise<GraphicsAuthoringLeaseReading> {
 		await db
 			.delete(graphicsAuthoringLeases)
 			.where(and(

@@ -6,7 +6,7 @@ import {
 } from '~~/server/db/schema/graphicsAsset';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { graphicsActorNames } from '~~/server/utils/actorNames';
+import { withActorNames } from '~~/server/utils/actorNames';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
@@ -90,7 +90,7 @@ export default defineEventHandler(async (event): Promise<GraphicsAssetEvidenceRe
 		// The ledger records who acted, never what they were called at the time, so
 		// the names are resolved at the moment the page is read (#398, ADR-0010) —
 		// a rename is a rename everywhere, including in evidence written years ago.
-		return { ...page, actorNames: await graphicsActorNames(page.entries.map(entry => entry.actor)) };
+		return await withActorNames(page, page.entries.map(entry => entry.actor));
 	}
 	catch (error) {
 		return rethrowGraphicsAssetApiError(error, event);

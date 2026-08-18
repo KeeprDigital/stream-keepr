@@ -250,7 +250,7 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 				:writable="editLease.writable.value"
 				:lease-status="editLease.status.value"
 				:can-take-over="editLease.canTakeOver.value"
-				:held-by="editLease.heldBy.value"
+				:holder-name="editLease.holderName.value"
 				:playout-disconnected="playoutDisconnected"
 				:save-state="saveState"
 				:save-error="saveError"

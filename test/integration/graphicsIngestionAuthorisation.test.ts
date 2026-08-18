@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
-import { $fetch, fetch, operatorSessionCookie } from './client';
+import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { anotherBrowser, anotherUser } from './identities';
 
@@ -336,7 +336,51 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	 * its handler runs, so they asserted a middleware from thirteen angles; the
 	 * boundary is proved once in `apiBoundary.test.ts`, and exhaustively against
 	 * every route file on disk in `test/unit/server/utils/apiBoundary.test.ts`.
+	 *
+	 * What those cases also proved is kept below, because the boundary suite does
+	 * not: a refusal leaves the library exactly as it was.
 	 */
+
+	/**
+	 * The half of the deleted cases that is about the library rather than the
+	 * middleware: a refused write must change nothing.
+	 *
+	 * A 401 with a side effect is the shape worth a test — a route that reads a
+	 * body, acts, and refuses afterwards passes any status-code assertion — and the
+	 * two writes chosen are the sharpest the surface has. The metadata route
+	 * replaces the Event association set outright, so an empty array is a valid
+	 * request that detaches the asset from every Event it belongs to; the lifecycle
+	 * actions are the ones #116 was filed over.
+	 *
+	 * Asked through `anonymousFetch`, because this suite's client signs anything
+	 * that presents no session of its own.
+	 */
+	describe('a refused write', () => {
+		it('detaches no Event association, having been refused before it acted', async () => {
+			const response = await anonymousFetch(`/api/graphics-assets/${assetId}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ name: 'Renamed by nobody', eventIds: [] }),
+			});
+
+			expect(response.status).toBe(401);
+			await expect(assetEventIds()).resolves.toEqual([eventId]);
+		});
+
+		it('leaves the Graphic Asset in active discovery', async () => {
+			const response = await anonymousFetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'trash' }),
+			});
+
+			expect(response.status).toBe(401);
+			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
+				headers: { cookie: authorCookie },
+				query: { search: 'Authorisation lifecycle subject' },
+			})).resolves.toMatchObject([{ id: assetId, lifecycle: { state: 'active' } }]);
+		});
+	});
 
 	describe('a second person claiming the initiating identity', () => {
 		it.each(operationRoutes)('cannot reach the operation for $label', async (route) => {

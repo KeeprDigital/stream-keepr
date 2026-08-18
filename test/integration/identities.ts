@@ -19,7 +19,7 @@ import {
  *   is what a scoping test needs — one author must not reach another's operation.
  * - **A second browser of the same person** holds a different Graphics Authoring
  *   Lease. `anotherBrowser` is what a lease test needs, and the fact that it is the
- *   same* person is the point: one operator in two browsers is two editors, and a
+ *   **same** person is the point: one operator in two browsers is two editors, and a
  *   lease that let them through would let them overwrite each other in silence.
  *
  * A suite that needs neither needs nothing from here at all: `./client.ts` signs

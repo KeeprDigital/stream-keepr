@@ -56,27 +56,35 @@ export interface GraphicsAuthoringLeaseState {
 	writable: boolean;
 	/** A live lease belongs to someone else — the only reason to offer a takeover. */
 	heldByAnotherSession: boolean;
-	/**
-	 * Who is holding it, where that is somebody else and their name could be
-	 * resolved (ADR-0010, #398).
-	 *
-	 * A lease is held by a **session**, and a session id is not something to show
-	 * an operator or to put in front of a Take over button — "another session" was
-	 * all this surface could say while the holder was an anonymous cookie. The
-	 * server resolves session → user when it answers, because that resolution
-	 * needs the session table and the editor must never be handed another
-	 * browser's session id.
-	 *
-	 * `null` where nobody else holds it, and also where the holder resolves to no
-	 * user: an unnamed holder is still a holder, and the surface falls back to
-	 * saying so rather than inventing a name.
-	 */
-	heldBy: string | null;
 	/** When the current holder's claim lapses, so an observer can show the wait. */
 	expiresAt: number | null;
 	heldSince: number | null;
 	/** The cadence the client should heartbeat or re-ask at. */
 	heartbeatIntervalMs: number;
+}
+
+/**
+ * A lease state as a route answers it: the state above, plus who is holding it
+ * where that is somebody else (#398, ADR-0010).
+ *
+ * The name is **not** on `GraphicsAuthoringLeaseState`, and the difference
+ * matters. That shape is decided by a pure function this file shares with the
+ * browser; a name can only come from the session table, so putting the field
+ * there would be a hole for a different layer to fill — which is the shape
+ * `GraphicsActorNaming` and the `…Reading` types in `shared/types/graphicsAsset.ts`
+ * exist to avoid on the administrator surfaces. Optional rather than nullable
+ * for the same reason: the branches that grant, renew, or take over answer the
+ * asking session as holder and have nobody to name, so they answer the state
+ * itself and this type accepts it unchanged.
+ *
+ * A lease is held by a **session**, and a session id is not something to show an
+ * operator or to put in front of a Take over button — "another session" was all
+ * this surface could say while the holder was an anonymous cookie. Absent where
+ * the holder resolves to no user: an unnamed holder is still a holder, and the
+ * surface says so rather than inventing a name.
+ */
+export interface GraphicsAuthoringLeaseReading extends GraphicsAuthoringLeaseState {
+	holderName?: string;
 }
 
 export interface GraphicsAuthoringLeaseRequest {
@@ -171,9 +179,6 @@ export function graphicsAuthoringLeaseState(
 		role: held ? 'holder' : 'observer',
 		writable: graphicsAuthoringLeaseAllowsWrite(record, sessionId, now),
 		heldByAnotherSession: live && !held,
-		// Names are resolved by the caller that can reach the session table; this
-		// function is pure and shared with the browser, which must never see one.
-		heldBy: null,
 		expiresAt: live ? record.expiresAt : null,
 		heldSince: live ? record.acquiredAt : null,
 		heartbeatIntervalMs: GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS,

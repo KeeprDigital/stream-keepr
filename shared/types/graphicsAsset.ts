@@ -1427,7 +1427,14 @@ export interface GraphicsActorNaming {
 	actorNames: GraphicsActorNames;
 }
 
-/** The Operations Cockpit as its route serves it: the reading, plus its names. */
+/**
+ * The Operations Cockpit as its route serves it: the reading, plus its names.
+ *
+ * An intersection where its two siblings below use `extends`, because the
+ * cockpit reading is a union — an interface cannot extend one, and splitting it
+ * into two named readings would double the type to say one thing about both
+ * arms.
+ */
 export type GraphicsOperationsCockpitReading = GraphicsOperationsCockpit & GraphicsActorNaming;
 
 /** One queue inspection as its route serves it. */

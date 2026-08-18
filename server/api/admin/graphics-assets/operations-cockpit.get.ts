@@ -1,7 +1,7 @@
 import type { GraphicsOperationsCockpitReading } from '~~/shared/types/graphicsAsset';
 import { requireGraphicsAdministrator } from '~~/server/modules/graphics-administrator';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { graphicsActorNames } from '~~/server/utils/actorNames';
+import { withActorNames } from '~~/server/utils/actorNames';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -28,14 +28,12 @@ export default defineEventHandler(async (event): Promise<GraphicsOperationsCockp
 		// beside the id (#398, ADR-0010). The catalogue-unavailable reading names
 		// nobody because it carries no operations to name — an empty naming is the
 		// accurate answer there, not a missing one.
-		return {
-			...cockpit,
-			actorNames: await graphicsActorNames(
-				cockpit.outcome === 'complete'
-					? cockpit.ingestion.operations.map(operation => operation.initiatedBy)
-					: [],
-			),
-		};
+		return await withActorNames(
+			cockpit,
+			cockpit.outcome === 'complete'
+				? cockpit.ingestion.operations.map(operation => operation.initiatedBy)
+				: [],
+		);
 	}
 	catch (error) {
 		return rethrowGraphicsAssetApiError(error, event);

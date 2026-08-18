@@ -12,7 +12,7 @@ interface LeaseState {
 	role: 'holder' | 'observer';
 	writable: boolean;
 	heldByAnotherSession: boolean;
-	heldBy: string | null;
+	holderName?: string;
 	expiresAt: number | null;
 	heldSince: number | null;
 	heartbeatIntervalMs: number;
@@ -243,7 +243,7 @@ describe('graphics Authoring Leases', () => {
 
 		const asked = await askForLease(browserB);
 
-		expect(asked.data.lease.heldBy).toBe('Integration Operator');
+		expect(asked.data.lease.holderName).toBe('Integration Operator');
 		expect(JSON.stringify(asked.data.lease)).not.toContain(browserA.split('=')[1]!.slice(0, 12));
 	});
 

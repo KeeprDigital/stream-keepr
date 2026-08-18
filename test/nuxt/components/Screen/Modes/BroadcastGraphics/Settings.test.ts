@@ -64,7 +64,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => bo
 		// Who holds it, where the server resolved their session to a person (#398).
 		// Named here rather than left `null`, so this file proves the settings
 		// surface passes it on rather than only that it compiles.
-		heldBy: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
+		holderName: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
 		canTakeOver: computed(() => !mockLeaseWritable.value),
 		refresh: vi.fn(),
 		takeOver: mockTakeOver,
@@ -96,7 +96,7 @@ const EditWorkspaceStub = defineComponent({
 		selectedGraphicId: { type: String, default: null },
 		writable: { type: Boolean, default: true },
 		canTakeOver: { type: Boolean, default: false },
-		heldBy: { type: String, default: null },
+		holderName: { type: String, default: null },
 		playoutDisconnected: { type: Boolean, default: false },
 		saveState: { type: String, default: 'idle' },
 		saveError: { type: String, default: null },
@@ -487,6 +487,6 @@ describe('broadcastGraphicsSettings', () => {
 		// And the workspace is handed who to name, rather than being left to say
 		// "another session" (#398). The notice itself is the workspace's own, and
 		// is pinned in `EditWorkspace.test.ts`.
-		expect(wrapper.getComponent(EditWorkspaceStub).props('heldBy')).toBe('Marcus Angel');
+		expect(wrapper.getComponent(EditWorkspaceStub).props('holderName')).toBe('Marcus Angel');
 	});
 });
