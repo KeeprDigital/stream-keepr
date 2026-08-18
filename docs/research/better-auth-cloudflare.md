@@ -41,7 +41,7 @@ Everything else the ticket asked about — admin-created accounts with self-sign
 ## Nuxt integration with `ssr: false`
 
 - **Server:** one Nitro catch-all — `server/api/auth/[...all].ts` calling `auth.handler(toWebRequest(event))` ([Nuxt integration docs](https://www.better-auth.com/docs/integrations/nuxt)). Plain Nitro; nothing preset-specific, so it mounts identically under `cloudflare_module`.
-- **Client:** `createAuthClient` from `better-auth/vue` gives reactive `useSession`/`signIn`/`signOut`. The docs' SSR complications (cookie forwarding, `useFetch` hydration) all vanish with `ssr: false` — the SPA case is the *simple* path. Route protection is ordinary Nuxt middleware client-side plus `auth.api.getSession({ headers })` in server routes, which is the credential ADR-0008 planned to attach at the existing `requireGraphicsAuthorSession` seams.
+- **Client:** `createAuthClient` from `better-auth/vue` gives reactive `useSession`/`signIn`/`signOut`. The docs' SSR complications (cookie forwarding, `useFetch` hydration) all vanish with `ssr: false` — the SPA case is the _simple_ path. Route protection is ordinary Nuxt middleware client-side plus `auth.api.getSession({ headers })` in server routes, which is the credential ADR-0008 planned to attach at the existing `requireGraphicsAuthorSession` seams.
 - The docs never demonstrate `ssr: false` explicitly; nothing in the mechanism depends on SSR, but budget a spike to confirm cookie behavior on the deployed origin (`baseURL`/`trustedOrigins` must be set).
 
 ## Future headroom

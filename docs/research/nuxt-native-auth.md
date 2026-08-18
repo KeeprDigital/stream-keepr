@@ -56,12 +56,12 @@ The module explicitly supports client-only rendering. Its [client plugin](https:
 
 ## Maintenance signals
 
-| Option | Latest release | Activity | Notes |
-| --- | --- | --- | --- |
-| nuxt-auth-utils | v0.5.30, 4 Aug 2026 | 1,590 stars, 141 open issues, steady releases through 2025–26 | Authored by Atinux (Nuxt core team); listed in the official Nuxt modules registry; still 0.x, so minor-version breaking changes are contractual |
-| @sidebase/nuxt-auth | v1.3.1, 30 Jun 2026 | 1,548 stars, active repo | CF Workers breakage open since Mar 2025 |
-| Lucia | — | Deprecated Mar 2025 | Maintained only as a learning resource |
-| h3 v1 session (transitive) | ships with Nitro | Nuxt-team maintained | Fixed-window `createdAt` semantics are v1 behaviour we'd depend on |
+| Option                     | Latest release      | Activity                                                      | Notes                                                                                                                                           |
+| -------------------------- | ------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| nuxt-auth-utils            | v0.5.30, 4 Aug 2026 | 1,590 stars, 141 open issues, steady releases through 2025–26 | Authored by Atinux (Nuxt core team); listed in the official Nuxt modules registry; still 0.x, so minor-version breaking changes are contractual |
+| @sidebase/nuxt-auth        | v1.3.1, 30 Jun 2026 | 1,548 stars, active repo                                      | CF Workers breakage open since Mar 2025                                                                                                         |
+| Lucia                      | —                   | Deprecated Mar 2025                                           | Maintained only as a learning resource                                                                                                          |
+| h3 v1 session (transitive) | ships with Nitro    | Nuxt-team maintained                                          | Fixed-window `createdAt` semantics are v1 behaviour we'd depend on                                                                              |
 
 ## What adoption would actually look like here
 
