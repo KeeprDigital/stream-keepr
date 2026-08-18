@@ -176,6 +176,64 @@ describe('broadcastGraphicAuthoring', () => {
 		expect(refused).toEqual(edited);
 	});
 
+	it('refuses projection edits that the strict document schema cannot save', () => {
+		const initial = addSocialProfileProjection({
+			...graphic('a'),
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+		}, {
+			label: 'Profile',
+			sourceKey: 'talent',
+			projectionKey: 'profile',
+			presentationGroupId: 'group',
+			iconItemId: 'icon',
+			handleItemId: 'handle',
+			...CANVAS,
+		});
+
+		expect(patchSocialProfileProjection(initial, 'profile', { label: 'x'.repeat(61) })).toBe(initial);
+		expect(patchSocialProfileProjection(initial, 'profile', { dwellMs: 2_000.5 })).toBe(initial);
+		expect(patchSocialProfileProjection(initial, 'profile', { transitionDurationMs: Number.NaN })).toBe(initial);
+		expect(patchSocialProfileProjection(initial, 'profile', {
+			// The public edit seam deliberately excludes Presentation Group reassignment.
+			// This cast pins its runtime boundary against an untyped caller too.
+			presentationGroupId: 'other-group',
+		} as never)).toBe(initial);
+	});
+
+	it('refuses a projection past the strict per-graphic authoring budget without creating an orphan group', () => {
+		const source = { key: 'talent', label: 'Talent', kind: 'talent' as const };
+		const projections = Array.from({ length: 24 }, (_, index) => ({
+			key: `profile-${index}`,
+			label: `Profile ${index}`,
+			sourceKey: source.key,
+			presentationGroupId: `group-${index}`,
+			dwellMs: 8_000,
+			transition: 'crossfade' as const,
+			transitionDurationMs: 250,
+		}));
+		const initial = addGraphicItem({
+			...graphic('a'),
+			sources: [source],
+			socialProfileProjections: projections,
+		}, { kind: 'group', id: 'existing', ...CANVAS }).graphic;
+
+		expect(associateSocialProfileProjection(initial, {
+			label: 'Overflow',
+			projectionKey: 'overflow',
+			sourceKey: source.key,
+			presentationGroupId: 'existing',
+		})).toBe(initial);
+		expect(addSocialProfileProjection(initial, {
+			label: 'Overflow',
+			projectionKey: 'overflow',
+			sourceKey: source.key,
+			presentationGroupId: 'orphan-group',
+			iconItemId: 'orphan-icon',
+			handleItemId: 'orphan-handle',
+			...CANVAS,
+		})).toBe(initial);
+	});
+
 	it('requires an explicit combined deletion for a projection with dependent content', () => {
 		const projected = addSocialProfileProjection({
 			...graphic('a'),
@@ -197,6 +255,40 @@ describe('broadcastGraphicAuthoring', () => {
 		const removed = deleteSocialProfileProjection(projected, 'profile', { deletePresentationGroup: true });
 		expect(removed.socialProfileProjections).toEqual([]);
 		expect(removed.items).toEqual([]);
+	});
+
+	it('treats a retained projected Placeholder Style as dependent content', () => {
+		const projected = addSocialProfileProjection({
+			...graphic('a'),
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+		}, {
+			label: 'Profile',
+			sourceKey: 'talent',
+			projectionKey: 'profile',
+			presentationGroupId: 'group',
+			iconItemId: 'icon',
+			handleItemId: 'handle',
+			...CANVAS,
+		});
+		const presentationGroup = projected.items[0];
+		if (presentationGroup?.type !== 'group')
+			throw new Error('expected starter Presentation Group');
+		const styleOnly = {
+			...projected,
+			items: [{
+				...presentationGroup,
+				children: presentationGroup.children.map((child) => {
+					if (child.id === 'handle')
+						return { ...child, text: 'literal', placeholderStyles: { 'profile.handle': { fontWeight: 700 } } };
+					if (child.id === 'icon')
+						return { ...child, network: 'twitch' as const };
+					return child;
+				}),
+			}],
+		};
+
+		expect(deleteSocialProfileProjection(styleOnly, 'profile', { deletePresentationGroup: false }))
+			.toBe(styleOnly);
 	});
 
 	it('keeps a Talent source while a Social Profile Projection still references it', () => {

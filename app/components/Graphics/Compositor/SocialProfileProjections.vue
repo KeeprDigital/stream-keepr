@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { SocialProfileProjectionPatch } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
-	SocialProfileProjectionDeclaration,
 	SocialProfileTransition,
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -17,6 +17,8 @@ import {
 import {
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_SOCIAL_PROFILE_DWELL_MS,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	MIN_SOCIAL_PROFILE_DWELL_MS,
 	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
@@ -45,6 +47,17 @@ const canAuthor = computed(() => props.writable === true);
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 const selectedGraphic = computed(() => selection.value.kind === 'graphic' ? selection.value.graphic : null);
 const projections = computed(() => selectedGraphic.value?.socialProfileProjections ?? []);
+const screenProjectionCount = computed(() => props.graphics.reduce(
+	(total, graphic) => total + (graphic.socialProfileProjections?.length ?? 0),
+	0,
+));
+const projectionBudgetFeedback = computed(() => {
+	if (projections.value.length >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC)
+		return `Broadcast Graphic limit reached (${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC}).`;
+	if (screenProjectionCount.value >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN)
+		return `Screen limit reached (${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN}).`;
+	return null;
+});
 const talentSources = computed(() => (selectedGraphic.value?.sources ?? []).filter(source => source.kind === 'talent'));
 
 const sourceOptions = computed(() => talentSources.value.map(source => ({
@@ -80,8 +93,15 @@ function replace(graphic: BroadcastGraphicConfig) {
 
 function addProjection() {
 	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic || newLabel.value.trim() === '' || newSourceKey.value === '')
+	if (
+		!canAuthor.value
+		|| !graphic
+		|| projectionBudgetFeedback.value
+		|| newLabel.value.trim() === ''
+		|| newSourceKey.value === ''
+	) {
 		return;
+	}
 	const projectionKey = graphicInputKeyFromLabel(
 		newLabel.value,
 		(graphic.socialProfileProjections ?? []).map(projection => projection.key),
@@ -110,7 +130,7 @@ function addProjection() {
 	newGroupId.value = '';
 }
 
-function patchProjection(key: string, patch: Partial<Omit<SocialProfileProjectionDeclaration, 'key'>>) {
+function patchProjection(key: string, patch: SocialProfileProjectionPatch) {
 	const graphic = selectedGraphic.value;
 	if (!canAuthor.value || !graphic)
 		return;
@@ -184,11 +204,14 @@ const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label
 			<p v-if="talentSources.length === 0" class="text-xs text-warning" data-testid="social-profile-projection-no-talent-source">
 				Declare a Talent Graphic Source Selection first. It may be operator selected or derived from Event Talent 1 or Talent 2.
 			</p>
+			<p v-if="projectionBudgetFeedback" class="text-xs text-warning" data-testid="social-profile-projection-budget-feedback">
+				{{ projectionBudgetFeedback }}
+			</p>
 			<UButton
 				size="sm"
 				variant="soft"
 				icon="i-lucide-plus"
-				:disabled="talentSources.length === 0 || newLabel.trim() === ''"
+				:disabled="talentSources.length === 0 || newLabel.trim() === '' || projectionBudgetFeedback !== null"
 				data-testid="social-profile-projection-add"
 				@click="addProjection"
 			>
@@ -205,6 +228,7 @@ const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label
 			<div class="flex items-center gap-2">
 				<UInput
 					:model-value="projection.label"
+					:maxlength="MAX_GRAPHIC_INPUT_LABEL_LENGTH"
 					class="min-w-0 flex-1"
 					size="sm"
 					:disabled="!canAuthor"
@@ -236,6 +260,7 @@ const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label
 						:model-value="projection.dwellMs / 1000"
 						:min="MIN_SOCIAL_PROFILE_DWELL_MS / 1000"
 						:max="MAX_SOCIAL_PROFILE_DWELL_MS / 1000"
+						:step="1"
 						:disabled="!canAuthor"
 						data-testid="social-profile-projection-dwell"
 						@update:model-value="patchProjection(projection.key, { dwellMs: ($event ?? 8) * 1000 })"
@@ -257,6 +282,7 @@ const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label
 					:model-value="projection.transitionDurationMs"
 					:min="MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
 					:max="MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
+					:step="1"
 					:disabled="!canAuthor"
 					data-testid="social-profile-projection-transition-duration"
 					@update:model-value="patchProjection(projection.key, { transitionDurationMs: $event ?? 250 })"

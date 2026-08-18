@@ -716,6 +716,13 @@ export const MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 100;
 export const MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 2_000;
 export const DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 250;
 
+/**
+ * Projection declaration budgets shared by strict validation and the compositor.
+ * Authoring stops at these limits so an edit never reaches the save path invalid.
+ */
+export const MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC = 24;
+export const MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 60;
+
 /** Template Package compatibility identity for the projection document vocabulary. */
 export const SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID = 'social-profile-projection';
 export const SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION = 1;

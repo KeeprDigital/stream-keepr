@@ -50,9 +50,11 @@ import {
 	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_INPUT_KEY_PATTERN,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
+	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_SOCIAL_PROFILE_DWELL_MS,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	MIN_SOCIAL_PROFILE_DWELL_MS,
 	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
@@ -64,7 +66,7 @@ import { canDeriveGraphicSource } from './bindingResolution';
 import { createDefaultGraphicInputDeclaration } from './inputs';
 import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, GRAPHIC_GROUP_CHILD_KINDS, graphicItemKindLabel } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
-import { graphicTextTemplateProjectedValueReferences } from './textTemplate';
+import { graphicTextTemplateProjectedValueReferences, readSocialProfileProjectedValueReference } from './textTemplate';
 
 /**
  * Authoring operations for a Screen's back-to-front stack of Broadcast
@@ -659,7 +661,10 @@ export function associateSocialProfileProjection(
 		|| source.kind !== 'talent'
 		|| group?.type !== 'group'
 		|| options.label.trim() === ''
+		|| options.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
 		|| !GRAPHIC_INPUT_KEY_PATTERN.test(options.projectionKey)
+		|| options.projectionKey.length > MAX_GRAPHIC_INPUT_KEY_LENGTH
+		|| (graphic.socialProfileProjections?.length ?? 0) >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC
 		|| (graphic.socialProfileProjections ?? []).some(entry =>
 			entry.key === options.projectionKey || entry.presentationGroupId === options.presentationGroupId,
 		)
@@ -699,7 +704,10 @@ export function addSocialProfileProjection(
 		!source
 		|| source.kind !== 'talent'
 		|| options.label.trim() === ''
+		|| options.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
 		|| !GRAPHIC_INPUT_KEY_PATTERN.test(options.projectionKey)
+		|| options.projectionKey.length > MAX_GRAPHIC_INPUT_KEY_LENGTH
+		|| (graphic.socialProfileProjections?.length ?? 0) >= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC
 		|| (graphic.socialProfileProjections ?? []).some(entry => entry.key === options.projectionKey)
 		|| findGraphicItem(graphic, options.presentationGroupId)
 		|| findGraphicItem(graphic, options.iconItemId)
@@ -739,15 +747,34 @@ export function addSocialProfileProjection(
 	return associateSocialProfileProjection(withStarter, options);
 }
 
+export type SocialProfileProjectionPatch = Partial<Pick<
+	SocialProfileProjectionDeclaration,
+	'label' | 'sourceKey' | 'dwellMs' | 'transition' | 'transitionDurationMs'
+>>;
+
+const SOCIAL_PROFILE_PROJECTION_PATCH_KEYS = new Set<keyof SocialProfileProjectionPatch>([
+	'label',
+	'sourceKey',
+	'dwellMs',
+	'transition',
+	'transitionDurationMs',
+]);
+
 /** Edit authored projection properties without allowing a strict-save-invalid state. */
 export function patchSocialProfileProjection(
 	graphic: BroadcastGraphicConfig,
 	key: string,
-	patch: Partial<Omit<SocialProfileProjectionDeclaration, 'key'>>,
+	patch: SocialProfileProjectionPatch,
 ): BroadcastGraphicConfig {
 	const current = (graphic.socialProfileProjections ?? []).find(entry => entry.key === key);
-	if (!current)
+	if (
+		!current
+		|| Object.keys(patch).some(
+			patchKey => !SOCIAL_PROFILE_PROJECTION_PATCH_KEYS.has(patchKey as keyof SocialProfileProjectionPatch),
+		)
+	) {
 		return graphic;
+	}
 	const candidate = { ...current, ...patch };
 	const source = (graphic.sources ?? []).find(entry => entry.key === candidate.sourceKey);
 	const group = graphic.items.find(entry => entry.id === candidate.presentationGroupId);
@@ -756,13 +783,16 @@ export function patchSocialProfileProjection(
 	);
 	if (
 		candidate.label.trim() === ''
+		|| candidate.label.trim().length > MAX_GRAPHIC_INPUT_LABEL_LENGTH
 		|| !source
 		|| source.kind !== 'talent'
 		|| group?.type !== 'group'
 		|| groupAssignedElsewhere
+		|| !Number.isInteger(candidate.dwellMs)
 		|| candidate.dwellMs < MIN_SOCIAL_PROFILE_DWELL_MS
 		|| candidate.dwellMs > MAX_SOCIAL_PROFILE_DWELL_MS
 		|| !SOCIAL_PROFILE_TRANSITION_VALUES.includes(candidate.transition)
+		|| !Number.isInteger(candidate.transitionDurationMs)
 		|| candidate.transitionDurationMs < MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS
 		|| candidate.transitionDurationMs > MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS
 	) {
@@ -790,12 +820,13 @@ export function socialProfileProjectionConsumerIds(
 		) {
 			return [item.id];
 		}
-		if (
-			item.type === 'text'
-			&& graphicTextTemplateProjectedValueReferences(item.text)
-				.some(reference => reference.projectionKey === key)
-		) {
-			return [item.id];
+		if (item.type === 'text') {
+			const textReferencesProjection = graphicTextTemplateProjectedValueReferences(item.text)
+				.some(reference => reference.projectionKey === key);
+			const styleReferencesProjection = Object.keys(item.placeholderStyles ?? {})
+				.some(styleKey => readSocialProfileProjectedValueReference(styleKey)?.projectionKey === key);
+			if (textReferencesProjection || styleReferencesProjection)
+				return [item.id];
 		}
 		return [];
 	});

@@ -154,6 +154,37 @@ describe('graphicsCompositorSocialProfileProjections', () => {
 		expect(second.items).toHaveLength(2);
 	});
 
+	it('stops before exceeding the strict per-graphic or per-screen projection budgets', async () => {
+		const declarations = (count: number, prefix: string) => Array.from({ length: count }, (_, index) => ({
+			key: `${prefix}-${index}`,
+			label: `${prefix} ${index}`,
+			sourceKey: 'operator-talent',
+			presentationGroupId: `${prefix}-group-${index}`,
+			dwellMs: 8_000,
+			transition: 'crossfade' as const,
+			transitionDurationMs: 250,
+		}));
+		const selected = graphic({ socialProfileProjections: declarations(23, 'selected') });
+		const other = graphic({
+			id: 'other',
+			name: 'Other',
+			socialProfileProjections: declarations(37, 'other'),
+		});
+		const wrapper = await mountComponent({ graphics: [selected, other] });
+
+		expect(wrapper.get('[data-testid="social-profile-projection-budget-feedback"]').text())
+			.toContain('Screen limit');
+		expect(wrapper.get('[data-testid="social-profile-projection-add"]').attributes('disabled')).toBeDefined();
+		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+
+		await wrapper.setProps({
+			graphics: [graphic({ socialProfileProjections: declarations(24, 'selected') })],
+		});
+		expect(wrapper.get('[data-testid="social-profile-projection-budget-feedback"]').text())
+			.toContain('Broadcast Graphic limit');
+	});
+
 	it('edits dwell and every bounded transition property while Cut ignores duration', async () => {
 		const wrapper = await mountComponent();
 		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');
@@ -177,6 +208,16 @@ describe('graphicsCompositorSocialProfileProjections', () => {
 		await wrapper.get('[data-testid="social-profile-projection-transition"]').setValue('cut');
 		await wrapper.setProps({ graphics: [emittedGraphic(wrapper, 4)] });
 		expect(wrapper.find('[data-testid="social-profile-projection-transition-duration"]').exists()).toBe(false);
+	});
+
+	it('constrains edited labels and timing controls to strict-save scalar bounds', async () => {
+		const wrapper = await mountComponent();
+		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');
+		await wrapper.setProps({ graphics: [emittedGraphic(wrapper)] });
+
+		expect(wrapper.get('[data-testid="social-profile-projection-label"]').attributes('maxlength')).toBe('60');
+		expect(wrapper.get('[data-testid="social-profile-projection-dwell"]').attributes('step')).toBe('1');
+		expect(wrapper.get('[data-testid="social-profile-projection-transition-duration"]').attributes('step')).toBe('1');
 	});
 
 	it('explains and performs the explicit combined deletion of dependent content', async () => {
