@@ -15,10 +15,11 @@ import {
 } from '~~/shared/modules/graphics';
 
 describe('graphicItemDefinitions', () => {
-	it('offers the shared base Graphic Item kinds to the Broadcast Graphics host', () => {
+	it('offers the base kinds and the host-owned Social Network Icon to Broadcast Graphics', () => {
 		const definitions = graphicItemDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
-		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape', 'media', 'group']);
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'social-network-icon', 'group']);
 	});
 
 	it('never offers a Graphic Group inside a Graphic Group', () => {
@@ -26,12 +27,21 @@ describe('graphicItemDefinitions', () => {
 		// group offers is the host palette without itself.
 		const definitions = graphicGroupChildDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT);
 
-		expect(definitions.map(definition => definition.kind)).toEqual(['text', 'shape', 'media']);
+		expect(definitions.map(definition => definition.kind))
+			.toEqual(['text', 'shape', 'media', 'social-network-icon']);
 	});
 
 	it('withholds a Definition whose required context the Host Contract cannot supply', () => {
 		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('clock'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(false);
 		expect(isGraphicItemDefinitionAvailable(getGraphicItemDefinition('text'), BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+	});
+
+	it('reserves the Social Network Icon Definition for the Broadcast Graphics host', () => {
+		const definition = getGraphicItemDefinition('social-network-icon');
+
+		expect(definition.requiredHost).toBe('broadcast-graphics');
+		expect(isGraphicItemDefinitionAvailable(definition, BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
+		expect(isGraphicItemDefinitionAvailable(definition, FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
 	});
 
 	it('offers the Feature Match host the base kinds and the three context-gated Definitions', () => {

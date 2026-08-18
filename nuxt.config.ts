@@ -2,6 +2,7 @@ import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { devVarsModule } from './build/devVarsModule';
+import { SUPPORTED_SOCIAL_NETWORKS } from './shared/socialProfiles';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from './shared/types/graphicStyleSetPackage';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
@@ -14,6 +15,15 @@ const isIntegration = process.env.STREAM_KEEPR_INTEGRATION === 'true';
 const integrationWranglerPersistDir = process.env.STREAM_KEEPR_INTEGRATION_WRANGLER_PERSIST_DIR ?? '.wrangler/state/integration';
 const integrationMutationDrainHandler = fileURLToPath(new URL('./test/integration/fixtures/drain-request-body.ts', import.meta.url));
 const compatibilityDate = '2026-07-16';
+
+/**
+ * Semantic Social Network Icon configurations resolve entirely from bytes shipped
+ * with the application. Their names are dynamic at the component site, so the
+ * icon scanner cannot discover them there; declare the catalogue explicitly.
+ */
+const supportedSocialNetworkIcons = SUPPORTED_SOCIAL_NETWORKS.map(network =>
+	network.icon.replace('i-simple-icons-', 'simple-icons:'),
+);
 
 const databaseId = '26830437-975a-4378-a135-acfc01ea89ae';
 const kvNamespaceId = 'a15cf281b12d43e4b5479baf8b69b587';
@@ -141,6 +151,16 @@ export default defineNuxtConfig({
 	eslint: {
 		config: {
 			standalone: false,
+		},
+	},
+
+	icon: {
+		// Component tests have no Nuxt icon endpoint. Requiring the client bundle
+		// there makes a missing local vector fail visibly instead of falling back to
+		// a network request the test environment cannot serve.
+		provider: process.env.NODE_ENV === 'test' ? 'none' : undefined,
+		clientBundle: {
+			icons: supportedSocialNetworkIcons,
 		},
 	},
 

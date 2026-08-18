@@ -93,23 +93,57 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		]);
 	});
 
-	it('publishes nothing for an item with no asset pinned, or for a non-media item', () => {
+	it('publishes nothing for an item with no asset pinned or for application-owned social icons', () => {
 		const references = broadcastGraphicsGraphicAssetReferences(config([{
 			id: 'bug',
 			name: 'Bug',
 			items: [
 				media('empty', { asset: undefined }),
 				{
-					type: 'shape',
-					id: 'bar',
-					label: 'bar',
+					type: 'social-network-icon',
+					id: 'social-icon',
+					label: 'Social icon',
 					visible: true,
 					anchor: 'top-left',
 					x: 0,
 					y: 0,
 					width: 10,
 					height: 10,
+					network: 'youtube',
+					color: '#ff0000',
+					opacity: 0.8,
+				},
+				{
+					type: 'group',
+					id: 'cluster',
+					label: 'Cluster',
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+					arrangement: 'row',
+					padding: 0,
+					gap: 0,
+					align: 'stretch',
+					justify: 'start',
+					clip: false,
 					geometry: squareShapeGeometry(),
+					children: [{
+						type: 'social-network-icon',
+						id: 'nested-social-icon',
+						label: 'Nested social icon',
+						visible: true,
+						anchor: 'top-left',
+						x: 0,
+						y: 0,
+						width: 10,
+						height: 10,
+						network: 'bluesky',
+						color: '#1185fe',
+						opacity: 1,
+					}],
 				},
 			],
 		}]));

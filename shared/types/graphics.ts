@@ -1,4 +1,5 @@
 import type { GraphicApplicationFontId } from '../modules/graphics/typography';
+import type { SupportedSocialNetwork } from '../socialProfiles';
 import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
@@ -853,6 +854,20 @@ export interface MediaGraphicItemConfig extends GraphicItemConfigBase {
 	loop: boolean;
 }
 
+/**
+ * An application-owned Supported Social Network vector icon.
+ *
+ * The semantic network key is the whole content reference: no Graphic Asset,
+ * filename, URL, or vector payload enters the authored document. Colour and
+ * opacity stay independent of neighbouring text and decoration.
+ */
+export interface SocialNetworkIconGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'social-network-icon';
+	network: SupportedSocialNetwork;
+	color: string;
+	opacity: number;
+}
+
 export const GRAPHIC_GROUP_ARRANGEMENT_VALUES = ['row', 'column', 'canvas'] as const;
 export type GraphicGroupArrangement = typeof GRAPHIC_GROUP_ARRANGEMENT_VALUES[number];
 
@@ -871,6 +886,7 @@ export type GraphicGroupChildConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
 		| MediaGraphicItemConfig
+		| SocialNetworkIconGraphicItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
 		| GameWinsGraphicItemConfig;
@@ -994,6 +1010,7 @@ export type GraphicItemConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
 		| MediaGraphicItemConfig
+		| SocialNetworkIconGraphicItemConfig
 		| GraphicGroupItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig

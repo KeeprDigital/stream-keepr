@@ -5,6 +5,7 @@ import type {
 	GraphicSurfaceStyleSlot,
 	ShapeGeometryPresetId,
 } from '~~/shared/modules/graphics';
+import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
@@ -33,6 +34,7 @@ import type {
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
+	SocialNetworkIconGraphicItemConfig,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
@@ -87,6 +89,7 @@ import {
 	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	applicationGraphicFont,
@@ -195,6 +198,10 @@ const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => 
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
 const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
+const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
+	label: network.label,
+	value: network.key,
+}));
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
 	value: preset.id,
@@ -260,6 +267,9 @@ const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
 const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'media' ? selectedItem.value : null,
 );
+const selectedSocialNetworkIcon = computed<SocialNetworkIconGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'social-network-icon' ? selectedItem.value : null,
+);
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
@@ -284,8 +294,15 @@ const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
  */
 const selectedTypography = computed<GraphicTypography | null>(() => {
 	const item = selectedItem.value;
-	if (!item || item.type === 'shape' || item.type === 'media' || item.type === 'group')
+	if (
+		!item
+		|| item.type === 'shape'
+		|| item.type === 'media'
+		|| item.type === 'social-network-icon'
+		|| item.type === 'group'
+	) {
 		return null;
+	}
 	if (item.type === 'game-wins')
 		return item.displayMode === 'number' ? item.typography : null;
 	return item.typography;
@@ -371,7 +388,7 @@ const isStackedChild = computed(() =>
  */
 const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
 	const item = selectedItem.value;
-	if (!item || item.type === 'media')
+	if (!item || item.type === 'media' || item.type === 'social-network-icon')
 		return null;
 	return item.surfaceStyle ?? null;
 });
@@ -1875,6 +1892,46 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</div>
 		</template>
 
+		<template v-if="selectedSocialNetworkIcon">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Social Network Icon
+				</p>
+				<UFormField label="Social network" size="sm">
+					<USelect
+						:model-value="selectedSocialNetworkIcon.network"
+						:items="SOCIAL_NETWORK_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-network"
+						@update:model-value="patchSelectedItem({ network: $event as SupportedSocialNetwork })"
+					/>
+				</UFormField>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Colour" size="sm">
+						<UIColorPicker
+							:model-value="selectedSocialNetworkIcon.color"
+							data-testid="social-network-icon-color"
+							@update:model-value="patchSelectedItem({ color: $event?.toString() || '#ffffff' })"
+						/>
+					</UFormField>
+					<UFormField label="Opacity" size="sm">
+						<UInputNumber
+							:model-value="selectedSocialNetworkIcon.opacity"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="social-network-icon-opacity"
+							aria-label="Social network icon opacity"
+							@update:model-value="patchSelectedItem({ opacity: $event ?? 1 })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+		</template>
+
 		<template v-if="selectedMediaItem">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
@@ -2082,13 +2139,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			A Media Graphic Item paints an asset rather than a surface, so it is offered
-			none. Every other kind gets the same controls, and a Game Wins Item gets
+			A Media Graphic Item paints an asset and a Social Network Icon paints its
+			application vector, so neither is offered a surface. Every other kind gets
 			them three times over — its own surface, and the two that paint a win box
 			before and after the Player wins it.
 		-->
 		<GraphicsCompositorSurfaceStyleFields
-			v-if="selectedItem && selectedItem.type !== 'media'"
+			v-if="selectedItem && selectedItem.type !== 'media' && selectedItem.type !== 'social-network-icon'"
 			:surface-style="ownSurfaceStyle"
 			title="Graphic Surface Style"
 			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"

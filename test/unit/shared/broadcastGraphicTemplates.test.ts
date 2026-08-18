@@ -3,6 +3,7 @@ import type {
 	GraphicAnimationStagger,
 	GraphicGroupItemConfig,
 	MediaGraphicItemConfig,
+	SocialNetworkIconGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
@@ -177,6 +178,38 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const placedMedia = placed.items.find(entry => entry.type === 'media') as MediaGraphicItemConfig;
 		expect(placedMedia.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
 		expect(placedMedia.videoCompatibility).toBe('chromium-transparency');
+	});
+
+	it('round-trips a Social Network Icon as semantic configuration with no Graphic Asset', () => {
+		const authored = addGraphicItem(
+			composed(),
+			{ kind: 'social-network-icon', id: 'social-icon', ...CANVAS },
+		).graphic;
+		const icon = authored.items.find(entry => entry.id === 'social-icon') as SocialNetworkIconGraphicItemConfig;
+		icon.network = 'tiktok';
+		icon.color = '#ff0050';
+		icon.opacity = 0.55;
+		icon.rotation = 12;
+		const template = {
+			id: 'template-1',
+			name: 'Social lower third',
+			document: broadcastGraphicTemplateDocument(authored),
+		};
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placedIcon = placed.items.find(
+			entry => entry.type === 'social-network-icon',
+		) as SocialNetworkIconGraphicItemConfig;
+
+		expect(placedIcon.id).not.toBe('social-icon');
+		expect(placedIcon).toMatchObject({
+			type: 'social-network-icon',
+			network: 'tiktok',
+			color: '#ff0050',
+			opacity: 0.55,
+			rotation: 12,
+		});
+		expect(placedIcon).not.toHaveProperty('asset');
 	});
 
 	it('names the copy distinctly when the Screen already carries the template\'s name', () => {

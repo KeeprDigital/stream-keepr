@@ -58,10 +58,10 @@ function group(built: BroadcastGraphicConfig): GraphicGroupItemConfig {
 	return item;
 }
 
-// A Media Graphic Item is the one kind with no Graphic Surface Style, so a
-// reading of `surfaceStyle` has to say which kind it expected to be looking at.
+// A Media Graphic Item and a Social Network Icon have no Graphic Surface Style,
+// so a reading of `surfaceStyle` has to say which kind it expected to be looking at.
 function surfaced(item: GraphicItemConfig | GraphicGroupChildConfig | undefined) {
-	if (!item || item.type === 'media')
+	if (!item || item.type === 'media' || item.type === 'social-network-icon')
 		throw new Error('expected a Graphic Item carrying a Graphic Surface Style');
 	return item;
 }
@@ -639,7 +639,13 @@ describe('broadcastGraphicAuthoring', () => {
 			const built = patchGraphicTypography(withKind(kind), kind, { fontSize: 96 });
 			const item = itemOf(built, kind);
 
-			expect(item.type !== 'shape' && item.type !== 'media' && item.type !== 'group' && item.typography)
+			expect(
+				item.type !== 'shape'
+				&& item.type !== 'media'
+				&& item.type !== 'social-network-icon'
+				&& item.type !== 'group'
+				&& item.typography,
+			)
 				.toMatchObject({ fontSize: 96, fontWeight: 700 });
 		});
 
@@ -647,7 +653,9 @@ describe('broadcastGraphicAuthoring', () => {
 			const built = patchGraphicSurfaceStyle(withKind(kind), kind, { fillOpacity: 0.4 });
 			const item = itemOf(built, kind);
 
-			expect(item.type !== 'media' && item.surfaceStyle).toMatchObject({ fillOpacity: 0.4 });
+			expect(
+				item.type !== 'media' && item.type !== 'social-network-icon' && item.surfaceStyle,
+			).toMatchObject({ fillOpacity: 0.4 });
 		});
 
 		it.each(['clock', 'player-life'] as const)('bounds a %s Item with a Text Overflow Policy', (kind) => {

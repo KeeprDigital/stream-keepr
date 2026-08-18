@@ -199,6 +199,25 @@ const lowerThird: BroadcastGraphicConfig = {
 	items: [bar],
 };
 
+const socialGraphic: BroadcastGraphicConfig = {
+	id: 'social',
+	name: 'Social',
+	items: [{
+		type: 'social-network-icon',
+		id: 'social-icon',
+		label: 'Instagram',
+		visible: true,
+		anchor: 'top-left',
+		x: 100,
+		y: 100,
+		width: 120,
+		height: 120,
+		network: 'instagram',
+		color: '#e1306c',
+		opacity: 0.72,
+	}],
+};
+
 /** A Broadcast Graphic whose Text Graphic Item renders a Graphic Text Template. */
 const templated: BroadcastGraphicConfig = {
 	id: 'templated',
@@ -376,6 +395,34 @@ describe('broadcastGraphicsDisplay', () => {
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
 		expect(wrapper.get('[data-graphic-item-kind="shape"]').attributes('style')).toContain('left: 100px');
+	});
+
+	it('renders the same social icon through the embedded preview and live output paths', async () => {
+		mockIsPreview.value = true;
+		const preview = await mountComponent();
+		await pushPreviewState([socialGraphic]);
+		await flushPromises();
+		const previewIcon = preview.get('[data-social-network-icon]');
+		const previewSignature = {
+			classes: previewIcon.classes(),
+			style: previewIcon.attributes('style'),
+		};
+		preview.unmount();
+
+		mockIsPreview.value = false;
+		mockScreen.value = screenWithStack([socialGraphic]);
+		mockOnAirGraphicIds.value = ['social'];
+		const live = await mountComponent();
+		await flushPromises();
+		const liveIcon = live.get('[data-social-network-icon]');
+
+		expect(liveIcon.classes()).toContain('i-simple-icons:instagram');
+		expect({
+			classes: liveIcon.classes(),
+			style: liveIcon.attributes('style'),
+		}).toEqual(previewSignature);
+		expect(liveIcon.attributes('style')).toContain('color: #e1306c');
+		expect(liveIcon.attributes('style')).toContain('opacity: 0.72');
 	});
 
 	it('composes concurrent on-air Broadcast Graphics in authored stack order, not take order', async () => {

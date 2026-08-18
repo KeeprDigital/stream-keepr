@@ -85,6 +85,24 @@ function mediaItem(id: string, overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function socialNetworkIconItem(id: string, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'social-network-icon' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 64,
+		height: 64,
+		network: 'twitch' as const,
+		color: '#9146ff',
+		opacity: 0.8,
+		...overrides,
+	};
+}
+
 function graphic(id: string, itemCount = 0) {
 	return {
 		id,
@@ -1072,6 +1090,64 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(false);
+	});
+
+	describe('social network icon Graphic Items', () => {
+		function withItems(items: Array<Record<string, unknown>>) {
+			return broadcastGraphicsModeConfigSchema.safeParse({
+				graphics: [{ id: 'a', name: 'A', items }],
+			});
+		}
+
+		it('accepts every statically selected Supported Social Network and rejects invented keys', () => {
+			for (const network of ['twitch', 'youtube', 'x', 'instagram', 'tiktok', 'bluesky'])
+				expect(withItems([socialNetworkIconItem(`icon-${network}`, { network })]).success).toBe(true);
+
+			expect(withItems([socialNetworkIconItem('icon-mastodon', { network: 'mastodon' })]).success).toBe(false);
+		});
+
+		it('bounds opacity and rejects unread configuration fields', () => {
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 0 })]).success).toBe(true);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 1 })]).success).toBe(true);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: -0.1 })]).success).toBe(false);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 1.1 })]).success).toBe(false);
+			expect(withItems([socialNetworkIconItem('icon', { asset: { assetId: 'icon', revisionId: '1' } })]).success).toBe(false);
+		});
+
+		it('accepts the icon in every ordinary Graphic Group arrangement', () => {
+			for (const arrangement of ['row', 'column', 'canvas']) {
+				const result = withItems([{
+					type: 'group',
+					id: `group-${arrangement}`,
+					label: arrangement,
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 50,
+					arrangement,
+					padding: 0,
+					gap: 0,
+					align: 'stretch',
+					justify: 'start',
+					clip: true,
+					geometry: GEOMETRY,
+					children: [socialNetworkIconItem(`icon-${arrangement}`, {
+						sizing: { mode: 'fill', size: 0, weight: 1 },
+					})],
+				}]);
+
+				expect(result.success).toBe(true);
+			}
+		});
+
+		it('keeps Social Network Icons out of Feature Match Overlay documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay'));
+			config.layout.composition.items = [socialNetworkIconItem('social-icon')];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
 	});
 
 	describe('media Graphic Items', () => {

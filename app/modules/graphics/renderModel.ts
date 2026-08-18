@@ -21,6 +21,7 @@ import type {
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
 	ShapeGeometry,
+	SocialNetworkIconGraphicItemConfig,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
@@ -37,6 +38,7 @@ import {
 	shapeGeometryPath,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
@@ -457,6 +459,12 @@ export interface GraphicLifeChangeRenderDescriptor {
 	accentColor: string;
 }
 
+/** One application-owned Supported Social Network vector icon. */
+export interface GraphicIconRenderDescriptor {
+	name: string;
+	style: CSSProperties;
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
@@ -477,6 +485,8 @@ export interface GraphicItemRenderDescriptor {
 	shrink?: GraphicTextShrinkBounds;
 	/** Present for Media Graphic Items. */
 	media?: GraphicMediaRenderDescriptor;
+	/** Present for Social Network Icon Graphic Items. */
+	icon?: GraphicIconRenderDescriptor;
 	/**
 	 * Present for a Player Life Graphic Item. The component re-runs it whenever
 	 * `text` changes, because the change is a new value from the live session
@@ -1114,7 +1124,7 @@ function groupClip(group: GraphicGroupItemConfig): CSSProperties {
  */
 function resolveChildSurfaceStyle(
 	group: GraphicGroupItemConfig,
-	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig>,
+	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig | SocialNetworkIconGraphicItemConfig>,
 ): GraphicSurfaceStyle | undefined {
 	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
 }
@@ -1504,6 +1514,29 @@ function mediaItemDescriptor(
 	};
 }
 
+function socialNetworkIconDescriptor(
+	output: ScreenOutput,
+	item: SocialNetworkIconGraphicItemConfig,
+	placement: CSSProperties,
+): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: 'social-network-icon',
+		style: placement,
+		icon: {
+			name: SUPPORTED_SOCIAL_NETWORK_BY_KEY[item.network].icon,
+			style: {
+				display: 'block',
+				width: '100%',
+				height: '100%',
+				color: paintColour(output, item.color),
+				opacity: clampOpacity(item.opacity),
+			},
+		},
+	};
+}
+
 /** What one Broadcast Graphic's Graphic Text Templates resolve their placeholders from. */
 /**
  * Everything one Broadcast Graphic's items resolve their content from.
@@ -1546,6 +1579,8 @@ function childDescriptor(
 	// that default to fill in.
 	if (child.type === 'media')
 		return mediaItemDescriptor(output, child, placement, assetContent, stackedChildClipSize(group, child));
+	if (child.type === 'social-network-icon')
+		return socialNetworkIconDescriptor(output, child, placement);
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -1755,6 +1790,8 @@ function paintedItemDescriptor(
 	// A top-level Graphic Item always occupies its authored rectangle.
 	if (item.type === 'media')
 		return mediaItemDescriptor(output, item, placement, assetContent, item);
+	if (item.type === 'social-network-icon')
+		return socialNetworkIconDescriptor(output, item, placement);
 
 	if (item.type === 'shape') {
 		return {

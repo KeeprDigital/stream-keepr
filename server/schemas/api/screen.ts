@@ -13,6 +13,7 @@ import {
 	graphicSourceRelationKind,
 	isKnownGraphicBindingFieldId,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -1088,6 +1089,14 @@ const mediaGraphicItemShape = {
 	loop: z.boolean(),
 };
 
+const socialNetworkIconGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('social-network-icon'),
+	network: z.enum(SUPPORTED_SOCIAL_NETWORK_KEYS),
+	color: cssColorSchema,
+	opacity: opacitySchema,
+};
+
 /**
  * The context-gated Graphic Items.
  *
@@ -1152,6 +1161,7 @@ const gameWinsGraphicItemShape = {
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
 const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
+const socialNetworkIconGraphicItemConfigSchema = z.object(socialNetworkIconGraphicItemShape).strict();
 const clockGraphicItemConfigSchema = z.object(clockGraphicItemShape).strict();
 const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).strict();
 const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
@@ -1175,6 +1185,7 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...socialNetworkIconGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...clockGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...playerLifeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...gameWinsGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
@@ -1212,6 +1223,7 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
 	mediaGraphicItemConfigSchema,
+	socialNetworkIconGraphicItemConfigSchema,
 	graphicGroupItemConfigSchema,
 	clockGraphicItemConfigSchema,
 	playerLifeGraphicItemConfigSchema,
@@ -1309,6 +1321,11 @@ function graphicItemIds(items: readonly { id: string; type: string; children?: r
 		item.id,
 		...(item.type === 'group' ? (item.children ?? []).map(child => child.id) : []),
 	]);
+}
+
+function hasSocialNetworkIcon(items: readonly { type: string; children?: readonly { type: string }[] }[]): boolean {
+	return items.some(item => item.type === 'social-network-icon'
+		|| (item.type === 'group' && item.children?.some(child => child.type === 'social-network-icon')));
 }
 
 export const broadcastGraphicConfigSchema = z.object({
@@ -1424,6 +1441,10 @@ const featureMatchLayoutCompositionSchema = z.object({
 		.refine(
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Feature Match Layout',
+		)
+		.refine(
+			items => !hasSocialNetworkIcon(items),
+			'Social Network Icon Graphic Items are available only in Broadcast Graphics',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict().refine(

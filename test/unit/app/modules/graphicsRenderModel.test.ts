@@ -11,6 +11,7 @@ import type {
 	MediaGraphicItemConfig,
 	PlayerLifeGraphicItemConfig,
 	ShapeGraphicItemConfig,
+	SocialNetworkIconGraphicItemConfig,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
@@ -23,6 +24,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -94,6 +96,27 @@ function media(id: string, overrides: Partial<MediaGraphicItemConfig> = {}): Med
 		opacity: 1,
 		playbackRate: 1,
 		loop: true,
+		...overrides,
+	};
+}
+
+function socialIcon(
+	id: string,
+	overrides: Partial<SocialNetworkIconGraphicItemConfig> = {},
+): SocialNetworkIconGraphicItemConfig {
+	return {
+		type: 'social-network-icon',
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left',
+		x: 10,
+		y: 20,
+		width: 64,
+		height: 64,
+		network: 'twitch',
+		color: '#9146ff',
+		opacity: 0.6,
 		...overrides,
 	};
 }
@@ -463,6 +486,7 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		// alpha out of the union arithmetic below.
 		...(item.surface ? surfacePaints(item.surface, path) : []),
 		...(item.media ? mediaPaints(item.media, path) : []),
+		...(item.icon ? stylePaints(item.icon.style, `${path}.icon`) : []),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
 		// An update phase's two renderings are two painted subtrees, so both are walked.
 		// Leaving the outgoing one out would let the rendering being replaced reach the
@@ -734,6 +758,50 @@ describe('graphicsCompositionRenderModel', () => {
 		});
 
 		expect(model.graphics[0]?.items[0]?.children?.[0]?.style.transform).toBeUndefined();
+	});
+
+	describe('social network icon Graphic Items', () => {
+		it('resolves every Supported Social Network to the catalog vector identity', () => {
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', SUPPORTED_SOCIAL_NETWORKS.map(network =>
+					socialIcon(network.key, { network: network.key })))],
+				...CANVAS,
+			});
+
+			expect(model.graphics[0]?.items.map(item => item.icon?.name))
+				.toEqual(SUPPORTED_SOCIAL_NETWORKS.map(network => network.icon));
+		});
+
+		it('keeps authored colour and opacity independent in Overlay and paints the same alpha white in Key', () => {
+			const overlay = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [socialIcon('twitch', { color: '#123456', opacity: 0.35 })])],
+				...CANVAS,
+			});
+			const key = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics: [graphic('a', [socialIcon('twitch', { color: '#123456', opacity: 0.35 })])],
+				...CANVAS,
+			});
+
+			expect(overlay.graphics[0]?.items[0]?.icon?.style).toMatchObject({ color: '#123456', opacity: 0.35 });
+			expect(key.graphics[0]?.items[0]?.icon?.style).toMatchObject({ color: '#ffffff', opacity: 0.35 });
+		});
+
+		it('uses the ordinary row, column, and canvas Graphic Group placements', () => {
+			for (const arrangement of ['row', 'column', 'canvas'] as const) {
+				const model = resolveGraphicsCompositionRenderModel({
+					output: 'overlay',
+					graphics: [graphic('a', [group('cluster', [socialIcon('icon')], { arrangement })])],
+					...CANVAS,
+				});
+
+				const child = model.graphics[0]?.items[0]?.children?.[0];
+				expect(child?.kind).toBe('social-network-icon');
+				expect(child?.style.position).toBe(arrangement === 'canvas' ? 'absolute' : 'relative');
+			}
+		});
 	});
 
 	describe('graphic groups', () => {
