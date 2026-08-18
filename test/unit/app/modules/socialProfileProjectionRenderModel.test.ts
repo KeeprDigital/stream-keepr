@@ -73,4 +73,146 @@ describe('programmatic Social Profile Projection rendering', () => {
 
 		expect(model.graphics[0]!.items).toEqual([]);
 	});
+
+	it('renders the synchronized transition as correlated Presentation Group layers clipped to its boundary', () => {
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [projectedGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
+						layers: [
+							{
+								values: {
+									network: 'twitch',
+									networkLabel: 'Twitch',
+									handle: 'alpha',
+									profileUrl: 'https://www.twitch.tv/alpha',
+								},
+								opacity: 1,
+								offsetX: -50,
+								offsetY: 0,
+							},
+							{
+								values: {
+									network: 'youtube',
+									networkLabel: 'YouTube',
+									handle: 'bravo',
+									profileUrl: 'https://www.youtube.com/@bravo',
+								},
+								opacity: 1,
+								offsetX: 50,
+								offsetY: 0,
+							},
+						],
+					},
+				},
+			},
+		} as BroadcastGraphicsRenderModelInput & { socialProfilePresentations: unknown });
+		const group = model.graphics[0]!.items[0]! as typeof model.graphics[0]['items'][0] & {
+			presentationLayers?: typeof model.graphics[0]['items'];
+		};
+
+		expect(group.style).toMatchObject({ overflow: 'hidden' });
+		expect(group.presentationLayers?.map(layer => ({
+			style: layer.style,
+			text: layer.children?.[0]?.text,
+			icon: layer.children?.[1]?.icon?.name,
+		}))).toEqual([
+			{
+				style: expect.objectContaining({ opacity: 1, transform: 'translate(-50%, 0%)' }),
+				text: 'Twitch · alpha · https://www.twitch.tv/alpha',
+				icon: 'i-simple-icons-twitch',
+			},
+			{
+				style: expect.objectContaining({ opacity: 1, transform: 'translate(50%, 0%)' }),
+				text: 'YouTube · bravo · https://www.youtube.com/@bravo',
+				icon: 'i-simple-icons-youtube',
+			},
+		]);
+	});
+
+	it('uses Graphic Animation as the sole visual transition during explicit Update Graphic', () => {
+		const current = {
+			network: 'youtube' as const,
+			networkLabel: 'YouTube',
+			handle: 'bravo',
+			profileUrl: 'https://www.youtube.com/@bravo',
+		};
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [projectedGraphic()],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
+			outgoingInputValues: { 'lower-third': {} },
+			socialProfileValues: { 'lower-third': { profile: current } },
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
+						layers: [
+							{ values: { ...current, network: 'twitch', networkLabel: 'Twitch' }, opacity: 0.5, offsetX: 0, offsetY: 0 },
+							{ values: current, opacity: 0.5, offsetX: 0, offsetY: 0 },
+						],
+					},
+				},
+			},
+		});
+		const group = model.graphics[0]!.items[0]!;
+
+		expect(group.presentationLayers).toBeUndefined();
+		expect(group.children?.[0]?.text).toBe('YouTube · bravo · https://www.youtube.com/@bravo');
+	});
+
+	it.each(['enter', 'exit'] as const)('nests the synchronized Presentation Group transition inside %s motion', (phase) => {
+		const social = projectedGraphic();
+		(social.items[0] as GraphicGroupItemConfig).animation = {
+			enter: {
+				duration: 1_000,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+				slide: { direction: 'south', distanceMode: 'fixed', distance: 100 },
+			},
+			exit: {
+				duration: 1_000,
+				easing: 'linear',
+				delay: 0,
+				fade: { opacity: 0 },
+				slide: { direction: 'south', distanceMode: 'fixed', distance: 100 },
+			},
+		};
+		const outgoing = { network: 'twitch' as const, networkLabel: 'Twitch', handle: 'alpha', profileUrl: 'https://www.twitch.tv/alpha' };
+		const incoming = { network: 'youtube' as const, networkLabel: 'YouTube', handle: 'bravo', profileUrl: 'https://www.youtube.com/@bravo' };
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [social],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [{ phase, elapsed: 500 }] },
+			socialProfilePresentations: {
+				'lower-third': {
+					profile: {
+						phase: { kind: 'transition', elapsedMs: 125, durationMs: 250 },
+						layers: [
+							{ values: outgoing, opacity: 1, offsetX: -50, offsetY: 0 },
+							{ values: incoming, opacity: 1, offsetX: 50, offsetY: 0 },
+						],
+					},
+				},
+			},
+		});
+		const group = model.graphics[0]!.items[0]!;
+
+		expect(group.style).toMatchObject({ opacity: 0.5, overflow: 'hidden' });
+		expect(String(group.style.transform)).toContain('translate(0px, 50px)');
+		expect(group.presentationLayers?.map(layer => layer.style.transform)).toEqual([
+			'translate(-50%, 0%)',
+			'translate(50%, 0%)',
+		]);
+	});
 });

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
@@ -199,6 +200,8 @@ export interface GraphicsCompositionRenderModelInput {
 	 * keyed by Broadcast Graphic id and Social Profile Projection key.
 	 */
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
+	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
+	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
 	/**
 	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
 	 * Graphic id.
@@ -503,6 +506,8 @@ export interface GraphicItemRenderDescriptor {
 	winBoxes?: GraphicWinBoxRenderDescriptor[];
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
+	/** Correlated renderings of one Social Profile Presentation Group, back to front. */
+	presentationLayers?: GraphicItemRenderDescriptor[];
 	/**
 	 * The two renderings an update phase draws for this Graphic Item, overlaid inside
 	 * its own box.
@@ -1568,6 +1573,7 @@ interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
 	socialProfileValues?: SocialProfileProjectionValues;
+	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
 }
 
@@ -1715,9 +1721,44 @@ function itemDescriptor(
 	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
+	presentation?: { key: string; frame: SocialProfilePresentationProjection },
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
+
+	if (item.type === 'group' && presentation?.frame.phase.kind === 'transition') {
+		return {
+			id: item.id,
+			label: item.label,
+			kind: item.type,
+			style: {
+				...canvasPlacement(item, { x: 0, y: 0 }, motion),
+				overflow: 'hidden',
+			},
+			presentationLayers: presentation.frame.layers.map(layer => paintedItemDescriptor(
+				output,
+				graphicId,
+				item,
+				assetContent,
+				{
+					...inputs,
+					socialProfileValues: {
+						...inputs.socialProfileValues,
+						[presentation.key]: layer.values,
+					},
+				},
+				context,
+				{
+					position: 'absolute',
+					inset: '0',
+					width: '100%',
+					height: '100%',
+					opacity: layer.opacity,
+					transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+				},
+			)),
+		};
+	}
 
 	if (!context.crossing?.(item.id)) {
 		return enclosedItemDescriptor(
@@ -2310,6 +2351,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
@@ -2336,6 +2378,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const crossTransition = outgoingValues
@@ -2383,21 +2426,46 @@ export function resolveGraphicsCompositionRenderModel(
 					if (!item.visible)
 						return false;
 					const projection = projectionByGroupId.get(item.id);
-					return !projection || values.socialProfileValues?.[projection.key] !== undefined;
+					if (!projection)
+						return true;
+					const presentation = values.socialProfilePresentations?.[projection.key];
+					return presentation
+						? presentation.layers.length > 0
+						: values.socialProfileValues?.[projection.key] !== undefined;
 				})
-				.map(item => itemDescriptor(
-					input.output,
-					graphic.id,
-					item,
-					assetContent,
-					values,
-					{
-						...context(item),
-						...(pairing === undefined
-							? {}
-							: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
-					},
-				));
+				.map((item) => {
+					const projection = projectionByGroupId.get(item.id);
+					const presentationFrame = projection && !phases.includes('update')
+						? values.socialProfilePresentations?.[projection.key]
+						: undefined;
+					const presentation = projection && presentationFrame
+						? { key: projection.key, frame: presentationFrame }
+						: undefined;
+					const currentValues = presentationFrame?.layers.at(-1)?.values;
+					const itemValues = projection && currentValues
+						? {
+								...values,
+								socialProfileValues: {
+									...values.socialProfileValues,
+									[projection.key]: currentValues,
+								},
+							}
+						: values;
+					return itemDescriptor(
+						input.output,
+						graphic.id,
+						item,
+						assetContent,
+						itemValues,
+						{
+							...context(item),
+							...(pairing === undefined
+								? {}
+								: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
+						},
+						presentation,
+					);
+				});
 
 			// Two whole frames only when the Broadcast Graphic's own recipe is what moves.
 			// A per-item cross-transition pairs inside each crossing item's box instead, so

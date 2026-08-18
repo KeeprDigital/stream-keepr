@@ -39,7 +39,7 @@ import {
 	unavailableRequiredGraphicInputs,
 } from './inputs';
 import { BroadcastGraphicsCommandRejection } from './rejection';
-import { projectSocialProfileRotation } from './socialProfiles';
+import { projectSocialProfilePresentation, projectSocialProfileRotation } from './socialProfiles';
 
 /**
  * Broadcast Graphics playout reduction.
@@ -1337,6 +1337,40 @@ function requireSocialProfileProjection(
 	return { declaration, projection };
 }
 
+/** Replace the current visual target without ever appending to a transition queue. */
+function transitionToSocialProfile(
+	projection: BroadcastGraphicSocialProfileProjectionStates[string],
+	declaration: SocialProfileProjectionDeclaration,
+	network: SupportedSocialNetwork,
+	acceptedAt: number,
+	onAir: boolean,
+): BroadcastGraphicSocialProfileProjectionStates[string] {
+	const { transitionAnchor: _replaced, ...base } = projection;
+	const transitionDuration = declaration.transition === 'cut'
+		? 0
+		: declaration.transitionDurationMs;
+	const from = projectSocialProfilePresentation(projection, declaration, {
+		onAir,
+		now: acceptedAt,
+	}).layers;
+	const alreadySettled = from.length === 1
+		&& from[0]!.values.network === network
+		&& from[0]!.opacity === 1
+		&& from[0]!.offsetX === 0
+		&& from[0]!.offsetY === 0;
+	const transitions = onAir && transitionDuration > 0 && !alreadySettled;
+
+	return {
+		...base,
+		currentNetwork: network,
+		rotationAnchor: {
+			network,
+			anchoredAt: acceptedAt + (transitions ? transitionDuration : 0),
+		},
+		...(transitions ? { transitionAnchor: { startedAt: acceptedAt, from } } : {}),
+	};
+}
+
 /** Select one populated accepted profile without turning projected values into inputs. */
 function reduceSelectSocialProfile(
 	state: BroadcastGraphicsLiveState,
@@ -1344,7 +1378,7 @@ function reduceSelectSocialProfile(
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
 	const unavailableMessage = `${payload.network} is not an accepted Social Profile for this projection`;
-	const { projection } = requireSocialProfileProjection(state, payload, context, unavailableMessage);
+	const { declaration, projection } = requireSocialProfileProjection(state, payload, context, unavailableMessage);
 	if (!projection.acceptedProfiles.some(profile => profile.network === payload.network)) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
@@ -1359,10 +1393,14 @@ function reduceSelectSocialProfile(
 			[payload.graphicId]: {
 				...state.socialProfileProjections?.[payload.graphicId],
 				[payload.projectionKey]: {
-					...projection,
-					currentNetwork: payload.network,
+					...transitionToSocialProfile(
+						projection,
+						declaration,
+						payload.network,
+						context.acceptedAt,
+						state.playout[payload.graphicId]?.onAir === true,
+					),
 					manualNetwork: payload.network,
-					rotationAnchor: { network: payload.network, anchoredAt: context.acceptedAt },
 				},
 			},
 		},
@@ -1407,10 +1445,14 @@ function reduceStepSocialProfile(
 			[payload.graphicId]: {
 				...state.socialProfileProjections?.[payload.graphicId],
 				[payload.projectionKey]: {
-					...projection,
-					currentNetwork: network,
+					...transitionToSocialProfile(
+						projection,
+						declaration,
+						network,
+						context.acceptedAt,
+						state.playout[payload.graphicId]?.onAir === true,
+					),
 					manualNetwork: network,
-					rotationAnchor: { network, anchoredAt: context.acceptedAt },
 				},
 			},
 		},
@@ -1550,14 +1592,38 @@ function freezeSocialProfileRotations(
 		const declaration = declarations?.find(entry => entry.key === projectionKey);
 		if (!declaration)
 			return [projectionKey, projection];
-		const current = projectSocialProfileRotation(projection, declaration, {
+		const rotation = projectSocialProfileRotation(projection, declaration, {
 			onAir: true,
 			now: acceptedAt,
-		}).current?.network;
-		if (current === undefined || current === projection.currentNetwork)
+		});
+		const current = rotation.current?.network;
+		const automaticTransitionAnchor = !projection.transitionAnchor
+			&& rotation.phase.kind === 'transition'
+			&& rotation.outgoing
+			? {
+					startedAt: acceptedAt - rotation.phase.elapsedMs,
+					from: [{
+						values: rotation.outgoing,
+						opacity: 1,
+						offsetX: 0,
+						offsetY: 0,
+					}],
+				}
+			: undefined;
+		if (
+			(current === undefined || current === projection.currentNetwork)
+			&& automaticTransitionAnchor === undefined
+		) {
 			return [projectionKey, projection];
+		}
 		changed = true;
-		return [projectionKey, { ...projection, currentNetwork: current }];
+		return [projectionKey, {
+			...projection,
+			...(current === undefined ? {} : { currentNetwork: current }),
+			...(automaticTransitionAnchor === undefined
+				? {}
+				: { transitionAnchor: automaticTransitionAnchor }),
+		}];
 	}));
 
 	return changed

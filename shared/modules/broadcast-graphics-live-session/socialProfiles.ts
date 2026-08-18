@@ -33,11 +33,18 @@ export interface SocialProfileProjectionLiveState {
 	automatic?: boolean;
 	/** The authoritative profile and instant from which automatic progression projects. */
 	rotationAnchor?: SocialProfileRotationAnchor;
+	/** The bounded sampled visual a latest-wins transition replaces. */
+	transitionAnchor?: SocialProfileTransitionAnchor;
 }
 
 export interface SocialProfileRotationAnchor {
 	network: SupportedSocialNetwork;
 	anchoredAt: number;
+}
+
+export interface SocialProfileTransitionAnchor {
+	startedAt: number;
+	from: SocialProfilePresentationLayer[];
 }
 
 export interface SocialProfileRotationPhase {
@@ -53,8 +60,36 @@ export interface SocialProfileRotationProjection {
 	phase: SocialProfileRotationPhase;
 }
 
+/** One correlated Presentation Group rendering at a projected visual position. */
+export interface SocialProfilePresentationLayer {
+	values: SocialProfileProjectionValue;
+	opacity: number;
+	/** Percentage of the Presentation Group's own width. */
+	offsetX: number;
+	/** Percentage of the Presentation Group's own height. */
+	offsetY: number;
+}
+
+/** The complete bounded visual one renderer paints for a Social Profile Projection. */
+export interface SocialProfilePresentationProjection {
+	phase: SocialProfileRotationPhase;
+	layers: SocialProfilePresentationLayer[];
+}
+
 export type BroadcastGraphicSocialProfileProjectionStates
 	= Record<string, SocialProfileProjectionLiveState>;
+
+function socialProfileTransitionSlide(
+	transition: SocialProfileProjectionDeclaration['transition'],
+): { x: number; y: number } | undefined {
+	switch (transition) {
+		case 'slide-left': return { x: -100, y: 0 };
+		case 'slide-right': return { x: 100, y: 0 };
+		case 'slide-up': return { x: 0, y: -100 };
+		case 'slide-down': return { x: 0, y: 100 };
+		default: return undefined;
+	}
+}
 
 /**
  * Project the correlated profile and schedule phase at one synchronized instant.
@@ -71,6 +106,24 @@ export function projectSocialProfileRotation(
 ): SocialProfileRotationProjection {
 	const fallback = state.acceptedProfiles.find(profile => profile.network === state.currentNetwork)
 		?? state.acceptedProfiles[0];
+	const transitionMs = declaration.transition === 'cut'
+		? 0
+		: Math.max(0, declaration.transitionDurationMs);
+	const interruptedElapsed = state.transitionAnchor && context.now !== undefined
+		? context.now - state.transitionAnchor.startedAt
+		: Number.POSITIVE_INFINITY;
+	if (
+		Number.isFinite(context.now)
+		&& transitionMs > 0
+		&& state.transitionAnchor
+		&& interruptedElapsed >= 0
+		&& interruptedElapsed < transitionMs
+	) {
+		return {
+			...(fallback ? { current: fallback } : {}),
+			phase: { kind: 'transition', elapsedMs: interruptedElapsed, durationMs: transitionMs },
+		};
+	}
 	if (!fallback)
 		return { phase: { kind: 'static', elapsedMs: 0, durationMs: null } };
 
@@ -95,9 +148,6 @@ export function projectSocialProfileRotation(
 	}
 
 	const dwellMs = Math.max(0, declaration.dwellMs);
-	const transitionMs = declaration.transition === 'cut'
-		? 0
-		: Math.max(0, declaration.transitionDurationMs);
 	if (dwellMs === 0) {
 		return {
 			current: fallback,
@@ -136,6 +186,110 @@ export function projectSocialProfileRotation(
 			elapsedMs: withinStep - transitionMs,
 			durationMs: dwellMs,
 		},
+	};
+}
+
+/**
+ * Project one synchronized Social Profile Presentation Group frame.
+ *
+ * Values and motion travel together so independently styled ordinary children
+ * cannot observe different profiles at one instant. The renderer receives sampled
+ * positions rather than a CSS transition, keeping fill, key, preview, and redundant
+ * outputs identical at the same synchronized time.
+ */
+export function projectSocialProfilePresentation(
+	state: SocialProfileProjectionLiveState,
+	declaration: Pick<SocialProfileProjectionDeclaration, 'dwellMs' | 'transition' | 'transitionDurationMs'>,
+	context: { onAir: boolean; now?: number },
+): SocialProfilePresentationProjection {
+	const rotation = projectSocialProfileRotation(state, declaration, context);
+	const transitionAnchor = state.transitionAnchor;
+	if (
+		rotation.phase.kind === 'transition'
+		&& transitionAnchor
+		&& rotation.phase.durationMs !== null
+	) {
+		const durationMs = rotation.phase.durationMs;
+		const progress = Math.max(0, Math.min(1, rotation.phase.elapsedMs / durationMs));
+		const slide = socialProfileTransitionSlide(declaration.transition);
+		const targetNetwork = rotation.current?.network;
+		const hasTarget = targetNetwork !== undefined
+			&& transitionAnchor.from.some(layer => layer.values.network === targetNetwork);
+		const from = hasTarget || !rotation.current
+			? transitionAnchor.from
+			: [
+					...transitionAnchor.from,
+					{
+						values: rotation.current,
+						opacity: declaration.transition === 'crossfade' ? 0 : 1,
+						offsetX: slide?.x === undefined ? 0 : -slide.x,
+						offsetY: slide?.y === undefined ? 0 : -slide.y,
+					},
+				];
+		const mix = (start: number, end: number) => start + ((end - start) * progress);
+
+		return {
+			phase: rotation.phase,
+			layers: from.map((layer) => {
+				const target = targetNetwork !== undefined && layer.values.network === targetNetwork;
+				if (target) {
+					return {
+						values: rotation.current!,
+						opacity: mix(layer.opacity, 1),
+						offsetX: mix(layer.offsetX, 0),
+						offsetY: mix(layer.offsetY, 0),
+					};
+				}
+				if (!slide) {
+					return {
+						...layer,
+						opacity: mix(layer.opacity, 0),
+					};
+				}
+				return {
+					...layer,
+					offsetX: mix(layer.offsetX, slide.x),
+					offsetY: mix(layer.offsetY, slide.y),
+				};
+			}),
+		};
+	}
+	if (!rotation.current)
+		return { phase: rotation.phase, layers: [] };
+	if (rotation.phase.kind !== 'transition' || !rotation.outgoing || rotation.phase.durationMs === null) {
+		return {
+			phase: rotation.phase,
+			layers: [{ values: rotation.current, opacity: 1, offsetX: 0, offsetY: 0 }],
+		};
+	}
+
+	const progress = Math.max(0, Math.min(1, rotation.phase.elapsedMs / rotation.phase.durationMs));
+	const slide = socialProfileTransitionSlide(declaration.transition);
+	if (slide) {
+		return {
+			phase: rotation.phase,
+			layers: [
+				{
+					values: rotation.outgoing,
+					opacity: 1,
+					offsetX: slide.x * progress,
+					offsetY: slide.y * progress,
+				},
+				{
+					values: rotation.current,
+					opacity: 1,
+					offsetX: slide.x === 0 ? 0 : -slide.x * (1 - progress),
+					offsetY: slide.y === 0 ? 0 : -slide.y * (1 - progress),
+				},
+			],
+		};
+	}
+	return {
+		phase: rotation.phase,
+		layers: [
+			{ values: rotation.outgoing, opacity: 1 - progress, offsetX: 0, offsetY: 0 },
+			{ values: rotation.current, opacity: progress, offsetX: 0, offsetY: 0 },
+		],
 	};
 }
 

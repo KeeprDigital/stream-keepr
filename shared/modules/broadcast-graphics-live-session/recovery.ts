@@ -68,6 +68,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value);
+}
+
 function fault(reason: BroadcastGraphicsRecoveryFaultReason, detail: string): BroadcastGraphicsRecoveryFault {
 	return { reason, detail };
 }
@@ -234,6 +238,44 @@ function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsR
 					|| !Number.isFinite(projection.rotationAnchor.anchoredAt)
 				) {
 					return fault('incompatible', `the Social Profile Rotation anchor for ${identity} cannot be interpreted`);
+				}
+			}
+
+			if ('transitionAnchor' in projection) {
+				if (!isRecord(projection.transitionAnchor))
+					return fault('corrupt', `the Social Profile Transition anchor for ${identity} is not a record`);
+				const anchor = projection.transitionAnchor;
+				if (!isFiniteNumber(anchor.startedAt) || !Array.isArray(anchor.from))
+					return fault('incompatible', `the Social Profile Transition anchor for ${identity} cannot be interpreted`);
+				if (anchor.from.length > SUPPORTED_SOCIAL_NETWORK_KEYS.length)
+					return fault('incompatible', `the interrupted Social Profile visual for ${identity} exceeds the supported catalog`);
+
+				const transitionNetworks = new Set<SupportedSocialNetwork>();
+				for (const layer of anchor.from) {
+					if (!isRecord(layer) || !isRecord(layer.values))
+						return fault('corrupt', `an interrupted Social Profile layer for ${identity} is not a record`);
+					const values = layer.values;
+					if (typeof values.network !== 'string' || !supportedNetworks.has(values.network))
+						return fault('incompatible', `an interrupted Social Profile network for ${identity} is unsupported`);
+					const network = values.network as SupportedSocialNetwork;
+					if (
+						typeof values.handle !== 'string'
+						|| values.handle.length === 0
+						|| values.handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
+						|| values.networkLabel !== SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].label
+						|| values.profileUrl !== canonicalSocialProfileUrl(network, values.handle)
+						|| transitionNetworks.has(network)
+						|| !isFiniteNumber(layer.opacity)
+						|| layer.opacity < 0
+						|| layer.opacity > 1
+						|| !isFiniteNumber(layer.offsetX)
+						|| Math.abs(layer.offsetX) > 100
+						|| !isFiniteNumber(layer.offsetY)
+						|| Math.abs(layer.offsetY) > 100
+					) {
+						return fault('incompatible', `an interrupted Social Profile layer for ${identity} is not correlated`);
+					}
+					transitionNetworks.add(network);
 				}
 			}
 		}

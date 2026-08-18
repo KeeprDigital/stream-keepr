@@ -151,7 +151,7 @@ describe('social profile rotation projection', () => {
 		expect(stepped.socialProfileProjections?.lower?.profile).toMatchObject({
 			currentNetwork: expectedNetwork,
 			manualNetwork: expectedNetwork,
-			rotationAnchor: { network: expectedNetwork, anchoredAt: 1_008_100 },
+			rotationAnchor: { network: expectedNetwork, anchoredAt: 1_008_350 },
 		});
 	});
 

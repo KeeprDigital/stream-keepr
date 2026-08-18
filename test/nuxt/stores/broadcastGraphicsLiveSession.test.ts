@@ -164,6 +164,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		store.$reset();
 		vi.clearAllMocks();
 		mockClockSynced.value = true;
+		mockServerTimeOffset.value = 0;
 		mockRepository.getSession.mockResolvedValue(session());
 	});
 
@@ -288,6 +289,34 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			socialGraphic('slate').socialProfileProjections![0]!,
 			1_008_100,
 		)?.currentNetwork).toBe('twitch');
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
+	});
+
+	it('advances a one-profile transition only until its transparent boundary settles', async () => {
+		const startedAt = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: startedAt, cut: false } },
+				inputs: {},
+				socialProfileProjections: {
+					slate: { profile: {
+						acceptedProfiles: [{
+							network: 'twitch' as const,
+							networkLabel: 'Twitch',
+							handle: 'AvaLive',
+							profileUrl: 'https://www.twitch.tv/AvaLive',
+						}],
+						currentNetwork: 'twitch' as const,
+						rotationAnchor: { network: 'twitch' as const, anchoredAt: startedAt + 250 },
+						transitionAnchor: { startedAt, from: [] },
+					} },
+				},
+			},
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+		mockServerTimeOffset.value = 250;
 		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
 	});
 

@@ -95,13 +95,17 @@ export {
 } from './rejection';
 export type {
 	BroadcastGraphicSocialProfileProjectionStates,
+	SocialProfilePresentationLayer,
+	SocialProfilePresentationProjection,
 	SocialProfileProjectionLiveState,
 	SocialProfileProjectionTalent,
 	SocialProfileRotationAnchor,
 	SocialProfileRotationPhase,
 	SocialProfileRotationProjection,
+	SocialProfileTransitionAnchor,
 } from './socialProfiles';
 export {
+	projectSocialProfilePresentation,
 	projectSocialProfileRotation,
 	resolveSocialProfileProjectionAcceptances,
 	socialProfileProjectionValues,

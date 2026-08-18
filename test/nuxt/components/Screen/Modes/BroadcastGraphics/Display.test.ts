@@ -15,6 +15,7 @@ import {
 	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
+	projectSocialProfilePresentation,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
@@ -191,6 +192,21 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 				return current ? [[projectionKey, current]] : [];
 			}));
 			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+		})),
+	socialProfilePresentations: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
+		Object.fromEntries(graphics.flatMap((graphic) => {
+			const projections = mockState().socialProfileProjections?.[graphic.id] ?? {};
+			const declarations = new Map((graphic.socialProfileProjections ?? []).map(entry => [entry.key, entry]));
+			const presentations = Object.fromEntries(Object.entries(projections).flatMap(([key, projection]) => {
+				const declaration = declarations.get(key);
+				return declaration
+					? [[key, projectSocialProfilePresentation(projection, declaration, {
+							onAir: mockState().playout[graphic.id]?.onAir === true,
+							now: now ?? mockServerNow.value,
+						})]]
+					: [];
+			}));
+			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
 		})),
 	playoutState: (
 		_screenId: number,
@@ -494,6 +510,44 @@ describe('broadcastGraphicsDisplay', () => {
 		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
 		await nextTick();
 		expect(wrapper.find('[data-graphic-item-kind="group"]').exists()).toBe(false);
+	});
+
+	it('renders synchronized outgoing and incoming Presentation Groups at the authoritative transition instant', async () => {
+		const graphic = projectedSocialGraphic();
+		graphic.socialProfileProjections![0]!.transition = 'slide-left';
+		mockScreen.value = screenWithStack([graphic]);
+		mockOnAirGraphicIds.value = [graphic.id];
+		mockServerNow.value = 1_008_125;
+		mockAcceptedInputs.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				[graphic.id]: { profile: {
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch',
+					automatic: true,
+					rotationAnchor: { network: 'twitch', anchoredAt: 1_000_000 },
+				} },
+			},
+		};
+
+		const wrapper = await mountComponent();
+		await nextTick();
+
+		const presentation = wrapper.get('[data-social-profile-presentation="profile-group"]');
+		const layers = presentation.findAll(':scope > [data-graphic-item-kind="group"]');
+		expect(presentation.attributes('style')).toContain('overflow: hidden');
+		expect(layers.map(layer => layer.attributes('style'))).toEqual([
+			expect.stringContaining('translate(-50%, 0%)'),
+			expect.stringContaining('translate(50%, 0%)'),
+		]);
+		expect(layers.map(layer => layer.get('p').text())).toEqual(['Twitch — @AvaLive', 'X — @AvaCasts']);
+		expect(layers.map(layer => layer.get('[data-social-network-icon]').classes())).toEqual([
+			expect.arrayContaining(['i-simple-icons:twitch']),
+			expect.arrayContaining(['i-simple-icons:x']),
+		]);
 	});
 
 	it('composes concurrent on-air Broadcast Graphics in authored stack order, not take order', async () => {

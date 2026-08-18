@@ -1,3 +1,4 @@
+import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
@@ -36,6 +37,8 @@ export interface BroadcastGraphicsRenderModelInput {
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
 	/** Current correlated values for every Social Profile Projection on program. */
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
+	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
+	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
 	/**
 	 * The rendering each updating Broadcast Graphic is transitioning away from.
 	 *
@@ -96,6 +99,7 @@ export function resolveBroadcastGraphicsRenderModel(
 		animation: input.animation,
 		inputValues: input.inputValues,
 		socialProfileValues: input.socialProfileValues,
+		socialProfilePresentations: input.socialProfilePresentations,
 		outgoingInputValues: input.outgoingInputValues,
 		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,
