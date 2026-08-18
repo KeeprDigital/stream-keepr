@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db, schema } from 'hub:db';
@@ -81,4 +82,35 @@ export function serverAuth() {
 	}
 
 	return auth;
+}
+
+/**
+ * The session this request carries, or `null` — for the routes that answer to
+ * more than one credential (#397).
+ *
+ * `server/middleware/api-session.ts` is the only caller that *requires* a
+ * session, and the routes ADR-0010 exempts from it are exempt precisely because
+ * something else may vouch for them: a Screen Output presents a Screen Output
+ * Asset Capability and has no session at all. Those routes need to ask rather
+ * than demand, and they need the answer to be a value instead of a refusal.
+ *
+ * **A missing `NUXT_BETTER_AUTH_SECRET` answers `null` rather than raising**,
+ * which is the one judgement in here. Everywhere else that 503 is the right
+ * answer — it names the setting to an operator who can go and set it. Here it
+ * would take the credential-free surface down with the configuration fault: an
+ * output machine showing program has no session to lose, and refusing it because
+ * somebody else's* sign-in is unconfigured would be the boundary reaching past
+ * what it protects. On such a checkout an operator cannot sign in to anything
+ * anyway, every other route says so with the name, and `pnpm dev` warned at boot;
+ * so nothing is hidden by this that is not already being said loudly.
+ */
+export async function optionalUserSession(event: H3Event) {
+	try {
+		return await serverAuth().api.getSession({ headers: event.headers });
+	}
+	catch (failure) {
+		if (failure instanceof ServiceConfigurationError)
+			return null;
+		throw failure;
+	}
 }

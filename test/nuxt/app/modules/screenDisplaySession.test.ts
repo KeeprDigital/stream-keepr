@@ -148,9 +148,26 @@ describe('useScreenDisplaySession', () => {
 		const harness = createHarness({ eventId: null });
 		await flushPromises();
 
-		expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledWith(42, 'main');
+		// The third argument is the Screen Output Asset Capability from the URL
+		// fragment, which the lookup itself requires since #397. Null here because this
+		// harness's route carries no fragment — the shape an operator's `embed=preview`
+		// surface has, and one the route admits on their session instead.
+		expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledWith(42, 'main', null);
 		expect(harness.session.error.value).toBeNull();
 		expect(harness.session.loading.value).toBe(false);
+	});
+
+	it('passes the capability from the URL fragment to the lookup, as a Screen Output', async () => {
+		// The output's only credential for the lookup. Without it the route answers
+		// 404, and an output that cannot resolve its own Screen renders nothing at all
+		// — so this is the argument that decides whether program comes up.
+		const harness = createHarness({
+			route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
+		});
+		await flushPromises();
+
+		expect(harness.screenStore.loadScreenBySlug)
+			.toHaveBeenCalledWith(42, 'main', 'a-screen-output-capability-token');
 	});
 
 	it('reports a missing event when neither the store nor route has an event id', async () => {

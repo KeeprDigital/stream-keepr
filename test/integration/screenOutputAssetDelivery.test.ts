@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphicsAssetReferences';
-import { $fetch, fetch } from './client';
+import { $fetch, anonymousFetch, fetch } from './client';
 import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
@@ -163,6 +163,52 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(range.status).toBe(206);
 		expect(range.headers.get('content-range')).toBe(`bytes 8-15/${pixelPng.byteLength}`);
 		expect(new Uint8Array(await range.arrayBuffer())).toEqual(pixelPng.slice(8, 16));
+	});
+
+	/**
+	 * The bootstrap, on the same credential and nothing else (#397).
+	 *
+	 * Every other row here resolves *content* for an output that already knows which
+	 * Screen it is. This is the step before that: since #397 the lookup by slug is on
+	 * this surface too, and an unattended output reaches it with its capability alone
+	 * — no session, no author cookie. It is the request that decides whether program
+	 * comes up at all, so it is checked with exactly what a real output holds.
+	 *
+	 * `anonymousFetch`, deliberately: the suite's ordinary client signs in, and a
+	 * session would admit this request through the other arm and prove nothing about
+	 * the bearer.
+	 */
+	it('answers the Screen lookup by slug to the capability alone, with no session', async () => {
+		const response = await anonymousFetch(
+			`/api/screen-output/events/${eventId}/screens/slug/unattended-overlay`,
+			{ headers: authorizedHeaders() },
+		);
+
+		expect(response.status).toBe(200);
+		const screen = await response.json() as ScreenResponse & { assetCapabilityDigest?: string };
+		expect(screen.id).toBe(screenId);
+		expect(screen.slug).toBe('unattended-overlay');
+		// The stored half of the credential never travels, which is what makes the
+		// comparison the route does safe to do against a row it also serialises.
+		expect(screen).not.toHaveProperty('assetCapabilityDigest');
+	});
+
+	it('refuses that lookup for a Screen the capability is not for, as a plain 404', async () => {
+		// A second Screen in the same Event: the capability is real, the slug is real,
+		// and the pairing is not. One 404 for that and for a slug that does not exist,
+		// so a bearer cannot walk an Event's Screens with the capability it has.
+		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Not This One', slug: 'not-this-one', currentMode: 'card' },
+		});
+
+		const response = await anonymousFetch(
+			`/api/screen-output/events/${eventId}/screens/slug/not-this-one`,
+			{ headers: authorizedHeaders() },
+		);
+
+		expect(response.status).toBe(404);
+		await $fetch(`/api/events/${eventId}/screens/${other.id}`, { method: 'DELETE' });
 	});
 
 	it('range-delivers the exact revision when native media sends its path-scoped capability cookie', async () => {

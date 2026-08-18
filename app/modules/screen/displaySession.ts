@@ -4,7 +4,12 @@ import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenPresenceData } from '~/types/screen';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
-import { parseScreenEmbed, parseScreenOutput, screenOutputBackground } from '~~/shared/utils/screenOutput';
+import {
+	parseScreenEmbed,
+	parseScreenOutput,
+	screenOutputAssetCapabilityFromHash,
+	screenOutputBackground,
+} from '~~/shared/utils/screenOutput';
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
@@ -47,12 +52,6 @@ function firstRouteParam(value: string | string[]): string {
 
 function routeEventId(route: RouteLocationNormalizedLoaded): number {
 	return Number(firstRouteParam(route.params.eventId as string | string[]));
-}
-
-function screenOutputAssetCapability(hash: string): string | null {
-	const value = new URLSearchParams(hash.replace(/^#/, ''))
-		.get('asset-capability');
-	return value && /^[\w-]{20,200}$/.test(value) ? value : null;
 }
 
 export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {}) {
@@ -133,7 +132,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
-	const assetCapability = computed(() => screenOutputAssetCapability(route.hash ?? ''));
+	const assetCapability = computed(() => screenOutputAssetCapabilityFromHash(route.hash ?? ''));
 
 	const isControlScreen = computed(() => {
 		const mode = screenStore.activeScreen?.currentMode;
@@ -275,7 +274,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		}
 
 		try {
-			const loadedScreen = await screenStore.loadScreenBySlug(evtId, slug);
+			// The capability is this output's credential for the lookup itself since
+			// #397, not only for the media it later resolves. An `embed=preview`
+			// surface has none and is admitted by its operator's session instead.
+			const loadedScreen = await screenStore.loadScreenBySlug(evtId, slug, assetCapability.value);
 			if (flight.stale)
 				return;
 			if (!loadedScreen || screenStore.activeScreen?.id !== loadedScreen.id)
@@ -328,7 +330,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			void loadActiveScreen(slug);
 			return;
 		}
-		void screenStore.refreshActiveScreen(evtId, slug);
+		void screenStore.refreshActiveScreen(evtId, slug, assetCapability.value);
 	}
 
 	useReconnectResync(resyncActiveScreen, realtime);

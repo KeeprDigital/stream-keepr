@@ -21,9 +21,32 @@ export function useScreenRepository() {
 		return screen;
 	};
 
-	const getBySlug = async (eventId: number, slug: string): Promise<Screen | null> => {
+	/**
+	 * The Screen behind a slug, as a Screen Output or as the operator embedding one.
+	 *
+	 * On the capability surface since #397, so the path is
+	 * `/api/screen-output/**` and the request has to carry a credential: the
+	 * capability an output holds in its URL fragment, or — for the `embed=preview`
+	 * surfaces, which deliberately hold none — the operator's own session cookie,
+	 * which rides along without being asked for.
+	 *
+	 * `assetCapability` is passed in rather than read from the route here, because a
+	 * repository has no business knowing which page it is on; `displaySession.ts`
+	 * has already parsed the fragment for its own use.
+	 *
+	 * Still null on refusal. The route answers one 404 for a missing Screen, an
+	 * unknown slug and a capability for some other Screen alike, so there is nothing
+	 * for a caller to tell apart — which is the posture the capability surface keeps.
+	 */
+	const getBySlug = async (
+		eventId: number,
+		slug: string,
+		assetCapability?: string | null,
+	): Promise<Screen | null> => {
 		try {
-			return await $fetch<Screen>(`/api/events/${eventId}/screens/slug/${slug}`);
+			return await $fetch<Screen>(`/api/screen-output/events/${eventId}/screens/slug/${slug}`, {
+				headers: assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined,
+			});
 		}
 		catch {
 			return null;

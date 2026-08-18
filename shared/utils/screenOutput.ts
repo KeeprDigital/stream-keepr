@@ -119,6 +119,32 @@ export interface ScreenOutputPathOptions {
  * registers it; it was a URL option only for as long as it took someone to open an
  * output the editor had not built the URL for (#232).
  */
+/**
+ * The shape a capability has to be to be one, matching the server's own
+ * `bearerScreenOutputCapability`.
+ *
+ * A value that cannot be a capability is treated as no capability rather than
+ * presented and refused, so a mistyped fragment renders an output without media
+ * instead of one that fails its bootstrap.
+ */
+const ASSET_CAPABILITY = /^[\w-]{20,200}$/;
+
+/**
+ * Read the Screen Output Asset Capability back out of a URL fragment — the
+ * inverse of the fragment `screenOutputPath` writes.
+ *
+ * Here rather than in the one page that used to parse it, because #397 gave the
+ * capability two more readers: the realtime plugin presents it to
+ * `/api/realtime/token` for its narrowed grant, and the Screen lookup by slug
+ * presents it as the credential that route now requires. Three parsers for one
+ * encoding is how a fragment written in one place stops being readable in
+ * another; this file already owns writing it, so it owns reading it.
+ */
+export function screenOutputAssetCapabilityFromHash(hash: string): string | null {
+	const value = new URLSearchParams(hash.replace(/^#/, '')).get('asset-capability');
+	return value && ASSET_CAPABILITY.test(value) ? value : null;
+}
+
 export function screenOutputPath(options: ScreenOutputPathOptions): string {
 	const query = new URLSearchParams({ output: options.output ?? 'overlay' });
 	if (options.embed)

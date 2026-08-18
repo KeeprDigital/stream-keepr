@@ -56,8 +56,11 @@ describe('screens API', () => {
 		expect(found!.name).toBe('Main Overlay');
 	});
 
+	// On the capability surface since #397, and admitted here by the suite's own
+	// session — the arm the operator's `embed=preview` surfaces use. The bearer arm,
+	// and the refusals, are `apiBoundary.test.ts`' business.
 	it('gets a screen by slug', async () => {
-		const screen = await $fetch(`/api/events/${eventId}/screens/slug/${testSlug}`);
+		const screen = await $fetch(`/api/screen-output/events/${eventId}/screens/slug/${testSlug}`);
 
 		expect(screen.id).toBe(screenId);
 		expect(screen.slug).toBe(testSlug);
@@ -98,7 +101,7 @@ describe('screens API', () => {
 		expect(result).toEqual({ success: true });
 
 		// Verify it's gone via slug
-		const res = await $fetchRaw(`/api/events/${eventId}/screens/slug/integration-delete-me`);
+		const res = await $fetchRaw(`/api/screen-output/events/${eventId}/screens/slug/integration-delete-me`);
 		expect(res.status).toBe(404);
 	});
 });

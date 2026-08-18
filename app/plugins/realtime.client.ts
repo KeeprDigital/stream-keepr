@@ -9,6 +9,7 @@ import type {
 } from '~/types/realtime';
 import Ably from 'ably';
 import { realtimeChannelEventId } from '~~/shared/utils/realtimeChannels';
+import { screenOutputAssetCapabilityFromHash } from '~~/shared/utils/screenOutput';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 type Unsubscribe = () => void;
@@ -16,7 +17,23 @@ type Unsubscribe = () => void;
 export default defineNuxtPlugin({
 	name: 'realtime',
 	setup() {
-		const clientId = `client-${randomUuid()}`;
+		/**
+		 * No `clientId` of our own any more (#397).
+		 *
+		 * It used to be `client-<uuid>` here, permitted by a token granting
+		 * `clientId: '*'` — a wildcard that let the holder claim any identity on the
+		 * channels it was granted. ADR-0010 pins the identity in the token instead: a
+		 * signed-in operator connects as their userId, a Screen Output as
+		 * `screen-output:<screenId>`. Ably refuses a connection whose declared
+		 * `clientId` conflicts with its token's, so declaring one here would break
+		 * every connection rather than merely duplicate the value.
+		 *
+		 * Nothing depended on the old one. It was written at construction and read
+		 * nowhere else, and no presence consumer reads `member.clientId` — they read
+		 * `member.data` (`useScreenOutputVideoTargets.ts`). Two outputs of one Screen
+		 * still appear as two presence members, because presence is per connection
+		 * rather than per identity.
+		 */
 
 		// The token is scoped to a single event's channels (see
 		// server/api/realtime/token.get.ts), so the auth flow needs to know
@@ -43,7 +60,6 @@ export default defineNuxtPlugin({
 		let pendingAuthorize: { eventId: number; promise: Promise<boolean> } | null = null;
 
 		const ably = new Ably.Realtime({
-			clientId,
 			authCallback: async (_tokenParams, callback) => {
 				try {
 					if (activeEventId == null) {
@@ -52,7 +68,17 @@ export default defineNuxtPlugin({
 						});
 					}
 					const eventId = activeEventId ?? await eventIdReady!;
-					const tokenRequest = await $fetch('/api/realtime/token', { query: { eventId } });
+					// Whichever credential this document has. A Screen Output holds its
+					// capability in the URL fragment and has no session; an operator's
+					// page has the session cookie and no fragment. The token route reads
+					// both and issues the grant that belongs to the one presented
+					// (#397) — read fresh per attempt, because a token is re-minted on
+					// reconnect and on every Event switch.
+					const assetCapability = screenOutputAssetCapabilityFromHash(window.location.hash);
+					const tokenRequest = await $fetch('/api/realtime/token', {
+						query: { eventId },
+						headers: assetCapability ? { authorization: `Bearer ${assetCapability}` } : undefined,
+					});
 					callback(null, tokenRequest);
 				}
 				catch (error) {

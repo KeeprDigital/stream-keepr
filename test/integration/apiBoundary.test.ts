@@ -58,8 +58,11 @@ describe('the API boundary', () => {
 		// missing Event if it ran first. It must not: the difference between 404
 		// and 401 is an Event-existence oracle for anybody who asks.
 		['GET', '/api/events/999999999/players'],
-		// The Screen lookup by slug, which ADR-0010 moves off the public surface.
-		// #397 gives it the capability posture; until then it is private.
+		// The Screen lookup by slug's **old** path. #397 moved the route to
+		// `/api/screen-output/**`, and nothing was left behind at this one — so this
+		// row is now about the boundary's default rather than about that route: a path
+		// with no handler is private, which is what stops a moved route from being
+		// reachable at the address it moved away from.
 		['GET', '/api/events/1/screens/slug/anything'],
 		// A path no handler answers. Private by default reaches further than the
 		// routes that exist, which is the posture rather than a side effect.
@@ -143,6 +146,34 @@ describe('the surfaces the boundary exempts', () => {
 
 		expect(status).toBe(401);
 		expect(message).not.toBe(REFUSAL);
+	});
+
+	/**
+	 * #397's half: the two allowlisted routes that used to answer anybody now refuse
+	 * on their own terms, because being exempt from the *session* requirement is not
+	 * being public.
+	 *
+	 * Both are checked anonymously and through the boundary's own suite rather than
+	 * their features', because what is being established is the same property the rows
+	 * above establish: a request carrying nothing gets nothing.
+	 */
+	it('refuses the Screen lookup by slug to a caller with neither credential', async () => {
+		// One 404 for every way of not being allowed to ask, so it cannot be used to
+		// find out which Screens exist. `screens.test.ts` covers the session arm and
+		// the unit suite covers the bearer arm.
+		const { status, message } = await anonymous('/api/screen-output/events/1/screens/slug/anything');
+
+		expect(status).toBe(404);
+		expect(message).toBe('Screen not found');
+	});
+
+	it('issues no realtime token to a caller with neither credential', async () => {
+		// ADR-0010's "no anonymous issuance". Until #397 this exact request was
+		// answered with a grant over every channel of the Event named.
+		const { status, message } = await anonymous('/api/realtime/token?eventId=1');
+
+		expect(status).toBe(401);
+		expect(message).toBe('A session or a Screen Output Asset Capability is required');
 	});
 
 	it('keeps the capability surface refusing 404, not 401', async () => {

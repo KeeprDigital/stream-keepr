@@ -182,6 +182,11 @@ describe('the public surface, counted against the routes on disk', () => {
 			// The Screen Output Asset Capability surface: authorised by the bearer
 			// token the output page holds in its URL hash, refusing 404 rather than
 			// 401/403 so it cannot be used to enumerate.
+			//
+			// The Screen lookup by slug joined it on #397 — the bootstrap an output
+			// needs before it has anything to resolve, admitted by the same bearer
+			// (or, for the operator's `embed=preview` surfaces, by their session).
+			'server/api/screen-output/events/[id]/screens/slug/[slug].get.ts',
 			'server/api/screen-output/screens/[screenId]/asset-capability-session.post.ts',
 			'server/api/screen-output/screens/[screenId]/assets/[assetId]/revisions/[revisionId]/content.get.ts',
 			// A clock reading for output drift correction, with no Event or Screen
@@ -197,13 +202,23 @@ describe('the public surface, counted against the routes on disk', () => {
 		expect(publicRouteFiles.filter(file => file.startsWith('server/api/admin/'))).toEqual(adminRouteFiles);
 	});
 
-	it('keeps the Screen lookup by slug private, which is where it now sits', () => {
-		// ADR-0010 has this route leave the public surface: #397 folds it into the
-		// capability surface, requiring the bearer the output page already holds.
-		// Until then it is private, which is the fail-closed direction — the
-		// output page loses a lookup, rather than the boundary keeping a hole.
+	it('has the Screen lookup by slug on the capability surface, where #397 put it', () => {
+		// #396 left this route private, which was the fail-closed direction and cost
+		// the output page its lookup. #397 moved it under `/api/screen-output/`
+		// rather than exempting its old path by pattern, so its membership of the
+		// exempt surface is structural — the prefix that means "carries its own
+		// credential" — and the route itself requires the capability the output holds
+		// in its URL fragment, or the session an operator's preview embed has instead.
+		expect(apiPathRequiresSession('/api/screen-output/events/1/screens/slug/main')).toBe(false);
+		expect(publicRouteFiles).toContain('server/api/screen-output/events/[id]/screens/slug/[slug].get.ts');
+
+		// And the old path is gone rather than still answering. A route left behind at
+		// a private path would be a lookup nothing could reach, which is the shape
+		// that reads as a broken output rather than as a moved route.
 		expect(apiPathRequiresSession('/api/events/1/screens/slug/main')).toBe(true);
-		expect(publicRouteFiles).not.toContain('server/api/events/[id]/screens/slug/[slug].get.ts');
+		expect(routeFiles.map(file => relative(REPOSITORY_ROOT, file)))
+			.not
+			.toContain('server/api/events/[id]/screens/slug/[slug].get.ts');
 	});
 
 	it('names every exemption in one of the two lists, so the census above is total', () => {
