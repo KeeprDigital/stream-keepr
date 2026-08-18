@@ -37,13 +37,17 @@ describe('normalizeSocialProfileInput', () => {
 
 	it.each([
 		['twitch', 'https://www.twitch.tv/Caster', 'Caster'],
+		['twitch', 'https://www.twitch.tv/@Caster', 'Caster'],
 		['twitch', 'twitch.tv/Caster/', 'Caster'],
 		['youtube', 'https://youtube.com/@Caster', 'Caster'],
 		['x', 'https://twitter.com/Caster', 'Caster'],
+		['x', 'https://x.com/@Caster', 'Caster'],
 		['x', 'x.com/Caster', 'Caster'],
 		['instagram', 'https://instagram.com/Caster/', 'Caster'],
+		['instagram', 'https://instagram.com/@Caster/', 'Caster'],
 		['tiktok', 'https://www.tiktok.com/@Caster', 'Caster'],
 		['bluesky', 'https://bsky.app/profile/Caster.bsky.social', 'Caster.bsky.social'],
+		['bluesky', 'https://bsky.app/profile/@Caster.bsky.social', 'Caster.bsky.social'],
 	] as const)('extracts a %s handle from %s', (network, input, expected) => {
 		expect(normalizeSocialProfileInput(network, input)).toBe(expected);
 	});

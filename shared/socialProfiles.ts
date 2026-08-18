@@ -142,6 +142,14 @@ function decodedPathSegments(url: URL, network: SupportedSocialNetwork) {
 	}
 }
 
+function normalizeHandle(network: SupportedSocialNetwork, handle: string | undefined) {
+	const normalized = handle?.startsWith('@') ? handle.slice(1) : handle;
+	if (!normalized || /\s/.test(normalized))
+		throw inputError(network);
+
+	return normalized;
+}
+
 function handleFromProfileUrl(network: SupportedSocialNetwork, value: string) {
 	let url: URL;
 	try {
@@ -177,10 +185,7 @@ function handleFromProfileUrl(network: SupportedSocialNetwork, value: string) {
 			handle = segments.length === 1 ? segments[0] : undefined;
 	}
 
-	if (!handle || /\s/.test(handle))
-		throw inputError(network);
-
-	return handle;
+	return normalizeHandle(network, handle);
 }
 
 /**
@@ -198,11 +203,7 @@ export function normalizeSocialProfileInput(
 	if (looksLikeUrl(trimmed))
 		return handleFromProfileUrl(network, trimmed);
 
-	const handle = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
-	if (!handle || /\s/.test(handle))
-		throw inputError(network);
-
-	return handle;
+	return normalizeHandle(network, trimmed);
 }
 
 export function canonicalSocialProfileUrl(network: SupportedSocialNetwork, handle: string) {

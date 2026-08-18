@@ -1,6 +1,9 @@
+import type { InboundMessage } from 'ably';
+import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch } from './client';
-import { $fetchRaw } from './helpers';
+import { $fetchRaw, INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 
 describe('talents API', () => {
 	let eventId: number;
@@ -67,6 +70,84 @@ describe('talents API', () => {
 			id: talentId,
 			socialProfiles: { twitch: 'JohnLive', youtube: 'JohnCasts' },
 		});
+	});
+
+	it.skipIf(!integrationRealtimeConfigured)('publishes normalized complete Social Profile maps from the Talent routes', async () => {
+		const realtime = new Ably.Realtime(INTEGRATION_ABLY_API_KEY);
+		const channel = realtime.channels.get(eventRealtimeChannel(eventId));
+		const messages: InboundMessage[] = [];
+		let resolveMessages!: () => void;
+		const messagesReceived = new Promise<void>((resolve) => {
+			resolveMessages = resolve;
+		});
+		const listener = (message: InboundMessage) => {
+			messages.push(message);
+			if (messages.length === 2)
+				resolveMessages();
+		};
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+
+		try {
+			await channel.subscribe(['talent:created', 'talent:updated'], listener);
+			const created = await $fetch(`/api/events/${eventId}/talents`, {
+				method: 'POST',
+				body: {
+					name: 'Realtime Route Caster',
+					socialProfiles: {
+						twitch: 'https://twitch.tv/@RouteCaster',
+						youtube: 'https://youtube.com/@RouteCasts',
+					},
+				},
+			});
+
+			await $fetch(`/api/events/${eventId}/talents/${created.id}`, {
+				method: 'PATCH',
+				body: {
+					socialProfiles: {
+						x: 'https://x.com/@RouteCaster',
+						bluesky: 'https://bsky.app/profile/@RouteCaster.bsky.social',
+					},
+				},
+			});
+
+			await Promise.race([
+				messagesReceived,
+				new Promise<never>((_resolve, reject) => {
+					timeout = setTimeout(() => reject(new Error('Timed out waiting for Talent realtime messages')), 10_000);
+				}),
+			]);
+
+			expect(messages.map(message => ({ name: message.name, data: message.data }))).toMatchObject([
+				{
+					name: 'talent:created',
+					data: {
+						eventId,
+						talent: {
+							id: created.id,
+							name: 'Realtime Route Caster',
+							socialProfiles: { twitch: 'RouteCaster', youtube: 'RouteCasts' },
+						},
+					},
+				},
+				{
+					name: 'talent:updated',
+					data: {
+						eventId,
+						talent: {
+							id: created.id,
+							name: 'Realtime Route Caster',
+							socialProfiles: { x: 'RouteCaster', bluesky: 'RouteCaster.bsky.social' },
+						},
+					},
+				},
+			]);
+		}
+		finally {
+			if (timeout)
+				clearTimeout(timeout);
+			channel.unsubscribe(listener);
+			realtime.close();
+		}
 	});
 
 	it('keeps the same Talent assigned after name and Social Profile edits', async () => {

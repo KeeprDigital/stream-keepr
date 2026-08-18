@@ -1,13 +1,13 @@
-# ADR-0011: Social Profile rotation projects into ordinary Graphic Items
+# ADR-0011: Social Profile Rotation projects into ordinary Graphic Items
 
 - **Status**: Accepted
 - **Date**: 2026-08-18
 - **Issue**: [#416](https://github.com/KeeprDigital/stream-keepr/issues/416)
 - **Builds on**: ADR-0009 (clock-projected automatic progression)
 
-A rotating Talent identity is represented by a named Social Profile Projection, not by an opaque all-in-one Graphic Item or a collection-valued Graphic Input. The projection references a Talent Graphic Source Selection, atomically supplies read-only network and profile values, and transitions one explicitly associated Presentation Group whose ordinary Text, Social Network Icon, and decorative children retain the compositor's existing independent layout, styling, animation, and Style Set capabilities.
+A rotating Talent identity is represented by a named Social Profile Projection, not by an opaque all-in-one Graphic Item or a collection-valued Graphic Input. The projection references a Talent Graphic Source Selection, atomically supplies read-only network and profile values, and transitions one explicitly associated Social Profile Presentation Group whose ordinary Text Graphic Items, Social Network Icon Graphic Items, and decorative children retain the compositor's existing independent layout, styling, animation, and Style Set capabilities.
 
-Automatic rotation is a pure projection of authoritative Broadcast Graphics Live Session state, the accepted populated profile set, and synchronized server time. Operator actions write the projection's selection, automatic mode, and rotation anchor, while Screen Outputs never write as rotation advances; a rendering without trustworthy synchronized time holds its last accepted or anchored profile statically rather than blanking or writing. Accepted profile-set changes preserve and re-anchor the current network when it still exists, so adding a profile cannot make program jump merely because the catalog indexes changed. Feature Match Overlay is outside this decision's scope.
+Social Profile Rotation is a pure projection of authoritative Broadcast Graphics Live Session state, the accepted populated profile set, and synchronized server time. Operator actions write the projection's selection, automatic mode, and rotation anchor, while Screen Outputs never write as rotation advances; a rendering without trustworthy synchronized time holds its last accepted or anchored profile statically rather than blanking or writing. Accepted profile-set changes preserve and re-anchor the current network when it still exists, so adding a profile cannot make program jump merely because the catalog indexes changed. Feature Match Overlay is outside this decision's scope.
 
 ## Considered Options
 
