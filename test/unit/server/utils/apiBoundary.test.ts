@@ -78,6 +78,16 @@ describe('which API paths require a session', () => {
 		expect(apiPathRequiresSession('/api/events/1/a-route-added-later')).toBe(true);
 	});
 
+	it('requires one for the bare prefix, which is the shape a widened router would reach through', () => {
+		// No handler answers `/api` or `/api/` today, so this is about the direction
+		// of the guess rather than about a route: a path the boundary did not
+		// recognise at all is the one that would reach a handler unauthenticated if
+		// the router ever started matching it. Asserted rather than reasoned about,
+		// because the comment in `isApiPath` claims it and a comment is not a check.
+		expect(apiPathRequiresSession('/api')).toBe(true);
+		expect(apiPathRequiresSession('/api/')).toBe(true);
+	});
+
 	it('leaves everything outside /api/** alone', () => {
 		// Pages and assets are unavoidably public under `ssr: false`, and are
 		// gated client-side as UX. The one that would matter if it were wrong is

@@ -40,15 +40,21 @@ function streamingMutation(method: 'DELETE' | 'PATCH' | 'POST' | 'PUT', body: Re
 
 describe('request body limits', () => {
 	/**
-	 * Absorb the last poisoned socket here, rather than leaving it for whoever runs
-	 * next.
+	 * Take one poisoned socket out of the pool here rather than leaving it for
+	 * whoever runs next.
 	 *
-	 * The final row above answers 413 with bytes still arriving, so it leaves the
-	 * pool holding a connection the next request will die on — and with
+	 * Every row above answers 413 with bytes still arriving, so each can leave the
+	 * pool holding a connection the next request dies on — and with
 	 * `fileParallelism: false` the next request is very often in another **file**,
-	 * where the failure would read as that file's defect. One throwaway request
-	 * takes it: `/api/time` is outside the boundary and costs nothing, and its own
-	 * retry is what makes it the request that dies instead of somebody else's.
+	 * where the failure would read as that file's defect. `/api/time` is outside the
+	 * boundary and costs nothing, and its own retry is what makes it the request
+	 * that dies instead of somebody else's.
+	 *
+	 * **One, not all of them.** Six oversized requests run in this file and undici's
+	 * pool holds several connections, so this absorbs at most one and only if the
+	 * pool hands it that one. It is not a guarantee to the next file; what actually
+	 * defends every row here is that each wraps its own retry. This narrows the
+	 * common single-socket case, which is the one that was observed.
 	 */
 	afterAll(async () => {
 		await throughOneTransportFailure(() => fetch('/api/time'));
