@@ -185,10 +185,30 @@ async function main() {
 	const eventChannel = `event:${event.id}`;
 
 	// -------------------------------------------------------------- subscribers
-	/** One browser tab. The app opens exactly one Ably connection per tab. */
+	/**
+	 * One browser tab. The app opens exactly one Ably connection per tab.
+	 *
+	 * **No `clientId` of its own since #397**, for the same reason
+	 * `app/plugins/realtime.client.ts` dropped its: the token now pins the identity
+	 * — the userId for a signed-in operator, `screen-output:<screenId>` for a
+	 * capability bearer — and Ably refuses a connection whose declared `clientId`
+	 * conflicts with its token's. Declaring one here would have made every
+	 * connection below fail, which is how this probe stopped being able to measure
+	 * anything the moment the grant it depends on changed.
+	 *
+	 * Nothing here needed it. `label` is this probe's own bookkeeping and the
+	 * distinctness assertion below reads **connection** ids, which stay one per
+	 * connection however many share an identity.
+	 *
+	 * A fidelity note, since the probe's whole claim is that it measures the real
+	 * thing: every client here authenticates as the operator, so each gets the
+	 * operator's wildcard grant rather than the narrowed one a real Screen Output
+	 * gets from its capability. What is counted is unaffected — an output subscribes
+	 * to its own Screen channel and the Event channel either way, which is what Ably
+	 * bills — but the grants are the operator's, not an output's.
+	 */
 	function openClient(label, screenId) {
 		const client = new Ably.Realtime({
-			clientId: `${label}-${marker}`,
 			authCallback: async (_params, callback) => {
 				try {
 					const request = await api(`/api/realtime/token?eventId=${event.id}`);
