@@ -155,6 +155,27 @@ describe('social profile rotation projection', () => {
 		});
 	});
 
+	it.each([
+		[{
+			type: 'Select Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile', network: 'twitch' },
+		}, 'twitch is not an accepted Social Profile for this projection'],
+		[{
+			type: 'Previous Social Profile',
+			payload: { graphicId: 'lower', projectionKey: 'profile' },
+		}, 'This Social Profile Projection has no accepted profiles'],
+		[{
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: 'lower', projectionKey: 'profile', automatic: false },
+		}, 'This Social Profile Projection has no accepted state'],
+	] as const)('preserves the unavailable message for $type', (command, message) => {
+		expect(() => applyBroadcastGraphicsCommand(
+			createInitialBroadcastGraphicsLiveState(),
+			command,
+			{ inputs: [], acceptedAt: 1_000_000, socialProfileProjections: [declaration] },
+		)).toThrowError(message);
+	});
+
 	it('freezes the authoritative projected profile when Automatic is disabled and re-anchors it on resume', () => {
 		const onAir = {
 			...createInitialBroadcastGraphicsLiveState(),

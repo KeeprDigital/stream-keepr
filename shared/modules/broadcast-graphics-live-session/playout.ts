@@ -1311,6 +1311,7 @@ function requireSocialProfileProjection(
 	state: BroadcastGraphicsLiveState,
 	payload: BroadcastGraphicsStepSocialProfilePayload,
 	context: BroadcastGraphicsReductionContext,
+	unavailableMessage: string,
 ): {
 	declaration: SocialProfileProjectionDeclaration;
 	projection: BroadcastGraphicSocialProfileProjectionStates[string];
@@ -1329,7 +1330,7 @@ function requireSocialProfileProjection(
 	if (!projection) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
-			'This Social Profile Projection has no accepted state',
+			unavailableMessage,
 		);
 	}
 
@@ -1342,11 +1343,12 @@ function reduceSelectSocialProfile(
 	payload: BroadcastGraphicsSelectSocialProfilePayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
-	const { projection } = requireSocialProfileProjection(state, payload, context);
+	const unavailableMessage = `${payload.network} is not an accepted Social Profile for this projection`;
+	const { projection } = requireSocialProfileProjection(state, payload, context, unavailableMessage);
 	if (!projection.acceptedProfiles.some(profile => profile.network === payload.network)) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
-			`${payload.network} is not an accepted Social Profile for this projection`,
+			unavailableMessage,
 		);
 	}
 
@@ -1374,11 +1376,17 @@ function reduceStepSocialProfile(
 	context: BroadcastGraphicsReductionContext,
 	direction: -1 | 1,
 ): BroadcastGraphicsLiveState {
-	const { declaration, projection } = requireSocialProfileProjection(state, payload, context);
+	const unavailableMessage = 'This Social Profile Projection has no accepted profiles';
+	const { declaration, projection } = requireSocialProfileProjection(
+		state,
+		payload,
+		context,
+		unavailableMessage,
+	);
 	if (projection.acceptedProfiles.length === 0) {
 		throw new BroadcastGraphicsCommandRejection(
 			'social-profile-unavailable',
-			'This Social Profile Projection has no accepted profiles',
+			unavailableMessage,
 		);
 	}
 
@@ -1415,7 +1423,12 @@ function reduceSetSocialProfileAutomatic(
 	payload: BroadcastGraphicsSetSocialProfileAutomaticPayload,
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
-	const { declaration, projection } = requireSocialProfileProjection(state, payload, context);
+	const { declaration, projection } = requireSocialProfileProjection(
+		state,
+		payload,
+		context,
+		'This Social Profile Projection has no accepted state',
+	);
 
 	const currentAutomatic = projection.automatic !== false;
 	if (currentAutomatic === payload.automatic)
