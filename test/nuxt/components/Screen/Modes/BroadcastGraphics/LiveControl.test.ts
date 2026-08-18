@@ -27,6 +27,7 @@ const mockUpdateGraphic = vi.fn();
 const mockSelectSocialProfile = vi.fn();
 const mockPreviousSocialProfile = vi.fn();
 const mockNextSocialProfile = vi.fn();
+const mockSetSocialProfileAutomatic = vi.fn();
 /** The Event Data Live Control resolves its bound values and picker options from. */
 const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingDataSet());
 /** The Graphic Inputs whose last edit from this session lost a field-scoped conflict. */
@@ -46,7 +47,8 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	selectSocialProfile: mockSelectSocialProfile,
 	previousSocialProfile: mockPreviousSocialProfile,
 	nextSocialProfile: mockNextSocialProfile,
-	socialProfileProjectionState: (_screenId: number, graphicId: string, projectionKey: string) =>
+	setSocialProfileAutomatic: mockSetSocialProfileAutomatic,
+	projectedSocialProfileProjectionState: (_screenId: number, graphicId: string, projectionKey: string) =>
 		mockLiveState.value.socialProfileProjections?.[graphicId]?.[projectionKey],
 	inputRefusal: (_screenId: number, _graphicId: string, inputKey: string) =>
 		mockInputRefusals.value[inputKey],
@@ -319,15 +321,18 @@ describe('broadcastGraphicsLiveControl', () => {
 			.toEqual(['Twitch — @AvaLive', 'X — @AvaCasts']);
 		expect(control.get('[data-testid="live-control-social-profile-timing"]').text())
 			.toContain('8 seconds · Crossfade · 250 ms');
-		expect(control.find('input').exists()).toBe(false);
+		const automatic = control.get('[data-testid="live-control-social-profile-automatic-profile"]');
+		expect((automatic.element as HTMLInputElement).checked).toBe(true);
 
 		await control.get('[data-testid="live-control-social-profile-profile"]').setValue('x');
 		await control.get('[data-testid="live-control-social-profile-previous-profile"]').trigger('click');
 		await control.get('[data-testid="live-control-social-profile-next-profile"]').trigger('click');
+		await automatic.setValue(false);
 
 		expect(mockSelectSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile', 'x');
 		expect(mockPreviousSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
 		expect(mockNextSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
+		expect(mockSetSocialProfileAutomatic).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile', false);
 	});
 
 	it('keeps many-profile controls operable while an earlier command is pending', async () => {

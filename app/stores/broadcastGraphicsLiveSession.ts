@@ -21,6 +21,7 @@ import type {
 	GraphicChannelConfig,
 	GraphicInputValue,
 	GraphicPlayoutState,
+	SocialProfileProjectionDeclaration,
 	SocialProfileProjectionValues,
 } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
@@ -39,6 +40,7 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
+	projectSocialProfileRotation,
 	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -83,6 +85,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * never disagree about what time it is.
 	 */
 	const { getServerTime, isSynced: isClockSynced } = useServerTime();
+	const clockSynchronized = computed(() => isClockSynced.value);
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	/**
 	 * Snapshot loads in flight, one Screen at a time.
@@ -627,7 +630,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return broadcastGraphicSourceSelections(liveState(screenId), graphicId);
 	}
 
-	/** One authored projection's accepted manual state from the authoritative snapshot. */
+	/** One authored Social Profile Rotation's authoritative operator state. */
 	function socialProfileProjectionState(
 		screenId: number,
 		graphicId: string,
@@ -636,16 +639,64 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return liveState(screenId).socialProfileProjections?.[graphicId]?.[projectionKey];
 	}
 
+	/** One Social Profile Rotation projected for a rendering at synchronized server time. */
+	function projectedSocialProfileProjectionState(
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		declaration: SocialProfileProjectionDeclaration,
+		now?: number,
+	): SocialProfileProjectionLiveState | undefined {
+		const state = liveState(screenId);
+		const projection = state.socialProfileProjections?.[graphicId]?.[projectionKey];
+		if (!projection)
+			return undefined;
+
+		const current = projectSocialProfileRotation(projection, declaration, {
+			onAir: state.playout[graphicId]?.onAir === true,
+			now: isClockSynced.value ? now ?? serverNow() : undefined,
+		}).current?.network;
+		return {
+			...projection,
+			automatic: projection.automatic !== false,
+			...(current === undefined ? {} : { currentNetwork: current }),
+		};
+	}
+
 	/** Every current correlated profile tuple a live Screen Output is allowed to render. */
 	function socialProfileValues(
 		screenId: number,
-		graphics: readonly Pick<BroadcastGraphicConfig, 'id'>[],
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+		now?: number,
 	): Record<string, SocialProfileProjectionValues> {
 		const state = liveState(screenId);
 		return Object.fromEntries(graphics.flatMap((graphic) => {
-			const values = socialProfileProjectionValues(state, graphic.id);
+			const values = socialProfileProjectionValues(
+				state,
+				graphic,
+				isClockSynced.value ? now ?? serverNow() : undefined,
+			);
 			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
 		}));
+	}
+
+	/** Whether synchronized automatic rotation requires the shared playout clock to advance. */
+	function hasActiveSocialProfileRotation(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+	): boolean {
+		if (!isClockSynced.value)
+			return false;
+
+		const state = liveState(screenId);
+		return graphics.some(graphic => state.playout[graphic.id]?.onAir === true
+			&& (graphic.socialProfileProjections ?? []).some((declaration) => {
+				const projection = state.socialProfileProjections?.[graphic.id]?.[declaration.key];
+				return projection !== undefined
+					&& projection.automatic !== false
+					&& projection.acceptedProfiles.length > 1
+					&& projection.rotationAnchor !== undefined;
+			}));
 	}
 
 	/**
@@ -895,6 +946,20 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		});
 	}
 
+	function setSocialProfileAutomatic(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		automatic: boolean,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Set Social Profile Automatic'),
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId, projectionKey, automatic },
+		});
+	}
+
 	/*
 	 * There is deliberately no `resolveBindings` action here.
 	 *
@@ -995,6 +1060,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		error,
 		refusal,
 		serverNow,
+		clockSynchronized,
 		channelContexts,
 		playoutState,
 		onAirGraphicIds,
@@ -1006,7 +1072,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		inputTraces,
 		sourceSelections,
 		socialProfileProjectionState,
+		projectedSocialProfileProjectionState,
 		socialProfileValues,
+		hasActiveSocialProfileRotation,
 		acceptedInputValues,
 		recoveryFault,
 		loadSession,
@@ -1018,6 +1086,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		selectSocialProfile,
 		previousSocialProfile,
 		nextSocialProfile,
+		setSocialProfileAutomatic,
 		updateGraphic,
 		resetLiveState,
 		applyRemoteCommand,

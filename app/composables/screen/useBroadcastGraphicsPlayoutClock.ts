@@ -41,7 +41,10 @@ export function useBroadcastGraphicsPlayoutClock(
 			now.value,
 			toValue(channels),
 		);
-		if (Object.keys(projection).length === 0) {
+		if (
+			Object.keys(projection).length === 0
+			&& !sessionStore.hasActiveSocialProfileRotation(toValue(screenId), toValue(graphics))
+		) {
 			stopClock();
 			return;
 		}
@@ -51,7 +54,9 @@ export function useBroadcastGraphicsPlayoutClock(
 	watch(
 		() => {
 			const session = sessionStore.sessions.get(toValue(screenId));
-			return session ? `${session.id}:${session.sequence}` : null;
+			return session
+				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+				: null;
 		},
 		() => {
 			if (!import.meta.client)

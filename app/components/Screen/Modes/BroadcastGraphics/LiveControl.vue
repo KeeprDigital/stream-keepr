@@ -72,6 +72,8 @@ const props = defineProps<{
 	screen: Screen;
 	graphic: BroadcastGraphicConfig;
 	playoutState: GraphicPlayoutState;
+	/** The synchronized instant the surrounding Live workspace is projecting. */
+	now?: number;
 	/** Whether this Broadcast Graphic has an action in flight. */
 	pending?: boolean;
 	/**
@@ -104,21 +106,28 @@ const pickers = computed(() =>
 const socialProfileProjectionControls = computed(() =>
 	(props.graphic.socialProfileProjections ?? []).map(declaration => ({
 		declaration,
-		state: sessionStore.socialProfileProjectionState(props.screen.id, props.graphic.id, declaration.key),
+		state: sessionStore.projectedSocialProfileProjectionState(
+			props.screen.id,
+			props.graphic.id,
+			declaration.key,
+			declaration,
+			props.now,
+		),
 	})),
 );
 
 function socialProfileOptions(projectionKey: string) {
-	return sessionStore.socialProfileProjectionState(props.screen.id, props.graphic.id, projectionKey)
-		?.acceptedProfiles
-		.map(profile => ({
-			label: `${profile.networkLabel} — @${profile.handle}`,
-			value: profile.network,
-		})) ?? [];
+	const state = socialProfileProjectionControls.value.find(
+		control => control.declaration.key === projectionKey,
+	)?.state;
+	return state?.acceptedProfiles.map(profile => ({
+		label: `${profile.networkLabel} — @${profile.handle}`,
+		value: profile.network,
+	})) ?? [];
 }
 
 function selectSocialProfile(projectionKey: string, value: unknown) {
-	const state = sessionStore.socialProfileProjectionState(props.screen.id, props.graphic.id, projectionKey);
+	const state = socialProfileProjectionControls.value.find(control => control.declaration.key === projectionKey)?.state;
 	const network = state?.acceptedProfiles.find(profile => profile.network === value)?.network;
 	if (!network || props.disconnected)
 		return;
@@ -133,6 +142,18 @@ function previousSocialProfile(projectionKey: string) {
 function nextSocialProfile(projectionKey: string) {
 	if (!props.disconnected)
 		void sessionStore.nextSocialProfile(props.eventId, props.screen.id, props.graphic.id, projectionKey);
+}
+
+function setSocialProfileAutomatic(projectionKey: string, automatic: boolean) {
+	if (!props.disconnected) {
+		void sessionStore.setSocialProfileAutomatic(
+			props.eventId,
+			props.screen.id,
+			props.graphic.id,
+			projectionKey,
+			automatic,
+		);
+	}
 }
 
 function socialProfileTiming(control: typeof socialProfileProjectionControls.value[number]): string {
@@ -645,6 +666,15 @@ watch(
 					>
 						Next
 					</UButton>
+				</div>
+				<div class="mt-3 flex items-center justify-between gap-3">
+					<span class="text-sm font-medium">Automatic</span>
+					<USwitch
+						:model-value="control.state?.automatic !== false"
+						:disabled="disconnected || !control.state"
+						:data-testid="`live-control-social-profile-automatic-${control.declaration.key}`"
+						@update:model-value="setSocialProfileAutomatic(control.declaration.key, Boolean($event))"
+					/>
 				</div>
 				<p class="mt-2 text-xs text-muted" data-testid="live-control-social-profile-timing">
 					{{ socialProfileTiming(control) }}

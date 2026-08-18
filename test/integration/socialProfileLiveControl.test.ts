@@ -117,7 +117,7 @@ describe('manual Social Profile Projection command API', () => {
 
 		expect((taken.currentState as typeof taken.currentState & {
 			socialProfileProjections: Record<string, Record<string, unknown>>;
-		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toEqual({
+		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			talent: { id: talent.id, name: 'Avery Quinn' },
 			acceptedProfiles: [
 				{
@@ -134,6 +134,8 @@ describe('manual Social Profile Projection command API', () => {
 				},
 			],
 			currentNetwork: 'twitch',
+			automatic: true,
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
 		});
 	});
 
@@ -168,6 +170,8 @@ describe('manual Social Profile Projection command API', () => {
 				profileUrl: 'https://www.twitch.tv/TaylorLive',
 			}],
 			currentNetwork: 'twitch',
+			automatic: true,
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
 		});
 
 		const zero = await harness.send({
@@ -178,6 +182,7 @@ describe('manual Social Profile Projection command API', () => {
 		expect(zero.currentState.socialProfileProjections?.[talent2Graphic.id]?.[PROJECTION_KEY]).toEqual({
 			talent: { id: talent2.id, name: 'Casey Park' },
 			acceptedProfiles: [],
+			automatic: true,
 		});
 	});
 
@@ -202,6 +207,7 @@ describe('manual Social Profile Projection command API', () => {
 		expect(taken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY]).toEqual({
 			talent: { id: talent.id, name: 'Legacy Long Handle' },
 			acceptedProfiles: [],
+			automatic: true,
 		});
 
 		const reloaded = await harness.reload();
@@ -255,7 +261,61 @@ describe('manual Social Profile Projection command API', () => {
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			currentNetwork: 'x',
 			manualNetwork: 'x',
+			rotationAnchor: { network: 'x', anchoredAt: expect.any(Number) },
 		});
+	});
+
+	it('pauses and resumes Automatic through the real route and persists its frozen anchor across reload', async () => {
+		const talent = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: {
+				name: 'Robin Shah',
+				socialProfiles: { twitch: 'RobinLive', youtube: 'RobinCasts' },
+			},
+		});
+		const harness = await createGraphicsHarness(eventId, 'social-profile-automatic', [socialProfileGraphic()]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		const taken = await harness.send({
+			commandId: playoutCommandId('social-profile-automatic-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		const takenProjection = taken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+
+		const paused = await harness.send({
+			commandId: playoutCommandId('social-profile-automatic-pause'),
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, automatic: false },
+		});
+		const pausedProjection = paused.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(pausedProjection).toMatchObject({
+			currentNetwork: 'twitch',
+			automatic: false,
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
+		});
+		expect(pausedProjection?.manualNetwork).toBeUndefined();
+		expect(pausedProjection!.rotationAnchor!.anchoredAt)
+			.toBeGreaterThanOrEqual(takenProjection!.rotationAnchor!.anchoredAt);
+
+		const reloaded = await harness.reload();
+		expect(reloaded.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY])
+			.toEqual(pausedProjection);
+
+		const resumed = await harness.send({
+			commandId: playoutCommandId('social-profile-automatic-resume'),
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, automatic: true },
+		});
+		const resumedProjection = resumed.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(resumedProjection).toMatchObject({
+			currentNetwork: 'twitch',
+			automatic: true,
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
+		});
+		expect(resumedProjection?.manualNetwork).toBeUndefined();
+		expect(resumedProjection!.rotationAnchor!.anchoredAt)
+			.toBeGreaterThanOrEqual(pausedProjection!.rotationAnchor!.anchoredAt);
 	});
 
 	it('refuses an unavailable profile and an unknown authored projection without changing state', async () => {
@@ -318,7 +378,7 @@ describe('manual Social Profile Projection command API', () => {
 			commandId: playoutCommandId('social-profile-previous'),
 			type: 'Previous Social Profile',
 			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY },
-		} as never);
+		});
 		expect((previous.currentState as typeof previous.currentState & {
 			socialProfileProjections: Record<string, Record<string, { currentNetwork?: string }>>;
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]?.currentNetwork).toBe('bluesky');
@@ -327,12 +387,13 @@ describe('manual Social Profile Projection command API', () => {
 			commandId: playoutCommandId('social-profile-next'),
 			type: 'Next Social Profile',
 			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY },
-		} as never);
+		});
 		expect((next.currentState as typeof next.currentState & {
 			socialProfileProjections: Record<string, Record<string, { currentNetwork?: string; manualNetwork?: string }>>;
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			currentNetwork: 'twitch',
 			manualNetwork: 'twitch',
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
 		});
 	});
 
@@ -362,7 +423,7 @@ describe('manual Social Profile Projection command API', () => {
 			commandId: playoutCommandId('social-profile-retry-next'),
 			type: 'Next Social Profile',
 			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY },
-		} as never);
+		});
 		const replay = await sendBroadcastGraphicsCommand(
 			eventId,
 			harness.screen.id,
@@ -407,7 +468,7 @@ describe('manual Social Profile Projection command API', () => {
 			commandId: playoutCommandId('social-profile-reset-select'),
 			type: 'Select Social Profile',
 			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
-		} as never);
+		});
 		await harness.send({
 			commandId: playoutCommandId('social-profile-reset-out'),
 			type: 'Out',
@@ -423,6 +484,8 @@ describe('manual Social Profile Projection command API', () => {
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			currentNetwork: 'x',
 			manualNetwork: 'x',
+			automatic: true,
+			rotationAnchor: { network: 'x', anchoredAt: expect.any(Number) },
 		});
 
 		const reloaded = await harness.reload();
@@ -431,6 +494,8 @@ describe('manual Social Profile Projection command API', () => {
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			currentNetwork: 'x',
 			manualNetwork: 'x',
+			automatic: true,
+			rotationAnchor: { network: 'x', anchoredAt: expect.any(Number) },
 		});
 
 		const reset = await $fetch<Awaited<ReturnType<typeof harness.reload>>>(
@@ -452,6 +517,8 @@ describe('manual Social Profile Projection command API', () => {
 			socialProfileProjections: Record<string, Record<string, { currentNetwork?: string; manualNetwork?: string }>>;
 		}).socialProfileProjections[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
 			currentNetwork: 'twitch',
+			automatic: true,
+			rotationAnchor: { network: 'twitch', anchoredAt: expect.any(Number) },
 		});
 		expect((afterReset.currentState as typeof afterReset.currentState & {
 			socialProfileProjections: Record<string, Record<string, { manualNetwork?: string }>>;

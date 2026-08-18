@@ -123,6 +123,10 @@ const selectSocialProfilePayloadSchema = z.object({
 
 const stepSocialProfilePayloadSchema = selectSocialProfilePayloadSchema.omit({ network: true });
 
+const setSocialProfileAutomaticPayloadSchema = stepSocialProfilePayloadSchema.extend({
+	automatic: z.boolean(),
+}).strict();
+
 const commandIdSchema = z.string().min(1).max(100);
 
 export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
@@ -150,6 +154,11 @@ export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
 		commandId: commandIdSchema,
 		type: z.literal('Next Social Profile'),
 		payload: stepSocialProfilePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Set Social Profile Automatic'),
+		payload: setSocialProfileAutomaticPayloadSchema,
 	}).strict(),
 	z.object({
 		commandId: commandIdSchema,

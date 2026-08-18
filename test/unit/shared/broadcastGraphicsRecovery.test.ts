@@ -93,6 +93,8 @@ describe('broadcastGraphicsRecovery', () => {
 							],
 							currentNetwork: 'x',
 							manualNetwork: 'x',
+							automatic: true,
+							rotationAnchor: { network: 'x', anchoredAt: 123_456 },
 						},
 					},
 				},
@@ -252,6 +254,38 @@ describe('broadcastGraphicsRecovery', () => {
 				socialProfileProjections: { lower: { profile: {
 					acceptedProfiles: [],
 					manualNetwork: 'twitch',
+				} } },
+			}],
+			['an Automatic value that is not boolean', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+					currentNetwork: 'twitch',
+					automatic: 'yes',
+				} } },
+			}],
+			['a rotation anchor outside the accepted set', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+					currentNetwork: 'twitch',
+					automatic: true,
+					rotationAnchor: { network: 'x', anchoredAt: 123_456 },
+				} } },
+			}],
+			['a rotation anchor instant that is not numeric', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					talent: { id: 7, name: 'Ava' },
+					acceptedProfiles: [{ network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' }],
+					currentNetwork: 'twitch',
+					automatic: true,
+					rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
 				} } },
 			}],
 		])('reports %s as incompatible', (_label, raw) => {

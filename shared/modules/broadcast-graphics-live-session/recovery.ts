@@ -184,6 +184,7 @@ function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsR
 				projection.acceptedProfiles.length > 0
 				|| 'currentNetwork' in projection
 				|| 'manualNetwork' in projection
+				|| 'rotationAnchor' in projection
 			) {
 				return fault('incompatible', `the Social Profile Projection ${identity} has no accepted Talent`);
 			}
@@ -219,6 +220,21 @@ function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsR
 					continue;
 				if (typeof projection[field] !== 'string' || !accepted.has(projection[field] as SupportedSocialNetwork))
 					return fault('incompatible', `the ${field} for ${identity} is not an accepted Social Profile`);
+			}
+
+			if ('automatic' in projection && typeof projection.automatic !== 'boolean')
+				return fault('incompatible', `Automatic for ${identity} is not a true or false value`);
+
+			if ('rotationAnchor' in projection) {
+				if (!isRecord(projection.rotationAnchor))
+					return fault('corrupt', `the Social Profile Rotation anchor for ${identity} is not a record`);
+				if (
+					typeof projection.rotationAnchor.network !== 'string'
+					|| !accepted.has(projection.rotationAnchor.network as SupportedSocialNetwork)
+					|| !Number.isFinite(projection.rotationAnchor.anchoredAt)
+				) {
+					return fault('incompatible', `the Social Profile Rotation anchor for ${identity} cannot be interpreted`);
+				}
 			}
 		}
 	}

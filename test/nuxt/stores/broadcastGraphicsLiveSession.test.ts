@@ -69,6 +69,21 @@ function graphic(id: string, animation?: BroadcastGraphicConfig['animation']): B
 	return { id, name: id, items: [], animation };
 }
 
+function socialGraphic(id: string): BroadcastGraphicConfig {
+	return {
+		...graphic(id),
+		socialProfileProjections: [{
+			key: 'profile',
+			label: 'Social Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'profile-group',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}],
+	};
+}
+
 function notification(
 	overrides: Partial<MessageData<'broadcastGraphicsLiveSession:commandApplied'>> = {},
 ): MessageData<'broadcastGraphicsLiveSession:commandApplied'> {
@@ -148,6 +163,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		store = useBroadcastGraphicsLiveSessionStore();
 		store.$reset();
 		vi.clearAllMocks();
+		mockClockSynced.value = true;
 		mockRepository.getSession.mockResolvedValue(session());
 	});
 
@@ -199,7 +215,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 
 		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('twitch');
-		expect(store.socialProfileValues(SCREEN_ID, [graphic('slate')])).toEqual({
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')])).toEqual({
 			slate: { profile: currentState.socialProfileProjections.slate.profile.acceptedProfiles[0] },
 		});
 
@@ -213,6 +229,66 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				{ type: 'Previous Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
 				{ type: 'Next Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
 			]);
+	});
+
+	it('projects automatic Social Profile values from the shared server clock and sends the Automatic command', async () => {
+		const acceptedProfiles = [
+			{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+			{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+		];
+		const currentState = {
+			playout: { slate: { onAir: true, effectiveStartedAt: 999_000, cut: false } },
+			inputs: {},
+			socialProfileProjections: {
+				slate: { profile: {
+					acceptedProfiles,
+					currentNetwork: 'twitch' as const,
+					automatic: true,
+					rotationAnchor: { network: 'twitch' as const, anchoredAt: 1_000_000 },
+				} },
+			},
+		};
+		mockRepository.getSession.mockResolvedValue(session({ currentState }));
+		mockRepository.sendCommand.mockResolvedValue({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Set Social Profile Automatic',
+			currentState,
+			session: session({ sequence: 2, currentState }),
+		});
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+			slate: { profile: acceptedProfiles[1] },
+		});
+		expect(store.projectedSocialProfileProjectionState(
+			SCREEN_ID,
+			'slate',
+			'profile',
+			socialGraphic('slate').socialProfileProjections![0]!,
+			1_008_100,
+		)?.currentNetwork).toBe('x');
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+
+		await store.setSocialProfileAutomatic(EVENT_ID, SCREEN_ID, 'slate', 'profile', false);
+		expect(mockRepository.sendCommand).toHaveBeenLastCalledWith(EVENT_ID, SCREEN_ID, 55, expect.objectContaining({
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: 'slate', projectionKey: 'profile', automatic: false },
+		}));
+
+		mockClockSynced.value = false;
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+			slate: { profile: acceptedProfiles[0] },
+		});
+		expect(store.projectedSocialProfileProjectionState(
+			SCREEN_ID,
+			'slate',
+			'profile',
+			socialGraphic('slate').socialProfileProjections![0]!,
+			1_008_100,
+		)?.currentNetwork).toBe('twitch');
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
 	});
 
 	it('sends a Take naming the loaded epoch, and keeps the returned snapshot', async () => {

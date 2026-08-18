@@ -62,6 +62,7 @@ export type {
 	BroadcastGraphicsSelectSourcePayload,
 	BroadcastGraphicsSetInputPayload,
 	BroadcastGraphicsSetOverridePayload,
+	BroadcastGraphicsSetSocialProfileAutomaticPayload,
 	BroadcastGraphicsStepSocialProfilePayload,
 	BroadcastGraphicsUpdatePayload,
 } from './playout';
@@ -96,8 +97,12 @@ export type {
 	BroadcastGraphicSocialProfileProjectionStates,
 	SocialProfileProjectionLiveState,
 	SocialProfileProjectionTalent,
+	SocialProfileRotationAnchor,
+	SocialProfileRotationPhase,
+	SocialProfileRotationProjection,
 } from './socialProfiles';
 export {
+	projectSocialProfileRotation,
 	resolveSocialProfileProjectionAcceptances,
 	socialProfileProjectionValues,
 } from './socialProfiles';
