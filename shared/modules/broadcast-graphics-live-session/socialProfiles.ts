@@ -8,6 +8,7 @@ import type { GraphicBindingDataSet, GraphicBindingTalent, GraphicSourceSelectio
 import type { BroadcastGraphicsLiveState } from './playout';
 import {
 	canonicalSocialProfileUrl,
+	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
 	SUPPORTED_SOCIAL_NETWORKS,
 } from '../../socialProfiles';
 import { resolveGraphicSourceSelections } from '../graphics';
@@ -75,10 +76,10 @@ export function resolveSocialProfileProjectionAcceptances(
 			? source.entity as GraphicBindingTalent
 			: undefined;
 		const talentId = talent ? talentIdOf(talent, data) : undefined;
-		const acceptedProfiles = talent
+		const acceptedProfiles = talent && talentId !== undefined
 			? SUPPORTED_SOCIAL_NETWORKS.flatMap((network) => {
 					const handle = talent.socialProfiles[network.key];
-					return handle === undefined
+					return handle === undefined || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
 						? []
 						: [{
 							network: network.key,

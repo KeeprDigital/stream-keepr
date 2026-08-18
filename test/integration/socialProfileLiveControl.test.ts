@@ -1,5 +1,6 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MAX_SOCIAL_PROFILE_HANDLE_LENGTH } from '../../shared/socialProfiles';
 import {
 	createGraphicsHarness,
 	getBroadcastGraphicsLiveSession,
@@ -9,6 +10,7 @@ import {
 } from './broadcastGraphicsPlayoutHelpers';
 import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
+import { executeIntegrationD1 } from './integrationD1';
 
 const GRAPHIC_ID = 'talent-lower-third';
 const PROJECTION_KEY = 'profile';
@@ -177,6 +179,35 @@ describe('manual Social Profile Projection command API', () => {
 			talent: { id: talent2.id, name: 'Casey Park' },
 			acceptedProfiles: [],
 		});
+	});
+
+	it('omits a legacy over-bound profile without creating an unreadable live session', async () => {
+		const talent = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Legacy Long Handle', socialProfiles: { twitch: 'before-migration' } },
+		});
+		const legacyHandle = 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1);
+		await executeIntegrationD1(
+			`UPDATE event_talents SET twitch_handle = '${legacyHandle}' WHERE id = ${talent.id};`,
+		);
+		const harness = await createGraphicsHarness(eventId, 'social-profile-legacy-bound', [socialProfileGraphic()]);
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+
+		const taken = await harness.send({
+			commandId: playoutCommandId('social-profile-legacy-bound-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		expect(taken.session.recoveryFault).toBeNull();
+		expect(taken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY]).toEqual({
+			talent: { id: talent.id, name: 'Legacy Long Handle' },
+			acceptedProfiles: [],
+		});
+
+		const reloaded = await harness.reload();
+		expect(reloaded.recoveryFault).toBeNull();
+		expect(reloaded.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY])
+			.toEqual(taken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY]);
 	});
 
 	it('selects one accepted profile directly as an authoritative manual command', async () => {

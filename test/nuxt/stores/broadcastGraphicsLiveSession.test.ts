@@ -395,6 +395,110 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
 	});
 
+	it('keeps the newest of two rapid profile command responses when they arrive in reverse order', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const releases: Array<(value: unknown) => void> = [];
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			releases.push(resolve);
+		}));
+		const profileState = (network: 'x' | 'bluesky') => ({
+			playout: {},
+			inputs: {},
+			socialProfileProjections: { slate: { profile: {
+				talent: { id: 7, name: 'Ava Reed' },
+				acceptedProfiles: [
+					{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					{ network: 'bluesky' as const, networkLabel: 'Bluesky', handle: 'ava.example', profileUrl: 'https://bsky.app/profile/ava.example' },
+				],
+				currentNetwork: network,
+				manualNetwork: network,
+			} } },
+		});
+		const result = (sequence: number, network: 'x' | 'bluesky') => ({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence,
+			commandType: 'Select Social Profile',
+			currentState: profileState(network),
+			session: session({ sequence, currentState: profileState(network) }),
+		});
+
+		const first = store.selectSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile', 'x');
+		const second = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await vi.waitFor(() => expect(releases).toHaveLength(2));
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(true);
+
+		releases[1]!(result(3, 'bluesky'));
+		await second;
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(true);
+		releases[0]!(result(2, 'x'));
+		const firstAnswer = await first;
+
+		expect(firstAnswer?.sequence).toBe(3);
+		expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(3);
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('bluesky');
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
+	});
+
+	it('does not let a late command response overwrite a newer realtime-authoritative reload', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		let release: (value: unknown) => void = () => {};
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			release = resolve;
+		}));
+		const old = session({ sequence: 2 });
+		const newest = session({ sequence: 3, currentState: {
+			playout: {},
+			inputs: {},
+			socialProfileProjections: { slate: { profile: {
+				talent: { id: 7, name: 'Ava Reed' },
+				acceptedProfiles: [{ network: 'x', networkLabel: 'X', handle: 'Ava', profileUrl: 'https://x.com/Ava' }],
+				currentNetwork: 'x',
+				manualNetwork: 'x',
+			} } },
+		} });
+		const inFlight = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await Promise.resolve();
+		mockRepository.getSession.mockResolvedValue(newest);
+		await store.applyRemoteCommand(notification({ sequence: 3, change: {} }));
+		release({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Next Social Profile',
+			currentState: old.currentState,
+			session: old,
+		});
+		await inFlight;
+
+		expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(3);
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('x');
+	});
+
+	it('does not let a late old-epoch command response restore the epoch reset replaced', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		let release: (value: unknown) => void = () => {};
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			release = resolve;
+		}));
+		const inFlight = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await Promise.resolve();
+		mockRepository.resetSession.mockResolvedValue(session({ id: 56, sequence: 0 }));
+		await store.resetLiveState(EVENT_ID, SCREEN_ID);
+		release({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Next Social Profile',
+			currentState: { playout: {}, inputs: {} },
+			session: session({ sequence: 2 }),
+		});
+		const answer = await inFlight;
+
+		expect(answer?.id).toBe(56);
+		expect(store.sessions.get(SCREEN_ID)?.id).toBe(56);
+	});
+
 	it('clears the pending marker even when the action fails', async () => {
 		await store.loadSession(EVENT_ID, SCREEN_ID);
 		mockRepository.sendCommand.mockRejectedValue(transportFailure({ status: 500, request: COMMANDS_REQUEST }));

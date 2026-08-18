@@ -180,6 +180,13 @@ function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsR
 				if (!Number.isFinite(projection.talent.id) || typeof projection.talent.name !== 'string')
 					return fault('incompatible', `the accepted Talent for ${identity} cannot be interpreted`);
 			}
+			else if (
+				projection.acceptedProfiles.length > 0
+				|| 'currentNetwork' in projection
+				|| 'manualNetwork' in projection
+			) {
+				return fault('incompatible', `the Social Profile Projection ${identity} has no accepted Talent`);
+			}
 
 			const accepted = new Set<SupportedSocialNetwork>();
 			let previousCatalogIndex = -1;

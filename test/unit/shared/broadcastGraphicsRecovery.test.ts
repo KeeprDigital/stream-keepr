@@ -236,6 +236,24 @@ describe('broadcastGraphicsRecovery', () => {
 					],
 				} } },
 			}],
+			['accepted Social Profiles without their Talent identity', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+					],
+					currentNetwork: 'twitch',
+				} } },
+			}],
+			['a manual Social Profile without its Talent identity', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					manualNetwork: 'twitch',
+				} } },
+			}],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});

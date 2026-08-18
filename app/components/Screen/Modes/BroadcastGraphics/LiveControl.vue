@@ -620,7 +620,7 @@ watch(
 					class="w-full"
 					size="sm"
 					placeholder="No populated profiles"
-					:disabled="disconnected || pending || !control.state?.acceptedProfiles.length"
+					:disabled="disconnected || !control.state?.acceptedProfiles.length"
 					:data-testid="`live-control-social-profile-${control.declaration.key}`"
 					@update:model-value="selectSocialProfile(control.declaration.key, $event)"
 				/>
@@ -629,7 +629,7 @@ watch(
 						size="xs"
 						variant="soft"
 						color="neutral"
-						:disabled="disconnected || pending || (control.state?.acceptedProfiles.length ?? 0) <= 1"
+						:disabled="disconnected || (control.state?.acceptedProfiles.length ?? 0) <= 1"
 						:data-testid="`live-control-social-profile-previous-${control.declaration.key}`"
 						@click="previousSocialProfile(control.declaration.key)"
 					>
@@ -639,7 +639,7 @@ watch(
 						size="xs"
 						variant="soft"
 						color="neutral"
-						:disabled="disconnected || pending || (control.state?.acceptedProfiles.length ?? 0) <= 1"
+						:disabled="disconnected || (control.state?.acceptedProfiles.length ?? 0) <= 1"
 						:data-testid="`live-control-social-profile-next-${control.declaration.key}`"
 						@click="nextSocialProfile(control.declaration.key)"
 					>

@@ -201,6 +201,7 @@ async function mountComponent(
 	config: BroadcastGraphicConfig,
 	playoutState: GraphicPlayoutState = 'off',
 	disconnected = false,
+	pending = false,
 ) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 	const { default: LiveControl } = await import(componentPath);
@@ -212,6 +213,7 @@ async function mountComponent(
 			graphic: config,
 			playoutState,
 			disconnected,
+			pending,
 		},
 		global: {
 			stubs: {
@@ -328,6 +330,40 @@ describe('broadcastGraphicsLiveControl', () => {
 		expect(mockNextSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
 	});
 
+	it('keeps many-profile controls operable while an earlier command is pending', async () => {
+		mockLiveState.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			socialProfileProjections: {
+				'lower-third': { profile: {
+					talent: { id: 7, name: 'Ava Reed' },
+					acceptedProfiles: [
+						{ network: 'twitch', networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x', networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch',
+				} },
+			},
+		};
+		const wrapper = await mountComponent(graphic([], {
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}],
+		}), 'on-air', false, true);
+		const control = wrapper.get('[data-social-profile-projection="profile"]');
+
+		expect(control.get('[data-testid="live-control-social-profile-profile"]').attributes('disabled')).toBeUndefined();
+		expect(control.get('[data-testid="live-control-social-profile-previous-profile"]').attributes('disabled')).toBeUndefined();
+		expect(control.get('[data-testid="live-control-social-profile-next-profile"]').attributes('disabled')).toBeUndefined();
+		await control.get('[data-testid="live-control-social-profile-next-profile"]').trigger('click');
+		expect(mockNextSocialProfile).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile');
+	});
+
 	it.each([
 		['zero', [], undefined, 'Unavailable'],
 		['one', [{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'SoloLive', profileUrl: 'https://www.twitch.tv/SoloLive' }], 'twitch', 'Available'],
@@ -336,6 +372,7 @@ describe('broadcastGraphicsLiveControl', () => {
 			...createInitialBroadcastGraphicsLiveState(),
 			socialProfileProjections: {
 				'lower-third': { profile: {
+					talent: { id: 7, name: 'Solo Caster' },
 					acceptedProfiles: [...acceptedProfiles],
 					...(currentNetwork ? { currentNetwork } : {}),
 				} },

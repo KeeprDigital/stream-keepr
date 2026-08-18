@@ -109,8 +109,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * this first; nothing else writes it.
 	 */
 	const refusal = ref<BroadcastGraphicsCommandRefusal | null>(null);
-	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
-	const pending = ref<Set<string>>(new Set());
+	/** Number of playout actions awaiting an authoritative answer, keyed per Broadcast Graphic. */
+	const pending = ref<Map<string, number>>(new Map());
 	/**
 	 * The Graphic Inputs whose last edit from this session lost a field-scoped
 	 * conflict, and have therefore been refreshed from the authoritative snapshot.
@@ -458,6 +458,12 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
+		const cached = sessions.value.get(result.screenId);
+		// Command requests may overlap. A late answer cannot move one epoch backwards,
+		// and an answer from an ended epoch cannot replace the current epoch at all.
+		if (cached && (cached.id !== result.session.id || cached.sequence > result.session.sequence))
+			return cached;
+
 		cacheSession(result.session);
 		return result.session;
 	}
@@ -504,7 +510,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		const pendingKey = playoutKey(screenId, graphicId);
 		refusal.value = null;
-		pending.value.add(pendingKey);
+		pending.value.set(pendingKey, (pending.value.get(pendingKey) ?? 0) + 1);
 
 		async function deliverTo(sessionId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
 			return cacheCommandResult(await repository.sendCommand(eventId, screenId, sessionId, command));
@@ -585,7 +591,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			);
 		}
 		finally {
-			pending.value.delete(pendingKey);
+			const remaining = (pending.value.get(pendingKey) ?? 1) - 1;
+			if (remaining > 0)
+				pending.value.set(pendingKey, remaining);
+			else
+				pending.value.delete(pendingKey);
 		}
 	}
 
