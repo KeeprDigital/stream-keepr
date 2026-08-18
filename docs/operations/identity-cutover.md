@@ -22,7 +22,9 @@ short — nothing here reshapes data.
   session clears itself on its own 8-hour TTL, and the two cookies it left in
   browsers are expired by
   `server/middleware/retired-author-session-cookies.ts` on the first request
-  each browser makes afterwards.
+  that reaches it — in practice the next page load, since that middleware sorts
+  after the API boundary and a signed-out `/api/**` request is refused before it
+  runs.
 
 ## Before the deploy
 
