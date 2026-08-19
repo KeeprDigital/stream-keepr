@@ -35,7 +35,6 @@ const featureMatchAssignment = computed(() => assignmentStore.assignments.find(a
 	assignment.slotId === props.match.id && assignment.matchId === props.match.matchId,
 ) ?? null);
 const assignmentNote = computed(() => featureMatchAssignment.value?.note ?? '');
-const hasAssignmentNote = computed(() => assignmentNote.value.trim().length > 0);
 const sourceMatch = ref<import('~/types').Match | null>(null);
 const sourceRound = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
 
@@ -263,6 +262,16 @@ async function save() {
 			/>
 		</template>
 
+		<FeatureMatchNote
+			v-if="featureMatchAssignment"
+			class="mx-3 mt-3"
+			:note="assignmentNote"
+			:note-key="featureMatchAssignment.id"
+			:save="saveAssignmentNote"
+			:remote-changed="assignmentStore.isRemoteChanged(featureMatchAssignment.id)"
+			compact
+		/>
+
 		<!-- ==================== GAME MODE ==================== -->
 		<div v-show="panelView === 'game'">
 			<!-- Player Arena -->
@@ -478,20 +487,6 @@ async function save() {
 
 			<!-- Game mode: Match actions -->
 			<div v-else-if="matchState" class="match-actions">
-				<MatchNotePopover
-					v-if="featureMatchAssignment"
-					:note="assignmentNote"
-					:note-key="featureMatchAssignment.id"
-					content-align="start"
-					@save="saveAssignmentNote"
-				>
-					<UButton
-						:label="hasAssignmentNote ? 'Edit Note' : 'Add Note'"
-						:icon="hasAssignmentNote ? 'i-lucide-sticky-note' : 'i-lucide-message-square-plus'"
-						:color="hasAssignmentNote ? 'primary' : 'neutral'"
-						:variant="hasAssignmentNote ? 'soft' : 'ghost'"
-					/>
-				</MatchNotePopover>
 				<UButton
 					label="Tokens"
 					icon="i-lucide-images"

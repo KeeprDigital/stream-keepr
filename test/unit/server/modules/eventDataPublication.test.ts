@@ -152,6 +152,20 @@ function createFeatureMatch(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function createFeatureMatchAssignment(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 9,
+		eventId: 1,
+		roundId: 3,
+		slotId: 4,
+		matchId: 7,
+		note: 'Production note',
+		createdAt: NOW,
+		updatedAt: NOW,
+		...overrides,
+	};
+}
+
 function createArchetype(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 11,
@@ -722,6 +736,38 @@ describe('event Data publication module', () => {
 				{ featureMatchId: 4, sortOrder: 1 },
 				{ featureMatchId: 5, sortOrder: 0 },
 			],
+		}, 'origin-1');
+	});
+
+	it('publishes complete Feature Match Assignment changes with origin suppression metadata', async () => {
+		const publication = eventDataPublicationModule();
+
+		const created = await publication.featureMatchAssignmentCreated({
+			eventId: 1,
+			entity: createFeatureMatchAssignment() as any,
+			originConnectionId: 'origin-1',
+		});
+		const updated = await publication.featureMatchAssignmentUpdated({
+			eventId: 1,
+			entity: createFeatureMatchAssignment({ note: 'Changed note' }) as any,
+			originConnectionId: 'origin-1',
+		});
+		await publication.featureMatchAssignmentDeleted({
+			eventId: 1,
+			id: 9,
+			originConnectionId: 'origin-1',
+		});
+
+		expect(created).toEqual(expect.objectContaining({ id: 9, roundId: 3, note: 'Production note' }));
+		expect(updated).toEqual(expect.objectContaining({ id: 9, roundId: 3, note: 'Changed note' }));
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:created', {
+			featureMatchAssignment: expect.objectContaining({ id: 9, note: 'Production note' }),
+		}, 'origin-1');
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:updated', {
+			featureMatchAssignment: expect.objectContaining({ id: 9, note: 'Changed note' }),
+		}, 'origin-1');
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:deleted', {
+			featureMatchAssignmentId: 9,
 		}, 'origin-1');
 	});
 

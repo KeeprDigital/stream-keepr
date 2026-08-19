@@ -32,14 +32,27 @@ const mockPlayerStore = reactive({
 	loadPlayersByEventId: vi.fn(),
 });
 
+const mockAssignmentStore = reactive({
+	assignments: [] as any[],
+	loadAssignments: vi.fn(),
+	updateAssignment: vi.fn(),
+	isRemoteChanged: vi.fn(() => false),
+});
+
+const mockMatchRepository = {
+	getById: vi.fn(),
+};
+
 const mockToast = { add: vi.fn() };
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockAssignmentStore);
+mockNuxtImport('useMatchRepository', () => () => mockMatchRepository);
 mockNuxtImport('useMatchStore', () => () => ({ matches: [] }));
-mockNuxtImport('useRoundStore', () => () => ({ getRoundById: vi.fn() }));
+mockNuxtImport('useRoundStore', () => () => ({ isLoaded: true, getRoundById: vi.fn(), loadRoundsByEventId: vi.fn() }));
 mockNuxtImport('useToast', () => () => mockToast);
 // The page guard reaches for the overlay and the router when it installs itself.
 // What it does with them is its own composable's test; here they only have to
@@ -121,9 +134,9 @@ const PlayerFormStub = defineComponent({
 const componentPath = '../../../../app/components/FeatureMatch/' + 'Panel.vue';
 
 /** A fresh match per mount, so nothing one test edits reaches the next. */
-function mountProps() {
+function mountProps(overrides: Record<string, unknown> = {}) {
 	return {
-		match: createMockFeatureMatch({ id: 1, eventId: 1 }) as any,
+		match: createMockFeatureMatch({ id: 1, eventId: 1, ...overrides }) as any,
 		matchNumber: 1,
 	};
 }
@@ -143,10 +156,10 @@ const mountOptions = {
 	},
 };
 
-async function mountComponent() {
+async function mountComponent(overrides: Record<string, unknown> = {}) {
 	const { default: FeatureMatchPanel } = await import(componentPath);
 
-	return mount(FeatureMatchPanel, { ...mountOptions, props: mountProps() });
+	return mount(FeatureMatchPanel, { ...mountOptions, props: mountProps(overrides) });
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
@@ -168,6 +181,9 @@ describe('featureMatchPanel setup save', () => {
 		vi.clearAllMocks();
 		mockFeatureMatchStore.error = null;
 		mockFeatureMatchStateStore.featureMatchStates = new Map();
+		mockAssignmentStore.assignments = [];
+		mockAssignmentStore.isRemoteChanged.mockReturnValue(false);
+		mockMatchRepository.getById.mockResolvedValue(null);
 	});
 
 	it('saves a table-only edit without empty player payloads', async () => {
@@ -235,5 +251,29 @@ describe('featureMatchPanel setup save', () => {
 			'feature-match-1-player-2-form',
 		]);
 		expect(submitButtons.every(button => button.classes().includes('sr-only'))).toBe(true);
+	});
+
+	it('shows the Assignment Note as a compact strip immediately beneath the panel header', async () => {
+		mockAssignmentStore.assignments = [{
+			id: 9,
+			eventId: 1,
+			roundId: 3,
+			slotId: 1,
+			matchId: 7,
+			note: 'Watch the sideboard plan',
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		}];
+		mockAssignmentStore.isRemoteChanged.mockReturnValue(true);
+		mockMatchRepository.getById.mockResolvedValue({ id: 7, roundId: 3 });
+
+		const wrapper = await mountComponent({ matchId: 7 });
+		await flushPromises();
+
+		const note = wrapper.get('.feature-match-note');
+		expect(note.text()).toContain('Watch the sideboard plan');
+		expect(note.classes()).toContain('px-3');
+		expect(note.attributes('data-remote-changed')).toBe('true');
+		expect(wrapper.html().indexOf('feature-match-note')).toBeGreaterThan(wrapper.html().indexOf('data-testid="edit-mode"'));
 	});
 });

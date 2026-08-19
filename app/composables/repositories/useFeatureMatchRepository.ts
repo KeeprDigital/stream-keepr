@@ -1,6 +1,7 @@
 import type {
 	CreateFeatureMatchInput,
 	FeatureMatch,
+	FeatureMatchNoteDiscardConfirmation,
 	FeatureMatchPromotionResponse,
 	UpdateFeatureMatchInput,
 } from '~/types';
@@ -29,10 +30,15 @@ export function useFeatureMatchRepository() {
 		);
 	};
 
-	const promoteMatch = async (eventId: number, slotId: number, matchId: number): Promise<FeatureMatchPromotionResponse> => {
-		return await eventData.command<FeatureMatchPromotionResponse, { matchId: number }>(
+	const promoteMatch = async (
+		eventId: number,
+		slotId: number,
+		matchId: number,
+		confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[],
+	): Promise<FeatureMatchPromotionResponse> => {
+		return await eventData.command<FeatureMatchPromotionResponse, { matchId: number; confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[] }>(
 			{ eventId, resourcePath: 'feature-match-slots', resourceId: slotId, suffix: 'promote' },
-			{ method: 'POST', body: { matchId } },
+			{ method: 'POST', body: { matchId, ...(confirmedNoteDiscards ? { confirmedNoteDiscards } : {}) } },
 		);
 	};
 

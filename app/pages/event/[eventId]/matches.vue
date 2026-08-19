@@ -190,6 +190,8 @@ async function handlePromote(featureMatchId: number, matchId: number) {
 				slotId: featureMatchId,
 				matchId,
 			});
+			if (!result)
+				return true;
 			if (!result.promotedSlot)
 				throw new Error('Failed to promote match');
 			return true;
@@ -316,14 +318,15 @@ const noMatchesAvailableDescription = computed(() => hasRounds.value
 				:matches="matchStore.matches"
 				:players="playerStore.players"
 				:feature-matches="featureMatchesForList"
-				:feature-match-assignments="assignmentStore.assignments"
+				:feature-match-assignments="viewedRoundId ? assignmentStore.assignmentsForRound(viewedRoundId) : []"
+				:save-assignment-note="handleAssignmentNoteBlur"
+				:is-assignment-remote-changed="assignmentStore.isRemoteChanged"
 				:loading="initialLoading"
 				:global-filter="globalFilter"
 				:results-editable="isSelectedRoundManualResults"
 				@promote="handlePromote"
 				@view-deck-list="openPlayerDeckList"
 				@edit-result="handleEditResult"
-				@assignment-note-blur="handleAssignmentNoteBlur"
 			/>
 		</div>
 

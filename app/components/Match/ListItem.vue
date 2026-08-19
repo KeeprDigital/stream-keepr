@@ -12,13 +12,14 @@ const props = defineProps<{
 	featureMatchMenuItems: DropdownMenuItem[][];
 	promoting: boolean;
 	resultsEditable: boolean;
+	saveAssignmentNote?: (assignmentId: number, note: string) => Promise<unknown>;
+	assignmentNoteRemoteChanged?: boolean;
 }>();
 
 const emit = defineEmits<{
 	promote: [featureMatchId: number];
 	viewDeckList: [player: Player];
 	editResult: [match: Match];
-	assignmentNoteBlur: [assignmentId: number, note: string];
 }>();
 
 const { getActiveDeckForPlayer } = usePlayerDeckCache();
@@ -28,13 +29,12 @@ const assignmentNotePreview = computed(() => assignmentNote.value.trim());
 const hasAssignmentNote = computed(() => assignmentNotePreview.value.length > 0);
 const matchRowClasses = computed(() => ({
 	'match-row--featured': !!props.featureMatchAssignment,
-	'match-row--has-note': hasAssignmentNote.value,
 }));
 
-function saveAssignmentNote(note: string) {
-	if (!props.featureMatchAssignment)
+async function saveAssignmentNote(note: string) {
+	if (!props.featureMatchAssignment || !props.saveAssignmentNote)
 		return;
-	emit('assignmentNoteBlur', props.featureMatchAssignment.id, note);
+	return await props.saveAssignmentNote(props.featureMatchAssignment.id, note);
 }
 
 // ── Player Resolution ──
@@ -202,16 +202,6 @@ function getScoreColor(side: 'player1' | 'player2') {
 					<UIcon name="i-lucide-star" class="size-3" />
 					{{ featureMatchLabel }}
 				</UBadge>
-				<UBadge
-					v-if="hasAssignmentNote"
-					color="warning"
-					variant="subtle"
-					size="md"
-					title="This featured match has production notes"
-				>
-					<UIcon name="i-lucide-sticky-note" class="size-3" />
-					Note
-				</UBadge>
 				<div class="match-player-stack items-end">
 					<div class="flex items-center justify-end gap-2 min-w-0">
 						<span data-testid="player1-name" class="truncate" :class="getPlayerResultClasses('player1')">{{ match.player1Data?.name || 'TBD' }}</span>
@@ -289,7 +279,12 @@ function getScoreColor(side: 'player1' | 'player2') {
 						/>
 					</div>
 				</div>
-				<div v-if="hasAssignmentNote" class="match-note-preview" :title="assignmentNotePreview">
+				<div
+					v-if="hasAssignmentNote"
+					class="match-note-preview"
+					:class="{ 'match-note-preview--changed': assignmentNoteRemoteChanged }"
+					:title="assignmentNotePreview"
+				>
 					<UIcon name="i-lucide-sticky-note" class="size-3.5 shrink-0" />
 					<span class="truncate">{{ assignmentNotePreview }}</span>
 				</div>
@@ -307,8 +302,9 @@ function getScoreColor(side: 'player1' | 'player2') {
 					v-if="featureMatchAssignment"
 					:note="assignmentNote"
 					:note-key="featureMatchAssignment.id"
+					:save="saveAssignmentNote"
+					:remote-changed="assignmentNoteRemoteChanged"
 					content-align="end"
-					@save="saveAssignmentNote"
 				>
 					<UButton
 						:icon="hasAssignmentNote ? 'i-lucide-sticky-note' : 'i-lucide-message-square-plus'"
@@ -376,11 +372,6 @@ function getScoreColor(side: 'player1' | 'player2') {
 	box-shadow: inset 0.25rem 0 0 var(--ui-primary);
 }
 
-.match-row--has-note {
-	background: color-mix(in srgb, var(--ui-warning) 8%, transparent);
-	box-shadow: inset 0.25rem 0 0 var(--ui-warning);
-}
-
 .match-left {
 	display: flex;
 	align-items: center;
@@ -400,12 +391,17 @@ function getScoreColor(side: 'player1' | 'player2') {
 	max-width: 12rem;
 	min-width: 0;
 	padding: 0.25rem 0.5rem;
-	border: 1px solid color-mix(in srgb, var(--ui-warning) 35%, transparent);
+	border: 1px solid var(--ui-border);
 	border-radius: 9999px;
-	color: var(--ui-warning);
-	background: color-mix(in srgb, var(--ui-warning) 12%, transparent);
+	color: var(--ui-text-muted);
+	background: var(--ui-bg-elevated);
 	font-size: 0.75rem;
 	line-height: 1rem;
+}
+
+.match-note-preview--changed {
+	border-color: var(--ui-primary);
+	background: color-mix(in srgb, var(--ui-primary) 10%, transparent);
 }
 
 .match-player-stack {

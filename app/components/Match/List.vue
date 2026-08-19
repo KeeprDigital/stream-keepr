@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<{
 	loading?: boolean;
 	globalFilter?: string;
 	resultsEditable?: boolean;
+	saveAssignmentNote?: (assignmentId: number, note: string) => Promise<unknown>;
+	isAssignmentRemoteChanged?: (assignmentId: number) => boolean;
 }>(), {
 	loading: false,
 	globalFilter: '',
@@ -20,7 +22,6 @@ const emit = defineEmits<{
 	promote: [featureMatchId: number, matchId: number];
 	viewDeckList: [player: Player];
 	editResult: [match: Match];
-	assignmentNoteBlur: [assignmentId: number, note: string];
 }>();
 
 const featureMatchItems = useFeatureMatchMenuItems();
@@ -118,10 +119,11 @@ onBeforeUnmount(() => {
 			:feature-match-menu-items="getFeatureMatchMenuItems(match.id)"
 			:promoting="promotingMatchId === match.id"
 			:results-editable="resultsEditable"
+			:save-assignment-note="saveAssignmentNote"
+			:assignment-note-remote-changed="getFeatureMatchAssignment(match.id) ? isAssignmentRemoteChanged?.(getFeatureMatchAssignment(match.id)!.id) : false"
 			@promote="(fmId) => emit('promote', fmId, match.id)"
 			@view-deck-list="(player) => emit('viewDeckList', player)"
 			@edit-result="(selectedMatch) => emit('editResult', selectedMatch)"
-			@assignment-note-blur="(assignmentId, note) => emit('assignmentNoteBlur', assignmentId, note)"
 		/>
 	</div>
 </template>

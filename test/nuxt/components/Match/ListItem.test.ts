@@ -26,7 +26,10 @@ const UDropdownMenuStub = defineComponent({
 	template: '<div><slot /><slot name="item-label" :item="{}" /></div>',
 });
 
-async function mountComponent(matchOverrides?: Parameters<typeof createMockMatch>[0]) {
+async function mountComponent(
+	matchOverrides?: Parameters<typeof createMockMatch>[0],
+	itemOverrides: Record<string, unknown> = {},
+) {
 	const { default: MatchListItem } = await import('~/components/Match/ListItem.vue');
 
 	return mount(MatchListItem, {
@@ -46,6 +49,7 @@ async function mountComponent(matchOverrides?: Parameters<typeof createMockMatch
 			featureMatchMenuItems: [],
 			promoting: false,
 			resultsEditable: true,
+			...itemOverrides,
 		},
 		global: {
 			stubs: {
@@ -131,5 +135,28 @@ describe('matchListItem', () => {
 
 		expect(wrapper.text()).toContain('Bye');
 		expect(wrapper.text()).toContain('Alice');
+	});
+
+	it('shows one subdued Note preview without a warning row or redundant Note badge', async () => {
+		const wrapper = await mountComponent({}, {
+			featureMatchLabel: 'Featured 1',
+			featureMatchAssignment: {
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 2,
+				matchId: 1,
+				note: 'Keep an eye on the sideboard plan',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			assignmentNoteRemoteChanged: true,
+			saveAssignmentNote: vi.fn().mockResolvedValue(undefined),
+		});
+
+		expect(wrapper.get('.match-row').classes()).not.toContain('match-row--has-note');
+		expect(wrapper.get('.match-note-preview').text()).toContain('Keep an eye on the sideboard plan');
+		expect(wrapper.get('.match-note-preview').classes()).toContain('match-note-preview--changed');
+		expect(wrapper.findAll('[data-testid="badge"]').map(badge => badge.text())).not.toContain('Note');
 	});
 });
