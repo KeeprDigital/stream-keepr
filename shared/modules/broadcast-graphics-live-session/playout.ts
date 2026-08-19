@@ -1296,7 +1296,11 @@ function reduceTake(
 						projection,
 						declaration,
 						handoff.entersAt,
-						{ sampleOnAir: false, transitionOnAir: false },
+						{
+							preserveProjectedCurrent: false,
+							sampleOnAir: false,
+							transitionOnAir: false,
+						},
 					)
 				: projection];
 		}));
@@ -1418,17 +1422,17 @@ function acceptResolvedSocialProfileProjection(
 	resolved: BroadcastGraphicSocialProfileProjectionStates[string],
 	declaration: SocialProfileProjectionDeclaration,
 	acceptedAt: number,
-	options: { sampleOnAir: boolean; transitionOnAir: boolean },
+	options: { preserveProjectedCurrent: boolean; sampleOnAir: boolean; transitionOnAir: boolean },
 ): BroadcastGraphicSocialProfileProjectionStates[string] {
-	const sameTalent = previous?.talent?.id !== undefined
-		&& previous.talent.id === resolved.talent?.id;
-	const previousCurrent = previous
+	const sameTalent = previous !== undefined
+		&& previous.talent?.id === resolved.talent?.id;
+	const previousCurrent = previous && options.preserveProjectedCurrent
 		? projectSocialProfileRotation(previous, declaration, {
 			onAir: options.sampleOnAir,
 			now: acceptedAt,
 		}).current?.network
 		?? previous.currentNetwork
-		: undefined;
+		: previous?.manualNetwork;
 	const currentNetwork = sameTalent
 		&& previousCurrent !== undefined
 		&& resolved.acceptedProfiles.some(profile => profile.network === previousCurrent)
@@ -1512,7 +1516,7 @@ function acceptLiveSocialProfileProjections(
 			candidate,
 			declaration,
 			context.acceptedAt,
-			{ sampleOnAir: true, transitionOnAir: true },
+			{ preserveProjectedCurrent: true, sampleOnAir: true, transitionOnAir: true },
 		)];
 	}).filter((entry): entry is [string, BroadcastGraphicSocialProfileProjectionStates[string]] => entry[1] !== undefined));
 }
@@ -1544,7 +1548,7 @@ function acceptStagedSocialProfileProjections(
 			candidate,
 			declaration,
 			context.acceptedAt,
-			{ sampleOnAir: true, transitionOnAir: false },
+			{ preserveProjectedCurrent: true, sampleOnAir: true, transitionOnAir: false },
 		)];
 	}).filter((entry): entry is [string, BroadcastGraphicSocialProfileProjectionStates[string]] => entry[1] !== undefined));
 }
