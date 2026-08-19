@@ -173,6 +173,7 @@ describe('placeBroadcastGraphicTemplate', () => {
 			label: 'Profile',
 			sourceKey: 'talent',
 			presentationGroupId: 'cluster',
+			updatePolicy: 'live',
 			dwellMs: 8_000,
 			transition: 'crossfade',
 			transitionDurationMs: 250,
@@ -188,6 +189,7 @@ describe('placeBroadcastGraphicTemplate', () => {
 			presentationGroupId: groupOf(placed).id,
 		}]);
 		expect(placed.socialProfileProjections![0]!.presentationGroupId).not.toBe('cluster');
+		expect(placed.socialProfileProjections![0]!.updatePolicy).toBe('live');
 		expect(placed.sources).toEqual(document.sources);
 		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
 	});

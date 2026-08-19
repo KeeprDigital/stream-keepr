@@ -13,6 +13,7 @@ import {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfileValues,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
 	projectSocialProfilePresentation,
@@ -175,6 +176,21 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 				mockState(),
 				graphic.id,
 				graphic.inputs ?? [],
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+		return { current, outgoing };
+	},
+	renderedSocialProfileValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
+		const current: Record<string, Record<string, unknown>> = {};
+		const outgoing: Record<string, Record<string, unknown>> = {};
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfileValues(
+				mockState(),
+				graphic,
 				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
 			);
 			current[graphic.id] = rendered.current;
@@ -510,6 +526,51 @@ describe('broadcastGraphicsDisplay', () => {
 		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
 		await nextTick();
 		expect(wrapper.find('[data-graphic-item-kind="group"]').exists()).toBe(false);
+	});
+
+	it('uses the graphic update animation to crossfade an explicitly accepted Social Profile change', async () => {
+		const updateAt = 1_700_000_000_000;
+		const graphic = projectedSocialGraphic();
+		graphic.items[0]!.animation = {
+			update: { duration: 1000, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+		};
+		mockScreen.value = screenWithStack([graphic]);
+		mockOnAirGraphicIds.value = [graphic.id];
+		mockServerNow.value = updateAt;
+		mockPlayout.value = {
+			[graphic.id]: { onAir: true, effectiveStartedAt: updateAt - 10_000, cut: false, updateStartedAt: updateAt - 500 },
+		};
+		mockAcceptedInputs.value = {
+			...createInitialBroadcastGraphicsLiveState(),
+			inputs: {
+				[graphic.id]: { working: {}, accepted: {}, acceptedRevision: 2, updateFrom: {} },
+			},
+			socialProfileProjections: {
+				[graphic.id]: { profile: {
+					acceptedProfiles: [{
+						network: 'youtube',
+						networkLabel: 'YouTube',
+						handle: 'After',
+						profileUrl: 'https://www.youtube.com/@After',
+					}],
+					currentNetwork: 'youtube',
+					updateFrom: {
+						network: 'twitch',
+						networkLabel: 'Twitch',
+						handle: 'Before',
+						profileUrl: 'https://www.twitch.tv/Before',
+					},
+				} },
+			},
+		};
+
+		const wrapper = await mountComponent();
+		await nextTick();
+
+		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text()))
+			.toEqual(['Twitch — @Before', 'YouTube — @After']);
+		expect(wrapper.find('[data-social-profile-presentation]').exists()).toBe(false);
+		expect(wrapper.find('[data-graphic-item-cross-transition="profile-group"]').exists()).toBe(true);
 	});
 
 	it('renders synchronized outgoing and incoming Presentation Groups at the authoritative transition instant', async () => {

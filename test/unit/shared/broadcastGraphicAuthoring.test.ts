@@ -91,6 +91,7 @@ describe('broadcastGraphicAuthoring', () => {
 			label: 'Talent social profile',
 			sourceKey: 'talent',
 			presentationGroupId: 'profile-group',
+			updatePolicy: 'staged',
 			dwellMs: 8_000,
 			transition: 'crossfade',
 			transitionDurationMs: 250,
@@ -161,6 +162,7 @@ describe('broadcastGraphicAuthoring', () => {
 
 		const edited = patchSocialProfileProjection(initial, 'profile', {
 			label: 'Main Talent',
+			updatePolicy: 'live',
 			dwellMs: 60_000,
 			transition: 'slide-left',
 			transitionDurationMs: 2_000,
@@ -169,6 +171,7 @@ describe('broadcastGraphicAuthoring', () => {
 
 		expect(edited.socialProfileProjections?.[0]).toMatchObject({
 			label: 'Main Talent',
+			updatePolicy: 'live',
 			dwellMs: 60_000,
 			transition: 'slide-left',
 			transitionDurationMs: 2_000,

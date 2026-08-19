@@ -2,6 +2,7 @@
 import type { SocialProfileProjectionPatch } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
+	OnAirUpdatePolicy,
 	SocialProfileTransition,
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -161,6 +162,10 @@ const TRANSITION_LABELS: Record<SocialProfileTransition, string> = {
 	'slide-down': 'Slide Down',
 };
 const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label: TRANSITION_LABELS[value], value }));
+const updatePolicyOptions = [
+	{ label: 'Staged', value: 'staged' },
+	{ label: 'Live', value: 'live' },
+] satisfies Array<{ label: string; value: OnAirUpdatePolicy }>;
 </script>
 
 <template>
@@ -252,6 +257,18 @@ const transitionOptions = SOCIAL_PROFILE_TRANSITION_VALUES.map(value => ({ label
 					:disabled="!canAuthor"
 					data-testid="social-profile-projection-source"
 					@update:model-value="patchProjection(projection.key, { sourceKey: String($event) })"
+				/>
+			</UFormField>
+			<UFormField label="On-air Update Policy" size="xs">
+				<USelect
+					:model-value="projection.updatePolicy ?? 'staged'"
+					:items="updatePolicyOptions"
+					value-key="value"
+					class="w-full"
+					size="sm"
+					:disabled="!canAuthor"
+					data-testid="social-profile-projection-update-policy"
+					@update:model-value="patchProjection(projection.key, { updatePolicy: $event as OnAirUpdatePolicy })"
 				/>
 			</UFormField>
 			<div class="grid grid-cols-2 gap-2">

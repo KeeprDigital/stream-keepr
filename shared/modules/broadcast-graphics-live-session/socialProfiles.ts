@@ -35,6 +35,10 @@ export interface SocialProfileProjectionLiveState {
 	rotationAnchor?: SocialProfileRotationAnchor;
 	/** The bounded sampled visual a latest-wins transition replaces. */
 	transitionAnchor?: SocialProfileTransitionAnchor;
+	/** The correlated tuple a Graphic Update cross-transition leaves behind. */
+	updateFrom?: SocialProfileProjectionValue | null;
+	/** The first accepted tuple held behind a running Graphic Update. */
+	pendingUpdateFrom?: SocialProfileProjectionValue | null;
 }
 
 export interface SocialProfileRotationAnchor {
@@ -102,6 +106,22 @@ function sameSocialProfileTuple(
 		&& left.networkLabel === right.networkLabel
 		&& left.handle === right.handle
 		&& left.profileUrl === right.profileUrl;
+}
+
+/** Whether Event Data resolves the same accepted Talent and correlated profile set. */
+export function sameSocialProfileProjectionAcceptance(
+	left: Pick<SocialProfileProjectionLiveState, 'talent' | 'acceptedProfiles'> | undefined,
+	right: Pick<SocialProfileProjectionLiveState, 'talent' | 'acceptedProfiles'> | undefined,
+): boolean {
+	if (left === undefined || right === undefined)
+		return left === right;
+	if (left.talent?.id !== right.talent?.id || left.talent?.name !== right.talent?.name)
+		return false;
+	return left.acceptedProfiles.length === right.acceptedProfiles.length
+		&& left.acceptedProfiles.every((profile, index) => {
+			const candidate = right.acceptedProfiles[index];
+			return candidate !== undefined && sameSocialProfileTuple(profile, candidate);
+		});
 }
 
 /**

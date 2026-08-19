@@ -210,6 +210,19 @@ describe('graphicsCompositorSocialProfileProjections', () => {
 		expect(wrapper.find('[data-testid="social-profile-projection-transition-duration"]').exists()).toBe(false);
 	});
 
+	it('authors the staged or live On-air Update Policy for each projection', async () => {
+		const wrapper = await mountComponent();
+		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');
+		const added = emittedGraphic(wrapper);
+		await wrapper.setProps({ graphics: [added] });
+
+		const policy = wrapper.get('[data-testid="social-profile-projection-update-policy"]');
+		expect((policy.element as unknown as HTMLSelectElement).value).toBe('staged');
+		await policy.setValue('live');
+
+		expect(emittedGraphic(wrapper, 1).socialProfileProjections?.[0]?.updatePolicy).toBe('live');
+	});
+
 	it('constrains edited labels and timing controls to strict-save scalar bounds', async () => {
 		const wrapper = await mountComponent();
 		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');

@@ -242,6 +242,26 @@ function socialProfileProjectionsFault(projections: unknown): BroadcastGraphicsR
 				}
 			}
 
+			for (const field of ['updateFrom', 'pendingUpdateFrom'] as const) {
+				if (!(field in projection) || projection[field] === null)
+					continue;
+				const snapshot = projection[field];
+				if (!isRecord(snapshot))
+					return fault('corrupt', `the ${field} Social Profile update snapshot for ${identity} is not a record`);
+				if (typeof snapshot.network !== 'string' || !supportedNetworks.has(snapshot.network))
+					return fault('incompatible', `the ${field} Social Profile update snapshot for ${identity} is unsupported`);
+				const network = snapshot.network as SupportedSocialNetwork;
+				if (
+					typeof snapshot.handle !== 'string'
+					|| snapshot.handle.length === 0
+					|| snapshot.handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
+					|| snapshot.networkLabel !== SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].label
+					|| snapshot.profileUrl !== canonicalSocialProfileUrl(network, snapshot.handle)
+				) {
+					return fault('incompatible', `the ${field} Social Profile update snapshot for ${identity} is not correlated`);
+				}
+			}
+
 			if ('transitionAnchor' in projection) {
 				if (!isRecord(projection.transitionAnchor))
 					return fault('corrupt', `the Social Profile Transition anchor for ${identity} is not a record`);

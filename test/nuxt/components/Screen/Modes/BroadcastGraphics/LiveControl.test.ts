@@ -335,6 +335,49 @@ describe('broadcastGraphicsLiveControl', () => {
 		expect(mockSetSocialProfileAutomatic).toHaveBeenCalledWith(7, 3, 'lower-third', 'profile', false);
 	});
 
+	it('labels staged Social Profile changes separately and offers Update without exposing pending-only choices', async () => {
+		mockLiveState.value = {
+			playout: { 'lower-third': { onAir: true, effectiveStartedAt: 0, cut: false } },
+			inputs: {},
+			sources: { 'lower-third': { talent: 7 } },
+			socialProfileProjections: {
+				'lower-third': { profile: {
+					talent: { id: 7, name: 'Ava Reed' },
+					acceptedProfiles: [{
+						network: 'twitch',
+						networkLabel: 'Twitch',
+						handle: 'AcceptedLive',
+						profileUrl: 'https://www.twitch.tv/AcceptedLive',
+					}],
+					currentNetwork: 'twitch',
+				} },
+			},
+		};
+		mockBindingData.value = {
+			...createEmptyGraphicBindingDataSet(),
+			talents: { 7: { name: 'Ava Reed', socialProfiles: { youtube: 'PendingOnly' } } },
+		};
+		const wrapper = await mountComponent(graphic([], {
+			sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
+			socialProfileProjections: [{
+				key: 'profile',
+				label: 'Social Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+				updatePolicy: 'staged',
+			}],
+		}), 'on-air');
+
+		const control = wrapper.get('[data-social-profile-projection="profile"]');
+		expect(control.get('[data-testid="live-control-social-profile-status"]').text()).toBe('Pending');
+		expect(control.get('[data-testid="live-control-social-profile-profile"]')
+			.findAll('option').map(option => option.text())).toEqual(['Twitch — @AcceptedLive']);
+		expect(wrapper.get('[data-testid="live-control-update"]').attributes('disabled')).toBeUndefined();
+	});
+
 	it('keeps many-profile controls operable while an earlier command is pending', async () => {
 		mockLiveState.value = {
 			...createInitialBroadcastGraphicsLiveState(),

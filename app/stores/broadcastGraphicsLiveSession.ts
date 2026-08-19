@@ -35,6 +35,7 @@ import {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfileValues,
 	BroadcastGraphicsCommandRejection,
 	broadcastGraphicSourceSelections,
 	changedBroadcastGraphicsLiveState,
@@ -432,6 +433,34 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				state,
 				graphic.id,
 				graphic.inputs ?? [],
+				renderTimingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
+	}
+
+	/** The correlated profile rendering each Graphic Update draws now and leaves. */
+	function renderedSocialProfileValues(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, SocialProfileProjectionValues>;
+		outgoing: Record<string, SocialProfileProjectionValues>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, SocialProfileProjectionValues> = {};
+		const outgoing: Record<string, SocialProfileProjectionValues> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfileValues(
+				state,
+				graphic,
 				renderTimingFor(graphic, instant),
 			);
 			current[graphic.id] = rendered.current;
@@ -1081,6 +1110,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		onAirGraphicIds,
 		animationProjection,
 		renderedInputValues,
+		renderedSocialProfileValues,
 		isPending,
 		inputRefusal,
 		inputsState,

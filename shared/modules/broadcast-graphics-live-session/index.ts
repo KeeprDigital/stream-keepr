@@ -74,6 +74,7 @@ export {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfileValues,
 	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
@@ -109,6 +110,7 @@ export {
 	projectSocialProfilePresentation,
 	projectSocialProfileRotation,
 	resolveSocialProfileProjectionAcceptances,
+	sameSocialProfileProjectionAcceptance,
 	socialProfilePresentationProjections,
 	socialProfileProjectionValues,
 } from './socialProfiles';
