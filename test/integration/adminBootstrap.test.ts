@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fetch } from './client';
+import { fetch, url } from './client';
 import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN, INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 
@@ -45,7 +45,10 @@ async function ensureAdmin(body: unknown, headers: Record<string, string> = {
 async function signIn(email: string, password: string) {
 	return fetch('/api/auth/sign-in/email', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		// `Origin` because a browser sends one and this request stands in for one:
+		// Better Auth's CSRF defence is live against the mounted handler since
+		// #410, and `auth.test.ts` is where what it refuses is asserted.
+		headers: { 'Content-Type': 'application/json', 'Origin': url('/') },
 		body: JSON.stringify({ email, password }),
 	});
 }
