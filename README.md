@@ -337,8 +337,8 @@ not lift a ban, and it does not rename an existing account.
 
 Nothing stores "already bootstrapped" — deleting the secret is what disarms the
 route, which is why the third command matters. Locally the name lives in `.env`
-and `.dev.vars` and can stay set; a deployed installation should hold it only
-for the minute between the first and third commands.
+and can stay set; a deployed installation should hold it only for the minute
+between the first and third commands.
 
 ### Everybody else's account
 

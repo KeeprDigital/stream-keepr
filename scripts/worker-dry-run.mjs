@@ -16,7 +16,7 @@
  * bundle correctly and the README *outside the repository*. An absolute path
  * is the one form both resolutions agree on.
  *
- * `.dev.vars` under `pnpm preview` has the same config-relative rule and cost
+ * The `.env` a previewed Worker reads has the same config-relative rule and cost
  * this repository more; see `scripts/stage-preview-secrets.mjs`.
  */
 

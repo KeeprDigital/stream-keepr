@@ -12,13 +12,12 @@ export const DEFAULT_INTEGRATION_WRANGLER_PERSIST_DIR = '.wrangler/state/integra
  * `integrationSetupOptions.env` is not enough, and the difference is not
  * academic. `@nuxt/test-utils` spreads that object into the server child it
  * spawns and nowhere else — but `loadFixture()` runs `loadNuxt()` in this
- * process first, against the repository root, which is where a developer's
- * `.dev.vars` lives. Anything that reads the environment during config load
- * therefore reads an environment with no sign that a suite is running, and
- * whatever it writes there is inherited by the server child, where only the two
- * names `env` happens to pin get overridden.
+ * process first, against the repository root, which is where a developer's own
+ * `.env` lives. Anything that reads the environment during config load therefore
+ * reads an environment with no sign that a suite is running, and whatever it says
+ * about it is said on every run of a suite behaving exactly as intended.
  *
- * `build/devVars.ts` is the current reader; the point is that it must not have
+ * `build/localConfiguration.ts` is the current reader; the point is that it must not have
  * to be the only one anybody remembers. Announcing it here means the answer to
  * "is this the integration suite?" is the same in the parent and the child, and
  * is the same question `nuxt.config.ts` already asks.

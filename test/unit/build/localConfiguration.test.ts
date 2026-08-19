@@ -1,22 +1,25 @@
-import type { LocallyRequiredNuxtName } from '~~/build/devVars';
-import { readFileSync } from 'node:fs';
+import type { LocallyRequiredNuxtName } from '~~/build/localConfiguration';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-	adoptDevVars,
-	adoptDevVarsInto,
-	adoptsDevVars,
-	devVarsAbsentNotice,
-	devVarsLogLine,
+	announcesLocalConfiguration,
 	LOCAL_NUXT_NAME_SURFACES,
+	localConfigurationBootNotice,
+	localConfigurationLogLine,
 	LOCALLY_OPTIONAL_NUXT_NAMES,
 	LOCALLY_REQUIRED_NUXT_NAMES,
 	missingLocalNuxtNames,
-	parseDevVars,
-} from '~~/build/devVars';
+	parseDotenv,
+} from '~~/build/localConfiguration';
+
+/** The name of the file #412 deleted, named once for the rows that rule it out. */
+const DELETED_FILE = '.dev.vars';
 
 /**
- * A `.env`-configured environment: every required name set, no `.dev.vars` needed.
+ * A configured checkout: every required name set, which since #412 means one
+ * file supplied them.
  *
  * Built from `LOCALLY_REQUIRED_NUXT_NAMES` rather than written out, because the
  * cells below mean "a configured checkout" and a transcription of the list stops
@@ -38,133 +41,54 @@ function configuredEnv(): Record<string, string | undefined> {
 	);
 }
 
-/** The same names as a `.dev.vars` body, for the cell where the file supplies them. */
-function configuredDevVarsBody(): string {
-	return `${Object.entries(configuredEnv()).map(([name, value]) => `${name}=${value}`).join('\n')}\n`;
-}
-
-describe('which processes adopt `.dev.vars` at all', () => {
-	it('adopts in an ordinary dev server, which is the whole point', () => {
-		expect(adoptsDevVars({ dev: true, env: {} })).toBe(true);
-	});
-
-	it('never adopts in a build, where these names come from real secrets', () => {
-		// Reading a local file here would bake a developer's key into the output.
-		expect(adoptsDevVars({ dev: false, env: {} })).toBe(false);
+describe('which processes say anything about local configuration at all', () => {
+	it('speaks in an ordinary dev server, which is the whole point', () => {
+		expect(announcesLocalConfiguration({ dev: true, env: {} })).toBe(true);
 	});
 
 	/**
-	 * The integration suite runs its own `nuxt dev`, and pins the two names it
-	 * needs in `integrationSetupOptions.env`. Those two survive because the
-	 * spawned server's environment overrides them — but only those two. Any other
-	 * `NUXT_` name in whatever `.dev.vars` a developer happens to have would be
-	 * adopted into the parent process, inherited by that server, and overridden by
-	 * nothing: isolation by the coincidence of which names the suite pinned. The
-	 * refusal has to be here, where the reading happens.
+	 * A build's names come from Worker secrets, and its process is not a checkout
+	 * anybody is about to develop in. #130's notice is advice to a developer at a
+	 * dev server, and a build reading it would be a build being told to copy a file
+	 * that must never reach its output.
 	 */
-	it('never adopts under the integration suite, whose environment is its own', () => {
-		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'true' } })).toBe(false);
+	it('says nothing in a build, whose names are not a checkout\'s to supply', () => {
+		expect(announcesLocalConfiguration({ dev: false, env: {} })).toBe(false);
+	});
+
+	/**
+	 * The integration suite runs its own `nuxt dev`, and pins the names it needs
+	 * into the *server child's* environment rather than its own. Its parent process
+	 * is therefore short of every one of them by design, so a notice keyed on what
+	 * this process can supply would fire on every run of a suite that is behaving
+	 * exactly as intended.
+	 *
+	 * Before #412 this refusal did a second job — it kept a developer's `.dev.vars`
+	 * from being adopted into the parent and inherited by the child, where only the
+	 * names the suite thought to pin were overridden (#197, #222). That job went
+	 * away with the file and the adoption; the silence is now about noise alone.
+	 */
+	it('says nothing under the integration suite, whose environment is its own', () => {
+		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'true' } })).toBe(false);
 	});
 
 	it('reads that announcement exactly as the rest of the repo reads it', () => {
 		// `nuxt.config.ts` and `server/plugins/error-handler.ts` both test for
-		// `'true'`. A looser reading here would make a developer with the variable
-		// set to anything else silently lose the fix this module exists to deliver.
-		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'false' } })).toBe(true);
-		expect(adoptsDevVars({ dev: true, env: { STREAM_KEEPR_INTEGRATION: '' } })).toBe(true);
-	});
-});
-
-/**
- * The whole decision, not only the predicate. The Nuxt module is an adapter
- * around this and cannot be reached by the unit suite, so a refusal that lived
- * only at the module's own call site would be a refusal nothing checks.
- */
-describe('the decision the Nuxt module delegates', () => {
-	const BODY = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=key\n';
-
-	it('adopts what it reads in an ordinary dev server', () => {
-		const env: Record<string, string | undefined> = {};
-
-		const adoption = adoptDevVarsInto({ dev: true, env, read: () => BODY });
-
-		expect(adoption.adopted).toEqual(['NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY']);
-		expect(adoption.outcome).toBe('read');
-		expect(env.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY).toBe('key');
-	});
-
-	it('never opens the file under the integration suite', () => {
-		// Not reading it is the refusal. A version that read the file and then
-		// discarded what it found would still have `.dev.vars` in its hands, one
-		// edit away from the leak this exists to prevent.
-		const env: Record<string, string | undefined> = { STREAM_KEEPR_INTEGRATION: 'true' };
-		let reads = 0;
-
-		const adoption = adoptDevVarsInto({
-			dev: true,
-			env,
-			read: () => {
-				reads += 1;
-				return BODY;
-			},
-		});
-
-		expect(reads).toBe(0);
-		expect(adoption).toEqual({
-			adopted: [],
-			retained: [],
-			outcome: 'refused',
-			missing: [...LOCALLY_REQUIRED_NUXT_NAMES],
-		});
-		expect('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY' in env).toBe(false);
-	});
-
-	it('never opens the file in a build', () => {
-		let reads = 0;
-
-		const adoption = adoptDevVarsInto({
-			dev: false,
-			env: {},
-			read: () => {
-				reads += 1;
-				return BODY;
-			},
-		});
-
-		expect(reads).toBe(0);
-		expect(adoption.outcome).toBe('refused');
-	});
-
-	it('is content with a project that has no `.dev.vars` at all', () => {
-		const env: Record<string, string | undefined> = {};
-
-		expect(adoptDevVarsInto({ dev: true, env, read: () => null }))
-			.toEqual({ adopted: [], retained: [], outcome: 'absent', missing: [...LOCALLY_REQUIRED_NUXT_NAMES] });
-	});
-
-	it('counts what is missing after adoption, not before it', () => {
-		// The names this very run supplied must not read as missing. Computing
-		// `missing` before `adoptDevVars` would make every successful adoption warn.
-		const env: Record<string, string | undefined> = {};
-
-		const adoption = adoptDevVarsInto({
-			dev: true,
-			env,
-			read: configuredDevVarsBody,
-		});
-
-		expect(adoption.missing).toEqual([]);
+		// `'true'`. A looser reading here would silence the notice for a developer
+		// who happens to have the variable set to anything else at all.
+		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: 'false' } })).toBe(true);
+		expect(announcesLocalConfiguration({ dev: true, env: { STREAM_KEEPR_INTEGRATION: '' } })).toBe(true);
 	});
 });
 
 /**
  * #130: that a checkout with no local configuration says so once, at boot.
  *
- * The trap the issue is about is a fresh `git worktree`, which inherits neither
- * `.env` nor `.dev.vars` because both are gitignored, and then fails in whatever way
- * the first surface needing a secret fails. That is unit-testable only because the
- * decision lives in `devVars` rather than in the Nuxt module — the #242 precedent —
- * so what the notice says and which runs get it are both settled here.
+ * The trap the issue is about is a fresh `git worktree`, which inherits no `.env`
+ * because it is gitignored, and then fails in whatever way the first surface
+ * needing a secret fails. That is unit-testable only because the decision lives
+ * here rather than in the Nuxt module — the #242 precedent — so what the notice
+ * says and which runs get it are both settled in this file.
  */
 describe('which names a local checkout has to be given', () => {
 	it('counts a blank as missing, the way the readers that refuse count it', () => {
@@ -189,12 +113,17 @@ describe('which names a local checkout has to be given', () => {
 		expect(missingLocalNuxtNames(env)).toEqual(['NUXT_GRAPHICS_ADMIN_TOKEN']);
 	});
 
-	it('partitions exactly the names `.dev.vars.example` assigns', () => {
+	/**
+	 * Repointed from `.dev.vars.example` on #412, which is the whole of what the
+	 * partition lost when that file went: `.env.example` is now the file a
+	 * developer copies, and it assigns three names the old one never did.
+	 */
+	it('partitions exactly the names `.env.example` assigns', () => {
 		// The honest home for "the known names". The example file is what a developer
-		// copies, so a fourth name added there has to be sorted into required or
+		// copies, so a ninth name added there has to be sorted into required or
 		// deliberately-optional before this passes — rather than silently becoming a
 		// name the notice never mentions.
-		const example = readFileSync(fileURLToPath(new URL('../../../.dev.vars.example', import.meta.url)), 'utf8');
+		const example = readFileSync(fileURLToPath(new URL('../../../.env.example', import.meta.url)), 'utf8');
 		const assigned = [...example.matchAll(/^(NUXT_\w+)=/gm)].map(match => match[1]).sort();
 
 		expect(assigned).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES, ...LOCALLY_OPTIONAL_NUXT_NAMES].sort());
@@ -220,6 +149,26 @@ describe('which names a local checkout has to be given', () => {
 	});
 
 	/**
+	 * The three names #412 brought into the partition, and the side they belong on.
+	 *
+	 * They were outside it until this ticket only because the partition was pinned
+	 * against `.dev.vars.example`, which never assigned them — the reason the ticket
+	 * gives for a previewed Worker having no Melee credential key at all. Optional
+	 * because nothing refuses at boot without them: a notice naming them would send a
+	 * developer after a secret they do not need yet, which is cell H's lesson.
+	 */
+	it('leaves the Melee names optional, because nothing refuses at boot without them', () => {
+		for (const name of [
+			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
+			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
+			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
+		] as const) {
+			expect(LOCALLY_OPTIONAL_NUXT_NAMES).toContain(name);
+			expect(LOCALLY_REQUIRED_NUXT_NAMES).not.toContain(name);
+		}
+	});
+
+	/**
 	 * #396's half of the #394 handoff, pinned rather than left to a docblock.
 	 *
 	 * Both names sat in the optional list from #393 and #394 with a written promise
@@ -240,71 +189,53 @@ describe('which names a local checkout has to be given', () => {
  * #130: that a checkout without local configuration says so once, at boot — and that
  * a checkout *with* it says nothing.
  *
- * The four cells are the whole point, and the fourth is the one #130's review found.
- * The first version keyed the notice on the missing `.dev.vars` file alone, which is
- * wrong because Nuxt loads `.env` into `process.env` before a module's `setup` runs —
- * that is precisely why `adoptDevVars` never overwrites what it finds. A developer
- * who read #130's own `.env`-centric ticket text and copied `.env` alone was then
- * told their working installation kept its empty defaults and answered 503. Both
- * clauses false, from a notice that exists to stop false readings.
+ * The cells are the whole point, and the one #130's review found is the one where a
+ * populated `.env` supplies the names. The first version keyed the notice on a
+ * missing `.dev.vars` file alone, which is wrong because Nuxt loads `.env` into
+ * `process.env` before a module's `setup` runs — a developer who read #130's own
+ * `.env`-centric ticket text and copied `.env` alone was then told their working
+ * installation kept its empty defaults and answered 503. Both clauses false, from a
+ * notice that exists to stop false readings.
+ *
+ * #412 deleted the file the other cells were about, and left this one: keyed on the
+ * names, it is the only cell there ever needed to be.
  */
 describe('what a dev server says about its local configuration', () => {
-	/** Cell A: no file, nothing in the environment. The worktree case. */
-	it('warns when neither the file nor the environment supplies the names', () => {
-		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env: {}, read: () => null }));
+	it('warns when nothing in the environment supplies the names', () => {
+		const line = localConfigurationLogLine({ dev: true, env: {} });
 
 		expect(line?.level).toBe('warn');
 		for (const name of LOCALLY_REQUIRED_NUXT_NAMES)
 			expect(line?.message).toContain(name);
 	});
 
-	/** Cell B: the file supplies them. The primary checkout. */
-	it('reports the adoption, and does not warn, when the file supplies them', () => {
-		const line = devVarsLogLine(adoptDevVarsInto({
-			dev: true,
-			env: {},
-			read: configuredDevVarsBody,
-		}));
+	it('warns about an `.env` that exists and supplies nothing', () => {
+		// `cp .env.example .env`, which is advice this very notice gives. Keyed on
+		// the names, this cell is covered for free; keyed on the file it would have
+		// been silent here, which is a real 503 with no explanation.
+		const blanks = Object.fromEntries(LOCALLY_REQUIRED_NUXT_NAMES.map(name => [name, '']));
 
-		expect(line?.level).toBe('info');
-		expect(line?.message).toBe(`Using ${LOCALLY_REQUIRED_NUXT_NAMES.join(', ')} from .dev.vars`);
-	});
-
-	/** Cell C: a file that exists and is empty — `cp .dev.vars.example .dev.vars`. */
-	it('warns about a file that exists and supplies nothing', () => {
-		// Keyed on the names, so this cell is covered for free. Keyed on the file it
-		// would have been silent here, which is a real 503 with no explanation.
-		const line = devVarsLogLine(adoptDevVarsInto({
-			dev: true,
-			env: {},
-			read: () => LOCALLY_REQUIRED_NUXT_NAMES.map(name => `${name}=""`).join('\n'),
-		}));
-
-		expect(line?.level).toBe('warn');
+		expect(localConfigurationLogLine({ dev: true, env: blanks })?.level).toBe('warn');
 	});
 
 	/**
-	 * Cell D: a populated `.env` and no `.dev.vars` — the blocker #130's review found.
-	 *
-	 * This is what a reader of the issue's own text builds, and the installation
-	 * works. Saying anything here is saying something false.
+	 * The configured checkout, which is now the ordinary one: `.env` is loaded into
+	 * `process.env` before this module's `setup` runs, so by the time the decision is
+	 * made the names are simply there. Saying anything here is saying something false.
 	 */
-	it('says nothing when `.env` already supplied the names and there is no `.dev.vars`', () => {
-		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env: configuredEnv(), read: () => null }));
-
-		expect(line).toBeUndefined();
+	it('says nothing when `.env` already supplied the names', () => {
+		expect(localConfigurationLogLine({ dev: true, env: configuredEnv() })).toBeUndefined();
 	});
 
-	it('stays silent for the two runs that decline to open the file at all', () => {
+	it('stays silent for the two runs that are not a developer\'s dev server', () => {
 		// Both are short of these names in their own process — the integration suite
 		// pins them into the server child's environment, not its own — so a gate on
-		// `missing` alone would warn them every run about a deliberate refusal.
-		const integration = devVarsLogLine(adoptDevVarsInto({
+		// `missing` alone would warn them on every run about behaving correctly.
+		const integration = localConfigurationLogLine({
 			dev: true,
 			env: { STREAM_KEEPR_INTEGRATION: 'true' },
-			read: () => null,
-		}));
-		const build = devVarsLogLine(adoptDevVarsInto({ dev: false, env: {}, read: () => null }));
+		});
+		const build = localConfigurationLogLine({ dev: false, env: {} });
 
 		expect(integration).toBeUndefined();
 		expect(build).toBeUndefined();
@@ -324,7 +255,7 @@ describe('what a dev server says about its local configuration', () => {
 		const env = configuredEnv();
 		delete env.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY;
 
-		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env, read: () => null }));
+		const line = localConfigurationLogLine({ dev: true, env });
 
 		expect(line?.level).toBe('warn');
 		expect(line?.message).toContain('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY');
@@ -346,7 +277,7 @@ describe('what a dev server says about its local configuration', () => {
 		const env = configuredEnv();
 		delete env.NUXT_GRAPHICS_ADMIN_TOKEN;
 
-		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env, read: () => null }));
+		const line = localConfigurationLogLine({ dev: true, env });
 
 		expect(line?.message).toContain('Graphics Administrator operations');
 		expect(line?.message).not.toContain('Screen Output asset capabilities');
@@ -366,7 +297,7 @@ describe('what a dev server says about its local configuration', () => {
 		const env = configuredEnv();
 		delete env[missing];
 
-		const line = devVarsLogLine(adoptDevVarsInto({ dev: true, env, read: () => null }));
+		const line = localConfigurationLogLine({ dev: true, env });
 
 		expect(line?.level).toBe('warn');
 		expect(line?.message).toContain(missing);
@@ -380,20 +311,21 @@ describe('what a dev server says about its local configuration', () => {
 });
 
 describe('the notice a missing name produces', () => {
-	const notice = devVarsAbsentNotice([...LOCALLY_REQUIRED_NUXT_NAMES]);
+	const notice = localConfigurationBootNotice([...LOCALLY_REQUIRED_NUXT_NAMES]);
 
-	it('names both gitignored files, so the reader knows what to copy', () => {
-		// `.env` as well as `.dev.vars`: a worktree is missing both, and a notice that
-		// named only the file it happened to look for would send the reader back for
-		// the other one after the next 503.
-		//
-		// The lookaheads are load-bearing. `toContain('.env')` is satisfied by
+	/**
+	 * One file, since #412. The notice named two and a copy step for both, and the
+	 * second of them no longer exists — a reader sent after it would spend the trip
+	 * and arrive at nothing, which is this repository's own definition of a comment
+	 * worse than no comment.
+	 */
+	it('names the one gitignored file, so the reader knows what to copy', () => {
+		// The lookahead is load-bearing. `toContain('.env')` is satisfied by
 		// `.env.example`, so the first version of this assertion passed against a
 		// notice that had stopped naming `.env` at all.
 		expect(notice).toMatch(/\.env(?!\.example)/);
-		expect(notice).toMatch(/\.dev\.vars(?!\.example)/);
 		expect(notice).toContain('.env.example');
-		expect(notice).toContain('.dev.vars.example');
+		expect(notice).not.toContain(DELETED_FILE);
 	});
 
 	it('names the cause and the fix, not just the condition', () => {
@@ -421,19 +353,53 @@ describe('the notice a missing name produces', () => {
 		// away is worse than no pointer: it costs the reader the trip and they arrive
 		// at a hazard list with no instruction in it.
 		//
-		// The command itself rather than a mention of the filenames. The document
-		// names both files a dozen times over — a check for that is satisfied by prose
+		// The command itself rather than a mention of the filename. The document
+		// names the file a dozen times over — a check for that is satisfied by prose
 		// about the problem, which is exactly what the reader already has.
 		const doc = readFileSync(fileURLToPath(new URL('../../../docs/agents/parallel-rounds.md', import.meta.url)), 'utf8');
 
 		expect(notice).toContain('docs/agents/parallel-rounds.md');
-		expect(doc).toContain('cp .env .dev.vars');
+		expect(doc).toContain('cp .env ');
 	});
 });
 
-describe('reading a .dev.vars body', () => {
+/**
+ * #412's first acceptance criterion, made executable: nothing sends a reader after
+ * the file that no longer exists.
+ *
+ * Two rows rather than a repository-wide grep for the name, and the distinction is
+ * this repository's own: a sentence saying what *used to* be true is how every
+ * correction here is written, and a scan that banned the string outright would ban
+ * the explanations along with the instructions. What must not survive is an
+ * instruction — a copy step, or an example file to copy — so those are what these
+ * read.
+ */
+describe('the file this ticket deleted', () => {
+	const root = fileURLToPath(new URL('../../../', import.meta.url));
+
+	it('has no example left for anyone to copy', () => {
+		expect(existsSync(join(root, `${DELETED_FILE}.example`))).toBe(false);
+		// The negative control: the example that survives is the one the notice sends
+		// its reader to, so a checkout that has neither would pass the row above.
+		expect(existsSync(join(root, '.env.example'))).toBe(true);
+	});
+
+	it('is in no copy step the worktree instructions give', () => {
+		// Read as commands rather than as prose. The document explains the two-file
+		// era in the past tense on purpose — what must not survive is a line an agent
+		// pastes into a shell, and that is what this reads.
+		const doc = readFileSync(join(root, 'docs/agents/parallel-rounds.md'), 'utf8');
+		const copySteps = [...doc.matchAll(/^cp .*$/gm)].map(match => match[0]);
+
+		expect(copySteps.length).toBeGreaterThan(0);
+		for (const step of copySteps)
+			expect(step).not.toContain(DELETED_FILE);
+	});
+});
+
+describe('reading a dotenv body', () => {
 	it('reads plain, quoted and exported entries alike', () => {
-		const values = parseDevVars([
+		const values = parseDotenv([
 			'NUXT_PLAIN=plain',
 			'NUXT_DOUBLE="double value"',
 			'NUXT_SINGLE=\'single value\'',
@@ -451,7 +417,7 @@ describe('reading a .dev.vars body', () => {
 	});
 
 	it('ignores comments, blank lines and anything that is not an assignment', () => {
-		const values = parseDevVars([
+		const values = parseDotenv([
 			'# The whole file is commented at the top',
 			'',
 			'   ',
@@ -464,50 +430,5 @@ describe('reading a .dev.vars body', () => {
 			NUXT_KEPT: 'kept',
 			NUXT_QUOTED: 'kept # inside quotes',
 		});
-	});
-});
-
-describe('adopting a .dev.vars body into an environment', () => {
-	it('copies the NUXT_-prefixed names that runtimeConfig reads', () => {
-		const env: Record<string, string | undefined> = {};
-
-		const adoption = adoptDevVars('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=key\n', env);
-
-		expect(env.NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY).toBe('key');
-		expect(adoption.adopted).toEqual(['NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY']);
-	});
-
-	it('leaves a Worker\'s own bindings where they are', () => {
-		// Everything unprefixed in that file is a binding name meant for workerd.
-		// Copying it into a Node process would put a name into scope that nothing
-		// there is entitled to read.
-		const env: Record<string, string | undefined> = {};
-
-		adoptDevVars('SOME_BINDING=value\nDB=other\n', env);
-
-		expect(env).toEqual({});
-	});
-
-	it('never overwrites a value the environment already carries', () => {
-		// `.env` and the shell are the authoritative sources; `.dev.vars` only
-		// fills what neither of them said.
-		const env: Record<string, string | undefined> = { NUXT_GRAPHICS_ADMIN_TOKEN: 'from-env' };
-
-		const adoption = adoptDevVars('NUXT_GRAPHICS_ADMIN_TOKEN=from-dev-vars\n', env);
-
-		expect(env.NUXT_GRAPHICS_ADMIN_TOKEN).toBe('from-env');
-		expect(adoption.adopted).toEqual([]);
-		expect(adoption.retained).toEqual(['NUXT_GRAPHICS_ADMIN_TOKEN']);
-	});
-
-	it('does not adopt an empty value over a runtimeConfig default', () => {
-		// `.dev.vars.example` ships its names with empty values, and a copied
-		// blank would read as "configured" everywhere downstream.
-		const env: Record<string, string | undefined> = {};
-
-		const adoption = adoptDevVars('NUXT_GRAPHICS_ADMIN_TOKEN=""\n', env);
-
-		expect('NUXT_GRAPHICS_ADMIN_TOKEN' in env).toBe(false);
-		expect(adoption.adopted).toEqual([]);
 	});
 });

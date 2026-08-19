@@ -17,7 +17,7 @@
  * - **The first-admin bootstrap.** With `NUXT_ADMIN_BOOTSTRAP_TOKEN` in hand the
  *   harness ensures its **own** account — a dedicated address, never a
  *   developer's — and signs in as that. This is the ordinary local path, and
- *   `.dev.vars` is where the token comes from, which is why #396 made that name
+ *   `.env` is where the token comes from, which is why #396 made that name
  *   one a local run is checked for (`./local-configuration.mjs`).
  *
  * **The password is generated per run and never written down.** A literal in
@@ -66,7 +66,7 @@ function usable(value) {
  *
  * `supplied` is what the checkout's own files could give — resolved by
  * `suppliedNames` in `./local-configuration.mjs` — and it is consulted **only**
- * for a local run. Sending a local `.dev.vars` token to a deployed origin would
+ * for a local run. Sending a checkout's own token to a deployed origin would
  * be handing this checkout's secret to a remote host on the strength of a
  * default, which is not a mistake a harness should be able to make.
  *
@@ -101,10 +101,10 @@ export function operatorCredentialPlan({ deployed = false, env = {}, supplied = 
  * What to set, and why this run stopped before it opened anything.
  *
  * Split by mode because the two readers are in different positions. A local run
- * is almost always a checkout missing its gitignored files, and the fix is the
+ * is almost always a checkout missing its gitignored `.env`, and the fix is the
  * copy step every other notice here points at. A deployed run has no such file
- * to copy and never reads one, so telling its reader about `.dev.vars` would
- * send them after something that could not have helped.
+ * to copy and never reads one, so telling its reader about `.env` would send
+ * them after something that could not have helped.
  *
  * @param {{ deployed?: boolean }} options
  */
@@ -122,9 +122,9 @@ export function operatorUnavailableNotice({ deployed = false } = {}) {
 
 	return `This run has no operator to sign in as, and every route behind the API boundary answers 401 `
 		+ `without one, so nothing would have been proved. A local run ordinarily takes ${BOOTSTRAP_TOKEN_NAME} `
-		+ `from .env or .dev.vars and creates its own account through the first-admin bootstrap; a fresh git `
-		+ `worktree has neither file, because both are gitignored. Fix: copy .env and .dev.vars in from the `
-		+ `checkout you branched from, or fill in .env.example and .dev.vars.example. ${credentials} instead, `
+		+ `from .env and creates its own account through the first-admin bootstrap; a fresh git worktree has no `
+		+ `such file, because it is gitignored. Fix: copy .env in from the checkout you branched from, or fill `
+		+ `in .env.example. ${credentials} instead, `
 		+ `if you would rather not arm the bootstrap. See docs/agents/parallel-rounds.md.`;
 }
 
@@ -135,7 +135,7 @@ export function operatorUnavailableNotice({ deployed = false } = {}) {
  * which they already thread through everything. The measurement probes in
  * `scripts/` have no such flag — they take one mandatory `PROBE_ORIGIN` — so for
  * them the question really is about the host, and this is its honest form: a
- * secret out of `.env` or `.dev.vars` is for a server on this machine, and
+ * secret out of `.env` is for a server on this machine, and
  * anything else is somebody else's installation.
  *
  * `0.0.0.0` counts because a server bound to it and addressed by it is the local

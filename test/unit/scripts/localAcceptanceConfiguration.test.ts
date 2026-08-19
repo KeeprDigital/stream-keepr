@@ -5,7 +5,7 @@ import {
 	LOCAL_NUXT_NAME_SURFACES,
 	LOCALLY_REQUIRED_NUXT_NAMES,
 	sentenceList,
-} from '../../../build/devVars';
+} from '../../../build/localConfiguration';
 import {
 	ACCEPTANCE_FAILURE_CODES,
 	createAcceptanceEvidence,
@@ -19,7 +19,8 @@ import {
 	missingLocalAcceptanceNames,
 	previewStagingPlan,
 	requireLocalAcceptanceConfiguration,
-	RESOLVED_PREVIEW_DEV_VARS,
+	RESOLVED_PREVIEW_ENV,
+	STALE_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from '../../../scripts/graphics-acceptance/local-configuration.mjs';
 
@@ -31,7 +32,7 @@ const BOOTSTRAP_TOKEN = 'NUXT_ADMIN_BOOTSTRAP_TOKEN';
 const A_KEY = 'Zm9vYmFyYmF6cXV4Zm9vYmFyYmF6cXV4Zm9vYmFyYmE=';
 
 /**
- * Every name a local run needs, as a `.dev.vars` body — because "configured" has
+ * Every name a local run needs, as an `.env` body — because "configured" has
  * meant three names since #396 and a fixture that supplies one of them is a
  * fixture about a broken checkout wearing the name of a working one.
  */
@@ -41,17 +42,17 @@ function configuredBody() {
 		.join('\n');
 }
 
-/** The three states a checkout's files can be in, as bodies the reader gets. */
-const noFiles = () => [null, null, null];
+/** The states a checkout's files can be in, as bodies the reader gets. */
+const noFiles = () => [null, null];
 
 function blankFiles() {
 	const blanks = [...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES, ADMIN_TOKEN].map(name => `${name}=""`).join('\n');
-	return [null, `${blanks}\n`, null];
+	return [`${blanks}\n`, null];
 }
 
 describe('which required names a local acceptance run needs', () => {
 	/**
-	 * The drift pin the shared import exists for. `build/devVars.ts` owns the
+	 * The drift pin the shared import exists for. `build/localConfiguration.ts` owns the
 	 * list; this file owns only the partition of it, and a third required name
 	 * added there has to be classified before it can reach a harness. Without
 	 * this, a new name would simply never be checked by the preflight and
@@ -119,8 +120,9 @@ describe('folding the checkout\'s sources into one answer', () => {
 	});
 
 	/**
-	 * The reason three files are read rather than one: any of them may be the
-	 * filled-in one, and an earlier blank must not shadow a later value.
+	 * The reason more than one source is folded: any of them may be the filled-in
+	 * one, and an earlier blank must not shadow a later value. Since #412 they are
+	 * the shell, the root `.env`, and the copy of it staged for a previewed Worker.
 	 */
 	it('lets a later source supply what an earlier one left blank', () => {
 		const supplied = suppliedNames([
@@ -141,7 +143,7 @@ describe('folding the checkout\'s sources into one answer', () => {
 	 * `missingLocalNuxtNames` trims again downstream, so a whitespace value that
 	 * got through the fold is still counted missing and the mutation survives.
 	 * What only this case can catch is the shadowing — a `.env` holding a stray
-	 * space would otherwise occupy the name and hide the real `.dev.vars` value,
+	 * space would otherwise occupy the name and hide the real `.env` value,
 	 * which is a false alarm on a checkout that works.
 	 */
 	it('does not let a whitespace-only earlier source shadow a real later one', () => {
@@ -155,13 +157,14 @@ describe('folding the checkout\'s sources into one answer', () => {
 	});
 
 	/**
-	 * Measured, not assumed: wrangler resolves `.dev.vars` against its config
-	 * file's directory, and `pnpm preview` passes
-	 * `--config .output/server/wrangler.json`. Someone who has worked that out
-	 * has the name in a place the repository root does not hold.
+	 * Two since #412, and the second is the point: wrangler resolves the file it
+	 * reads against its config file's directory, and `pnpm preview` passes
+	 * `--config .output/server/wrangler.json`. Someone who has previewed has the
+	 * name in a place the repository root does not hold — and someone who has not
+	 * built yet has it only at the root, which is why both are read.
 	 */
-	it('looks in the three places this checkout keeps such a name', () => {
-		expect(LOCAL_CONFIGURATION_FILES).toEqual(['.env', '.dev.vars', '.output/server/.dev.vars']);
+	it('looks in the two places this checkout keeps such a name', () => {
+		expect(LOCAL_CONFIGURATION_FILES).toEqual(['.env', '.output/server/.env']);
 	});
 });
 
@@ -196,7 +199,7 @@ describe('a local run', () => {
 		expect(requireLocalAcceptanceConfiguration({
 			deployed: false,
 			env: {},
-			readSources: () => [null, configuredBody(), null],
+			readSources: () => [configuredBody(), null],
 		})).toEqual({ checked: true, missing: [] });
 	});
 
@@ -252,18 +255,18 @@ describe('the notice, read as prose', () => {
 			+ 'and this run would never reach anything to assert. Nothing was proved and nothing was disproved. '
 			+ 'NUXT_GRAPHICS_ADMIN_TOKEN is not checked here and a blank one is not what stopped this: '
 			+ 'no route an acceptance run calls reads it. '
-			+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, '
-			+ 'so a new checkout inherits neither from the one it was branched from, and a copied example carries '
-			+ 'the names with empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, '
-			+ 'or fill in .env.example and .dev.vars.example — `pnpm preview` stages .dev.vars into '
-			+ '.output/server/, which is where wrangler resolves it from the config. '
-			+ 'A --deployed run reads neither file and is unaffected. See docs/agents/parallel-rounds.md.',
+			+ 'A fresh git worktree is the usual way to arrive here — .env is gitignored, so a new checkout does '
+			+ 'not inherit it from the one it was branched from, and a copied .env.example carries the names with '
+			+ 'empty values. Fix: copy .env in from the checkout you branched from, or fill in .env.example — '
+			+ '`pnpm preview` stages .env into .output/server/, which is where wrangler resolves it from the '
+			+ 'config. A --deployed run reads no local file and is unaffected. '
+			+ 'See docs/agents/parallel-rounds.md.',
 		);
 	});
 
 	/**
 	 * The excluded name is named, so a reader who has just been told their run
-	 * is blocked does not go hunting for the other blank in `.dev.vars`. Read
+	 * is blocked does not go hunting for the other blank in `.env`. Read
 	 * against the partition rather than a literal, so the clause cannot outlive
 	 * the list it describes.
 	 */
@@ -291,7 +294,7 @@ describe('the notice, read as prose', () => {
 	 */
 	it('says where the copied file actually has to end up', () => {
 		expect(localConfigurationNotice([SIGNING_KEY]))
-			.toContain('`pnpm preview` stages .dev.vars into .output/server/');
+			.toContain('`pnpm preview` stages .env into .output/server/');
 	});
 
 	/**
@@ -300,7 +303,7 @@ describe('the notice, read as prose', () => {
 	 * run is fine — so there must be no sentence at all.
 	 */
 	it('says nothing when only the name no harness reaches is blank', () => {
-		expect(noticeFor(() => [null, `${ADMIN_TOKEN}=""\n${configuredBody()}`, null])).toBeUndefined();
+		expect(noticeFor(() => [`${ADMIN_TOKEN}=""\n${configuredBody()}`, null])).toBeUndefined();
 	});
 
 	it('says nothing when the shell alone carries the names', () => {
@@ -310,7 +313,7 @@ describe('the notice, read as prose', () => {
 	});
 
 	it('says nothing when only the built worker\'s own copy carries them', () => {
-		expect(noticeFor(() => [null, null, configuredBody()])).toBeUndefined();
+		expect(noticeFor(() => [null, configuredBody()])).toBeUndefined();
 	});
 
 	it('joins two names and surfaces with a plain conjunction', () => {
@@ -342,7 +345,7 @@ describe('the notice, read as prose', () => {
 	/**
 	 * The surfaces are the map's, not this file's. Swapping the map's strings has
 	 * to change the sentence, or the reuse is decorative and a future edit to
-	 * `devVars.ts` would leave the notice claiming the old surface.
+	 * `localConfiguration.ts` would leave the notice claiming the old surface.
 	 */
 	it('names the surface the shared map gives, not one of its own', () => {
 		expect(localConfigurationNotice([SIGNING_KEY]))
@@ -372,7 +375,7 @@ describe('the notice, read as prose', () => {
 	 */
 	it('gives the copy step literally', () => {
 		expect(localConfigurationNotice([SIGNING_KEY]))
-			.toContain('copy .env and .dev.vars in from the checkout you branched from');
+			.toContain('copy .env in from the checkout you branched from');
 		expect(localConfigurationNotice([SIGNING_KEY])).toMatch(/\.env(?!\.example)/);
 	});
 });
@@ -392,7 +395,7 @@ describe('the preview command', () => {
 	 * was missing: reordering to `stage && build && migrate && wrangler` passed
 	 * every test with zero failures. It also silently restores #274's original
 	 * defect, because `nuxt build` rebuilds `.output` — a sentinel written to
-	 * `.output/server/.dev.vars` is gone afterwards — so a stage that runs first
+	 * `.output/server/.env` is gone afterwards — so a stage that runs first
 	 * is a stage that never happened, and the previewed Worker comes up with no
 	 * secrets again. The module docblock already stated this invariant; nothing
 	 * made it executable.
@@ -418,49 +421,85 @@ describe('the preview command', () => {
 	 */
 	it('still points wrangler at the config the resolved path is derived from', () => {
 		expect(packageJson.scripts.preview).toContain('--config .output/server/wrangler.json');
-		expect(RESOLVED_PREVIEW_DEV_VARS).toBe('.output/server/.dev.vars');
+		expect(RESOLVED_PREVIEW_ENV).toBe('.output/server/.env');
 	});
 });
 
-describe('staging .dev.vars for the preview', () => {
+describe('staging .env for the preview', () => {
 	const source = `${SIGNING_KEY}=${A_KEY}\n`;
 
-	it('does nothing at all when there is no .dev.vars to stage', () => {
-		expect(previewStagingPlan({ source: null, existing: null }))
-			.toEqual({ stage: false, lines: [] });
+	it('does nothing at all when there is no .env to stage', () => {
+		expect(previewStagingPlan({ source: null, existing: null, stale: false }))
+			.toEqual({ stage: false, removeStale: false, lines: [] });
 	});
 
 	it('stages quietly when nothing is there yet', () => {
-		const plan = previewStagingPlan({ source, existing: null });
+		const plan = previewStagingPlan({ source, existing: null, stale: false });
 		expect(plan.stage).toBe(true);
 		expect(plan.lines).toHaveLength(1);
-		expect(plan.lines[0]).toContain(`Staged .dev.vars into ${RESOLVED_PREVIEW_DEV_VARS}`);
+		expect(plan.lines[0]).toContain(`Staged .env into ${RESOLVED_PREVIEW_ENV}`);
 	});
 
 	it('stages quietly when the staged copy already matches', () => {
-		expect(previewStagingPlan({ source, existing: source }).lines).toHaveLength(1);
+		expect(previewStagingPlan({ source, existing: source, stale: false }).lines).toHaveLength(1);
 	});
 
 	/**
-	 * #189 hand-maintained this file with a name the root copy did not carry. An
-	 * unannounced overwrite would have removed it and left a preview failing for
+	 * #189 hand-maintained the staged file with a name the root copy did not carry.
+	 * An unannounced overwrite would have removed it and left a preview failing for
 	 * a reason nothing on screen explained — this ticket's own defect class, one
 	 * layer up. It still overwrites; it no longer does so silently.
 	 */
 	it('says so before replacing a staged copy that differs', () => {
-		const plan = previewStagingPlan({ source, existing: `${source}NUXT_ABLY_API_KEY=live\n` });
+		const plan = previewStagingPlan({ source, existing: `${source}NUXT_ABLY_API_KEY=live\n`, stale: false });
 		expect(plan.stage).toBe(true);
 		expect(plan.lines).toHaveLength(2);
-		expect(plan.lines[0]).toContain('differs from the .dev.vars it is staged from');
+		expect(plan.lines[0]).toContain('differs from the .env it is staged from');
 		expect(plan.lines[0]).toContain('about to be lost');
 	});
 
 	/** The warning must not become noise on the ordinary path. */
 	it('does not cry replacement when the two agree', () => {
 		for (const existing of [null, source]) {
-			for (const line of previewStagingPlan({ source, existing }).lines)
+			for (const line of previewStagingPlan({ source, existing, stale: false }).lines)
 				expect(line).not.toContain('about to be lost');
 		}
+	});
+
+	/**
+	 * The leftover that would undo this ticket in a checkout that previewed before
+	 * it. Wrangler reads exactly one of the two files and prefers the old one — the
+	 * measurement on the ticket staged both and watched it announce the old name and
+	 * answer 503 for a name sitting in the new one. A staged `.env` beside a
+	 * surviving one is therefore not a partial improvement; it is the original
+	 * defect, silently.
+	 */
+	it('removes a leftover staged .dev.vars, which would shadow what it just staged', () => {
+		const plan = previewStagingPlan({ source, existing: null, stale: true });
+
+		expect(plan.removeStale).toBe(true);
+		expect(plan.lines.some(line => line.includes(STALE_PREVIEW_DEV_VARS))).toBe(true);
+		expect(plan.lines.some(line => line.includes('shadow'))).toBe(true);
+	});
+
+	/**
+	 * A checkout with no root `.env` and a leftover staged file is the same hazard
+	 * wearing a friendlier face: the preview comes up armed by a file the checkout
+	 * no longer has a source for, so what it proves is about nothing anybody can
+	 * reproduce. The removal is therefore not conditional on having something to
+	 * stage.
+	 */
+	it('removes the leftover even when there is nothing to stage in its place', () => {
+		const plan = previewStagingPlan({ source: null, existing: null, stale: true });
+
+		expect(plan.stage).toBe(false);
+		expect(plan.removeStale).toBe(true);
+		expect(plan.lines).toHaveLength(1);
+	});
+
+	it('says nothing about a leftover that is not there, which is the ordinary case', () => {
+		for (const line of previewStagingPlan({ source, existing: null, stale: false }).lines)
+			expect(line).not.toContain(STALE_PREVIEW_DEV_VARS);
 	});
 });
 

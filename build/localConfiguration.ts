@@ -1,13 +1,25 @@
 /**
- * Wrangler reads worker secrets from `.dev.vars`; Nuxt reads runtimeConfig
- * overrides from `.env`. The two files hold the same names for the same
- * meanings, but only the deployed and previewed Worker ever sees both: `nuxt
- * dev` runs Nitro in Node with the Cloudflare bindings proxied in, so a value
- * that lives only in `.dev.vars` reaches the bindings and never reaches
- * `process.env`, where `NUXT_`-prefixed overrides are read from.
+ * What a local checkout has to be given before the surfaces that read it stop
+ * refusing, and the one line a dev server says when it has not been.
  *
- * Parsing and adoption live here, apart from the Nuxt module that calls them,
- * so both can be exercised without booting Nuxt.
+ * `.env` is the whole of local configuration since #412. Nuxt loads it into
+ * `process.env` before a module's `setup` runs, so `nuxt dev` has these names in
+ * hand by the time runtimeConfig is read, and `pnpm preview` stages the same file
+ * next to the generated wrangler config, where a previewed Worker reads it
+ * (`scripts/stage-preview-secrets.mjs`).
+ *
+ * There were two files, and a `.dev.vars` whose `NUXT_`-prefixed names the Nuxt
+ * module in front of this one copied into `process.env` for the dev server. The
+ * reason recorded for the second file — that wrangler would not read `.env` —
+ * was measured false: wrangler reads one of the two and prefers the other one, so
+ * the three names living only in `.env` reached a previewed Worker through nothing
+ * at all. Collapsing to one file closed that gap and took the copying with it
+ * (#412).
+ *
+ * The names, their surfaces and the notice live here, apart from the Nuxt module
+ * that prints it, so all of it can be exercised without booting Nuxt — and so the
+ * `.mjs` acceptance harnesses can import the one list rather than restate it
+ * (`scripts/graphics-acceptance/local-configuration.mjs`).
  */
 
 const NAME = /^[A-Z_]\w*$/i;
@@ -17,10 +29,10 @@ const EXPORT_PREFIX = /^export\s+/;
  * The `NUXT_` names a local checkout has to be given before the surfaces that read
  * them stop refusing, and the whole of what the #130 notice is asserting.
  *
- * These are `.dev.vars.example`'s assignments minus everything in
+ * These are `.env.example`'s assignments minus everything in
  * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
- * `devVars.test.ts` pins the partition against the example file, so a new name
- * added there fails until someone decides which side it belongs on.
+ * `localConfiguration.test.ts` pins the partition against the example file, so a new
+ * name added there fails until someone decides which side it belongs on.
  *
  * The subtraction was written as "minus `NUXT_ABLY_API_KEY`" when that was the
  * only exception, and was correct when written — three assignments, one of them
@@ -29,9 +41,10 @@ const EXPORT_PREFIX = /^export\s+/;
  * adding to. Stated as a reference to the list rather than a transcription of
  * it, so the next name cannot falsify it again.
  *
- * The Melee names in `.env.example` are absent for the same reason in a different
- * key: nothing refuses without them at boot, so a notice naming them would be
- * telling a developer to go and find a secret they do not need yet.
+ * The example file it is pinned against changed on #412, and with it the size of
+ * what this partition has to account for: `.dev.vars.example` assigned five names,
+ * `.env.example` assigns eight. The three it gains are the Melee ones, and they are
+ * optional — see below.
  *
  * The last two arrived here on #396, which is the ticket the comment on
  * `LOCALLY_OPTIONAL_NUXT_NAMES` used to promise them to. Before it, a checkout
@@ -53,11 +66,20 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
 /**
  * Deliberately optional, and named here so the partition above is legible.
  *
- * One name, and it is the only one here that reaches a third party. An empty
- * Ably key is the expected state of a checkout that never claimed to have
- * realtime, and #223 already owns saying so: the integration suite skips the two
- * tests that reach the service and announces the reason once. Requiring it would
- * warn every such checkout about a secret it does not need.
+ * The Ably key is the only one here that reaches a third party. An empty one is
+ * the expected state of a checkout that never claimed to have realtime, and #223
+ * already owns saying so: the integration suite skips the two tests that reach the
+ * service and announces the reason once. Requiring it would warn every such
+ * checkout about a secret it does not need.
+ *
+ * The three Melee names are optional in a different key: nothing refuses at boot
+ * without them, so a notice naming them would be telling a developer to go and find
+ * a secret they do not need yet. They are in this list at all only as of #412 —
+ * before it the partition was pinned against `.dev.vars.example`, which never
+ * assigned them, and their absence from that file was also why a previewed Worker
+ * could not read a Melee credential however full the root `.env` was. One file
+ * closed both: the partition now covers every name a developer is handed, and the
+ * file staged for the preview is the file that carries them.
  *
  * The two auth names that sat here from #393 and #394 moved to required on #396
  * — see the note above. The promise that they would was recorded in this
@@ -67,6 +89,9 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
+	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
+	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
+	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
 ] as const;
 
 /**
@@ -108,7 +133,7 @@ export const LOCAL_NUXT_NAME_SURFACES = {
 } as const satisfies Record<LocallyRequiredNuxtName, string>;
 
 /**
- * Which required names the environment cannot supply, after adoption has had its go.
+ * Which required names the environment cannot supply.
  *
  * Blank counts as missing, because that is how the readers count it —
  * `requireGraphicsAdministrator` trims before testing, and `signingKey` rejects the
@@ -143,30 +168,31 @@ export function sentenceList(items: readonly string[], conjunction: 'and' | 'or'
  * #130: what a dev server without local configuration is about to do, said before it
  * does it.
  *
- * `.env` and `.dev.vars` are both gitignored, so a fresh `git worktree` inherits
- * neither from the checkout it was branched from. The integration suite has its own
- * answer to that — #223's skip notice for the one secret it cannot invent — but a
- * plain `pnpm dev` in the same worktree had none, and the shape of what goes wrong is
- * the reason this file exists: the names keep their empty defaults, and the two
- * surfaces that need them answer 503 individually. `requireGraphicsAdministrator`
- * says "not configured"; `screen-output-assets/runtime.ts` names the variable.
- * Neither says the checkout has no local configuration, which is the one fact that
- * turns two unrelated-looking 503s into one copy step.
+ * `.env` is gitignored, so a fresh `git worktree` does not inherit it from the
+ * checkout it was branched from. The integration suite has its own answer to that —
+ * #223's skip notice for the one secret it cannot invent — but a plain `pnpm dev` in
+ * the same worktree had none, and the shape of what goes wrong is the reason this
+ * file exists: the names keep their empty defaults, and the surfaces that need them
+ * answer 503 individually. `requireGraphicsAdministrator` says "not configured";
+ * `screen-output-assets/runtime.ts` names the variable. None of them says the
+ * checkout has no local configuration, which is the one fact that turns four
+ * unrelated-looking 503s into one copy step.
  *
  * **Keyed on the names, not on the file**, which is the correction #130's review
- * forced. Nuxt loads `.env` into `process.env` before a module's `setup` runs — that
- * is why `adoptDevVars` never overwrites what it finds — so a checkout with a
- * populated `.env` and no `.dev.vars` is perfectly well configured, and is exactly
- * what a reader of #130's own `.env`-centric text would build. The first version of
- * this notice fired on the missing file alone and told that developer their working
- * installation answered 503. A notice that can be false where it fires is worse than
- * no notice: it is the obscure failure this replaced, wearing a confident face.
+ * forced. The first version of this notice fired on a missing `.dev.vars` alone —
+ * but Nuxt loads `.env` into `process.env` before a module's `setup` runs, so a
+ * checkout with a populated `.env` and no second file was perfectly well configured,
+ * and was exactly what a reader of #130's own `.env`-centric text would build. That
+ * version told those developers their working installation answered 503. A notice
+ * that can be false where it fires is worse than no notice: it is the obscure
+ * failure this replaced, wearing a confident face. Keyed on the names it survived
+ * #412 deleting the file the other version was about, unchanged in behaviour.
  *
  * A warning rather than a refusal. Plenty of this application runs without these
  * names — that is exactly what a worktree opened to read the UI wants — so failing
  * the boot would trade an obscure 503 for an obstruction.
  */
-export function devVarsAbsentNotice(missing: readonly LocallyRequiredNuxtName[]): string {
+export function localConfigurationBootNotice(missing: readonly LocallyRequiredNuxtName[]): string {
 	const names = missing.length === 1
 		? `${missing[0]}, so it keeps its empty default`
 		: `${sentenceList(missing, 'or')}, so they keep their empty default`;
@@ -179,43 +205,49 @@ export function devVarsAbsentNotice(missing: readonly LocallyRequiredNuxtName[])
 		: `${sentenceList(surfaces, 'and')} answer 503, and each says so on its own without naming a common cause`;
 
 	return `Nothing in this checkout sets ${names}: ${consequence}. `
-		+ 'A fresh git worktree is the usual way to arrive here — .env and .dev.vars are both gitignored, so a new '
-		+ 'checkout inherits neither from the one it was branched from, and a copied .env.example carries the names '
-		+ 'with empty values. Fix: copy .env and .dev.vars in from the checkout you branched from, or fill in '
-		+ '.env.example and .dev.vars.example. See docs/agents/parallel-rounds.md.';
+		+ 'A fresh git worktree is the usual way to arrive here — .env is gitignored, so a new checkout '
+		+ 'inherits none of it from the one it was branched from, and a copied .env.example carries the names '
+		+ 'with empty values. Fix: copy .env in from the checkout you branched from, or fill in .env.example. '
+		+ 'See docs/agents/parallel-rounds.md.';
 }
 
 /**
- * Whether this process should adopt `.dev.vars` at all.
+ * Whether this process should say anything about local configuration at all.
  *
- * Two refusals, both structural rather than incidental.
+ * Two silences, both structural rather than incidental.
  *
- * A build must not: there these names come from real secrets, and reading a
- * local file would bake a developer's key into the worker output.
+ * A build must not: there these names come from real secrets rather than from a
+ * checkout, and advice about copying a local file into place is advice a build has
+ * no way to act on and no business acting on.
  *
- * The integration suite must not, even though it runs `nuxt dev`. It pins the
- * environment it needs in `integrationSetupOptions.env` and spawns its server
- * with those two names overriding whatever it inherits — but only those two.
- * Every *other* `NUXT_` name in whatever `.dev.vars` the developer happens to
- * have would be adopted here and inherited by that server with nothing
- * overriding it, which is isolation by the coincidence of which names the suite
- * thought to pin. That is the shape #197 and #222 were about. The suite already
- * announces itself to `nuxt.config.ts`; this reads the same announcement.
+ * The integration suite must not, even though it runs `nuxt dev`. It pins the names
+ * it needs into the environment of the *server child* it spawns, not into its own,
+ * so its own process is short of every one of them by design and a notice keyed on
+ * what this process can supply would fire on every run of a suite behaving exactly
+ * as intended. The suite already announces itself to `nuxt.config.ts`; this reads
+ * the same announcement.
+ *
+ * Until #412 this second refusal did a heavier job: it kept a developer's
+ * `.dev.vars` out of the parent process, where the spawned server would inherit
+ * every `NUXT_` name the suite had not thought to pin — isolation by coincidence,
+ * which is the shape #197 and #222 were about. Nothing is adopted any more, and
+ * Nuxt's own `.env` loading was never this module's to control, so what is left is
+ * the noise argument alone. It is enough on its own.
  *
  * `=== 'true'` rather than "is set", because that is what `STREAM_KEEPR_INTEGRATION`
  * means everywhere else it is read (`nuxt.config.ts`, `server/plugins/error-handler.ts`)
  * and the suite sets exactly that. A second, looser definition of "this is the
  * integration suite" would be its own quiet bug.
  */
-export function adoptsDevVars(context: {
+export function announcesLocalConfiguration(context: {
 	dev: boolean;
 	env: Record<string, string | undefined>;
 }): boolean {
 	return context.dev && context.env.STREAM_KEEPR_INTEGRATION !== 'true';
 }
 
-/** Reads a `.dev.vars` body in the dotenv shape Wrangler accepts. */
-export function parseDevVars(source: string): Map<string, string> {
+/** Reads a dotenv body — `.env`, or the copy of it staged for a previewed Worker. */
+export function parseDotenv(source: string): Map<string, string> {
 	const values = new Map<string, string>();
 	for (const rawLine of source.split(/\r?\n/)) {
 		const line = rawLine.trim();
@@ -240,111 +272,31 @@ function unquote(value: string): string {
 	return value.replace(/\s+#.*$/, '');
 }
 
-export interface DevVarAdoption {
-	/** Names copied into the environment because nothing had set them. */
-	adopted: string[];
-	/** Names left alone because the environment already carried a value. */
-	retained: string[];
-}
-
-/**
- * Copies the `NUXT_`-prefixed entries of a `.dev.vars` body into `env`.
- *
- * Only the `NUXT_` prefix, because those are exactly the names runtimeConfig
- * reads; everything else in that file is a Worker's own binding and has no
- * business in a Node process. Never over an existing value, so `.env` and the
- * shell keep the last word, and never an empty one, because `.dev.vars.example`
- * ships its names with empty values and adopting those would replace a
- * runtimeConfig default with a blank string.
- */
-export function adoptDevVars(source: string, env: Record<string, string | undefined>): DevVarAdoption {
-	const adopted: string[] = [];
-	const retained: string[] = [];
-	for (const [name, value] of parseDevVars(source)) {
-		if (!name.startsWith('NUXT_') || value.length === 0)
-			continue;
-		if (typeof env[name] === 'string' && env[name].length > 0) {
-			retained.push(name);
-			continue;
-		}
-		env[name] = value;
-		adopted.push(name);
-	}
-	return { adopted, retained };
-}
-
-export interface DevVarsSource {
-	dev: boolean;
-	env: Record<string, string | undefined>;
-	/** The `.dev.vars` body, or null where there is none to read. */
-	read: () => string | null;
-}
-
-/**
- * Which of the three things happened, because `adopted: []` is all three at once.
- *
- * A build and the integration suite adopt nothing on purpose and must stay silent;
- * a dev server that found no file is the case #130 exists to announce. Returning the
- * distinction is what keeps the notice out of the two runs that are behaving
- * correctly — a caller reading only `adopted.length === 0` would warn the integration
- * suite, on every run, about a file it deliberately refused to open.
- */
-export type DevVarsOutcome = 'refused' | 'absent' | 'read';
-
-export interface DevVarsDecision extends DevVarAdoption {
-	outcome: DevVarsOutcome;
-	/**
-	 * Required names the environment still cannot supply once adoption is done.
-	 *
-	 * A fact about the environment rather than about the file, so it is populated
-	 * even for a refusal — what a refusal decides is whether anyone may *say* it.
-	 */
-	missing: LocallyRequiredNuxtName[];
-}
-
-/**
- * The whole decision — whether to read `.dev.vars` at all, and what to take from
- * it — so the Nuxt module around it is an adapter with nothing left to get
- * wrong. A refusal never calls `read`: not opening the file is the point of the
- * refusal, and passing `read` in is what lets a caller prove it was not opened.
- */
-export function adoptDevVarsInto(source: DevVarsSource): DevVarsDecision {
-	if (!adoptsDevVars(source))
-		return { adopted: [], retained: [], outcome: 'refused', missing: missingLocalNuxtNames(source.env) };
-
-	const body = source.read();
-	if (body === null)
-		return { adopted: [], retained: [], outcome: 'absent', missing: missingLocalNuxtNames(source.env) };
-
-	// After adoption, so the names this run just supplied do not read as missing.
-	const adoption = adoptDevVars(body, source.env);
-	return { ...adoption, outcome: 'read', missing: missingLocalNuxtNames(source.env) };
-}
-
 /**
  * The one line this run should log, or nothing.
  *
  * Here rather than in the Nuxt module because the module is meant to be an adapter
  * with nothing left to get wrong, and #130's first version put a three-way
  * conditional in it that no suite could reach — a surviving mutation there
- * reintroduced the warn-the-integration-suite defect the outcome discriminator
- * exists to prevent. A pure function of the decision can be pinned; four lines
- * inside `defineNuxtModule` cannot.
+ * reintroduced the warn-the-integration-suite defect this gate exists to prevent. A
+ * pure function of the environment can be pinned; four lines inside
+ * `defineNuxtModule` cannot.
  *
- * The refusal is checked first and separately from `missing`. A build and the
+ * The silence is checked first and separately from what is missing. A build and the
  * integration suite are both short of these names in their own process — the suite
  * pins them into the *server child's* environment, not its own — so gating on
- * `missing` alone would warn them on every run about a file they declined to open.
+ * `missing` alone would warn them on every run.
  */
-export function devVarsLogLine(decision: DevVarsDecision): { level: 'warn' | 'info'; message: string } | undefined {
-	if (decision.outcome === 'refused')
+export function localConfigurationLogLine(context: {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+}): { level: 'warn'; message: string } | undefined {
+	if (!announcesLocalConfiguration(context))
 		return undefined;
 
-	if (decision.missing.length > 0)
-		return { level: 'warn', message: devVarsAbsentNotice(decision.missing) };
+	const missing = missingLocalNuxtNames(context.env);
+	if (missing.length === 0)
+		return undefined;
 
-	if (decision.adopted.length > 0)
-		return { level: 'info', message: `Using ${decision.adopted.join(', ')} from .dev.vars` };
-
-	return undefined;
+	return { level: 'warn', message: localConfigurationBootNotice(missing) };
 }

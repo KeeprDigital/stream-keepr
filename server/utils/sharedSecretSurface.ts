@@ -21,8 +21,8 @@ import { secretTokensMatch } from './secretTokenComparison';
  * about an unset name resolves by waiting.
  *
  * The *words* stay with each caller, because they are not interchangeable:
- * `build/devVars.ts` quotes the Graphics Administrator clause verbatim in the
- * notice a dev server prints, and a shared sentence would make that quotation
+ * `build/localConfiguration.ts` quotes the Graphics Administrator clause verbatim in
+ * the notice a dev server prints, and a shared sentence would make that quotation
  * a lie about whichever surface it was not written for.
  */
 export interface SharedSecretSurface {

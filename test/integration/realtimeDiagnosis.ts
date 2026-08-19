@@ -36,10 +36,10 @@
  */
 
 /**
- * Named in both notices, in `.env.example`, in `.dev.vars.example`, and in
- * `build/devVars.ts` as the name #130's local-configuration notice deliberately
- * does not require. Keep the five in step — the last of them is pinned against
- * `.dev.vars.example` by `test/unit/build/devVars.test.ts`, the rest are not.
+ * Named in both notices, in `.env.example`, and in `build/localConfiguration.ts` as
+ * the name #130's local-configuration notice deliberately does not require. Keep the
+ * four in step — the last of them is pinned against `.env.example` by
+ * `test/unit/build/localConfiguration.test.ts`, the rest are not.
  */
 export const INTEGRATION_ABLY_API_KEY_ENV = 'NUXT_ABLY_API_KEY';
 
@@ -60,9 +60,9 @@ export const INTEGRATION_REALTIME_PUBLISH_REJECTED_NOTICE
 		+ 'well-formed string counts as configured, and Ably answers 404 with code 40400 ("no application found") for a '
 		+ 'key whose application does not exist. The realtime token test passing is not evidence against this — '
 		+ 'createTokenRequest signs locally and never asks the service. '
-		+ `Fix: put a real key from your Ably app in ${INTEGRATION_ABLY_API_KEY_ENV} — .env for the test suites, `
-		+ '.dev.vars for wrangler runs, see .env.example and .dev.vars.example — or clear it to the empty string, which '
-		+ 'skips realtime coverage instead of failing it.';
+		+ `Fix: put a real key from your Ably app in ${INTEGRATION_ABLY_API_KEY_ENV} — .env, which is what the test `
+		+ 'suites read and what `pnpm preview` stages for wrangler runs; see .env.example — or clear it to the empty '
+		+ 'string, which skips realtime coverage instead of failing it.';
 
 /**
  * #264: the server's own name for a refused publish, and the status it wears.
@@ -96,8 +96,8 @@ export const INTEGRATION_REALTIME_PUBLISH_FAILED_NOTICE
 		+ 'The server said which it was: find the `realtime_publish_failed` line in the run output and read its '
 		+ '`errorCode` and `reason` — 40400 is a key Ably does not know, 401/403 a key it will not honour, 5xx the '
 		+ `service itself. Fix for the usual case: put a real key from your Ably app in ${INTEGRATION_ABLY_API_KEY_ENV} — `
-		+ '.env for the test suites, .dev.vars for wrangler runs, see .env.example and .dev.vars.example — or clear it to '
-		+ 'the empty string, which skips realtime coverage instead of failing it.';
+		+ '.env, which is what the test suites read and what `pnpm preview` stages for wrangler runs; see .env.example — '
+		+ 'or clear it to the empty string, which skips realtime coverage instead of failing it.';
 
 /**
  * A refusal a route raises on its own terms: the status it answers with, and the
