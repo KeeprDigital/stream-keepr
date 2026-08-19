@@ -47,27 +47,37 @@ const {
 const ORIGIN = 'https://stream.keepr.digital';
 
 /**
- * The clock an administrator's request would carry, and it has to be the real one.
+ * The clock an administrator's request would carry, pinned — and pinned in both
+ * places, which is the whole of it.
  *
- * A literal date was written here, and it made this file pass on the day it was
- * written and fail every day after. `issuePasswordResetLinkForUser` derives the
- * link's expiry from this `now` — `now + PASSWORD_RESET_LINK_LIFETIME_SECONDS` —
- * and the rows below redeem those links against **a real Better Auth**, which
- * checks the stored expiry against the system clock. Twenty-four hours after that
- * literal, every link this file mints is already expired and five rows fail with
- * `Invalid token`: a green suite turning red with nothing changed, pointing at the
- * library rather than at the date.
+ * `issuePasswordResetLinkForUser` derives a link's expiry from this `now`
+ * (`now + PASSWORD_RESET_LINK_LIFETIME_SECONDS`), and the rows below redeem those
+ * links against **a real Better Auth**, which checks the stored expiry against the
+ * system clock. So the two clocks have to be the same one: `beforeEach` freezes
+ * `Date` at this instant, and every link is therefore minted and redeemed at the
+ * same moment on both sides. Deterministic, and unable to drift.
  *
- * A fixed clock is right where nothing consumes the value — `userAdministration.test.ts`
- * pins the expiry arithmetic against a literal `NOW` and should keep doing so, because
- * it asserts on the number rather than handing it to something that enforces it. The
- * distinction is whether a real expiry check is downstream, and here it is.
+ * Pinning only this one was a time bomb, and it went off. A literal date here with
+ * a live system clock made the file pass on the day it was written and fail every
+ * day after: twenty-four hours later every link it minted was already expired and
+ * five rows failed with `Invalid token` — a suite going red with nothing changed,
+ * pointing at the library, which is the one place the cause was not. Two fixes
+ * landed for it in parallel and were merged together (#445, #447): the frozen
+ * clock below, and a `new Date()` here, which made this docblock argue for a real
+ * clock the fixture no longer used. The literal is back because freezing makes
+ * determinism free; if the freeze ever goes, this has to become `new Date()` in
+ * the same edit.
  *
- * The one row that needs an expired link still mints its own, explicitly in the past
- * (`new Date(Date.now() - 1000)`) — deliberate expiry, rather than expiry by the
- * calendar catching up with a fixture.
+ * The row that needs an expired link still mints its own, explicitly before this
+ * instant (`new Date(Date.now() - 1000)`) — deliberate expiry, rather than expiry
+ * by the calendar catching up with a fixture.
+ *
+ * `userAdministration.test.ts` pins its own literal `NOW` and needs no frozen
+ * clock, because it asserts on the expiry it computes instead of handing it to
+ * something that enforces it. The distinction is whether a real expiry check is
+ * downstream.
  */
-const CONTEXT = { now: new Date(), origin: ORIGIN };
+const CONTEXT = { now: new Date('2026-08-18T09:00:00.000Z'), origin: ORIGIN };
 const EMAIL = 'operator@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
