@@ -45,7 +45,29 @@ const {
  */
 
 const ORIGIN = 'https://stream.keepr.digital';
-const CONTEXT = { now: new Date('2026-08-18T09:00:00.000Z'), origin: ORIGIN };
+
+/**
+ * The clock an administrator's request would carry, and it has to be the real one.
+ *
+ * A literal date was written here, and it made this file pass on the day it was
+ * written and fail every day after. `issuePasswordResetLinkForUser` derives the
+ * link's expiry from this `now` — `now + PASSWORD_RESET_LINK_LIFETIME_SECONDS` —
+ * and the rows below redeem those links against **a real Better Auth**, which
+ * checks the stored expiry against the system clock. Twenty-four hours after that
+ * literal, every link this file mints is already expired and five rows fail with
+ * `Invalid token`: a green suite turning red with nothing changed, pointing at the
+ * library rather than at the date.
+ *
+ * A fixed clock is right where nothing consumes the value — `userAdministration.test.ts`
+ * pins the expiry arithmetic against a literal `NOW` and should keep doing so, because
+ * it asserts on the number rather than handing it to something that enforces it. The
+ * distinction is whether a real expiry check is downstream, and here it is.
+ *
+ * The one row that needs an expired link still mints its own, explicitly in the past
+ * (`new Date(Date.now() - 1000)`) — deliberate expiry, rather than expiry by the
+ * calendar catching up with a fixture.
+ */
+const CONTEXT = { now: new Date(), origin: ORIGIN };
 const EMAIL = 'operator@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
