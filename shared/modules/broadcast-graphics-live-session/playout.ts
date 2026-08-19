@@ -10,13 +10,18 @@ import type {
 	GraphicPlayoutState,
 	GraphicSourceSelectionDeclaration,
 	SocialProfileProjectionDeclaration,
+	SocialProfileProjectionValues,
 } from '~~/shared/types/graphics';
 import type {
 	BroadcastGraphicInputsState,
 	GraphicInputValues,
 	NormalizedBroadcastGraphicInputsState,
 } from './inputs';
-import type { BroadcastGraphicSocialProfileProjectionStates } from './socialProfiles';
+import type {
+	BroadcastGraphicSocialProfileProjectionStates,
+	SocialProfilePresentationLayer,
+	SocialProfilePresentationProjection,
+} from './socialProfiles';
 import {
 	broadcastGraphicHasPhaseAnimation,
 	broadcastGraphicPhaseDurations,
@@ -26,6 +31,8 @@ import {
 	graphicInputAvailability,
 	isOperatorSelectedGraphicSource,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
+import { DEFAULT_ON_AIR_UPDATE_POLICY } from '~~/shared/types/graphics';
 import {
 	acceptGraphicInputValues,
 	broadcastGraphicInputsState,
@@ -43,6 +50,8 @@ import {
 	MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
 	projectSocialProfilePresentation,
 	projectSocialProfileRotation,
+	sameSocialProfileProjectionAcceptance,
+	socialProfilePresentationProjections,
 } from './socialProfiles';
 
 /**
@@ -978,6 +987,22 @@ function withInputs(
 	return { ...state, inputs: { ...state.inputs, [graphicId]: inputs } };
 }
 
+function withSocialProfileProjections(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	projections: BroadcastGraphicSocialProfileProjectionStates | undefined,
+): BroadcastGraphicsLiveState {
+	if (projections === undefined)
+		return state;
+	return {
+		...state,
+		socialProfileProjections: {
+			...state.socialProfileProjections,
+			[graphicId]: projections,
+		},
+	};
+}
+
 /**
  * Store a field-scoped edit together with whatever its On-air Update Policy accepted,
  * collapsing an update phase that is still in flight if anything actually reached air.
@@ -1252,30 +1277,32 @@ function reduceTake(
 
 	let socialProfileProjections = acceptanceState.socialProfileProjections;
 	if (
-		(context.socialProfileProjections?.length ?? 0) > 0
+		current?.onAir !== true
+		&& (context.socialProfileProjections?.length ?? 0) > 0
 		&& context.resolveSocialProfileProjections
 	) {
 		const previous = acceptanceState.socialProfileProjections?.[payload.graphicId] ?? {};
+		const declarations = new Map(
+			(context.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
+		);
 		const resolved = context.resolveSocialProfileProjections(
 			broadcastGraphicSourceSelections(acceptanceState, payload.graphicId),
 		);
 		const accepted = Object.fromEntries(Object.entries(resolved).map(([projectionKey, projection]) => {
-			const previousProjection = previous[projectionKey];
-			const retained = previousProjection?.manualNetwork;
-			const manualNetwork = retained !== undefined
-				&& projection.acceptedProfiles.some(profile => profile.network === retained)
-				? retained
-				: undefined;
-			const currentNetwork = manualNetwork ?? projection.acceptedProfiles[0]?.network;
-			return [projectionKey, {
-				...projection,
-				automatic: previousProjection?.automatic !== false,
-				...(currentNetwork === undefined ? {} : { currentNetwork }),
-				...(manualNetwork === undefined ? {} : { manualNetwork }),
-				...(currentNetwork === undefined
-					? {}
-					: { rotationAnchor: { network: currentNetwork, anchoredAt: handoff.entersAt } }),
-			}];
+			const declaration = declarations.get(projectionKey);
+			return [projectionKey, declaration
+				? acceptResolvedSocialProfileProjection(
+						previous[projectionKey],
+						projection,
+						declaration,
+						handoff.entersAt,
+						{
+							preserveProjectedCurrent: false,
+							sampleOnAir: false,
+							transitionOnAir: false,
+						},
+					)
+				: projection];
 		}));
 		socialProfileProjections = {
 			...acceptanceState.socialProfileProjections,
@@ -1373,6 +1400,275 @@ function transitionToSocialProfile(
 		},
 		...(transitions ? { transitionAnchor: { startedAt: acceptedAt, from } } : {}),
 	};
+}
+
+function nextAcceptedSocialProfileNetwork(
+	removed: SupportedSocialNetwork | undefined,
+	profiles: BroadcastGraphicSocialProfileProjectionStates[string]['acceptedProfiles'],
+): SupportedSocialNetwork | undefined {
+	if (profiles.length === 0)
+		return undefined;
+	if (removed === undefined)
+		return profiles[0]!.network;
+
+	const removedIndex = SUPPORTED_SOCIAL_NETWORK_KEYS.indexOf(removed);
+	return profiles.find(profile => SUPPORTED_SOCIAL_NETWORK_KEYS.indexOf(profile.network) > removedIndex)?.network
+		?? profiles[0]!.network;
+}
+
+/** Accept one Event Data projection change without losing the visual currently on program. */
+function acceptResolvedSocialProfileProjection(
+	previous: BroadcastGraphicSocialProfileProjectionStates[string] | undefined,
+	resolved: BroadcastGraphicSocialProfileProjectionStates[string],
+	declaration: SocialProfileProjectionDeclaration,
+	acceptedAt: number,
+	options: { preserveProjectedCurrent: boolean; sampleOnAir: boolean; transitionOnAir: boolean },
+): BroadcastGraphicSocialProfileProjectionStates[string] {
+	const sameTalent = previous !== undefined
+		&& previous.talent?.id === resolved.talent?.id;
+	const previousCurrent = previous && options.preserveProjectedCurrent
+		? projectSocialProfileRotation(previous, declaration, {
+			onAir: options.sampleOnAir,
+			now: acceptedAt,
+		}).current?.network
+		?? previous.currentNetwork
+		: previous?.manualNetwork;
+	const currentNetwork = sameTalent
+		&& previousCurrent !== undefined
+		&& resolved.acceptedProfiles.some(profile => profile.network === previousCurrent)
+		? previousCurrent
+		: sameTalent
+			? nextAcceptedSocialProfileNetwork(previousCurrent, resolved.acceptedProfiles)
+			: resolved.acceptedProfiles[0]?.network;
+	const manualNetwork = sameTalent
+		&& previous?.manualNetwork !== undefined
+		&& resolved.acceptedProfiles.some(profile => profile.network === previous.manualNetwork)
+		? previous.manualNetwork
+		: undefined;
+	const automatic = previous?.automatic !== false;
+	const transitionDuration = declaration.transition === 'cut'
+		? 0
+		: declaration.transitionDurationMs;
+	const from = previous
+		? projectSocialProfilePresentation(previous, declaration, {
+				onAir: options.sampleOnAir,
+				now: acceptedAt,
+			})
+				.layers
+				.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS)
+		: [];
+	const target = resolved.acceptedProfiles.find(profile => profile.network === currentNetwork);
+	const alreadySettled = target !== undefined
+		&& from.length === 1
+		&& from[0]!.values.network === target.network
+		&& from[0]!.values.networkLabel === target.networkLabel
+		&& from[0]!.values.handle === target.handle
+		&& from[0]!.values.profileUrl === target.profileUrl
+		&& from[0]!.opacity === 1
+		&& from[0]!.offsetX === 0
+		&& from[0]!.offsetY === 0;
+	const remainsUnavailable = target === undefined && from.length === 0;
+	const transitions = options.transitionOnAir
+		&& transitionDuration > 0
+		&& !alreadySettled
+		&& !remainsUnavailable;
+
+	return {
+		...resolved,
+		automatic,
+		...(currentNetwork === undefined ? {} : { currentNetwork }),
+		...(manualNetwork === undefined ? {} : { manualNetwork }),
+		...(currentNetwork === undefined
+			? {}
+			: {
+					rotationAnchor: {
+						network: currentNetwork,
+						anchoredAt: acceptedAt + (transitions ? transitionDuration : 0),
+					},
+				}),
+		...(transitions ? { transitionAnchor: { startedAt: acceptedAt, from } } : {}),
+	};
+}
+
+function acceptLiveSocialProfileProjections(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	context: BroadcastGraphicsReductionContext,
+	selections: GraphicSourceSelectionsState = broadcastGraphicSourceSelections(state, graphicId),
+): BroadcastGraphicSocialProfileProjectionStates | undefined {
+	if (!isOnProgram(state, graphicId, context) || !context.resolveSocialProfileProjections)
+		return state.socialProfileProjections?.[graphicId];
+
+	const resolved = context.resolveSocialProfileProjections(selections);
+	const previous = state.socialProfileProjections?.[graphicId] ?? {};
+	return Object.fromEntries((context.socialProfileProjections ?? []).map((declaration) => {
+		const current = previous[declaration.key];
+		const candidate = resolved[declaration.key];
+		if (
+			(declaration.updatePolicy ?? DEFAULT_ON_AIR_UPDATE_POLICY) !== 'live'
+			|| candidate === undefined
+			|| sameSocialProfileProjectionAcceptance(current, candidate)
+		) {
+			return [declaration.key, current ?? candidate];
+		}
+		return [declaration.key, acceptResolvedSocialProfileProjection(
+			current,
+			candidate,
+			declaration,
+			context.acceptedAt,
+			{ preserveProjectedCurrent: true, sampleOnAir: true, transitionOnAir: true },
+		)];
+	}).filter((entry): entry is [string, BroadcastGraphicSocialProfileProjectionStates[string]] => entry[1] !== undefined));
+}
+
+function acceptStagedSocialProfileProjections(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicSocialProfileProjectionStates | undefined {
+	if (!context.resolveSocialProfileProjections)
+		return state.socialProfileProjections?.[graphicId];
+
+	const resolved = context.resolveSocialProfileProjections(
+		broadcastGraphicSourceSelections(state, graphicId),
+	);
+	const previous = state.socialProfileProjections?.[graphicId] ?? {};
+	return Object.fromEntries((context.socialProfileProjections ?? []).map((declaration) => {
+		const current = previous[declaration.key];
+		const candidate = resolved[declaration.key];
+		if (
+			(declaration.updatePolicy ?? DEFAULT_ON_AIR_UPDATE_POLICY) === 'live'
+			|| candidate === undefined
+			|| sameSocialProfileProjectionAcceptance(current, candidate)
+		) {
+			return [declaration.key, current ?? candidate];
+		}
+		return [declaration.key, acceptResolvedSocialProfileProjection(
+			current,
+			candidate,
+			declaration,
+			context.acceptedAt,
+			{ preserveProjectedCurrent: true, sampleOnAir: true, transitionOnAir: false },
+		)];
+	}).filter((entry): entry is [string, BroadcastGraphicSocialProfileProjectionStates[string]] => entry[1] !== undefined));
+}
+
+function socialProfileProjectionEndpoint(
+	projection: BroadcastGraphicSocialProfileProjectionStates[string] | undefined,
+	declaration: SocialProfileProjectionDeclaration,
+	acceptedAt: number,
+): SocialProfilePresentationLayer[] {
+	if (!projection)
+		return [];
+	return projectSocialProfilePresentation(projection, declaration, {
+		onAir: true,
+		now: acceptedAt,
+	}).layers.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
+}
+
+function socialProfileUpdateSnapshot(
+	projection: BroadcastGraphicSocialProfileProjectionStates[string] | undefined,
+	field: 'updateFrom' | 'pendingUpdateFrom',
+	fallback: SocialProfilePresentationLayer[],
+): SocialProfilePresentationLayer[] {
+	const snapshot = projection?.[field];
+	return snapshot === undefined ? fallback : snapshot;
+}
+
+function withoutSocialProfileUpdateSnapshots(
+	projections: BroadcastGraphicSocialProfileProjectionStates | undefined,
+): BroadcastGraphicSocialProfileProjectionStates | undefined {
+	if (!projections)
+		return undefined;
+	return Object.fromEntries(Object.entries(projections).map(([key, projection]) => {
+		const {
+			pendingUpdateFrom: _pendingUpdateFrom,
+			updateFrom: _updateFrom,
+			...settled
+		} = projection;
+		return [key, settled];
+	}));
+}
+
+function withLiveSocialProfileAcceptance(
+	state: BroadcastGraphicsLiveState,
+	graphicId: string,
+	projections: BroadcastGraphicSocialProfileProjectionStates | undefined,
+): BroadcastGraphicsLiveState {
+	if (projections === undefined)
+		return state;
+	const changed = JSON.stringify(state.socialProfileProjections?.[graphicId] ?? null)
+		!== JSON.stringify(projections);
+	if (!changed)
+		return state;
+
+	const settled = withoutSocialProfileUpdateSnapshots(projections)!;
+	const playout = state.playout[graphicId];
+	return {
+		...state,
+		socialProfileProjections: {
+			...state.socialProfileProjections,
+			[graphicId]: settled,
+		},
+		...(playout?.updateStartedAt === undefined
+			? {}
+			: {
+					playout: {
+						...state.playout,
+						[graphicId]: withoutUpdatePhase(playout),
+					},
+				}),
+	};
+}
+
+/** Carry every projection through the same bounded update chain as Graphic Inputs. */
+function scheduleSocialProfileProjectionUpdate(
+	previous: BroadcastGraphicSocialProfileProjectionStates | undefined,
+	accepted: BroadcastGraphicSocialProfileProjectionStates | undefined,
+	declarations: readonly SocialProfileProjectionDeclaration[] | undefined,
+	flight: BroadcastGraphicUpdateFlight | null,
+	playout: BroadcastGraphicPlayout,
+	acceptedAt: number,
+	targetSettlesAt: number,
+): BroadcastGraphicSocialProfileProjectionStates | undefined {
+	if (!accepted)
+		return undefined;
+
+	const byKey = new Map((declarations ?? []).map(declaration => [declaration.key, declaration]));
+	return Object.fromEntries(Object.entries(accepted).map(([key, projection]) => {
+		const declaration = byKey.get(key);
+		if (!declaration)
+			return [key, projection];
+
+		const before = previous?.[key];
+		const endpoint = socialProfileProjectionEndpoint(before, declaration, acceptedAt);
+		const handedOver = flight !== null
+			&& playout.updateStartedAt !== undefined
+			&& flight.startedAt !== playout.updateStartedAt;
+		const from = handedOver
+			? socialProfileUpdateSnapshot(before, 'pendingUpdateFrom', endpoint)
+			: socialProfileUpdateSnapshot(before, 'updateFrom', endpoint);
+		const target = handedOver
+			? endpoint
+			: socialProfileUpdateSnapshot(before, 'pendingUpdateFrom', endpoint);
+		const running = flight !== null && acceptedAt >= flight.startedAt;
+		const { pendingUpdateFrom: _pending, updateFrom: _from, ...unanchored } = projection;
+		const acceptanceChanged = !sameSocialProfileProjectionAcceptance(before, projection);
+		const base = acceptanceChanged && projection.currentNetwork !== undefined
+			? {
+					...unanchored,
+					rotationAnchor: {
+						network: projection.currentNetwork,
+						anchoredAt: targetSettlesAt,
+					},
+				}
+			: unanchored;
+		return [key, {
+			...base,
+			updateFrom: from,
+			...(running ? { pendingUpdateFrom: target } : {}),
+		}];
+	}));
 }
 
 /** Select one populated accepted profile without turning projected values into inputs. */
@@ -1580,6 +1876,53 @@ function exitCarryingInterruptedPhases(
 	return { playout, inputs: carried };
 }
 
+/** Carry the exact Social Profile frame paired with the one Graphic Update leg Out keeps. */
+function exitCarryingSocialProfileUpdate(
+	exit: BroadcastGraphicPlayout,
+	current: BroadcastGraphicPlayout,
+	inputs: NormalizedBroadcastGraphicInputsState,
+	projections: BroadcastGraphicSocialProfileProjectionStates | undefined,
+	declarations: readonly SocialProfileProjectionDeclaration[] | undefined,
+	context: BroadcastGraphicsReductionContext,
+): BroadcastGraphicSocialProfileProjectionStates | undefined {
+	if (!projections)
+		return undefined;
+	if (!current.onAir || !enterExitFlight(exit, { now: context.acceptedAt, durations: context.durations }))
+		return withoutSocialProfileUpdateSnapshots(projections);
+
+	const flight = rollUpdateChain(
+		current,
+		inputs,
+		durationOf(context.durations, 'update'),
+		context.acceptedAt,
+		durationOf(context.durations, 'enter'),
+	);
+	if (!flight || context.acceptedAt < flight.startedAt)
+		return withoutSocialProfileUpdateSnapshots(projections);
+
+	const byKey = new Map((declarations ?? []).map(declaration => [declaration.key, declaration]));
+	const handedOver = current.updateStartedAt !== undefined
+		&& flight.startedAt !== current.updateStartedAt;
+	return Object.fromEntries(Object.entries(projections).map(([key, projection]) => {
+		const declaration = byKey.get(key);
+		if (!declaration)
+			return [key, projection];
+		const endpoint = socialProfileProjectionEndpoint(projection, declaration, context.acceptedAt);
+		const from = handedOver
+			? socialProfileUpdateSnapshot(projection, 'pendingUpdateFrom', endpoint)
+			: socialProfileUpdateSnapshot(projection, 'updateFrom', endpoint);
+		const target = handedOver
+			? endpoint
+			: socialProfileUpdateSnapshot(projection, 'pendingUpdateFrom', endpoint);
+		const { updateFrom: _from, pendingUpdateFrom: _pending, ...base } = projection;
+		return [key, {
+			...base,
+			updateFrom: from,
+			...(flight.pending ? { pendingUpdateFrom: target } : {}),
+		}];
+	}));
+}
+
 /** Persist the last clock-projected profile once an Out stops the rotation clock. */
 function freezeSocialProfileRotations(
 	state: BroadcastGraphicsLiveState,
@@ -1692,10 +2035,25 @@ function reduceOut(
 	const withCarriedInputs = carried.inputs
 		? withInputs(state, payload.graphicId, carried.inputs)
 		: state;
+	const carriedProjections = current
+		? exitCarryingSocialProfileUpdate(
+				started,
+				current,
+				broadcastGraphicInputsState(state, payload.graphicId),
+				state.socialProfileProjections?.[payload.graphicId],
+				context.socialProfileProjections,
+				context,
+			)
+		: state.socialProfileProjections?.[payload.graphicId];
+	const withCarriedState = withSocialProfileProjections(
+		withCarriedInputs,
+		payload.graphicId,
+		carriedProjections,
+	);
 
-	let playout = { ...withCarriedInputs.playout, [payload.graphicId]: next };
+	let playout = { ...withCarriedState.playout, [payload.graphicId]: next };
 	if (channel?.handoff !== 'out-then-in')
-		return { ...withCarriedInputs, playout };
+		return { ...withCarriedState, playout };
 
 	// Out on the graphic a channel member is being held behind moves that member's enter
 	// with it. Out then in begins the incoming enter at the outgoing exit's authoritative
@@ -1719,7 +2077,7 @@ function reduceOut(
 		};
 	}
 
-	return { ...withCarriedInputs, playout };
+	return { ...withCarriedState, playout };
 }
 
 /**
@@ -1784,17 +2142,35 @@ function reduceUpdateGraphic(
 	// An on-air acceptance: an input that has become unavailable keeps its last
 	// accepted value, because program must not blank mid-show.
 	const accepted = acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, true);
+	const projections = acceptStagedSocialProfileProjections(state, payload.graphicId, context);
+	const projectionsChanged = JSON.stringify(state.socialProfileProjections?.[payload.graphicId] ?? null)
+		!== JSON.stringify(projections ?? null);
 	const acceptedRevision = inputs.acceptedRevision + 1;
 	const updateMs = durationOf(context.durations, 'update');
+	const flight = rollUpdateChain(
+		playout,
+		inputs,
+		updateMs,
+		context.acceptedAt,
+		durationOf(context.durations, 'enter'),
+	);
 
-	if (payload.cut === true || updateMs <= 0 || sameGraphicInputValues(inputs.accepted, accepted)) {
+	if (
+		payload.cut === true
+		|| updateMs <= 0
+		|| (sameGraphicInputValues(inputs.accepted, accepted) && !projectionsChanged)
+	) {
+		const acceptedState = withSocialProfileProjections(
+			withInputs(state, payload.graphicId, { ...inputs, accepted, acceptedRevision }),
+			payload.graphicId,
+			withoutSocialProfileUpdateSnapshots(projections),
+		);
 		return {
-			...withInputs(state, payload.graphicId, { ...inputs, accepted, acceptedRevision }),
+			...acceptedState,
 			playout: { ...state.playout, [payload.graphicId]: withoutUpdatePhase(playout) },
 		};
 	}
 
-	const flight = rollUpdateChain(playout, inputs, updateMs, context.acceptedAt, durationOf(context.durations, 'enter'));
 	const scheduled = flight
 		? context.acceptedAt >= flight.startedAt
 			// An update is actually running: this acceptance becomes the one pending
@@ -1817,14 +2193,25 @@ function reduceUpdateGraphic(
 	// would hand over to content nobody accepted.
 	const { pendingUpdateFrom: _spent, ...withoutPending } = inputs;
 
+	const scheduledProjections = scheduleSocialProfileProjectionUpdate(
+		state.socialProfileProjections?.[payload.graphicId],
+		projections,
+		context.socialProfileProjections,
+		flight,
+		playout,
+		context.acceptedAt,
+		scheduled.startedAt + (updateMs * (scheduled.pendingUpdateFrom === undefined ? 1 : 2)),
+	);
+	const acceptedState = withSocialProfileProjections(withInputs(state, payload.graphicId, {
+		...withoutPending,
+		accepted,
+		acceptedRevision,
+		updateFrom: scheduled.updateFrom,
+		...(scheduled.pendingUpdateFrom === undefined ? {} : { pendingUpdateFrom: scheduled.pendingUpdateFrom }),
+	}), payload.graphicId, scheduledProjections);
+
 	return {
-		...withInputs(state, payload.graphicId, {
-			...withoutPending,
-			accepted,
-			acceptedRevision,
-			updateFrom: scheduled.updateFrom,
-			...(scheduled.pendingUpdateFrom === undefined ? {} : { pendingUpdateFrom: scheduled.pendingUpdateFrom }),
-		}),
+		...acceptedState,
 		playout: {
 			...state.playout,
 			[payload.graphicId]: { ...playout, updateStartedAt: scheduled.startedAt },
@@ -1990,8 +2377,14 @@ function reduceSelectSource(
 
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
 	const bound = boundValuesFor(state, payload.graphicId, context, selections);
+	const projections = acceptLiveSocialProfileProjections(
+		state,
+		payload.graphicId,
+		context,
+		selections,
+	);
 
-	return {
+	const selectedState: BroadcastGraphicsLiveState = {
 		...state,
 		sources: { ...state.sources, [payload.graphicId]: selections },
 		inputs: {
@@ -2007,6 +2400,7 @@ function reduceSelectSource(
 			},
 		},
 	};
+	return withLiveSocialProfileAcceptance(selectedState, payload.graphicId, projections);
 }
 
 /**
@@ -2024,8 +2418,7 @@ function reduceResolveBindings(
 	context: BroadcastGraphicsReductionContext,
 ): BroadcastGraphicsLiveState {
 	const inputs = broadcastGraphicInputsState(state, payload.graphicId);
-
-	return withInputs(state, payload.graphicId, {
+	const withAcceptedInputs = withInputs(state, payload.graphicId, {
 		...inputs,
 		accepted: acceptLivePolicyValues(
 			inputs,
@@ -2034,6 +2427,8 @@ function reduceResolveBindings(
 			isOnProgram(state, payload.graphicId, context),
 		),
 	});
+	const projections = acceptLiveSocialProfileProjections(state, payload.graphicId, context);
+	return withLiveSocialProfileAcceptance(withAcceptedInputs, payload.graphicId, projections);
 }
 
 /**
@@ -2069,14 +2464,12 @@ export function broadcastGraphicsResolveBindingsDue(
 			? {}
 			: { socialProfileProjections: state.socialProfileProjections }),
 	};
-	const inputs = broadcastGraphicInputsState(normalized, graphicId);
-
-	return !sameGraphicInputValues(inputs.accepted, acceptLivePolicyValues(
-		inputs,
-		context,
-		boundValuesFor(normalized, graphicId, context),
-		isOnProgram(normalized, graphicId, context),
-	));
+	const resolved = reduceResolveBindings(normalized, { graphicId }, context);
+	return !sameGraphicInputValues(
+		broadcastGraphicInputsState(normalized, graphicId).accepted,
+		broadcastGraphicInputsState(resolved, graphicId).accepted,
+	) || JSON.stringify(normalized.socialProfileProjections?.[graphicId] ?? null)
+	!== JSON.stringify(resolved.socialProfileProjections?.[graphicId] ?? null);
 }
 
 /**
@@ -2449,6 +2842,105 @@ export function broadcastGraphicRenderedInputs(
 	return {
 		current: resolveGraphicInputValues(update.to, declarations),
 		outgoing: resolveGraphicInputValues(update.from, declarations),
+	};
+}
+
+function staticSocialProfilePresentation(
+	layers: SocialProfilePresentationLayer[],
+): SocialProfilePresentationProjection {
+	return {
+		phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+		layers,
+	};
+}
+
+function socialProfileUpdateSnapshotPresentations(
+	state: BroadcastGraphicsLiveState,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+	field: 'updateFrom' | 'pendingUpdateFrom',
+	fallback: Record<string, SocialProfilePresentationProjection>,
+): Record<string, SocialProfilePresentationProjection> {
+	const projections = state.socialProfileProjections?.[graphic.id] ?? {};
+	const entries: Array<[string, SocialProfilePresentationProjection]> = [];
+	for (const declaration of graphic.socialProfileProjections ?? []) {
+		const projection = projections[declaration.key];
+		const presentation = !projection || projection[field] === undefined
+			? fallback[declaration.key]
+			: staticSocialProfilePresentation(projection[field]);
+		if (presentation)
+			entries.push([declaration.key, presentation]);
+	}
+	return Object.fromEntries(entries);
+}
+
+/** The exact Social Profile presentation pair driven by the graphic's one Update phase. */
+export function broadcastGraphicRenderedSocialProfilePresentations(
+	state: BroadcastGraphicsLiveState,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+	timing?: BroadcastGraphicPhaseTiming,
+): {
+	current: Record<string, SocialProfilePresentationProjection>;
+	outgoing?: Record<string, SocialProfilePresentationProjection>;
+} {
+	const current = socialProfilePresentationProjections(state, graphic, timing?.now);
+	if (!timing)
+		return { current };
+
+	const inputs = broadcastGraphicInputsState(state, graphic.id);
+	const playout = state.playout[graphic.id];
+	const settled = playout
+		&& !playout.onAir
+		&& playout.updateStartedAt !== undefined
+		&& inputs.pendingUpdateFrom !== undefined
+		&& enterExitFlight(playout, timing) !== null
+		? socialProfileUpdateSnapshotPresentations(state, graphic, 'pendingUpdateFrom', current)
+		: current;
+	const update = rollUpdateChain(
+		playout,
+		inputs,
+		durationOf(timing.durations, 'update'),
+		timing.now,
+		durationOf(timing.durations, 'enter'),
+	);
+	if (!update)
+		return { current: settled };
+
+	const updateFrom = socialProfileUpdateSnapshotPresentations(state, graphic, 'updateFrom', current);
+	if (timing.now < update.startedAt)
+		return { current: updateFrom };
+
+	const handedOver = playout?.updateStartedAt !== undefined
+		&& update.startedAt !== playout.updateStartedAt;
+	const pending = socialProfileUpdateSnapshotPresentations(state, graphic, 'pendingUpdateFrom', current);
+	return handedOver
+		? { current, outgoing: pending }
+		: {
+				current: update.pending ? pending : current,
+				outgoing: updateFrom,
+			};
+}
+
+function socialProfilePresentationValues(
+	presentations: Record<string, SocialProfilePresentationProjection>,
+): SocialProfileProjectionValues {
+	return Object.fromEntries(Object.entries(presentations).flatMap(([key, presentation]) => {
+		const value = presentation.layers.at(-1)?.values;
+		return value ? [[key, value]] : [];
+	}));
+}
+
+/** The correlated Social Profile tuples represented by the exact presentation pair. */
+export function broadcastGraphicRenderedSocialProfileValues(
+	state: BroadcastGraphicsLiveState,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+	timing?: BroadcastGraphicPhaseTiming,
+): { current: SocialProfileProjectionValues; outgoing?: SocialProfileProjectionValues } {
+	const presentations = broadcastGraphicRenderedSocialProfilePresentations(state, graphic, timing);
+	return {
+		current: socialProfilePresentationValues(presentations.current),
+		...(presentations.outgoing
+			? { outgoing: socialProfilePresentationValues(presentations.outgoing) }
+			: {}),
 	};
 }
 

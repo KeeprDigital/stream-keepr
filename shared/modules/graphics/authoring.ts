@@ -45,6 +45,7 @@ import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import {
+	DEFAULT_ON_AIR_UPDATE_POLICY,
 	DEFAULT_SOCIAL_PROFILE_DWELL_MS,
 	DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	GRAPHIC_ANIMATION_PHASE_VALUES,
@@ -58,6 +59,7 @@ import {
 	MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	MIN_SOCIAL_PROFILE_DWELL_MS,
 	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
+	ON_AIR_UPDATE_POLICY_VALUES,
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 } from '../../types/graphics';
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
@@ -677,6 +679,7 @@ export function associateSocialProfileProjection(
 		label: options.label.trim(),
 		sourceKey: options.sourceKey,
 		presentationGroupId: options.presentationGroupId,
+		updatePolicy: DEFAULT_ON_AIR_UPDATE_POLICY,
 		dwellMs: DEFAULT_SOCIAL_PROFILE_DWELL_MS,
 		transition: 'crossfade',
 		transitionDurationMs: DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
@@ -749,12 +752,13 @@ export function addSocialProfileProjection(
 
 export type SocialProfileProjectionPatch = Partial<Pick<
 	SocialProfileProjectionDeclaration,
-	'label' | 'sourceKey' | 'dwellMs' | 'transition' | 'transitionDurationMs'
+	'label' | 'sourceKey' | 'updatePolicy' | 'dwellMs' | 'transition' | 'transitionDurationMs'
 >>;
 
 const SOCIAL_PROFILE_PROJECTION_PATCH_KEYS = new Set<keyof SocialProfileProjectionPatch>([
 	'label',
 	'sourceKey',
+	'updatePolicy',
 	'dwellMs',
 	'transition',
 	'transitionDurationMs',
@@ -788,6 +792,7 @@ export function patchSocialProfileProjection(
 		|| source.kind !== 'talent'
 		|| group?.type !== 'group'
 		|| groupAssignedElsewhere
+		|| (candidate.updatePolicy !== undefined && !ON_AIR_UPDATE_POLICY_VALUES.includes(candidate.updatePolicy))
 		|| !Number.isInteger(candidate.dwellMs)
 		|| candidate.dwellMs < MIN_SOCIAL_PROFILE_DWELL_MS
 		|| candidate.dwellMs > MAX_SOCIAL_PROFILE_DWELL_MS

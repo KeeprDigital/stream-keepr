@@ -46,6 +46,7 @@ function projectedGraphic() {
 			label: 'Profile',
 			sourceKey: 'talent',
 			presentationGroupId: 'profile-group',
+			updatePolicy: undefined as 'staged' | 'live' | undefined,
 			dwellMs: 8_000,
 			transition: 'crossfade' as const,
 			transitionDurationMs: 250,
@@ -188,7 +189,7 @@ describe('social Profile Projection document validation', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [shared], channels: [] }).success).toBe(false);
 	});
 
-	it('pins the projection timing bounds and stable transition vocabulary', () => {
+	it('pins the projection timing bounds, transition vocabulary, and On-air Update Policy', () => {
 		for (const [field, values] of [
 			['dwellMs', [1_999, 60_001]],
 			['transitionDurationMs', [99, 2_001]],
@@ -201,8 +202,14 @@ describe('social Profile Projection document validation', () => {
 		}
 		const invalidTransition = projectedGraphic();
 		invalidTransition.socialProfileProjections[0]!.transition = 'zoom' as 'crossfade';
+		const invalidPolicy = projectedGraphic();
+		invalidPolicy.socialProfileProjections[0]!.updatePolicy = 'automatic' as 'staged';
+		const livePolicy = projectedGraphic();
+		livePolicy.socialProfileProjections[0]!.updatePolicy = 'live';
 
 		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [invalidTransition], channels: [] }).success).toBe(false);
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [invalidPolicy], channels: [] }).success).toBe(false);
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [livePolicy], channels: [] }).success).toBe(true);
 	});
 
 	it('accepts projected text references and a dynamic icon inside the Presentation Group', () => {

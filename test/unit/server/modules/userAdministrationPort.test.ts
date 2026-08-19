@@ -1,7 +1,7 @@
 import type { ServerAuth } from '~~/server/utils/auth';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authStaticOptions } from '~~/server/utils/authOptions';
 
 // The port module imports `serverAuth`, which reaches the database binding at
@@ -60,7 +60,13 @@ function throwawayAuth() {
 let auth: ServerAuth;
 
 beforeEach(() => {
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(CONTEXT.now);
 	auth = throwawayAuth();
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 async function port() {

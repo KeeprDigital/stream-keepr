@@ -4,6 +4,7 @@ import { MAX_SOCIAL_PROFILE_HANDLE_LENGTH } from '../../shared/socialProfiles';
 import {
 	createGraphicsHarness,
 	getBroadcastGraphicsLiveSession,
+	integrationGraphicAnimation,
 	playoutCommandId,
 	selectBroadcastGraphicSource,
 	sendBroadcastGraphicsCommand,
@@ -15,22 +16,24 @@ import { executeIntegrationD1 } from './integrationD1';
 const GRAPHIC_ID = 'talent-lower-third';
 const PROJECTION_KEY = 'profile';
 
-function socialProfileGraphic(): BroadcastGraphicConfig {
+function socialProfileGraphic(updatePolicy?: 'staged' | 'live'): BroadcastGraphicConfig {
 	const square = { treatment: 'square' as const, size: 0 };
+	const projection = {
+		key: PROJECTION_KEY,
+		label: 'Social Profile',
+		sourceKey: 'talent',
+		presentationGroupId: 'profile-group',
+		dwellMs: 8_000,
+		transition: 'crossfade' as const,
+		transitionDurationMs: 250,
+		...(updatePolicy ? { updatePolicy } : {}),
+	};
 
 	return {
 		id: GRAPHIC_ID,
 		name: 'Talent lower third',
 		sources: [{ key: 'talent', label: 'Talent', kind: 'talent' }],
-		socialProfileProjections: [{
-			key: PROJECTION_KEY,
-			label: 'Social Profile',
-			sourceKey: 'talent',
-			presentationGroupId: 'profile-group',
-			dwellMs: 8_000,
-			transition: 'crossfade',
-			transitionDurationMs: 250,
-		}],
+		socialProfileProjections: [projection],
 		items: [{
 			id: 'profile-group',
 			label: 'Social Profile',
@@ -64,8 +67,9 @@ function derivedSocialProfileGraphic(
 	graphicId: string,
 	sourceKey: string,
 	relation: 'commentator1' | 'commentator2',
+	updatePolicy?: 'staged' | 'live',
 ): BroadcastGraphicConfig {
-	const graphic = socialProfileGraphic();
+	const graphic = socialProfileGraphic(updatePolicy);
 	return {
 		...graphic,
 		id: graphicId,
@@ -139,6 +143,260 @@ describe('manual Social Profile Projection command API', () => {
 		});
 	});
 
+	it('applies a live-policy Talent profile edit without changing the current network', async () => {
+		const talent = await $fetch<{ id: number; name: string }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: {
+				name: 'Live Profile Edit',
+				socialProfiles: { twitch: 'BeforeLive', x: 'OnAirX' },
+			},
+		});
+		const harness = await createGraphicsHarness(
+			eventId,
+			'social-profile-live-reresolution',
+			[socialProfileGraphic('live')],
+		);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-live-reresolution-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-live-reresolution-select'),
+			type: 'Select Social Profile',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: {
+				name: talent.name,
+				socialProfiles: { twitch: 'BeforeLive', youtube: 'NewlyAdded', x: 'CorrectedX' },
+			},
+		});
+
+		const refreshed = await harness.reload();
+		const projection = refreshed.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			acceptedProfiles: [
+				{ network: 'twitch', handle: 'BeforeLive' },
+				{ network: 'youtube', handle: 'NewlyAdded' },
+				{ network: 'x', handle: 'CorrectedX' },
+			],
+			currentNetwork: 'x',
+			manualNetwork: 'x',
+			transitionAnchor: { startedAt: expect.any(Number) },
+		});
+		expect(projection!.transitionAnchor!.from).toEqual(expect.arrayContaining([
+			expect.objectContaining({
+				values: expect.objectContaining({ network: 'x', handle: 'OnAirX' }),
+			}),
+		]));
+		expect(projection!.rotationAnchor!.anchoredAt)
+			.toBe(projection!.transitionAnchor!.startedAt + 250);
+		await new Promise(resolve => setTimeout(resolve, 300));
+
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: { twitch: 'BeforeLive' } },
+		});
+		const removed = (await harness.reload()).currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(removed).toMatchObject({
+			acceptedProfiles: [{ network: 'twitch', handle: 'BeforeLive' }],
+			currentNetwork: 'twitch',
+			transitionAnchor: { startedAt: expect.any(Number) },
+		});
+		expect(removed?.manualNetwork).toBeUndefined();
+		await new Promise(resolve => setTimeout(resolve, 300));
+
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: {} },
+		});
+		const unavailable = (await harness.reload()).currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(unavailable?.acceptedProfiles).toEqual([]);
+		expect(unavailable?.currentNetwork).toBeUndefined();
+		expect(unavailable?.transitionAnchor?.from).toEqual([
+			expect.objectContaining({ values: expect.objectContaining({ network: 'twitch' }) }),
+		]);
+		await new Promise(resolve => setTimeout(resolve, 300));
+
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: { youtube: 'BackOnAir' } },
+		});
+		const repopulated = (await harness.reload()).currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(repopulated).toMatchObject({
+			acceptedProfiles: [{ network: 'youtube', handle: 'BackOnAir' }],
+			currentNetwork: 'youtube',
+			transitionAnchor: { startedAt: expect.any(Number), from: [] },
+		});
+		expect(repopulated!.rotationAnchor!.anchoredAt)
+			.toBe(repopulated!.transitionAnchor!.startedAt + 250);
+	});
+
+	it('keeps a staged profile set off program and out of the picker until Update Graphic accepts it', async () => {
+		const talent = await $fetch<{ id: number; name: string }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Staged Profile Edit', socialProfiles: { twitch: 'AcceptedLive' } },
+		});
+		const graphic = {
+			...socialProfileGraphic(),
+			animation: integrationGraphicAnimation({ update: 1_000 }),
+		};
+		const harness = await createGraphicsHarness(eventId, 'social-profile-staged-reresolution', [graphic]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		const taken = await harness.send({
+			commandId: playoutCommandId('social-profile-staged-reresolution-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: { youtube: 'PendingOnly' } },
+		});
+
+		const stillAccepted = await harness.reload();
+		expect(stillAccepted.sequence).toBe(taken.sequence);
+		expect(stillAccepted.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY])
+			.toMatchObject({
+				acceptedProfiles: [{ network: 'twitch', handle: 'AcceptedLive' }],
+				currentNetwork: 'twitch',
+			});
+		const pendingSelection = await $fetchRaw(
+			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: {
+					commandId: playoutCommandId('social-profile-staged-reresolution-pending-select'),
+					type: 'Select Social Profile',
+					payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'youtube' },
+				},
+				ignoreResponseError: true,
+			},
+		);
+		expect(pendingSelection).toMatchObject({
+			status: 409,
+			_data: { data: { code: 'social-profile-unavailable' } },
+		});
+
+		const updated = await harness.send({
+			commandId: playoutCommandId('social-profile-staged-reresolution-update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId: GRAPHIC_ID,
+				basedOnAcceptedRevision: stillAccepted.currentState.inputs[GRAPHIC_ID]!.acceptedRevision,
+			},
+		});
+		const accepted = updated.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(accepted).toMatchObject({
+			acceptedProfiles: [{ network: 'youtube', handle: 'PendingOnly' }],
+			currentNetwork: 'youtube',
+		});
+		expect(accepted?.manualNetwork).toBeUndefined();
+		expect(accepted?.transitionAnchor).toBeUndefined();
+		expect(updated.currentState.playout[GRAPHIC_ID]?.updateStartedAt).toEqual(expect.any(Number));
+	});
+
+	it('takes the latest Event Data after an off-air edit instead of replaying the previous acceptance', async () => {
+		const talent = await $fetch<{ id: number; name: string }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Off-air Refresh', socialProfiles: { twitch: 'BeforeTake', x: 'BeforeManual' } },
+		});
+		const harness = await createGraphicsHarness(eventId, 'social-profile-off-air-latest-take', [socialProfileGraphic()]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-first-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-manual'),
+			type: 'Select Social Profile',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-out'),
+			type: 'Out',
+			payload: { graphicId: GRAPHIC_ID, cut: true },
+		});
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: { youtube: 'LatestTake' } },
+		});
+
+		const retaken = await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-retake'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		const projection = retaken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			talent: { id: talent.id, name: talent.name },
+			acceptedProfiles: [{ network: 'youtube', handle: 'LatestTake' }],
+			currentNetwork: 'youtube',
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
+	});
+
+	it('accepts a staged operator Talent reassignment only through explicit Update Graphic', async () => {
+		const first = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Staged Source First', socialProfiles: { twitch: 'FirstSource', x: 'FirstManual' } },
+		});
+		const replacement = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Staged Source Replacement', socialProfiles: { youtube: 'ReplacementFirst' } },
+		});
+		const graphic = {
+			...socialProfileGraphic('staged'),
+			animation: integrationGraphicAnimation({ update: 1_000 }),
+		};
+		const harness = await createGraphicsHarness(eventId, 'social-profile-staged-source-update', [graphic]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', first.id);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-manual'),
+			type: 'Select Social Profile',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', replacement.id);
+
+		const staged = await harness.reload();
+		expect(staged.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
+			talent: { id: first.id },
+			currentNetwork: 'x',
+			manualNetwork: 'x',
+		});
+		const updated = await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId: GRAPHIC_ID,
+				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC_ID]!.acceptedRevision,
+			},
+		});
+		const projection = updated.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			talent: { id: replacement.id, name: 'Staged Source Replacement' },
+			acceptedProfiles: [{ network: 'youtube', handle: 'ReplacementFirst' }],
+			currentNetwork: 'youtube',
+			rotationAnchor: { network: 'youtube', anchoredAt: expect.any(Number) },
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
+		expect(projection?.transitionAnchor).toBeUndefined();
+		expect(updated.currentState.playout[GRAPHIC_ID]?.updateStartedAt).toEqual(expect.any(Number));
+	});
+
 	it('resolves Talent 1 and Talent 2 sources with one and zero populated profiles', async () => {
 		const talent1 = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',
@@ -184,6 +442,99 @@ describe('manual Social Profile Projection command API', () => {
 			acceptedProfiles: [],
 			automatic: true,
 		});
+	});
+
+	it('re-resolves an Event Talent 1 reassignment live and discards the previous Talent manual choice', async () => {
+		const first = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'First Caster', socialProfiles: { twitch: 'FirstLive', x: 'FirstCasts' } },
+		});
+		const replacement = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Replacement Caster', socialProfiles: { youtube: 'ReplacementLive' } },
+		});
+		await $fetch(`/api/events/${eventId}`, {
+			method: 'PATCH',
+			body: { commentator1TalentId: first.id },
+		});
+		const graphic = derivedSocialProfileGraphic('talent-1-live-profile', 'talent1', 'commentator1', 'live');
+		const harness = await createGraphicsHarness(eventId, 'social-profile-derived-reassignment', [graphic]);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-derived-reassignment-take'),
+			type: 'Take',
+			payload: { graphicId: graphic.id },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-derived-reassignment-select'),
+			type: 'Select Social Profile',
+			payload: { graphicId: graphic.id, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+
+		await $fetch(`/api/events/${eventId}`, {
+			method: 'PATCH',
+			body: { commentator1TalentId: replacement.id },
+		});
+
+		const refreshed = await harness.reload();
+		const projection = refreshed.currentState.socialProfileProjections?.[graphic.id]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			talent: { id: replacement.id, name: 'Replacement Caster' },
+			acceptedProfiles: [{ network: 'youtube', handle: 'ReplacementLive' }],
+			currentNetwork: 'youtube',
+			transitionAnchor: { startedAt: expect.any(Number) },
+			rotationAnchor: { network: 'youtube', anchoredAt: expect.any(Number) },
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
+		expect(projection!.rotationAnchor!.anchoredAt)
+			.toBe(projection!.transitionAnchor!.startedAt + 250);
+	});
+
+	it('serializes a manual profile choice racing the Event Data refresh without reviving a removed profile', async () => {
+		const talent = await $fetch<{ id: number; name: string }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Racing Caster', socialProfiles: { twitch: 'RaceTwitch', x: 'RaceX' } },
+		});
+		const harness = await createGraphicsHarness(
+			eventId,
+			'social-profile-event-control-race',
+			[socialProfileGraphic('live')],
+		);
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		const taken = await harness.send({
+			commandId: playoutCommandId('social-profile-event-control-race-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		const commandUrl = `/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`;
+
+		const [eventEdit, manualChoice] = await Promise.all([
+			$fetchRaw(`/api/events/${eventId}/talents/${talent.id}`, {
+				method: 'PATCH',
+				body: { name: talent.name, socialProfiles: { youtube: 'RaceWinner' } },
+				ignoreResponseError: true,
+			}),
+			$fetchRaw(commandUrl, {
+				method: 'POST',
+				body: {
+					commandId: playoutCommandId('social-profile-event-control-race-select'),
+					type: 'Select Social Profile',
+					payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+				},
+				ignoreResponseError: true,
+			}),
+		]);
+		expect(eventEdit.status).toBe(200);
+		expect([200, 409]).toContain(manualChoice.status);
+
+		const authoritative = await harness.reload();
+		expect(authoritative.sequence).toBeGreaterThan(taken.sequence);
+		expect(authoritative.recoveryFault).toBeNull();
+		const projection = authoritative.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			acceptedProfiles: [{ network: 'youtube', handle: 'RaceWinner' }],
+			currentNetwork: 'youtube',
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
 	});
 
 	it('omits a legacy over-bound profile without creating an unreadable live session', async () => {

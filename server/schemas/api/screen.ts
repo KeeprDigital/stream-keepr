@@ -888,6 +888,9 @@ const socialProfileProjectionSchema = z.object({
 	label: graphicInputLabelSchema,
 	sourceKey: graphicInputKeySchema,
 	presentationGroupId: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
+	// Optional on the wire so documents authored before projection re-resolution keep
+	// their established staged behaviour rather than becoming strict-save-invalid.
+	updatePolicy: z.enum(ON_AIR_UPDATE_POLICY_VALUES).optional(),
 	dwellMs: finiteNumberSchema.int()
 		.min(MIN_SOCIAL_PROFILE_DWELL_MS)
 		.max(MAX_SOCIAL_PROFILE_DWELL_MS),

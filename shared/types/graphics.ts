@@ -741,6 +741,8 @@ export interface SocialProfileProjectionDeclaration {
 	label: string;
 	sourceKey: string;
 	presentationGroupId: string;
+	/** How Event Data changes reach an on-air projection; absent legacy values are staged. */
+	updatePolicy?: OnAirUpdatePolicy;
 	dwellMs: number;
 	transition: SocialProfileTransition;
 	transitionDurationMs: number;

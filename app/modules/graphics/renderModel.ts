@@ -202,6 +202,8 @@ export interface GraphicsCompositionRenderModelInput {
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
 	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Sampled Presentation Group frames an update phase is transitioning away from. */
+	outgoingSocialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
 	/** Correlated Social Profile values an update phase is transitioning away from. */
 	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
@@ -1729,7 +1731,17 @@ function itemDescriptor(
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
 
-	if (item.type === 'group' && presentation?.frame.phase.kind === 'transition') {
+	if (
+		item.type === 'group'
+		&& presentation
+		&& (
+			presentation.frame.phase.kind === 'transition'
+			|| presentation.frame.layers.length > 1
+			|| presentation.frame.layers.some(layer =>
+				layer.opacity !== 1 || layer.offsetX !== 0 || layer.offsetY !== 0,
+			)
+		)
+	) {
 		return enclosedItemDescriptor(
 			motion,
 			item,
@@ -1815,15 +1827,45 @@ function itemDescriptor(
 		placement: CSSProperties,
 		available: boolean,
 	): GraphicItemRenderDescriptor => available
-		? paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
-				halfInputs,
-				halfContext(halfMotion),
-				placement,
-			)
+		? item.type === 'group' && presentation
+			? {
+					id: item.id,
+					label: item.label,
+					kind: item.type,
+					style: { ...placement, overflow: 'hidden' },
+					presentationLayers: (halfInputs.socialProfilePresentations?.[presentation.key]?.layers ?? [])
+						.map(layer => paintedItemDescriptor(
+							output,
+							graphicId,
+							item,
+							assetContent,
+							{
+								...halfInputs,
+								socialProfileValues: {
+									...halfInputs.socialProfileValues,
+									[presentation.key]: layer.values,
+								},
+							},
+							halfContext(halfMotion),
+							{
+								position: 'absolute',
+								inset: '0',
+								width: '100%',
+								height: '100%',
+								opacity: layer.opacity,
+								transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+							},
+						)),
+				}
+			: paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					halfInputs,
+					halfContext(halfMotion),
+					placement,
+				)
 		: {
 				id: item.id,
 				label: item.label,
@@ -2261,20 +2303,49 @@ function updateCrossTransition(
 	current: GraphicItemContentContext,
 	outgoing: GraphicItemContentContext,
 ): GraphicsUpdateCrossTransition | null {
-	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
-		renderedContent(owner, current) !== renderedContent(owner, outgoing);
+	const presentationKeyByGroupId = new Map(
+		(graphic.socialProfileProjections ?? []).map(projection => [
+			projection.presentationGroupId,
+			projection.key,
+		]),
+	);
+	const presentationChanged = (projectionKey: string | undefined): boolean => {
+		if (!projectionKey)
+			return false;
+		const left = current.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		const right = outgoing.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		return left.length !== right.length || left.some((layer, index) => {
+			const candidate = right[index];
+			return candidate === undefined
+				|| layer.values.network !== candidate.values.network
+				|| layer.values.networkLabel !== candidate.values.networkLabel
+				|| layer.values.handle !== candidate.values.handle
+				|| layer.values.profileUrl !== candidate.values.profileUrl
+				|| layer.opacity !== candidate.opacity
+				|| layer.offsetX !== candidate.offsetX
+				|| layer.offsetY !== candidate.offsetY;
+		});
+	};
+	const changed = (
+		owner: GraphicItemConfig | GraphicGroupChildConfig,
+		projectionKey?: string,
+	): boolean => renderedContent(owner, current) !== renderedContent(owner, outgoing)
+		|| presentationChanged(projectionKey);
 
-	if (!graphic.items.some(item => changed(item)))
+	if (!graphic.items.some(item => changed(item, presentationKeyByGroupId.get(item.id))))
 		return null;
 
 	const crossing = new Set<string>();
 	for (const item of graphic.items) {
-		if (item.animation?.update && changed(item))
+		const projectionKey = presentationKeyByGroupId.get(item.id);
+		if (item.animation?.update && changed(item, projectionKey))
 			crossing.add(item.id);
 		if (item.type !== 'group')
 			continue;
+		if (presentationChanged(projectionKey) && item.children.some(child => child.animation?.update))
+			crossing.add(item.id);
 		for (const child of item.children) {
-			if (child.animation?.update && changed(child))
+			if (child.animation?.update && changed(child, projectionKey))
 				crossing.add(child.id);
 		}
 	}
@@ -2408,7 +2479,8 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
-				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
+				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
+					?? input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
@@ -2458,17 +2530,16 @@ export function resolveGraphicsCompositionRenderModel(
 					const projection = projectionByGroupId.get(item.id);
 					if (!projection)
 						return true;
-					const presentation = phases.includes('update')
-						? undefined
-						: values.socialProfilePresentations?.[projection.key];
+					const presentation = values.socialProfilePresentations?.[projection.key];
 					return presentation
 						? presentation.layers.length > 0
+						|| (pairing?.inputs.socialProfilePresentations?.[projection.key]?.layers.length ?? 0) > 0
 						: values.socialProfileValues?.[projection.key] !== undefined
 							|| pairing?.inputs.socialProfileValues?.[projection.key] !== undefined;
 				})
 				.map((item) => {
 					const projection = projectionByGroupId.get(item.id);
-					const presentationFrame = projection && !phases.includes('update')
+					const presentationFrame = projection
 						? values.socialProfilePresentations?.[projection.key]
 						: undefined;
 					const presentation = projection && presentationFrame

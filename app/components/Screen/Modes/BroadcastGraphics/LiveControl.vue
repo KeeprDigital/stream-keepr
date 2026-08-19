@@ -12,6 +12,10 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import {
+	resolveSocialProfileProjectionAcceptances,
+	sameSocialProfileProjectionAcceptance,
+} from '~~/shared/modules/broadcast-graphics-live-session';
+import {
 	graphicInputTextValue,
 	isMediaGraphicInputValue,
 	isOperatorSelectedGraphicSource,
@@ -103,18 +107,26 @@ const pickers = computed(() =>
 	(props.graphic.sources ?? []).filter(isOperatorSelectedGraphicSource),
 );
 
-const socialProfileProjectionControls = computed(() =>
-	(props.graphic.socialProfileProjections ?? []).map(declaration => ({
-		declaration,
-		state: sessionStore.projectedSocialProfileProjectionState(
+const socialProfileProjectionControls = computed(() => {
+	const selections = sessionStore.sourceSelections(props.screen.id, props.graphic.id);
+	const resolved = resolveSocialProfileProjectionAcceptances(props.graphic, selections, dataSet.value);
+	return (props.graphic.socialProfileProjections ?? []).map((declaration) => {
+		const state = sessionStore.projectedSocialProfileProjectionState(
 			props.screen.id,
 			props.graphic.id,
 			declaration.key,
 			declaration,
 			props.now,
-		),
-	})),
-);
+		);
+		return {
+			declaration,
+			state,
+			pending: ['entering', 'on-air', 'updating'].includes(props.playoutState)
+				&& (declaration.updatePolicy ?? 'staged') === 'staged'
+				&& !sameSocialProfileProjectionAcceptance(state, resolved[declaration.key]),
+		};
+	});
+});
 
 function socialProfileOptions(projectionKey: string) {
 	const state = socialProfileProjectionControls.value.find(
@@ -218,9 +230,10 @@ const OFF_AIR_NOTES: Partial<Record<GraphicPlayoutState, string>> = {
  * value differs from the accepted one. Offering the action then would offer an
  * acceptance that provably accepts nothing.
  */
-const hasStagedChanges = computed(() => traces.value.some(trace =>
-	trace.pending && trace.effective.availability.available,
-));
+const hasStagedChanges = computed(() =>
+	traces.value.some(trace => trace.pending && trace.effective.availability.available)
+	|| socialProfileProjectionControls.value.some(control => control.pending),
+);
 
 /**
  * The required Graphic Inputs that stop this Broadcast Graphic going on air.
@@ -630,6 +643,15 @@ watch(
 					<span class="min-w-0 flex-1 truncate text-sm font-medium">{{ control.declaration.label }}</span>
 					<UBadge size="xs" variant="soft" :color="control.state?.acceptedProfiles.length ? 'success' : 'warning'">
 						{{ control.state?.acceptedProfiles.length ? 'Available' : 'Unavailable' }}
+					</UBadge>
+					<UBadge
+						v-if="control.pending"
+						size="xs"
+						variant="soft"
+						color="warning"
+						data-testid="live-control-social-profile-status"
+					>
+						Pending
 					</UBadge>
 				</div>
 				<p class="mb-2 text-xs text-muted" data-testid="live-control-social-profile-talent">

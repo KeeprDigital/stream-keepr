@@ -109,18 +109,32 @@ export function useBroadcastGraphicsModeData() {
 
 	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => renderedInputs.value.current);
 	const outgoingInputValues = computed(() => renderedInputs.value.outgoing);
-	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(() => {
-		if (previewState.value)
-			return previewState.value.socialProfileValues ?? {};
+	const renderedSocialProfiles = computed(() => {
+		if (previewState.value) {
+			return {
+				current: previewState.value.socialProfileValues ?? {},
+				outgoing: {} as Record<string, SocialProfileProjectionValues>,
+			};
+		}
 		const screenId = screen.value?.id;
-		return screenId ? sessionStore.socialProfileValues(screenId, graphics.value, liveNow.value) : {};
+		return screenId
+			? sessionStore.renderedSocialProfileValues(screenId, graphics.value, liveNow.value)
+			: { current: {}, outgoing: {} };
 	});
-	const socialProfilePresentations = computed(() => {
+	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(
+		() => renderedSocialProfiles.value.current,
+	);
+	const outgoingSocialProfileValues = computed(() => renderedSocialProfiles.value.outgoing);
+	const renderedSocialProfilePresentations = computed(() => {
 		if (previewState.value)
-			return {};
+			return { current: {}, outgoing: {} };
 		const screenId = screen.value?.id;
-		return screenId ? sessionStore.socialProfilePresentations(screenId, graphics.value, liveNow.value) : {};
+		return screenId
+			? sessionStore.renderedSocialProfilePresentations(screenId, graphics.value, liveNow.value)
+			: { current: {}, outgoing: {} };
 	});
+	const socialProfilePresentations = computed(() => renderedSocialProfilePresentations.value.current);
+	const outgoingSocialProfilePresentations = computed(() => renderedSocialProfilePresentations.value.outgoing);
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
@@ -349,7 +363,9 @@ export function useBroadcastGraphicsModeData() {
 		inputValues,
 		outgoingInputValues,
 		socialProfileValues,
+		outgoingSocialProfileValues,
 		socialProfilePresentations,
+		outgoingSocialProfilePresentations,
 		isAuthoringPreview,
 		selectedTarget,
 		publishSelection,

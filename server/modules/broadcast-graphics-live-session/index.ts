@@ -659,13 +659,13 @@ export function broadcastGraphicsLiveSessionModule() {
 	 * Whether any Graphic Input this Broadcast Graphic binds is applied immediately.
 	 *
 	 * The authored half of the question, answered before any Event Data is loaded.
-	 * A graphic with no live-policy bound input cannot be changed by re-resolution
-	 * whatever Event Data does, so it never costs a query.
+	 * A graphic with neither a live-policy bound input nor a live Social Profile
+	 * Projection cannot change program through re-resolution, so it never costs a query.
 	 */
-	function hasLiveBoundInput(graphic: BroadcastGraphicConfig): boolean {
+	function hasLiveEventData(graphic: BroadcastGraphicConfig): boolean {
 		return (graphic.bindings ?? []).some(binding => (graphic.inputs ?? []).some(
 			declaration => declaration.key === binding.inputKey && declaration.updatePolicy === 'live',
-		));
+		)) || (graphic.socialProfileProjections ?? []).some(projection => projection.updatePolicy === 'live');
 	}
 
 	/**
@@ -739,7 +739,7 @@ export function broadcastGraphicsLiveSessionModule() {
 				continue;
 
 			for (const graphic of authoredStack(screen).graphics) {
-				if (!hasLiveBoundInput(graphic))
+				if (!hasLiveEventData(graphic))
 					continue;
 
 				try {
