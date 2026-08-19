@@ -1,7 +1,7 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetParamsSchema } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 
 /**
  * One Graphic Style Set with both its working draft and its published entries.
@@ -9,7 +9,7 @@ import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
  * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 
 	const styleSet = await graphicStyleSetService().findById(styleSetId);

@@ -15,11 +15,11 @@ vi.mock('~~/server/modules/graphics-administrator', () => ({
 	requireGraphicsAdministrator: mockRequireGraphicsAdministrator,
 }));
 
-// The error wrapper reaches for an author session when it names an actor, and
-// that module reads the platform KV binding at import time. This route never
-// names an actor, so the stub only keeps the import graph resolvable.
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	optionalGraphicsAuthorSession: vi.fn().mockResolvedValue(undefined),
+// The error wrapper reaches for the asking user when it names an actor, and that
+// module builds the Better Auth instance over `hub:db` at import time. This route
+// never names an actor, so the stub only keeps the import graph resolvable.
+vi.mock('~~/server/utils/auth', () => ({
+	optionalUserId: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({

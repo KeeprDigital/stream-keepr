@@ -1,6 +1,6 @@
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
+import { requireUserId } from '~~/server/utils/auth';
 import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
@@ -13,7 +13,7 @@ import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templat
  * a Feature Match Layout Template — the same document, through the same exporter.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 
 	const screen = await screenService().findById(screenId, eventId);

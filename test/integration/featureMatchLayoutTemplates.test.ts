@@ -7,8 +7,7 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 
 /**
  * The Feature Match Layout Template library through the real API.
@@ -108,7 +107,7 @@ describe('feature Match Layout Template library', () => {
 	}
 
 	beforeAll(async () => {
-		authorCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
 
 		const source = await createEventWithOverlayScreen(`Layout Source Event ${runId}`, `layout-source-${runId}`);
 		sourceEventId = source.eventId;
@@ -224,17 +223,13 @@ describe('feature Match Layout Template library', () => {
 		expect(templates.some(template => template.id === templateId)).toBe(true);
 	});
 
-	it('refuses the library reads without a graphics author session', async () => {
-		// #206: reads ask for the same session the writes do — session-scoping,
-		// not access control (ADR-0008) — so the Graphic Asset identities a
-		// document embeds are not enumerable one layer over from the Asset
-		// Library's own guarded routes.
-		const anonymousList = await request(LIBRARY_PATH);
-		expect(anonymousList.status).toBe(401);
-
-		const anonymousEntry = await request(`${LIBRARY_PATH}/${templateId}`);
-		expect(anonymousEntry.status).toBe(401);
-	});
+	/*
+	 * The refusal for a caller with no session at all is the API boundary's since
+	 * #398, composed around every `/api/**` route before any handler runs, and it
+	 * is proved against a genuinely anonymous client in `apiBoundary.test.ts`.
+	 * This suite's client is signed in, so asserting it here would mean sending a
+	 * request a different way to test a middleware this file is not about.
+	 */
 
 	/**
 	 * The acceptance criterion stated as one operator-visible rule: placing a layout
@@ -372,16 +367,5 @@ describe('feature Match Layout Template library', () => {
 			.toBe('application/vnd.streamkeepr.feature-match-layout-template+zip');
 		expect(response.headers.get('content-disposition')).toContain('.sklayout');
 		await response.arrayBuffer();
-	});
-
-	it('requires a graphics author session to save, revise, or export', async () => {
-		const anonymousSave = await request(LIBRARY_PATH, {
-			method: 'POST',
-			body: { source: { eventId: sourceEventId, screenId: sourceScreenId } },
-		});
-		expect(anonymousSave.status).toBe(401);
-
-		const anonymousExport = await fetch(`${LIBRARY_PATH}/${templateId}/template-package`);
-		expect(anonymousExport.status).toBe(401);
 	});
 });

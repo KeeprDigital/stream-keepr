@@ -8,8 +8,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -54,7 +53,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 	let authorHeaders: Record<string, string>;
 
 	beforeAll(async () => {
-		authorHeaders = { cookie: await createGraphicsAuthorSessionCookie() };
+		authorHeaders = { cookie: await operatorSessionCookie() };
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

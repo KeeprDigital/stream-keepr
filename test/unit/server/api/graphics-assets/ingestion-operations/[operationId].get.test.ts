@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 const {
-	mockRequireGraphicsAuthorSession,
+	mockRequireUserId,
 	mockGetIngestionOperation,
 	mockSetResponseHeader,
 	mockRouterParam,
 } = vi.hoisted(() => ({
-	mockRequireGraphicsAuthorSession: vi.fn(),
+	mockRequireUserId: vi.fn(),
 	mockGetIngestionOperation: vi.fn(),
 	mockSetResponseHeader: vi.fn(),
 	mockRouterParam: vi.fn(),
 }));
 
-vi.mock('~~/server/modules/graphics-author-session', () => ({
-	requireGraphicsAuthorSession: mockRequireGraphicsAuthorSession,
+vi.mock('~~/server/utils/auth', () => ({
+	requireUserId: mockRequireUserId,
 }));
 
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
@@ -38,7 +38,7 @@ const routePath = '../../../../../../server/api/graphics-assets/ingestion-operat
 describe('one Graphics Ingestion Operation, as its initiator polls it', () => {
 	beforeEach(() => {
 		vi.resetModules();
-		mockRequireGraphicsAuthorSession.mockReset().mockResolvedValue('author-1');
+		mockRequireUserId.mockReset().mockResolvedValue('author-1');
 		mockGetIngestionOperation.mockReset().mockResolvedValue({ id: 'operation-1' });
 		mockSetResponseHeader.mockReset();
 		mockRouterParam.mockReset().mockReturnValue('operation-1');

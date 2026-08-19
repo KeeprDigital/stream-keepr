@@ -10,35 +10,30 @@ import { ACCEPTANCE_FAILURE_CODES } from '../../../scripts/graphics-acceptance/e
 import { authoredPageRequest } from '../../../scripts/graphics-acceptance/installation.mjs';
 
 /**
- * The name the installation issues its graphics author session under
- * (`server/modules/graphics-author-session.ts:11`).
- */
-const COOKIE_NAME = 'stream_keepr_graphics_author_session';
-/**
- * Shaped like a real token rather than merely opaque: the installation mints one
- * as two concatenated `crypto.randomUUID()`s (`graphics-author-session.ts:159`),
- * so it is hex and hyphens and carries no `.` or `=` of its own.
- */
-const COOKIE_VALUE = '3f9c1a72-5d84-4e21-9b6f-0a7c2e8d41b5'
-	+ 'c4e70d92-1f38-4a6b-8c25-7d09e3f1a2b6';
-const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
-
-/**
- * The operator session that travels beside it since #396.
+ * The name Better Auth issues this installation's session under, over http.
  *
- * Two identities reach the browser now, and they answer different questions: this
- * one gets a request past the API boundary at all, the author cookie says whose
- * operation is being read. A page given only the second is answered 401 by every
- * library route, which no assertion inside the page can tell from a broken one.
+ * One identity reaches the browser since #398: it gets a request past the API
+ * boundary *and* names the user whose Graphics Ingestion Operation is being
+ * read. A page given none is answered 401 by every library route, which no
+ * assertion inside the page can tell from a broken one.
  */
-const SESSION_COOKIE = 'better-auth.session_token=0f8b1c2d3e4f5a6b.7c8d9e0f1a2b3c4d';
+const COOKIE_NAME = 'better-auth.session_token';
+/**
+ * Shaped like a real token rather than merely opaque: Better Auth signs the
+ * token, so the value carries a `.` — which is exactly the separator a naive
+ * split would take for the cookie's own.
+ */
+const COOKIE_VALUE = '0f8b1c2d3e4f5a6b.7c8d9e0f1a2b3c4d';
+const COOKIE = `${COOKIE_NAME}=${COOKIE_VALUE}`;
+const SESSION_COOKIE = COOKIE;
 
 /**
  * The `--library` font gate stages an ingestion from Node and then reads it
- * back in a browser. A Graphics Ingestion Operation is owned by the session
- * that created it and is a `404` to any other (ADR-0003), so the browser has to
+ * back in a browser. A Graphics Ingestion Operation is owned by the user who
+ * created it and is a `404` to any other (ADR-0010), so the browser has to
  * arrive carrying the harness's own session: the run that let the page mint its
- * own could not pass by construction (#276).
+ * own identity could not pass by construction (#276), and since #398 a page with
+ * no session cannot even reach the route.
  *
  * The live shape of that fact — the browser reading the operation `200` as its
  * initiator — needs a running installation and a local Chromium. What is
@@ -185,16 +180,15 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 	 * this test was the stand-in; since #345 the call site is pinned directly in
 	 * `runFontBrowserAcceptance.test.ts`, and this holds just the helper.
 	 */
-	it('pairs a staged page with both identities that staged it', () => {
+	it('pairs a staged page with the identity that staged it', () => {
 		const session = {
 			origin: 'http://127.0.0.1:8787',
-			authorCookie: COOKIE,
 			sessionCookies: [SESSION_COOKIE],
 		};
 
 		expect(authoredPageRequest(session, PAGE_URL)).toEqual({
 			url: PAGE_URL,
-			cookies: [SESSION_COOKIE, COOKIE],
+			cookies: [SESSION_COOKIE],
 		});
 	});
 

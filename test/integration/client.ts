@@ -33,11 +33,9 @@ import {
  * `test/unit/integration/integrationClient.test.ts` keeps it honest: no file under
  * `test/integration/` may import the raw helpers except this one.
  *
- * **The session is appended, never substituted.** Several suites present a
- * Graphics Author cookie of their own, and that identity answers a different
- * question — one says who owns an operation, the other says the request is allowed
- * in at all. A client that replaced the header would turn every graphics
- * authorisation test into an anonymous-author test.
+ * **The session is appended, never substituted — and never appended to a request
+ * that carries one already** (see `signed` below, and `./identities.ts` for the
+ * two identities a suite can present instead of the operator).
  */
 
 /** The paths that get a session, which is every API path but two surfaces. */
@@ -55,8 +53,8 @@ const UNAUTHENTICATED_API_PREFIXES = ['/api/auth/', '/api/bootstrap/'] as const;
  * place.
  *
  * Pages are left alone because nothing about them needs a session: the boundary
- * covers `/api/**`, and `graphicsAuthorSession.ts` reads `Set-Cookie` off a page
- * request whose answer must be the one a real browser gets.
+ * covers `/api/**`, and a page request's answer must be the one a real browser
+ * gets.
  */
 export function requestCarriesSession(path: string): boolean {
 	if (!path.startsWith('/api/'))
@@ -152,11 +150,33 @@ async function signInAsOperator(): Promise<string> {
  */
 export { throughOneTransportFailure } from './transportRetry';
 
-/** One request's headers with the operator's session appended to whatever was there. */
+/**
+ * A Better Auth session cookie, under either name it can be issued as.
+ *
+ * The `__Secure-` prefix is added over https, so which name a run sees depends on
+ * the scheme the spawned server happened to use.
+ */
+const SESSION_COOKIE = /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/;
+
+/**
+ * One request's headers, signed as the operator unless the caller signed it as
+ * somebody else.
+ *
+ * **A caller's own session wins, and that rule arrived with #398.** Before the
+ * cutover the identity a graphics suite presented was a Graphics Author Session
+ * under a name of its own, so appending the operator's cookie beside it was two
+ * different questions answered by two different cookies. Since the cutover both
+ * are `better-auth.session_token`: appending would put the same cookie name in one
+ * header twice and leave which identity the server reads to whichever end of the
+ * header it parsed first. So a request that already carries a session is left
+ * exactly as the caller wrote it — which is also what makes `./identities.ts`
+ * work at all.
+ */
 async function signed(path: string, headers: HeadersInit | undefined): Promise<Record<string, string>> {
 	const merged = new Headers(headers ?? {});
-	if (requestCarriesSession(path))
-		merged.set('cookie', [merged.get('cookie'), await operatorSessionCookie()].filter(Boolean).join('; '));
+	const own = merged.get('cookie');
+	if (requestCarriesSession(path) && !SESSION_COOKIE.test(own ?? ''))
+		merged.set('cookie', [own, await operatorSessionCookie()].filter(Boolean).join('; '));
 
 	return Object.fromEntries(merged);
 }

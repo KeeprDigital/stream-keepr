@@ -1,7 +1,7 @@
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import { requireUserId } from '~~/server/utils/auth';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
 
 /**
@@ -17,7 +17,7 @@ import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/br
  * something the author is looking straight at.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 

@@ -2,7 +2,7 @@ import {
 	broadcastGraphicTemplateLibrarySummary,
 	listBroadcastGraphicTemplateLibrary,
 } from '~~/server/modules/broadcast-graphic-template-library';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 
 /**
  * Browse the installation's Broadcast Graphic Template library.
@@ -19,7 +19,7 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
  * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const entries = await listBroadcastGraphicTemplateLibrary(event);
 
 	return { templates: entries.map(broadcastGraphicTemplateLibrarySummary) };

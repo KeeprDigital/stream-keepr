@@ -4,25 +4,26 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { anotherBrowser, anotherUser } from './identities';
 
 /**
  * Who a Graphics Ingestion Operation belongs to, proved through the real routes.
  *
- * Two rules are worth a suite of their own because they are the whole contract
- * and nothing else pins them:
+ * Since #398 the answer is a **person** (ADR-0010's credential model), and that is
+ * what this suite is now about. The rule it used to open with — that every
+ * author-facing route refuses a caller carrying no session — is the API boundary's
+ * since the cutover and is proved once, against a genuinely anonymous client, in
+ * `apiBoundary.test.ts`. What is left is the guarantee no middleware can state:
  *
- * - every author-facing graphics ingestion and lifecycle route refuses a caller
- *   carrying no graphics author session, before it reaches the library;
- * - the graphics author session alone decides identity, so one session cannot
- *   reach another's operation however it labels itself.
+ * - one person cannot reach another's operation, however they label themselves;
+ * - the same person can, from any browser — an operation outlives the session it
+ *   was started in, which is the whole of what the cutover bought.
  *
- * The second rule is asserted while the caller supplies the identity header the
- * library used to trust. A suite that only proved scoping between two headers
- * would prove the mechanism and not the guarantee, which is exactly the gap this
- * replaces.
+ * Scoping is asserted while the caller supplies the identity header the library
+ * used to trust. A suite that only proved scoping between two headers would prove
+ * the mechanism and not the guarantee, which is exactly the gap this replaces.
  */
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -177,7 +178,6 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	let authorCookie: string;
 	let intruderCookie: string;
 	let fontBytes: Uint8Array<ArrayBuffer>;
-	let sessionlessProbeOperationId: string;
 	let assetId: string;
 	let eventId: number;
 
@@ -260,15 +260,11 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 
 	beforeAll(async () => {
 		fontBytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
-		authorCookie = await createGraphicsAuthorSessionCookie();
-		intruderCookie = await createGraphicsAuthorSessionCookie();
+		authorCookie = await operatorSessionCookie();
+		// A different person, not a second browser: what the scoping cases below
+		// probe is ownership, and one person in two browsers is one owner (#398).
+		intruderCookie = await anotherUser('ingestion-outsider');
 		expect(intruderCookie).not.toBe(authorCookie);
-
-		sessionlessProbeOperationId = (await initiateStillImageAs(
-			authorCookie,
-			'authorisation-sessionless-probe',
-			'Authorisation sessionless probe',
-		)).id;
 
 		/**
 		 * Every scoping probe is parked at `awaiting-confirmation`: a font whose
@@ -334,88 +330,51 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		catch {}
 	});
 
-	describe('a caller carrying no graphics author session', () => {
-		it.each(operationRoutes)('is refused $label', async (route) => {
-			const response = await fetch(
-				route.path(sessionlessProbeOperationId),
-				requestInit(route, { ...UNHONOURED_AUTHOR_ID_HEADER }),
-			);
-			expect(response.status).toBe(401);
-		});
+	/*
+	 * A `describe` of thirteen route-by-route refusals for a caller with no session
+	 * stood here until #398. Every one of them now meets ADR-0010's boundary before
+	 * its handler runs, so they asserted a middleware from thirteen angles; the
+	 * boundary is proved once in `apiBoundary.test.ts`, and exhaustively against
+	 * every route file on disk in `test/unit/server/utils/apiBoundary.test.ts`.
+	 *
+	 * What those cases also proved is kept below, because the boundary suite does
+	 * not: a refusal leaves the library exactly as it was.
+	 */
 
-		it('is refused the initiation of a new operation', async () => {
-			const response = await fetch('/api/graphics-assets/ingestion-operations', {
-				method: 'POST',
-				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
-				body: JSON.stringify(graphicsIngestionRequest({
-					idempotencyKey: 'authorisation-sessionless-initiation',
-					name: 'Sessionless initiation',
-					declaredByteLength: transparentPixelPng.byteLength,
-				})),
-			});
-			expect(response.status).toBe(401);
-		});
-
-		it('is refused the replacement of an existing Graphic Asset', async () => {
-			const response = await fetch(`/api/graphics-assets/${assetId}/replacement-operations`, {
-				method: 'POST',
-				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					idempotencyKey: 'authorisation-sessionless-replacement',
-					declaredByteLength: transparentPixelPng.byteLength,
-				}),
-			});
-			expect(response.status).toBe(401);
-		});
-
-		it('is refused a Graphic Asset metadata rewrite', async () => {
-			const response = await fetch(`/api/graphics-assets/${assetId}`, {
+	/**
+	 * The half of the deleted cases that is about the library rather than the
+	 * middleware: a refused write must change nothing.
+	 *
+	 * A 401 with a side effect is the shape worth a test — a route that reads a
+	 * body, acts, and refuses afterwards passes any status-code assertion — and the
+	 * two writes chosen are the sharpest the surface has. The metadata route
+	 * replaces the Event association set outright, so an empty array is a valid
+	 * request that detaches the asset from every Event it belongs to; the lifecycle
+	 * actions are the ones #116 was filed over.
+	 *
+	 * Asked through `anonymousFetch`, because this suite's client signs anything
+	 * that presents no session of its own.
+	 */
+	describe('a refused write', () => {
+		it('detaches no Event association, having been refused before it acted', async () => {
+			const response = await anonymousFetch(`/api/graphics-assets/${assetId}`, {
 				method: 'PATCH',
-				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					name: 'Renamed by nobody',
-					eventIds: [eventId],
-				}),
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ name: 'Renamed by nobody', eventIds: [] }),
 			});
-			expect(response.status).toBe(401);
-		});
 
-		/**
-		 * The sharpest form of the same route: the update replaces the Event
-		 * association set outright rather than merging into it, and the schema puts
-		 * no floor under the array. An empty one is therefore a valid request that
-		 * detaches the asset from every Event it belongs to — and unlike the
-		 * lifecycle actions, this route records nothing in the Evidence Ledger, so
-		 * there would be no attribution for it either.
-		 */
-		it('is refused the detachment of every Event association', async () => {
-			const response = await fetch(`/api/graphics-assets/${assetId}`, {
-				method: 'PATCH',
-				headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					name: 'Authorisation lifecycle subject',
-					eventIds: [],
-				}),
-			});
 			expect(response.status).toBe(401);
 			await expect(assetEventIds()).resolves.toEqual([eventId]);
 		});
 
-		// The defect #116 names: retiring and Trashing were reachable by anyone who
-		// could reach the API at all.
-		it.each(['retire', 'trash', 'restore'] as const)(
-			'is refused the %s lifecycle action',
-			async (action) => {
-				const response = await fetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
-					method: 'POST',
-					headers: { ...UNHONOURED_AUTHOR_ID_HEADER, 'content-type': 'application/json' },
-					body: JSON.stringify({ action }),
-				});
-				expect(response.status).toBe(401);
-			},
-		);
-
 		it('leaves the Graphic Asset in active discovery', async () => {
+			const response = await anonymousFetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'trash' }),
+			});
+
+			expect(response.status).toBe(401);
 			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
 				headers: { cookie: authorCookie },
 				query: { search: 'Authorisation lifecycle subject' },
@@ -423,7 +382,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		});
 	});
 
-	describe('a second graphics author session claiming the initiating identity', () => {
+	describe('a second person claiming the initiating identity', () => {
 		it.each(operationRoutes)('cannot reach the operation for $label', async (route) => {
 			const response = await fetch(
 				route.path(scopingProbes.get(route.label)!),
@@ -440,6 +399,32 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			);
 			expect(reconnectAttempt.id).not.toBe(scopingProbes.get(operationRoutes[0]!.label));
 		});
+	});
+
+	/**
+	 * The other half of that key, and the half the cutover widened (#398).
+	 *
+	 * `(initiatedBy, idempotencyKey)` is unique, and `initiatedBy` is now a person
+	 * — so the same key sent from a second browser reconnects to the first
+	 * operation instead of starting a second one. ADR-0010 calls this intentional
+	 * dedupe rather than a side effect, which is worth a case of its own precisely
+	 * because it reads like one: under the Graphics Author Session the identical
+	 * request from a second browser produced a second operation, and the sentence
+	 * describing that ("the same person in a second browser is still a second
+	 * author") was retired with it.
+	 */
+	describe('the same person in a second browser', () => {
+		it('reconnects to their own operation rather than starting another', async () => {
+			const secondBrowser = await anotherBrowser();
+
+			const reconnected = await initiateFontAs(
+				secondBrowser,
+				'authorisation-scoping-probe-0',
+				'Authorisation scoping probe 0',
+			);
+
+			expect(reconnected.id).toBe(scopingProbes.get(operationRoutes[0]!.label));
+		});
 
 		it('leaves every probed operation exactly as its own author left it', async () => {
 			for (const route of operationRoutes) {
@@ -451,7 +436,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			}
 		});
 
-		it('leaves the initiating session still reading its own provisional staged bytes', async () => {
+		it('leaves the initiator still reading their own provisional staged bytes', async () => {
 			const operationId = scopingProbes.get('reading provisional staged bytes')!;
 			const response = await fetch(
 				`/api/graphics-assets/ingestion-operations/${operationId}/staged-source`,
@@ -463,46 +448,34 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	});
 
 	/**
-	 * What per-session ownership costs, at the moment it costs the most.
+	 * A session ending mid-transfer, which is where ownership used to cost the most
+	 * and now costs almost nothing (#176's scenario, #398's answer).
 	 *
-	 * This is #176's scenario played out through the real routes: a resumable
-	 * transfer half sent, and the session it was sent under gone.
+	 * The same story as before the cutover for its first two beats — the transfer
+	 * stops with `401`, and the durable checkpoint is untouched — and the opposite
+	 * for its third. Ownership is the person's now, so signing in again reaches the
+	 * operation instead of finding somebody else's: the case below that used to
+	 * assert `404` for a reload asserts that the transfer resumes.
 	 *
-	 * **What these cases cover, and what they do not.** They pin the *decision* —
-	 * that ownership is per-session and what that costs — not the sliding lifetime
-	 * this branch added; they pass identically against a session module with the
-	 * sliding removed, because nothing here advances a clock. Sliding is proved in
-	 * `test/unit/server/modules/graphicsAuthorSession.test.ts`, where the clock is
-	 * controlled directly; what that leaves uncovered is wiring rather than logic,
-	 * since `h3` and `hub:kv` are both substituted there. A Worker's clock cannot be
-	 * advanced from here, and the only wire-observable trace of a slide — a
-	 * refreshed `Set-Cookie` — appears only once a session is over a minute stale,
-	 * which a session minted seconds ago in `beforeAll` never is.
-	 *
-	 * Three separate facts follow, and only the first two are losses:
-	 *
-	 * - the transfer stops with `401`, not with a partial success;
-	 * - reloading does not recover it, because a new session is a new author and
-	 *   the operation belongs to the old one, so it is a `404` to the person who
-	 *   started it. ADR-0003 records why that is kept;
-	 * - the durable checkpoint itself is untouched. Nothing about the transfer was
-	 *   lost except who was allowed to continue it, which is what makes an idle
-	 *   session lifetime a sufficient answer rather than a partial one.
+	 * That is the difference ADR-0010 bought, stated where it can be seen: an upload
+	 * interrupted overnight is finished in the morning, from any machine, rather
+	 * than being reclaimed by the retention sweep with its bytes still good.
 	 */
-	describe('a graphics author session that lapses mid-transfer', () => {
+	describe('a session that ends mid-transfer', () => {
 		/**
-		 * A cookie of the shape the browser keeps and the library has forgotten.
+		 * A cookie of the shape a browser keeps and the server has forgotten.
 		 *
-		 * A token that was never minted, not one that has expired — the two are not
+		 * A token that was never issued, not one that has expired — the two are not
 		 * the same event, and the honest claim is narrower than "this is what expiry
-		 * looks like". What makes it a faithful proxy is that both reach the library
-		 * the same way: `readSession` looks the token up, gets nothing back, and
-		 * refuses. An expired session arrives there because KV dropped its entry;
-		 * this one because there was never an entry to drop. From the route's side
-		 * they are indistinguishable, which is what these cases are about.
+		 * looks like". What makes it a faithful proxy is that both reach the boundary
+		 * the same way: Better Auth looks the token up, gets nothing back, and the
+		 * request is refused before a handler sees it. It has to be a *session*
+		 * cookie by name, because the suite's client signs any request that presents
+		 * none — a request with no identity has to be sent deliberately since the
+		 * cutover.
 		 */
-		const lapsedCookie
-			= 'stream_keepr_graphics_author_session=a7f1c0d2-lapsed-session-token-no-longer-stored';
+		const endedCookie
+			= 'better-auth.session_token=a7f1c0d2-ended-session-token-no-longer-stored';
 
 		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
 		let interruptedId: string;
@@ -543,25 +516,37 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/2`,
 				{
 					method: 'PUT',
-					headers: { 'cookie': lapsedCookie, 'content-type': 'application/octet-stream' },
+					headers: { 'cookie': endedCookie, 'content-type': 'application/octet-stream' },
 					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
 				},
 			);
 			expect(response.status).toBe(401);
 		});
 
-		it('is not recovered by the reload that mints a new session', async () => {
-			const reloadedCookie = await createGraphicsAuthorSessionCookie();
-			expect(reloadedCookie).not.toBe(authorCookie);
+		/**
+		 * The cutover's headline, and the one case in this file that asserts the
+		 * opposite* of what it asserted before #398.
+		 *
+		 * Signing in again is a new Better Auth session — a new browser, as far as
+		 * the installation is concerned — and it reaches the operation, because
+		 * `initiatedBy` is the person rather than the session. Under the Graphics
+		 * Author Session this was a `404` to the very person who started the upload.
+		 */
+		it('is reached again after signing in from another browser', async () => {
+			const secondBrowser = await anotherBrowser();
+			expect(secondBrowser).not.toBe(authorCookie);
 
-			const response = await fetch(
+			await expect($fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
-				{ headers: { cookie: reloadedCookie } },
-			);
-			expect(response.status).toBe(404);
+				{ headers: { cookie: secondBrowser } },
+			)).resolves.toMatchObject({
+				id: interruptedId,
+				stage: 'transferring',
+				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			});
 		});
 
-		it('loses nothing but the identity allowed to continue it', async () => {
+		it('loses nothing at all, checkpoint included', async () => {
 			await expect($fetch<GraphicsIngestionOperation>(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
 				{ headers: { cookie: authorCookie } },

@@ -155,54 +155,51 @@ file. An approved remote copy has no client-side bytes, so after server-side
 validation the operation pauses at `awaiting-confirmation`. The workspace reads
 the exact staged bytes from
 `GET /api/graphics-assets/ingestion-operations/:id/staged-source` — private,
-`no-store`, gated on an authenticated graphics author session, scoped to the
-session that initiated the operation, and readable only while that operation is
-awaiting confirmation — produces the evidence, and submits it to
+`no-store`, scoped to the user who initiated the operation, and readable only
+while that operation is awaiting confirmation — produces the evidence, and submits it to
 `POST /api/graphics-assets/ingestion-operations/:id/browser-evidence`.
 
 ## Who a Graphics Ingestion Operation belongs to
 
-The authenticated graphics author session is the author identity, on this route
-and on every other. An operation records the session that initiated it as its
-`initiatedBy`, every route resolves the asking author the same way, and the
-library matches the two before it will answer at all — so an operation's UUID is
-a name, not a right, and a second author who learns one is told the operation
-does not exist. The same holds for an idempotency key: keys are unique per
-author, so reusing another author's key opens a new operation of one's own
-rather than reconnecting to theirs.
+The signed-in user is the author identity, on this route and on every other. An
+operation records the user who initiated it as its `initiatedBy`, every route
+resolves the asking user the same way, and the library matches the two before it
+will answer at all — so an operation's UUID is a name, not a right, and another
+person who learns one is told the operation does not exist.
 
 There is no longer any client-supplied author header. The former
 `x-graphics-author-id` was unauthenticated and is gone from the whole library;
-nothing on the wire names an author except the session cookie.
+nothing on the wire names an author except the session cookie the API boundary
+already requires.
 
-Two consequences worth stating plainly, and one of them has changed.
+Two consequences worth stating plainly, and both of them changed at ADR-0010's
+cutover (#398), where the anonymous Graphics Author Session was retired and the
+user replaced it.
 
-A graphics author session lasts eight hours **from its last request**, not from
-the moment it was minted. Every request that presents a live session carries it
-forward a further eight hours — the KV entry and the cookie together, and no
-more often than once a minute, because Workers KV rate-limits writes to a single
-key. A transfer in progress is a stream of requests, so it holds its own session
-open and cannot be expired out from under itself. What still lapses is a session
-nobody is using: an operation paused at `awaiting-confirmation` with the browser
-closed overnight is unreachable in the morning, because it belongs to a session
-that has ended. Retention still reclaims its staged input on the ordinary
-schedule, but its author cannot resume it.
+**An operation outlives the browser that started it.** It belongs to a person, so
+one paused at `awaiting-confirmation` with the browser closed overnight is
+reached again in the morning — from that machine or any other — by signing in.
+What ends a session no longer ends the work: the only thing lost to a lapse is
+the request that met it. Staged input for an operation that genuinely nobody
+finishes is still reclaimed by retention on the ordinary schedule.
 
-And an operation is owned by one session rather than by a person: the same author
-in a second browser is a second author here. That is deliberate, and there is
-nothing more durable to own it — the installation has no accounts, so nobody logs
-in to become a graphics author. [ADR-0003](../adr/0003-graphics-ingestion-operation-ownership.md)
-records the decision, what it costs, and what would have to exist before it could
-be reversed. The Library Workspace states it before an upload begins, and names a
-lapsed session rather than a bare `401` if one happens.
+**An idempotency key is unique per person, not per browser.** Sending the same
+key from a second browser therefore reconnects to the first operation rather than
+starting a second one. That is intended deduplication and not a side effect —
+the sentence this document used to carry, that the same person in a second
+browser is a second author, was retired with the identity that made it true. The
+Library Workspace states the account-scoped rule before an upload begins, and
+names an ended session rather than a bare `401` if one happens.
 
 `docs/operations/graphics-operations-cockpit.md` describes the administrator
 surface, which is gated by the installation's admin token instead. That gate is
 unchanged. What the Evidence Ledger records for an administrator's action did
 change: the actor was a client-supplied header, so any holder of the admin token
-could write any name into the ledger, and it is now the asking graphics author
-session where there is one and a plain `graphics-administrator` where there is
-not.
+could write any name into the ledger, and it is now the asking user where there
+is one and a plain `graphics-administrator` where there is not. The ledger stores
+the userId and resolves the display name when it is read, so a rename reaches
+entries written years ago; an actor that resolves to no user at all is an
+identity from before the cutover and reads as `anonymous era`.
 
 ## Reading the library
 
@@ -224,25 +221,21 @@ rather than only the asset that was asked about.
 library.** The gate is authentication, not authorisation, and it is thinner than
 its name suggests.
 
-`CONTEXT.md` defines the **Graphics Author Session** and is the authority on what
-it is; what matters operationally here is what that makes the read gate mean.
-Because a session is anonymous and self-issued on any HTML page navigation, any
-browser that has loaded any page of this application — an operator's Screen page
-as much as the Library Workspace — carries one and is admitted, and the guarded
-routes discard the author id they resolve rather than checking it against
-anything. What these routes now refuse is a caller that has not made that page
-request — a bare `curl`, a scanner, a script with no cookie jar. Because the
-session is self-issued, that is a low bar rather than a barrier: one request
-carrying `Accept: text/html` is enough, against any path, including one that
-does not exist, because the middleware runs before routing. A scanner that
-keeps its cookies clears it. **They do not partition the library between
-people.** That is consistent with the library being deliberately
-installation-wide, but it means the gate raises the cost of enumeration rather
-than preventing it for anyone determined.
+`CONTEXT.md` defines the **User** and the **Session** and is the authority on
+what they are; what matters operationally here is what they make the read gate
+mean. Since ADR-0010's cutover (#398) the gate is a real credential — an account
+an administrator created, with a password — where before it was a cookie any
+browser was handed for loading any page. What has not changed is what it gates:
+**it does not partition the library between people.** Every signed-in user
+discovers and reads every Graphic Asset, which is what the library being
+deliberately installation-wide means. The routes resolve who is asking in order
+to record ownership of the work they start, not to decide which assets they may
+see.
 
-The session's eight-hour idle lifetime now bounds reads as well as writes. A
-surface left open overnight answers `401` on its next read and recovers by
-reloading, which mints a new session.
+A session is idle-expiring on a week rather than on eight hours, so a surface
+left open over a weekend answers `401` on its next read and recovers by signing
+in again — which returns the operator to the page they were on, with the
+operations they started still theirs.
 
 ### No server-side render is involved
 

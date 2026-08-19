@@ -1,7 +1,7 @@
 import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { devVarsModule } from './build/devVarsModule';
+import { localConfigurationModule } from './build/localConfigurationModule';
 import { SUPPORTED_SOCIAL_NETWORKS } from './shared/socialProfiles';
 import { GRAPHIC_STYLE_SET_PACKAGE_LIMITS } from './shared/types/graphicStyleSetPackage';
 import {
@@ -44,9 +44,11 @@ export default defineNuxtConfig({
 	},
 
 	modules: [
-		// First: it populates the environment every later module reads its
-		// runtimeConfig from.
-		devVarsModule,
+		// First because it says whether this checkout can configure the rest, and a
+		// notice about that is worth having before anything else speaks. It no
+		// longer needs to be: it populated the environment later modules read their
+		// runtimeConfig from until #412 deleted the file it read.
+		localConfigurationModule,
 		'@nuxthub/core',
 		'@nuxt/eslint',
 		'@nuxt/fonts',

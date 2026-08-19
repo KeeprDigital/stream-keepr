@@ -1,6 +1,6 @@
 import type {
 	GraphicsAuthoringLeaseOutcome,
-	GraphicsAuthoringLeaseState,
+	GraphicsAuthoringLeaseReading,
 } from '~~/shared/modules/graphics-authoring-lease';
 import { GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS } from '~~/shared/modules/graphics-authoring-lease';
 
@@ -28,12 +28,12 @@ export interface UseGraphicsAuthoringLeaseOptions {
 export type GraphicsAuthoringLeaseStatus = 'idle' | 'pending' | 'ready' | 'error';
 
 interface LeaseEnvelope {
-	lease: GraphicsAuthoringLeaseState;
+	lease: GraphicsAuthoringLeaseReading;
 	outcome?: GraphicsAuthoringLeaseOutcome;
 }
 
 export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOptions) {
-	const lease = ref<GraphicsAuthoringLeaseState | null>(null);
+	const lease = ref<GraphicsAuthoringLeaseReading | null>(null);
 	const status = ref<GraphicsAuthoringLeaseStatus>('idle');
 	const enabled = computed(() => toValue(options.enabled ?? true));
 	const endpoint = computed(() => toValue(options.endpoint));
@@ -42,6 +42,13 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 	const writable = computed(() => status.value === 'ready' && (lease.value?.writable ?? false));
 	const heldByAnotherSession = computed(() => lease.value?.heldByAnotherSession ?? false);
 	const canTakeOver = computed(() => status.value === 'ready' && heldByAnotherSession.value);
+	/**
+	 * Who is holding it, where the server could resolve their session to a person
+	 * (#398). Read from the last answer rather than remembered: a holder can be
+	 * displaced between heartbeats, and a stale name beside a live lease would say
+	 * an operator is editing something they have already left.
+	 */
+	const holderName = computed(() => lease.value?.holderName ?? null);
 
 	async function ask(body: { takeover?: boolean } = {}): Promise<void> {
 		if (!enabled.value)
@@ -134,5 +141,5 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 		void release();
 	});
 
-	return { lease, status, writable, heldByAnotherSession, canTakeOver, refresh: ask, takeOver, release };
+	return { lease, status, writable, heldByAnotherSession, holderName, canTakeOver, refresh: ask, takeOver, release };
 }

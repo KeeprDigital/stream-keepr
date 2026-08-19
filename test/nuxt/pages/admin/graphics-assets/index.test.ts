@@ -1,4 +1,4 @@
-import type { GraphicsOperationsCockpit } from '~~/shared/types/graphicsAsset';
+import type { GraphicsOperationsCockpitReading } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,8 +12,8 @@ const GIB = 1024 * 1024 * 1024;
 const DAY = 24 * 60 * 60 * 1000;
 
 function completeCockpit(
-	overrides: Partial<Extract<GraphicsOperationsCockpit, { outcome: 'complete' }>> = {},
-): GraphicsOperationsCockpit {
+	overrides: Partial<Extract<GraphicsOperationsCockpitReading, { outcome: 'complete' }>> = {},
+): GraphicsOperationsCockpitReading {
 	return {
 		outcome: 'complete',
 		checkedAt: '2026-07-30T09:00:00.000Z',
@@ -179,8 +179,15 @@ function completeCockpit(
 				},
 			],
 		},
+		// What the route resolved each initiator to when it served this reading
+		// (#398): one operator by name, and one identity from before the cutover
+		// that resolves to nobody.
+		actorNames: {
+			'author-one': 'Marcus Angel',
+			'author-two': 'anonymous era',
+		},
 		...overrides,
-	} as GraphicsOperationsCockpit;
+	} as GraphicsOperationsCockpitReading;
 }
 
 const passthroughStub = defineComponent({
@@ -246,7 +253,7 @@ async function openCockpit() {
  * The server answers each surface with its own payload, so the page is never
  * accidentally proved correct by a mock that returns the same body everywhere.
  */
-function serve(reading: GraphicsOperationsCockpit, sweep?: unknown) {
+function serve(reading: GraphicsOperationsCockpitReading, sweep?: unknown) {
 	mockApiFetch.mockImplementation((url: string) =>
 		url === '/api/admin/graphics-assets/operations-cockpit'
 			? Promise.resolve(reading)
@@ -305,6 +312,23 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 		expect(wrapper.text()).toContain('stage awaiting-confirmation');
 		expect(wrapper.text()).toContain('(complete)');
 		expect(wrapper.text()).toContain('Staged input expires');
+	});
+
+	/**
+	 * Who started it, as a person rather than as an identity (#398, ADR-0010).
+	 *
+	 * The second half is the cutover's own residue: an operation started before it
+	 * names a Graphics Author Session that never had a person attached, so the
+	 * reading says which era it came from. An administrator meeting a stalled
+	 * anonymous operation should be able to read that off the card rather than
+	 * debug it as a mystery — ADR-0010 records the retry that can revive one.
+	 */
+	it('names who started each operation, and the era where that is nobody', async () => {
+		const wrapper = await openCockpit();
+
+		expect(wrapper.text()).toContain('started by Marcus Angel');
+		expect(wrapper.text()).toContain('started by anonymous era');
+		expect(wrapper.text()).not.toContain('author-one');
 	});
 
 	it('states every lifecycle deadline and never offers to shorten one', async () => {
@@ -445,6 +469,9 @@ describe('the Graphics Asset Library Operations cockpit page', () => {
 					persistent: false,
 				}],
 			},
+			// Empty rather than absent: a reading that carries no operations names
+			// nobody, and the route still says so (#398).
+			actorNames: {},
 		});
 
 		const wrapper = await openCockpit();

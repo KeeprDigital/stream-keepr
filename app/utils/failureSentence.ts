@@ -101,11 +101,11 @@ const SANITIZED_SERVER_MESSAGES: readonly string[] = ['Internal Server Error', '
  * Established by execution rather than reasoned about. Driving the real route with the
  * signing key invalid — `GET /api/events/1/screens/1/asset-capability` — answers a
  * `FetchError` with `statusCode` 503 and `data.message` naming the setting, which is the
- * shape. The enumeration is separate: `mapPublicNitroError` was driven across all eleven
+ * shape. The enumeration is separate: `mapPublicNitroError` was driven across all ten
  * preserved branches and they come out at 502/503/504/507, never 500, while an unmapped
  * 5xx keeps its own non-500 status and carries the placeholder (#286's review; #321
  * added the shared branch and closed the live unmapped examples; #344 retired the
- * wiring branch #243 had added).
+ * wiring branch #243 had added; #398 retired the Graphics Author Session store's).
  *
  * A `useFetch` error is that failure rebuilt by `createError`, which keeps `statusCode`
  * and `data` and does not always keep `status` — imported from `@nuxt/nitro-server/h3` in

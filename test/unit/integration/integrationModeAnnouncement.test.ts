@@ -13,16 +13,16 @@ import { announceIntegrationMode, INTEGRATION_MODE_ENV } from '~~/test/integrati
  * (`startServer(ctx.options.env)`) and nowhere else, while `loadFixture()` calls
  * `loadNuxt({ cwd: rootDir, dev: true, … })` in the *globalSetup* process first —
  * with `rootDir` resolving through `process.cwd()` to the repository root, where
- * a developer's real `.dev.vars` sits. So a config-time reader in the parent sees
- * no suite, acts as it would for an ordinary `pnpm dev`, and the server child
+ * a developer's real `.env` sits. So a config-time reader in the parent sees no
+ * suite, acts as it would for an ordinary `pnpm dev`, and the server child
  * inherits the result: `{ ...process.env, ...options.env }` overrides only the
  * two names the suite happened to pin.
  *
  * That is isolation by the coincidence of which names somebody thought to list —
  * the shape #197 and #222 were about, and the shape the first two attempts at
- * #233's dev-vars gate had. `build/devVars.ts` refusing to adopt under the flag
- * is correct and was never the problem; the flag simply was not set where it had
- * to be read.
+ * #233's gate had. `build/localConfiguration.ts` staying silent under the flag is
+ * correct and was never the problem; the flag simply was not set where it had to
+ * be read.
  *
  * `globalSetup.ts` is not reachable from this suite, so a call sitting in it is a
  * convention. The scan below is what makes it a rule: the announcement must
@@ -75,7 +75,7 @@ describe('the integration suite announcing itself to its own process', () => {
 		announceIntegrationMode(env);
 
 		// `'true'` exactly, because `nuxt.config.ts`, `server/plugins/error-handler.ts`
-		// and `build/devVars.ts` all compare against that string.
+		// and `build/localConfiguration.ts` all compare against that string.
 		expect(env[INTEGRATION_MODE_ENV]).toBe('true');
 	});
 

@@ -1,11 +1,11 @@
 import { planGraphicStyleSetDeletion } from '~~/server/modules/graphic-style-set';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetSchema,
 	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -24,7 +24,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * its entries would leave that template pointing at nothing.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 	const body = deleteGraphicStyleSetSchema.parse(
 		await readJsonPayloadLimited(

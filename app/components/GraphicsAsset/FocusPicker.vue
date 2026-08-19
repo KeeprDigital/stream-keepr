@@ -74,8 +74,9 @@ const {
  *
  * `useFetch` hands its `error` on as the failure the request produced, whose own
  * `message` is the transport's line — rendering it put '[GET] "/api/graphics-assets":
- * 403 Forbidden' where the route had written 'An authenticated graphics author session
- * is required'. `failureSentence` owns which failures may be quoted, and since #286 that
+ * 403 Forbidden' where the server had written the sentence the refusal carried (today
+ * the boundary's 'Authentication is required'; a graphics author session's own refusal
+ * when this was written). `failureSentence` owns which may be quoted, and since #286 that
  * includes the 5xx families whose prose the server preserves through sanitizing: an
  * unavailable Graphics Asset Library is exactly the answer this surface must not turn
  * back into a status line. The transport's line stays as the fallback, because a

@@ -2,7 +2,7 @@ import {
 	featureMatchLayoutTemplateLibrarySummary,
 	listFeatureMatchLayoutTemplateLibrary,
 } from '~~/server/modules/feature-match-layout-template-library';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 
 /**
  * Browse the installation's Feature Match Layout Template library.
@@ -18,7 +18,7 @@ import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-
  * The session is session-scoping, not access control (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const entries = await listFeatureMatchLayoutTemplateLibrary(event);
 
 	return { templates: entries.map(featureMatchLayoutTemplateLibrarySummary) };

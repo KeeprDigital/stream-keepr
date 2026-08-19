@@ -1,12 +1,12 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { planGraphicStyleSetPublish } from '~~/server/modules/graphic-style-set';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetParamsSchema,
 	publishGraphicStyleSetSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -27,7 +27,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * and this route is the only place that distinction could quietly be lost.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId } = await getValidatedRouterParams(event, graphicStyleSetParamsSchema.parse);
 	const body = publishGraphicStyleSetSchema.parse(
 		await readJsonPayloadLimited(

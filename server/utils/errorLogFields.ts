@@ -44,9 +44,9 @@ const MAX_CAUSE_DEPTH = 5;
  * Nearest, not deepest: a domain error's own code is the classification, and a
  * store code beneath it is only the fallback for levels that classify nothing.
  * Before this walk the read stopped at one level, so a class like
- * `GraphicsAuthorSessionUnavailableError` — which names the failure but carries
- * no code — logged `errorCode: null` over the store exception whose code said
- * why the store refused.
+ * `TemporarilyUnavailableError` — which names the failure but carries no code —
+ * logged `errorCode: null` over the store exception whose code said why the store
+ * refused.
  */
 function nearestCauseCode(cause: unknown): string | number | null {
 	for (

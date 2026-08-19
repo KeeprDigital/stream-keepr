@@ -4,9 +4,9 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { anotherUser } from './identities';
 
 /**
  * Two real graphics author sessions. The identity is the session and nothing
@@ -48,8 +48,8 @@ async function copyRemoteSource(operationId: string, sourceUrl: string) {
 
 describe('the approved remote HTTPS copy API', () => {
 	beforeAll(async () => {
-		authorHeaders.cookie = await createGraphicsAuthorSessionCookie();
-		otherAuthorHeaders.cookie = await createGraphicsAuthorSessionCookie();
+		authorHeaders.cookie = await operatorSessionCookie();
+		otherAuthorHeaders.cookie = await anotherUser('remote-copy-outsider');
 		expect(otherAuthorHeaders.cookie).not.toBe(authorHeaders.cookie);
 	});
 
@@ -161,11 +161,6 @@ describe('the approved remote HTTPS copy API', () => {
 			{ headers: authorHeaders },
 		);
 		expect(response.status).toBe(404);
-
-		const anonymous = await fetch(
-			`/api/graphics-assets/ingestion-operations/${initiated.id}/staged-source`,
-		);
-		expect(anonymous.status).toBe(401);
 	});
 
 	it('refuses browser confirmation before the report is ready', async () => {
@@ -195,7 +190,7 @@ describe('the approved remote HTTPS copy API', () => {
 	// second author holding a real session of their own is therefore the exact
 	// adversary this must resist, and knowing the operation's UUID buys them
 	// nothing.
-	it('scopes a remote copy operation to the graphics author session that initiated it', async () => {
+	it('scopes a remote copy operation to the person who initiated it', async () => {
 		const initiated = await initiateRemoteCopy(
 			'integration-remote-copy-isolation',
 			'Private remote copy',
@@ -217,12 +212,7 @@ describe('the approved remote HTTPS copy API', () => {
 		);
 		expect(foreignStagedSource.status).toBe(404);
 
-		const sessionless = await fetch(
-			`/api/graphics-assets/ingestion-operations/${initiated.id}/staged-source`,
-		);
-		expect(sessionless.status).toBe(401);
-
-		// The initiating session still owns it: refusing everyone is not scoping.
+		// The initiator still owns it: refusing everyone is not scoping.
 		await expect($fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}`,
 			{ headers: authorHeaders },

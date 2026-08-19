@@ -43,37 +43,9 @@ export class ServiceConfigurationError extends Error {
 }
 
 /**
- * The store a Graphics Author Session lives in could not be reached.
- *
- * Public for the same reason as `ServiceConfigurationError` above, and it exists
- * at all for a reason that class does not have: the refusal it becomes is raised
- * around whatever the store
- * threw, and a raw KV exception carries nothing `mapPublicNitroError` can
- * discriminate on — so before this class the sentence below was written, sent,
- * and then overwritten with 'Internal Server Error' on the way out (#294). What
- * the name buys is that the mapper can tell "the session store is down" from
- * "something threw", which is the whole difference between an operator who knows
- * to go and look at a binding and one who has been told nothing.
- *
- * It names the subsystem and never the store's own words: the exception that
- * caused it is kept as `cause`, where debugging can reach it and no response
- * carries it. The failure log names this class — `errorLogFields` takes its
- * `name` from the nearest cause — and, because this class declares no `code`,
- * walks on to carry the store exception's own code beside it (#323), so one
- * line says both what failed and why the store refused.
- */
-export class GraphicsAuthorSessionUnavailableError extends Error {
-	statusCode = 503;
-	constructor(cause: unknown) {
-		super('Graphics author sessions are temporarily unavailable', { cause });
-		this.name = 'GraphicsAuthorSessionUnavailableError';
-	}
-}
-
-/**
  * Something this request needed was out of reach, and may not be a moment from now.
  *
- * Public for the reason the three above are: the sentence names what stopped working
+ * Public for the reason the two above are: the sentence names what stopped working
  * and implies what to do about it — wait and ask again — where 'Internal Server Error'
  * says only that the request failed. The response carries `retry-after` beside it,
  * because a reader told a thing is temporary is owed a number.
@@ -93,8 +65,7 @@ export class GraphicsAuthorSessionUnavailableError extends Error {
  * kept there for a debugger to reach, and no response carries it. The failure log names
  * this class — `errorLogFields` takes its `name` from the nearest cause — and, since
  * this class declares no `code`, walks on to carry the underlying refusal's code beside
- * it (#323), with or without an inner cause. The same judgement as
- * `GraphicsAuthorSessionUnavailableError` above.
+ * it (#323), with or without an inner cause.
  */
 export class TemporarilyUnavailableError extends Error {
 	statusCode = 503;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { graphicAssetId } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 const metadataSchema = z.object({
@@ -29,7 +29,7 @@ const metadataSchema = z.object({
  * one kind of change the domain deliberately keeps no history of.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	try {
 		const input = await readValidatedBody(event, metadataSchema.parse);
 		return await graphicsAssetLibraryForEvent(event).updateGraphicAsset({

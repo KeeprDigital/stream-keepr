@@ -8,8 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getGraphicItemDefinition } from '../../shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { testGraphicAssetId, testGraphicAssetRevisionId } from '../helpers/graphicsAssetIdentities';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
@@ -30,7 +29,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	let graphicsAuthorCookie: string;
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		graphicsAuthorCookie = await operatorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

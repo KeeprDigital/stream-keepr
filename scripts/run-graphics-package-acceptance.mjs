@@ -81,14 +81,13 @@ export async function main(argv = process.argv) {
 			registerSessionSecrets(evidence, session);
 
 			async function listAssetIds() {
-				const assets = await session.json(acceptanceRoutes.graphicsAssets(), { author: true });
+				const assets = await session.json(acceptanceRoutes.graphicsAssets(), {});
 				return new Set(assets.map(asset => asset.id));
 			}
 
 			async function receivePackage(archive, marker) {
 				const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 					method: 'POST',
-					author: true,
 					body: {
 						idempotencyKey: `staging-acceptance-package-${marker}`,
 						source: 'template-package',
@@ -98,14 +97,12 @@ export async function main(argv = process.argv) {
 				});
 				const received = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
 					method: 'PUT',
-					author: true,
 					body: archive,
 				});
 				if (received.stage !== 'awaiting-confirmation')
 					return received;
 				return await session.json(acceptanceRoutes.templatePackageConfirmation(received.id), {
 					method: 'POST',
-					author: true,
 					body: { fingerprint: received.templatePackagePreflight.fingerprint },
 				});
 			}
@@ -116,7 +113,7 @@ export async function main(argv = process.argv) {
 			async function installPackage(operationId) {
 				return await session.json(
 					acceptanceRoutes.templatePackageInstallation(operationId),
-					{ method: 'POST', author: true },
+					{ method: 'POST' },
 				);
 			}
 
@@ -137,14 +134,14 @@ export async function main(argv = process.argv) {
 			async function interruptInstallation(operationId) {
 				// A pooled connection means the abort races the installation rather
 				// than the TCP handshake.
-				await session.request(acceptanceRoutes.ingestionOperation(operationId), { author: true });
+				await session.request(acceptanceRoutes.ingestionOperation(operationId), {});
 
 				const abort = new AbortController();
 				async function abandon() {
 					try {
 						const response = await fetch(
 							`${origin}${acceptanceRoutes.templatePackageInstallation(operationId)}`,
-							{ method: 'POST', headers: { cookie: session.authorCookie }, signal: abort.signal },
+							{ method: 'POST', headers: { cookie: session.sessionCookies.join('; ') }, signal: abort.signal },
 						);
 						try {
 							await response.arrayBuffer();
@@ -165,7 +162,6 @@ export async function main(argv = process.argv) {
 				const clientOutcome = await inflight;
 
 				const observed = await session.json(acceptanceRoutes.ingestionOperation(operationId), {
-					author: true,
 				});
 				return {
 					stage: observed.stage,
@@ -193,7 +189,7 @@ export async function main(argv = process.argv) {
 					scenario.eventId,
 					scenario.screenId,
 				);
-				const exported = await session.request(exportRoute, { author: true });
+				const exported = await session.request(exportRoute, {});
 				if (exported.status !== 200) {
 					record([{
 						code: 'harness-precondition-unmet',
@@ -252,7 +248,7 @@ export async function main(argv = process.argv) {
 					// the asset it names is really there.
 					const template = await session.request(
 						acceptanceRoutes.installedTemplate(installation.templateId),
-						{ author: true },
+						{},
 					);
 					record(template.status === 200
 						? []
@@ -264,7 +260,7 @@ export async function main(argv = process.argv) {
 					const installed = installation.assets[0];
 					const content = await session.request(
 						acceptanceRoutes.editorContent(installed.assetId, installed.revisionId),
-						{ author: true },
+						{},
 					);
 					record(content.status === 200
 						? []
@@ -295,7 +291,6 @@ export async function main(argv = process.argv) {
 				);
 				await session.json(acceptanceRoutes.ingestionOperation(cancellable.id), {
 					method: 'DELETE',
-					author: true,
 				});
 				const attempted = await installPackage(cancellable.id);
 				record(attempted.stage === 'cancelled' && attempted.templatePackageInstallation === undefined

@@ -22,9 +22,9 @@ import {
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
 import {
-	GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE,
-	graphicsAuthorSessionLapsed,
-} from '~/composables/useGraphicsAuthorSession';
+	GRAPHICS_AUTHOR_SIGNED_OUT_MESSAGE,
+	graphicsAuthorSignedOut,
+} from '~/composables/useGraphicsAuthorship';
 import { graphicAssetReferenceStatus } from '~/utils/graphicAssetReferenceStatus';
 import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
@@ -411,15 +411,15 @@ async function selectMedia(key: string, reference: GraphicAssetReference) {
 		if (flight.stale)
 			return;
 
-		// A lapsed graphics author session is not the library saying anything about
-		// this revision, and it is the one failure retrying cannot fix. Reported in
-		// the terms the session seam already owns, rather than as bytes that will
-		// come back. The lapse is read from the helper directly rather than through
-		// `describeFailure`: this surface holds no session instance to record a
-		// lapse on, and it wants one settled sentence about the media whatever
-		// refused it, where that seam answers about the request.
-		refuseMedia(key, graphicsAuthorSessionLapsed(caught)
-			? GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE
+		// An ended session is not the library saying anything about this revision,
+		// and it is the one failure retrying cannot fix. Reported in the terms the
+		// authorship seam already owns, rather than as bytes that will come back.
+		// Read from the helper directly rather than through `describeFailure`: this
+		// surface holds no authorship instance to record the refusal on, and it
+		// wants one settled sentence about the media whatever refused it, where
+		// that seam answers about the request.
+		refuseMedia(key, graphicsAuthorSignedOut(caught)
+			? GRAPHICS_AUTHOR_SIGNED_OUT_MESSAGE
 			: MEDIA_REFUSALS.unavailable);
 		return;
 	}

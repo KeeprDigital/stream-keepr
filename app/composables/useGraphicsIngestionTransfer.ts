@@ -21,10 +21,15 @@ const ingestion = '/api/graphics-assets/ingestion-operations';
  * library already holds, so only the outstanding ones are sent.
  *
  * One failure is not like the others and is translated rather than passed on: a
- * refusal for want of a graphics author session. Every ingestion route resolves
- * the author from that session, so its lapse makes the operation unreachable to
- * whoever started it, and no amount of resuming brings it back. Callers get a
- * sentence saying that instead of a status code they cannot act on.
+ * refusal for want of a session. Retrying cannot change it — every remaining
+ * part would be refused identically — so the transfer stops rather than spending
+ * its budget, and the caller gets a sentence instead of a status code it cannot
+ * act on.
+ *
+ * What it does **not** mean, since #398, is that the work is gone. The operation
+ * belongs to the person who started it rather than to the session that carried
+ * the request, so signing in again — here or on another machine — reaches it,
+ * and the transfer resumes from the parts the library has already verified.
  */
 
 /**
@@ -53,10 +58,10 @@ export function useGraphicsIngestionTransfer(options: {
 	const observe = (operation: GraphicsIngestionOperation) => options.onOperation?.(operation);
 
 	function refuseWithoutSession(caught: unknown): never {
-		if (!graphicsAuthorSessionLapsed(caught))
+		if (!graphicsAuthorSignedOut(caught))
 			throw caught;
 		throw Object.assign(
-			new Error(GRAPHICS_AUTHOR_SESSION_LAPSED_MESSAGE),
+			new Error(GRAPHICS_AUTHOR_SIGNED_OUT_MESSAGE),
 			{ statusCode: 401 },
 		);
 	}
@@ -146,11 +151,11 @@ export function useGraphicsIngestionTransfer(options: {
 					catch (caught) {
 						// The library holds a part only once it has verified it, so a
 						// re-sent part is the same part rather than a second one. A
-						// refusal a retry cannot change — an author lapse or any other
+						// refusal a retry cannot change — an ended session or any other
 						// non-retryable 4xx — stops here: every remaining attempt would
 						// be refused identically.
 						if (
-							graphicsAuthorSessionLapsed(caught)
+							graphicsAuthorSignedOut(caught)
 							|| !retryCanChangeTheAnswer(caught)
 							|| attempt === transfer.maximumPartAttempts
 						) {

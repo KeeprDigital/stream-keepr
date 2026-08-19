@@ -308,4 +308,40 @@ describe('broadcastGraphicsEditWorkspace', () => {
 			expect(wrapper.find('[data-testid="edit-save-state"]').exists()).toBe(false);
 		});
 	});
+
+	/**
+	 * Who is holding the lease, as a person (#398, ADR-0010).
+	 *
+	 * A lease is held by a session, and "another session" — all this surface could
+	 * say while the holder was an anonymous cookie — is true and useless: what an
+	 * operator does next depends on whether that is a colleague to go and ask or
+	 * their own second window to close. The server resolves session → user, so the
+	 * editor is handed a name and never another browser's session id.
+	 */
+	describe('the notice an observing session is shown', () => {
+		it('names the person holding the lease when the server resolved one', async () => {
+			const wrapper = await mountWorkspace({ writable: false, holderName: 'Marcus Angel' });
+
+			const notice = wrapper.get('[data-testid="edit-lease-notice"]').text();
+			expect(notice).toContain('Marcus Angel holds the Graphics Authoring Lease');
+			expect(notice).toContain('in another browser');
+		});
+
+		it('still says the artifact is held when the holder resolves to nobody', async () => {
+			// A session that has since ended, or a user deleted after taking it: the
+			// artifact is still held, so the notice states that rather than falling
+			// silent or inventing a name.
+			const wrapper = await mountWorkspace({ writable: false, holderName: null });
+
+			expect(wrapper.get('[data-testid="edit-lease-notice"]').text())
+				.toContain('Another session holds the Graphics Authoring Lease');
+		});
+
+		it('offers the takeover beside the name rather than instead of it', async () => {
+			const wrapper = await mountWorkspace({ writable: false, holderName: 'Marcus Angel', canTakeOver: true });
+
+			expect(wrapper.get('[data-testid="edit-lease-notice"]').text()).toContain('Marcus Angel');
+			expect(wrapper.find('[data-testid="edit-lease-take-over"]').exists()).toBe(true);
+		});
+	});
 });

@@ -1,6 +1,6 @@
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
+import { requireUserId } from '~~/server/utils/auth';
 import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
@@ -12,7 +12,7 @@ import { exportBroadcastGraphicTemplatePackage } from '~~/server/utils/templateP
  * `.sklayout` workflow uses.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 	const graphicId = getRouterParam(event, 'graphicId') ?? '';
 

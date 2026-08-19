@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/devVars';
+import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/localConfiguration';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 
 /**
  * The refusal a blank `NUXT_BETTER_AUTH_SECRET` produces, and the one thing about
  * it that lives in two files.
  *
- * `build/devVars.ts` quotes each required name's surface in the notice a dev
+ * `build/localConfiguration.ts` quotes each required name's surface in the notice a dev
  * server prints, in that surface's own words, so a reader can match the notice to
  * the 503 they are looking at. For the two shared-secret surfaces that quotation
  * is held to account by their own unit tests (`graphicsAdministrator.test.ts`
@@ -22,6 +23,7 @@ vi.mock('hub:db', () => ({ db: {}, schema: {} }));
 
 const mockUseRuntimeConfig = vi.fn();
 vi.stubGlobal('useRuntimeConfig', mockUseRuntimeConfig);
+vi.stubGlobal('createError', (input: { statusCode: number; message: string }) => Object.assign(new Error(input.message), input));
 
 const { optionalUserSession, serverAuth } = await import('~~/server/utils/auth');
 
@@ -47,7 +49,7 @@ describe('the Better Auth instance', () => {
 	});
 
 	it('counts a whitespace-only secret as missing, the way the boot notice counts it', () => {
-		// The notice in `build/devVars.ts` treats a name that trims to nothing as
+		// The notice in `build/localConfiguration.ts` treats a name that trims to nothing as
 		// absent, and says it does so because that is how the readers count it. It
 		// was not how this reader counted it until #396: a space passed the test and
 		// every session in the installation was signed with it, rather than the
@@ -78,7 +80,7 @@ describe('the optional session read', () => {
 	it('answers null on a blank secret rather than raising the 503', async () => {
 		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
 
-		await expect(optionalUserSession({ headers: new Headers() } as never)).resolves.toBeNull();
+		await expect(optionalUserSession(stubH3Event({ headers: new Headers(), context: {} }))).resolves.toBeNull();
 	});
 
 	it('lets every other failure out, so only the configuration fault is absorbed', async () => {
@@ -96,8 +98,101 @@ describe('the optional session read', () => {
 		const unreachable = new Error('D1 is unreachable');
 		vi.spyOn(fresh.serverAuth().api, 'getSession').mockRejectedValue(unreachable);
 
-		await expect(fresh.optionalUserSession({ headers: new Headers() } as never))
+		await expect(fresh.optionalUserSession(stubH3Event({ headers: new Headers(), context: {} })))
 			.rejects
 			.toThrow(unreachable);
+	});
+});
+
+/**
+ * The identities a request is asked for once the boundary has admitted it (#398,
+ * ADR-0010's credential model).
+ *
+ * Two granularities, deliberately: the **person** owns Graphics Ingestion
+ * Operations, and the **browser** holds a Graphics Authoring Lease. That pair is
+ * the whole of what replaced the Graphics Author Session, so the distinction is
+ * pinned here rather than left to a hundred call sites to get right one at a time.
+ */
+describe('the identities a request carries', () => {
+	async function freshAuth(session: unknown) {
+		// Fresh for the reason the row above gives: `serverAuth` memoises its
+		// instance, so a suite that configured a secret in place would leave the
+		// blank-secret rows passing on where they sit in the file.
+		vi.resetModules();
+		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: 'a-configured-secret-0000000000' });
+		const fresh = await import('~~/server/utils/auth');
+		const getSession = vi.spyOn(fresh.serverAuth().api, 'getSession').mockResolvedValue(session as never);
+		return { ...fresh, getSession };
+	}
+
+	function requestEvent() {
+		return stubH3Event({ headers: new Headers(), context: {} });
+	}
+
+	const signedIn = { session: { id: 'a-browser-session' }, user: { id: 'a-user' } };
+
+	it('names the person, not the browser, as who a request is acting as', async () => {
+		// The widening ADR-0003 pre-committed to: an operation survives the browser
+		// that started it, and the same idempotency key sent from a second browser
+		// dedupes onto the first operation rather than starting a second.
+		const { requireUserId } = await freshAuth(signedIn);
+
+		await expect(requireUserId(requestEvent())).resolves.toBe('a-user');
+	});
+
+	it('names the browser for the one thing that is browser-scoped', async () => {
+		// A lease guards concurrent editors, and one person in two browsers is two of
+		// them. This answering `a-user` would be the silent-corruption shape the lease
+		// exists to prevent.
+		const { optionalBrowserSessionId } = await freshAuth(signedIn);
+
+		await expect(optionalBrowserSessionId(requestEvent())).resolves.toBe('a-browser-session');
+	});
+
+	it('refuses a session-less caller in the boundary\'s own words', async () => {
+		// Unreachable through today's callers — every one of them is a private
+		// `/api/**` path the middleware has already refused for. It is spelled so a
+		// caller that stops being one of those fails closed rather than reading
+		// `undefined` as an identity, and it is spelled *identically* so the refusal
+		// census gains no entry from it.
+		const { requireUserId } = await freshAuth(null);
+
+		await expect(requireUserId(requestEvent())).rejects.toMatchObject({
+			statusCode: 401,
+			message: 'Authentication is required',
+		});
+	});
+
+	it('leaves the optional identities empty rather than refusing', async () => {
+		const { optionalUserId, optionalBrowserSessionId } = await freshAuth(null);
+		const event = requestEvent();
+
+		await expect(optionalUserId(event)).resolves.toBeUndefined();
+		await expect(optionalBrowserSessionId(event)).resolves.toBeUndefined();
+	});
+
+	it('resolves one request\'s session once, however many identities it asks for', async () => {
+		// The middleware has already resolved it before the handler runs, and a
+		// leased ingestion write asks twice more. Three D1 reads per part of a
+		// resumable transfer is what the memo is for — and the two asked here are
+		// asked concurrently, which is the case memoising the value rather than the
+		// promise would miss.
+		const { requestUserSession, requireUserId, optionalBrowserSessionId, getSession } = await freshAuth(signedIn);
+		const event = requestEvent();
+
+		await requestUserSession(event);
+		await Promise.all([requireUserId(event), optionalBrowserSessionId(event)]);
+
+		expect(getSession).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not memoise a blank secret, so the answer stays the 503 that names it', async () => {
+		vi.resetModules();
+		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
+		const fresh = await import('~~/server/utils/auth');
+		const event = requestEvent();
+
+		await expect(fresh.requestUserSession(event)).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
+		await expect(fresh.requestUserSession(event)).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
 	});
 });

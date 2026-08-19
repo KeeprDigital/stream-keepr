@@ -312,14 +312,14 @@ export async function main(argv = process.argv) {
 				const route = deliveryRouteLabel(path);
 				const byteLength = scenario.content.byteLength;
 
-				const unauthenticated = await session.request(path);
+				const unauthenticated = await session.request(path, { anonymous: true });
 				record(checkCapabilityDenial(unauthenticated, {
 					route,
 					body: unauthenticated.text(),
 					expectedStatus: 401,
 				}));
 
-				const full = await session.request(path, { author: true });
+				const full = await session.request(path, {});
 				record(checkFullRead(full, editorExpectations(scenario, route)));
 				record(checkOriginExposure(full.headers, { route }));
 				record(checkNoStorageAddressing(full.headers, { route }));
@@ -327,13 +327,11 @@ export async function main(argv = process.argv) {
 				const etag = full.headers.get('etag');
 
 				const conditional = await session.request(path, {
-					author: true,
 					headers: { 'if-none-match': etag ?? '' },
 				});
 				record(checkConditionalRead(conditional, { route, etag }));
 
 				const range = await session.request(path, {
-					author: true,
 					headers: { range: 'bytes=8-15' },
 				});
 				record(checkRangeRead(range, {
@@ -345,14 +343,13 @@ export async function main(argv = process.argv) {
 				}));
 
 				const beyond = await session.request(path, {
-					author: true,
 					headers: { range: `bytes=${byteLength}-` },
 				});
 				record(checkUnsatisfiableRange(beyond, { route, byteLength }));
 
 				const missing = await session.request(
 					acceptanceRoutes.editorContent(scenario.assetId, 'gar-not-a-revision'),
-					{ author: true },
+					{},
 				);
 				record(checkMissingIdentity(missing, { route }));
 			}
@@ -365,7 +362,7 @@ export async function main(argv = process.argv) {
 					capability: await session.request(representation.capabilityContentPath(), {
 						headers: capabilityHeaders(representation.capability),
 					}),
-					editor: await session.request(representation.editorContentPath(), { author: true }),
+					editor: await session.request(representation.editorContentPath(), {}),
 				};
 			}
 
@@ -469,7 +466,6 @@ export async function main(argv = process.argv) {
 						for (const eventId of new Set([armed.warm.eventId, armed.cold.eventId])) {
 							await session.request(acceptanceRoutes.event(eventId), {
 								method: 'DELETE',
-								author: true,
 							}).catch(() => undefined);
 						}
 						// A passed run has nothing left to restore, so its two armed

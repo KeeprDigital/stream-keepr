@@ -3,7 +3,7 @@ import {
 	graphicAssetId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { MAX_SILENT_VIDEO_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 
@@ -27,7 +27,7 @@ const replacementSchema = z.object({
 }).strict();
 
 export default defineEventHandler(async (event) => {
-	const initiatedBy = await requireGraphicsAuthorSession(event);
+	const initiatedBy = await requireUserId(event);
 	try {
 		const input = await readValidatedBody(event, replacementSchema.parse);
 		const operation = await graphicsAssetLibraryForEvent(event).initiateGraphicAssetReplacement({

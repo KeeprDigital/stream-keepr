@@ -9,8 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
@@ -262,7 +261,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	}
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		graphicsAuthorCookie = await operatorSessionCookie();
 		const event = await $fetch('/api/events', {
 			method: 'POST',
 			body: {
@@ -819,7 +818,7 @@ describe('media Graphic Input values on air', () => {
 	}
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		graphicsAuthorCookie = await operatorSessionCookie();
 		const event = await $fetch<{ id: number }>('/api/events', {
 			method: 'POST',
 			body: {

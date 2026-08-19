@@ -13,31 +13,79 @@ interface MeleeCredentialRuntimeConfig {
 
 const KEY_VERSION_PATTERN = /^\w[\w.-]{0,63}$/;
 
+const PREVIOUS_KEYS_INVALID = 'Melee credential previous encryption keys must be a JSON object of key versions to base64 keys';
+
+/**
+ * A configured value as the operator wrote it, whatever runtimeConfig made of it.
+ *
+ * **A number is a value, not an absence**, which is the whole of this function.
+ * Nuxt applies environment overrides through `destr`, so `NUXT_MELEE_CREDENTIAL_
+ * ENCRYPTION_KEY_VERSION=1` — the assignment `.env.example` ships — arrives here
+ * as the number 1. Reading only strings made that read as unset, and the surface
+ * answered 503 naming the setting the operator had just set: the worst shape a
+ * refusal can take, because the one thing it tells you to do is the thing you did.
+ * Measured on a previewed Worker (#412): `=1` answered 503, `=v1` answered 200,
+ * nothing else changed. A deployed installation is in the same position — a Worker
+ * secret reaches runtimeConfig through the same coercion — so this is not a local
+ * convenience.
+ *
+ * Numbers only, and finite ones. A boolean or an object is not a value anybody
+ * meant to write into one of these names, and coercing it would turn a mistyped
+ * setting into a key version that looks configured; those stay absent here and are
+ * refused by name where they matter.
+ */
 function optionalConfigString(value: unknown): string {
-	return typeof value === 'string' ? value.trim() : '';
+	if (typeof value === 'string')
+		return value.trim();
+
+	return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+}
+
+/**
+ * The retired keyring as an object, from whichever shape the environment delivered.
+ *
+ * The same `destr` coercion as above, and worse where it lands: `.env.example`
+ * documents `NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS={"1":"OLD_BASE64_KEY"}`,
+ * and that arrives already parsed. Read as a string and only as a string, an
+ * operator mid-rotation had every retired key silently dropped — and the failure
+ * surfaces on decrypting a credential stored *before* the rotation, a long way from
+ * the setting that caused it.
+ *
+ * A number or a boolean throws rather than reading as absence, because absence is a
+ * claim: it says this installation has no retired keys and every stored envelope is
+ * readable with the active one. A mistyped keyring making that claim is how a
+ * rotation loses data quietly.
+ */
+function previousKeysSource(value: unknown): unknown {
+	if (value === undefined || value === null)
+		return null;
+
+	if (typeof value === 'object')
+		return value;
+
+	if (typeof value === 'string') {
+		const configured = value.trim();
+		if (!configured)
+			return null;
+
+		try {
+			return JSON.parse(configured);
+		}
+		catch {
+			throw new MeleeCredentialCryptoError('MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID', PREVIOUS_KEYS_INVALID);
+		}
+	}
+
+	throw new MeleeCredentialCryptoError('MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID', PREVIOUS_KEYS_INVALID);
 }
 
 function parsePreviousKeys(value: unknown): Map<string, string> {
-	const configured = optionalConfigString(value);
-	if (!configured)
+	const parsed = previousKeysSource(value);
+	if (parsed === null)
 		return new Map();
 
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(configured);
-	}
-	catch {
-		throw new MeleeCredentialCryptoError(
-			'MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID',
-			'Melee credential previous encryption keys must be a JSON object of key versions to base64 keys',
-		);
-	}
-
 	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-		throw new MeleeCredentialCryptoError(
-			'MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID',
-			'Melee credential previous encryption keys must be a JSON object of key versions to base64 keys',
-		);
+		throw new MeleeCredentialCryptoError('MELEE_CREDENTIAL_PREVIOUS_KEYS_INVALID', PREVIOUS_KEYS_INVALID);
 	}
 
 	const keys = new Map<string, string>();

@@ -73,7 +73,7 @@ describe('diagnosing a rejected realtime publish', () => {
 		expect(notice).toContain(INTEGRATION_ABLY_API_KEY_ENV);
 		expect(notice).toContain('placeholder or fabricated');
 		expect(notice).toContain('40400');
-		expect(notice).toContain('.dev.vars');
+		expect(notice).toContain('.env.example');
 		expect(notice).toContain('Fix:');
 	});
 
@@ -265,16 +265,18 @@ describe('the variable is named where each runner looks', () => {
 		return readFileSync(fileURLToPath(new URL(`../../../${name}`, import.meta.url)), 'utf8');
 	}
 
-	// `.env` is what the test suites and `nuxt dev` read; `.dev.vars` is what Wrangler
-	// reads for `pnpm preview` and the delivery acceptance harnesses. #242 was filed
-	// because only the first example file named the key, so a wrangler run had nothing
-	// to copy and no pointer to what was missing.
+	// One file since #412: `.env` is what the test suites and `nuxt dev` read, and
+	// what `pnpm preview` stages for the wrangler runs the delivery acceptance
+	// harnesses point at. #242 was filed because only one of the two example files
+	// then in the repository named the key, so a wrangler run had nothing to copy and
+	// no pointer to what was missing — a gap that cannot reopen while there is one
+	// file, which is the cheapest thing this collapse bought.
 	//
-	// An assignment rather than a mention: both files explain the variable in prose as
+	// An assignment rather than a mention: the file explains the variable in prose as
 	// well, and prose is not something a reader can copy into a real one. Deleting the
 	// assignment while leaving the comment behind is exactly the regression that would
 	// otherwise pass — it did, on the first version of this test.
-	it.each(['.env.example', '.dev.vars.example'])('%s assigns it, not just mentions it', (name) => {
+	it.each(['.env.example'])('%s assigns it, not just mentions it', (name) => {
 		expect(example(name)).toMatch(new RegExp(`^${INTEGRATION_ABLY_API_KEY_ENV}=`, 'm'));
 	});
 });
@@ -375,8 +377,15 @@ describe('the Screen-command route\'s own refusals', () => {
 		// which this route can answer, and listing them would have re-opened #268's hole
 		// wholesale. A middleware consults the domain layer for a boolean and refuses on
 		// its own terms; the routes that really call a service carry it in their own graph.
+		//
+		// This was a pair until #398. The second half named
+		// `server/modules/graphics-author-session.ts`, which its own middleware minted
+		// a session through and which no route imported — the cleanest possible witness
+		// for the rule. Both are retired at ADR-0010's cutover, and no middleware
+		// reaches a `server/modules/**` file any more, so the row that survives is the
+		// one whose witness still exists. The rule itself is unchanged and is stated in
+		// `routeRefusalScan.ts`, where it is enforced rather than merely observed.
 		expect(scan.files).not.toContain('server/services/featureMatch.ts');
-		expect(scan.files).not.toContain('server/modules/graphics-author-session.ts');
 	});
 
 	it('leave no first-party import unfollowed', () => {
@@ -840,8 +849,8 @@ describe('the middleware the scan is given as entry points', () => {
 
 		expect(named).toContain('api-session.ts');
 		expect(named).toContain('event-exists.ts');
-		expect(named).toContain('graphics-author-session.ts');
 		expect(named).toContain('request-body-limit.ts');
+		expect(named).toContain('retired-author-session-cookies.ts');
 	});
 
 	it('reaches a middleware one directory down, because Nitro\'s own scan does', () => {

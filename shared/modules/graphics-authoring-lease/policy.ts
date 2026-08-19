@@ -63,8 +63,32 @@ export interface GraphicsAuthoringLeaseState {
 	heartbeatIntervalMs: number;
 }
 
+/**
+ * A lease state as a route answers it: the state above, plus who is holding it
+ * where that is somebody else (#398, ADR-0010).
+ *
+ * The name is **not** on `GraphicsAuthoringLeaseState`, and the difference
+ * matters. That shape is decided by a pure function this file shares with the
+ * browser; a name can only come from the session table, so putting the field
+ * there would be a hole for a different layer to fill — which is the shape
+ * `GraphicsActorNaming` and the `…Reading` types in `shared/types/graphicsAsset.ts`
+ * exist to avoid on the administrator surfaces. Optional rather than nullable
+ * for the same reason: the branches that grant, renew, or take over answer the
+ * asking session as holder and have nobody to name, so they answer the state
+ * itself and this type accepts it unchanged.
+ *
+ * A lease is held by a **session**, and a session id is not something to show an
+ * operator or to put in front of a Take over button — "another session" was all
+ * this surface could say while the holder was an anonymous cookie. Absent where
+ * the holder resolves to no user: an unnamed holder is still a holder, and the
+ * surface says so rather than inventing a name.
+ */
+export interface GraphicsAuthoringLeaseReading extends GraphicsAuthoringLeaseState {
+	holderName?: string;
+}
+
 export interface GraphicsAuthoringLeaseRequest {
-	/** The asking graphics author session, or none for a client without one. */
+	/** The asking browser's session id, or none for a client without one. */
 	sessionId: string | undefined;
 	/** Explicit intent to displace a live holder. */
 	takeover?: boolean;

@@ -147,19 +147,14 @@ async function main() {
 	const marker = randomUUID().slice(0, 8);
 
 	// ------------------------------------------------------------ provisioning
-	// Two credentials, and #396 is why there are two. The session is what gets a
-	// request past the deny-by-default boundary over `/api/**` at all; the author
-	// cookie says which Graphics Author owns what this probe provisions. Where the
-	// session comes from — an account named in the environment, or one this probe
-	// creates through the first-admin bootstrap — is `graphics-acceptance/operator.mjs`'s
-	// decision, and it is not defaulted to a local file for a remote origin.
+	// One credential since #398: the session gets a request past the
+	// deny-by-default boundary over `/api/**` *and* names the user who owns what
+	// this probe provisions. Where it comes from — an account named in the
+	// environment, or one this probe creates through the first-admin bootstrap —
+	// is `graphics-acceptance/operator.mjs`'s decision, and it is not defaulted to
+	// a local file for a remote origin.
 	const sessionCookies = await openOperatorSessionForOrigin(origin);
-
-	const bootstrap = await fetch(`${origin}/`, { headers: { accept: 'text/html' }, redirect: 'manual' });
-	const authorCookie = bootstrap.headers.getSetCookie().map(v => v.split(';', 1)[0]).find(v => v.includes('='));
-	if (!authorCookie)
-		throw new Error('no author session issued');
-	cookie = [...sessionCookies, authorCookie].join('; ');
+	cookie = sessionCookies.join('; ');
 
 	const event = await api('/api/events', {
 		method: 'POST',

@@ -160,28 +160,27 @@ export async function openInstallation(origin, { deployed = false } = {}) {
 		supplied: deployed ? {} : suppliedNames(readLocalConfigurationFiles()),
 	});
 
-	const bootstrap = await fetch(`${origin}/`, { headers: { accept: 'text/html' }, redirect: 'manual' });
-	const authorCookie = bootstrap.headers.getSetCookie()
-		.map(value => value.split(';', 1)[0])
-		.find(value => value.includes('='));
-	if (!authorCookie) {
-		throw new AcceptanceFailure('harness-precondition-unmet', {
-			reason: 'no graphics author session issued',
-		});
-	}
+	// The operator's session is the whole identity since ADR-0010's cutover
+	// (#398): it admits the request *and* names the author who owns the Graphics
+	// Ingestion Operations this harness starts. The page load that used to mint a
+	// second, author-only cookie is gone with the thing it minted.
 
 	/**
 	 * @param {string} path
-	 * @param {{ method?: string, headers?: Record<string, string>, body?: unknown, author?: boolean }} init
+	 * `anonymous` sends no session at all, which is the only way to ask what an
+	 * unauthenticated caller is answered since #398 retired the second identity a
+	 * harness could withhold. It is a probe of the boundary, so it exists here
+	 * rather than being assembled at a call site that could forget the difference.
+	 *
+	 * @param {{ method?: string, headers?: Record<string, string>, body?: unknown, anonymous?: boolean }} init
 	 */
 	async function request(path, init = {}) {
 		const headers = new Headers(init.headers ?? {});
-		// Unconditionally, because the boundary is unconditional: a request
-		// without this is a 401 from every path here but the Screen Output ones,
-		// where an extra cookie is ignored.
-		headers.set('cookie', [headers.get('cookie'), ...sessionCookies].filter(Boolean).join('; '));
-		if (init.author)
-			headers.set('cookie', [headers.get('cookie'), authorCookie].filter(Boolean).join('; '));
+		// Unconditionally unless asked otherwise, because the boundary is
+		// unconditional: a request without this is a 401 from every path here but
+		// the Screen Output ones, where an extra cookie is ignored.
+		if (!init.anonymous)
+			headers.set('cookie', [headers.get('cookie'), ...sessionCookies].filter(Boolean).join('; '));
 		let body = init.body;
 		if (body !== undefined && !(body instanceof Uint8Array)) {
 			headers.set('content-type', 'application/json');
@@ -209,7 +208,7 @@ export async function openInstallation(origin, { deployed = false } = {}) {
 		return observation.bytes.byteLength === 0 ? undefined : JSON.parse(observation.text());
 	}
 
-	return { origin, authorCookie, sessionCookies, request, json };
+	return { origin, sessionCookies, request, json };
 }
 
 /**
@@ -226,7 +225,6 @@ export async function trashGraphicAssetBestEffort(session, assetId) {
 	try {
 		await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
 			method: 'POST',
-			author: true,
 			body: { action: 'trash' },
 		});
 	}
@@ -248,7 +246,6 @@ export async function trashGraphicAssetBestEffort(session, assetId) {
 export async function stageStillImagePublication(session, { name, sourceFileName, declaredMime, bytes }) {
 	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 		method: 'POST',
-		author: true,
 		body: {
 			idempotencyKey: `staging-acceptance-still-${randomUUID()}`,
 			name,
@@ -265,7 +262,6 @@ export async function stageStillImagePublication(session, { name, sourceFileName
 	});
 	const settled = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
 		method: 'PUT',
-		author: true,
 		headers: { 'content-type': declaredMime },
 		body: bytes,
 	});
@@ -278,7 +274,6 @@ export async function stageStillImagePublication(session, { name, sourceFileName
 			try {
 				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
 					method: 'POST',
-					author: true,
 					body: { action: 'trash' },
 				});
 			}
@@ -293,37 +288,36 @@ export async function stageStillImagePublication(session, { name, sourceFileName
  * Register every credential this session holds with the evidence formatter,
  * before anything can print one.
  *
- * One call rather than one per cookie, because the list grew on #396 and the
- * failure mode of the old shape was silent: a harness that registered the author
- * cookie and not the operator session would still pass every assertion, and
- * would print a live session token the first time a request failed. Somewhere a
- * caller has to say "these are this run's secrets"; what it must not have to do
- * is enumerate them.
+ * One call rather than one per cookie, because the list has changed twice — it
+ * grew on #396 and shrank on #398 — and the failure mode of the old shape was
+ * silent: a harness that registered one cookie and not another would still pass
+ * every assertion, and would print a live session token the first time a request
+ * failed. Somewhere a caller has to say "these are this run's secrets"; what it
+ * must not have to do is enumerate them.
  *
  * @param {{ addSecret: (value: string) => void }} evidence
- * @param {{ authorCookie: string, sessionCookies: readonly string[] }} session
+ * @param {{ sessionCookies: readonly string[] }} session
  */
 export function registerSessionSecrets(evidence, session) {
-	for (const secret of [session.authorCookie, ...session.sessionCookies])
+	for (const secret of session.sessionCookies)
 		evidence.addSecret(secret);
 }
 
 /**
  * The browser's half of a staged run: where to go, and whose identities to go as.
  *
- * Anything the harness stages belongs to the session that staged it and is a
- * `404` to any other (ADR-0003), so a page opened for that work has to carry
- * this session — and "the harness forgot to pass the cookie" is a defect no
- * assertion in the page can see, because the page simply becomes a different,
- * perfectly valid author (#276). Since #396 the operator session travels beside
- * it, and its absence is louder but no more visible from inside the page: every
- * library route the page reads answers 401 rather than serving a face. Pairing
- * them here means the call site says `open this page as this session` in one
- * expression, rather than assembling an identity from arguments that can be
- * separated by an edit.
+ * Anything the harness stages belongs to the user who staged it and is a `404`
+ * to any other (ADR-0010), so a page opened for that work has to carry this
+ * session. "The harness forgot to pass the cookie" used to be a defect no
+ * assertion in the page could see, because the page simply became a different,
+ * perfectly valid anonymous author (#276); since #396 it is loud — every library
+ * route the page reads answers 401 rather than serving a face — and since #398
+ * there is one identity to forget rather than two. Passing it here means the
+ * call site says `open this page as this session` in one expression, rather than
+ * assembling an identity from arguments that can be separated by an edit.
  */
 export function authoredPageRequest(session, url) {
-	return { url, cookies: [...session.sessionCookies, session.authorCookie] };
+	return { url, cookies: [...session.sessionCookies] };
 }
 
 /**
@@ -336,7 +330,6 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	const content = distinctPixelPng(marker);
 	const event = await session.json(acceptanceRoutes.events(), {
 		method: 'POST',
-		author: true,
 		body: {
 			name: `${label} ${marker.slice(0, 8)}`,
 			game: 'mtg',
@@ -346,13 +339,11 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	const slug = `acceptance-overlay-${marker.slice(0, 8)}`;
 	const screen = await session.json(acceptanceRoutes.screens(event.id), {
 		method: 'POST',
-		author: true,
 		body: { name: 'Acceptance Overlay', slug, currentMode: 'feature-match-overlay' },
 	});
 
 	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 		method: 'POST',
-		author: true,
 		body: {
 			idempotencyKey: `staging-acceptance-${marker}`,
 			name: 'Staging acceptance pixel',
@@ -368,7 +359,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	});
 	const operation = await session.json(
 		acceptanceRoutes.ingestionContent(initiated.id),
-		{ method: 'PUT', author: true, body: content },
+		{ method: 'PUT', body: content },
 	);
 	const { assetId, revisionId } = operation.result;
 
@@ -378,7 +369,6 @@ export async function provisionScreenOutputScenario(session, { label }) {
 		acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 		{
 			method: 'PATCH',
-			author: true,
 			body: { layout: featureMatchLayoutReferencing({ assetId, revisionId }) },
 		},
 	);
@@ -386,7 +376,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 	async function mintCapability(method) {
 		const minted = await session.json(
 			acceptanceRoutes.screenAssetCapability(event.id, screen.id),
-			{ method, author: true },
+			{ method },
 		);
 		return minted.assetCapability;
 	}
@@ -405,7 +395,7 @@ export async function provisionScreenOutputScenario(session, { label }) {
 		rotateCapability: () => mintCapability('POST'),
 		async dispose() {
 			try {
-				await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE', author: true });
+				await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE' });
 			}
 			catch {
 				// A left-behind acceptance Event is noise, never a failure of the gate.
@@ -434,7 +424,6 @@ export async function stageFontIngestion(session, { bytes, declaredMime, sourceF
 	const marker = randomUUID();
 	const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 		method: 'POST',
-		author: true,
 		body: {
 			idempotencyKey: `staging-acceptance-font-${marker}`,
 			name: `Staging acceptance face ${marker.slice(0, 8)}`,
@@ -445,7 +434,6 @@ export async function stageFontIngestion(session, { bytes, declaredMime, sourceF
 	});
 	const staged = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
 		method: 'PUT',
-		author: true,
 		headers: { 'content-type': declaredMime },
 		body: bytes,
 	});
@@ -463,7 +451,6 @@ export async function stageFontIngestion(session, { bytes, declaredMime, sourceF
 			try {
 				const settled = await session.json(
 					acceptanceRoutes.ingestionOperation(initiated.id),
-					{ author: true },
 				);
 				return settled?.result?.assetId;
 			}
@@ -477,7 +464,6 @@ export async function stageFontIngestion(session, { bytes, declaredMime, sourceF
 			try {
 				await session.request(acceptanceRoutes.assetLifecycleActions(assetId), {
 					method: 'POST',
-					author: true,
 					body: { action: 'trash' },
 				});
 			}
@@ -501,7 +487,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 	const marker = randomUUID();
 	const event = await session.json(acceptanceRoutes.events(), {
 		method: 'POST',
-		author: true,
 		body: {
 			name: `${label} ${marker.slice(0, 8)}`,
 			game: 'mtg',
@@ -511,7 +496,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 	const slug = `acceptance-restricted-${marker.slice(0, 8)}`;
 	const screen = await session.json(acceptanceRoutes.screens(event.id), {
 		method: 'POST',
-		author: true,
 		body: { name: 'Acceptance Restricted Overlay', slug, currentMode: 'feature-match-overlay' },
 	});
 
@@ -520,7 +504,7 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 	let publishedAssetId;
 	async function dispose() {
 		try {
-			await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE', author: true });
+			await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE' });
 		}
 		catch {
 			// A left-behind acceptance Event is noise, never a failure of the gate.
@@ -531,7 +515,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 	try {
 		const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
 			method: 'POST',
-			author: true,
 			body: {
 				idempotencyKey: `staging-acceptance-vp9-alpha-${marker}`,
 				name: 'Staging acceptance VP9 alpha',
@@ -543,7 +526,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 		});
 		const operation = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
 			method: 'PUT',
-			author: true,
 			headers: { 'content-type': 'video/webm' },
 			body: webm,
 		});
@@ -556,7 +538,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 				break;
 			await new Promise(resolve => setTimeout(resolve, 1000));
 			settled = await session.json(acceptanceRoutes.ingestionOperation(initiated.id), {
-				author: true,
 			});
 		}
 		if (settled.stage !== 'completed' || !settled.result) {
@@ -580,7 +561,6 @@ export async function provisionRestrictedVideoScenario(session, { label, webm })
 			acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
 			{
 				method: 'PATCH',
-				author: true,
 				body: { layout: featureMatchLayoutWithRestrictedVideo({ assetId, revisionId }) },
 			},
 		);

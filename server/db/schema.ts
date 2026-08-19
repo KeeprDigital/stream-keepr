@@ -487,7 +487,7 @@ export const graphicsAuthoringLeases = sqliteTable('graphics_authoring_leases', 
 	 */
 	eventId: integer('event_id').references(() => events.id, { onDelete: 'cascade' }),
 
-	/** The graphics author session holding the lease. */
+	/** The Better Auth session — one browser — holding the lease (ADR-0010). */
 	holderSessionId: text('holder_session_id').notNull(),
 	acquiredAt: integer('acquired_at', { mode: 'timestamp_ms' }).notNull(),
 	/**

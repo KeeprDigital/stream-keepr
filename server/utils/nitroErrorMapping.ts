@@ -2,7 +2,6 @@ import { GraphicsAssetLibraryError, graphicsCapacityErrorDescriptor } from '~~/s
 import { meleeKeyringConfigurationFaultSentence } from '~~/server/services/meleeCredentials';
 import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import {
-	GraphicsAuthorSessionUnavailableError,
 	ServiceConfigurationError,
 	StateConflictError,
 	TemporarilyUnavailableError,
@@ -159,17 +158,6 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		// overwritten below until #321. They differ only in what they name, so they
 		// share a class rather than earning seven, and the message carried here is
 		// the raiser's.
-		error.statusCode = cause.statusCode;
-		error.statusMessage = 'Service Unavailable';
-		error.message = cause.message;
-		hasMappedPublicServerMessage = true;
-		mappedOperationalError = true;
-	}
-	else if (cause instanceof GraphicsAuthorSessionUnavailableError) {
-		// The other half of #294, and the one that could not be fixed here alone:
-		// the throw sites used to raise a 503 whose cause was whatever the session
-		// store threw, which is nothing to discriminate on. The named error is what
-		// makes this branch possible — see `GraphicsAuthorSessionUnavailableError`.
 		error.statusCode = cause.statusCode;
 		error.statusMessage = 'Service Unavailable';
 		error.message = cause.message;

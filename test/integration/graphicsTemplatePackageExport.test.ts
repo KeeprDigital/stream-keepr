@@ -9,8 +9,7 @@ import { crc32 } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive';
-import { $fetch, fetch } from './client';
-import { createGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
 
@@ -47,7 +46,7 @@ describe('template Package export through the API boundary', () => {
 	let graphicsAuthorCookie: string;
 
 	beforeAll(async () => {
-		graphicsAuthorCookie = await createGraphicsAuthorSessionCookie();
+		graphicsAuthorCookie = await operatorSessionCookie();
 		const created = await $fetch('/api/events', {
 			method: 'POST',
 			body: {

@@ -1,6 +1,6 @@
 import { mapGraphicStyleSetToSummary } from '~~/server/mappers/graphicStyleSet';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 
 /**
  * Browse the installation's Graphic Style Sets.
@@ -14,7 +14,7 @@ import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
  * (ADR-0008, #206).
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const styleSets = await graphicStyleSetService().findAll();
 
 	return { styleSets: styleSets.map(mapGraphicStyleSetToSummary) };

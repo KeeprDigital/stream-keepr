@@ -1,6 +1,5 @@
 import type { GraphicAsset } from '~~/shared/types/graphicsAsset';
-import { $fetch } from './client';
-import { suiteGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
+import { $fetch, operatorSessionCookie } from './client';
 
 /**
  * The library listing, read under the suite's graphics author session (#172).
@@ -17,6 +16,6 @@ import { suiteGraphicsAuthorSessionCookie } from './graphicsAuthorSession';
  */
 export async function libraryAssets(): Promise<GraphicAsset[]> {
 	return await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-		headers: { cookie: await suiteGraphicsAuthorSessionCookie() },
+		headers: { cookie: await operatorSessionCookie() },
 	});
 }

@@ -1,4 +1,4 @@
-import type { GraphicsAssetEvidenceCategory } from '~~/shared/types/graphicsAsset';
+import type { GraphicsActorNames, GraphicsAssetEvidenceCategory } from '~~/shared/types/graphicsAsset';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import { GRAPHICS_RETENTION_GUARANTEES } from './graphicsAssetRetention';
 
@@ -160,4 +160,17 @@ export function graphicsEvidenceCategoriesForGroups(
 	groups: readonly GraphicsEvidenceCategoryGroup[],
 ): GraphicsAssetEvidenceCategory[] {
 	return [...new Set(groups.flatMap(group => GRAPHICS_EVIDENCE_CATEGORY_GROUPS[group]))];
+}
+
+/**
+ * What to call one actor in an administrator reading (#398).
+ *
+ * The reading names every identity it carries, so the fallback is for one case
+ * only: a surface holding an identity that was not in the payload the names came
+ * with — a row from a previous poll, say. Showing the identity is the honest
+ * answer there; inventing 'anonymous era' for it would name an era it may have
+ * nothing to do with.
+ */
+export function graphicsActorName(names: GraphicsActorNames, actor: string): string {
+	return names[actor] ?? actor;
 }

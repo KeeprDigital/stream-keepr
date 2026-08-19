@@ -48,7 +48,7 @@ describe('the Graphics Administrator guard', () => {
 	 * An installation that has never set the name answered 503 with a body of 'Internal
 	 * Server Error', because the refusal carried no cause for `mapPublicNitroError` to
 	 * recognise — so the one reader who could fix it in a line was sent to the logs of a
-	 * server behaving exactly as configured. `build/devVars.ts` quotes this sentence in
+	 * server behaving exactly as configured. `build/localConfiguration.ts` quotes this sentence in
 	 * the notice `nuxt dev` prints for the same missing name, and quoted one nobody could
 	 * see until this was classified.
 	 *

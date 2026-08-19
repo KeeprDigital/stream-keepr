@@ -4,7 +4,7 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
+import { requireUserId } from '~~/server/utils/auth';
 import {
 	ifNoneMatchMatches,
 	rangePermitted,
@@ -35,7 +35,7 @@ function contentTemporarilyUnavailable(event: H3Event) {
 }
 
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const assetId = graphicAssetId(getRouterParam(event, 'assetId') ?? '');
 	const revisionId = graphicAssetRevisionId(getRouterParam(event, 'revisionId') ?? '');
 	// Revisions are immutable, so their route identity is a strong validator

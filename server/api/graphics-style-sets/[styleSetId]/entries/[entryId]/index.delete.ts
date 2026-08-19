@@ -1,12 +1,12 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-set';
-import { requireGraphicsAuthorSession } from '~~/server/modules/graphics-author-session';
 import {
 	deleteGraphicStyleSetEntrySchema,
 	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
 	graphicStyleSetEntryParamsSchema,
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
+import { requireUserId } from '~~/server/utils/auth';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -31,7 +31,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
  * would not have happened as far as any template was concerned.
  */
 export default defineEventHandler(async (event) => {
-	await requireGraphicsAuthorSession(event);
+	await requireUserId(event);
 	const { styleSetId, entryId } = await getValidatedRouterParams(
 		event,
 		graphicStyleSetEntryParamsSchema.parse,
