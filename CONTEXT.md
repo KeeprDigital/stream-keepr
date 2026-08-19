@@ -65,11 +65,11 @@ A reusable production control lane for showing one featured Match at a time, usi
 _Avoid_: Feature Match when referring to the reusable lane.
 
 **Feature Match Assignment**:
-A Round-scoped selection of which Match appears in which Feature Match Slot.
+A Round-scoped selection of a Match for a Feature Match Slot. Moving the same Match to another Slot continues the Assignment; replacing it with a different Match ends it.
 _Avoid_: Feature Match when referring to the saved Round selection.
 
 **Feature Match Note**:
-A free-text production note attached to a Feature Match Assignment.
+A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends.
 
 **Feature Match Session**:
 The live state timeline for a Feature Match Slot.
