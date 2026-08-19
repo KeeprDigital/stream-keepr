@@ -190,7 +190,24 @@ describe('graphicsCompositorStackTree', () => {
 			selectedGraphicId: 'a',
 		});
 
-		expect(itemPaletteKinds(wrapper)).toEqual(['text', 'shape', 'media', 'group']);
+		expect(itemPaletteKinds(wrapper)).toEqual(['text', 'shape', 'media', 'social-network-icon', 'group']);
+	});
+
+	it('creates a semantic Social Network Icon with the application defaults', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [] }],
+			selectedGraphicId: 'a',
+		});
+
+		await wrapper.get('[data-add-graphic-item-kind="social-network-icon"]').trigger('click');
+
+		expect(emittedGraphics(wrapper)[0]?.items[0]).toMatchObject({
+			type: 'social-network-icon',
+			network: 'twitch',
+			color: '#ffffff',
+			opacity: 1,
+			visible: true,
+		});
 	});
 
 	it('places a Graphic Item at the front of the Graphic Layer Order and selects it', async () => {
@@ -281,6 +298,28 @@ describe('graphicsCompositorStackTree', () => {
 		expect(emittedTarget(wrapper)).toEqual({ type: 'graphic', graphicId: 'a' });
 	});
 
+	it('prevents deleting a Presentation Group outside the projection combined-delete path', async () => {
+		const projected = groupStack();
+		projected.socialProfileProjections = [{
+			key: 'profile',
+			label: 'Talent profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'cluster',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}];
+		const wrapper = await mountComponent({
+			graphics: [projected],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'item', graphicId: 'a', itemId: 'cluster' },
+		});
+
+		expect(wrapper.get('[aria-label="Delete Name block"]').attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-testid="presentation-group-delete-feedback"]').text())
+			.toContain('delete the projection and Presentation Group together');
+	});
+
 	it('nests the children of a Graphic Group under it as one layer', async () => {
 		const wrapper = await mountComponent({
 			graphics: [{
@@ -358,7 +397,7 @@ describe('graphicsCompositorStackTree', () => {
 
 		expect(wrapper.findAll('[data-add-graphic-group-child-kind]')
 			.map(button => button.attributes('data-add-graphic-group-child-kind')))
-			.toEqual(['text', 'shape', 'media']);
+			.toEqual(['text', 'shape', 'media', 'social-network-icon']);
 
 		await wrapper.get('[data-add-graphic-group-child-kind="text"]').trigger('click');
 		await nextTick();
@@ -444,6 +483,7 @@ describe('graphicsCompositorStackTree', () => {
 		});
 
 		expect(wrapper.find('[data-testid="graphic-item-palette"]').exists()).toBe(true);
+		expect(itemPaletteKinds(wrapper)).not.toContain('social-network-icon');
 
 		await wrapper.get('[data-add-graphic-item-kind="text"]').trigger('click');
 

@@ -48,6 +48,7 @@ const PreviewStub = defineComponent({ template: '<div data-testid="preview" />' 
 /** Stands in for the inspector, reporting the Event facts the workspace hands it. */
 const InspectorStub = defineComponent({
 	props: { eventId: { type: Number, required: true }, game: { type: String, default: '' } },
+	emits: ['update:graphics'],
 	setup(props) {
 		return () => h('div', {
 			'data-testid': 'inspector',
@@ -228,6 +229,30 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		const wrapper = await mountWorkspace();
 
 		expect(wrapper.get('[data-testid="inspector"]').attributes('data-game')).toBe('mtg');
+	});
+
+	it('funnels Social Profile Projection authoring through the workspace graphics save path', async () => {
+		const wrapper = await mountWorkspace();
+		const projected = [lowerThird, {
+			...slate,
+			socialProfileProjections: [{
+				key: 'talent-profile',
+				label: 'Talent profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade' as const,
+				transitionDurationMs: 250,
+			}],
+		}];
+
+		wrapper.getComponent(InspectorStub).vm.$emit('update:graphics', projected);
+		await flushPromises();
+
+		expect(wrapper.emitted('update:graphics')).toEqual([[projected]]);
+		// There is no projection-specific write that could bypass the mode document's
+		// Graphics Authoring Lease and strict save path.
+		expect(wrapper.emitted('update:socialProfileProjections')).toBeUndefined();
 	});
 
 	/**

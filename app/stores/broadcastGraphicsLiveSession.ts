@@ -7,8 +7,11 @@ import type {
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
 	GraphicInputTrace,
+	SocialProfilePresentationProjection,
+	SocialProfileProjectionLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
+import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type {
 	BroadcastGraphicsCommand,
 	BroadcastGraphicsCommandResult,
@@ -19,6 +22,8 @@ import type {
 	GraphicChannelConfig,
 	GraphicInputValue,
 	GraphicPlayoutState,
+	SocialProfileProjectionDeclaration,
+	SocialProfileProjectionValues,
 } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import type { BroadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
@@ -30,12 +35,17 @@ import {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfilePresentations,
+	broadcastGraphicRenderedSocialProfileValues,
 	BroadcastGraphicsCommandRejection,
 	broadcastGraphicSourceSelections,
 	changedBroadcastGraphicsLiveState,
 	createInitialBroadcastGraphicsLiveState,
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
+	projectSocialProfileRotation,
+	socialProfilePresentationProjections,
+	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
 import { broadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
@@ -79,6 +89,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * never disagree about what time it is.
 	 */
 	const { getServerTime, isSynced: isClockSynced } = useServerTime();
+	const clockSynchronized = computed(() => isClockSynced.value);
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	/**
 	 * Snapshot loads in flight, one Screen at a time.
@@ -105,8 +116,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * this first; nothing else writes it.
 	 */
 	const refusal = ref<BroadcastGraphicsCommandRefusal | null>(null);
-	/** Playout actions awaiting their authoritative answer, keyed per Broadcast Graphic. */
-	const pending = ref<Set<string>>(new Set());
+	/** Number of playout actions awaiting an authoritative answer, keyed per Broadcast Graphic. */
+	const pending = ref<Map<string, number>>(new Map());
 	/**
 	 * The Graphic Inputs whose last edit from this session lost a field-scoped
 	 * conflict, and have therefore been refreshed from the authoritative snapshot.
@@ -433,6 +444,62 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return { current, outgoing };
 	}
 
+	/** The correlated profile rendering each Graphic Update draws now and leaves. */
+	function renderedSocialProfileValues(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, SocialProfileProjectionValues>;
+		outgoing: Record<string, SocialProfileProjectionValues>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, SocialProfileProjectionValues> = {};
+		const outgoing: Record<string, SocialProfileProjectionValues> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfileValues(
+				state,
+				graphic,
+				renderTimingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
+	}
+
+	/** The exact synchronized presentation frames each Graphic Update draws now and leaves. */
+	function renderedSocialProfilePresentations(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, Record<string, SocialProfilePresentationProjection>>;
+		outgoing: Record<string, Record<string, SocialProfilePresentationProjection>>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, Record<string, SocialProfilePresentationProjection>> = {};
+		const outgoing: Record<string, Record<string, SocialProfilePresentationProjection>> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfilePresentations(
+				state,
+				graphic,
+				renderTimingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
+	}
+
 	function storeSession(session: BroadcastGraphicsLiveSessionResponse) {
 		sessions.value.set(session.screenId, session);
 	}
@@ -454,6 +521,12 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
+		const cached = sessions.value.get(result.screenId);
+		// Command requests may overlap. A late answer cannot move one epoch backwards,
+		// and an answer from an ended epoch cannot replace the current epoch at all.
+		if (cached && (cached.id !== result.session.id || cached.sequence > result.session.sequence))
+			return cached;
+
 		cacheSession(result.session);
 		return result.session;
 	}
@@ -500,7 +573,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		const pendingKey = playoutKey(screenId, graphicId);
 		refusal.value = null;
-		pending.value.add(pendingKey);
+		pending.value.set(pendingKey, (pending.value.get(pendingKey) ?? 0) + 1);
 
 		async function deliverTo(sessionId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
 			return cacheCommandResult(await repository.sendCommand(eventId, screenId, sessionId, command));
@@ -581,7 +654,11 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			);
 		}
 		finally {
-			pending.value.delete(pendingKey);
+			const remaining = (pending.value.get(pendingKey) ?? 1) - 1;
+			if (remaining > 0)
+				pending.value.set(pendingKey, remaining);
+			else
+				pending.value.delete(pendingKey);
 		}
 	}
 
@@ -611,6 +688,88 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	/** Which entity each of this Broadcast Graphic's Graphic Source Selections names. */
 	function sourceSelections(screenId: number, graphicId: string): GraphicSourceSelectionsState {
 		return broadcastGraphicSourceSelections(liveState(screenId), graphicId);
+	}
+
+	/** One authored Social Profile Rotation's authoritative operator state. */
+	function socialProfileProjectionState(
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+	): SocialProfileProjectionLiveState | undefined {
+		return liveState(screenId).socialProfileProjections?.[graphicId]?.[projectionKey];
+	}
+
+	/** One Social Profile Rotation projected for a rendering at synchronized server time. */
+	function projectedSocialProfileProjectionState(
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		declaration: SocialProfileProjectionDeclaration,
+		now?: number,
+	): SocialProfileProjectionLiveState | undefined {
+		const state = liveState(screenId);
+		const projection = state.socialProfileProjections?.[graphicId]?.[projectionKey];
+		if (!projection)
+			return undefined;
+
+		const current = projectSocialProfileRotation(projection, declaration, {
+			onAir: state.playout[graphicId]?.onAir === true,
+			now: isClockSynced.value ? now ?? serverNow() : undefined,
+		}).current?.network;
+		return {
+			...projection,
+			automatic: projection.automatic !== false,
+			...(current === undefined ? {} : { currentNetwork: current }),
+		};
+	}
+
+	/** Every current correlated profile tuple a live Screen Output is allowed to render. */
+	function socialProfileValues(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+		now?: number,
+	): Record<string, SocialProfileProjectionValues> {
+		const state = liveState(screenId);
+		return Object.fromEntries(graphics.flatMap((graphic) => {
+			const values = socialProfileProjectionValues(
+				state,
+				graphic,
+				isClockSynced.value ? now ?? serverNow() : undefined,
+			);
+			return Object.keys(values).length > 0 ? [[graphic.id, values]] : [];
+		}));
+	}
+
+	/** Every sampled synchronized Social Profile Presentation Group frame on program. */
+	function socialProfilePresentations(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+		now?: number,
+	): Record<string, Record<string, SocialProfilePresentationProjection>> {
+		const state = liveState(screenId);
+		return Object.fromEntries(graphics.flatMap((graphic) => {
+			const presentations = socialProfilePresentationProjections(
+				state,
+				graphic,
+				isClockSynced.value ? now ?? serverNow() : undefined,
+			);
+			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
+		}));
+	}
+
+	/** Whether synchronized profile rotation or transition requires the playout clock. */
+	function hasActiveSocialProfileRotation(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+	): boolean {
+		if (!isClockSynced.value)
+			return false;
+
+		const state = liveState(screenId);
+		const now = serverNow();
+		return graphics.some(graphic => state.playout[graphic.id]?.onAir === true
+			&& Object.values(socialProfilePresentationProjections(state, graphic, now))
+				.some(presentation => presentation.phase.kind !== 'static'));
 	}
 
 	/**
@@ -830,6 +989,50 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		});
 	}
 
+	function selectSocialProfile(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		network: SupportedSocialNetwork,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Select Social Profile'),
+			type: 'Select Social Profile',
+			payload: { graphicId, projectionKey, network },
+		});
+	}
+
+	function previousSocialProfile(eventId: number, screenId: number, graphicId: string, projectionKey: string) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Previous Social Profile'),
+			type: 'Previous Social Profile',
+			payload: { graphicId, projectionKey },
+		});
+	}
+
+	function nextSocialProfile(eventId: number, screenId: number, graphicId: string, projectionKey: string) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Next Social Profile'),
+			type: 'Next Social Profile',
+			payload: { graphicId, projectionKey },
+		});
+	}
+
+	function setSocialProfileAutomatic(
+		eventId: number,
+		screenId: number,
+		graphicId: string,
+		projectionKey: string,
+		automatic: boolean,
+	) {
+		return deliverCommand(eventId, screenId, graphicId, {
+			commandId: randomCommandId('Set Social Profile Automatic'),
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId, projectionKey, automatic },
+		});
+	}
+
 	/*
 	 * There is deliberately no `resolveBindings` action here.
 	 *
@@ -930,16 +1133,24 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		error,
 		refusal,
 		serverNow,
+		clockSynchronized,
 		channelContexts,
 		playoutState,
 		onAirGraphicIds,
 		animationProjection,
 		renderedInputValues,
+		renderedSocialProfileValues,
+		renderedSocialProfilePresentations,
 		isPending,
 		inputRefusal,
 		inputsState,
 		inputTraces,
 		sourceSelections,
+		socialProfileProjectionState,
+		projectedSocialProfileProjectionState,
+		socialProfileValues,
+		socialProfilePresentations,
+		hasActiveSocialProfileRotation,
 		acceptedInputValues,
 		recoveryFault,
 		loadSession,
@@ -948,6 +1159,10 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		setInput,
 		setOverride,
 		selectSource,
+		selectSocialProfile,
+		previousSocialProfile,
+		nextSocialProfile,
+		setSocialProfileAutomatic,
 		updateGraphic,
 		resetLiveState,
 		applyRemoteCommand,

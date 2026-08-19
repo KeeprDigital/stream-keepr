@@ -256,7 +256,14 @@ export function placeBroadcastGraphicTemplate(
 		id: graphicId,
 		name: distinctName(template.name, options.existing),
 		items: items.map(item => withRemappedGroupStagger(item, idMap)),
+		socialProfileProjections: document.socialProfileProjections?.map(projection => ({
+			...structuredClone(projection),
+			presentationGroupId: idMap.get(projection.presentationGroupId)
+				?? projection.presentationGroupId,
+		})),
 	};
+	if (!document.socialProfileProjections)
+		delete placed.socialProfileProjections;
 
 	// A Graphic Channel is per-placement, not per-design: the id names a lane on one
 	// Screen. A saved template drops it, but an imported or hand-built document may

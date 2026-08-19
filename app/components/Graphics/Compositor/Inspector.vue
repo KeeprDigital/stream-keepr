@@ -5,6 +5,7 @@ import type {
 	GraphicSurfaceStyleSlot,
 	ShapeGeometryPresetId,
 } from '~~/shared/modules/graphics';
+import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
@@ -33,6 +34,7 @@ import type {
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
+	SocialNetworkIconGraphicItemConfig,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
@@ -60,6 +62,7 @@ import {
 	graphicItemKindLabel,
 	graphicItemSummary,
 	graphicsHostTokenCatalogue,
+	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
@@ -87,6 +90,7 @@ import {
 	setMediaClipGeometry,
 	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	applicationGraphicFont,
@@ -110,10 +114,12 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
+	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
+import GraphicsCompositorSocialProfileProjections from './SocialProfileProjections.vue';
 
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
@@ -195,6 +201,14 @@ const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => 
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
 const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
+const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
+	label: network.label,
+	value: network.key,
+}));
+const SOCIAL_NETWORK_ICON_SOURCE_OPTIONS = [
+	{ label: 'Static network', value: 'static' },
+	{ label: 'Social Profile Projection', value: 'projection' },
+];
 const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
 	label: preset.label,
 	value: preset.id,
@@ -260,6 +274,34 @@ const selectedTextItem = computed<TextGraphicItemConfig | null>(() =>
 const selectedMediaItem = computed<MediaGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'media' ? selectedItem.value : null,
 );
+const selectedSocialNetworkIcon = computed<SocialNetworkIconGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'social-network-icon' ? selectedItem.value : null,
+);
+const socialProfileProjectionOptions = computed(() => {
+	const current = selection.value;
+	if (current.kind !== 'item' || !current.group)
+		return [];
+	return (current.graphic.socialProfileProjections ?? [])
+		.filter(projection => projection.presentationGroupId === current.group?.id)
+		.map(projection => ({ label: projection.label, value: projection.key }));
+});
+const invalidSocialNetworkIconProjection = computed(() => {
+	const icon = selectedSocialNetworkIcon.value;
+	const network = icon?.network;
+	if (!network || typeof network === 'string')
+		return false;
+	return !socialProfileProjectionOptions.value.some(option => option.value === network.projectionKey);
+});
+
+function updateSocialNetworkIconSource(source: 'static' | 'projection') {
+	if (source === 'static') {
+		patchSelectedItem({ network: 'twitch' });
+		return;
+	}
+	const projectionKey = socialProfileProjectionOptions.value[0]?.value;
+	if (projectionKey)
+		patchSelectedItem({ network: { projectionKey } });
+}
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
 );
@@ -284,8 +326,15 @@ const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
  */
 const selectedTypography = computed<GraphicTypography | null>(() => {
 	const item = selectedItem.value;
-	if (!item || item.type === 'shape' || item.type === 'media' || item.type === 'group')
+	if (
+		!item
+		|| item.type === 'shape'
+		|| item.type === 'media'
+		|| item.type === 'social-network-icon'
+		|| item.type === 'group'
+	) {
 		return null;
+	}
 	if (item.type === 'game-wins')
 		return item.displayMode === 'number' ? item.typography : null;
 	return item.typography;
@@ -371,7 +420,7 @@ const isStackedChild = computed(() =>
  */
 const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
 	const item = selectedItem.value;
-	if (!item || item.type === 'media')
+	if (!item || item.type === 'media' || item.type === 'social-network-icon')
 		return null;
 	return item.surfaceStyle ?? null;
 });
@@ -702,7 +751,24 @@ const availablePlaceholders = computed<Array<{ key: string; label: string }>>(()
 	const current = selection.value;
 	if (current.kind !== 'graphic' && current.kind !== 'item')
 		return [];
-	return (current.graphic.inputs ?? []).map(input => ({ key: input.key, label: input.label }));
+	const inputs = (current.graphic.inputs ?? []).map(input => ({ key: input.key, label: input.label }));
+	const valueLabels = {
+		networkLabel: 'Projected network label',
+		handle: 'Projected handle',
+		profileUrl: 'Projected profile URL',
+	} as const;
+	const projections = current.kind === 'item'
+		? (current.graphic.socialProfileProjections ?? []).filter(projection =>
+				projection.presentationGroupId === current.group?.id,
+			)
+		: current.graphic.socialProfileProjections ?? [];
+	const projected = projections.flatMap(projection =>
+		SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES.map(value => ({
+			key: `${projection.key}.${value}`,
+			label: `${valueLabels[value]} — ${projection.label}`,
+		})),
+	);
+	return [...inputs, ...projected];
 });
 
 const availablePlaceholderKeys = computed(() => availablePlaceholders.value.map(entry => entry.key));
@@ -723,7 +789,10 @@ const unresolvedPlaceholders = computed<string[]>(() => {
 		return [];
 
 	const available = new Set(availablePlaceholderKeys.value);
-	return graphicTextTemplateInputKeys(item.text).filter(key => !available.has(key));
+	return [
+		...graphicTextTemplateInputKeys(item.text),
+		...graphicTextTemplateDottedPlaceholderKeys(item.text),
+	].filter(key => !available.has(key));
 });
 
 const INPUT_TYPE_OPTIONS = GRAPHIC_INPUT_TYPE_VALUES.map(value => ({ label: value, value }));
@@ -897,7 +966,10 @@ const styleablePlaceholders = computed(() => {
 		return [];
 
 	const available = new Set(availablePlaceholderKeys.value);
-	return graphicTextTemplateInputKeys(current.item.text).filter(key => available.has(key));
+	return [
+		...graphicTextTemplateInputKeys(current.item.text),
+		...graphicTextTemplateDottedPlaceholderKeys(current.item.text),
+	].filter(key => available.has(key));
 });
 
 function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
@@ -1211,6 +1283,21 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				@update:graphics="emit('update:graphics', $event)"
 			/>
 		</template>
+
+		<!--
+			Social Profile Projections expose correlated, read-only values and own one
+			Presentation Group, so they are authored beside — never as — Graphic Inputs
+			and Graphic Source Selections. Feature Match hosts do not offer this vocabulary.
+		-->
+		<GraphicsCompositorSocialProfileProjections
+			v-if="selection.kind === 'graphic' && authorsInputs"
+			:graphics="graphics"
+			:selected-target="selectedTarget"
+			:canvas-width="canvasWidth"
+			:canvas-height="canvasHeight"
+			:writable="writable"
+			@update:graphics="emit('update:graphics', $event)"
+		/>
 
 		<template v-if="selectedItem">
 			<UFormField label="Label" size="sm">
@@ -1875,6 +1962,73 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</div>
 		</template>
 
+		<template v-if="selectedSocialNetworkIcon">
+			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Social Network Icon
+				</p>
+				<UFormField label="Network source" size="sm">
+					<USelect
+						:model-value="typeof selectedSocialNetworkIcon.network === 'string' ? 'static' : 'projection'"
+						:items="SOCIAL_NETWORK_ICON_SOURCE_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-source"
+						@update:model-value="updateSocialNetworkIconSource($event as 'static' | 'projection')"
+					/>
+				</UFormField>
+				<UFormField v-if="typeof selectedSocialNetworkIcon.network === 'string'" label="Social network" size="sm">
+					<USelect
+						:model-value="selectedSocialNetworkIcon.network"
+						:items="SOCIAL_NETWORK_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-network"
+						@update:model-value="patchSelectedItem({ network: $event as SupportedSocialNetwork })"
+					/>
+				</UFormField>
+				<UFormField v-else label="Social Profile Projection" size="sm">
+					<USelect
+						:model-value="selectedSocialNetworkIcon.network.projectionKey"
+						:items="socialProfileProjectionOptions"
+						value-key="value"
+						class="w-full"
+						data-testid="social-network-icon-projection"
+						@update:model-value="patchSelectedItem({ network: { projectionKey: String($event) } })"
+					/>
+				</UFormField>
+				<p
+					v-if="invalidSocialNetworkIconProjection"
+					class="text-xs text-warning"
+					data-testid="social-network-icon-projection-invalid"
+				>
+					This icon is outside that projection's Presentation Group. Move or replace it before saving.
+				</p>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Colour" size="sm">
+						<UIColorPicker
+							:model-value="selectedSocialNetworkIcon.color"
+							data-testid="social-network-icon-color"
+							@update:model-value="patchSelectedItem({ color: $event?.toString() || '#ffffff' })"
+						/>
+					</UFormField>
+					<UFormField label="Opacity" size="sm">
+						<UInputNumber
+							:model-value="selectedSocialNetworkIcon.opacity"
+							:min="0"
+							:max="1"
+							:step="0.05"
+							size="sm"
+							class="w-full"
+							data-testid="social-network-icon-opacity"
+							aria-label="Social network icon opacity"
+							@update:model-value="patchSelectedItem({ opacity: $event ?? 1 })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+		</template>
+
 		<template v-if="selectedMediaItem">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
@@ -2082,13 +2236,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			A Media Graphic Item paints an asset rather than a surface, so it is offered
-			none. Every other kind gets the same controls, and a Game Wins Item gets
+			A Media Graphic Item paints an asset and a Social Network Icon paints its
+			application vector, so neither is offered a surface. Every other kind gets
 			them three times over — its own surface, and the two that paint a win box
 			before and after the Player wins it.
 		-->
 		<GraphicsCompositorSurfaceStyleFields
-			v-if="selectedItem && selectedItem.type !== 'media'"
+			v-if="selectedItem && selectedItem.type !== 'media' && selectedItem.type !== 'social-network-icon'"
 			:surface-style="ownSurfaceStyle"
 			title="Graphic Surface Style"
 			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"

@@ -1,4 +1,5 @@
-import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
+import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { GraphicMediaIncompatibilityCode, GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
@@ -34,6 +35,14 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * nothing, never its authored default.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/** Current correlated values for every Social Profile Projection on program. */
+	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
+	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
+	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Sampled Presentation Group frames an update phase is transitioning away from. */
+	outgoingSocialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Correlated Social Profile values an update phase is transitioning away from. */
+	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering each updating Broadcast Graphic is transitioning away from.
 	 *
@@ -93,6 +102,10 @@ export function resolveBroadcastGraphicsRenderModel(
 		visibleGraphicIds: input.onAirGraphicIds ?? [],
 		animation: input.animation,
 		inputValues: input.inputValues,
+		socialProfileValues: input.socialProfileValues,
+		socialProfilePresentations: input.socialProfilePresentations,
+		outgoingSocialProfilePresentations: input.outgoingSocialProfilePresentations,
+		outgoingSocialProfileValues: input.outgoingSocialProfileValues,
 		outgoingInputValues: input.outgoingInputValues,
 		substituteAuthoredDefaults: input.substituteAuthoredDefaults,
 		itemGuides: input.itemGuides,

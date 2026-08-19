@@ -4,6 +4,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	GRAPHIC_INPUT_KEY_PATTERN,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
@@ -114,6 +115,18 @@ const selectSourcePayloadSchema = z.object({
 	selectionId: z.number().int().positive().nullable(),
 }).strict();
 
+const selectSocialProfilePayloadSchema = z.object({
+	graphicId: graphicIdSchema,
+	projectionKey: inputKeySchema,
+	network: z.enum(SUPPORTED_SOCIAL_NETWORK_KEYS),
+}).strict();
+
+const stepSocialProfilePayloadSchema = selectSocialProfilePayloadSchema.omit({ network: true });
+
+const setSocialProfileAutomaticPayloadSchema = stepSocialProfilePayloadSchema.extend({
+	automatic: z.boolean(),
+}).strict();
+
 const commandIdSchema = z.string().min(1).max(100);
 
 export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
@@ -126,6 +139,26 @@ export const broadcastGraphicsCommandSchema = z.discriminatedUnion('type', [
 		commandId: commandIdSchema,
 		type: z.literal('Out'),
 		payload: playoutPayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Select Social Profile'),
+		payload: selectSocialProfilePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Previous Social Profile'),
+		payload: stepSocialProfilePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Next Social Profile'),
+		payload: stepSocialProfilePayloadSchema,
+	}).strict(),
+	z.object({
+		commandId: commandIdSchema,
+		type: z.literal('Set Social Profile Automatic'),
+		payload: setSocialProfileAutomaticPayloadSchema,
 	}).strict(),
 	z.object({
 		commandId: commandIdSchema,

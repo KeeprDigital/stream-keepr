@@ -58,9 +58,12 @@ export type {
 	BroadcastGraphicsPlayoutPayload,
 	BroadcastGraphicsReductionContext,
 	BroadcastGraphicsResolveBindingsPayload,
+	BroadcastGraphicsSelectSocialProfilePayload,
 	BroadcastGraphicsSelectSourcePayload,
 	BroadcastGraphicsSetInputPayload,
 	BroadcastGraphicsSetOverridePayload,
+	BroadcastGraphicsSetSocialProfileAutomaticPayload,
+	BroadcastGraphicsStepSocialProfilePayload,
 	BroadcastGraphicsUpdatePayload,
 } from './playout';
 export {
@@ -71,6 +74,8 @@ export {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfilePresentations,
+	broadcastGraphicRenderedSocialProfileValues,
 	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
@@ -90,3 +95,23 @@ export {
 	BROADCAST_GRAPHICS_REJECTION_CODES,
 	BroadcastGraphicsCommandRejection,
 } from './rejection';
+export type {
+	BroadcastGraphicSocialProfileProjectionStates,
+	SocialProfilePresentationLayer,
+	SocialProfilePresentationProjection,
+	SocialProfileProjectionLiveState,
+	SocialProfileProjectionTalent,
+	SocialProfileRotationAnchor,
+	SocialProfileRotationPhase,
+	SocialProfileRotationProjection,
+	SocialProfileTransitionAnchor,
+} from './socialProfiles';
+export {
+	MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
+	projectSocialProfilePresentation,
+	projectSocialProfileRotation,
+	resolveSocialProfileProjectionAcceptances,
+	sameSocialProfileProjectionAcceptance,
+	socialProfilePresentationProjections,
+	socialProfileProjectionValues,
+} from './socialProfiles';

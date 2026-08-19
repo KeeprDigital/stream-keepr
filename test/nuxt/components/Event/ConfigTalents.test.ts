@@ -1,19 +1,26 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
+import type { Talent } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
-import { createMockTalent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 
-const ALICE = createMockTalent({ id: 11, name: 'Alice' });
-/** Two rows, one name: only their ids tell them apart. */
-const BOB = createMockTalent({ id: 12, name: 'Bob' });
-const BOB_AGAIN = createMockTalent({ id: 13, name: 'Bob' });
+function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}): Talent {
+	return {
+		id,
+		eventId: 1,
+		name,
+		socialProfiles,
+		createdAt: new Date('2026-01-01T00:00:00.000Z'),
+		updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+	};
+}
 
-// The page guard reaches for the overlay and the router when it installs itself.
-// What it does with them is its own composable's test; here they only have to
-// exist so a test can mount this card the way its page does.
+const ALICE = talent(11, 'Alice');
+const BOB = talent(12, 'Bob');
+const BOB_AGAIN = talent(13, 'Bob');
+
 mockNuxtImport('useOverlay', () => () => ({
 	create: () => ({ open: () => ({ result: Promise.resolve(true) }) }),
 }));
@@ -31,26 +38,26 @@ const UIEmptyStateStub = defineComponent({
 
 const UInputStub = defineComponent({
 	name: 'UInput',
-	props: { modelValue: { type: String, required: false } },
+	props: {
+		modelValue: { type: String, required: false },
+		icon: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @keydown="$emit(\'keydown\', $event)" />',
+	template: '<input :value="modelValue" :data-icon="icon" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
-// The row's confirm and cancel controls carry an icon and no label, so the icon is
-// the only thing a test can name them by.
 const UButtonStub = defineComponent({
 	name: 'UButton',
 	props: {
 		label: { type: String, required: false },
 		icon: { type: String, required: false },
 		disabled: { type: Boolean, required: false },
+		type: { type: String, required: false },
 	},
 	emits: ['click'],
-	template: '<button :data-label="label" :data-icon="icon" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
+	template: '<button :data-label="label" :data-icon="icon" :disabled="disabled" :type="type" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
-// The row menu is where "Remove" lives. Exposing its items lets a test choose an
-// action by name rather than by driving a popover open.
 const UDropdownMenuStub = defineComponent({
 	name: 'UDropdownMenu',
 	props: { items: { type: Array, default: () => [] } },
@@ -62,6 +69,34 @@ const UTooltipStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
+const UModalStub = defineComponent({
+	name: 'UModal',
+	props: { open: { type: Boolean, default: false } },
+	template: '<section v-if="open" data-editor><slot name="body" /><slot name="footer" /></section>',
+});
+
+const UFormStub = defineComponent({
+	name: 'UForm',
+	emits: ['submit'],
+	template: '<form @submit.prevent="$emit(\'submit\')"><slot /></form>',
+});
+
+const UFormFieldStub = defineComponent({
+	name: 'UFormField',
+	props: {
+		name: { type: String, required: false },
+		label: { type: String, required: false },
+		error: { type: String, required: false },
+	},
+	template: '<label :data-field="name"><span data-field-label>{{ label }}</span><slot /><span v-if="error" data-error>{{ error }}</span></label>',
+});
+
+const UIconStub = defineComponent({
+	name: 'UIcon',
+	props: { name: { type: String, required: true } },
+	template: '<span :data-icon="name" />',
+});
+
 const stubs = {
 	UCard: UCardStub,
 	UIEmptyState: UIEmptyStateStub,
@@ -69,52 +104,48 @@ const stubs = {
 	UButton: UButtonStub,
 	UDropdownMenu: UDropdownMenuStub,
 	UTooltip: UTooltipStub,
+	UModal: UModalStub,
+	UForm: UFormStub,
+	UFormField: UFormFieldStub,
+	UIcon: UIconStub,
 };
 
 enableAutoUnmount(afterEach);
 
 const componentPath = '../../../../app/components/Event/ConfigTalents.vue';
-
 const mountOptions = { attachTo: document.body, global: { stubs } };
 
-async function mountComponent(talents: ReturnType<typeof createMockTalent>[]) {
+async function mountComponent(talents: Talent[]) {
 	const { default: ConfigTalents } = await import(componentPath);
-
 	return mount(ConfigTalents, { ...mountOptions, props: { talents } });
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
-/**
- * Mounts the card the way `pages/event/[eventId]/config/broadcast.vue` does,
- * inside a page that has installed the unsaved-changes guard. See the shared
- * harness for why the registration is invisible from a bare mount.
- */
-async function mountUnderGuard(talents: ReturnType<typeof createMockTalent>[]) {
+async function mountUnderGuard(talents: Talent[]) {
 	const { default: ConfigTalents } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(ConfigTalents, { ...mountOptions, props: { talents } });
 }
 
-function rowMenus(wrapper: Wrapper) {
-	return wrapper.findAllComponents(UDropdownMenuStub);
-}
-
 function chooseRowAction(wrapper: Wrapper, index: number, label: string) {
-	const items = rowMenus(wrapper)[index]!.props('items') as DropdownMenuItem[];
+	const menus = wrapper.findAllComponents(UDropdownMenuStub);
+	const items = menus[index]!.props('items') as DropdownMenuItem[];
 	const action = items.find(item => item.label === label);
 	if (!action)
 		throw new Error(`Row ${index} offers no "${label}" action`);
 	action.onSelect?.(new Event('select') as never);
 }
 
-function saveButton(wrapper: Wrapper) {
-	return wrapper.findAll('[data-label="Save"]').at(-1)!;
+function button(wrapper: Wrapper, label: string) {
+	return wrapper.findAll(`[data-label="${label}"]`).at(-1)!;
 }
 
-/** Confirms the row edit currently open, whichever row that is. */
-async function confirmEdit(wrapper: Wrapper) {
-	await wrapper.get('[data-icon="i-lucide-check"]').trigger('click');
+function profileInput(wrapper: Wrapper, network: string) {
+	return wrapper.get(`[data-social-network="${network}"]`);
+}
+
+async function finishEditor(wrapper: Wrapper) {
+	await button(wrapper, 'Done').trigger('click');
 	await flushPromises();
 }
 
@@ -122,102 +153,136 @@ function submitted(wrapper: Wrapper) {
 	const events = wrapper.emitted('submit');
 	if (!events?.length)
 		throw new Error('The card emitted no submit');
-	return events.at(-1)![0] as { id?: number; name: string }[];
+	return events.at(-1)![0] as Array<{ id?: number; name: string; socialProfiles: Talent['socialProfiles'] }>;
 }
 
-describe('event config talents', () => {
-	// Everything beneath this card is keyed on talent id — the FK the event holds,
-	// and the binding data a Take resolves through. The card has to speak the same
-	// language or the save has to guess, and guessing by name is what made a
-	// duplicate unremovable.
-	it('carries each row back with the id of the talent it came from', async () => {
-		const wrapper = await mountComponent([ALICE, BOB]);
+describe('event config Talents', () => {
+	it('offers a focused editor with six icon-labelled optional Social Profile fields', async () => {
+		const wrapper = await mountComponent([ALICE]);
+		chooseRowAction(wrapper, 0, 'Edit');
 		await flushPromises();
 
-		chooseRowAction(wrapper, 1, 'Remove');
-		await flushPromises();
-		await saveButton(wrapper).trigger('click');
-
-		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alice' }]);
+		expect(wrapper.find('[data-editor]').exists()).toBe(true);
+		expect(wrapper.findAll('[data-social-network]')).toHaveLength(6);
+		expect(wrapper.findAll('[data-field-label]').map(label => label.text())).toEqual([
+			'Name',
+			'Twitch',
+			'YouTube',
+			'X',
+			'Instagram',
+			'TikTok',
+			'Bluesky',
+		]);
+		expect(profileInput(wrapper, 'twitch').attributes('data-icon')).toBe('i-simple-icons-twitch');
+		expect(profileInput(wrapper, 'bluesky').attributes('data-icon')).toBe('i-simple-icons-bluesky');
 	});
 
-	it('distinguishes two namesakes when one is removed', async () => {
-		const wrapper = await mountComponent([BOB, BOB_AGAIN]);
+	it('normalizes profiles and keeps the Talent id through the staged save', async () => {
+		const wrapper = await mountComponent([ALICE]);
+		chooseRowAction(wrapper, 0, 'Edit');
 		await flushPromises();
 
+		await wrapper.get('[data-field="name"] input').setValue(' Alicia ');
+		await profileInput(wrapper, 'twitch').setValue('  @AliceLive ');
+		await profileInput(wrapper, 'youtube').setValue('https://youtube.com/@AliceVideo');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([{
+			id: ALICE.id,
+			name: 'Alicia',
+			socialProfiles: { twitch: 'AliceLive', youtube: 'AliceVideo' },
+		}]);
+	});
+
+	it('keeps a malformed profile error on its network field and does not stage it', async () => {
+		const wrapper = await mountComponent([ALICE]);
+		chooseRowAction(wrapper, 0, 'Edit');
+		await flushPromises();
+
+		await profileInput(wrapper, 'x').setValue('two words');
+		await finishEditor(wrapper);
+
+		expect(wrapper.get('[data-field="socialProfiles.x"] [data-error]').text()).toContain('valid X handle');
+		expect(wrapper.find('[data-editor]').exists()).toBe(true);
+		expect(wrapper.emitted('submit')).toBeUndefined();
+	});
+
+	it('replaces the complete profile set and treats a blank field as removal', async () => {
+		const wrapper = await mountComponent([talent(11, 'Alice', { twitch: 'Old', instagram: 'Kept' })]);
+		chooseRowAction(wrapper, 0, 'Edit');
+		await flushPromises();
+
+		await profileInput(wrapper, 'twitch').setValue(' ');
+		await profileInput(wrapper, 'x').setValue('@New');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)[0]!.socialProfiles).toEqual({ instagram: 'Kept', x: 'New' });
+	});
+
+	it('allows two Talents to share one handle', async () => {
+		const wrapper = await mountComponent([
+			talent(11, 'Alice', { twitch: 'Shared' }),
+			talent(12, 'Bob'),
+		]);
+		chooseRowAction(wrapper, 1, 'Edit');
+		await flushPromises();
+
+		await profileInput(wrapper, 'twitch').setValue('Shared');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper).map(row => row.socialProfiles.twitch)).toEqual(['Shared', 'Shared']);
+	});
+
+	it('distinguishes namesakes by id when one is removed', async () => {
+		const wrapper = await mountComponent([BOB, BOB_AGAIN]);
 		chooseRowAction(wrapper, 0, 'Remove');
 		await flushPromises();
-		await saveButton(wrapper).trigger('click');
+		await button(wrapper, 'Save').trigger('click');
 
-		expect(submitted(wrapper)).toEqual([{ id: BOB_AGAIN.id, name: 'Bob' }]);
+		expect(submitted(wrapper)).toEqual([{ id: BOB_AGAIN.id, name: 'Bob', socialProfiles: {} }]);
 	});
 
-	// A rename keeps the id, so the save can update the talent rather than replace
-	// them — which is what used to clear their commentator seat.
-	it('keeps the id when a name is edited', async () => {
+	it('adds a normalized Talent row with no id', async () => {
 		const wrapper = await mountComponent([ALICE]);
+		await button(wrapper, 'Add talent').trigger('click');
 		await flushPromises();
 
-		chooseRowAction(wrapper, 0, 'Edit Name');
-		await flushPromises();
+		await wrapper.get('[data-field="name"] input').setValue('Dana');
+		await profileInput(wrapper, 'bluesky').setValue('https://bsky.app/profile/dana.bsky.social');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
 
-		await wrapper.getComponent(UInputStub).setValue('Alicia');
-		await confirmEdit(wrapper);
-		await saveButton(wrapper).trigger('click');
-
-		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alicia' }]);
+		expect(submitted(wrapper)).toEqual([
+			{ id: ALICE.id, name: 'Alice', socialProfiles: {} },
+			{ name: 'Dana', socialProfiles: { bluesky: 'dana.bsky.social' } },
+		]);
 	});
 
-	// Nothing above this card is a form, so a `type="submit"` on Save would be
-	// inert and would only suggest that pressing it posts something. Save is
-	// written twice — bare, and wrapped in the tooltip that explains why it is
-	// disabled mid-edit — so both spellings are checked, and the tooltip's
-	// presence is what says the second mount reached the other branch.
-	it('offers Save as an ordinary button in both of its forms', async () => {
-		const wrapper = await mountComponent([ALICE]);
-		await flushPromises();
-
-		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(false);
-		expect(saveButton(wrapper).attributes('type')).toBe('button');
-
-		await wrapper.get('[data-label="Add talent"]').trigger('click');
-		await flushPromises();
-
-		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(true);
-		expect(saveButton(wrapper).attributes('type')).toBe('button');
-	});
-
-	// The guard is what stops an operator navigating away from an unsaved edit. It
-	// registers through inject, so a card mounted without a page around it
-	// registers with nothing and loses this silently.
-	it('tells the page it has unsaved changes while a row is added or removed', async () => {
+	it('registers staged changes with the page guard and Reset restores the response', async () => {
 		const { wrapper, pageIsDirty } = await mountUnderGuard([ALICE, BOB]);
 		await flushPromises();
 
 		expect(pageIsDirty()).toBe(false);
-
 		chooseRowAction(wrapper, 1, 'Remove');
 		await flushPromises();
 		expect(pageIsDirty()).toBe(true);
 
-		await wrapper.get('[data-label="Reset"]').trigger('click');
+		await button(wrapper, 'Reset').trigger('click');
 		expect(pageIsDirty()).toBe(false);
+		expect(wrapper.findAllComponents(UDropdownMenuStub)).toHaveLength(2);
 	});
 
-	it('offers a newly added row with no id at all', async () => {
+	it('uses ordinary buttons for both Save branches', async () => {
 		const wrapper = await mountComponent([ALICE]);
+		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(false);
+		expect(button(wrapper, 'Save').attributes('type')).toBe('button');
+
+		await button(wrapper, 'Add talent').trigger('click');
 		await flushPromises();
-
-		await wrapper.get('[data-label="Add talent"]').trigger('click');
-		await flushPromises();
-
-		await wrapper.getComponent(UInputStub).setValue('Dana');
-		await confirmEdit(wrapper);
-		await saveButton(wrapper).trigger('click');
-
-		expect(submitted(wrapper)).toEqual([
-			{ id: ALICE.id, name: 'Alice' },
-			{ name: 'Dana' },
-		]);
+		expect(wrapper.findComponent(UTooltipStub).exists()).toBe(true);
+		expect(button(wrapper, 'Save').attributes('type')).toBe('button');
 	});
 });

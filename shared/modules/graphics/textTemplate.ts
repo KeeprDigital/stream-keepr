@@ -1,14 +1,24 @@
-import type { GraphicInputDeclaration, GraphicInputValue } from '../../types/graphics';
-import { GRAPHIC_INPUT_KEY_PATTERN } from '../../types/graphics';
+import type {
+	GraphicInputDeclaration,
+	GraphicInputValue,
+	SocialProfileProjectedTextValue,
+	SocialProfileProjectionValues,
+} from '../../types/graphics';
+import {
+	GRAPHIC_INPUT_KEY_PATTERN,
+	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
+} from '../../types/graphics';
 import { findGraphicInputDeclaration, graphicInputTextValue } from './inputs';
 
 /**
  * Graphic Text Templates.
  *
- * A template is literal text combined with `{inputKey}` placeholders, and a
- * placeholder is a reference to a stable Graphic Input key — nothing else. There
- * is no property access, formatting, fallback, conditional, or expression to
- * parse, which is what keeps this a substitution rather than an evaluator.
+ * A template is literal text combined with `{inputKey}` placeholders. A Broadcast
+ * Graphic may opt a declared Social Profile Projection into the parser's bounded
+ * `{projectionKey.value}` reference vocabulary; ordinary and Feature Match parsing
+ * do not. There is no general property access, formatting, fallback, conditional,
+ * or expression to parse, which is what keeps this a substitution rather than an
+ * evaluator.
  *
  * A brace run that does not name a valid key is text the author typed, and stays
  * literal. That is the only sensible reading of it: refusing to render an
@@ -29,19 +39,54 @@ function isInputKey(candidate: string): boolean {
 	return GRAPHIC_INPUT_KEY_PATTERN.test(candidate);
 }
 
+export interface SocialProfileProjectedValueReference {
+	projectionKey: string;
+	value: SocialProfileProjectedTextValue;
+}
+
+/** A dotted, bounded reference to one projection's read-only text value. */
+export function readSocialProfileProjectedValueReference(
+	candidate: string,
+): SocialProfileProjectedValueReference | undefined {
+	const separator = candidate.lastIndexOf('.');
+	if (separator <= 0)
+		return undefined;
+	const projectionKey = candidate.slice(0, separator);
+	const value = candidate.slice(separator + 1) as SocialProfileProjectedTextValue;
+	if (
+		!isInputKey(projectionKey)
+		|| !SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES.includes(value)
+	) {
+		return undefined;
+	}
+	return { projectionKey, value };
+}
+
+function isPlaceholderKey(candidate: string, projectionKeys: ReadonlySet<string>): boolean {
+	if (isInputKey(candidate))
+		return true;
+	const projected = readSocialProfileProjectedValueReference(candidate);
+	return projected !== undefined && projectionKeys.has(projected.projectionKey);
+}
+
+const NO_SOCIAL_PROFILE_PROJECTIONS: ReadonlySet<string> = new Set();
+
 /**
  * The template's runs, with every placeholder still empty.
  *
  * Parsing is separate from rendering so the editor can find which Graphic Inputs
  * a template references without holding any values.
  */
-export function parseGraphicTextTemplate(template: string): GraphicTextTemplateSegment[] {
+export function parseGraphicTextTemplate(
+	template: string,
+	projectionKeys: ReadonlySet<string> = NO_SOCIAL_PROFILE_PROJECTIONS,
+): GraphicTextTemplateSegment[] {
 	const segments: GraphicTextTemplateSegment[] = [];
 	let literalStart = 0;
 
 	for (const match of template.matchAll(PLACEHOLDER)) {
 		const key = match[1] ?? '';
-		if (!isInputKey(key))
+		if (!isPlaceholderKey(key, projectionKeys))
 			continue;
 
 		const literal = template.slice(literalStart, match.index);
@@ -62,7 +107,32 @@ export function parseGraphicTextTemplate(template: string): GraphicTextTemplateS
 export function graphicTextTemplateInputKeys(template: string): string[] {
 	const keys = parseGraphicTextTemplate(template)
 		.map(segment => segment.inputKey)
-		.filter((key): key is string => key !== undefined);
+		.filter((key): key is string => key !== undefined && isInputKey(key));
+	return [...new Set(keys)];
+}
+
+/** The projection value references in template order, once each. */
+export function graphicTextTemplateProjectedValueReferences(
+	template: string,
+): SocialProfileProjectedValueReference[] {
+	const references = graphicTextTemplateDottedPlaceholderKeys(template)
+		.map(readSocialProfileProjectedValueReference)
+		.filter((reference): reference is SocialProfileProjectedValueReference => reference !== undefined);
+	const seen = new Set<string>();
+	return references.filter((reference) => {
+		const key = `${reference.projectionKey}.${reference.value}`;
+		if (seen.has(key))
+			return false;
+		seen.add(key);
+		return true;
+	});
+}
+
+/** Dotted placeholder candidates, including unsupported projection fields. */
+export function graphicTextTemplateDottedPlaceholderKeys(template: string): string[] {
+	const keys = [...template.matchAll(PLACEHOLDER)]
+		.map(match => match[1] ?? '')
+		.filter(key => key.includes('.'));
 	return [...new Set(keys)];
 }
 
@@ -79,10 +149,19 @@ export function renderGraphicTextTemplate(
 	template: string,
 	declarations: readonly GraphicInputDeclaration[] | undefined,
 	values: Readonly<Record<string, GraphicInputValue>>,
+	socialProfileValues?: SocialProfileProjectionValues,
 ): GraphicTextTemplateSegment[] {
-	return parseGraphicTextTemplate(template).map((segment) => {
+	const projectionKeys = new Set(Object.keys(socialProfileValues ?? {}));
+	return parseGraphicTextTemplate(template, projectionKeys).map((segment) => {
 		if (segment.inputKey === undefined)
 			return segment;
+		const projected = readSocialProfileProjectedValueReference(segment.inputKey);
+		if (projected) {
+			return {
+				text: socialProfileValues?.[projected.projectionKey]?.[projected.value] ?? '',
+				inputKey: segment.inputKey,
+			};
+		}
 
 		const declaration = findGraphicInputDeclaration(declarations, segment.inputKey);
 		return {

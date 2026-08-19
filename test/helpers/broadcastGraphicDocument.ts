@@ -26,7 +26,7 @@ import {
  * re-exporting repairs nothing.
  *
  * Built through the same authoring operations an editor uses, so its base items can
- * never drift from what the editor actually produces. All seven `GraphicItemConfig`
+ * never drift from what the editor actually produces. All eight `GraphicItemConfig`
  * branches appear, including the three the Broadcast Graphics palette does not offer
  * — see the item list below for why they belong here anyway.
  *
@@ -98,15 +98,27 @@ export function maximalBroadcastGraphicDocument(
 	// Every branch of `GraphicItemConfig`, the three context-gated Definitions
 	// included. A Broadcast Graphics palette does not offer Clock, Player Life, or
 	// Game Wins today — the Host Contract declares only the `event` context — but
-	// `broadcastGraphicConfigSchema` validates all seven kinds and a `.skgraphic`
-	// receiver resolves capability identities against all seven, so a package
+	// `broadcastGraphicConfigSchema` validates all eight kinds and a `.skgraphic`
+	// receiver resolves capability identities against all eight, so a package
 	// carrying one is accepted and installed. A transfer that has never been held to
 	// three of the seven branches is a transfer nobody has tested.
 	const withGroup = addGraphicItem(base, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	const withChild = addGraphicGroupChild(withGroup, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
-	const withHeadline = addGraphicItem(withChild, { kind: 'text', id: 'headline', ...CANVAS }).graphic;
+	const withProjectedText = addGraphicGroupChild(
+		withChild,
+		{ kind: 'text', groupId: 'cluster', id: 'projected-handle' },
+	).graphic;
+	const withProjectedIcon = addGraphicGroupChild(
+		withProjectedText,
+		{ kind: 'social-network-icon', groupId: 'cluster', id: 'projected-icon' },
+	).graphic;
+	const withHeadline = addGraphicItem(withProjectedIcon, { kind: 'text', id: 'headline', ...CANVAS }).graphic;
 	const withBackdrop = addGraphicItem(withHeadline, { kind: 'media', id: 'backdrop', ...CANVAS }).graphic;
-	const withClock = addGraphicItem(withBackdrop, { kind: 'clock', id: 'countdown', ...CANVAS }).graphic;
+	const withSocialIcon = addGraphicItem(
+		withBackdrop,
+		{ kind: 'social-network-icon', id: 'social-icon', ...CANVAS },
+	).graphic;
+	const withClock = addGraphicItem(withSocialIcon, { kind: 'clock', id: 'countdown', ...CANVAS }).graphic;
 	const withLife = addGraphicItem(withClock, { kind: 'player-life', id: 'life', ...CANVAS }).graphic;
 	const document = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
 
@@ -116,12 +128,21 @@ export function maximalBroadcastGraphicDocument(
 	const child = group.children[0];
 	if (child?.type !== 'shape')
 		throw new Error('expected a Shape Graphic Item inside the Graphic Group');
+	const projectedText = group.children.find(item => item.id === 'projected-handle');
+	if (projectedText?.type !== 'text')
+		throw new Error('expected projected text inside the Graphic Group');
+	const projectedIcon = group.children.find(item => item.id === 'projected-icon');
+	if (projectedIcon?.type !== 'social-network-icon')
+		throw new Error('expected a projected Social Network Icon inside the Graphic Group');
 	const headline = document.items.find(item => item.id === 'headline');
 	if (headline?.type !== 'text')
 		throw new Error('expected a Text Graphic Item');
 	const backdrop = document.items.find(item => item.id === 'backdrop');
 	if (backdrop?.type !== 'media')
 		throw new Error('expected a Media Graphic Item');
+	const socialIcon = document.items.find(item => item.id === 'social-icon');
+	if (socialIcon?.type !== 'social-network-icon')
+		throw new Error('expected a Social Network Icon Graphic Item');
 	const countdown = document.items.find(item => item.id === 'countdown');
 	if (countdown?.type !== 'clock')
 		throw new Error('expected a Clock Graphic Item');
@@ -148,6 +169,17 @@ export function maximalBroadcastGraphicDocument(
 	backdrop.opacity = 0.85;
 	backdrop.playbackRate = 1.25;
 	backdrop.loop = false;
+	socialIcon.network = 'bluesky';
+	socialIcon.color = '#1185fe';
+	socialIcon.opacity = 0.65;
+	socialIcon.rotation = 8;
+	projectedText.text = '{talent-profile.networkLabel} · {talent-profile.handle} · {talent-profile.profileUrl}';
+	projectedText.placeholderStyles = {
+		'talent-profile.handle': { color: '#ffcc00', fontWeight: 900 },
+	};
+	projectedIcon.network = { projectionKey: 'talent-profile' };
+	projectedIcon.color = '#ffffff';
+	projectedIcon.opacity = 0.8;
 
 	headline.text = 'Match point for {headline}';
 	// Every key a Graphic Placeholder Style may carry, not a representative few.
@@ -231,7 +263,11 @@ export function maximalBroadcastGraphicDocument(
 			'enter': { order: 'list', step: 80, itemIds: ['headline', 'cluster'] },
 			'on-screen': { order: 'reverse-list', step: 40, itemIds: ['cluster'] },
 			'update': { order: 'list', step: 20, itemIds: ['headline'] },
-			'exit': { order: 'reverse-list', step: 60, itemIds: ['cluster', 'backdrop', 'countdown', 'life', 'wins'] },
+			'exit': {
+				order: 'reverse-list',
+				step: 60,
+				itemIds: ['cluster', 'backdrop', 'social-icon', 'countdown', 'life', 'wins'],
+			},
 		},
 	};
 	group.animation = {
@@ -240,6 +276,9 @@ export function maximalBroadcastGraphicDocument(
 	};
 	headline.animation = {
 		exit: { duration: 150, easing: 'ease-in', delay: 50, fade: { opacity: 0 } },
+	};
+	socialIcon.animation = {
+		enter: { duration: 180, easing: 'ease-out', delay: 20, scale: { factor: 0.8, origin: 'center' } },
 	};
 	// All six Graphic Input types, because each is a separate branch of the wire
 	// vocabulary and a package carrying five of them proves nothing about the sixth.
@@ -310,8 +349,18 @@ export function maximalBroadcastGraphicDocument(
 	document.sources = [
 		{ key: 'match', label: 'Match', kind: 'match' },
 		{ key: 'player', label: 'Player', kind: 'player', from: { sourceKey: 'match', relation: 'player1' } },
+		{ key: 'talent', label: 'Talent', kind: 'talent' },
 	];
 	document.bindings = [{ inputKey: 'headline', sourceKey: 'player', fieldId: 'player.name' }];
+	document.socialProfileProjections = [{
+		key: 'talent-profile',
+		label: 'Talent Profile',
+		sourceKey: 'talent',
+		presentationGroupId: 'cluster',
+		dwellMs: 8_000,
+		transition: 'crossfade',
+		transitionDurationMs: 250,
+	}];
 
 	return document;
 }

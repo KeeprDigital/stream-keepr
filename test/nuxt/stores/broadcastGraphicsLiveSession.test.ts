@@ -69,6 +69,21 @@ function graphic(id: string, animation?: BroadcastGraphicConfig['animation']): B
 	return { id, name: id, items: [], animation };
 }
 
+function socialGraphic(id: string): BroadcastGraphicConfig {
+	return {
+		...graphic(id),
+		socialProfileProjections: [{
+			key: 'profile',
+			label: 'Social Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'profile-group',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}],
+	};
+}
+
 function notification(
 	overrides: Partial<MessageData<'broadcastGraphicsLiveSession:commandApplied'>> = {},
 ): MessageData<'broadcastGraphicsLiveSession:commandApplied'> {
@@ -148,6 +163,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		store = useBroadcastGraphicsLiveSessionStore();
 		store.$reset();
 		vi.clearAllMocks();
+		mockClockSynced.value = true;
+		mockServerTimeOffset.value = 0;
 		mockRepository.getSession.mockResolvedValue(session());
 	});
 
@@ -166,6 +183,141 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	it('reports every Broadcast Graphic off before any snapshot has loaded', () => {
 		expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
 		expect(store.onAirGraphicIds(SCREEN_ID, [graphic('slate')])).toEqual([]);
+	});
+
+	it('reads current Social Profile tuples and sends direct, Previous, and Next commands', async () => {
+		const currentState = {
+			playout: {},
+			inputs: {},
+			socialProfileProjections: {
+				slate: { profile: {
+					acceptedProfiles: [
+						{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+						{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					],
+					currentNetwork: 'twitch' as const,
+				} },
+			},
+		};
+		mockRepository.getSession.mockResolvedValue(session({ currentState }));
+		mockRepository.sendCommand.mockImplementation(async (
+			_eventId: number,
+			_screenId: number,
+			_sessionId: number,
+			command: { type: string },
+		) => ({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: command.type,
+			currentState,
+			session: session({ sequence: 2, currentState }),
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('twitch');
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')])).toEqual({
+			slate: { profile: currentState.socialProfileProjections.slate.profile.acceptedProfiles[0] },
+		});
+
+		await store.selectSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile', 'x');
+		await store.previousSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+
+		expect(mockRepository.sendCommand.mock.calls.map(call => ({ type: call[3].type, payload: call[3].payload })))
+			.toEqual([
+				{ type: 'Select Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile', network: 'x' } },
+				{ type: 'Previous Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
+				{ type: 'Next Social Profile', payload: { graphicId: 'slate', projectionKey: 'profile' } },
+			]);
+	});
+
+	it('projects automatic Social Profile values from the shared server clock and sends the Automatic command', async () => {
+		const acceptedProfiles = [
+			{ network: 'twitch' as const, networkLabel: 'Twitch', handle: 'AvaLive', profileUrl: 'https://www.twitch.tv/AvaLive' },
+			{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+		];
+		const currentState = {
+			playout: { slate: { onAir: true, effectiveStartedAt: 999_000, cut: false } },
+			inputs: {},
+			socialProfileProjections: {
+				slate: { profile: {
+					acceptedProfiles,
+					currentNetwork: 'twitch' as const,
+					automatic: true,
+					rotationAnchor: { network: 'twitch' as const, anchoredAt: 1_000_000 },
+				} },
+			},
+		};
+		mockRepository.getSession.mockResolvedValue(session({ currentState }));
+		mockRepository.sendCommand.mockResolvedValue({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Set Social Profile Automatic',
+			currentState,
+			session: session({ sequence: 2, currentState }),
+		});
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+			slate: { profile: acceptedProfiles[1] },
+		});
+		expect(store.projectedSocialProfileProjectionState(
+			SCREEN_ID,
+			'slate',
+			'profile',
+			socialGraphic('slate').socialProfileProjections![0]!,
+			1_008_100,
+		)?.currentNetwork).toBe('x');
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+
+		await store.setSocialProfileAutomatic(EVENT_ID, SCREEN_ID, 'slate', 'profile', false);
+		expect(mockRepository.sendCommand).toHaveBeenLastCalledWith(EVENT_ID, SCREEN_ID, 55, expect.objectContaining({
+			type: 'Set Social Profile Automatic',
+			payload: { graphicId: 'slate', projectionKey: 'profile', automatic: false },
+		}));
+
+		mockClockSynced.value = false;
+		expect(store.socialProfileValues(SCREEN_ID, [socialGraphic('slate')], 1_008_100)).toEqual({
+			slate: { profile: acceptedProfiles[0] },
+		});
+		expect(store.projectedSocialProfileProjectionState(
+			SCREEN_ID,
+			'slate',
+			'profile',
+			socialGraphic('slate').socialProfileProjections![0]!,
+			1_008_100,
+		)?.currentNetwork).toBe('twitch');
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
+	});
+
+	it('advances a one-profile transition only until its transparent boundary settles', async () => {
+		const startedAt = Date.now();
+		mockRepository.getSession.mockResolvedValue(session({
+			currentState: {
+				playout: { slate: { onAir: true, effectiveStartedAt: startedAt, cut: false } },
+				inputs: {},
+				socialProfileProjections: {
+					slate: { profile: {
+						acceptedProfiles: [{
+							network: 'twitch' as const,
+							networkLabel: 'Twitch',
+							handle: 'AvaLive',
+							profileUrl: 'https://www.twitch.tv/AvaLive',
+						}],
+						currentNetwork: 'twitch' as const,
+						rotationAnchor: { network: 'twitch' as const, anchoredAt: startedAt + 250 },
+						transitionAnchor: { startedAt, from: [] },
+					} },
+				},
+			},
+		}));
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(true);
+		mockServerTimeOffset.value = 250;
+		expect(store.hasActiveSocialProfileRotation(SCREEN_ID, [socialGraphic('slate')])).toBe(false);
 	});
 
 	it('sends a Take naming the loaded epoch, and keeps the returned snapshot', async () => {
@@ -346,6 +498,110 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 		await inFlight;
 
 		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
+	});
+
+	it('keeps the newest of two rapid profile command responses when they arrive in reverse order', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		const releases: Array<(value: unknown) => void> = [];
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			releases.push(resolve);
+		}));
+		const profileState = (network: 'x' | 'bluesky') => ({
+			playout: {},
+			inputs: {},
+			socialProfileProjections: { slate: { profile: {
+				talent: { id: 7, name: 'Ava Reed' },
+				acceptedProfiles: [
+					{ network: 'x' as const, networkLabel: 'X', handle: 'AvaCasts', profileUrl: 'https://x.com/AvaCasts' },
+					{ network: 'bluesky' as const, networkLabel: 'Bluesky', handle: 'ava.example', profileUrl: 'https://bsky.app/profile/ava.example' },
+				],
+				currentNetwork: network,
+				manualNetwork: network,
+			} } },
+		});
+		const result = (sequence: number, network: 'x' | 'bluesky') => ({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence,
+			commandType: 'Select Social Profile',
+			currentState: profileState(network),
+			session: session({ sequence, currentState: profileState(network) }),
+		});
+
+		const first = store.selectSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile', 'x');
+		const second = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await vi.waitFor(() => expect(releases).toHaveLength(2));
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(true);
+
+		releases[1]!(result(3, 'bluesky'));
+		await second;
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(true);
+		releases[0]!(result(2, 'x'));
+		const firstAnswer = await first;
+
+		expect(firstAnswer?.sequence).toBe(3);
+		expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(3);
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('bluesky');
+		expect(store.isPending(SCREEN_ID, 'slate')).toBe(false);
+	});
+
+	it('does not let a late command response overwrite a newer realtime-authoritative reload', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		let release: (value: unknown) => void = () => {};
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			release = resolve;
+		}));
+		const old = session({ sequence: 2 });
+		const newest = session({ sequence: 3, currentState: {
+			playout: {},
+			inputs: {},
+			socialProfileProjections: { slate: { profile: {
+				talent: { id: 7, name: 'Ava Reed' },
+				acceptedProfiles: [{ network: 'x', networkLabel: 'X', handle: 'Ava', profileUrl: 'https://x.com/Ava' }],
+				currentNetwork: 'x',
+				manualNetwork: 'x',
+			} } },
+		} });
+		const inFlight = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await Promise.resolve();
+		mockRepository.getSession.mockResolvedValue(newest);
+		await store.applyRemoteCommand(notification({ sequence: 3, change: {} }));
+		release({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Next Social Profile',
+			currentState: old.currentState,
+			session: old,
+		});
+		await inFlight;
+
+		expect(store.sessions.get(SCREEN_ID)?.sequence).toBe(3);
+		expect(store.socialProfileProjectionState(SCREEN_ID, 'slate', 'profile')?.currentNetwork).toBe('x');
+	});
+
+	it('does not let a late old-epoch command response restore the epoch reset replaced', async () => {
+		await store.loadSession(EVENT_ID, SCREEN_ID);
+		let release: (value: unknown) => void = () => {};
+		mockRepository.sendCommand.mockImplementation(() => new Promise((resolve) => {
+			release = resolve;
+		}));
+		const inFlight = store.nextSocialProfile(EVENT_ID, SCREEN_ID, 'slate', 'profile');
+		await Promise.resolve();
+		mockRepository.resetSession.mockResolvedValue(session({ id: 56, sequence: 0 }));
+		await store.resetLiveState(EVENT_ID, SCREEN_ID);
+		release({
+			screenId: SCREEN_ID,
+			sessionId: 55,
+			sequence: 2,
+			commandType: 'Next Social Profile',
+			currentState: { playout: {}, inputs: {} },
+			session: session({ sequence: 2 }),
+		});
+		const answer = await inFlight;
+
+		expect(answer?.id).toBe(56);
+		expect(store.sessions.get(SCREEN_ID)?.id).toBe(56);
 	});
 
 	it('clears the pending marker even when the action fails', async () => {

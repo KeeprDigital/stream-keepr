@@ -1,4 +1,5 @@
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -11,8 +12,12 @@ import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featu
 import {
 	GRAPHIC_FONT_IDS,
 	graphicSourceRelationKind,
+	graphicTextTemplateDottedPlaceholderKeys,
+	graphicTextTemplateProjectedValueReferences,
 	isKnownGraphicBindingFieldId,
+	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	CARD_ANIMATION_SPEED_VALUES,
 	DECK_CARD_SIZE_VALUES,
@@ -80,14 +85,21 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
+	MAX_SOCIAL_PROFILE_DWELL_MS,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
+	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+	MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
+	MIN_SOCIAL_PROFILE_DWELL_MS,
+	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	ON_AIR_UPDATE_POLICY_VALUES,
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SHAPE_CORNER_TREATMENT_VALUES,
+	SOCIAL_PROFILE_TRANSITION_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
 import {
@@ -867,6 +879,27 @@ const graphicInputBindingSchema = z.object({
 	),
 }).strict();
 
+/**
+ * One Social Profile Projection declaration. Referential integrity belongs to
+ * the containing Broadcast Graphic, which can see the source and item lists.
+ */
+const socialProfileProjectionSchema = z.object({
+	key: graphicInputKeySchema,
+	label: graphicInputLabelSchema,
+	sourceKey: graphicInputKeySchema,
+	presentationGroupId: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
+	// Optional on the wire so documents authored before projection re-resolution keep
+	// their established staged behaviour rather than becoming strict-save-invalid.
+	updatePolicy: z.enum(ON_AIR_UPDATE_POLICY_VALUES).optional(),
+	dwellMs: finiteNumberSchema.int()
+		.min(MIN_SOCIAL_PROFILE_DWELL_MS)
+		.max(MAX_SOCIAL_PROFILE_DWELL_MS),
+	transition: z.enum(SOCIAL_PROFILE_TRANSITION_VALUES),
+	transitionDurationMs: finiteNumberSchema.int()
+		.min(MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS)
+		.max(MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS),
+}).strict();
+
 /** Whether every derived Graphic Source Selection names a sibling it can actually follow. */
 function graphicSourceDerivationsResolve(
 	sources: readonly { key: string; kind: string; from?: { sourceKey: string; relation: string } }[],
@@ -1036,6 +1069,12 @@ const graphicPlaceholderStyleSchema = z.object({
 	color: cssColorSchema.optional(),
 }).strict();
 
+const graphicPlaceholderKeySchema = z.string().refine(
+	key => GRAPHIC_INPUT_KEY_PATTERN.test(key)
+		|| readSocialProfileProjectedValueReference(key) !== undefined,
+	'A Graphic Placeholder Style must name a Graphic Input or projected text value',
+);
+
 const textGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('text'),
@@ -1045,7 +1084,7 @@ const textGraphicItemShape = {
 	minFontSize: finiteNumberSchema.positive().max(600),
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 	placeholderStyles: z.record(
-		graphicInputKeySchema,
+		graphicPlaceholderKeySchema,
 		graphicPlaceholderStyleSchema,
 	).refine(
 		styles => Object.keys(styles).length <= MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM,
@@ -1086,6 +1125,17 @@ const mediaGraphicItemShape = {
 		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
 		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
 	loop: z.boolean(),
+};
+
+const socialNetworkIconGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('social-network-icon'),
+	network: z.union([
+		z.enum(SUPPORTED_SOCIAL_NETWORK_KEYS),
+		z.object({ projectionKey: graphicInputKeySchema }).strict(),
+	]),
+	color: cssColorSchema,
+	opacity: opacitySchema,
 };
 
 /**
@@ -1152,6 +1202,7 @@ const gameWinsGraphicItemShape = {
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
 const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
+const socialNetworkIconGraphicItemConfigSchema = z.object(socialNetworkIconGraphicItemShape).strict();
 const clockGraphicItemConfigSchema = z.object(clockGraphicItemShape).strict();
 const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).strict();
 const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
@@ -1175,6 +1226,7 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...textGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...shapeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...mediaGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...socialNetworkIconGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...clockGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...playerLifeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...gameWinsGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
@@ -1212,6 +1264,7 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	textGraphicItemConfigSchema,
 	shapeGraphicItemConfigSchema,
 	mediaGraphicItemConfigSchema,
+	socialNetworkIconGraphicItemConfigSchema,
 	graphicGroupItemConfigSchema,
 	clockGraphicItemConfigSchema,
 	playerLifeGraphicItemConfigSchema,
@@ -1311,6 +1364,65 @@ function graphicItemIds(items: readonly { id: string; type: string; children?: r
 	]);
 }
 
+function hasSocialNetworkIcon(items: readonly { type: string; children?: readonly { type: string }[] }[]): boolean {
+	return items.some(item => item.type === 'social-network-icon'
+		|| (item.type === 'group' && item.children?.some(child => child.type === 'social-network-icon')));
+}
+
+/** A projected placeholder style is meaningful only in Broadcast Graphics. */
+function hasSocialProfilePlaceholderStyle(items: readonly GraphicItemConfig[]): boolean {
+	function projectedStyle(item: GraphicItemConfig | GraphicGroupChildConfig): boolean {
+		return item.type === 'text' && Object.keys(item.placeholderStyles ?? {})
+			.some(key => readSocialProfileProjectedValueReference(key) !== undefined);
+	}
+	return items.some(item => projectedStyle(item)
+		|| (item.type === 'group' && item.children.some(projectedStyle)));
+}
+
+/** Every projected consumer stays inside the Presentation Group that supplies it. */
+function socialProfileProjectionConsumersResolve(graphic: BroadcastGraphicConfig): boolean {
+	const presentationGroupByProjection = new Map(
+		(graphic.socialProfileProjections ?? []).map(projection => [projection.key, projection.presentationGroupId]),
+	);
+
+	function resolves(
+		item: GraphicItemConfig | GraphicGroupChildConfig,
+		containingGroupId: string | undefined,
+	): boolean {
+		if (item.type === 'social-network-icon' && typeof item.network !== 'string') {
+			const presentationGroupId = presentationGroupByProjection.get(item.network.projectionKey);
+			return presentationGroupId !== undefined && presentationGroupId === containingGroupId;
+		}
+		if (item.type !== 'text')
+			return true;
+		const styleReferences = Object.keys(item.placeholderStyles ?? {})
+			.map(readSocialProfileProjectedValueReference)
+			.filter(reference => reference !== undefined);
+		if (presentationGroupByProjection.size === 0)
+			return styleReferences.length === 0;
+		if (
+			graphicTextTemplateDottedPlaceholderKeys(item.text)
+				.some(key => readSocialProfileProjectedValueReference(key) === undefined)
+		) {
+			return false;
+		}
+		const references = [
+			...graphicTextTemplateProjectedValueReferences(item.text),
+			...styleReferences,
+		];
+		return references.every((reference) => {
+			const presentationGroupId = presentationGroupByProjection.get(reference.projectionKey);
+			return presentationGroupId !== undefined && presentationGroupId === containingGroupId;
+		});
+	}
+
+	return graphic.items.every((item) => {
+		if (item.type !== 'group')
+			return resolves(item, undefined);
+		return item.children.every(child => resolves(child, item.id));
+	});
+}
+
 export const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(100),
@@ -1386,6 +1498,16 @@ export const broadcastGraphicConfigSchema = z.object({
 			'A Graphic Input may have at most one Graphic Input Binding',
 		)
 		.optional(),
+	socialProfileProjections: z.array(socialProfileProjectionSchema)
+		.max(
+			MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
+			`A Broadcast Graphic must not declare more than ${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC} Social Profile Projections`,
+		)
+		.refine(
+			projections => new Set(projections.map(projection => projection.key)).size === projections.length,
+			'Social Profile Projection keys must be unique within one Broadcast Graphic',
+		)
+		.optional(),
 	animation: graphicContainerAnimationSchema.optional(),
 	styleSet: graphicStyleSetLinkSchema.optional(),
 	styleRefs: graphicContainerStyleRefsSchema.optional(),
@@ -1393,6 +1515,25 @@ export const broadcastGraphicConfigSchema = z.object({
 	// Top-level items only: a Graphic Group's children are staggered by the group.
 	graphic => graphicStaggerNamesASubset(graphic, graphic.items.length),
 	GRAPHIC_STAGGER_SUBSET_MESSAGE,
+).refine(
+	(graphic) => {
+		const sources = new Map((graphic.sources ?? []).map(source => [source.key, source]));
+		return (graphic.socialProfileProjections ?? []).every(
+			projection => sources.get(projection.sourceKey)?.kind === 'talent',
+		);
+	},
+	'A Social Profile Projection must reference a declared Talent Graphic Source Selection',
+).refine(
+	(graphic) => {
+		const projections = graphic.socialProfileProjections ?? [];
+		const groups = new Set(graphic.items.filter(item => item.type === 'group').map(group => group.id));
+		return projections.every(projection => groups.has(projection.presentationGroupId))
+			&& new Set(projections.map(projection => projection.presentationGroupId)).size === projections.length;
+	},
+	'Every Social Profile Projection must reference its own ordinary Graphic Group',
+).refine(
+	graphic => socialProfileProjectionConsumersResolve(graphic as BroadcastGraphicConfig),
+	'Projected text values and dynamic Social Network Icons must reference the projection of their containing Presentation Group',
 );
 
 /**
@@ -1424,6 +1565,14 @@ const featureMatchLayoutCompositionSchema = z.object({
 		.refine(
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Feature Match Layout',
+		)
+		.refine(
+			items => !hasSocialNetworkIcon(items),
+			'Social Network Icon Graphic Items are available only in Broadcast Graphics',
+		)
+		.refine(
+			items => !hasSocialProfilePlaceholderStyle(items),
+			'Social Profile Projection placeholder styles are available only in Broadcast Graphics',
 		),
 	animation: graphicContainerAnimationSchema.optional(),
 }).strict().refine(
@@ -1489,6 +1638,13 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 			graphics => graphics.reduce((total, graphic) => total + (graphic.sources?.length ?? 0), 0)
 				<= MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
+		)
+		.refine(
+			graphics => graphics.reduce(
+				(total, graphic) => total + (graphic.socialProfileProjections?.length ?? 0),
+				0,
+			) <= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+			`A Broadcast Graphics Screen must not declare more than ${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Social Profile Projections in total`,
 		),
 	channels: z.array(graphicChannelConfigSchema)
 		.max(

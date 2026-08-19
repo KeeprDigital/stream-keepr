@@ -3,6 +3,7 @@ import type {
 	GraphicAnimationStagger,
 	GraphicGroupItemConfig,
 	MediaGraphicItemConfig,
+	SocialNetworkIconGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import {
@@ -137,6 +138,62 @@ describe('placeBroadcastGraphicTemplate', () => {
 		expect(document.bindings).toHaveLength(1);
 	});
 
+	it('retains a fixed Talent Social Profile binding without embedding Event Talent data', () => {
+		const document = composed();
+		document.inputs = [{
+			type: 'text',
+			key: 'social',
+			label: 'Twitch handle',
+			required: false,
+			updatePolicy: 'staged',
+			default: '',
+			maxLength: 100,
+		}];
+		document.sources = [
+			{ key: 'event', label: 'Current Event', kind: 'event' },
+			{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+		];
+		document.bindings = [{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' }];
+
+		const placed = placeBroadcastGraphicTemplate(
+			{ id: 'template-1', name: 'Social lower third', document },
+			{ generateId: sequentialIds(), existing: [] },
+		);
+
+		expect(placed.sources).toEqual(document.sources);
+		expect(placed.bindings).toEqual(document.bindings);
+		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
+	});
+
+	it('places Social Profile Projections onto the copied Presentation Group identities', () => {
+		const document = composed();
+		document.sources = [{ key: 'talent', label: 'Talent', kind: 'talent' }];
+		document.socialProfileProjections = [{
+			key: 'profile',
+			label: 'Profile',
+			sourceKey: 'talent',
+			presentationGroupId: 'cluster',
+			updatePolicy: 'live',
+			dwellMs: 8_000,
+			transition: 'crossfade',
+			transitionDurationMs: 250,
+		}];
+
+		const placed = placeBroadcastGraphicTemplate(
+			{ id: 'template-1', name: 'Social lower third', document },
+			{ generateId: sequentialIds(), existing: [] },
+		);
+
+		expect(placed.socialProfileProjections).toEqual([{
+			...document.socialProfileProjections[0],
+			presentationGroupId: groupOf(placed).id,
+		}]);
+		expect(placed.socialProfileProjections![0]!.presentationGroupId).not.toBe('cluster');
+		expect(placed.socialProfileProjections![0]!.updatePolicy).toBe('live');
+		expect(placed.sources).toEqual(document.sources);
+		expect(JSON.stringify(placed)).not.toContain('socialProfiles');
+	});
+
 	it('carries the authored Graphic Asset Reference of every Media Graphic Item', () => {
 		const document = composed();
 		const media = addGraphicItem(document, { kind: 'media', id: 'brand', ...CANVAS }).graphic;
@@ -150,6 +207,38 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const placedMedia = placed.items.find(entry => entry.type === 'media') as MediaGraphicItemConfig;
 		expect(placedMedia.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
 		expect(placedMedia.videoCompatibility).toBe('chromium-transparency');
+	});
+
+	it('round-trips a Social Network Icon as semantic configuration with no Graphic Asset', () => {
+		const authored = addGraphicItem(
+			composed(),
+			{ kind: 'social-network-icon', id: 'social-icon', ...CANVAS },
+		).graphic;
+		const icon = authored.items.find(entry => entry.id === 'social-icon') as SocialNetworkIconGraphicItemConfig;
+		icon.network = 'tiktok';
+		icon.color = '#ff0050';
+		icon.opacity = 0.55;
+		icon.rotation = 12;
+		const template = {
+			id: 'template-1',
+			name: 'Social lower third',
+			document: broadcastGraphicTemplateDocument(authored),
+		};
+
+		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
+		const placedIcon = placed.items.find(
+			entry => entry.type === 'social-network-icon',
+		) as SocialNetworkIconGraphicItemConfig;
+
+		expect(placedIcon.id).not.toBe('social-icon');
+		expect(placedIcon).toMatchObject({
+			type: 'social-network-icon',
+			network: 'tiktok',
+			color: '#ff0050',
+			opacity: 0.55,
+			rotation: 12,
+		});
+		expect(placedIcon).not.toHaveProperty('asset');
 	});
 
 	it('names the copy distinctly when the Screen already carries the template\'s name', () => {

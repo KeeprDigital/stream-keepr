@@ -16,7 +16,7 @@ import {
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 } from '~~/server/schemas/api/screen';
-import { graphicBindingFieldIds } from '~~/shared/modules/graphics';
+import { addGraphicItem, graphicBindingFieldIds } from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
@@ -81,6 +81,24 @@ function mediaItem(id: string, overrides: Record<string, unknown> = {}) {
 		opacity: 1,
 		playbackRate: 1,
 		loop: true,
+		...overrides,
+	};
+}
+
+function socialNetworkIconItem(id: string, overrides: Record<string, unknown> = {}) {
+	return {
+		type: 'social-network-icon' as const,
+		id,
+		label: id,
+		visible: true,
+		anchor: 'top-left' as const,
+		x: 0,
+		y: 0,
+		width: 64,
+		height: 64,
+		network: 'twitch' as const,
+		color: '#9146ff',
+		opacity: 0.8,
 		...overrides,
 	};
 }
@@ -1072,6 +1090,96 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(false);
+	});
+
+	describe('social network icon Graphic Items', () => {
+		function withItems(items: Array<Record<string, unknown>>) {
+			return broadcastGraphicsModeConfigSchema.safeParse({
+				graphics: [{ id: 'a', name: 'A', items }],
+			});
+		}
+
+		it('accepts every statically selected Supported Social Network and rejects invented keys', () => {
+			for (const network of ['twitch', 'youtube', 'x', 'instagram', 'tiktok', 'bluesky'])
+				expect(withItems([socialNetworkIconItem(`icon-${network}`, { network })]).success).toBe(true);
+
+			expect(withItems([socialNetworkIconItem('icon-mastodon', { network: 'mastodon' })]).success).toBe(false);
+		});
+
+		it('bounds opacity and rejects unread configuration fields', () => {
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 0 })]).success).toBe(true);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 1 })]).success).toBe(true);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: -0.1 })]).success).toBe(false);
+			expect(withItems([socialNetworkIconItem('icon', { opacity: 1.1 })]).success).toBe(false);
+			expect(withItems([socialNetworkIconItem('icon', { asset: { assetId: 'icon', revisionId: '1' } })]).success).toBe(false);
+		});
+
+		it('accepts the icon in every ordinary Graphic Group arrangement', () => {
+			for (const arrangement of ['row', 'column', 'canvas']) {
+				const result = withItems([{
+					type: 'group',
+					id: `group-${arrangement}`,
+					label: arrangement,
+					visible: true,
+					anchor: 'top-left',
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 50,
+					arrangement,
+					padding: 0,
+					gap: 0,
+					align: 'stretch',
+					justify: 'start',
+					clip: true,
+					geometry: GEOMETRY,
+					children: [socialNetworkIconItem(`icon-${arrangement}`, {
+						sizing: { mode: 'fill', size: 0, weight: 1 },
+					})],
+				}]);
+
+				expect(result.success).toBe(true);
+			}
+		});
+
+		it('keeps Social Network Icons out of Feature Match Overlay documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay'));
+			config.layout.composition.items = [socialNetworkIconItem('social-icon')];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
+
+		it('keeps dynamic Social Profile Projection icons and declarations out of Feature Match documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+			config.layout.composition.items = [socialNetworkIconItem('social-icon', {
+				network: { projectionKey: 'profile' },
+			})];
+			config.layout.composition.socialProfileProjections = [{
+				key: 'profile',
+				label: 'Profile',
+				sourceKey: 'talent',
+				presentationGroupId: 'profile-group',
+				dwellMs: 8_000,
+				transition: 'crossfade',
+				transitionDurationMs: 250,
+			}];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
+
+		it('keeps Social Profile Projection placeholder styles out of Feature Match documents', () => {
+			const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+			const authored = addGraphicItem(
+				{ id: 'feature-match', name: 'Feature Match', items: [] },
+				{ kind: 'text', id: 'player-name', canvasWidth: 1920, canvasHeight: 1080 },
+			).graphic.items[0];
+			if (authored?.type !== 'text')
+				throw new Error('expected a Feature Match Text Graphic Item');
+			authored.placeholderStyles = { 'profile.handle': { color: '#ffffff' } };
+			config.layout.composition.items = [authored];
+
+			expect(modeConfigsMapSchema.safeParse({ 'feature-match-overlay': config }).success).toBe(false);
+		});
 	});
 
 	describe('media Graphic Items', () => {

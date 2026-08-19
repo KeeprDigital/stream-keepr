@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
@@ -21,6 +22,8 @@ import type {
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
 	ShapeGeometry,
+	SocialNetworkIconGraphicItemConfig,
+	SocialProfileProjectionValues,
 	TextGraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
@@ -37,6 +40,7 @@ import {
 	shapeGeometryPath,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
+import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
@@ -191,6 +195,17 @@ export interface GraphicsCompositionRenderModelInput {
 	 * here renders nothing.
 	 */
 	inputValues?: Readonly<Record<string, Readonly<Record<string, GraphicInputValue>>>>;
+	/**
+	 * Correlated Social Profile values supplied by the Broadcast Graphics host,
+	 * keyed by Broadcast Graphic id and Social Profile Projection key.
+	 */
+	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
+	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
+	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Sampled Presentation Group frames an update phase is transitioning away from. */
+	outgoingSocialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Correlated Social Profile values an update phase is transitioning away from. */
+	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
 	 * Graphic id.
@@ -457,6 +472,12 @@ export interface GraphicLifeChangeRenderDescriptor {
 	accentColor: string;
 }
 
+/** One application-owned Supported Social Network vector icon. */
+export interface GraphicIconRenderDescriptor {
+	name: string;
+	style: CSSProperties;
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
@@ -477,6 +498,8 @@ export interface GraphicItemRenderDescriptor {
 	shrink?: GraphicTextShrinkBounds;
 	/** Present for Media Graphic Items. */
 	media?: GraphicMediaRenderDescriptor;
+	/** Present for Social Network Icon Graphic Items. */
+	icon?: GraphicIconRenderDescriptor;
 	/**
 	 * Present for a Player Life Graphic Item. The component re-runs it whenever
 	 * `text` changes, because the change is a new value from the live session
@@ -487,6 +510,8 @@ export interface GraphicItemRenderDescriptor {
 	winBoxes?: GraphicWinBoxRenderDescriptor[];
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
+	/** Correlated renderings of one Social Profile Presentation Group, back to front. */
+	presentationLayers?: GraphicItemRenderDescriptor[];
 	/**
 	 * The two renderings an update phase draws for this Graphic Item, overlaid inside
 	 * its own box.
@@ -1114,7 +1139,7 @@ function groupClip(group: GraphicGroupItemConfig): CSSProperties {
  */
 function resolveChildSurfaceStyle(
 	group: GraphicGroupItemConfig,
-	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig>,
+	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig | SocialNetworkIconGraphicItemConfig>,
 ): GraphicSurfaceStyle | undefined {
 	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
 }
@@ -1182,7 +1207,12 @@ function textDescriptor(
 	surfaceStyle: GraphicSurfaceStyle | undefined,
 	inputs: GraphicItemContentContext,
 ): GraphicItemRenderDescriptor {
-	const segments = renderGraphicTextTemplate(item.text, inputs.declarations, inputs.values)
+	const segments = renderGraphicTextTemplate(
+		item.text,
+		inputs.declarations,
+		inputs.values,
+		inputs.socialProfileValues,
+	)
 		.map(segment => ({
 			text: segment.text,
 			inputKey: segment.inputKey,
@@ -1504,6 +1534,35 @@ function mediaItemDescriptor(
 	};
 }
 
+function socialNetworkIconDescriptor(
+	output: ScreenOutput,
+	item: SocialNetworkIconGraphicItemConfig,
+	placement: CSSProperties,
+	inputs: GraphicItemContentContext,
+): GraphicItemRenderDescriptor {
+	const network = typeof item.network === 'string'
+		? item.network
+		: inputs.socialProfileValues?.[item.network.projectionKey]?.network;
+	return {
+		id: item.id,
+		label: item.label,
+		kind: 'social-network-icon',
+		style: placement,
+		icon: network
+			? {
+					name: SUPPORTED_SOCIAL_NETWORK_BY_KEY[network].icon,
+					style: {
+						display: 'block',
+						width: '100%',
+						height: '100%',
+						color: paintColour(output, item.color),
+						opacity: clampOpacity(item.opacity),
+					},
+				}
+			: undefined,
+	};
+}
+
 /** What one Broadcast Graphic's Graphic Text Templates resolve their placeholders from. */
 /**
  * Everything one Broadcast Graphic's items resolve their content from.
@@ -1517,6 +1576,8 @@ function mediaItemDescriptor(
 interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
+	socialProfileValues?: SocialProfileProjectionValues;
+	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
 }
 
@@ -1546,6 +1607,8 @@ function childDescriptor(
 	// that default to fill in.
 	if (child.type === 'media')
 		return mediaItemDescriptor(output, child, placement, assetContent, stackedChildClipSize(group, child));
+	if (child.type === 'social-network-icon')
+		return socialNetworkIconDescriptor(output, child, placement, inputs);
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -1662,9 +1725,58 @@ function itemDescriptor(
 	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
+	presentation?: { key: string; frame: SocialProfilePresentationProjection },
+	updateAvailability?: { incoming: boolean; outgoing: boolean },
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
+
+	if (
+		item.type === 'group'
+		&& presentation
+		&& (
+			presentation.frame.phase.kind === 'transition'
+			|| presentation.frame.layers.length > 1
+			|| presentation.frame.layers.some(layer =>
+				layer.opacity !== 1 || layer.offsetX !== 0 || layer.offsetY !== 0,
+			)
+		)
+	) {
+		return enclosedItemDescriptor(
+			motion,
+			item,
+			rotation,
+			values => canvasPlacement(item, { x: 0, y: 0 }, values),
+			placement => ({
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, overflow: 'hidden' },
+				presentationLayers: presentation.frame.layers.map(layer => paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					{
+						...inputs,
+						socialProfileValues: {
+							...inputs.socialProfileValues,
+							[presentation.key]: layer.values,
+						},
+					},
+					context,
+					{
+						position: 'absolute',
+						inset: '0',
+						width: '100%',
+						height: '100%',
+						opacity: layer.opacity,
+						transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+					},
+				)),
+			}),
+		);
+	}
 
 	if (!context.crossing?.(item.id)) {
 		return enclosedItemDescriptor(
@@ -1709,6 +1821,57 @@ function itemDescriptor(
 		parent: context.parent,
 		motionOf,
 	});
+	const updateHalf = (
+		halfInputs: GraphicItemContentContext,
+		halfMotion: GraphicsItemAnimationContext['motionOf'],
+		placement: CSSProperties,
+		available: boolean,
+	): GraphicItemRenderDescriptor => available
+		? item.type === 'group' && presentation
+			? {
+					id: item.id,
+					label: item.label,
+					kind: item.type,
+					style: { ...placement, overflow: 'hidden' },
+					presentationLayers: (halfInputs.socialProfilePresentations?.[presentation.key]?.layers ?? [])
+						.map(layer => paintedItemDescriptor(
+							output,
+							graphicId,
+							item,
+							assetContent,
+							{
+								...halfInputs,
+								socialProfileValues: {
+									...halfInputs.socialProfileValues,
+									[presentation.key]: layer.values,
+								},
+							},
+							halfContext(halfMotion),
+							{
+								position: 'absolute',
+								inset: '0',
+								width: '100%',
+								height: '100%',
+								opacity: layer.opacity,
+								transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+							},
+						)),
+				}
+			: paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					halfInputs,
+					halfContext(halfMotion),
+					placement,
+				)
+		: {
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, visibility: 'hidden' },
+			};
 
 	return {
 		id: item.id,
@@ -1716,23 +1879,17 @@ function itemDescriptor(
 		kind: item.type,
 		style: placement,
 		crossTransition: {
-			outgoing: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			outgoing: updateHalf(
 				context.outgoing!.inputs,
-				halfContext(context.outgoing!.motionOf),
+				context.outgoing!.motionOf,
 				half(context.outgoing!.motionOf(item, context.staggerOffsets, context.parent)),
+				updateAvailability?.outgoing ?? true,
 			),
-			incoming: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			incoming: updateHalf(
 				inputs,
-				halfContext(context.motionOf),
+				context.motionOf,
 				half(motion),
+				updateAvailability?.incoming ?? true,
 			),
 		},
 	};
@@ -1755,6 +1912,8 @@ function paintedItemDescriptor(
 	// A top-level Graphic Item always occupies its authored rectangle.
 	if (item.type === 'media')
 		return mediaItemDescriptor(output, item, placement, assetContent, item);
+	if (item.type === 'social-network-icon')
+		return socialNetworkIconDescriptor(output, item, placement, inputs);
 
 	if (item.type === 'shape') {
 		return {
@@ -2081,12 +2240,12 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  * What one owner renders from the current Graphic Input values, as a string that
  * changes exactly when its rendered content does.
  *
- * Only a Graphic Text Template reads Graphic Input values, so only a Text Graphic
- * Item's content can change under a graphic that is already on air — and a Graphic
- * Group's content is its children's. A Shape or Media Graphic Item renders the same
- * thing whatever the values are, which is why an update animation is not offered to
- * it here: an update recipe runs when *that owner's* rendered content changes, and
- * its content did not.
+ * A Graphic Text Template reads Graphic Input and Social Profile values, while a
+ * dynamic Social Network Icon reads its projection's network. A Graphic Group's
+ * content is its children's. Shape and Media items render the same thing whatever
+ * the accepted values are, which is why an update animation is not offered to them:
+ * an update recipe runs when *that owner's* rendered content changes, and theirs did
+ * not.
  *
  * The context-gated kinds answer the same way, and for a stronger reason than
  * "their content did not change": their content changes constantly, but from the
@@ -2097,13 +2256,20 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  */
 function renderedContent(
 	owner: GraphicItemConfig | GraphicGroupChildConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	values: Readonly<Record<string, GraphicInputValue>>,
+	inputs: Pick<GraphicItemContentContext, 'declarations' | 'socialProfileValues' | 'values'>,
 ): string {
-	if (owner.type === 'text')
-		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
+	if (owner.type === 'text') {
+		return renderGraphicTextTemplate(owner.text, inputs.declarations, inputs.values, inputs.socialProfileValues)
+			.map(segment => segment.text)
+			.join('');
+	}
+	if (owner.type === 'social-network-icon') {
+		return typeof owner.network === 'string'
+			? owner.network
+			: inputs.socialProfileValues?.[owner.network.projectionKey]?.network ?? '';
+	}
 	if (owner.type === 'group')
-		return owner.children.map(child => renderedContent(child, declarations, values)).join(GROUP_CONTENT_SEPARATOR);
+		return owner.children.map(child => renderedContent(child, inputs)).join(GROUP_CONTENT_SEPARATOR);
 	return '';
 }
 
@@ -2134,24 +2300,52 @@ interface GraphicsUpdateCrossTransition {
 
 function updateCrossTransition(
 	graphic: BroadcastGraphicConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	current: Readonly<Record<string, GraphicInputValue>>,
-	outgoing: Readonly<Record<string, GraphicInputValue>>,
+	current: GraphicItemContentContext,
+	outgoing: GraphicItemContentContext,
 ): GraphicsUpdateCrossTransition | null {
-	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
-		renderedContent(owner, declarations, current) !== renderedContent(owner, declarations, outgoing);
+	const presentationKeyByGroupId = new Map(
+		(graphic.socialProfileProjections ?? []).map(projection => [
+			projection.presentationGroupId,
+			projection.key,
+		]),
+	);
+	const presentationChanged = (projectionKey: string | undefined): boolean => {
+		if (!projectionKey)
+			return false;
+		const left = current.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		const right = outgoing.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		return left.length !== right.length || left.some((layer, index) => {
+			const candidate = right[index];
+			return candidate === undefined
+				|| layer.values.network !== candidate.values.network
+				|| layer.values.networkLabel !== candidate.values.networkLabel
+				|| layer.values.handle !== candidate.values.handle
+				|| layer.values.profileUrl !== candidate.values.profileUrl
+				|| layer.opacity !== candidate.opacity
+				|| layer.offsetX !== candidate.offsetX
+				|| layer.offsetY !== candidate.offsetY;
+		});
+	};
+	const changed = (
+		owner: GraphicItemConfig | GraphicGroupChildConfig,
+		projectionKey?: string,
+	): boolean => renderedContent(owner, current) !== renderedContent(owner, outgoing)
+		|| presentationChanged(projectionKey);
 
-	if (!graphic.items.some(item => changed(item)))
+	if (!graphic.items.some(item => changed(item, presentationKeyByGroupId.get(item.id))))
 		return null;
 
 	const crossing = new Set<string>();
 	for (const item of graphic.items) {
-		if (item.animation?.update && changed(item))
+		const projectionKey = presentationKeyByGroupId.get(item.id);
+		if (item.animation?.update && changed(item, projectionKey))
 			crossing.add(item.id);
 		if (item.type !== 'group')
 			continue;
+		if (presentationChanged(projectionKey) && item.children.some(child => child.animation?.update))
+			crossing.add(item.id);
 		for (const child of item.children) {
-			if (child.animation?.update && changed(child))
+			if (child.animation?.update && changed(child, projectionKey))
 				crossing.add(child.id);
 		}
 	}
@@ -2254,6 +2448,8 @@ export function resolveGraphicsCompositionRenderModel(
 					input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
@@ -2268,6 +2464,9 @@ export function resolveGraphicsCompositionRenderModel(
 			const outgoingValues = phases.includes('update')
 				? input.outgoingInputValues?.[graphic.id]
 				: undefined;
+			const outgoingSocialProfileValues = phases.includes('update')
+				? input.outgoingSocialProfileValues?.[graphic.id]
+				: undefined;
 			const outgoingInputs: GraphicItemContentContext = {
 				declarations,
 				// Substitution follows the same rule as the incoming rendering: the pair is
@@ -2276,13 +2475,16 @@ export function resolveGraphicsCompositionRenderModel(
 				// changes the value.
 				values: resolvedInputValues(
 					declarations,
-					outgoingValues ?? {},
+					outgoingValues ?? input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
+					?? input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
-			const crossTransition = outgoingValues
-				? updateCrossTransition(graphic, declarations, inputs.values, outgoingInputs.values)
+			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
+				? updateCrossTransition(graphic, inputs, outgoingInputs)
 				: null;
 			const perItem = crossTransition !== null && !crossTransition.wholeGraphic;
 
@@ -2311,25 +2513,70 @@ export function resolveGraphicsCompositionRenderModel(
 				'top-left',
 			);
 
+			const projectionByGroupId = new Map(
+				(graphic.socialProfileProjections ?? []).map(projection => [
+					projection.presentationGroupId,
+					projection,
+				]),
+			);
 			const buildItems = (
 				values: GraphicItemContentContext,
 				context: (item: GraphicItemConfig) => GraphicsItemAnimationContext,
 				pairing: GraphicsItemAnimationContext['outgoing'],
 			) => graphic.items
-				.filter(item => item.visible)
-				.map(item => itemDescriptor(
-					input.output,
-					graphic.id,
-					item,
-					assetContent,
-					values,
-					{
-						...context(item),
-						...(pairing === undefined
-							? {}
-							: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
-					},
-				));
+				.filter((item) => {
+					if (!item.visible)
+						return false;
+					const projection = projectionByGroupId.get(item.id);
+					if (!projection)
+						return true;
+					const presentation = values.socialProfilePresentations?.[projection.key];
+					return presentation
+						? presentation.layers.length > 0
+						|| (pairing?.inputs.socialProfilePresentations?.[projection.key]?.layers.length ?? 0) > 0
+						: values.socialProfileValues?.[projection.key] !== undefined
+							|| pairing?.inputs.socialProfileValues?.[projection.key] !== undefined;
+				})
+				.map((item) => {
+					const projection = projectionByGroupId.get(item.id);
+					const presentationFrame = projection
+						? values.socialProfilePresentations?.[projection.key]
+						: undefined;
+					const presentation = projection && presentationFrame
+						? { key: projection.key, frame: presentationFrame }
+						: undefined;
+					const currentValues = presentationFrame?.layers.at(-1)?.values;
+					const itemValues = projection && currentValues
+						? {
+								...values,
+								socialProfileValues: {
+									...values.socialProfileValues,
+									[projection.key]: currentValues,
+								},
+							}
+						: values;
+					const updateAvailability = projection && pairing
+						? {
+								incoming: itemValues.socialProfileValues?.[projection.key] !== undefined,
+								outgoing: pairing.inputs.socialProfileValues?.[projection.key] !== undefined,
+							}
+						: undefined;
+					return itemDescriptor(
+						input.output,
+						graphic.id,
+						item,
+						assetContent,
+						itemValues,
+						{
+							...context(item),
+							...(pairing === undefined
+								? {}
+								: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
+						},
+						presentation,
+						updateAvailability,
+					);
+				});
 
 			// Two whole frames only when the Broadcast Graphic's own recipe is what moves.
 			// A per-item cross-transition pairs inside each crossing item's box instead, so

@@ -34,12 +34,24 @@ describe('talent mapper', () => {
 				id: 5,
 				eventId: 2,
 				name: 'Marshall Sutcliffe',
+				twitchHandle: 'Marshall_LR',
+				xHandle: 'Marshall_LR',
 			});
 			const result = mapTalentToResponse(talent);
 
 			expect(result.id).toBe(5);
 			expect(result.eventId).toBe(2);
 			expect(result.name).toBe('Marshall Sutcliffe');
+			expect(result.socialProfiles).toEqual({
+				twitch: 'Marshall_LR',
+				x: 'Marshall_LR',
+			});
+			expect(result).not.toHaveProperty('twitchHandle');
+			expect(result).not.toHaveProperty('youtubeHandle');
+		});
+
+		it('always exposes an empty Social Profile map for an existing Talent', () => {
+			expect(mapTalentToResponse(createMockTalent()).socialProfiles).toEqual({});
 		});
 	});
 });

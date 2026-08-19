@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackagePreflightReport } from '~~/shared/types/templatePackage';
 import { Buffer } from 'node:buffer';
@@ -148,7 +148,7 @@ function reportOf(operation: { templatePackagePreflight?: TemplatePackagePreflig
  * object the export path reads, so nothing about the seam is simulated.
  */
 async function withGraphicItemDefinitionAt<T>(
-	kind: 'media',
+	kind: GraphicItemKind,
 	configurationVersion: number,
 	work: () => Promise<T>,
 ): Promise<T> {
@@ -169,6 +169,13 @@ async function exportedPackage() {
 	const asset = await ingestImage(sender, 'Backdrop');
 	const document = maximalBroadcastGraphicDocument({ asset });
 	return { sender, asset, document, archive: await exportGraphic(sender, document) };
+}
+
+async function exportedProjectedPackage() {
+	const sender = createLibrary(`projection-sender-${++sequence}`);
+	const asset = await ingestImage(sender, 'Projection backdrop');
+	const document = maximalBroadcastGraphicDocument({ asset });
+	return { document, archive: await exportGraphic(sender, document) };
 }
 
 describe('a `.skgraphic` Template Package crossing an installation boundary', () => {
@@ -214,6 +221,29 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		expect(report.outcome).not.toBe('rejected');
 	});
 
+	it('round-trips Social Profile Projection semantics without Event Talent data or icon assets', async () => {
+		const { document, archive } = await exportedProjectedPackage();
+		const parts = readTemplatePackageParts(archive);
+
+		expect(parts.template).toEqual(document);
+		expect(parts.manifest.packagedAssets).toHaveLength(1);
+		expect(JSON.stringify(parts)).not.toContain('socialProfiles');
+		expect(parts.manifest.applicationCapabilities).toEqual(expect.arrayContaining([
+			expect.objectContaining({
+				capability: 'host-vocabulary',
+				identity: 'social-profile-projection',
+				configurationVersion: 1,
+			}),
+			expect.objectContaining({
+				capability: 'graphic-item-definition',
+				identity: 'social-network-icon',
+				configurationVersion: 2,
+			}),
+		]));
+		const report = reportOf(await preflight(createLibrary('projection-receiver'), archive));
+		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
+	});
+
 	/**
 	 * The envelope proves a Template document is data. It cannot prove it is a
 	 * Broadcast Graphic, and a package that installed one that is not would leave an
@@ -250,6 +280,36 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		const parts = readTemplatePackageParts(archive);
 		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
 			declaration => declaration.identity === 'media'
+				? { ...declaration, configurationVersion: 2 }
+				: declaration,
+		);
+
+		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+
+		expect(report.outcome).toBe('rejected');
+		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
+	});
+
+	it('refuses a future Social Network Icon configuration version', async () => {
+		const { archive } = await exportedPackage();
+		const parts = readTemplatePackageParts(archive);
+		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
+			declaration => declaration.identity === 'social-network-icon'
+				? { ...declaration, configurationVersion: 3 }
+				: declaration,
+		);
+
+		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+
+		expect(report.outcome).toBe('rejected');
+		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
+	});
+
+	it('refuses a future Social Profile Projection vocabulary version', async () => {
+		const { archive } = await exportedProjectedPackage();
+		const parts = readTemplatePackageParts(archive);
+		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
+			declaration => declaration.identity === 'social-profile-projection'
 				? { ...declaration, configurationVersion: 2 }
 				: declaration,
 		);
@@ -300,6 +360,22 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		const parts = readTemplatePackageParts(archive);
 		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.filter(
 			declaration => declaration.identity !== 'media',
+		);
+
+		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+
+		expect(report.outcome).toBe('rejected');
+		expect(report.issues.some(issue =>
+			issue.code === 'unsupported-application-capability'
+			&& issue.message.includes('never declares'),
+		)).toBe(true);
+	});
+
+	it('refuses a Social Profile Projection the package never declares', async () => {
+		const { archive } = await exportedProjectedPackage();
+		const parts = readTemplatePackageParts(archive);
+		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.filter(
+			declaration => declaration.identity !== 'social-profile-projection',
 		);
 
 		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));

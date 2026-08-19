@@ -28,6 +28,28 @@ A competitor in an Event.
 **Talent**:
 An Event-scoped broadcast presenter or commentator who may be selected for production graphics.
 
+**Supported Social Network**:
+One of Twitch, YouTube, X, Instagram, TikTok, or Bluesky: the application-owned, ordered catalog of public networks available for Talent profiles. Each entry supplies its display label, icon, and profile-URL rule; Events cannot add or reorder networks.
+
+**Social Profile**:
+An Event-scoped Talent's public identity on one Supported Social Network, identified by a locally normalized handle from which its profile URL is derived. A Talent may have no Social Profiles or any subset of the catalog, with at most one per network; Stream Keepr does not verify that the remote account exists.
+_Avoid_: Commentator handle, social link
+
+**Social Profile Projection**:
+A named Broadcast Graphic presentation controller that references a Talent Graphic Source Selection—never a fixed Talent record—and atomically supplies the current Social Profile's network key plus read-only network label, handle, and profile URL values to independently authored Graphic Items. A Broadcast Graphic may declare multiple projections, each owning its own current profile, rotation, Presentation Group, and Live Control controls; Feature Match Overlay does not consume them.
+
+**Social Network Icon Graphic Item**:
+A Graphic Item that renders the application-owned vector icon for either one statically selected Supported Social Network or the current network of one Social Profile Projection. It is not a Graphic Asset and has independent colour, opacity, geometry, and animation from Text Items consuming a projection's label, handle, or profile URL.
+
+**Social Profile Presentation Group**:
+The ordinary Graphic Group in a one-to-one association with one Social Profile Projection, containing its independently authored icon, text, and decoration consumers. The projection transitions the whole group as a synchronized presentation, and its projected values cannot be overridden independently.
+
+**Social Profile Rotation**:
+The default-on, on-air-only progression of one Social Profile Projection through its Talent's populated Social Profiles, with an eight-second default dwell configurable from two to sixty seconds. Its operator state belongs to the Broadcast Graphics Live Session; a Take or selection re-anchors the chosen profile for a full dwell, while every rendering projects the same automatic advance from synchronized server time and outputs never write as it runs.
+
+**Social Profile Transition**:
+The bounded, synchronized visual change between profiles in a Social Profile Rotation: Cut, Crossfade, Slide Left, Slide Right, Slide Up, or Slide Down. A non-Cut transition lasts 100 to 2,000 milliseconds, defaults to 250 milliseconds, completes before the next profile's full dwell, and is replaced rather than queued when a newer target arrives; an explicit Update Graphic uses its own update animation instead.
+
 **Deck List**:
 A Player's submitted cards for a game and Phase.
 
@@ -243,11 +265,13 @@ The operator-facing controls generated for a placed Broadcast Graphic from its G
 The rule that determines whether a Graphic Input change is staged for operator confirmation or applied immediately to an on-air Broadcast Graphic. Staged values are accepted atomically through Update Graphic; a template recommends the policy and the operator may override it for a placed graphic.
 
 **Graphic Text Template**:
-A string that combines literal text with `{inputKey}` placeholders for Graphic Inputs, rendered by a text Graphic Item. Placeholders reference stable input keys and do not contain property access, formatting, fallbacks, conditionals, or expressions.
+A string that combines literal text with `{inputKey}` placeholders for Graphic Inputs, rendered by a Text Graphic Item.
+A Broadcast Graphic may also consume a declared Social Profile Projection through the bounded `{projectionKey.networkLabel}`, `{projectionKey.handle}`, or `{projectionKey.profileUrl}` reference vocabulary. These are named read-only projection values rather than general property access; ordinary and Feature Match templates keep the same brace runs as literal text.
+Placeholders and projection references use stable keys and do not contain any other property access, formatting, fallbacks, conditionals, or expressions.
 _Avoid_: Expression when referring to placeholder substitution
 
 **Graphic Placeholder Style**:
-An optional typography-only override for one `{inputKey}` placeholder in a Text Graphic Item.
+An optional typography-only override for one `{inputKey}` placeholder or one declared Social Profile Projection text reference in a Text Graphic Item.
 Literal text uses the Text Graphic Item's base typography, and placeholder styles do not add rich-text ranges, markup, fills, outlines, or other surface styling.
 
 **Graphic Font Selection**:

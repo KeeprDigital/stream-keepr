@@ -543,6 +543,7 @@ async function resetLiveState() {
 			:screen="screen"
 			:graphic="selectedEntry.graphic"
 			:playout-state="selectedEntry.playoutState"
+			:now="now"
 			:pending="selectedEntry.pending"
 			:disconnected="disconnected"
 		/>

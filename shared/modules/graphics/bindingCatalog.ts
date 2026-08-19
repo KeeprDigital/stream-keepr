@@ -1,3 +1,4 @@
+import type { SocialProfiles, SupportedSocialNetwork } from '../../socialProfiles';
 import type { Game, PositionFormat, RecordSeparator } from '../../types/enums';
 import type { FeatureMatchState } from '../../types/featureMatchState';
 import type { PlayerGameData } from '../../types/game';
@@ -6,6 +7,7 @@ import type {
 	GraphicInputValue,
 	GraphicSourceSelectionKind,
 } from '../../types/graphics';
+import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
 import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 
@@ -93,6 +95,7 @@ export interface GraphicBindingPlayer {
 
 export interface GraphicBindingTalent {
 	name: string;
+	socialProfiles: SocialProfiles;
 }
 
 export interface GraphicBindingPhase {
@@ -359,8 +362,41 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 	},
 ];
 
+function talentSocialProfileFields(
+	networkKey: SupportedSocialNetwork,
+	handleId: string,
+	profileUrlId: string,
+): readonly [GraphicBindingField<GraphicBindingTalent>, GraphicBindingField<GraphicBindingTalent>] {
+	const network = SUPPORTED_SOCIAL_NETWORK_BY_KEY[networkKey];
+	return [
+		{
+			id: handleId,
+			label: `${network.label} handle`,
+			type: 'text',
+			shape: 'atomic',
+			resolve: talent => textOf(talent.socialProfiles[networkKey]),
+		},
+		{
+			id: profileUrlId,
+			label: `${network.label} profile URL`,
+			type: 'text',
+			shape: 'formatted',
+			resolve: (talent) => {
+				const handle = textOf(talent.socialProfiles[networkKey]);
+				return handle === undefined ? undefined : canonicalSocialProfileUrl(networkKey, handle);
+			},
+		},
+	];
+}
+
 const TALENT_FIELDS: readonly GraphicBindingField<GraphicBindingTalent>[] = [
 	{ id: 'talent.name', label: 'Name', type: 'text', shape: 'atomic', resolve: talent => textOf(talent.name) },
+	...talentSocialProfileFields('twitch', 'talent.twitchHandle', 'talent.twitchProfileUrl'),
+	...talentSocialProfileFields('youtube', 'talent.youtubeHandle', 'talent.youtubeProfileUrl'),
+	...talentSocialProfileFields('x', 'talent.xHandle', 'talent.xProfileUrl'),
+	...talentSocialProfileFields('instagram', 'talent.instagramHandle', 'talent.instagramProfileUrl'),
+	...talentSocialProfileFields('tiktok', 'talent.tiktokHandle', 'talent.tiktokProfileUrl'),
+	...talentSocialProfileFields('bluesky', 'talent.blueskyHandle', 'talent.blueskyProfileUrl'),
 ];
 
 const PHASE_FIELDS: readonly GraphicBindingField<GraphicBindingPhase>[] = [

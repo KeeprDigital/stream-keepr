@@ -6,6 +6,7 @@ import type {
 	GraphicSourceSelectionDeclaration,
 	GraphicSourceSelectionKind,
 } from '~~/shared/types/graphics';
+import { mapTalentToResponse } from '~~/server/mappers/talent';
 import {
 	createEmptyGraphicBindingDataSet,
 	graphicSourceRelationKind,
@@ -142,7 +143,7 @@ export function graphicBindingDataService() {
 			event,
 			// Talents arrive with the Event, and an Event's commentators are reached by a
 			// fixed relationship rather than by selection, so they are always available.
-			talents: byId(event.talents ?? []),
+			talents: byId((event.talents ?? []).map(mapTalentToResponse)),
 		} satisfies Partial<GraphicBindingDataSet>);
 
 		// Concurrently: nothing here depends on anything else here, and a command is on

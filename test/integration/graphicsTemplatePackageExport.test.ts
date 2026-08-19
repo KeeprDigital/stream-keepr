@@ -204,6 +204,14 @@ describe('template Package export through the API boundary', () => {
 	});
 
 	it('streams a .skgraphic package declaring application capabilities without duplicating them', async () => {
+		const talent = await $fetch(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Package Talent', socialProfiles: { twitch: 'MustNotTravel' } },
+		});
+		await $fetch(`/api/events/${eventId}`, {
+			method: 'PATCH',
+			body: { commentator1TalentId: talent.id },
+		});
 		const graphicsScreen = await $fetch(`/api/events/${eventId}/screens`, {
 			method: 'POST',
 			body: {
@@ -230,7 +238,7 @@ describe('template Package export through the API boundary', () => {
 							y: 900,
 							width: 800,
 							height: 120,
-							text: 'Semifinal',
+							text: '{social}',
 							overflowPolicy: 'ellipsis',
 							minFontSize: 24,
 							typography: {
@@ -245,6 +253,20 @@ describe('template Package export through the API boundary', () => {
 								color: '#ffffff',
 							},
 						}],
+						inputs: [{
+							type: 'text',
+							key: 'social',
+							label: 'Twitch handle',
+							required: false,
+							updatePolicy: 'staged',
+							default: '',
+							maxLength: 100,
+						}],
+						sources: [
+							{ key: 'event', label: 'Current Event', kind: 'event' },
+							{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+						],
+						bindings: [{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' }],
 					}],
 				},
 			},
@@ -275,9 +297,20 @@ describe('template Package export through the API boundary', () => {
 			expect.objectContaining({ capability: 'graphic-item-definition', identity: 'text' }),
 		]));
 		// The package carries one Broadcast Graphic, not the Screen's whole stack.
-		const template = archive.json<{ id: string; items: unknown[] }>('template.json');
+		const template = archive.json<{ id: string; items: unknown[]; sources: unknown[]; bindings: unknown[] }>('template.json');
 		expect(template.id).toBe('lower-third');
 		expect(template.items).toHaveLength(1);
+		expect(template.sources).toEqual([
+			{ key: 'event', label: 'Current Event', kind: 'event' },
+			{ key: 'talent1', label: 'Talent 1', kind: 'talent', from: { sourceKey: 'event', relation: 'commentator1' } },
+		]);
+		expect(template.bindings).toEqual([
+			{ inputKey: 'social', sourceKey: 'talent1', fieldId: 'talent.twitchHandle' },
+		]);
+		// Stable source relationships and field ids travel; this Event's Talent record
+		// and complete Social Profile map do not.
+		expect(archive.text('template.json')).not.toContain('MustNotTravel');
+		expect(archive.text('template.json')).not.toContain('socialProfiles');
 	});
 
 	it('returns 404 for a Broadcast Graphic that is not on the Screen', async () => {

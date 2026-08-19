@@ -204,6 +204,12 @@ function removeItem(itemId: string) {
 	emit('update:graphics', replaceBroadcastGraphic(props.graphics, deleteGraphicItem(graphic, itemId)));
 	emit('update:selectedTarget', { type: 'graphic', graphicId: graphic.id });
 }
+
+function presentationGroupProjection(itemId: string) {
+	return selectedGraphic.value?.socialProfileProjections?.find(
+		projection => projection.presentationGroupId === itemId,
+	);
+}
 </script>
 
 <template>
@@ -362,9 +368,17 @@ function removeItem(itemId: string) {
 						:label="row.item.label"
 						:can-move-forward="row.index < row.siblingCount - 1"
 						:can-move-backward="row.index > 0"
+						:can-remove="presentationGroupProjection(row.item.id) === undefined"
 						@move="moveItem(row.item.id, $event)"
 						@remove="removeItem(row.item.id)"
 					/>
+					<p
+						v-if="presentationGroupProjection(row.item.id)"
+						class="max-w-36 self-center text-xs text-warning"
+						data-testid="presentation-group-delete-feedback"
+					>
+						To remove this group, delete the projection and Presentation Group together in the inspector.
+					</p>
 				</div>
 			</div>
 		</section>

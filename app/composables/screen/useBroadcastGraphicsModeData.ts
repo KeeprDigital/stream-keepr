@@ -1,4 +1,4 @@
-import type { BroadcastGraphicConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -109,6 +109,32 @@ export function useBroadcastGraphicsModeData() {
 
 	const inputValues = computed<Record<string, Record<string, GraphicInputValue>>>(() => renderedInputs.value.current);
 	const outgoingInputValues = computed(() => renderedInputs.value.outgoing);
+	const renderedSocialProfiles = computed(() => {
+		if (previewState.value) {
+			return {
+				current: previewState.value.socialProfileValues ?? {},
+				outgoing: {} as Record<string, SocialProfileProjectionValues>,
+			};
+		}
+		const screenId = screen.value?.id;
+		return screenId
+			? sessionStore.renderedSocialProfileValues(screenId, graphics.value, liveNow.value)
+			: { current: {}, outgoing: {} };
+	});
+	const socialProfileValues = computed<Readonly<Record<string, SocialProfileProjectionValues>>>(
+		() => renderedSocialProfiles.value.current,
+	);
+	const outgoingSocialProfileValues = computed(() => renderedSocialProfiles.value.outgoing);
+	const renderedSocialProfilePresentations = computed(() => {
+		if (previewState.value)
+			return { current: {}, outgoing: {} };
+		const screenId = screen.value?.id;
+		return screenId
+			? sessionStore.renderedSocialProfilePresentations(screenId, graphics.value, liveNow.value)
+			: { current: {}, outgoing: {} };
+	});
+	const socialProfilePresentations = computed(() => renderedSocialProfilePresentations.value.current);
+	const outgoingSocialProfilePresentations = computed(() => renderedSocialProfilePresentations.value.outgoing);
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
@@ -136,7 +162,7 @@ export function useBroadcastGraphicsModeData() {
 		if (previewState.value || !screenId)
 			return false;
 
-		return Object.keys(
+		return sessionStore.hasActiveSocialProfileRotation(screenId, graphics.value) || Object.keys(
 			sessionStore.animationProjection(screenId, graphics.value, liveNow.value, channels.value),
 		).length > 0;
 	}
@@ -174,7 +200,9 @@ export function useBroadcastGraphicsModeData() {
 		() => {
 			const screenId = screen.value?.id;
 			const session = screenId ? sessionStore.sessions.get(screenId) : undefined;
-			return session ? `${session.id}:${session.sequence}` : null;
+			return session
+				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+				: null;
 		},
 		() => startLiveClock(),
 		{ immediate: true },
@@ -334,6 +362,10 @@ export function useBroadcastGraphicsModeData() {
 		onAirGraphicIds,
 		inputValues,
 		outgoingInputValues,
+		socialProfileValues,
+		outgoingSocialProfileValues,
+		socialProfilePresentations,
+		outgoingSocialProfilePresentations,
 		isAuthoringPreview,
 		selectedTarget,
 		publishSelection,

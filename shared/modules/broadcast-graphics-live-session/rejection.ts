@@ -57,6 +57,8 @@ export const BROADCAST_GRAPHICS_REJECTION_CODES = [
 	 * right thing to do.
 	 */
 	'unavailable-asset-content',
+	'unknown-social-profile-projection',
+	'social-profile-unavailable',
 ] as const;
 
 export type BroadcastGraphicsRejectionCode = typeof BROADCAST_GRAPHICS_REJECTION_CODES[number];

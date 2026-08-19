@@ -1,4 +1,5 @@
 import type { GraphicApplicationFontId } from '../modules/graphics/typography';
+import type { SupportedSocialNetwork } from '../socialProfiles';
 import type { PlayerSide } from './enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
@@ -696,6 +697,77 @@ export interface GraphicSourceSelectionDeclaration {
 	from?: GraphicSourceDerivation;
 }
 
+/** The bounded transition applied to one Social Profile Presentation Group. */
+export const SOCIAL_PROFILE_TRANSITION_VALUES = [
+	'cut',
+	'crossfade',
+	'slide-left',
+	'slide-right',
+	'slide-up',
+	'slide-down',
+] as const;
+
+export type SocialProfileTransition = typeof SOCIAL_PROFILE_TRANSITION_VALUES[number];
+
+export const MIN_SOCIAL_PROFILE_DWELL_MS = 2_000;
+export const MAX_SOCIAL_PROFILE_DWELL_MS = 60_000;
+export const DEFAULT_SOCIAL_PROFILE_DWELL_MS = 8_000;
+export const MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 100;
+export const MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 2_000;
+export const DEFAULT_SOCIAL_PROFILE_TRANSITION_DURATION_MS = 250;
+
+/**
+ * Projection declaration budgets shared by strict validation and the compositor.
+ * Authoring stops at these limits so an edit never reaches the save path invalid.
+ */
+export const MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC = 24;
+export const MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN = 60;
+
+/** Template Package compatibility identity for the projection document vocabulary. */
+export const SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID = 'social-profile-projection';
+export const SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION = 1;
+
+/**
+ * One named projection of an Event-scoped Talent's current Social Profile.
+ *
+ * The source is always a Talent Graphic Source Selection. The Presentation Group
+ * is an ordinary Graphic Group whose children retain the shared compositor
+ * vocabulary; Graphic Groups are top-level in the existing item model because a
+ * Group child cannot itself be a Group. The projection supplies correlated content
+ * rather than owning layout or styling.
+ */
+export interface SocialProfileProjectionDeclaration {
+	key: string;
+	label: string;
+	sourceKey: string;
+	presentationGroupId: string;
+	/** How Event Data changes reach an on-air projection; absent legacy values are staged. */
+	updatePolicy?: OnAirUpdatePolicy;
+	dwellMs: number;
+	transition: SocialProfileTransition;
+	transitionDurationMs: number;
+}
+
+/** One correlated Social Profile presentation supplied atomically to renderers. */
+export interface SocialProfileProjectionValue {
+	network: SupportedSocialNetwork;
+	networkLabel: string;
+	handle: string;
+	profileUrl: string;
+}
+
+export type SocialProfileProjectionValues = Readonly<Record<string, SocialProfileProjectionValue>>;
+
+/** The read-only text fields a Social Profile Projection exposes to placeholders. */
+export const SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES = [
+	'networkLabel',
+	'handle',
+	'profileUrl',
+] as const;
+
+export type SocialProfileProjectedTextValue
+	= typeof SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES[number];
+
 /**
  * An Event-specific, type-compatible mapping from a Graphic Input to one
  * broadcast-facing field on a Graphic Source Selection.
@@ -853,6 +925,21 @@ export interface MediaGraphicItemConfig extends GraphicItemConfigBase {
 	loop: boolean;
 }
 
+/**
+ * An application-owned Supported Social Network vector icon.
+ *
+ * The semantic network key is the whole content reference: no Graphic Asset,
+ * filename, URL, or vector payload enters the authored document. Colour and
+ * opacity stay independent of neighbouring text and decoration.
+ */
+export interface SocialNetworkIconGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'social-network-icon';
+	/** A static network, or the current network of one Social Profile Projection. */
+	network: SupportedSocialNetwork | { projectionKey: string };
+	color: string;
+	opacity: number;
+}
+
 export const GRAPHIC_GROUP_ARRANGEMENT_VALUES = ['row', 'column', 'canvas'] as const;
 export type GraphicGroupArrangement = typeof GRAPHIC_GROUP_ARRANGEMENT_VALUES[number];
 
@@ -871,6 +958,7 @@ export type GraphicGroupChildConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
 		| MediaGraphicItemConfig
+		| SocialNetworkIconGraphicItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
 		| GameWinsGraphicItemConfig;
@@ -994,6 +1082,7 @@ export type GraphicItemConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
 		| MediaGraphicItemConfig
+		| SocialNetworkIconGraphicItemConfig
 		| GraphicGroupItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
@@ -1047,6 +1136,8 @@ export interface BroadcastGraphicConfig {
 	sources?: GraphicSourceSelectionDeclaration[];
 	/** Graphic Input Bindings, at most one per Graphic Input. */
 	bindings?: GraphicInputBinding[];
+	/** Read-only Social Profile values projected into ordinary Presentation Groups. */
+	socialProfileProjections?: SocialProfileProjectionDeclaration[];
 	/**
 	 * The one Graphic Style Set this composition's inherited properties come from.
 	 *

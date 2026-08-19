@@ -1,6 +1,7 @@
 import type { GraphicSourceSelectionsState } from '../graphics';
 import type { BroadcastGraphicInputsState } from './inputs';
 import type { BroadcastGraphicPlayout, BroadcastGraphicsLiveState } from './playout';
+import type { BroadcastGraphicSocialProfileProjectionStates } from './socialProfiles';
 
 /**
  * What one accepted command changed, in the form a peer can apply.
@@ -70,10 +71,11 @@ export interface BroadcastGraphicsLiveStateChange {
 	playout?: BroadcastGraphicsLiveStateEntries<BroadcastGraphicPlayout>;
 	inputs?: BroadcastGraphicsLiveStateEntries<BroadcastGraphicInputsState>;
 	sources?: BroadcastGraphicsLiveStateEntries<GraphicSourceSelectionsState>;
+	socialProfileProjections?: BroadcastGraphicsLiveStateEntries<BroadcastGraphicSocialProfileProjectionStates>;
 }
 
 /** The maps a change describes. Everything else in live state is passed through. */
-const CHANGED_MAPS = ['playout', 'inputs', 'sources'] as const;
+const CHANGED_MAPS = ['playout', 'inputs', 'sources', 'socialProfileProjections'] as const;
 
 type LiveStateMap = typeof CHANGED_MAPS[number];
 
@@ -104,7 +106,13 @@ function same(before: unknown, after: unknown): boolean {
  * the honest answer to that is not to describe it — see `broadcastGraphicsLiveStateChange`.
  */
 function passedThrough(state: BroadcastGraphicsLiveState): Record<string, unknown> {
-	const { playout: _playout, inputs: _inputs, sources: _sources, ...rest } = state;
+	const {
+		playout: _playout,
+		inputs: _inputs,
+		sources: _sources,
+		socialProfileProjections: _socialProfileProjections,
+		...rest
+	} = state;
 	return rest;
 }
 
@@ -168,6 +176,8 @@ export function changedBroadcastGraphicsLiveState(
 		inputs: { ...state.inputs },
 		sources: { ...state.sources },
 	};
+	if (state.socialProfileProjections !== undefined || change.socialProfileProjections !== undefined)
+		next.socialProfileProjections = { ...state.socialProfileProjections };
 
 	for (const map of CHANGED_MAPS) {
 		const entries = change[map];

@@ -3,11 +3,15 @@ import type {
 	GraphicItemRenderDescriptor,
 	GraphicMediaIncompatibilityNoticeDescriptor,
 } from '~/modules/graphics/renderModel';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { addIcon, getIcon } from '@iconify/vue';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
+import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
+import { init as initClientIconBundle } from '#build/nuxt-icon-client-bundle';
 
 enableAutoUnmount(afterEach);
+initClientIconBundle(addIcon);
 
 function lifeDescriptor(text: string, animation: PlayerLifeAnimation = 'glow'): GraphicItemRenderDescriptor {
 	return {
@@ -102,6 +106,35 @@ describe('graphicsCompositorItem player life', () => {
 		expect(lifeParagraph(wrapper)).toBe(before);
 		expect(lifeClasses(wrapper).join(' ')).not.toContain('graphics-compositor-item--life');
 	});
+});
+
+describe('graphicsCompositorItem social network icon', () => {
+	it.each(SUPPORTED_SOCIAL_NETWORKS)(
+		'renders the application-owned $label vector with its authored colour and opacity',
+		async (network) => {
+			const iconName = network.icon.replace('i-simple-icons-', 'simple-icons:');
+			const bundledIcon = getIcon(iconName);
+			expect(bundledIcon?.body).toContain('<path');
+			expect(bundledIcon).toMatchObject({ width: 24, height: 24 });
+
+			const wrapper = await mountItem({
+				id: 'social-icon',
+				label: 'Social Network Icon',
+				kind: 'social-network-icon',
+				style: { position: 'absolute', left: '120px', top: '80px' },
+				icon: {
+					name: network.icon,
+					style: { display: 'block', width: '100%', height: '100%', color: '#1185fe', opacity: '0.65' },
+				},
+			});
+			await flushPromises();
+
+			const icon = wrapper.get('[data-social-network-icon]');
+			expect(icon.classes()).toContain(`i-${iconName}`);
+			expect(icon.attributes('style')).toContain('color: #1185fe');
+			expect(icon.attributes('style')).toContain('opacity: 0.65');
+		},
+	);
 });
 
 /**

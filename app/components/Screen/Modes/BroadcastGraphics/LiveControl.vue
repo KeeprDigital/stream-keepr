@@ -12,6 +12,10 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import {
+	resolveSocialProfileProjectionAcceptances,
+	sameSocialProfileProjectionAcceptance,
+} from '~~/shared/modules/broadcast-graphics-live-session';
+import {
 	graphicInputTextValue,
 	isMediaGraphicInputValue,
 	isOperatorSelectedGraphicSource,
@@ -72,6 +76,8 @@ const props = defineProps<{
 	screen: Screen;
 	graphic: BroadcastGraphicConfig;
 	playoutState: GraphicPlayoutState;
+	/** The synchronized instant the surrounding Live workspace is projecting. */
+	now?: number;
 	/** Whether this Broadcast Graphic has an action in flight. */
 	pending?: boolean;
 	/**
@@ -100,6 +106,76 @@ const drafts = ref<Record<string, GraphicInputValue>>({});
 const pickers = computed(() =>
 	(props.graphic.sources ?? []).filter(isOperatorSelectedGraphicSource),
 );
+
+const socialProfileProjectionControls = computed(() => {
+	const selections = sessionStore.sourceSelections(props.screen.id, props.graphic.id);
+	const resolved = resolveSocialProfileProjectionAcceptances(props.graphic, selections, dataSet.value);
+	return (props.graphic.socialProfileProjections ?? []).map((declaration) => {
+		const state = sessionStore.projectedSocialProfileProjectionState(
+			props.screen.id,
+			props.graphic.id,
+			declaration.key,
+			declaration,
+			props.now,
+		);
+		return {
+			declaration,
+			state,
+			pending: ['entering', 'on-air', 'updating'].includes(props.playoutState)
+				&& (declaration.updatePolicy ?? 'staged') === 'staged'
+				&& !sameSocialProfileProjectionAcceptance(state, resolved[declaration.key]),
+		};
+	});
+});
+
+function socialProfileOptions(projectionKey: string) {
+	const state = socialProfileProjectionControls.value.find(
+		control => control.declaration.key === projectionKey,
+	)?.state;
+	return state?.acceptedProfiles.map(profile => ({
+		label: `${profile.networkLabel} — @${profile.handle}`,
+		value: profile.network,
+	})) ?? [];
+}
+
+function selectSocialProfile(projectionKey: string, value: unknown) {
+	const state = socialProfileProjectionControls.value.find(control => control.declaration.key === projectionKey)?.state;
+	const network = state?.acceptedProfiles.find(profile => profile.network === value)?.network;
+	if (!network || props.disconnected)
+		return;
+	void sessionStore.selectSocialProfile(props.eventId, props.screen.id, props.graphic.id, projectionKey, network);
+}
+
+function previousSocialProfile(projectionKey: string) {
+	if (!props.disconnected)
+		void sessionStore.previousSocialProfile(props.eventId, props.screen.id, props.graphic.id, projectionKey);
+}
+
+function nextSocialProfile(projectionKey: string) {
+	if (!props.disconnected)
+		void sessionStore.nextSocialProfile(props.eventId, props.screen.id, props.graphic.id, projectionKey);
+}
+
+function setSocialProfileAutomatic(projectionKey: string, automatic: boolean) {
+	if (!props.disconnected) {
+		void sessionStore.setSocialProfileAutomatic(
+			props.eventId,
+			props.screen.id,
+			props.graphic.id,
+			projectionKey,
+			automatic,
+		);
+	}
+}
+
+function socialProfileTiming(control: typeof socialProfileProjectionControls.value[number]): string {
+	const { dwellMs, transition, transitionDurationMs } = control.declaration;
+	const dwell = dwellMs % 1000 === 0
+		? `${dwellMs / 1000} ${dwellMs === 1000 ? 'second' : 'seconds'}`
+		: `${dwellMs} ms`;
+	const transitionLabel = transition[0]!.toUpperCase() + transition.slice(1);
+	return `${dwell} · ${transitionLabel} · ${transitionDurationMs} ms`;
+}
 
 function selectedSource(sourceKey: string): number | undefined {
 	return sessionStore.sourceSelections(props.screen.id, props.graphic.id)[sourceKey];
@@ -154,9 +230,10 @@ const OFF_AIR_NOTES: Partial<Record<GraphicPlayoutState, string>> = {
  * value differs from the accepted one. Offering the action then would offer an
  * acceptance that provably accepts nothing.
  */
-const hasStagedChanges = computed(() => traces.value.some(trace =>
-	trace.pending && trace.effective.availability.available,
-));
+const hasStagedChanges = computed(() =>
+	traces.value.some(trace => trace.pending && trace.effective.availability.available)
+	|| socialProfileProjectionControls.value.some(control => control.pending),
+);
 
 /**
  * The required Graphic Inputs that stop this Broadcast Graphic going on air.
@@ -510,7 +587,7 @@ watch(
 <template>
 	<ScreenSettingsCard title="Live Control" :default-open="true">
 		<UIEmptyState
-			v-if="traces.length === 0 && pickers.length === 0"
+			v-if="traces.length === 0 && pickers.length === 0 && socialProfileProjectionControls.length === 0"
 			icon="i-lucide-sliders-horizontal"
 			title="No Graphic Inputs"
 			description="This Broadcast Graphic declares no operator values."
@@ -554,6 +631,76 @@ watch(
 						Clear
 					</UButton>
 				</div>
+			</div>
+
+			<div
+				v-for="control in socialProfileProjectionControls"
+				:key="control.declaration.key"
+				class="rounded-lg border border-default/70 p-3"
+				:data-social-profile-projection="control.declaration.key"
+			>
+				<div class="mb-2 flex min-w-0 items-center gap-2">
+					<span class="min-w-0 flex-1 truncate text-sm font-medium">{{ control.declaration.label }}</span>
+					<UBadge size="xs" variant="soft" :color="control.state?.acceptedProfiles.length ? 'success' : 'warning'">
+						{{ control.state?.acceptedProfiles.length ? 'Available' : 'Unavailable' }}
+					</UBadge>
+					<UBadge
+						v-if="control.pending"
+						size="xs"
+						variant="soft"
+						color="warning"
+						data-testid="live-control-social-profile-status"
+					>
+						Pending
+					</UBadge>
+				</div>
+				<p class="mb-2 text-xs text-muted" data-testid="live-control-social-profile-talent">
+					{{ control.state?.talent?.name ?? 'No Talent resolved' }}
+				</p>
+				<USelect
+					:model-value="control.state?.currentNetwork"
+					:items="socialProfileOptions(control.declaration.key)"
+					class="w-full"
+					size="sm"
+					placeholder="No populated profiles"
+					:disabled="disconnected || !control.state?.acceptedProfiles.length"
+					:data-testid="`live-control-social-profile-${control.declaration.key}`"
+					@update:model-value="selectSocialProfile(control.declaration.key, $event)"
+				/>
+				<div class="mt-2 flex items-center gap-2">
+					<UButton
+						size="xs"
+						variant="soft"
+						color="neutral"
+						:disabled="disconnected || (control.state?.acceptedProfiles.length ?? 0) <= 1"
+						:data-testid="`live-control-social-profile-previous-${control.declaration.key}`"
+						@click="previousSocialProfile(control.declaration.key)"
+					>
+						Previous
+					</UButton>
+					<UButton
+						size="xs"
+						variant="soft"
+						color="neutral"
+						:disabled="disconnected || (control.state?.acceptedProfiles.length ?? 0) <= 1"
+						:data-testid="`live-control-social-profile-next-${control.declaration.key}`"
+						@click="nextSocialProfile(control.declaration.key)"
+					>
+						Next
+					</UButton>
+				</div>
+				<div class="mt-3 flex items-center justify-between gap-3">
+					<span class="text-sm font-medium">Automatic</span>
+					<USwitch
+						:model-value="control.state?.automatic !== false"
+						:disabled="disconnected || !control.state"
+						:data-testid="`live-control-social-profile-automatic-${control.declaration.key}`"
+						@update:model-value="setSocialProfileAutomatic(control.declaration.key, Boolean($event))"
+					/>
+				</div>
+				<p class="mt-2 text-xs text-muted" data-testid="live-control-social-profile-timing">
+					{{ socialProfileTiming(control) }}
+				</p>
 			</div>
 			<p v-if="!isOnAir" class="text-xs text-muted" data-testid="live-control-off-note">
 				{{ OFF_AIR_NOTES[playoutState] }}

@@ -19,6 +19,10 @@ import { isFeatureMatchTokenKey } from '../featureMatchTokenCatalogue';
 import { getGraphicItemDefinition } from '../modules/graphics/itemDefinitions';
 import { graphicTextTemplateInputKeys } from '../modules/graphics/textTemplate';
 import {
+	SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID,
+	SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION,
+} from '../types/graphics';
+import {
 	broadcastGraphicsGraphicAssetReferences,
 	featureMatchLayoutGraphicAssetReferences,
 } from './graphicsAssetReferences';
@@ -115,6 +119,14 @@ export function broadcastGraphicTemplatePackageRequirements(
 	const capabilities: TemplatePackageCapabilityRequirement[] = [];
 	for (const item of graphic.items)
 		appendBroadcastGraphicItemCapabilities(capabilities, item, `items.${item.id}`);
+	for (const projection of graphic.socialProfileProjections ?? []) {
+		capabilities.push({
+			slot: `socialProfileProjections.${projection.key}`,
+			capability: 'host-vocabulary',
+			identity: SOCIAL_PROFILE_PROJECTION_CAPABILITY_ID,
+			configurationVersion: SOCIAL_PROFILE_PROJECTION_CONFIGURATION_VERSION,
+		});
+	}
 	appendApplicationFontCapabilities(capabilities, graphic.items, 'items');
 	// Media Graphic Items pin exact revisions, and discovery is shared with the
 	// Screen reference index rather than repeated here: a Template must package

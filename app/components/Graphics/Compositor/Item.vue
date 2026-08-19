@@ -230,6 +230,21 @@ watch(
 		<Item :render="render.enclosed" />
 	</div>
 
+	<!-- One Social Profile Presentation Group sampled as bounded correlated layers. -->
+	<div
+		v-else-if="render.presentationLayers"
+		class="graphics-compositor-item"
+		:data-social-profile-presentation="render.id"
+		:style="render.style"
+	>
+		<Item
+			v-for="(layer, index) in render.presentationLayers"
+			:key="`${layer.id}-${index}`"
+			:render="layer"
+			:aria-hidden="index < render.presentationLayers.length - 1"
+		/>
+	</div>
+
 	<!--
 		A cross-transitioning Graphic Item is a positioning box holding both renderings,
 		the arriving one in front of the one it replaces. Both fill this box, so the pair
@@ -411,6 +426,14 @@ watch(
 				:style="media.style"
 			>
 		</template>
+
+		<UIcon
+			v-if="render.icon"
+			:name="render.icon.name"
+			:style="render.icon.style"
+			aria-hidden="true"
+			data-social-network-icon
+		/>
 
 		<Item
 			v-for="child in render.children"

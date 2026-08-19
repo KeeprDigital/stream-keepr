@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SocialProfiles } from '~~/shared/socialProfiles';
 import { applyTalentUpdates } from '~/modules/event-data/talentUpdates';
 
 const eventStore = useEventStore();
@@ -10,7 +11,7 @@ const loading = computed(() => eventStore.loading);
 
 const talentsRef = useTemplateRef<{ resetForm: () => void }>('talents');
 
-async function handleSaveTalents(newTalents: { id?: number; name: string }[]) {
+async function handleSaveTalents(newTalents: { id?: number; name: string; socialProfiles: SocialProfiles }[]) {
 	const currentEvent = eventStore.event;
 	if (!currentEvent)
 		return;
@@ -21,7 +22,7 @@ async function handleSaveTalents(newTalents: { id?: number; name: string }[]) {
 			requestedTalents: newTalents,
 			removeTalent: talentId => eventStore.removeTalent(talentId),
 			addTalent: input => eventStore.addTalent(input),
-			renameTalent: (talentId, input) => eventStore.updateTalent(talentId, input),
+			updateTalent: (talentId, input) => eventStore.updateTalent(talentId, input),
 		});
 
 		// Explicitly reset form after all mutations complete so dirty state

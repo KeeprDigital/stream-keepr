@@ -58,6 +58,28 @@ describe('talentService', () => {
 
 			expect(result).toEqual(newTalent);
 		});
+
+		it('writes a supplied Social Profile subset into its fixed columns', async () => {
+			const newTalent = createMockTalent({ twitchHandle: 'Caster', blueskyHandle: 'caster.bsky.social' });
+			getChain('insert').returning.mockResolvedValue([newTalent]);
+
+			await talentService().create(1, {
+				name: 'New Caster',
+				socialProfiles: { twitch: 'Caster', bluesky: 'caster.bsky.social' },
+			});
+
+			expect(mockDb.insert).toHaveBeenCalledWith(expect.anything());
+			expect(getChain('insert').values).toHaveBeenCalledWith({
+				eventId: 1,
+				name: 'New Caster',
+				twitchHandle: 'Caster',
+				youtubeHandle: null,
+				xHandle: null,
+				instagramHandle: null,
+				tiktokHandle: null,
+				blueskyHandle: 'caster.bsky.social',
+			});
+		});
 	});
 
 	describe('update', () => {
@@ -68,6 +90,29 @@ describe('talentService', () => {
 			const result = await talentService().update(1, 1, { name: 'Updated' });
 
 			expect(result).toEqual(updated);
+		});
+
+		it('preserves Social Profiles when the map is omitted', async () => {
+			getChain('update').returning.mockResolvedValue([createMockTalent()]);
+
+			await talentService().update(1, 1, { name: 'Updated' });
+
+			expect(getChain('update').set).toHaveBeenCalledWith({ name: 'Updated' });
+		});
+
+		it('replaces the complete Social Profile set when the map is supplied', async () => {
+			getChain('update').returning.mockResolvedValue([createMockTalent()]);
+
+			await talentService().update(1, 1, { socialProfiles: { youtube: 'Caster' } });
+
+			expect(getChain('update').set).toHaveBeenCalledWith({
+				twitchHandle: null,
+				youtubeHandle: 'Caster',
+				xHandle: null,
+				instagramHandle: null,
+				tiktokHandle: null,
+				blueskyHandle: null,
+			});
 		});
 	});
 
