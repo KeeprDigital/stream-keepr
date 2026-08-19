@@ -95,8 +95,13 @@ describe('broadcastGraphicsRecovery', () => {
 							manualNetwork: 'x',
 							automatic: true,
 							rotationAnchor: { network: 'x', anchoredAt: 123_456 },
-							updateFrom: { network: 'twitch', networkLabel: 'Twitch', handle: 'Before', profileUrl: 'https://www.twitch.tv/Before' },
-							pendingUpdateFrom: null,
+							updateFrom: [{
+								values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Before', profileUrl: 'https://www.twitch.tv/Before' },
+								opacity: 0.5,
+								offsetX: 0,
+								offsetY: 0,
+							}],
+							pendingUpdateFrom: [],
 						},
 					},
 				},
@@ -235,7 +240,12 @@ describe('broadcastGraphicsRecovery', () => {
 				inputs: {},
 				socialProfileProjections: { lower: { profile: {
 					acceptedProfiles: [],
-					updateFrom: { network: 'twitch', networkLabel: 'Not Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+					updateFrom: [{
+						values: { network: 'twitch', networkLabel: 'Not Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+						opacity: 1,
+						offsetX: 0,
+						offsetY: 0,
+					}],
 				} } },
 			}],
 			['accepted Social Profiles outside catalog order', {

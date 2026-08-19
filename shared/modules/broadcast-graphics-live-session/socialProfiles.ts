@@ -35,10 +35,10 @@ export interface SocialProfileProjectionLiveState {
 	rotationAnchor?: SocialProfileRotationAnchor;
 	/** The bounded sampled visual a latest-wins transition replaces. */
 	transitionAnchor?: SocialProfileTransitionAnchor;
-	/** The correlated tuple a Graphic Update cross-transition leaves behind. */
-	updateFrom?: SocialProfileProjectionValue | null;
-	/** The first accepted tuple held behind a running Graphic Update. */
-	pendingUpdateFrom?: SocialProfileProjectionValue | null;
+	/** The bounded sampled presentation a Graphic Update cross-transition leaves behind. */
+	updateFrom?: SocialProfilePresentationLayer[];
+	/** The first accepted presentation held behind a running Graphic Update. */
+	pendingUpdateFrom?: SocialProfilePresentationLayer[];
 }
 
 export interface SocialProfileRotationAnchor {

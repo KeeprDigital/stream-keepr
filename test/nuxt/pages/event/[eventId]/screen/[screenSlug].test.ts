@@ -88,6 +88,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	renderedInputValues: () => ({ current: {}, outgoing: {} }),
 	socialProfileValues: () => ({}),
 	renderedSocialProfileValues: () => ({ current: {}, outgoing: {} }),
+	renderedSocialProfilePresentations: () => ({ current: {}, outgoing: {} }),
 	socialProfilePresentations: () => ({}),
 	playoutState: () => 'on-air',
 	loadSession: () => {},

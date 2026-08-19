@@ -35,6 +35,7 @@ import {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfilePresentations,
 	broadcastGraphicRenderedSocialProfileValues,
 	BroadcastGraphicsCommandRejection,
 	broadcastGraphicSourceSelections,
@@ -459,6 +460,34 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 		for (const graphic of graphics) {
 			const rendered = broadcastGraphicRenderedSocialProfileValues(
+				state,
+				graphic,
+				renderTimingFor(graphic, instant),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+
+		return { current, outgoing };
+	}
+
+	/** The exact synchronized presentation frames each Graphic Update draws now and leaves. */
+	function renderedSocialProfilePresentations(
+		screenId: number,
+		graphics: readonly BroadcastGraphicConfig[],
+		now?: number,
+	): {
+		current: Record<string, Record<string, SocialProfilePresentationProjection>>;
+		outgoing: Record<string, Record<string, SocialProfilePresentationProjection>>;
+	} {
+		const state = liveState(screenId);
+		const instant = now ?? serverNow();
+		const current: Record<string, Record<string, SocialProfilePresentationProjection>> = {};
+		const outgoing: Record<string, Record<string, SocialProfilePresentationProjection>> = {};
+
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfilePresentations(
 				state,
 				graphic,
 				renderTimingFor(graphic, instant),
@@ -1111,6 +1140,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		animationProjection,
 		renderedInputValues,
 		renderedSocialProfileValues,
+		renderedSocialProfilePresentations,
 		isPending,
 		inputRefusal,
 		inputsState,

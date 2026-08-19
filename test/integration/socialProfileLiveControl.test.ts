@@ -301,6 +301,102 @@ describe('manual Social Profile Projection command API', () => {
 		expect(updated.currentState.playout[GRAPHIC_ID]?.updateStartedAt).toEqual(expect.any(Number));
 	});
 
+	it('takes the latest Event Data after an off-air edit instead of replaying the previous acceptance', async () => {
+		const talent = await $fetch<{ id: number; name: string }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Off-air Refresh', socialProfiles: { twitch: 'BeforeTake', x: 'BeforeManual' } },
+		});
+		const harness = await createGraphicsHarness(eventId, 'social-profile-off-air-latest-take', [socialProfileGraphic()]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', talent.id);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-first-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-manual'),
+			type: 'Select Social Profile',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-out'),
+			type: 'Out',
+			payload: { graphicId: GRAPHIC_ID, cut: true },
+		});
+		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
+			method: 'PATCH',
+			body: { name: talent.name, socialProfiles: { youtube: 'LatestTake' } },
+		});
+
+		const retaken = await harness.send({
+			commandId: playoutCommandId('social-profile-off-air-latest-retake'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		const projection = retaken.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			talent: { id: talent.id, name: talent.name },
+			acceptedProfiles: [{ network: 'youtube', handle: 'LatestTake' }],
+			currentNetwork: 'youtube',
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
+	});
+
+	it('accepts a staged operator Talent reassignment only through explicit Update Graphic', async () => {
+		const first = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Staged Source First', socialProfiles: { twitch: 'FirstSource', x: 'FirstManual' } },
+		});
+		const replacement = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+			method: 'POST',
+			body: { name: 'Staged Source Replacement', socialProfiles: { youtube: 'ReplacementFirst' } },
+		});
+		const graphic = {
+			...socialProfileGraphic('staged'),
+			animation: integrationGraphicAnimation({ update: 1_000 }),
+		};
+		const harness = await createGraphicsHarness(eventId, 'social-profile-staged-source-update', [graphic]);
+
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', first.id);
+		await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-take'),
+			type: 'Take',
+			payload: { graphicId: GRAPHIC_ID },
+		});
+		await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-manual'),
+			type: 'Select Social Profile',
+			payload: { graphicId: GRAPHIC_ID, projectionKey: PROJECTION_KEY, network: 'x' },
+		});
+		await selectBroadcastGraphicSource(harness, GRAPHIC_ID, 'talent', replacement.id);
+
+		const staged = await harness.reload();
+		expect(staged.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY]).toMatchObject({
+			talent: { id: first.id },
+			currentNetwork: 'x',
+			manualNetwork: 'x',
+		});
+		const updated = await harness.send({
+			commandId: playoutCommandId('social-profile-staged-source-update'),
+			type: 'Update Graphic',
+			payload: {
+				graphicId: GRAPHIC_ID,
+				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC_ID]!.acceptedRevision,
+			},
+		});
+		const projection = updated.currentState.socialProfileProjections?.[GRAPHIC_ID]?.[PROJECTION_KEY];
+		expect(projection).toMatchObject({
+			talent: { id: replacement.id, name: 'Staged Source Replacement' },
+			acceptedProfiles: [{ network: 'youtube', handle: 'ReplacementFirst' }],
+			currentNetwork: 'youtube',
+			rotationAnchor: { network: 'youtube', anchoredAt: expect.any(Number) },
+		});
+		expect(projection?.manualNetwork).toBeUndefined();
+		expect(projection?.transitionAnchor).toBeUndefined();
+		expect(updated.currentState.playout[GRAPHIC_ID]?.updateStartedAt).toEqual(expect.any(Number));
+	});
+
 	it('resolves Talent 1 and Talent 2 sources with one and zero populated profiles', async () => {
 		const talent1 = await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
 			method: 'POST',

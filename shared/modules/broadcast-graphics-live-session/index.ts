@@ -74,6 +74,7 @@ export {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfilePresentations,
 	broadcastGraphicRenderedSocialProfileValues,
 	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,

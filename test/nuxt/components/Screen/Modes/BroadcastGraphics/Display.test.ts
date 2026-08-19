@@ -13,6 +13,7 @@ import {
 	broadcastGraphicPhaseTiming,
 	broadcastGraphicPlayoutState,
 	broadcastGraphicRenderedInputs,
+	broadcastGraphicRenderedSocialProfilePresentations,
 	broadcastGraphicRenderedSocialProfileValues,
 	createInitialBroadcastGraphicsLiveState,
 	onAirBroadcastGraphicIds,
@@ -189,6 +190,21 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		const outgoing: Record<string, Record<string, unknown>> = {};
 		for (const graphic of graphics) {
 			const rendered = broadcastGraphicRenderedSocialProfileValues(
+				mockState(),
+				graphic,
+				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
+			);
+			current[graphic.id] = rendered.current;
+			if (rendered.outgoing)
+				outgoing[graphic.id] = rendered.outgoing;
+		}
+		return { current, outgoing };
+	},
+	renderedSocialProfilePresentations: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
+		const current: Record<string, Record<string, unknown>> = {};
+		const outgoing: Record<string, Record<string, unknown>> = {};
+		for (const graphic of graphics) {
+			const rendered = broadcastGraphicRenderedSocialProfilePresentations(
 				mockState(),
 				graphic,
 				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
@@ -554,12 +570,17 @@ describe('broadcastGraphicsDisplay', () => {
 						profileUrl: 'https://www.youtube.com/@After',
 					}],
 					currentNetwork: 'youtube',
-					updateFrom: {
-						network: 'twitch',
-						networkLabel: 'Twitch',
-						handle: 'Before',
-						profileUrl: 'https://www.twitch.tv/Before',
-					},
+					updateFrom: [{
+						values: {
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'Before',
+							profileUrl: 'https://www.twitch.tv/Before',
+						},
+						opacity: 1,
+						offsetX: 0,
+						offsetY: 0,
+					}],
 				} },
 			},
 		};
@@ -569,7 +590,7 @@ describe('broadcastGraphicsDisplay', () => {
 
 		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text()))
 			.toEqual(['Twitch — @Before', 'YouTube — @After']);
-		expect(wrapper.find('[data-social-profile-presentation]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-social-profile-presentation="profile-group"]')).toHaveLength(2);
 		expect(wrapper.find('[data-graphic-item-cross-transition="profile-group"]').exists()).toBe(true);
 	});
 

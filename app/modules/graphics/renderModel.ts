@@ -202,6 +202,8 @@ export interface GraphicsCompositionRenderModelInput {
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
 	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Sampled Presentation Group frames an update phase is transitioning away from. */
+	outgoingSocialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
 	/** Correlated Social Profile values an update phase is transitioning away from. */
 	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
@@ -1815,15 +1817,45 @@ function itemDescriptor(
 		placement: CSSProperties,
 		available: boolean,
 	): GraphicItemRenderDescriptor => available
-		? paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
-				halfInputs,
-				halfContext(halfMotion),
-				placement,
-			)
+		? item.type === 'group' && presentation
+			? {
+					id: item.id,
+					label: item.label,
+					kind: item.type,
+					style: { ...placement, overflow: 'hidden' },
+					presentationLayers: (halfInputs.socialProfilePresentations?.[presentation.key]?.layers ?? [])
+						.map(layer => paintedItemDescriptor(
+							output,
+							graphicId,
+							item,
+							assetContent,
+							{
+								...halfInputs,
+								socialProfileValues: {
+									...halfInputs.socialProfileValues,
+									[presentation.key]: layer.values,
+								},
+							},
+							halfContext(halfMotion),
+							{
+								position: 'absolute',
+								inset: '0',
+								width: '100%',
+								height: '100%',
+								opacity: layer.opacity,
+								transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+							},
+						)),
+				}
+			: paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					halfInputs,
+					halfContext(halfMotion),
+					placement,
+				)
 		: {
 				id: item.id,
 				label: item.label,
@@ -2408,7 +2440,8 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
-				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
+				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
+					?? input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
@@ -2458,17 +2491,16 @@ export function resolveGraphicsCompositionRenderModel(
 					const projection = projectionByGroupId.get(item.id);
 					if (!projection)
 						return true;
-					const presentation = phases.includes('update')
-						? undefined
-						: values.socialProfilePresentations?.[projection.key];
+					const presentation = values.socialProfilePresentations?.[projection.key];
 					return presentation
 						? presentation.layers.length > 0
+						|| (pairing?.inputs.socialProfilePresentations?.[projection.key]?.layers.length ?? 0) > 0
 						: values.socialProfileValues?.[projection.key] !== undefined
 							|| pairing?.inputs.socialProfileValues?.[projection.key] !== undefined;
 				})
 				.map((item) => {
 					const projection = projectionByGroupId.get(item.id);
-					const presentationFrame = projection && !phases.includes('update')
+					const presentationFrame = projection
 						? values.socialProfilePresentations?.[projection.key]
 						: undefined;
 					const presentation = projection && presentationFrame
