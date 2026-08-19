@@ -33,11 +33,18 @@ export interface SocialProfileProjectionLiveState {
 	automatic?: boolean;
 	/** The authoritative profile and instant from which automatic progression projects. */
 	rotationAnchor?: SocialProfileRotationAnchor;
+	/** The bounded sampled visual a latest-wins transition replaces. */
+	transitionAnchor?: SocialProfileTransitionAnchor;
 }
 
 export interface SocialProfileRotationAnchor {
 	network: SupportedSocialNetwork;
 	anchoredAt: number;
+}
+
+export interface SocialProfileTransitionAnchor {
+	startedAt: number;
+	from: SocialProfilePresentationLayer[];
 }
 
 export interface SocialProfileRotationPhase {
@@ -53,8 +60,49 @@ export interface SocialProfileRotationProjection {
 	phase: SocialProfileRotationPhase;
 }
 
+/** One correlated Presentation Group rendering at a projected visual position. */
+export interface SocialProfilePresentationLayer {
+	values: SocialProfileProjectionValue;
+	opacity: number;
+	/** Percentage of the Presentation Group's own width. */
+	offsetX: number;
+	/** Percentage of the Presentation Group's own height. */
+	offsetY: number;
+}
+
+/** The complete bounded visual one renderer paints for a Social Profile Projection. */
+export interface SocialProfilePresentationProjection {
+	phase: SocialProfileRotationPhase;
+	layers: SocialProfilePresentationLayer[];
+}
+
+/** Hard recovery/render bound: two complete catalog-width sampled visuals. */
+export const MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS = SUPPORTED_SOCIAL_NETWORKS.length * 2;
+
 export type BroadcastGraphicSocialProfileProjectionStates
 	= Record<string, SocialProfileProjectionLiveState>;
+
+function socialProfileTransitionSlide(
+	transition: SocialProfileProjectionDeclaration['transition'],
+): { x: number; y: number } | undefined {
+	switch (transition) {
+		case 'slide-left': return { x: -100, y: 0 };
+		case 'slide-right': return { x: 100, y: 0 };
+		case 'slide-up': return { x: 0, y: -100 };
+		case 'slide-down': return { x: 0, y: 100 };
+		default: return undefined;
+	}
+}
+
+function sameSocialProfileTuple(
+	left: SocialProfileProjectionValue,
+	right: SocialProfileProjectionValue,
+): boolean {
+	return left.network === right.network
+		&& left.networkLabel === right.networkLabel
+		&& left.handle === right.handle
+		&& left.profileUrl === right.profileUrl;
+}
 
 /**
  * Project the correlated profile and schedule phase at one synchronized instant.
@@ -71,6 +119,24 @@ export function projectSocialProfileRotation(
 ): SocialProfileRotationProjection {
 	const fallback = state.acceptedProfiles.find(profile => profile.network === state.currentNetwork)
 		?? state.acceptedProfiles[0];
+	const transitionMs = declaration.transition === 'cut'
+		? 0
+		: Math.max(0, declaration.transitionDurationMs);
+	const interruptedElapsed = state.transitionAnchor && context.now !== undefined
+		? context.now - state.transitionAnchor.startedAt
+		: Number.POSITIVE_INFINITY;
+	if (
+		Number.isFinite(context.now)
+		&& transitionMs > 0
+		&& state.transitionAnchor
+		&& interruptedElapsed >= 0
+		&& interruptedElapsed < transitionMs
+	) {
+		return {
+			...(fallback ? { current: fallback } : {}),
+			phase: { kind: 'transition', elapsedMs: interruptedElapsed, durationMs: transitionMs },
+		};
+	}
 	if (!fallback)
 		return { phase: { kind: 'static', elapsedMs: 0, durationMs: null } };
 
@@ -95,9 +161,6 @@ export function projectSocialProfileRotation(
 	}
 
 	const dwellMs = Math.max(0, declaration.dwellMs);
-	const transitionMs = declaration.transition === 'cut'
-		? 0
-		: Math.max(0, declaration.transitionDurationMs);
 	if (dwellMs === 0) {
 		return {
 			current: fallback,
@@ -139,25 +202,152 @@ export function projectSocialProfileRotation(
 	};
 }
 
+/**
+ * Project one synchronized Social Profile Presentation Group frame.
+ *
+ * Values and motion travel together so independently styled ordinary children
+ * cannot observe different profiles at one instant. The renderer receives sampled
+ * positions rather than a CSS transition, keeping fill, key, preview, and redundant
+ * outputs identical at the same synchronized time.
+ */
+export function projectSocialProfilePresentation(
+	state: SocialProfileProjectionLiveState,
+	declaration: Pick<SocialProfileProjectionDeclaration, 'dwellMs' | 'transition' | 'transitionDurationMs'>,
+	context: { onAir: boolean; now?: number },
+): SocialProfilePresentationProjection {
+	const rotation = projectSocialProfileRotation(state, declaration, context);
+	const transitionAnchor = state.transitionAnchor;
+	if (
+		rotation.phase.kind === 'transition'
+		&& transitionAnchor
+		&& rotation.phase.durationMs !== null
+	) {
+		const durationMs = rotation.phase.durationMs;
+		const progress = Math.max(0, Math.min(1, rotation.phase.elapsedMs / durationMs));
+		const slide = socialProfileTransitionSlide(declaration.transition);
+		const target = rotation.current;
+		const hasTarget = target !== undefined
+			&& transitionAnchor.from.some(layer => sameSocialProfileTuple(layer.values, target));
+		const from = (hasTarget || !rotation.current
+			? transitionAnchor.from
+			: [
+					...transitionAnchor.from,
+					{
+						values: rotation.current,
+						opacity: declaration.transition === 'crossfade' ? 0 : 1,
+						offsetX: slide?.x === undefined ? 0 : -slide.x,
+						offsetY: slide?.y === undefined ? 0 : -slide.y,
+					},
+				])
+			.slice(-MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS);
+		const mix = (start: number, end: number) => start + ((end - start) * progress);
+
+		return {
+			phase: rotation.phase,
+			layers: from.map((layer) => {
+				const isTarget = target !== undefined && sameSocialProfileTuple(layer.values, target);
+				if (isTarget) {
+					return {
+						values: rotation.current!,
+						opacity: mix(layer.opacity, 1),
+						offsetX: mix(layer.offsetX, 0),
+						offsetY: mix(layer.offsetY, 0),
+					};
+				}
+				if (!slide) {
+					return {
+						...layer,
+						opacity: mix(layer.opacity, 0),
+					};
+				}
+				return {
+					...layer,
+					offsetX: mix(layer.offsetX, slide.x),
+					offsetY: mix(layer.offsetY, slide.y),
+				};
+			}),
+		};
+	}
+	if (!rotation.current)
+		return { phase: rotation.phase, layers: [] };
+	if (rotation.phase.kind !== 'transition' || !rotation.outgoing || rotation.phase.durationMs === null) {
+		return {
+			phase: rotation.phase,
+			layers: [{ values: rotation.current, opacity: 1, offsetX: 0, offsetY: 0 }],
+		};
+	}
+
+	const progress = Math.max(0, Math.min(1, rotation.phase.elapsedMs / rotation.phase.durationMs));
+	const slide = socialProfileTransitionSlide(declaration.transition);
+	if (slide) {
+		return {
+			phase: rotation.phase,
+			layers: [
+				{
+					values: rotation.outgoing,
+					opacity: 1,
+					offsetX: slide.x * progress,
+					offsetY: slide.y * progress,
+				},
+				{
+					values: rotation.current,
+					opacity: 1,
+					offsetX: slide.x === 0 ? 0 : -slide.x * (1 - progress),
+					offsetY: slide.y === 0 ? 0 : -slide.y * (1 - progress),
+				},
+			],
+		};
+	}
+	return {
+		phase: rotation.phase,
+		layers: [
+			{ values: rotation.outgoing, opacity: 1 - progress, offsetX: 0, offsetY: 0 },
+			{ values: rotation.current, opacity: progress, offsetX: 0, offsetY: 0 },
+		],
+	};
+}
+
+function declaredSocialProfileProjections(
+	state: Pick<BroadcastGraphicsLiveState, 'socialProfileProjections'>,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+): Array<[SocialProfileProjectionDeclaration, SocialProfileProjectionLiveState]> {
+	const projections = state.socialProfileProjections?.[graphic.id] ?? {};
+	const declarations = new Map(
+		(graphic.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
+	);
+	return Object.entries(projections).flatMap(([projectionKey, projection]) => {
+		const declaration = declarations.get(projectionKey);
+		return declaration ? [[declaration, projection]] : [];
+	});
+}
+
+/** Every synchronized Presentation Group frame one live graphic supplies. */
+export function socialProfilePresentationProjections(
+	state: Pick<BroadcastGraphicsLiveState, 'playout' | 'socialProfileProjections'>,
+	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
+	now?: number,
+): Record<string, SocialProfilePresentationProjection> {
+	return Object.fromEntries(declaredSocialProfileProjections(state, graphic).map(([declaration, projection]) => [
+		declaration.key,
+		projectSocialProfilePresentation(projection, declaration, {
+			onAir: state.playout[graphic.id]?.onAir === true,
+			now,
+		}),
+	]));
+}
+
 /** The current correlated tuples one live Broadcast Graphic supplies to its renderer. */
 export function socialProfileProjectionValues(
 	state: Pick<BroadcastGraphicsLiveState, 'playout' | 'socialProfileProjections'>,
 	graphic: Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>,
 	now?: number,
 ): SocialProfileProjectionValues {
-	const projections = state.socialProfileProjections?.[graphic.id] ?? {};
-	const declarations = new Map(
-		(graphic.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
-	);
-	return Object.fromEntries(Object.entries(projections).flatMap(([projectionKey, projection]) => {
-		const declaration = declarations.get(projectionKey);
-		if (!declaration)
-			return [];
+	return Object.fromEntries(declaredSocialProfileProjections(state, graphic).flatMap(([declaration, projection]) => {
 		const current = projectSocialProfileRotation(projection, declaration, {
 			onAir: state.playout[graphic.id]?.onAir === true,
 			now,
 		}).current;
-		return current ? [[projectionKey, current]] : [];
+		return current ? [[declaration.key, current]] : [];
 	}));
 }
 

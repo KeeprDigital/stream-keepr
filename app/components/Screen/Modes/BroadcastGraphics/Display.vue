@@ -14,6 +14,7 @@ const {
 	inputValues,
 	outgoingInputValues,
 	socialProfileValues,
+	socialProfilePresentations,
 	isAuthoringPreview,
 	selectedTarget,
 	publishSelection,
@@ -66,6 +67,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	inputValues: inputValues.value,
 	outgoingInputValues: outgoingInputValues.value,
 	socialProfileValues: socialProfileValues.value,
+	socialProfilePresentations: socialProfilePresentations.value,
 	// An author sees unset Graphic Inputs as their authored defaults; a live output
 	// shows nothing for them rather than putting placeholder text on program.
 	substituteAuthoredDefaults: isAuthoringPreview.value,

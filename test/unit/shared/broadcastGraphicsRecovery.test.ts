@@ -288,6 +288,54 @@ describe('broadcastGraphicsRecovery', () => {
 					rotationAnchor: { network: 'twitch', anchoredAt: 'later' },
 				} } },
 			}],
+			['an unbounded interrupted Social Profile visual', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: Array.from({ length: 13 }, (_, index) => ({
+							values: { network: 'twitch', networkLabel: 'Twitch', handle: `Ava${index}`, profileUrl: `https://www.twitch.tv/Ava${index}` },
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
+						})),
+					},
+				} } },
+			}],
+			['an interrupted Social Profile tuple that is not canonical', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: [{
+							values: { network: 'twitch', networkLabel: 'Not Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
+						}],
+					},
+				} } },
+			}],
+			['a duplicate correlated tuple in an interrupted Social Profile visual', {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: Array.from({ length: 2 }, () => ({
+							values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+							opacity: 1,
+							offsetX: 0,
+							offsetY: 0,
+						})),
+					},
+				} } },
+			}],
 		])('reports %s as incompatible', (_label, raw) => {
 			expect(broadcastGraphicsRecoveryFault(raw)?.reason).toBe('incompatible');
 		});
@@ -309,6 +357,49 @@ describe('broadcastGraphicsRecovery', () => {
 			expect(broadcastGraphicsRecoveryFault(ancient)).toBeNull();
 			expect(onAirBroadcastGraphicIds(recoveredBroadcastGraphicsLiveState(ancient), [{ id: 'slate' }]))
 				.toEqual(['slate']);
+		});
+
+		it('accepts a bounded correlated Social Profile Transition anchor and legacy state without one', () => {
+			const legacy = { playout: {}, inputs: {}, socialProfileProjections: { lower: { profile: { acceptedProfiles: [] } } } };
+			const transitioning = {
+				...legacy,
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: [{
+							values: { network: 'twitch', networkLabel: 'Twitch', handle: 'Ava', profileUrl: 'https://www.twitch.tv/Ava' },
+							opacity: 0.5,
+							offsetX: -50,
+							offsetY: 0,
+						}],
+					},
+				} } },
+			};
+
+			expect(broadcastGraphicsRecoveryFault(legacy)).toBeNull();
+			expect(broadcastGraphicsRecoveryFault(transitioning)).toBeNull();
+		});
+
+		it('accepts distinct old and new correlated tuples on one catalog network', () => {
+			const transitioning = {
+				playout: {},
+				inputs: {},
+				socialProfileProjections: { lower: { profile: {
+					acceptedProfiles: [],
+					transitionAnchor: {
+						startedAt: 123_456,
+						from: ['OldAva', 'NewAva'].map(handle => ({
+							values: { network: 'twitch', networkLabel: 'Twitch', handle, profileUrl: `https://www.twitch.tv/${handle}` },
+							opacity: 0.5,
+							offsetX: 0,
+							offsetY: 0,
+						})),
+					},
+				} } },
+			};
+
+			expect(broadcastGraphicsRecoveryFault(transitioning)).toBeNull();
 		});
 	});
 

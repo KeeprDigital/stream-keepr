@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue';
+import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
@@ -199,6 +200,10 @@ export interface GraphicsCompositionRenderModelInput {
 	 * keyed by Broadcast Graphic id and Social Profile Projection key.
 	 */
 	socialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
+	/** Sampled synchronized Presentation Group frames, keyed by graphic and projection. */
+	socialProfilePresentations?: Readonly<Record<string, Readonly<Record<string, SocialProfilePresentationProjection>>>>;
+	/** Correlated Social Profile values an update phase is transitioning away from. */
+	outgoingSocialProfileValues?: Readonly<Record<string, SocialProfileProjectionValues>>;
 	/**
 	 * The rendering an update phase is transitioning *away* from, keyed by Broadcast
 	 * Graphic id.
@@ -503,6 +508,8 @@ export interface GraphicItemRenderDescriptor {
 	winBoxes?: GraphicWinBoxRenderDescriptor[];
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
+	/** Correlated renderings of one Social Profile Presentation Group, back to front. */
+	presentationLayers?: GraphicItemRenderDescriptor[];
 	/**
 	 * The two renderings an update phase draws for this Graphic Item, overlaid inside
 	 * its own box.
@@ -1568,6 +1575,7 @@ interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
 	socialProfileValues?: SocialProfileProjectionValues;
+	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
 }
 
@@ -1715,9 +1723,48 @@ function itemDescriptor(
 	assetContent: GraphicAssetContentResolution | undefined,
 	inputs: GraphicItemContentContext,
 	context: GraphicsItemAnimationContext,
+	presentation?: { key: string; frame: SocialProfilePresentationProjection },
+	updateAvailability?: { incoming: boolean; outgoing: boolean },
 ): GraphicItemRenderDescriptor {
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
+
+	if (item.type === 'group' && presentation?.frame.phase.kind === 'transition') {
+		return enclosedItemDescriptor(
+			motion,
+			item,
+			rotation,
+			values => canvasPlacement(item, { x: 0, y: 0 }, values),
+			placement => ({
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, overflow: 'hidden' },
+				presentationLayers: presentation.frame.layers.map(layer => paintedItemDescriptor(
+					output,
+					graphicId,
+					item,
+					assetContent,
+					{
+						...inputs,
+						socialProfileValues: {
+							...inputs.socialProfileValues,
+							[presentation.key]: layer.values,
+						},
+					},
+					context,
+					{
+						position: 'absolute',
+						inset: '0',
+						width: '100%',
+						height: '100%',
+						opacity: layer.opacity,
+						transform: `translate(${layer.offsetX}%, ${layer.offsetY}%)`,
+					},
+				)),
+			}),
+		);
+	}
 
 	if (!context.crossing?.(item.id)) {
 		return enclosedItemDescriptor(
@@ -1762,6 +1809,27 @@ function itemDescriptor(
 		parent: context.parent,
 		motionOf,
 	});
+	const updateHalf = (
+		halfInputs: GraphicItemContentContext,
+		halfMotion: GraphicsItemAnimationContext['motionOf'],
+		placement: CSSProperties,
+		available: boolean,
+	): GraphicItemRenderDescriptor => available
+		? paintedItemDescriptor(
+				output,
+				graphicId,
+				item,
+				assetContent,
+				halfInputs,
+				halfContext(halfMotion),
+				placement,
+			)
+		: {
+				id: item.id,
+				label: item.label,
+				kind: item.type,
+				style: { ...placement, visibility: 'hidden' },
+			};
 
 	return {
 		id: item.id,
@@ -1769,23 +1837,17 @@ function itemDescriptor(
 		kind: item.type,
 		style: placement,
 		crossTransition: {
-			outgoing: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			outgoing: updateHalf(
 				context.outgoing!.inputs,
-				halfContext(context.outgoing!.motionOf),
+				context.outgoing!.motionOf,
 				half(context.outgoing!.motionOf(item, context.staggerOffsets, context.parent)),
+				updateAvailability?.outgoing ?? true,
 			),
-			incoming: paintedItemDescriptor(
-				output,
-				graphicId,
-				item,
-				assetContent,
+			incoming: updateHalf(
 				inputs,
-				halfContext(context.motionOf),
+				context.motionOf,
 				half(motion),
+				updateAvailability?.incoming ?? true,
 			),
 		},
 	};
@@ -2136,12 +2198,12 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  * What one owner renders from the current Graphic Input values, as a string that
  * changes exactly when its rendered content does.
  *
- * Only a Graphic Text Template reads Graphic Input values, so only a Text Graphic
- * Item's content can change under a graphic that is already on air — and a Graphic
- * Group's content is its children's. A Shape or Media Graphic Item renders the same
- * thing whatever the values are, which is why an update animation is not offered to
- * it here: an update recipe runs when *that owner's* rendered content changes, and
- * its content did not.
+ * A Graphic Text Template reads Graphic Input and Social Profile values, while a
+ * dynamic Social Network Icon reads its projection's network. A Graphic Group's
+ * content is its children's. Shape and Media items render the same thing whatever
+ * the accepted values are, which is why an update animation is not offered to them:
+ * an update recipe runs when *that owner's* rendered content changes, and theirs did
+ * not.
  *
  * The context-gated kinds answer the same way, and for a stronger reason than
  * "their content did not change": their content changes constantly, but from the
@@ -2152,13 +2214,20 @@ const GROUP_CONTENT_SEPARATOR = '\u001F';
  */
 function renderedContent(
 	owner: GraphicItemConfig | GraphicGroupChildConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	values: Readonly<Record<string, GraphicInputValue>>,
+	inputs: Pick<GraphicItemContentContext, 'declarations' | 'socialProfileValues' | 'values'>,
 ): string {
-	if (owner.type === 'text')
-		return renderGraphicTextTemplate(owner.text, declarations, values).map(segment => segment.text).join('');
+	if (owner.type === 'text') {
+		return renderGraphicTextTemplate(owner.text, inputs.declarations, inputs.values, inputs.socialProfileValues)
+			.map(segment => segment.text)
+			.join('');
+	}
+	if (owner.type === 'social-network-icon') {
+		return typeof owner.network === 'string'
+			? owner.network
+			: inputs.socialProfileValues?.[owner.network.projectionKey]?.network ?? '';
+	}
 	if (owner.type === 'group')
-		return owner.children.map(child => renderedContent(child, declarations, values)).join(GROUP_CONTENT_SEPARATOR);
+		return owner.children.map(child => renderedContent(child, inputs)).join(GROUP_CONTENT_SEPARATOR);
 	return '';
 }
 
@@ -2189,12 +2258,11 @@ interface GraphicsUpdateCrossTransition {
 
 function updateCrossTransition(
 	graphic: BroadcastGraphicConfig,
-	declarations: readonly GraphicInputDeclaration[],
-	current: Readonly<Record<string, GraphicInputValue>>,
-	outgoing: Readonly<Record<string, GraphicInputValue>>,
+	current: GraphicItemContentContext,
+	outgoing: GraphicItemContentContext,
 ): GraphicsUpdateCrossTransition | null {
 	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
-		renderedContent(owner, declarations, current) !== renderedContent(owner, declarations, outgoing);
+		renderedContent(owner, current) !== renderedContent(owner, outgoing);
 
 	if (!graphic.items.some(item => changed(item)))
 		return null;
@@ -2310,6 +2378,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
@@ -2324,6 +2393,9 @@ export function resolveGraphicsCompositionRenderModel(
 			const outgoingValues = phases.includes('update')
 				? input.outgoingInputValues?.[graphic.id]
 				: undefined;
+			const outgoingSocialProfileValues = phases.includes('update')
+				? input.outgoingSocialProfileValues?.[graphic.id]
+				: undefined;
 			const outgoingInputs: GraphicItemContentContext = {
 				declarations,
 				// Substitution follows the same rule as the incoming rendering: the pair is
@@ -2332,14 +2404,15 @@ export function resolveGraphicsCompositionRenderModel(
 				// changes the value.
 				values: resolvedInputValues(
 					declarations,
-					outgoingValues ?? {},
+					outgoingValues ?? input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
-				socialProfileValues: input.socialProfileValues?.[graphic.id],
+				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
+				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
 			};
-			const crossTransition = outgoingValues
-				? updateCrossTransition(graphic, declarations, inputs.values, outgoingInputs.values)
+			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
+				? updateCrossTransition(graphic, inputs, outgoingInputs)
 				: null;
 			const perItem = crossTransition !== null && !crossTransition.wholeGraphic;
 
@@ -2383,21 +2456,56 @@ export function resolveGraphicsCompositionRenderModel(
 					if (!item.visible)
 						return false;
 					const projection = projectionByGroupId.get(item.id);
-					return !projection || values.socialProfileValues?.[projection.key] !== undefined;
+					if (!projection)
+						return true;
+					const presentation = phases.includes('update')
+						? undefined
+						: values.socialProfilePresentations?.[projection.key];
+					return presentation
+						? presentation.layers.length > 0
+						: values.socialProfileValues?.[projection.key] !== undefined
+							|| pairing?.inputs.socialProfileValues?.[projection.key] !== undefined;
 				})
-				.map(item => itemDescriptor(
-					input.output,
-					graphic.id,
-					item,
-					assetContent,
-					values,
-					{
-						...context(item),
-						...(pairing === undefined
-							? {}
-							: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
-					},
-				));
+				.map((item) => {
+					const projection = projectionByGroupId.get(item.id);
+					const presentationFrame = projection && !phases.includes('update')
+						? values.socialProfilePresentations?.[projection.key]
+						: undefined;
+					const presentation = projection && presentationFrame
+						? { key: projection.key, frame: presentationFrame }
+						: undefined;
+					const currentValues = presentationFrame?.layers.at(-1)?.values;
+					const itemValues = projection && currentValues
+						? {
+								...values,
+								socialProfileValues: {
+									...values.socialProfileValues,
+									[projection.key]: currentValues,
+								},
+							}
+						: values;
+					const updateAvailability = projection && pairing
+						? {
+								incoming: itemValues.socialProfileValues?.[projection.key] !== undefined,
+								outgoing: pairing.inputs.socialProfileValues?.[projection.key] !== undefined,
+							}
+						: undefined;
+					return itemDescriptor(
+						input.output,
+						graphic.id,
+						item,
+						assetContent,
+						itemValues,
+						{
+							...context(item),
+							...(pairing === undefined
+								? {}
+								: { crossing: (ownerId: string) => crossTransition!.crossing.has(ownerId), outgoing: pairing }),
+						},
+						presentation,
+						updateAvailability,
+					);
+				});
 
 			// Two whole frames only when the Broadcast Graphic's own recipe is what moves.
 			// A per-item cross-transition pairs inside each crossing item's box instead, so

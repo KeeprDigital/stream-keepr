@@ -7,6 +7,7 @@ import type {
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
 	GraphicInputTrace,
+	SocialProfilePresentationProjection,
 	SocialProfileProjectionLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
@@ -41,6 +42,7 @@ import {
 	graphicInputTraces,
 	onAirBroadcastGraphicIds,
 	projectSocialProfileRotation,
+	socialProfilePresentationProjections,
 	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -680,7 +682,24 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		}));
 	}
 
-	/** Whether synchronized automatic rotation requires the shared playout clock to advance. */
+	/** Every sampled synchronized Social Profile Presentation Group frame on program. */
+	function socialProfilePresentations(
+		screenId: number,
+		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
+		now?: number,
+	): Record<string, Record<string, SocialProfilePresentationProjection>> {
+		const state = liveState(screenId);
+		return Object.fromEntries(graphics.flatMap((graphic) => {
+			const presentations = socialProfilePresentationProjections(
+				state,
+				graphic,
+				isClockSynced.value ? now ?? serverNow() : undefined,
+			);
+			return Object.keys(presentations).length > 0 ? [[graphic.id, presentations]] : [];
+		}));
+	}
+
+	/** Whether synchronized profile rotation or transition requires the playout clock. */
 	function hasActiveSocialProfileRotation(
 		screenId: number,
 		graphics: readonly Pick<BroadcastGraphicConfig, 'id' | 'socialProfileProjections'>[],
@@ -689,14 +708,10 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			return false;
 
 		const state = liveState(screenId);
+		const now = serverNow();
 		return graphics.some(graphic => state.playout[graphic.id]?.onAir === true
-			&& (graphic.socialProfileProjections ?? []).some((declaration) => {
-				const projection = state.socialProfileProjections?.[graphic.id]?.[declaration.key];
-				return projection !== undefined
-					&& projection.automatic !== false
-					&& projection.acceptedProfiles.length > 1
-					&& projection.rotationAnchor !== undefined;
-			}));
+			&& Object.values(socialProfilePresentationProjections(state, graphic, now))
+				.some(presentation => presentation.phase.kind !== 'static'));
 	}
 
 	/**
@@ -1074,6 +1089,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		socialProfileProjectionState,
 		projectedSocialProfileProjectionState,
 		socialProfileValues,
+		socialProfilePresentations,
 		hasActiveSocialProfileRotation,
 		acceptedInputValues,
 		recoveryFault,

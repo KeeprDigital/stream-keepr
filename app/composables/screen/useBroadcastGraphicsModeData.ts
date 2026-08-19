@@ -115,6 +115,12 @@ export function useBroadcastGraphicsModeData() {
 		const screenId = screen.value?.id;
 		return screenId ? sessionStore.socialProfileValues(screenId, graphics.value, liveNow.value) : {};
 	});
+	const socialProfilePresentations = computed(() => {
+		if (previewState.value)
+			return {};
+		const screenId = screen.value?.id;
+		return screenId ? sessionStore.socialProfilePresentations(screenId, graphics.value, liveNow.value) : {};
+	});
 
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
@@ -343,6 +349,7 @@ export function useBroadcastGraphicsModeData() {
 		inputValues,
 		outgoingInputValues,
 		socialProfileValues,
+		socialProfilePresentations,
 		isAuthoringPreview,
 		selectedTarget,
 		publishSelection,
