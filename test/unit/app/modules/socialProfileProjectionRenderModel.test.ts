@@ -190,6 +190,52 @@ describe('programmatic Social Profile Projection rendering', () => {
 			.toBe('YouTube · bravo · https://www.youtube.com/@bravo');
 	});
 
+	it('preserves child-owned update motion when exact presentation frames create the pair', () => {
+		const social = projectedGraphic();
+		const group = social.items[0] as GraphicGroupItemConfig;
+		group.children[0]!.animation = {
+			update: { duration: 250, easing: 'linear', delay: 0, fade: { opacity: 0 } },
+		};
+		const twitch = {
+			network: 'twitch' as const,
+			networkLabel: 'Twitch',
+			handle: 'alpha',
+			profileUrl: 'https://www.twitch.tv/alpha',
+		};
+		const youtube = {
+			network: 'youtube' as const,
+			networkLabel: 'YouTube',
+			handle: 'bravo',
+			profileUrl: 'https://www.youtube.com/@bravo',
+		};
+		const model = resolveBroadcastGraphicsRenderModel({
+			output: 'overlay',
+			...CANVAS,
+			graphics: [social],
+			onAirGraphicIds: ['lower-third'],
+			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
+			socialProfileValues: { 'lower-third': { profile: youtube } },
+			outgoingSocialProfileValues: { 'lower-third': { profile: youtube } },
+			socialProfilePresentations: { 'lower-third': { profile: {
+				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+				layers: [{ values: youtube, opacity: 1, offsetX: 0, offsetY: 0 }],
+			} } },
+			outgoingSocialProfilePresentations: { 'lower-third': { profile: {
+				phase: { kind: 'static', elapsedMs: 0, durationMs: null },
+				layers: [
+					{ values: twitch, opacity: 0.5, offsetX: 0, offsetY: 0 },
+					{ values: youtube, opacity: 0.5, offsetX: 0, offsetY: 0 },
+				],
+			} } },
+		});
+		const transition = model.graphics[0]!.items[0]!.crossTransition!;
+
+		expect(transition.outgoing.presentationLayers).toHaveLength(2);
+		expect(transition.outgoing.presentationLayers?.map(layer => layer.children?.[0]?.style.opacity))
+			.toEqual([0.5, 0.5]);
+		expect(transition.incoming.presentationLayers?.[0]?.children?.[0]?.style.opacity).toBe(0.5);
+	});
+
 	it('uses the update recipe to cross the outgoing and incoming correlated Social Profile values', () => {
 		const social = projectedGraphic();
 		(social.items[0] as GraphicGroupItemConfig).animation = {

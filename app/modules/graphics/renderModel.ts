@@ -2342,12 +2342,10 @@ function updateCrossTransition(
 			crossing.add(item.id);
 		if (item.type !== 'group')
 			continue;
-		if (presentationChanged(projectionKey) && item.children.some(child => child.animation?.update)) {
+		if (presentationChanged(projectionKey) && item.children.some(child => child.animation?.update))
 			crossing.add(item.id);
-			continue;
-		}
 		for (const child of item.children) {
-			if (child.animation?.update && changed(child))
+			if (child.animation?.update && changed(child, projectionKey))
 				crossing.add(child.id);
 		}
 	}
