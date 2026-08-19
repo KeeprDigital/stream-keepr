@@ -1731,7 +1731,17 @@ function itemDescriptor(
 	const motion = context.motionOf(item, context.staggerOffsets, context.parent);
 	const rotation = item.rotation ?? 0;
 
-	if (item.type === 'group' && presentation?.frame.phase.kind === 'transition') {
+	if (
+		item.type === 'group'
+		&& presentation
+		&& (
+			presentation.frame.phase.kind === 'transition'
+			|| presentation.frame.layers.length > 1
+			|| presentation.frame.layers.some(layer =>
+				layer.opacity !== 1 || layer.offsetX !== 0 || layer.offsetY !== 0,
+			)
+		)
+	) {
 		return enclosedItemDescriptor(
 			motion,
 			item,
@@ -2293,18 +2303,49 @@ function updateCrossTransition(
 	current: GraphicItemContentContext,
 	outgoing: GraphicItemContentContext,
 ): GraphicsUpdateCrossTransition | null {
-	const changed = (owner: GraphicItemConfig | GraphicGroupChildConfig): boolean =>
-		renderedContent(owner, current) !== renderedContent(owner, outgoing);
+	const presentationKeyByGroupId = new Map(
+		(graphic.socialProfileProjections ?? []).map(projection => [
+			projection.presentationGroupId,
+			projection.key,
+		]),
+	);
+	const presentationChanged = (projectionKey: string | undefined): boolean => {
+		if (!projectionKey)
+			return false;
+		const left = current.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		const right = outgoing.socialProfilePresentations?.[projectionKey]?.layers ?? [];
+		return left.length !== right.length || left.some((layer, index) => {
+			const candidate = right[index];
+			return candidate === undefined
+				|| layer.values.network !== candidate.values.network
+				|| layer.values.networkLabel !== candidate.values.networkLabel
+				|| layer.values.handle !== candidate.values.handle
+				|| layer.values.profileUrl !== candidate.values.profileUrl
+				|| layer.opacity !== candidate.opacity
+				|| layer.offsetX !== candidate.offsetX
+				|| layer.offsetY !== candidate.offsetY;
+		});
+	};
+	const changed = (
+		owner: GraphicItemConfig | GraphicGroupChildConfig,
+		projectionKey?: string,
+	): boolean => renderedContent(owner, current) !== renderedContent(owner, outgoing)
+		|| presentationChanged(projectionKey);
 
-	if (!graphic.items.some(item => changed(item)))
+	if (!graphic.items.some(item => changed(item, presentationKeyByGroupId.get(item.id))))
 		return null;
 
 	const crossing = new Set<string>();
 	for (const item of graphic.items) {
-		if (item.animation?.update && changed(item))
+		const projectionKey = presentationKeyByGroupId.get(item.id);
+		if (item.animation?.update && changed(item, projectionKey))
 			crossing.add(item.id);
 		if (item.type !== 'group')
 			continue;
+		if (presentationChanged(projectionKey) && item.children.some(child => child.animation?.update)) {
+			crossing.add(item.id);
+			continue;
+		}
 		for (const child of item.children) {
 			if (child.animation?.update && changed(child))
 				crossing.add(child.id);

@@ -159,7 +159,7 @@ describe('programmatic Social Profile Projection rendering', () => {
 			onAirGraphicIds: ['lower-third'],
 			animation: { 'lower-third': [{ phase: 'update', elapsed: 125 }] },
 			socialProfileValues: { 'lower-third': { profile: current } },
-			outgoingSocialProfileValues: { 'lower-third': { profile: outgoing } },
+			outgoingSocialProfileValues: { 'lower-third': { profile: current } },
 			socialProfilePresentations: {
 				'lower-third': {
 					profile: {
