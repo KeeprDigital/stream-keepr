@@ -1,15 +1,19 @@
 ## Pre-push gate
 
 Run `pnpm verify` before pushing. It applies CI's gates to the working tree in
-one invocation, stopping at the first failure. (CI also installs from the
-lockfile; commit `pnpm-lock.yaml` alongside any `package.json` change.)
+one invocation, stopping at the first failure. CI also installs from the
+lockfile, so commit `pnpm-lock.yaml` alongside any `package.json` change that
+affects dependency resolution; script-only changes do not rewrite it.
 
-It exists for its tail, `pnpm worker:dry-run` — the gate nothing else in the
-local loop runs. The dry run reads `.output/`, so it needs a production build
-first, which is why it stays out of `pnpm test`. It catches the #302 class of
-failure: a bundle green on Node and broken on workerd. Those failures move with
-dependencies, bundling, `nuxt.config.ts`, and server code, so a change touching
-any of the four is one `pnpm verify` covers and the test loop does not.
+It exists for its tail: `pnpm worker:dry-run` followed by `pnpm worker:smoke`.
+Both consume `.output/`, so they need a production build first and stay out of
+`pnpm test`. The dry run checks the upload bundle statically; the smoke run then
+starts that artifact under local workerd and sends production-shaped requests
+through its runtime, bindings, authentication, and media paths. Together they
+catch the #302 class of failure: a bundle green on Node and broken on workerd.
+Those failures move with dependencies, bundling, `nuxt.config.ts`, and server
+code, so a change touching any of the four is one `pnpm verify` covers and the
+test loop does not.
 
 ## Agent skills
 
