@@ -1,14 +1,15 @@
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { FeatureMatchPromotionResponse } from '~~/shared/api';
+import type { FeatureMatchNoteDiscardConfirmation, FeatureMatchPromotionResponse } from '~~/shared/api';
 import { db } from 'hub:db';
 import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
-import { buildUpsertAssignmentQueries, featureMatchAssignmentService } from '~~/server/services/featureMatchAssignment';
+import { buildAssignmentDisplacementGuardQuery, buildUpsertAssignmentQueries, featureMatchAssignmentService, isAssignmentDisplacementGuardViolation } from '~~/server/services/featureMatchAssignment';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { buildMatchPromotionPlan, matchService } from '~~/server/services/match';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { StateConflictError } from '~~/server/utils/errors';
+import { hasExactNoteDiscardConfirmation, throwFeatureMatchNoteDiscardRequired } from '~~/server/utils/featureMatchNoteDiscard';
 
 /**
  * Whether a write failed because two Feature Match Slots would have held one
@@ -28,6 +29,7 @@ interface PromoteMatchToSlotInput {
 	eventId: number;
 	slotId: number;
 	matchId: number;
+	confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[];
 	originConnectionId?: string;
 }
 
@@ -50,6 +52,7 @@ export function featureMatchPromotionModule() {
 		eventId,
 		slotId,
 		matchId,
+		confirmedNoteDiscards = [],
 		originConnectionId,
 	}: PromoteMatchToSlotInput): Promise<FeatureMatchPromotionResponse> {
 		const match = await matches.findById(matchId, eventId);
@@ -60,6 +63,27 @@ export function featureMatchPromotionModule() {
 		const slot = await slots.findById(slotId, eventId);
 		if (!slot) {
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
+		}
+
+		const [displacedAssignment, incomingAssignment] = await Promise.all([
+			assignments.findByRoundAndSlot(eventId, match.roundId, slotId),
+			assignments.findByRoundAndMatch(eventId, match.roundId, matchId),
+		]);
+		const assignmentToDisplace = displacedAssignment?.matchId !== matchId ? displacedAssignment : undefined;
+		const hasExactConfirmation = assignmentToDisplace
+			? hasExactNoteDiscardConfirmation(assignmentToDisplace, confirmedNoteDiscards)
+			: false;
+		if (
+			assignmentToDisplace?.note?.trim()
+			&& !hasExactConfirmation
+		) {
+			await throwFeatureMatchNoteDiscardRequired(eventId, assignmentToDisplace);
+		}
+		if (confirmedNoteDiscards.length > 0 && !hasExactConfirmation) {
+			throw new StateConflictError(
+				'Feature match assignment',
+				assignmentToDisplace?.id ?? confirmedNoteDiscards[0]!.assignmentId,
+			);
 		}
 
 		// Promote the Slot, refresh every displaced Slot's Session, upsert the
@@ -84,6 +108,12 @@ export function featureMatchPromotionModule() {
 		const { queries: promotedSessionQueries } = await state.buildCreateSessionForSlotQueries(plan.promotedSlot, eventId, defaults);
 
 		const batchQueries: BatchItem<'sqlite'>[] = [
+			buildAssignmentDisplacementGuardQuery(eventId, {
+				roundId: match.roundId,
+				slotId,
+				incomingMatchId: matchId,
+				expectedAssignment: assignmentToDisplace,
+			}),
 			...plan.queries,
 			...clearedSessionQueries,
 			...assignmentQueries,
@@ -99,10 +129,31 @@ export function featureMatchPromotionModule() {
 			// transaction, with none of its own writes committed. Naming it a
 			// conflict is what turns an operator's simultaneous promotion into a
 			// `409` they can act on instead of a `500`.
-			if (!isDuplicateSlotMatchViolation(error))
+			if (isDuplicateSlotMatchViolation(error))
+				throw new StateConflictError('Feature match slot', slotId);
+			if (!isAssignmentDisplacementGuardViolation(error))
 				throw error;
-			throw new StateConflictError('Feature match slot', slotId);
+
+			const current = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
+			if (current?.matchId !== matchId && current?.note?.trim())
+				await throwFeatureMatchNoteDiscardRequired(eventId, current);
+			throw new StateConflictError('Feature match assignment', assignmentToDisplace?.id ?? slotId);
 		}
+
+		const assignment = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
+		if (!assignment) {
+			throw createError({ statusCode: 500, message: 'Failed to save feature match assignment' });
+		}
+
+		// Assignment notifications describe the authoritative batch write and must
+		// not wait behind the optional reverse-sync follow-on. If that later work
+		// faults, peers still learn about the committed Assignment lifecycle.
+		if (incomingAssignment)
+			await eventData.featureMatchAssignmentUpdated({ eventId, entity: assignment, originConnectionId });
+		else
+			await eventData.featureMatchAssignmentCreated({ eventId, entity: assignment, originConnectionId });
+		if (assignmentToDisplace && assignmentToDisplace.id !== assignment.id)
+			await eventData.featureMatchAssignmentDeleted({ eventId, id: assignmentToDisplace.id, originConnectionId });
 
 		// Reverse-sync the promoted players' latest data into the fresh Sessions.
 		// This runs after the atomic promotion: it is a read-compute-write cycle
@@ -113,11 +164,6 @@ export function featureMatchPromotionModule() {
 			eventId,
 			[match.player1Id, match.player2Id].filter((playerId): playerId is number => playerId != null),
 		);
-
-		const assignment = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
-		if (!assignment) {
-			throw createError({ statusCode: 500, message: 'Failed to save feature match assignment' });
-		}
 
 		const clearedSlots = [];
 		for (const clearedSlot of plan.clearedSlots) {

@@ -1,6 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, reactive, ref, watch } from 'vue';
 
 const route = reactive({
@@ -85,6 +85,16 @@ const mockFeatureMatchPromotion = {
 	promote: vi.fn(),
 };
 
+const releaseAssignmentRound = vi.fn();
+const assignmentsByRound = new Map<number, Array<{ id: number; roundId: number; note: string | null }>>();
+const mockFeatureMatchAssignmentStore = reactive({
+	consumeRound: vi.fn(() => releaseAssignmentRound),
+	loadAssignments: vi.fn(),
+	assignmentsForRound: vi.fn((roundId: number) => assignmentsByRound.get(roundId) ?? []),
+	isRemoteChanged: vi.fn(() => false),
+	updateAssignment: vi.fn(),
+});
+
 const mockPlayerStore = reactive({
 	players: [] as Array<{ id: number; name: string; updatedAt: string }>,
 	isLoaded: true,
@@ -129,6 +139,7 @@ mockNuxtImport('useMatchRepository', () => () => mockMatchRepository);
 mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchPromotion', () => () => mockFeatureMatchPromotion);
+mockNuxtImport('useFeatureMatchAssignmentStore', () => () => mockFeatureMatchAssignmentStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useArchetypeStore', () => () => ({ $reset: vi.fn() }));
@@ -182,8 +193,12 @@ const MatchListStub = defineComponent({
 			type: Array,
 			required: true,
 		},
+		featureMatchAssignments: {
+			type: Array,
+			default: () => [],
+		},
 	},
-	template: '<div data-testid="match-list">Match list: {{ matches.map(match => match.id).join(",") }}</div>',
+	template: '<div data-testid="match-list" :data-assignment-notes="featureMatchAssignments.map(assignment => assignment.note).join(\'|\')">Match list: {{ matches.map(match => match.id).join(",") }}</div>',
 });
 
 const UDashboardToolbarStub = defineComponent({
@@ -220,11 +235,13 @@ const UContainerStub = defineComponent({
 	template: '<div data-testid="container"><slot /></div>',
 });
 
+const mountedPages: Array<ReturnType<typeof mount>> = [];
+
 async function mountPage() {
 	const pagePath = '../../../../../app/pages/event/[eventId]/matches.vue';
 	const { default: MatchesPage } = await import(pagePath);
 
-	return mount(MatchesPage, {
+	const wrapper = mount(MatchesPage, {
 		global: {
 			stubs: {
 				NuxtLayout: NuxtLayoutStub,
@@ -238,6 +255,8 @@ async function mountPage() {
 			},
 		},
 	});
+	mountedPages.push(wrapper);
+	return wrapper;
 }
 
 describe('matches page', () => {
@@ -248,14 +267,23 @@ describe('matches page', () => {
 		mockMatchStore.matches = [];
 		mockRoundStore.rounds = [];
 		mockFeatureMatchStore.featureMatches = [];
+		assignmentsByRound.clear();
 		mockPlayerStore.players = [];
 		storesLoading.value = false;
 		mockMatchStore.loadMatchesByRoundId.mockClear();
+		mockFeatureMatchAssignmentStore.consumeRound.mockClear();
+		mockFeatureMatchAssignmentStore.loadAssignments.mockClear();
+		releaseAssignmentRound.mockClear();
 		mockMatchRepository.list.mockReset();
 		mockMatchRepository.list.mockResolvedValue([]);
 		mockOverlay.create.mockClear();
 		router.replace.mockClear();
 		mockToast.add.mockClear();
+	});
+
+	afterEach(() => {
+		for (const wrapper of mountedPages.splice(0))
+			wrapper.unmount();
 	});
 
 	it('shows the rounds setup empty state when no rounds exist', async () => {
@@ -355,5 +383,25 @@ describe('matches page', () => {
 
 		expect(wrapper.get('[data-testid="toolbar"]').text()).toContain('3 Matches');
 		expect(wrapper.get('[data-testid="match-list"]').text()).toContain('Match list: 11,12,13');
+	});
+
+	it('passes only the selected previous Round Assignments to the Matches list and releases it on unmount', async () => {
+		route.query.roundId = '3';
+		mockRoundStore.rounds = [
+			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null },
+			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+		];
+		mockMatchRepository.list.mockResolvedValue([{ id: 13, roundId: 3 }]);
+		mockMatchStore.matches = [{ id: 13, roundId: 3, hasResult: false, isBye: false }];
+		assignmentsByRound.set(2, [{ id: 20, roundId: 2, note: 'Wrong Round' }]);
+		assignmentsByRound.set(3, [{ id: 30, roundId: 3, note: 'Selected Round Note' }]);
+
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(mockFeatureMatchAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
+		expect(wrapper.get('[data-testid="match-list"]').attributes('data-assignment-notes')).toBe('Selected Round Note');
+		wrapper.unmount();
+		expect(releaseAssignmentRound).toHaveBeenCalledOnce();
 	});
 });

@@ -452,6 +452,21 @@ export interface FeatureMatchPromotionResponse {
 	assignment: FeatureMatchAssignmentResponse;
 }
 
+export interface FeatureMatchNoteDiscardConfirmation {
+	assignmentId: number;
+	updatedAt: Date;
+}
+
+export interface FeatureMatchNoteDiscard {
+	assignment: FeatureMatchAssignmentResponse;
+	match: MatchResponse;
+}
+
+export interface FeatureMatchNoteDiscardConflict {
+	code: 'feature-match-note-discard-required';
+	assignments: FeatureMatchNoteDiscard[];
+}
+
 export interface FeatureMatchAssignmentResponse {
 	id: number;
 	eventId: number;
@@ -470,7 +485,11 @@ export interface CreateFeatureMatchAssignmentInput {
 	note?: string | null;
 }
 
-export type UpdateFeatureMatchAssignmentInput = Partial<Pick<CreateFeatureMatchAssignmentInput, 'matchId' | 'note'>>;
+export interface SaveFeatureMatchAssignmentInput extends CreateFeatureMatchAssignmentInput {
+	confirmedNoteDiscards?: FeatureMatchNoteDiscardConfirmation[];
+}
+
+export type UpdateFeatureMatchAssignmentInput = Partial<Pick<CreateFeatureMatchAssignmentInput, 'note'>>;
 
 export interface ArchetypeResponse {
 	id: number;

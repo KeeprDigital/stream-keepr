@@ -26,7 +26,15 @@ const UDropdownMenuStub = defineComponent({
 	template: '<div><slot /><slot name="item-label" :item="{}" /></div>',
 });
 
-async function mountComponent(matchOverrides?: Parameters<typeof createMockMatch>[0]) {
+const MatchNotePopoverStub = defineComponent({
+	props: ['note', 'noteKey', 'save', 'remoteChanged'],
+	template: '<div data-testid="match-note-popover" :data-note="note" :data-remote-changed="String(remoteChanged)"><slot /><button data-testid="match-note-save" @click="save(\'Edited from Matches\')">Save Note</button></div>',
+});
+
+async function mountComponent(
+	matchOverrides?: Parameters<typeof createMockMatch>[0],
+	itemOverrides: Record<string, unknown> = {},
+) {
 	const { default: MatchListItem } = await import('~/components/Match/ListItem.vue');
 
 	return mount(MatchListItem, {
@@ -46,12 +54,14 @@ async function mountComponent(matchOverrides?: Parameters<typeof createMockMatch
 			featureMatchMenuItems: [],
 			promoting: false,
 			resultsEditable: true,
+			...itemOverrides,
 		},
 		global: {
 			stubs: {
 				UBadge: UBadgeStub,
 				UButton: UButtonStub,
 				UDropdownMenu: UDropdownMenuStub,
+				MatchNotePopover: MatchNotePopoverStub,
 				MtgManaColorDisplay: true,
 				UIcon: true,
 			},
@@ -131,5 +141,52 @@ describe('matchListItem', () => {
 
 		expect(wrapper.text()).toContain('Bye');
 		expect(wrapper.text()).toContain('Alice');
+	});
+
+	it('shows one subdued Note preview without a warning row or redundant Note badge', async () => {
+		const wrapper = await mountComponent({}, {
+			featureMatchLabel: 'Featured 1',
+			featureMatchAssignment: {
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 2,
+				matchId: 1,
+				note: 'Keep an eye on the sideboard plan',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			assignmentNoteRemoteChanged: true,
+			saveAssignmentNote: vi.fn().mockResolvedValue(undefined),
+		});
+
+		expect(wrapper.get('.match-row').classes()).not.toContain('match-row--has-note');
+		expect(wrapper.get('.match-note-preview').text()).toContain('Keep an eye on the sideboard plan');
+		expect(wrapper.get('.match-note-preview').classes()).toContain('match-note-preview--changed');
+		expect(wrapper.findAll('[data-testid="badge"]').map(badge => badge.text())).not.toContain('Note');
+		expect(wrapper.get('[data-testid="match-note-popover"]').attributes('data-remote-changed')).toBe('true');
+	});
+
+	it('keeps a subtle add affordance and shared editor integration when the Assignment has no Note', async () => {
+		const save = vi.fn().mockResolvedValue(undefined);
+		const wrapper = await mountComponent({}, {
+			featureMatchLabel: 'Featured 1',
+			featureMatchAssignment: {
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 2,
+				matchId: 1,
+				note: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			saveAssignmentNote: save,
+		});
+
+		expect(wrapper.find('.match-note-preview').exists()).toBe(false);
+		expect(wrapper.get('[aria-label="Add feature match note"]').attributes('data-color')).not.toBe('warning');
+		await wrapper.get('[data-testid="match-note-save"]').trigger('click');
+		expect(save).toHaveBeenCalledWith(9, 'Edited from Matches');
 	});
 });

@@ -1,4 +1,5 @@
 import type {
+	FeatureMatchAssignmentResponse,
 	FeatureMatchResponse,
 	MatchResponse,
 	PhaseResponse,
@@ -197,6 +198,18 @@ export interface MessageDefinitions {
 
 	'featureMatch:reordered': {
 		featureMatches: { featureMatchId: number; sortOrder: number }[];
+	};
+
+	'featureMatchAssignment:created': {
+		featureMatchAssignment: FeatureMatchAssignmentResponse;
+	};
+
+	'featureMatchAssignment:updated': {
+		featureMatchAssignment: FeatureMatchAssignmentResponse;
+	};
+
+	'featureMatchAssignment:deleted': {
+		featureMatchAssignmentId: number;
 	};
 
 	'featureMatchSession:eventApplied': FeatureMatchSessionEventAppliedPayload;

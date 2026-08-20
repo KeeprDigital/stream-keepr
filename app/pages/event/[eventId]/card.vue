@@ -132,7 +132,9 @@ const roundOptions = computed(() => roundStore.rounds.map((round) => {
 }));
 
 const matchOptions = computed(() => {
-	const assignments = assignmentStore.assignments;
+	const assignments = deckListRoundId.value
+		? assignmentStore.assignmentsForRound(deckListRoundId.value)
+		: [];
 	const matches = matchStore.matches;
 	const assignedMatchIds = new Set(assignments.map(assignment => assignment.matchId));
 	return matches
@@ -166,6 +168,18 @@ const matchOptions = computed(() => {
 const selectedDeckListMatch = computed(() =>
 	deckListMatchId.value ? matchStore.matches.find(match => match.id === deckListMatchId.value) ?? null : null,
 );
+const selectedDeckListAssignment = computed(() => {
+	if (!deckListRoundId.value || !deckListMatchId.value)
+		return null;
+	return assignmentStore.assignmentsForRound(deckListRoundId.value)
+		.find(assignment => assignment.matchId === deckListMatchId.value) ?? null;
+});
+
+async function saveSelectedAssignmentNote(note: string) {
+	if (!eventStore.eventId || !selectedDeckListAssignment.value)
+		return;
+	await assignmentStore.updateAssignment(eventStore.eventId, selectedDeckListAssignment.value.id, { note: note.trim() || null });
+}
 
 // Auto-select the first matchup when entering match-decklist mode.
 watch(activeMode, (mode) => {
@@ -179,12 +193,14 @@ watch(roundOptions, (options) => {
 		deckListRoundId.value = options[0].value;
 }, { immediate: true });
 
-watch(deckListRoundId, async (roundId) => {
-	if (!eventStore.eventId || !roundId)
+watch([() => eventStore.eventId, deckListRoundId], async ([eventId, roundId], _, onCleanup) => {
+	if (!eventId || !roundId)
 		return;
+	const releaseRound = assignmentStore.consumeRound(eventId, roundId);
+	onCleanup(releaseRound);
 	await Promise.all([
-		matchStore.loadMatchesByRoundId(eventStore.eventId, roundId),
-		assignmentStore.loadAssignments(eventStore.eventId, roundId),
+		matchStore.loadMatchesByRoundId(eventId, roundId),
+		assignmentStore.loadAssignments(eventId, roundId),
 	]);
 	if (!matchOptions.value.some(option => option.value === deckListMatchId.value)) {
 		deckListMatchId.value = matchOptions.value[0]?.value;
@@ -284,6 +300,9 @@ const timeoutProgress = computed(() => {
 								:round-options="roundOptions"
 								:match-options="matchOptions"
 								:selected-match="selectedDeckListMatch"
+								:selected-assignment="selectedDeckListAssignment"
+								:save-assignment-note="saveSelectedAssignmentNote"
+								:assignment-note-remote-changed="selectedDeckListAssignment ? assignmentStore.isRemoteChanged(selectedDeckListAssignment.id) : false"
 							/>
 						</div>
 						<div v-show="activeMode === 'player-decklist'">

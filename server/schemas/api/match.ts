@@ -85,7 +85,11 @@ export const matchQuerySchema = z.object({
 // PROMOTE (for promotion endpoint)
 export const promoteMatchSchema = z.object({
 	matchId: z.number().int().positive(),
-});
+	confirmedNoteDiscards: z.array(z.object({
+		assignmentId: z.number().int().positive(),
+		updatedAt: z.coerce.date(),
+	}).strict()).optional(),
+}).strict();
 
 /* TYPES */
 export type CreateMatchInput = z.infer<typeof createMatchSchema>;

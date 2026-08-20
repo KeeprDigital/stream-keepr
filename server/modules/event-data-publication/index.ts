@@ -1,9 +1,10 @@
-import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbMatch, DbPhase, DbPlayer, DbPlayerDeck, DbPlayerList, DbRound, DbScreen } from '~~/server/db/schema';
+import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbFeatureMatchAssignment, DbMatch, DbPhase, DbPlayer, DbPlayerDeck, DbPlayerList, DbRound, DbScreen } from '~~/server/db/schema';
 import type { ArchetypeKeyCard } from '~~/server/services/archetypeCard';
 import type { MessagePayload, MessageType } from '~~/shared/types/messages';
 import { mapArchetypeToResponse } from '~~/server/mappers/archetype';
 import { mapEventToResponse } from '~~/server/mappers/event';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
+import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { mapMatchToResponse } from '~~/server/mappers/match';
 import { mapPhaseToResponse } from '~~/server/mappers/phase';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
@@ -344,6 +345,22 @@ export function eventDataPublicationModule() {
 		return featureMatches;
 	}
 
+	async function featureMatchAssignmentCreated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
+		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
+		await publishEventDataChange(eventId, 'featureMatchAssignment:created', { featureMatchAssignment }, originConnectionId);
+		return featureMatchAssignment;
+	}
+
+	async function featureMatchAssignmentUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
+		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
+		await publishEventDataChange(eventId, 'featureMatchAssignment:updated', { featureMatchAssignment }, originConnectionId);
+		return featureMatchAssignment;
+	}
+
+	async function featureMatchAssignmentDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
+		await publishEventDataChange(eventId, 'featureMatchAssignment:deleted', { featureMatchAssignmentId: id }, originConnectionId);
+	}
+
 	/*
 	 * A Screen change is announced by name; the Screen itself travels over the API.
 	 *
@@ -474,6 +491,9 @@ export function eventDataPublicationModule() {
 		featureMatchSlotUpdated,
 		featureMatchSlotDeleted,
 		featureMatchSlotsReordered,
+		featureMatchAssignmentCreated,
+		featureMatchAssignmentUpdated,
+		featureMatchAssignmentDeleted,
 		screenCreated,
 		screenUpdated,
 		screenDeleted,

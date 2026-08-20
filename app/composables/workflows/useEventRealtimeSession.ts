@@ -13,10 +13,14 @@ export function useEventRealtimeSession() {
 
 	const realtime = useRealtime();
 	const eventStore = useEventStore();
+	const featureMatchAssignmentStore = useFeatureMatchAssignmentStore();
 
 	const { accept } = useRealtimeMessageGate(computed(() => realtime.connectionId));
 
 	realtime.onRoom('event-session', createEventRealtimeHandlers({ accept, eventStore, realtime }));
+	useReconnectResync(() => {
+		void featureMatchAssignmentStore.reloadConsumedRounds();
+	}, realtime);
 
 	watch(
 		() => eventStore.eventId,

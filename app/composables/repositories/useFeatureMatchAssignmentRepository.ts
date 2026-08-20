@@ -1,9 +1,9 @@
-import type { CreateFeatureMatchAssignmentInput, FeatureMatchAssignment, UpdateFeatureMatchAssignmentInput } from '~/types';
+import type { FeatureMatchAssignment, SaveFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInput } from '~/types';
 import { useEventDataFetch, useEventDataResource } from '~/modules/event-data/client';
 
 export function useFeatureMatchAssignmentRepository() {
 	const eventData = useEventDataFetch();
-	const base = useEventDataResource<FeatureMatchAssignment, CreateFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInput>({
+	const base = useEventDataResource<FeatureMatchAssignment, SaveFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInput>({
 		resourcePath: 'feature-match-assignments',
 		eventScoped: true,
 		includeHeaders: true,

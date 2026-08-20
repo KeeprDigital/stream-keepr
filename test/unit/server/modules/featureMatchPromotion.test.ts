@@ -9,9 +9,12 @@ const mockFeatureMatchService = {
 	findById: vi.fn(),
 };
 const mockFeatureMatchAssignmentService = {
+	findById: vi.fn(),
 	findByRoundAndSlot: vi.fn(),
+	findByRoundAndMatch: vi.fn(),
 };
 const mockBuildUpsertAssignmentQueries = vi.fn();
+const mockBuildAssignmentDisplacementGuardQuery = vi.fn();
 const mockFeatureMatchStateService = {
 	loadEventDefaults: vi.fn(),
 	buildCreateSessionForSlotQueries: vi.fn(),
@@ -36,6 +39,8 @@ vi.mock('~~/server/services/featureMatch', () => ({
 vi.mock('~~/server/services/featureMatchAssignment', () => ({
 	featureMatchAssignmentService: () => mockFeatureMatchAssignmentService,
 	buildUpsertAssignmentQueries: (...args: unknown[]) => mockBuildUpsertAssignmentQueries(...args),
+	buildAssignmentDisplacementGuardQuery: (...args: unknown[]) => mockBuildAssignmentDisplacementGuardQuery(...args),
+	isAssignmentDisplacementGuardViolation: (error: unknown) => error instanceof Error && error.message.includes('feature_match_assignments.event_id'),
 }));
 vi.mock('~~/server/services/featureMatchState', () => ({
 	featureMatchStateService: () => mockFeatureMatchStateService,
@@ -110,6 +115,8 @@ describe('feature Match Slot Promotion server module', () => {
 		mockFeatureMatchStateService.loadEventDefaults.mockResolvedValue({ game: 'mtg' });
 		mockFeatureMatchStateService.buildCreateSessionForSlotQueries.mockResolvedValue({ queries: ['session-q'] });
 		mockBuildUpsertAssignmentQueries.mockReturnValue(['assignment-del', 'assignment-ins']);
+		mockBuildAssignmentDisplacementGuardQuery.mockReturnValue('assignment-guard');
+		mockFeatureMatchAssignmentService.findByRoundAndMatch.mockResolvedValue(undefined);
 		mockBatch.mockResolvedValue([]);
 		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([]);
 	});
@@ -155,6 +162,7 @@ describe('feature Match Slot Promotion server module', () => {
 		// Every write is composed into exactly one atomic batch, in order.
 		expect(mockBatch).toHaveBeenCalledOnce();
 		expect(mockBatch).toHaveBeenCalledWith([
+			'assignment-guard',
 			'clear-q',
 			'promote-q',
 			'session-q', // cleared slot session
@@ -181,6 +189,23 @@ describe('feature Match Slot Promotion server module', () => {
 			clearedSlots: [expect.objectContaining({ id: 5 })],
 			assignment: expect.objectContaining({ id: 9 }),
 		});
+	});
+
+	it('guards even an initially empty destination against a concurrent Note before deleting it', async () => {
+		stagePromotion();
+		mockFeatureMatchAssignmentService.findByRoundAndSlot
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce({ id: 9 });
+
+		await featureMatchPromotionModule().promoteMatchToSlot({ eventId: 1, slotId: 2, matchId: 7 });
+
+		expect(mockBuildAssignmentDisplacementGuardQuery).toHaveBeenCalledWith(1, {
+			roundId: 3,
+			slotId: 2,
+			incomingMatchId: 7,
+			expectedAssignment: undefined,
+		});
+		expect(mockBatch.mock.calls[0]![0][0]).toBe('assignment-guard');
 	});
 
 	it('throws 404 when the Match is not in the Event', async () => {
@@ -294,5 +319,71 @@ describe('feature Match Slot Promotion server module', () => {
 
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [101, 102]);
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
+	});
+
+	it('publishes committed Assignment changes before a fallible post-commit reverse sync', async () => {
+		stagePromotion();
+		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockRejectedValue(new Error('sync failed'));
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+		})).rejects.toThrow('sync failed');
+
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:created', {
+			featureMatchAssignment: expect.objectContaining({ id: 9 }),
+		}, undefined);
+		expect(mockPublishMessage.mock.invocationCallOrder[0]).toBeLessThan(
+			mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mock.invocationCallOrder[0]!,
+		);
+	});
+
+	it('turns a stale confirmed Assignment that was deleted into a renewed conflict', async () => {
+		stagePromotion();
+		mockFeatureMatchAssignmentService.findByRoundAndSlot
+			.mockResolvedValueOnce({
+				id: 8,
+				eventId: 1,
+				roundId: 3,
+				slotId: 2,
+				matchId: 6,
+				note: 'Reviewed note',
+				createdAt: NOW,
+				updatedAt: NOW,
+			})
+			.mockResolvedValueOnce(undefined);
+		mockBatch.mockRejectedValue(new Error(
+			'D1_ERROR: NOT NULL constraint failed: feature_match_assignments.event_id: SQLITE_CONSTRAINT',
+		));
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+			confirmedNoteDiscards: [{ assignmentId: 8, updatedAt: NOW }],
+		})).rejects.toMatchObject({ statusCode: 409 });
+	});
+
+	it('refuses a confirmation whose reviewed Note was cleared before the retry began', async () => {
+		stagePromotion();
+		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValueOnce({
+			id: 8,
+			eventId: 1,
+			roundId: 3,
+			slotId: 2,
+			matchId: 6,
+			note: null,
+			createdAt: NOW,
+			updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+		});
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+			confirmedNoteDiscards: [{ assignmentId: 8, updatedAt: NOW }],
+		})).rejects.toMatchObject({ statusCode: 409 });
+		expect(mockBatch).not.toHaveBeenCalled();
 	});
 });

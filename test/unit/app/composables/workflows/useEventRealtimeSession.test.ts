@@ -111,6 +111,13 @@ describe('useEventRealtimeSession', () => {
 	const featureMatchStateStore = {
 		applyRemoteSessionEvent: vi.fn(),
 	};
+	const featureMatchAssignmentStore = {
+		applyRemoteCreated: vi.fn(),
+		applyRemoteUpdated: vi.fn(),
+		applyRemoteDeleted: vi.fn(),
+		reloadConsumedRounds: vi.fn(),
+	};
+	const useReconnectResync = vi.fn();
 	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
 		applyEpochEnded: vi.fn(),
@@ -181,6 +188,8 @@ describe('useEventRealtimeSession', () => {
 		vi.stubGlobal('useMatchStore', () => matchStore);
 		vi.stubGlobal('useFeatureMatchStore', () => featureMatchStore);
 		vi.stubGlobal('useFeatureMatchStateStore', () => featureMatchStateStore);
+		vi.stubGlobal('useFeatureMatchAssignmentStore', () => featureMatchAssignmentStore);
+		vi.stubGlobal('useReconnectResync', useReconnectResync);
 		vi.stubGlobal('useBroadcastGraphicsLiveSessionStore', () => broadcastGraphicsLiveSessionStore);
 		vi.stubGlobal('useScreenStore', () => screenStore);
 		vi.stubGlobal('useCardStore', () => cardStore);
@@ -261,6 +270,9 @@ describe('useEventRealtimeSession', () => {
 			'featureMatch:updated': featureMatchStore.applyRemoteUpdated,
 			'featureMatch:deleted': featureMatchStore.applyRemoteDeleted,
 			'featureMatch:reordered': featureMatchStore.applyRemoteReordered,
+			'featureMatchAssignment:created': featureMatchAssignmentStore.applyRemoteCreated,
+			'featureMatchAssignment:updated': featureMatchAssignmentStore.applyRemoteUpdated,
+			'featureMatchAssignment:deleted': featureMatchAssignmentStore.applyRemoteDeleted,
 			'featureMatchSession:eventApplied': featureMatchStateStore.applyRemoteSessionEvent,
 			'broadcastGraphicsLiveSession:commandApplied': broadcastGraphicsLiveSessionStore.applyRemoteCommand,
 			'broadcastGraphicsLiveSession:epochEnded': broadcastGraphicsLiveSessionStore.applyEpochEnded,
@@ -366,6 +378,15 @@ describe('useEventRealtimeSession', () => {
 			expect(matchStore.applyRemoteMatchesRefreshed).toHaveBeenCalledWith(roundMessage);
 			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
 		});
+	});
+
+	it('reloads every consumed Assignment Round through Reconnect Resync', async () => {
+		await startSession();
+
+		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), realtime);
+		const [resync] = useReconnectResync.mock.calls[0]!;
+		resync();
+		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 	});
 
 	it('resets event state and navigates home when the active event is deleted', async () => {

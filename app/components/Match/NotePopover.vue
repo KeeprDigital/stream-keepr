@@ -3,93 +3,56 @@ const props = defineProps<{
 	note: string;
 	noteKey?: number | string | null;
 	contentAlign?: 'start' | 'end';
+	save: (note: string) => Promise<unknown>;
+	remoteChanged?: boolean;
 }>();
 
-const emit = defineEmits<{
-	save: [note: string];
-}>();
-
-const open = ref(false);
-const draft = ref('');
-
-const hasNote = computed(() => props.note.trim().length > 0);
-
-watch(
-	() => [props.noteKey, props.note] as const,
-	() => {
-		draft.value = props.note;
-	},
-	{ immediate: true },
-);
-
-function saveNote() {
-	if (draft.value.trim() === props.note.trim()) {
-		open.value = false;
-		return;
-	}
-	emit('save', draft.value);
-	open.value = false;
-}
-
-function clearNote() {
-	draft.value = '';
-	saveNote();
-}
-
-function cancelNote() {
-	draft.value = props.note;
-	open.value = false;
-}
+const {
+	active: open,
+	draft,
+	saving,
+	error,
+	confirmingClear,
+	hasNote,
+	cancelEditing: cancelNote,
+	saveDraft: saveNote,
+	requestClear,
+	confirmClear,
+	handleKeydown,
+} = useFeatureMatchNoteEditor({
+	note: () => props.note,
+	noteKey: () => props.noteKey,
+	save: note => props.save(note),
+});
 </script>
 
 <template>
-	<UPopover
-		v-model:open="open"
-		:content="{ align: contentAlign }"
-	>
-		<slot />
+	<UPopover v-model:open="open" :content="{ align: contentAlign }">
+		<span :data-remote-changed="String(remoteChanged ?? false)">
+			<slot />
+		</span>
 
 		<template #content>
 			<div class="match-note-popover">
 				<div class="flex items-center gap-2 text-sm font-medium text-default">
-					<UIcon name="i-lucide-sticky-note" class="size-4 text-primary" />
-					Feature match note
+					<UIcon name="i-lucide-sticky-note" class="size-4 text-muted" />
+					Feature Match Note
 				</div>
-				<UTextarea
-					v-model="draft"
-					placeholder="Add production notes for this feature match…"
-					:rows="4"
-					autofocus
-					class="w-full"
+				<FeatureMatchNoteEditorBody
+					v-model:draft="draft"
+					:note="note"
+					:saving="saving"
+					:error="error"
+					:confirming-clear="confirmingClear"
+					:has-note="hasNote"
+					compact
+					@keydown="handleKeydown"
+					@save="saveNote"
+					@cancel="cancelNote"
+					@request-clear="requestClear"
+					@keep-note="confirmingClear = false"
+					@confirm-clear="confirmClear"
 				/>
-				<div class="flex items-center justify-between gap-2">
-					<UButton
-						color="neutral"
-						variant="ghost"
-						size="sm"
-						:disabled="!hasNote && !draft.trim()"
-						@click="clearNote"
-					>
-						Clear
-					</UButton>
-					<div class="flex items-center gap-2">
-						<UButton
-							color="neutral"
-							variant="ghost"
-							size="sm"
-							@click="cancelNote"
-						>
-							Cancel
-						</UButton>
-						<UButton
-							color="primary"
-							size="sm"
-							@click="saveNote"
-						>
-							Save note
-						</UButton>
-					</div>
-				</div>
 			</div>
 		</template>
 	</UPopover>

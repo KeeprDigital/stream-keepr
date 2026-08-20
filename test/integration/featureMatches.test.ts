@@ -183,6 +183,351 @@ describe('feature match slots API', () => {
 		});
 	});
 
+	it('re-promotes the same Match to the same Slot without replacing its Assignment or Note', async () => {
+		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: {
+				roundId,
+				tableNumber: 43,
+				player1Data: { name: 'Same' },
+				player2Data: { name: 'Slot' },
+			},
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+
+		const first = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: sourceMatch.id },
+		});
+		const noted = await $fetch(`/api/events/${eventId}/feature-match-assignments/${first.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Keep this note' },
+		});
+
+		const promotedAgain = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: sourceMatch.id },
+		});
+
+		expect(promotedAgain.assignment).toMatchObject({
+			id: noted.id,
+			roundId,
+			slotId: slot.id,
+			matchId: sourceMatch.id,
+			note: 'Keep this note',
+		});
+	});
+
+	it('normalizes Assignment Note whitespace and treats an empty saved value as no Note', async () => {
+		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 44, player1Data: { name: 'Plain' }, player2Data: { name: 'Text' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: sourceMatch.id },
+		});
+
+		const noted = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: '  first line\nsecond line  ' },
+		});
+		expect(noted.note).toBe('first line\nsecond line');
+
+		const cleared = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: ' \n\t ' },
+		});
+		expect(cleared.note).toBeNull();
+	});
+
+	it('refuses a promotion that would discard a Note before changing any Assignment or Slot', async () => {
+		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 45, player1Data: { name: 'Noted' }, player2Data: { name: 'Match' } },
+		});
+		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 46, player1Data: { name: 'New' }, player2Data: { name: 'Match' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: notedMatch.id },
+		});
+		const noted = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Do not lose this' },
+		});
+
+		const refused = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: replacementMatch.id },
+		});
+
+		expect(refused.status).toBe(409);
+		expect(refused._data.data).toMatchObject({
+			code: 'feature-match-note-discard-required',
+			assignments: [{
+				assignment: { id: noted.id, matchId: notedMatch.id, note: 'Do not lose this' },
+				match: { id: notedMatch.id, tableNumber: 45 },
+			}],
+		});
+
+		const slots = await $fetch(`/api/events/${eventId}/feature-match-slots`);
+		expect(slots.featureMatchSlots.find((candidate: { id: number }) => candidate.id === slot.id)).toMatchObject({
+			matchId: notedMatch.id,
+			activeSessionId: promoted.promotedSlot.activeSessionId,
+		});
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		expect(assignments.featureMatchAssignments).toContainEqual(expect.objectContaining({
+			id: noted.id,
+			matchId: notedMatch.id,
+			note: 'Do not lose this',
+		}));
+	});
+
+	it('protects the direct Assignment save endpoint with the same exact Note discard confirmation', async () => {
+		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 78, player1Data: { name: 'Direct' }, player2Data: { name: 'Note' } },
+		});
+		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 79, player1Data: { name: 'Direct' }, player2Data: { name: 'Replacement' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: notedMatch.id },
+		});
+		const reviewed = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Protect direct saves too' },
+		});
+
+		const refused = await $fetchRaw(`/api/events/${eventId}/feature-match-assignments`, {
+			method: 'POST',
+			body: { roundId, slotId: slot.id, matchId: replacementMatch.id },
+		});
+		expect(refused.status).toBe(409);
+		expect(refused._data.data).toMatchObject({
+			code: 'feature-match-note-discard-required',
+			assignments: [{ assignment: { id: reviewed.id, note: 'Protect direct saves too' } }],
+		});
+
+		const replaced = await $fetch(`/api/events/${eventId}/feature-match-assignments`, {
+			method: 'POST',
+			body: {
+				roundId,
+				slotId: slot.id,
+				matchId: replacementMatch.id,
+				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+			},
+		});
+		expect(replaced).toMatchObject({
+			roundId,
+			slotId: slot.id,
+			matchId: replacementMatch.id,
+			note: null,
+		});
+	});
+
+	it('retries a destructive replacement only with the exact Assignment version the user reviewed', async () => {
+		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 47, player1Data: { name: 'Reviewed' }, player2Data: { name: 'Note' } },
+		});
+		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 48, player1Data: { name: 'Replacement' }, player2Data: { name: 'Match' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: notedMatch.id },
+		});
+		const reviewed = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'The reviewed note' },
+		});
+
+		const replaced = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: {
+				matchId: replacementMatch.id,
+				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+			},
+		});
+
+		expect(replaced.promotedSlot).toMatchObject({ id: slot.id, matchId: replacementMatch.id });
+		expect(replaced.assignment).toMatchObject({
+			matchId: replacementMatch.id,
+			slotId: slot.id,
+			note: null,
+		});
+		expect(replaced.assignment.id).not.toBe(reviewed.id);
+	});
+
+	it('refuses a stale discard confirmation with the current Note and leaves the reassignment untouched', async () => {
+		const notedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 49, player1Data: { name: 'Changed' }, player2Data: { name: 'Note' } },
+		});
+		const replacementMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 50, player1Data: { name: 'Waiting' }, player2Data: { name: 'Match' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: notedMatch.id },
+		});
+		const reviewed = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Version one' },
+		});
+		const current = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Version two' },
+		});
+
+		const refused = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: {
+				matchId: replacementMatch.id,
+				confirmedNoteDiscards: [{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt }],
+			},
+		});
+
+		expect(refused.status).toBe(409);
+		expect(refused._data.data.assignments).toEqual([
+			expect.objectContaining({
+				assignment: expect.objectContaining({ id: current.id, note: 'Version two', updatedAt: current.updatedAt }),
+			}),
+		]);
+		const slots = await $fetch(`/api/events/${eventId}/feature-match-slots`);
+		expect(slots.featureMatchSlots.find((candidate: { id: number }) => candidate.id === slot.id)).toMatchObject({
+			matchId: notedMatch.id,
+		});
+	});
+
+	it('moves a continuing Assignment with its Note and confirms only the displaced destination Note', async () => {
+		const incomingMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 51, player1Data: { name: 'Incoming' }, player2Data: { name: 'Match' } },
+		});
+		const displacedMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 52, player1Data: { name: 'Displaced' }, player2Data: { name: 'Match' } },
+		});
+		const [sourceSlot, destinationSlot] = await Promise.all([
+			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+			$fetch(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } }),
+		]);
+		const incomingPromotion = await $fetch(`/api/events/${eventId}/feature-match-slots/${sourceSlot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: incomingMatch.id },
+		});
+		const displacedPromotion = await $fetch(`/api/events/${eventId}/feature-match-slots/${destinationSlot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: displacedMatch.id },
+		});
+		const incomingAssignment = await $fetch(`/api/events/${eventId}/feature-match-assignments/${incomingPromotion.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Carry this Note' },
+		});
+		const displacedAssignment = await $fetch(`/api/events/${eventId}/feature-match-assignments/${displacedPromotion.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Confirm losing this Note' },
+		});
+
+		const refused = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${destinationSlot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: incomingMatch.id },
+		});
+		expect(refused.status).toBe(409);
+		expect(refused._data.data.assignments).toHaveLength(1);
+		expect(refused._data.data.assignments[0].assignment).toMatchObject({
+			id: displacedAssignment.id,
+			note: 'Confirm losing this Note',
+		});
+
+		const moved = await $fetch(`/api/events/${eventId}/feature-match-slots/${destinationSlot.id}/promote`, {
+			method: 'POST',
+			body: {
+				matchId: incomingMatch.id,
+				confirmedNoteDiscards: [{ assignmentId: displacedAssignment.id, updatedAt: displacedAssignment.updatedAt }],
+			},
+		});
+		expect(moved.assignment).toMatchObject({
+			id: incomingAssignment.id,
+			slotId: destinationSlot.id,
+			matchId: incomingMatch.id,
+			note: 'Carry this Note',
+		});
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		expect(assignments.featureMatchAssignments.some((assignment: { id: number }) => assignment.id === displacedAssignment.id)).toBe(false);
+	});
+
+	it('leaves retained Assignments and Notes in another Round untouched', async () => {
+		const previousRound = await $fetch(`/api/events/${eventId}/rounds`, {
+			method: 'POST',
+			body: { phaseId, name: 'Previous Round', roundNumber: 99 },
+		});
+		const previousMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId: previousRound.id, tableNumber: 53, player1Data: { name: 'Previous' }, player2Data: { name: 'Round' } },
+		});
+		const currentMatch = await $fetch(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 54, player1Data: { name: 'Current' }, player2Data: { name: 'Round' } },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+		const previous = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: previousMatch.id },
+		});
+		const notedPrevious = await $fetch(`/api/events/${eventId}/feature-match-assignments/${previous.assignment.id}`, {
+			method: 'PATCH',
+			body: { note: 'Historical context' },
+		});
+
+		await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+			method: 'POST',
+			body: { matchId: currentMatch.id },
+		});
+
+		const retained = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId: previousRound.id } });
+		expect(retained.featureMatchAssignments).toContainEqual(expect.objectContaining({
+			id: notedPrevious.id,
+			matchId: previousMatch.id,
+			note: 'Historical context',
+		}));
+	});
+
 	it('promotes atomically: slot, assignment, and a fresh session land together, and re-promotion stays consistent', async () => {
 		const matchA = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
@@ -280,6 +625,18 @@ describe('feature match slots API', () => {
 		const stored = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
 		expect(holders).toHaveLength(1);
+		const winner = holders[0]!;
+		const loserBefore = responses[0]!.status === 409 ? lane1 : lane2;
+		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id);
+		expect(loserAfter).toMatchObject({
+			id: loserBefore.id,
+			matchId: null,
+			activeSessionId: loserBefore.activeSessionId,
+		});
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		expect(assignments.featureMatchAssignments.filter(
+			(assignment: { matchId: number }) => assignment.matchId === contested.id,
+		)).toEqual([expect.objectContaining({ slotId: winner.id })]);
 	});
 
 	it('keeps a Player rename and a concurrent operator command from cancelling each other', async () => {

@@ -35,21 +35,27 @@ const featureMatchAssignment = computed(() => assignmentStore.assignments.find(a
 	assignment.slotId === props.match.id && assignment.matchId === props.match.matchId,
 ) ?? null);
 const assignmentNote = computed(() => featureMatchAssignment.value?.note ?? '');
-const hasAssignmentNote = computed(() => assignmentNote.value.trim().length > 0);
 const sourceMatch = ref<import('~/types').Match | null>(null);
 const sourceRound = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
 
 watch(
 	() => props.match.matchId,
-	async (matchId) => {
+	async (matchId, _, onCleanup) => {
+		let releaseRound: (() => void) | undefined;
+		let stale = false;
+		onCleanup(() => {
+			stale = true;
+			releaseRound?.();
+		});
 		sourceMatch.value = null;
 		if (!eventStore.eventId || !matchId)
 			return;
 		if (!roundStore.isLoaded)
 			await roundStore.loadRoundsByEventId(eventStore.eventId);
 		const linkedMatch = await matchRepository.getById(eventStore.eventId, matchId);
-		if (linkedMatch) {
+		if (linkedMatch && !stale) {
 			sourceMatch.value = linkedMatch;
+			releaseRound = assignmentStore.consumeRound(eventStore.eventId, linkedMatch.roundId);
 			await assignmentStore.loadAssignments(eventStore.eventId, linkedMatch.roundId);
 		}
 	},
@@ -262,6 +268,16 @@ async function save() {
 				@update:table-number="formData.tableNumber = $event"
 			/>
 		</template>
+
+		<FeatureMatchNote
+			v-if="featureMatchAssignment"
+			class="mx-3 mt-3"
+			:note="assignmentNote"
+			:note-key="featureMatchAssignment.id"
+			:save="saveAssignmentNote"
+			:remote-changed="assignmentStore.isRemoteChanged(featureMatchAssignment.id)"
+			compact
+		/>
 
 		<!-- ==================== GAME MODE ==================== -->
 		<div v-show="panelView === 'game'">
@@ -478,20 +494,6 @@ async function save() {
 
 			<!-- Game mode: Match actions -->
 			<div v-else-if="matchState" class="match-actions">
-				<MatchNotePopover
-					v-if="featureMatchAssignment"
-					:note="assignmentNote"
-					:note-key="featureMatchAssignment.id"
-					content-align="start"
-					@save="saveAssignmentNote"
-				>
-					<UButton
-						:label="hasAssignmentNote ? 'Edit Note' : 'Add Note'"
-						:icon="hasAssignmentNote ? 'i-lucide-sticky-note' : 'i-lucide-message-square-plus'"
-						:color="hasAssignmentNote ? 'primary' : 'neutral'"
-						:variant="hasAssignmentNote ? 'soft' : 'ghost'"
-					/>
-				</MatchNotePopover>
 				<UButton
 					label="Tokens"
 					icon="i-lucide-images"

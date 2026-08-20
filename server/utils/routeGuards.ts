@@ -120,21 +120,6 @@ export async function validateFeatureMatchAssignmentCreateReferences(
 		throw createError({ statusCode: 400, message: 'Match does not belong to round' });
 }
 
-export async function validateFeatureMatchAssignmentUpdateReferences(
-	eventId: number,
-	existing: { roundId: number },
-	input: { matchId?: number | null },
-): Promise<void> {
-	if (input.matchId == null)
-		return;
-
-	const match = await matchService().findById(input.matchId, eventId);
-	if (!match)
-		throwReferenceNotFound('Match not found');
-	if (match.roundId !== existing.roundId)
-		throw createError({ statusCode: 400, message: 'Match does not belong to assignment round' });
-}
-
 function configReferenceValue(config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined, key: string): number | null | undefined {
 	if (!config || typeof config !== 'object')
 		return undefined;
