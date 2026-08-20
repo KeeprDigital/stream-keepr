@@ -1,8 +1,9 @@
 ## Pre-push gate
 
 Run `pnpm verify` before pushing. It applies CI's gates to the working tree in
-one invocation, stopping at the first failure. (CI also installs from the
-lockfile; commit `pnpm-lock.yaml` alongside any `package.json` change.)
+one invocation, stopping at the first failure. CI also installs from the
+lockfile, so commit `pnpm-lock.yaml` alongside any `package.json` change that
+affects dependency resolution; script-only changes do not rewrite it.
 
 It exists for its tail: `pnpm worker:dry-run` followed by `pnpm worker:smoke`.
 Both consume `.output/`, so they need a production build first and stay out of

@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -12,6 +12,7 @@ describe('the built Worker smoke runner', () => {
 	const temporaryRoots: string[] = [];
 
 	afterEach(async () => {
+		vi.unstubAllEnvs();
 		await Promise.all(temporaryRoots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 	});
 
@@ -89,11 +90,12 @@ describe('the built Worker smoke runner', () => {
 		const stagedDevVars = join(repositoryRoot, '.output/server/.dev.vars');
 		const originalEnv = Buffer.from('NUXT_BETTER_AUTH_SECRET=developer-value\n');
 		const originalDevVars = Buffer.from('NUXT_ADMIN_BOOTSTRAP_TOKEN=older-preview\n');
+		vi.stubEnv('NUXT_DEVELOPER_CREDENTIAL', 'must-not-reach-wrangler');
 		await writeFile(stagedEnv, originalEnv);
 		await writeFile(stagedDevVars, originalDevVars);
 		let generatedBody = '';
 		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => {
+			.mockImplementationOnce((_command, _arguments, options) => {
 				generatedBody = readFileSync(stagedEnv, 'utf8');
 				expect(generatedBody).not.toContain('developer-value');
 				expect(generatedBody).toContain('NUXT_BETTER_AUTH_SECRET=');
@@ -101,6 +103,9 @@ describe('the built Worker smoke runner', () => {
 				expect(generatedBody).toContain('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=');
 				expect(generatedBody).toContain('NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY=');
 				expect(existsSync(stagedDevVars)).toBe(false);
+				expect(options.env).toMatchObject({ NODE_ENV: 'production' });
+				expect(options.env.NUXT_DEVELOPER_CREDENTIAL).toBeUndefined();
+				expect(options.env.HOME).toBeUndefined();
 				return exitedProcess(0);
 			})
 			.mockImplementationOnce(() => exitedProcess(17));
@@ -111,6 +116,33 @@ describe('the built Worker smoke runner', () => {
 		expect(generatedBody).not.toBe('');
 		expect(await readFile(stagedEnv)).toEqual(originalEnv);
 		expect(await readFile(stagedDevVars)).toEqual(originalDevVars);
+	});
+
+	it('terminates an interrupted migration and removes its temporary binding state', async () => {
+		const repositoryRoot = await builtRepository();
+		const stagedEnv = join(repositoryRoot, '.output/server/.env');
+		const stagedDevVars = join(repositoryRoot, '.output/server/.dev.vars');
+		const originalEnv = Buffer.from('original env\n');
+		const originalDevVars = Buffer.from('original dev vars\n');
+		await writeFile(stagedEnv, originalEnv);
+		await writeFile(stagedDevVars, originalDevVars);
+		const before = new Set((await readdir(tmpdir())).filter(name => name.startsWith('stream-keepr-worker-smoke-')));
+		const migration = livingProcess();
+
+		await expect(runWorkerSmoke({
+			repositoryRoot,
+			spawnProcess: vi.fn(() => migration),
+			hardTimeoutMs: 5,
+		})).rejects.toMatchObject({
+			probe: 'runner',
+			failureClass: 'hard-timeout',
+		});
+
+		expect(migration.kill).toHaveBeenCalledWith('SIGTERM');
+		expect(await readFile(stagedEnv)).toEqual(originalEnv);
+		expect(await readFile(stagedDevVars)).toEqual(originalDevVars);
+		const after = (await readdir(tmpdir())).filter(name => name.startsWith('stream-keepr-worker-smoke-'));
+		expect(after.filter(name => !before.has(name))).toEqual([]);
 	});
 
 	it('names an API-boundary probe failure instead of accepting a reachable Worker', async () => {

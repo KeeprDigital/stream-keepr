@@ -87,7 +87,7 @@ export async function runWorkerSmoke({
 	const stagedEnvPath = join(repositoryRoot, '.output/server/.env');
 	const stagedDevVarsPath = join(repositoryRoot, '.output/server/.dev.vars');
 	const generated = generatedConfiguration();
-	const sensitiveValues = Object.values(generated.entries);
+	const sensitiveValues = [...generated.secrets];
 	const workerLog = new BoundedLogTail();
 	const timeout = new AbortController();
 	const hardTimeout = setTimeout(() => timeout.abort(
@@ -99,8 +99,8 @@ export async function runWorkerSmoke({
 	const smokeSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
 	const startedAt = Date.now();
 	let persistencePath;
-	let worker;
-	let workerExit;
+	let activeChild;
+	let activeChildExit;
 	let stagedConfiguration;
 	try {
 		stagedConfiguration = await relocateConfigurations([
@@ -110,9 +110,9 @@ export async function runWorkerSmoke({
 		await writeFile(stagedEnvPath, generated.body, { mode: 0o600 });
 		await rm(stagedDevVarsPath, { force: true });
 		persistencePath = await mkdtemp(join(tmpdir(), 'stream-keepr-worker-smoke-'));
-		const common = {
+		const childProcessOptions = {
 			cwd: repositoryRoot,
-			env: { ...process.env, NODE_ENV: 'production' },
+			env: hermeticChildEnvironment(),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		};
 		const migration = spawnProcess(wranglerPath, [
@@ -125,18 +125,22 @@ export async function runWorkerSmoke({
 			configPath,
 			'--persist-to',
 			persistencePath,
-		], common);
+		], { ...childProcessOptions, detached: true });
+		activeChild = migration;
 		captureChildOutput(migration, workerLog);
-		const migrationExit = await abortable(childExit(migration, 'setup'), smokeSignal);
+		activeChildExit = childExit(migration, 'setup');
+		const migrationExit = await abortable(activeChildExit, smokeSignal);
 		if (migrationExit.status !== 0) {
 			throw new WorkerSmokeFailure('setup', 'migration-exit', {
 				expected: 'exit 0',
 				actual: exitDescription(migrationExit),
 			});
 		}
+		activeChild = undefined;
+		activeChildExit = undefined;
 
 		const port = await availableLoopbackPort();
-		worker = spawnProcess(wranglerPath, [
+		activeChild = spawnProcess(wranglerPath, [
 			'dev',
 			'--local',
 			'--config',
@@ -147,13 +151,13 @@ export async function runWorkerSmoke({
 			'127.0.0.1',
 			'--port',
 			String(port),
-		], { ...common, detached: true });
-		captureChildOutput(worker, workerLog);
-		workerExit = childExit(worker, 'startup');
+		], { ...childProcessOptions, detached: true });
+		captureChildOutput(activeChild, workerLog);
+		activeChildExit = childExit(activeChild, 'startup');
 		await waitUntilReady({
 			origin: `http://127.0.0.1:${port}`,
 			fetchRequest,
-			exit: workerExit,
+			exit: activeChildExit,
 			readinessTimeoutMs,
 			signal: smokeSignal,
 		});
@@ -178,11 +182,15 @@ export async function runWorkerSmoke({
 	}
 	finally {
 		clearTimeout(hardTimeout);
-		await terminateChild(worker, workerExit);
-		if (stagedConfiguration)
-			await Promise.all(stagedConfiguration.map(restoreConfiguration));
-		if (persistencePath)
-			await rm(persistencePath, { recursive: true, force: true });
+		try {
+			await terminateChild(activeChild, activeChildExit);
+		}
+		finally {
+			if (stagedConfiguration)
+				await Promise.all(stagedConfiguration.map(restoreConfiguration));
+			if (persistencePath)
+				await rm(persistencePath, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -191,20 +199,42 @@ function generatedConfiguration() {
 	// disabled without Ably, and the Melee persistence probe saves disabled
 	// configuration, so this process has neither authority nor reason to leave
 	// loopback.
-	const value = (bytes = 32) => randomBytes(bytes).toString('base64url');
+	const randomSecret = (bytes = 32) => randomBytes(bytes).toString('base64url');
 	const base64Key = () => randomBytes(32).toString('base64');
 	const entries = {
-		NUXT_ADMIN_BOOTSTRAP_TOKEN: value(),
-		NUXT_BETTER_AUTH_SECRET: value(48),
-		NUXT_GRAPHICS_ADMIN_TOKEN: value(),
+		NUXT_ADMIN_BOOTSTRAP_TOKEN: randomSecret(),
+		NUXT_BETTER_AUTH_SECRET: randomSecret(48),
+		NUXT_GRAPHICS_ADMIN_TOKEN: randomSecret(),
 		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: base64Key(),
 		NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY: base64Key(),
 		NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION: '1',
 	};
 	return {
 		entries,
+		secrets: Object.entries(entries)
+			.filter(([name]) => name !== 'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION')
+			.map(([, entry]) => entry),
 		body: `${Object.entries(entries).map(([name, entry]) => `${name}=${entry}`).join('\n')}\n`,
 	};
+}
+
+function hermeticChildEnvironment() {
+	const allowedNames = [
+		'PATH',
+		'TMPDIR',
+		'TEMP',
+		'TMP',
+		'SystemRoot',
+		'WINDIR',
+		'ComSpec',
+		'PATHEXT',
+	];
+	return Object.fromEntries([
+		...allowedNames
+			.filter(name => process.env[name] !== undefined)
+			.map(name => [name, process.env[name]]),
+		['NODE_ENV', 'production'],
+	]);
 }
 
 async function relocateConfigurations(paths) {
@@ -323,6 +353,18 @@ async function terminateChild(child, exit) {
 		: false;
 	if (!stopped)
 		signalChild(child, 'SIGKILL');
+	if (!stopped && exit) {
+		const killed = await Promise.race([
+			exit.then(() => true, () => true),
+			new Promise(resolve => setTimeout(resolve, 2_000, false)),
+		]);
+		if (!killed) {
+			throw new WorkerSmokeFailure('cleanup', 'child-exit-timeout', {
+				expected: 'child exited after SIGKILL',
+				actual: 'still running after 2000ms',
+			});
+		}
+	}
 }
 
 function signalChild(child, signal) {
@@ -455,7 +497,7 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 			meleeClientSecret,
 		}, { cookie }), method: 'PUT' },
 	});
-	assertMeleeRedaction(melee, meleeClientSecret);
+	assertMeleeRedaction(melee, meleeClientSecret, 'melee-configuration');
 	const reread = await expectJson({
 		probe: 'melee-configuration-read',
 		expected: 200,
@@ -465,7 +507,7 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		signal,
 		init: { headers: { cookie } },
 	});
-	assertMeleeRedaction(reread, meleeClientSecret);
+	assertMeleeRedaction(reread, meleeClientSecret, 'melee-configuration-read');
 
 	await publishStillImage({
 		format: 'png',
@@ -557,11 +599,11 @@ function throwShapeFailure(probe, expected) {
 	});
 }
 
-function assertMeleeRedaction(value, secret) {
+function assertMeleeRedaction(value, secret, probe) {
 	if (value?.meleeConfigured !== true)
-		throwShapeFailure('melee-configuration', 'persisted Melee configuration');
+		throwShapeFailure(probe, 'persisted Melee configuration');
 	if (Object.hasOwn(value, 'meleeClientSecret') || JSON.stringify(value).includes(secret)) {
-		throw new WorkerSmokeFailure('melee-configuration', 'secret-exposed', {
+		throw new WorkerSmokeFailure(probe, 'secret-exposed', {
 			expected: 'redacted client secret',
 			actual: 'secret-bearing response',
 		});
