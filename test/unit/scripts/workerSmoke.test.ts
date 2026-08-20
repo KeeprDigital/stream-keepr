@@ -6,12 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { redactSmokeText, runWorkerSmoke } from '../../../scripts/worker-smoke/runner.mjs';
+import {
+	redactSmokeText,
+	runWorkerSmoke,
+	WorkerSmokeFailure,
+} from '../../../scripts/worker-smoke/runner.mjs';
 
 describe('the built Worker smoke runner', () => {
 	const temporaryRoots: string[] = [];
 
 	afterEach(async () => {
+		vi.useRealTimers();
 		vi.unstubAllEnvs();
 		await Promise.all(temporaryRoots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 	});
@@ -53,6 +58,16 @@ describe('the built Worker smoke runner', () => {
 		child.pid = 12346;
 		child.kill = vi.fn(() => {
 			queueMicrotask(() => child.emit('exit', null, 'SIGTERM'));
+			return true;
+		});
+		return child;
+	}
+
+	function stubbornProcess() {
+		const child = livingProcess();
+		child.kill = vi.fn((signal: NodeJS.Signals) => {
+			if (signal === 'SIGKILL')
+				queueMicrotask(() => child.emit('exit', null, signal));
 			return true;
 		});
 		return child;
@@ -145,6 +160,26 @@ describe('the built Worker smoke runner', () => {
 		expect(after.filter(name => !before.has(name))).toEqual([]);
 	});
 
+	it('terminates setup when the caller interrupts the smoke run', async () => {
+		const repositoryRoot = await builtRepository();
+		const migration = livingProcess();
+		const interrupted = new AbortController();
+		const spawnProcess = vi.fn(() => {
+			queueMicrotask(() => interrupted.abort(new WorkerSmokeFailure('runner', 'interrupted')));
+			return migration;
+		});
+
+		await expect(runWorkerSmoke({
+			repositoryRoot,
+			spawnProcess,
+			signal: interrupted.signal,
+		})).rejects.toMatchObject({
+			probe: 'runner',
+			failureClass: 'interrupted',
+		});
+		expect(migration.kill).toHaveBeenCalledWith('SIGTERM');
+	});
+
 	it('names an API-boundary probe failure instead of accepting a reachable Worker', async () => {
 		const repositoryRoot = await builtRepository();
 		const worker = livingProcess();
@@ -161,6 +196,30 @@ describe('the built Worker smoke runner', () => {
 			detail: { expected: 401, actual: 200 },
 		});
 		expect(worker.kill).toHaveBeenCalled();
+	});
+
+	it('escalates cleanup to SIGKILL and waits for the child exit', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		const repositoryRoot = await builtRepository();
+		const worker = stubbornProcess();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => worker);
+		const fetchRequest = vi.fn()
+			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
+			.mockResolvedValueOnce(Response.json({ events: [] }));
+		const outcome = runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }).catch(error => error);
+
+		for (let attempt = 0; attempt < 100 && worker.kill.mock.calls.length === 0; attempt++)
+			await new Promise(resolve => setImmediate(resolve));
+		expect(worker.kill).toHaveBeenCalledWith('SIGTERM');
+		await vi.advanceTimersByTimeAsync(2_000);
+
+		expect(await outcome).toMatchObject({
+			probe: 'api-boundary',
+			failureClass: 'unexpected-status',
+		});
+		expect(worker.kill.mock.calls.map(([signal]) => signal)).toEqual(['SIGTERM', 'SIGKILL']);
 	});
 
 	it('reports readiness timeout separately while the Worker is still running', async () => {

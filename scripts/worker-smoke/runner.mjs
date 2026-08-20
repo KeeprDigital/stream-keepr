@@ -555,6 +555,8 @@ async function expectStatus({ probe, expected, origin, path, fetchRequest, signa
 		response = await fetchRequest(`${origin}${path}`, { redirect: 'manual', ...init, signal });
 	}
 	catch {
+		if (signal?.aborted)
+			throw signal.reason;
 		throw new WorkerSmokeFailure(probe, 'request-failed', {
 			expected: `status ${expected}`,
 			actual: 'request failed',
