@@ -1,7 +1,6 @@
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
+import type { ThrowawayAuth } from '~~/test/helpers/throwawayAuth';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { authStaticOptions } from '~~/server/utils/authOptions';
+import { LOCAL_HOST, LOCAL_ORIGIN, throwawayAuth } from '~~/test/helpers/throwawayAuth';
 
 /**
  * Which client IP a session records, against a real instance configured exactly
@@ -32,23 +31,12 @@ import { authStaticOptions } from '~~/server/utils/authOptions';
 const EMAIL = 'client-ip@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
-const LOCAL_HOST = 'localhost:3000';
-const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
-
 /** The address Cloudflare vouches for, distinct from anything a fallback produces. */
 const CLOUDFLARE_CLIENT_IP = '203.0.113.7';
 /** An address only a caller-controlled header could smuggle in. */
 const SPOOFED_IP = '198.51.100.99';
 
-function throwawayAuth() {
-	return betterAuth({
-		...authStaticOptions,
-		database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-		secret: 'a-throwaway-secret-for-the-unit-suite',
-	});
-}
-
-let auth: ReturnType<typeof throwawayAuth>;
+let auth: ThrowawayAuth;
 
 /** Sign in with the given headers and answer the session Better Auth stored for it. */
 async function sessionAfterSignIn(headers: Record<string, string>) {
@@ -91,6 +79,15 @@ describe('the client IP a session records, under the environment the tests run i
 			'x-forwarded-for': SPOOFED_IP,
 		});
 		expect(session.ipAddress).toBe(CLOUDFLARE_CLIENT_IP);
+	});
+
+	it('treats x-forwarded-for alone as no header at all', async () => {
+		// The case that tells `['cf-connecting-ip']` apart from a config that
+		// merely *prefers* it: were the spoofable header still on the list as a
+		// fallback, this would record the smuggled address instead of falling
+		// through to the environment.
+		const session = await sessionAfterSignIn({ 'x-forwarded-for': SPOOFED_IP });
+		expect(session.ipAddress).toBe('127.0.0.1');
 	});
 
 	it('answers loopback for a header-less caller — the accepted residual', async () => {
