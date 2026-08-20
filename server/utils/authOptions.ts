@@ -160,6 +160,36 @@ export const authStaticOptions = {
 		 * account at all.
 		 */
 		disableOriginCheck: false,
+		/**
+		 * Which header names the client, stated for the same reason as
+		 * `disableOriginCheck` above: the default answer is decided by things this
+		 * file does not control (#438).
+		 *
+		 * Better Auth's default walks `x-forwarded-for` and, failing that, answers
+		 * loopback under `NODE_ENV=test`/`development` and `null` in production.
+		 * On this installation both arms of that default are wrong. The header arm
+		 * reads a name the caller can write: a bare spoofed `x-forwarded-for` is
+		 * recorded as the session's client IP verbatim (measured —
+		 * `test/unit/server/utils/authClientIp.test.ts` failed exactly there
+		 * against the default), and when Cloudflare's own append makes the header
+		 * multi-valued, the library — configured with no `trustedProxies` — refuses
+		 * to read it at all, which in production is a `null` client IP and a rate
+		 * limiter with no key. That header-shaped collapse is the warning a built
+		 * Worker probe surfaced during #410.
+		 *
+		 * `cf-connecting-ip` is written by Cloudflare itself on every request that
+		 * reaches the Worker, after anything the caller sent under that name is
+		 * discarded — the one address on this platform the caller cannot choose.
+		 *
+		 * What stating it does **not** reach: a request carrying no listed header
+		 * still resolves by environment — loopback under test/dev, so every
+		 * header-less local caller is `127.0.0.1` and anything keyed on client IP
+		 * shares one bucket in the suite. That residual has no option to state and
+		 * is accepted, with the reasoning, in ADR-0012.
+		 */
+		ipAddress: {
+			ipAddressHeaders: ['cf-connecting-ip'],
+		},
 	},
 	// Off by default at this version; stated so a bump flipping the default
 	// cannot quietly start publishing from a deployed Worker.
