@@ -10,6 +10,7 @@ import {
 	LOCAL_DEVELOPER_USER_EMAIL,
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
+	localAuthBypassEnabled,
 } from '~~/shared/utils/localDeveloperAuth';
 import { authStaticOptions } from './authOptions';
 import { ServiceConfigurationError } from './errors';
@@ -145,9 +146,11 @@ export async function optionalUserSession(event: H3Event) {
 export type UserSession = Awaited<ReturnType<ServerAuth['api']['getSession']>>;
 
 /** Whether this request is allowed to substitute the Local Developer Session. */
-export function localAuthBypassIsActive(event: H3Event): boolean {
-	return process.env.NODE_ENV !== 'production'
-		&& useRuntimeConfig(event).localAuthBypassActive === true;
+export function localAuthBypassIsActive(_event: H3Event): boolean {
+	return localAuthBypassEnabled({
+		dev: process.env.NODE_ENV !== 'production',
+		value: process.env.NUXT_LOCAL_AUTH_BYPASS,
+	});
 }
 
 const LOCAL_SESSION_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

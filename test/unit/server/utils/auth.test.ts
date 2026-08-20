@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/localConfiguration';
 import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_DEVELOPER_SESSION_COOKIE,
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_ID,
@@ -216,10 +217,11 @@ describe('the identities a request carries', () => {
 describe('the Local Developer Session', () => {
 	async function freshLocalAuth(cookie?: string) {
 		vi.resetModules();
+		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', LOCAL_AUTH_BYPASS_ENABLED_VALUE);
 		mockGetCookie.mockReset();
 		mockSetCookie.mockReset();
 		mockGetCookie.mockReturnValue(cookie);
-		mockUseRuntimeConfig.mockReturnValue({ localAuthBypassActive: true, betterAuthSecret: '' });
+		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
 		return await import('~~/server/utils/auth');
 	}
 
@@ -261,5 +263,16 @@ describe('the Local Developer Session', () => {
 		expect(other?.session.id).not.toBe(first?.session.id);
 		expect(repeat?.user.id).toBe(first?.user.id);
 		expect(other?.user.id).toBe(first?.user.id);
+	});
+
+	it('cannot be activated through Nuxt runtime-config environment aliases', async () => {
+		vi.resetModules();
+		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', '');
+		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS_ACTIVE', 'true');
+		mockUseRuntimeConfig.mockReturnValue({ localAuthBypassActive: true, betterAuthSecret: '' });
+		const auth = await import('~~/server/utils/auth');
+
+		expect(auth.localAuthBypassIsActive(requestEvent())).toBe(false);
+		await expect(auth.requestUserSession(requestEvent())).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
 	});
 });

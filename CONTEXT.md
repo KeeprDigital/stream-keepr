@@ -166,12 +166,14 @@ An account an administrator created for one person, holding the credential they 
 It is the installation's only durable identity and the one that owns work: a Graphics Ingestion Operation records the user as its initiator, idempotency keys are unique within the user, and the Evidence Ledger names the user as actor with the display name resolved when the ledger is read.
 Because ownership belongs to the person rather than to a browser, an operation survives the browser that started it and is resumed by signing in anywhere; the same idempotency key sent from a second browser continues the first operation instead of starting a second.
 There is no self-signup: an administrator creates the account, and a **Password Reset Link** is how its password is first set (ADR-0010).
+An explicitly bypassed development server supplies one synthetic **Local Developer User** as the development-only exception to the account, credential, and durability rules above. It has a stable identity but no directory row, owns work through the same User interface, and cannot exist in a built or deployed application.
 _Avoid_: author, graphics author — those name a role a user may be acting in, not the identity; account is acceptable when the subject is the credential rather than the person.
 
 **Session**:
 One signed-in browser: server-side, revocable, and expiring seven days after its last day of use.
 It is what admits a request — the deny-by-default API boundary over `/api/**` requires one (ADR-0010, which supersedes ADR-0008's perimeter-trust stance) — and it is the granularity of a Graphics Authoring Lease, because one person signed in from two browsers is two concurrent editors and a lease held per user would let them overwrite each other in silence.
 A session never owns work; it says which browser is asking, and the takeover surface resolves it back to a user for display.
+While the development bypass is active, each browser receives a synthetic **Local Developer Session**. It is the development-only exception to server-side persistence, revocation, and expiry: an HTTP-only local cookie keeps its identity stable for that browser, a second browser receives another identity, and sign-out has no lasting meaning while every request is intentionally admitted. It retains the ordinary Session's request-admission and Graphics Authoring Lease semantics and cannot exist in a built or deployed application.
 _Avoid_: Graphics Author Session — the anonymous self-issued identity this replaced, retired at ADR-0010's cutover; login, which names the act rather than the thing.
 
 **Password Reset Link**:

@@ -300,6 +300,62 @@ export async function observeChromiumVerdict({
 	extraArgs = [],
 	cookies,
 }) {
+	return await withChromiumPage({ url, extraArgs, cookies }, async (page) => {
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			const evaluated = await page.command('Runtime.evaluate', {
+				expression: `JSON.stringify({
+					dataset: { ...(document.body?.dataset ?? {}) },
+					detail: document.querySelector('#result')?.textContent,
+				})`,
+				returnByValue: true,
+			});
+			const { dataset = {}, detail } = JSON.parse(evaluated.result?.value ?? '{}');
+			if (dataset.result === 'passed' || dataset.result === 'failed')
+				return { outcome: dataset.result, code: dataset.code, detail, dataset };
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		return { outcome: 'timed-out' };
+	});
+}
+
+/**
+ * Open an application page in Chromium and wait until `expression` returns a
+ * value. Returning `undefined` means the page is still settling; any other
+ * serialisable value is the observation. This is for app-shell acceptance
+ * where the page has no purpose-built `data-result` contract of its own.
+ */
+export async function observeChromiumValue({
+	url,
+	expression,
+	timeoutMs = 30_000,
+	extraArgs = [],
+	cookies = [],
+}) {
+	return await withChromiumPage({ url, extraArgs, cookies }, async (page) => {
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			const evaluated = await page.command('Runtime.evaluate', {
+				expression,
+				returnByValue: true,
+			});
+			if (evaluated.exceptionDetails) {
+				return {
+					outcome: 'failed',
+					detail: evaluated.exceptionDetails.exception?.description
+						?? evaluated.exceptionDetails.text,
+				};
+			}
+			if (Object.hasOwn(evaluated.result ?? {}, 'value'))
+				return { outcome: 'passed', value: evaluated.result.value };
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		return { outcome: 'timed-out' };
+	});
+}
+
+/** Run one observation against the first available local Chromium. */
+async function withChromiumPage({ url, extraArgs = [], cookies }, observe) {
 	for (const candidate of chromiumCandidates()) {
 		const browser = await launch(candidate, extraArgs);
 		if (!browser)
@@ -313,21 +369,7 @@ export async function observeChromiumVerdict({
 			const page = await connect(target.webSocketDebuggerUrl);
 			try {
 				await openAuthoredPage(page, { url, cookies });
-				const deadline = Date.now() + timeoutMs;
-				while (Date.now() < deadline) {
-					const evaluated = await page.command('Runtime.evaluate', {
-						expression: `JSON.stringify({
-							dataset: { ...(document.body?.dataset ?? {}) },
-							detail: document.querySelector('#result')?.textContent,
-						})`,
-						returnByValue: true,
-					});
-					const { dataset = {}, detail } = JSON.parse(evaluated.result?.value ?? '{}');
-					if (dataset.result === 'passed' || dataset.result === 'failed')
-						return { outcome: dataset.result, code: dataset.code, detail, dataset };
-					await new Promise(resolve => setTimeout(resolve, 100));
-				}
-				return { outcome: 'timed-out' };
+				return await observe(page);
 			}
 			finally {
 				page.close();

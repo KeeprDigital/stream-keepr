@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import { fetch } from '@nuxt/test-utils/e2e';
+import { fetch, url } from '@nuxt/test-utils/e2e';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	LOCAL_DEVELOPER_SESSION_COOKIE,
@@ -7,6 +7,7 @@ import {
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
 } from '~~/shared/utils/localDeveloperAuth';
+import { observeChromiumValue } from '../../scripts/graphics-acceptance/chromium.mjs';
 
 interface LocalSessionReading {
 	user: { id: string; name: string };
@@ -83,6 +84,33 @@ describe('a dev server with the Local Developer Session enabled', () => {
 		expect(response.status).toBe(200);
 		expect(cookieFrom(response)).toContain(`${LOCAL_DEVELOPER_SESSION_COOKIE}=`);
 	});
+
+	it('enters a protected page through the real browser gate without seeing login', async () => {
+		const observed = await observeChromiumValue({
+			url: url('/admin/graphics-assets'),
+			expression: `(() => {
+				const body = document.body?.innerText ?? '';
+				globalThis.__localAuthProbeStarted ??= Date.now();
+				if (!body.includes('Graphics Asset Library Operations')
+					&& Date.now() - globalThis.__localAuthProbeStarted < 5000)
+					return undefined;
+				return {
+					pathname: location.pathname,
+					protectedPageVisible: body.includes('Graphics Asset Library Operations'),
+					loginPageVisible: body.includes('Sign in to Stream Keepr'),
+				};
+			})()`,
+		});
+
+		expect(observed).toEqual({
+			outcome: 'passed',
+			value: {
+				pathname: '/admin/graphics-assets',
+				protectedPageVisible: true,
+				loginPageVisible: false,
+			},
+		});
+	}, 45_000);
 
 	it('keeps one User across browsers while giving each browser its own Session', async () => {
 		expect(browserA.reading.user).toMatchObject({

@@ -264,6 +264,19 @@ export function announcesLocalConfiguration(context: {
 	return context.dev && context.env.STREAM_KEEPR_INTEGRATION !== 'true';
 }
 
+export interface LocalConfigurationContext {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+}
+
+/** Whether the one named local-development switch is exactly active. */
+export function localAuthBypassActive(context: LocalConfigurationContext): boolean {
+	return localAuthBypassEnabled({
+		dev: context.dev,
+		value: context.env.NUXT_LOCAL_AUTH_BYPASS,
+	});
+}
+
 /** Reads a dotenv body — `.env`, or the copy of it staged for a previewed Worker. */
 export function parseDotenv(source: string): Map<string, string> {
 	const values = new Map<string, string>();
@@ -305,18 +318,15 @@ function unquote(value: string): string {
  * pins them into the *server child's* environment, not its own — so gating on
  * `missing` alone would warn them on every run.
  */
-export function localConfigurationLogLine(context: {
-	dev: boolean;
-	env: Record<string, string | undefined>;
-}): { level: 'warn'; message: string } | undefined {
+export function localConfigurationLogLine(
+	context: LocalConfigurationContext,
+	bypassActive = localAuthBypassActive(context),
+): { level: 'warn'; message: string } | undefined {
 	if (!announcesLocalConfiguration(context))
 		return undefined;
 
 	const missing = missingLocalNuxtNames(context.env, {
-		localAuthBypassActive: localAuthBypassEnabled({
-			dev: context.dev,
-			value: context.env.NUXT_LOCAL_AUTH_BYPASS,
-		}),
+		localAuthBypassActive: bypassActive,
 	});
 	if (missing.length === 0)
 		return undefined;
@@ -325,12 +335,11 @@ export function localConfigurationLogLine(context: {
 }
 
 /** The warning an intentionally unauthenticated development server emits. */
-export function localAuthBypassLogLine(context: {
-	dev: boolean;
-	env: Record<string, string | undefined>;
-}): { level: 'warn'; message: string } | undefined {
-	if (!announcesLocalConfiguration(context)
-		|| !localAuthBypassEnabled({ dev: context.dev, value: context.env.NUXT_LOCAL_AUTH_BYPASS })) {
+export function localAuthBypassLogLine(
+	context: LocalConfigurationContext,
+	bypassActive = localAuthBypassActive(context),
+): { level: 'warn'; message: string } | undefined {
+	if (!announcesLocalConfiguration(context) || !bypassActive) {
 		return undefined;
 	}
 
