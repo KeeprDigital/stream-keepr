@@ -1,0 +1,192 @@
+import { Buffer } from 'node:buffer';
+import { EventEmitter } from 'node:events';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { redactSmokeText, runWorkerSmoke } from '../../../scripts/worker-smoke/runner.mjs';
+
+describe('the built Worker smoke runner', () => {
+	const temporaryRoots: string[] = [];
+
+	afterEach(async () => {
+		await Promise.all(temporaryRoots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+	});
+
+	async function builtRepository() {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'stream-keepr-worker-smoke-test-'));
+		temporaryRoots.push(repositoryRoot);
+		await mkdir(join(repositoryRoot, '.output/server'), { recursive: true });
+		await mkdir(join(repositoryRoot, 'node_modules/.bin'), { recursive: true });
+		await writeFile(join(repositoryRoot, '.output/server/wrangler.json'), '{}');
+		await writeFile(join(repositoryRoot, 'node_modules/.bin/wrangler'), '');
+		return repositoryRoot;
+	}
+
+	function exitedProcess(status: number) {
+		const child = new EventEmitter() as EventEmitter & {
+			stdout: PassThrough;
+			stderr: PassThrough;
+			pid: number;
+			kill: ReturnType<typeof vi.fn>;
+		};
+		child.stdout = new PassThrough();
+		child.stderr = new PassThrough();
+		child.pid = 12345;
+		child.kill = vi.fn();
+		queueMicrotask(() => child.emit('exit', status, null));
+		return child;
+	}
+
+	function livingProcess() {
+		const child = new EventEmitter() as EventEmitter & {
+			stdout: PassThrough;
+			stderr: PassThrough;
+			pid: number;
+			kill: ReturnType<typeof vi.fn>;
+		};
+		child.stdout = new PassThrough();
+		child.stderr = new PassThrough();
+		child.pid = 12346;
+		child.kill = vi.fn(() => {
+			queueMicrotask(() => child.emit('exit', null, 'SIGTERM'));
+			return true;
+		});
+		return child;
+	}
+
+	it('refuses a missing production artifact without starting any process', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'stream-keepr-worker-smoke-test-'));
+		temporaryRoots.push(repositoryRoot);
+		const spawnProcess = vi.fn();
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
+			probe: 'precondition',
+			failureClass: 'missing-artifact',
+		});
+		expect(spawnProcess).not.toHaveBeenCalled();
+	});
+
+	it('distinguishes a Worker that exits during startup from readiness timeout', async () => {
+		const repositoryRoot = await builtRepository();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => exitedProcess(17));
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
+			probe: 'startup',
+			failureClass: 'process-exit',
+			detail: { actual: 'exit 17' },
+		});
+		expect(spawnProcess).toHaveBeenCalledTimes(2);
+	});
+
+	it('restores both staged configuration files byte-for-byte after startup failure', async () => {
+		const repositoryRoot = await builtRepository();
+		const stagedEnv = join(repositoryRoot, '.output/server/.env');
+		const stagedDevVars = join(repositoryRoot, '.output/server/.dev.vars');
+		const originalEnv = Buffer.from('NUXT_BETTER_AUTH_SECRET=developer-value\n');
+		const originalDevVars = Buffer.from('NUXT_ADMIN_BOOTSTRAP_TOKEN=older-preview\n');
+		await writeFile(stagedEnv, originalEnv);
+		await writeFile(stagedDevVars, originalDevVars);
+		let generatedBody = '';
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => {
+				generatedBody = readFileSync(stagedEnv, 'utf8');
+				expect(generatedBody).not.toContain('developer-value');
+				expect(generatedBody).toContain('NUXT_BETTER_AUTH_SECRET=');
+				expect(generatedBody).toContain('NUXT_ADMIN_BOOTSTRAP_TOKEN=');
+				expect(generatedBody).toContain('NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY=');
+				expect(generatedBody).toContain('NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY=');
+				expect(existsSync(stagedDevVars)).toBe(false);
+				return exitedProcess(0);
+			})
+			.mockImplementationOnce(() => exitedProcess(17));
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess })).rejects.toMatchObject({
+			probe: 'startup',
+		});
+		expect(generatedBody).not.toBe('');
+		expect(await readFile(stagedEnv)).toEqual(originalEnv);
+		expect(await readFile(stagedDevVars)).toEqual(originalDevVars);
+	});
+
+	it('names an API-boundary probe failure instead of accepting a reachable Worker', async () => {
+		const repositoryRoot = await builtRepository();
+		const worker = livingProcess();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => worker);
+		const fetchRequest = vi.fn()
+			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
+			.mockResolvedValueOnce(Response.json({ events: [] }));
+
+		await expect(runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest })).rejects.toMatchObject({
+			probe: 'api-boundary',
+			failureClass: 'unexpected-status',
+			detail: { expected: 401, actual: 200 },
+		});
+		expect(worker.kill).toHaveBeenCalled();
+	});
+
+	it('reports readiness timeout separately while the Worker is still running', async () => {
+		const repositoryRoot = await builtRepository();
+		const worker = livingProcess();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => worker);
+
+		await expect(runWorkerSmoke({
+			repositoryRoot,
+			spawnProcess,
+			fetchRequest: vi.fn().mockRejectedValue(new Error('not ready')),
+			readinessTimeoutMs: 5,
+		})).rejects.toMatchObject({
+			probe: 'readiness',
+			failureClass: 'timeout',
+		});
+		expect(worker.kill).toHaveBeenCalled();
+	});
+
+	it('redacts generated values, cookies, digests, resource identities, and full URLs', () => {
+		const secret = 'generated-secret-value';
+		const digest = 'a'.repeat(64);
+		const text = [
+			secret,
+			'better-auth.session_token=session-cookie-value',
+			digest,
+			'/api/events/42/graphics-assets/550e8400-e29b-41d4-a716-446655440000',
+			'{"eventId":42,"assetId":"asset-in-a-log"}',
+			'https://127.0.0.1:8787/api/events/42?credential=secret',
+		].join(' ');
+		const redacted = redactSmokeText(text, [secret]);
+
+		expect(redacted).not.toContain(secret);
+		expect(redacted).not.toContain('session-cookie-value');
+		expect(redacted).not.toContain(digest);
+		expect(redacted).not.toContain('550e8400-e29b-41d4-a716-446655440000');
+		expect(redacted).not.toContain('asset-in-a-log');
+		expect(redacted).not.toContain('https://127.0.0.1:8787');
+		expect(redacted).toContain('[redacted]');
+	});
+
+	it('builds once, then runs the dry run and smoke command in verify and CI', async () => {
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		const verify = packageJson.scripts.verify!;
+		expect(packageJson.scripts['worker:smoke']).toBe('node scripts/worker-smoke.mjs');
+		expect(packageJson.scripts['worker:smoke']).not.toContain('build');
+		expect(verify.indexOf('pnpm build')).toBeLessThan(verify.indexOf('pnpm worker:dry-run'));
+		expect(verify.indexOf('pnpm worker:dry-run')).toBeLessThan(verify.indexOf('pnpm worker:smoke'));
+
+		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+		const workerGuard = ci.slice(ci.indexOf('  worker-guard:'));
+		expect(workerGuard.indexOf('pnpm build')).toBeLessThan(workerGuard.indexOf('pnpm worker:dry-run'));
+		expect(workerGuard.indexOf('pnpm worker:dry-run')).toBeLessThan(workerGuard.indexOf('pnpm worker:smoke'));
+		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
+	});
+});

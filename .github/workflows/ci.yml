@@ -58,7 +58,7 @@ jobs:
       - run: pnpm test
 
   worker-guard:
-    name: Build and wrangler dry run
+    name: Build, wrangler dry run, and Worker smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -74,3 +74,6 @@ jobs:
       # bytes, so it belongs on every PR — not just deploy day.
       - run: pnpm build
       - run: pnpm worker:dry-run
+      # Starts that same artifact under production-shaped local workerd and
+      # sends the small runtime/bindings/auth/streaming probe set through it.
+      - run: pnpm worker:smoke

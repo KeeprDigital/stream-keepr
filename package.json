@@ -5,7 +5,7 @@
 	"private": true,
 	"packageManager": "pnpm@11.21.0+sha512.521705bce689924eac72f5a3587122f362689ef6571e55ba80076fd637c11132ecffada26fad4ea79c485bfddbfd3d5a2a5b05805a77e893de71ec8a6cca3bb1",
 	"scripts": {
-		"verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm worker:dry-run",
+		"verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm worker:dry-run && pnpm worker:smoke",
 		"build": "nuxt build",
 		"dev": "nuxt dev",
 		"dev:local": "nuxt dev --host 0.0.0.0",
@@ -14,6 +14,7 @@
 		"generate": "nuxt generate",
 		"preview": "pnpm build && pnpm db:migrate:local:built && node scripts/stage-preview-secrets.mjs && wrangler dev --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker",
 		"worker:dry-run": "node scripts/worker-dry-run.mjs",
+		"worker:smoke": "node scripts/worker-smoke.mjs",
 		"deploy": "CLOUDFLARE_ENV=production pnpm build && pnpm worker:dry-run && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
 		"deploy:verify": "bash scripts/deploy-verify.sh",
 		"deploy:validator": "wrangler deploy --config workers/silent-video-validator/wrangler.jsonc",
