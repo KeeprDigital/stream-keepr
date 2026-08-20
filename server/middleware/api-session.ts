@@ -3,7 +3,10 @@ import { requestUserSession } from '~~/server/utils/auth';
 
 /**
  * The deny-by-default API boundary (#396, ADR-0010): every `/api/**` route
- * requires a Better Auth session unless `apiPathRequiresSession` exempts it.
+ * requires a session through the authentication interface unless
+ * `apiPathRequiresSession` exempts it. In an ordinary run that is a Better Auth
+ * session; an explicitly bypassed dev server supplies the Local Developer
+ * Session through the same `requestUserSession` call.
  *
  * This is the wall. The page gate in `app/middleware/auth.global.ts` is UX — it
  * spares a signed-out browser a shell of pages whose every request comes back
@@ -39,7 +42,8 @@ export default defineEventHandler(async (event) => {
 	if (!apiPathRequiresSession(getRequestURL(event).pathname))
 		return;
 
-	// A blank `NUXT_BETTER_AUTH_SECRET` raises out of here as the
+	// Outside the opt-in Local Developer Session, a blank
+	// `NUXT_BETTER_AUTH_SECRET` raises out of here as the
 	// `ServiceConfigurationError` 503 that names the setting — an unfinished
 	// deployment answered with the name of the thing to go and set, rather than
 	// with a 401 that would send an operator looking for their password. It is

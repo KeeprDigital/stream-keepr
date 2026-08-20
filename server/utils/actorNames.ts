@@ -1,6 +1,11 @@
 import type { GraphicsActorNaming } from '~~/shared/types/graphicsAsset';
 import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from 'hub:db';
+import {
+	isLocalDeveloperSessionId,
+	isLocalDeveloperUserId,
+	LOCAL_DEVELOPER_USER_NAME,
+} from '~~/shared/utils/localDeveloperAuth';
 import { chunkArray, SAFE_INARRAY_SIZE } from './db';
 
 /**
@@ -64,7 +69,13 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 		return {};
 
 	const found = new Map<string, string>();
-	for (const chunk of chunkArray(asked, SAFE_INARRAY_SIZE)) {
+	const directoryActors = asked.filter((actor) => {
+		if (!isLocalDeveloperUserId(actor))
+			return true;
+		found.set(actor, LOCAL_DEVELOPER_USER_NAME);
+		return false;
+	});
+	for (const chunk of chunkArray(directoryActors, SAFE_INARRAY_SIZE)) {
 		const rows = await db
 			.select({ id: schema.user.id, name: schema.user.name, email: schema.user.email })
 			.from(schema.user)
@@ -124,6 +135,9 @@ export async function withActorNames<Reading>(
  * shows this says so in its own words rather than being handed an invented one.
  */
 export async function sessionHolderName(sessionId: string): Promise<string | null> {
+	if (isLocalDeveloperSessionId(sessionId))
+		return LOCAL_DEVELOPER_USER_NAME;
+
 	const [holder] = await db
 		.select({ name: schema.user.name })
 		.from(schema.session)

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	announcesLocalConfiguration,
 	LOCAL_NUXT_NAME_SURFACES,
+	localAuthBypassLogLine,
 	localConfigurationBootNotice,
 	localConfigurationLogLine,
 	LOCALLY_OPTIONAL_NUXT_NAMES,
@@ -183,6 +184,20 @@ describe('which names a local checkout has to be given', () => {
 		expect(LOCALLY_OPTIONAL_NUXT_NAMES).not.toContain('NUXT_BETTER_AUTH_SECRET');
 		expect(LOCALLY_OPTIONAL_NUXT_NAMES).not.toContain('NUXT_ADMIN_BOOTSTRAP_TOKEN');
 	});
+
+	it('does not require the two Better Auth setup names while the exact local bypass is enabled', () => {
+		const env = { NUXT_LOCAL_AUTH_BYPASS: 'true' };
+
+		expect(missingLocalNuxtNames(env, { localAuthBypassActive: true })).toEqual([
+			'NUXT_GRAPHICS_ADMIN_TOKEN',
+			'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY',
+		]);
+	});
+
+	it.each(['', 'false', 'TRUE', '1'])('keeps the auth setup names required for bypass value %j', (value) => {
+		expect(missingLocalNuxtNames({ NUXT_LOCAL_AUTH_BYPASS: value }))
+			.toEqual([...LOCALLY_REQUIRED_NUXT_NAMES]);
+	});
 });
 
 /**
@@ -307,6 +322,26 @@ describe('what a dev server says about its local configuration', () => {
 			expect(line?.message).not.toContain(other);
 			expect(line?.message).not.toContain(LOCAL_NUXT_NAME_SURFACES[other]);
 		}
+	});
+});
+
+describe('the Local Developer Session startup warning', () => {
+	it('conspicuously names the bypass and the risk of binding beyond loopback', () => {
+		const line = localAuthBypassLogLine({
+			dev: true,
+			env: { NUXT_LOCAL_AUTH_BYPASS: 'true' },
+		});
+
+		expect(line?.level).toBe('warn');
+		expect(line?.message).toContain('AUTHENTICATION BYPASSED');
+		expect(line?.message).toContain('Local Developer User');
+		expect(line?.message).toContain('loopback');
+		expect(line?.message).toContain('other machines');
+	});
+
+	it('stays silent for malformed values and non-development runs', () => {
+		expect(localAuthBypassLogLine({ dev: true, env: { NUXT_LOCAL_AUTH_BYPASS: 'TRUE' } })).toBeUndefined();
+		expect(localAuthBypassLogLine({ dev: false, env: { NUXT_LOCAL_AUTH_BYPASS: 'true' } })).toBeUndefined();
 	});
 });
 

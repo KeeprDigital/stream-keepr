@@ -42,13 +42,39 @@ pnpm install
 pnpm dev
 ```
 
+By default, local development uses Better Auth exactly like a deployed
+installation. To work without creating an account or signing in, set this in the
+ignored `.env` file and restart the dev server:
+
+```dotenv
+NUXT_LOCAL_AUTH_BYPASS=true
+```
+
+The value must be exactly `true`, and it applies only to `pnpm dev`; blank,
+`false`, malformed values, builds, previews, and deployments keep the normal
+Better Auth behavior. In bypass mode `NUXT_BETTER_AUTH_SECRET` and
+`NUXT_ADMIN_BOOTSTRAP_TOKEN` may remain blank. The app enters protected pages as
+the stable **Local Developer User**, while each browser receives a distinct local
+Session so Graphics Authoring Leases still distinguish concurrent editors. The
+shell shows that identity and omits sign-out because the next request would create
+the same local identity again.
+
+This bypass does not cover the Graphics Administrator token, Screen Output
+capabilities, or any other configuration. In particular,
+`NUXT_GRAPHICS_ADMIN_TOKEN` is still required for Graphics Administrator routes.
+Remove the setting or set it to `false` to return to real sign-in.
+
+Keep a bypassed dev server on loopback. Binding it to `0.0.0.0` or another
+non-loopback address gives every machine that can reach it unauthenticated access;
+startup prints the same warning conspicuously.
+
 ## Testing
 
 Which script, when:
 
 | When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                   |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`                                  | Watch mode for the tier you are touching; append `:run` for a single pass.                                                                                                                                                                              |
+| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:local-auth:run`, `pnpm test:integration`      | Watch mode is available for the unit, Nuxt, and integration tiers; append `:run` for a single pass. The local-auth tier is one focused spawned-dev-server pass.                                                                                         |
 | Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                   |
 | Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                      |
 | Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, auth, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one.                   |

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive } from 'vue';
+import { LOCAL_DEVELOPER_USER_EMAIL, LOCAL_DEVELOPER_USER_ID, LOCAL_DEVELOPER_USER_NAME } from '~~/shared/utils/localDeveloperAuth';
 
 vi.mock('~/composables/workflows/useEventLiveRefresh', () => ({
 	useEventLiveRefresh: vi.fn(),
@@ -191,6 +192,19 @@ describe('default layout sign-out', () => {
 		const wrapper = await mountLayout();
 
 		expect(wrapper.text()).toContain('operator@example.test');
+	});
+
+	it('names the Local Developer User and offers no meaningless sign-out', async () => {
+		mockUser.value = {
+			id: LOCAL_DEVELOPER_USER_ID,
+			email: LOCAL_DEVELOPER_USER_EMAIL,
+			name: LOCAL_DEVELOPER_USER_NAME,
+		};
+
+		const wrapper = await mountLayout();
+
+		expect(wrapper.text()).toContain(LOCAL_DEVELOPER_USER_NAME);
+		expect(wrapper.find('[data-nav-item="Sign out"]').exists()).toBe(false);
 	});
 
 	it('signs out and sends the browser to the login page', async () => {

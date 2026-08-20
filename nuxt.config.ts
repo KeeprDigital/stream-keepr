@@ -36,6 +36,7 @@ export default defineNuxtConfig({
 		ablyApiKey: '',
 		adminBootstrapToken: '',
 		betterAuthSecret: '',
+		localAuthBypassActive: false,
 		graphicsAdminToken: '',
 		screenOutputCapabilitySigningKey: '',
 		meleeCredentialEncryptionKey: '',

@@ -1,7 +1,16 @@
 import type { H3Event } from 'h3';
+import process from 'node:process';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { getCookie, setCookie } from 'h3';
 import { db, schema } from 'hub:db';
+import {
+	LOCAL_DEVELOPER_SESSION_COOKIE,
+	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
+	LOCAL_DEVELOPER_USER_EMAIL,
+	LOCAL_DEVELOPER_USER_ID,
+	LOCAL_DEVELOPER_USER_NAME,
+} from '~~/shared/utils/localDeveloperAuth';
 import { authStaticOptions } from './authOptions';
 import { ServiceConfigurationError } from './errors';
 
@@ -52,7 +61,8 @@ function createAuth(secret: string) {
 
 /**
  * The Better Auth instance, constructed on first use because the secret only
- * exists at runtime. A missing secret is an unfinished deployment, and the
+ * exists at runtime. Outside the development-only Local Developer Session, a
+ * missing secret is an unfinished deployment, and the
  * classification is what lets the response name the setting instead of a
  * stack-free 500 — same reasoning as `getAblyClient`.
  *
@@ -95,7 +105,8 @@ export function serverAuth() {
  * Asset Capability and has no session at all. Those routes need to ask rather
  * than demand, and they need the answer to be a value instead of a refusal.
  *
- * **A missing `NUXT_BETTER_AUTH_SECRET` answers `null` rather than raising**,
+ * **A missing `NUXT_BETTER_AUTH_SECRET` answers `null` rather than raising**
+ * when the local bypass is inactive,
  * which is the one judgement in here. Everywhere else that 503 is the right
  * answer — it names the setting to an operator who can go and set it. Here it
  * would take the credential-free surface down with the configuration fault: an
@@ -133,6 +144,63 @@ export async function optionalUserSession(event: H3Event) {
 /** This request's session as Better Auth answers it. */
 export type UserSession = Awaited<ReturnType<ServerAuth['api']['getSession']>>;
 
+/** Whether this request is allowed to substitute the Local Developer Session. */
+export function localAuthBypassIsActive(event: H3Event): boolean {
+	return process.env.NODE_ENV !== 'production'
+		&& useRuntimeConfig(event).localAuthBypassActive === true;
+}
+
+const LOCAL_SESSION_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LOCAL_DEVELOPER_CREATED_AT = new Date(0);
+const LOCAL_DEVELOPER_EXPIRES_AT = new Date('9999-12-31T23:59:59.999Z');
+
+/**
+ * The synthetic Better Auth boundary reading used by local development.
+ *
+ * The User id is constant because work belongs to the person-shaped local
+ * identity. The Session id comes from an http-only session cookie, so reloads in
+ * one browser remain one editor while another browser receives another editor.
+ */
+function localDeveloperSession(event: H3Event): NonNullable<UserSession> {
+	const presented = getCookie(event, LOCAL_DEVELOPER_SESSION_COOKIE);
+	const token = presented && LOCAL_SESSION_TOKEN.test(presented) ? presented : crypto.randomUUID();
+
+	if (token !== presented) {
+		setCookie(event, LOCAL_DEVELOPER_SESSION_COOKIE, token, {
+			httpOnly: true,
+			path: '/',
+			sameSite: 'lax',
+		});
+	}
+
+	const sessionId = `${LOCAL_DEVELOPER_SESSION_ID_PREFIX}${token}`;
+	return {
+		session: {
+			id: sessionId,
+			userId: LOCAL_DEVELOPER_USER_ID,
+			createdAt: LOCAL_DEVELOPER_CREATED_AT,
+			updatedAt: LOCAL_DEVELOPER_CREATED_AT,
+			expiresAt: LOCAL_DEVELOPER_EXPIRES_AT,
+			token: sessionId,
+			ipAddress: null,
+			userAgent: event.headers.get('user-agent'),
+		},
+		user: {
+			id: LOCAL_DEVELOPER_USER_ID,
+			name: LOCAL_DEVELOPER_USER_NAME,
+			email: LOCAL_DEVELOPER_USER_EMAIL,
+			emailVerified: true,
+			createdAt: LOCAL_DEVELOPER_CREATED_AT,
+			updatedAt: LOCAL_DEVELOPER_CREATED_AT,
+			image: null,
+			role: 'admin',
+			banned: false,
+			banReason: null,
+			banExpires: null,
+		},
+	};
+}
+
 /**
  * Where a request keeps the session it has already resolved.
  *
@@ -166,7 +234,9 @@ export async function requestUserSession(event: H3Event): Promise<UserSession> {
 	if (resolved)
 		return await resolved;
 
-	const resolving = serverAuth().api.getSession({ headers: event.headers });
+	const resolving = localAuthBypassIsActive(event)
+		? Promise.resolve(localDeveloperSession(event))
+		: serverAuth().api.getSession({ headers: event.headers });
 	event.context[REQUEST_SESSION_CONTEXT_KEY] = resolving;
 	return await resolving;
 }

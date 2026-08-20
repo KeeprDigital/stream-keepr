@@ -22,12 +22,20 @@
  * (`scripts/graphics-acceptance/local-configuration.mjs`).
  */
 
+import {
+	LOCAL_DEVELOPER_USER_NAME,
+	localAuthBypassEnabled,
+} from '../shared/utils/localDeveloperAuth.ts';
+
 const NAME = /^[A-Z_]\w*$/i;
 const EXPORT_PREFIX = /^export\s+/;
 
 /**
- * The `NUXT_` names a local checkout has to be given before the surfaces that read
- * them stop refusing, and the whole of what the #130 notice is asserting.
+ * The `NUXT_` names an ordinary local checkout has to be given before the surfaces
+ * that read them stop refusing, and the whole of what the #130 notice is asserting.
+ * `missingLocalNuxtNames` removes the two account-setup names when the exact
+ * development bypass is active; the canonical list remains complete for preview
+ * and acceptance harnesses, where the bypass is deliberately inert.
  *
  * These are `.env.example`'s assignments minus everything in
  * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
@@ -89,6 +97,7 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
+	'NUXT_LOCAL_AUTH_BYPASS',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
@@ -140,8 +149,17 @@ export const LOCAL_NUXT_NAME_SURFACES = {
  * empty string — and because the likeliest way to hold a populated `.env` full of
  * blanks is `cp .env.example .env`, which is advice this very notice gives.
  */
-export function missingLocalNuxtNames(env: Record<string, string | undefined>): LocallyRequiredNuxtName[] {
-	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name => (env[name] ?? '').trim().length === 0);
+export function missingLocalNuxtNames(
+	env: Record<string, string | undefined>,
+	options: { localAuthBypassActive?: boolean } = {},
+): LocallyRequiredNuxtName[] {
+	const bypassedAuthNames = options.localAuthBypassActive
+		? new Set<LocallyRequiredNuxtName>(['NUXT_BETTER_AUTH_SECRET', 'NUXT_ADMIN_BOOTSTRAP_TOKEN'])
+		: new Set<LocallyRequiredNuxtName>();
+
+	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name =>
+		!bypassedAuthNames.has(name) && (env[name] ?? '').trim().length === 0,
+	);
 }
 
 /**
@@ -294,9 +312,32 @@ export function localConfigurationLogLine(context: {
 	if (!announcesLocalConfiguration(context))
 		return undefined;
 
-	const missing = missingLocalNuxtNames(context.env);
+	const missing = missingLocalNuxtNames(context.env, {
+		localAuthBypassActive: localAuthBypassEnabled({
+			dev: context.dev,
+			value: context.env.NUXT_LOCAL_AUTH_BYPASS,
+		}),
+	});
 	if (missing.length === 0)
 		return undefined;
 
 	return { level: 'warn', message: localConfigurationBootNotice(missing) };
+}
+
+/** The warning an intentionally unauthenticated development server emits. */
+export function localAuthBypassLogLine(context: {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+}): { level: 'warn'; message: string } | undefined {
+	if (!announcesLocalConfiguration(context)
+		|| !localAuthBypassEnabled({ dev: context.dev, value: context.env.NUXT_LOCAL_AUTH_BYPASS })) {
+		return undefined;
+	}
+
+	return {
+		level: 'warn',
+		message: `AUTHENTICATION BYPASSED: every request is acting as ${LOCAL_DEVELOPER_USER_NAME}. `
+			+ 'Keep the development server bound to loopback; binding it to 0.0.0.0 or another non-loopback '
+			+ 'address exposes the application to other machines without authentication.',
+	};
 }

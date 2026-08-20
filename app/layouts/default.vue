@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '#ui/types';
+import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
 
@@ -40,6 +41,8 @@ const colorModeItem = computed<NavigationMenuItem[]>(() => [{
 
 const session = useAuthSession();
 const currentUser = session.user;
+const localDeveloperSession = computed(() => currentUser.value !== null && isLocalDeveloperUserId(currentUser.value.id));
+const accountLabel = computed(() => localDeveloperSession.value ? currentUser.value?.name : currentUser.value?.email);
 const toast = useToast();
 
 /**
@@ -50,13 +53,15 @@ const toast = useToast();
  * shared production machines, and "whose session is this laptop holding" is a
  * question the shell should answer without being asked.
  */
-const accountItems: NavigationMenuItem[] = [{
-	label: 'Sign out',
-	icon: 'i-lucide-log-out',
-	onSelect: () => {
-		void signOut();
-	},
-}];
+const accountItems = computed<NavigationMenuItem[]>(() => localDeveloperSession.value
+	? []
+	: [{
+			label: 'Sign out',
+			icon: 'i-lucide-log-out',
+			onSelect: () => {
+				void signOut();
+			},
+		}]);
 
 /**
  * Navigating only after the server agreed the session is over. A sign-out that
@@ -245,7 +250,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 						class="px-3 pb-1 text-xs text-muted truncate"
 						:title="currentUser.email"
 					>
-						{{ currentUser.email }}
+						{{ accountLabel }}
 					</div>
 					<UNavigationMenu
 						:collapsed="collapsed"
