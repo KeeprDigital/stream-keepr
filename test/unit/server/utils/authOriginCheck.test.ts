@@ -1,7 +1,6 @@
-import { betterAuth } from 'better-auth';
-import { memoryAdapter } from 'better-auth/adapters/memory';
+import type { ThrowawayAuth } from '~~/test/helpers/throwawayAuth';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { authStaticOptions } from '~~/server/utils/authOptions';
+import { LOCAL_HOST, LOCAL_ORIGIN, throwawayAuth } from '~~/test/helpers/throwawayAuth';
 
 /**
  * Better Auth's CSRF defence, against a real instance configured exactly as the
@@ -31,18 +30,7 @@ import { authStaticOptions } from '~~/server/utils/authOptions';
 const EMAIL = 'origin-check@keepr.digital';
 const PASSWORD = 'a-long-enough-password';
 
-const LOCAL_HOST = 'localhost:3000';
-const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
-
-function throwawayAuth() {
-	return betterAuth({
-		...authStaticOptions,
-		database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
-		secret: 'a-throwaway-secret-for-the-unit-suite',
-	});
-}
-
-let auth: ReturnType<typeof throwawayAuth>;
+let auth: ThrowawayAuth;
 
 /** One sign-in attempt, with whatever headers the case is about. */
 async function signIn(headers: Record<string, string>) {
