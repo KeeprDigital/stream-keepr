@@ -40,15 +40,22 @@ const sourceRound = computed(() => sourceMatch.value ? roundStore.getRoundById(s
 
 watch(
 	() => props.match.matchId,
-	async (matchId) => {
+	async (matchId, _, onCleanup) => {
+		let releaseRound: (() => void) | undefined;
+		let stale = false;
+		onCleanup(() => {
+			stale = true;
+			releaseRound?.();
+		});
 		sourceMatch.value = null;
 		if (!eventStore.eventId || !matchId)
 			return;
 		if (!roundStore.isLoaded)
 			await roundStore.loadRoundsByEventId(eventStore.eventId);
 		const linkedMatch = await matchRepository.getById(eventStore.eventId, matchId);
-		if (linkedMatch) {
+		if (linkedMatch && !stale) {
 			sourceMatch.value = linkedMatch;
+			releaseRound = assignmentStore.consumeRound(eventStore.eventId, linkedMatch.roundId);
 			await assignmentStore.loadAssignments(eventStore.eventId, linkedMatch.roundId);
 		}
 	},

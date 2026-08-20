@@ -16,7 +16,7 @@ mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([]));
 
 const FeatureMatchNoteStub = defineComponent({
 	props: ['note', 'noteKey', 'remoteChanged', 'save'],
-	template: '<div data-testid="cards-production-note" :data-note="note" :data-remote-changed="String(remoteChanged)" />',
+	template: '<div data-testid="cards-production-note" :data-note="note" :data-remote-changed="String(remoteChanged)"><button data-testid="cards-note-save" @click="save(\'Edited from Cards\')">Save</button></div>',
 });
 
 describe('mtgCardDeckListHeader', () => {
@@ -52,5 +52,39 @@ describe('mtgCardDeckListHeader', () => {
 		const note = wrapper.get('[data-testid="cards-production-note"]');
 		expect(note.attributes('data-note')).toBe('Talent can read this without leaving Cards');
 		expect(note.attributes('data-remote-changed')).toBe('true');
+		await wrapper.get('[data-testid="cards-note-save"]').trigger('click');
+		expect(save).toHaveBeenCalledWith('Edited from Cards');
+		expect(wrapper.get('.space-y-3 > div').classes()).toContain('flex-wrap');
+	});
+
+	it('renders the shared empty Note state for a selected previous-Round Assignment', async () => {
+		const { default: CardDeckListHeader } = await import('~/components/Mtg/CardDeckListHeader.vue');
+		const wrapper = mount(CardDeckListHeader, {
+			props: {
+				deckListRoundId: 2,
+				deckListMatchId: 7,
+				selectedAssignment: {
+					id: 9,
+					eventId: 1,
+					roundId: 2,
+					slotId: 3,
+					matchId: 7,
+					note: null,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				saveAssignmentNote: vi.fn().mockResolvedValue(undefined),
+			},
+			global: {
+				stubs: {
+					FeatureMatchNote: FeatureMatchNoteStub,
+					USelect: true,
+					UInput: true,
+					UButton: true,
+				},
+			},
+		});
+
+		expect(wrapper.get('[data-testid="cards-production-note"]').attributes('data-note')).toBe('');
 	});
 });

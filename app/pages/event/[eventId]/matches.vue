@@ -118,12 +118,15 @@ const initialLoading = computed(() =>
 const searchQuery = ref('');
 const globalFilter = refDebounced(searchQuery, 200);
 
-// Load matches when viewed round changes
-watch(viewedRoundId, async (roundId) => {
-	if (eventId.value && roundId) {
+// Load matches when viewed round changes and retain only the mounted Round for
+// Reconnect Resync. The collection itself remains cached after release.
+watch([eventId, viewedRoundId], async ([activeEventId, roundId], _, onCleanup) => {
+	if (activeEventId && roundId) {
+		const releaseRound = assignmentStore.consumeRound(activeEventId, roundId);
+		onCleanup(releaseRound);
 		await Promise.all([
-			matchStore.loadMatchesByRoundId(eventId.value, roundId),
-			assignmentStore.loadAssignments(eventId.value, roundId),
+			matchStore.loadMatchesByRoundId(activeEventId, roundId),
+			assignmentStore.loadAssignments(activeEventId, roundId),
 		]);
 	}
 }, { immediate: true });

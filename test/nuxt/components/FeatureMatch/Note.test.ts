@@ -103,4 +103,29 @@ describe('featureMatchNote', () => {
 		await wrapper.get('[data-testid="note-confirm-clear"]').trigger('click');
 		await vi.waitFor(() => expect(save).toHaveBeenCalledWith(''));
 	});
+
+	it('cancels without changing the authoritative Note and supports Cmd+Enter saving', async () => {
+		const save = vi.fn().mockResolvedValue(undefined);
+		const wrapper = await mountNote({ note: 'Authoritative Note', save });
+		await wrapper.get('[data-testid="note-edit"]').trigger('click');
+		await wrapper.get('[data-testid="note-input"]').setValue('Discard this draft');
+		const cancel = wrapper.findAll('button').find(button => button.text() === 'Cancel');
+		expect(cancel).toBeDefined();
+		await cancel!.trigger('click');
+
+		expect(save).not.toHaveBeenCalled();
+		expect(wrapper.get('[data-testid="note-text"]').text()).toBe('Authoritative Note');
+
+		await wrapper.get('[data-testid="note-edit"]').trigger('click');
+		await wrapper.get('[data-testid="note-input"]').setValue('Saved from a Mac');
+		await wrapper.get('[data-testid="note-input"]').trigger('keydown', { key: 'Enter', metaKey: true });
+		await vi.waitFor(() => expect(save).toHaveBeenCalledWith('Saved from a Mac'));
+	});
+
+	it('renders Note contents strictly as plain text', async () => {
+		const wrapper = await mountNote({ note: '<strong>Not markup</strong>\nSecond line' });
+
+		expect(wrapper.get('[data-testid="note-text"]').text()).toBe('<strong>Not markup</strong>\nSecond line');
+		expect(wrapper.find('strong').exists()).toBe(false);
+	});
 });

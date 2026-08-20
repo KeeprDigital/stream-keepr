@@ -43,7 +43,7 @@ watch([deckListMatchId, () => props.selectedMatch], async ([matchId, selectedMat
 
 <template>
 	<div class="space-y-3">
-		<div class="flex items-center gap-4">
+		<div class="flex flex-wrap items-center gap-4">
 			<!-- Round Picker -->
 			<USelect
 				v-if="roundOptions?.length"
@@ -52,7 +52,7 @@ watch([deckListMatchId, () => props.selectedMatch], async ([matchId, selectedMat
 				value-key="value"
 				placeholder="Select round..."
 				size="xl"
-				class="w-64"
+				class="w-full sm:w-64"
 			/>
 
 			<!-- Match Picker -->
@@ -62,7 +62,7 @@ watch([deckListMatchId, () => props.selectedMatch], async ([matchId, selectedMat
 				value-key="value"
 				placeholder="Select matchup..."
 				size="xl"
-				class="w-72"
+				class="w-full sm:w-72"
 				:ui="{ content: 'min-w-fit' }"
 			>
 				<template #item-label="{ item }">
@@ -92,7 +92,7 @@ watch([deckListMatchId, () => props.selectedMatch], async ([matchId, selectedMat
 				size="xl"
 				placeholder="Filter cards..."
 				icon="i-lucide-filter"
-				class="flex-1"
+				class="min-w-48 flex-1"
 			>
 				<template v-if="cardStore.deckListFilter" #trailing>
 					<UButton

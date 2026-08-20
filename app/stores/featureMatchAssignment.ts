@@ -21,9 +21,11 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	const consumedRoundIds = ref(new Set<number>());
 	const remoteChangedAssignmentIds = ref(new Set<number>());
 	const remoteChangeTimers = new Map<number, ReturnType<typeof setTimeout>>();
+	const roundConsumerCounts = new Map<number, number>();
 	const loading = ref(false);
 	const error = ref<string | null>(null);
 	const currentEventId = ref<number | null>(null);
+	const roundLoads = createKeyedGuardedSequence<number>();
 
 	const assignments = computed(() => [...assignmentsByRound.value.values()].flat());
 
@@ -35,27 +37,51 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 		assignmentsByRound.value = new Map(assignmentsByRound.value).set(roundId, next);
 	}
 
-	function startConsuming(eventId: number, roundId: number) {
+	function ensureEvent(eventId: number) {
 		if (currentEventId.value !== eventId) {
+			roundLoads.supersedeAll();
 			assignmentsByRound.value = new Map();
 			consumedRoundIds.value = new Set();
+			roundConsumerCounts.clear();
 			currentEventId.value = eventId;
 		}
+	}
+
+	function consumeRound(eventId: number, roundId: number): () => void {
+		ensureEvent(eventId);
+		roundConsumerCounts.set(roundId, (roundConsumerCounts.get(roundId) ?? 0) + 1);
 		consumedRoundIds.value = new Set(consumedRoundIds.value).add(roundId);
+		let released = false;
+		return () => {
+			if (released || currentEventId.value !== eventId)
+				return;
+			released = true;
+			const remaining = (roundConsumerCounts.get(roundId) ?? 1) - 1;
+			if (remaining > 0) {
+				roundConsumerCounts.set(roundId, remaining);
+				return;
+			}
+			roundConsumerCounts.delete(roundId);
+			const next = new Set(consumedRoundIds.value);
+			next.delete(roundId);
+			consumedRoundIds.value = next;
+		};
 	}
 
 	async function loadAssignments(eventId: number, roundId: number) {
-		startConsuming(eventId, roundId);
+		ensureEvent(eventId);
+		const flight = roundLoads.begin(roundId);
 		loading.value = true;
 		error.value = null;
 		try {
 			const loaded = await repo.listByRound(eventId, roundId);
-			if (currentEventId.value === eventId && consumedRoundIds.value.has(roundId))
+			if (flight.current && currentEventId.value === eventId)
 				replaceRound(roundId, loaded);
 			return loaded;
 		}
 		catch (cause) {
-			error.value = cause instanceof Error ? cause.message : 'Failed to load feature match assignments';
+			if (flight.current)
+				error.value = cause instanceof Error ? cause.message : 'Failed to load feature match assignments';
 			return null;
 		}
 		finally {
@@ -69,13 +95,15 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 			return;
 		const roundIds = [...consumedRoundIds.value];
 		await Promise.all(roundIds.map(async (roundId) => {
+			const flight = roundLoads.begin(roundId);
 			try {
 				const loaded = await repo.listByRound(eventId, roundId);
-				if (currentEventId.value === eventId && consumedRoundIds.value.has(roundId))
+				if (flight.current && currentEventId.value === eventId && consumedRoundIds.value.has(roundId))
 					replaceRound(roundId, loaded);
 			}
 			catch (cause) {
-				error.value = cause instanceof Error ? cause.message : 'Failed to reload feature match assignments';
+				if (flight.current)
+					error.value = cause instanceof Error ? cause.message : 'Failed to reload feature match assignments';
 			}
 		}));
 	}
@@ -154,6 +182,8 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	}
 
 	function $reset() {
+		roundLoads.supersedeAll();
+		roundConsumerCounts.clear();
 		for (const timer of remoteChangeTimers.values())
 			clearTimeout(timer);
 		remoteChangeTimers.clear();
@@ -173,6 +203,7 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 		error,
 		currentEventId,
 		assignmentsForRound,
+		consumeRound,
 		loadAssignments,
 		reloadConsumedRounds,
 		saveAssignment,

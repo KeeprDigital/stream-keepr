@@ -45,6 +45,18 @@ describe('useFeatureMatchPromotion', () => {
 				updatedAt: new Date('2026-01-02T00:00:00Z'),
 			},
 			match: { id: 8, tableNumber: 12, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+		}, {
+			assignment: {
+				id: 11,
+				eventId: 1,
+				roundId: 3,
+				slotId: 4,
+				matchId: 10,
+				note: 'A second affected Note',
+				createdAt: new Date('2026-01-01T00:00:00Z'),
+				updatedAt: new Date('2026-01-03T00:00:00Z'),
+			},
+			match: { id: 10, tableNumber: 13, player1Data: { name: 'Carol' }, player2Data: { name: 'Dana' } },
 		}];
 		mockRepo.promoteMatch
 			.mockRejectedValueOnce(transportFailure({
@@ -64,6 +76,46 @@ describe('useFeatureMatchPromotion', () => {
 		expect(mockRepo.promoteMatch).toHaveBeenNthCalledWith(2, 1, 2, 7, [{
 			assignmentId: 9,
 			updatedAt: new Date('2026-01-02T00:00:00Z'),
+		}, {
+			assignmentId: 11,
+			updatedAt: new Date('2026-01-03T00:00:00Z'),
+		}]);
+	});
+
+	it('reopens confirmation with current information after a stale retry is refused', async () => {
+		const reviewed = [{
+			assignment: { id: 9, updatedAt: new Date('2026-01-02T00:00:00Z'), note: 'Reviewed Note' },
+			match: { id: 8, tableNumber: 12 },
+		}];
+		const current = [{
+			assignment: { id: 9, updatedAt: new Date('2026-01-04T00:00:00Z'), note: 'Newer Note' },
+			match: { id: 8, tableNumber: 12 },
+		}];
+		mockRepo.promoteMatch
+			.mockRejectedValueOnce(transportFailure({
+				status: 409,
+				body: { data: { code: 'feature-match-note-discard-required', assignments: reviewed } },
+			}))
+			.mockRejectedValueOnce(transportFailure({
+				status: 409,
+				body: { data: { code: 'feature-match-note-discard-required', assignments: current } },
+			}))
+			.mockResolvedValueOnce({
+				promotedSlot: createMockFeatureMatch({ id: 2, matchId: 7 }),
+				clearedSlots: [],
+				assignment: { id: 12, eventId: 1, roundId: 3, slotId: 2, matchId: 7, note: null },
+			});
+		mockModalOpen
+			.mockReturnValueOnce({ result: Promise.resolve(true) })
+			.mockReturnValueOnce({ result: Promise.resolve(true) });
+
+		await useFeatureMatchPromotion().promote({ eventId: 1, roundId: 3, slotId: 2, matchId: 7 });
+
+		expect(mockModalOpen).toHaveBeenNthCalledWith(1, { assignments: reviewed });
+		expect(mockModalOpen).toHaveBeenNthCalledWith(2, { assignments: current });
+		expect(mockRepo.promoteMatch).toHaveBeenNthCalledWith(3, 1, 2, 7, [{
+			assignmentId: 9,
+			updatedAt: new Date('2026-01-04T00:00:00Z'),
 		}]);
 	});
 

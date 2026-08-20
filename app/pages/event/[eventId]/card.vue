@@ -193,12 +193,14 @@ watch(roundOptions, (options) => {
 		deckListRoundId.value = options[0].value;
 }, { immediate: true });
 
-watch(deckListRoundId, async (roundId) => {
-	if (!eventStore.eventId || !roundId)
+watch([() => eventStore.eventId, deckListRoundId], async ([eventId, roundId], _, onCleanup) => {
+	if (!eventId || !roundId)
 		return;
+	const releaseRound = assignmentStore.consumeRound(eventId, roundId);
+	onCleanup(releaseRound);
 	await Promise.all([
-		matchStore.loadMatchesByRoundId(eventStore.eventId, roundId),
-		assignmentStore.loadAssignments(eventStore.eventId, roundId),
+		matchStore.loadMatchesByRoundId(eventId, roundId),
+		assignmentStore.loadAssignments(eventId, roundId),
 	]);
 	if (!matchOptions.value.some(option => option.value === deckListMatchId.value)) {
 		deckListMatchId.value = matchOptions.value[0]?.value;

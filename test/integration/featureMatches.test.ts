@@ -287,6 +287,7 @@ describe('feature match slots API', () => {
 		const slots = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		expect(slots.featureMatchSlots.find((candidate: { id: number }) => candidate.id === slot.id)).toMatchObject({
 			matchId: notedMatch.id,
+			activeSessionId: promoted.promotedSlot.activeSessionId,
 		});
 		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
 		expect(assignments.featureMatchAssignments).toContainEqual(expect.objectContaining({
@@ -624,6 +625,18 @@ describe('feature match slots API', () => {
 		const stored = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
 		expect(holders).toHaveLength(1);
+		const winner = holders[0]!;
+		const loserBefore = responses[0]!.status === 409 ? lane1 : lane2;
+		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id);
+		expect(loserAfter).toMatchObject({
+			id: loserBefore.id,
+			matchId: null,
+			activeSessionId: loserBefore.activeSessionId,
+		});
+		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
+		expect(assignments.featureMatchAssignments.filter(
+			(assignment: { matchId: number }) => assignment.matchId === contested.id,
+		)).toEqual([expect.objectContaining({ slotId: winner.id })]);
 	});
 
 	it('keeps a Player rename and a concurrent operator command from cancelling each other', async () => {

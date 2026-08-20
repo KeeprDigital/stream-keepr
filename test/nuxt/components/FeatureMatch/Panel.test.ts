@@ -34,6 +34,7 @@ const mockPlayerStore = reactive({
 
 const mockAssignmentStore = reactive({
 	assignments: [] as any[],
+	consumeRound: vi.fn(() => vi.fn()),
 	loadAssignments: vi.fn(),
 	updateAssignment: vi.fn(),
 	isRemoteChanged: vi.fn(() => false),
@@ -254,6 +255,8 @@ describe('featureMatchPanel setup save', () => {
 	});
 
 	it('shows the Assignment Note as a compact strip immediately beneath the panel header', async () => {
+		const releaseRound = vi.fn();
+		mockAssignmentStore.consumeRound.mockReturnValueOnce(releaseRound);
 		mockAssignmentStore.assignments = [{
 			id: 9,
 			eventId: 1,
@@ -275,5 +278,43 @@ describe('featureMatchPanel setup save', () => {
 		expect(note.classes()).toContain('px-3');
 		expect(note.attributes('data-remote-changed')).toBe('true');
 		expect(wrapper.html().indexOf('feature-match-note')).toBeGreaterThan(wrapper.html().indexOf('data-testid="edit-mode"'));
+		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
+		wrapper.unmount();
+		expect(releaseRound).toHaveBeenCalledOnce();
+	});
+
+	it('resolves simultaneous Feature Match panels against their own Assignment Rounds', async () => {
+		mockAssignmentStore.assignments = [{
+			id: 9,
+			eventId: 1,
+			roundId: 3,
+			slotId: 1,
+			matchId: 7,
+			note: 'Round three Note',
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		}, {
+			id: 10,
+			eventId: 1,
+			roundId: 4,
+			slotId: 2,
+			matchId: 8,
+			note: 'Round four Note',
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		}];
+		mockMatchRepository.getById.mockImplementation(async (_eventId, matchId) => ({
+			id: matchId,
+			roundId: matchId === 7 ? 3 : 4,
+		}));
+
+		const roundThreePanel = await mountComponent({ id: 1, matchId: 7 });
+		const roundFourPanel = await mountComponent({ id: 2, matchId: 8 });
+		await flushPromises();
+
+		expect(roundThreePanel.get('.feature-match-note').text()).toContain('Round three Note');
+		expect(roundFourPanel.get('.feature-match-note').text()).toContain('Round four Note');
+		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
+		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 4);
 	});
 });
