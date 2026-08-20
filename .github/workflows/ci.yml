@@ -5,13 +5,20 @@
 # needs a real library store). The seven `:deployed` gates run on deploy day
 # only: they provision real Events in production and spend Ably free-plan
 # quota (#189).
+#
+# PR-only by decision: no push-to-main trigger. Merges land squarely from
+# CI-green PRs, and deploys ship released tags whose PR run was green —
+# re-running the same gates on the merge commit doubled Actions spend for
+# no added signal. Docs-only PRs are skipped for the same reason; safe while
+# main has no required status checks (see release-please.yml).
 
 name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,10 +30,10 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  checks:
-    name: Lint and typecheck
+  tests:
+    name: Lint, typecheck, and test gates
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -35,21 +42,10 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Lint and typecheck lead so the cheap gates fail fast; they share this
+      # job to save a third checkout + install per run.
       - run: pnpm lint
       - run: pnpm typecheck
-
-  tests:
-    name: Unit, Nuxt, integration, browser gates
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       # One runner, sequential tiers: this is the "one authoritative run on a
       # quiet machine" that docs/agents/parallel-rounds.md requires for
       # integration numbers. Realtime integration tests self-skip here — no

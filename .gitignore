@@ -38,7 +38,3 @@ coverage
 .claude/worktrees/
 .worktrees/
 
-# Local skill output that otherwise lands untracked inside the tracked docs tree (#254)
-docs/superpowers/
-
-.claude/worktrees/

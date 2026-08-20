@@ -59,8 +59,9 @@ Which script, when:
 | Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                  |
 
 CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
-and push to main — the same gates `pnpm verify` runs locally, split across
-three jobs. Realtime integration tests self-skip there — no Ably key is
+— the same gates `pnpm verify` runs locally, split across two jobs. It does
+not re-run on the merge commit, and docs-only PRs are skipped (rationale in
+the workflow header). Realtime integration tests self-skip there — no Ably key is
 configured in CI by decision (#189). The prerequisite-bound suites in the table
 above stay local.
 

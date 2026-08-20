@@ -14,7 +14,7 @@
 #
 # Actions deploys ship released tags, never main's HEAD: the version input
 # resolves through GitHub Releases (cut by merging the Release PR), so what
-# promotes is always a formally released, CI-green snapshot — and rollback
+# promotes is always a formally released snapshot whose PRs ran CI green — and rollback
 # is dispatching this workflow with the previous tag. Local `pnpm deploy`
 # stays free-form for emergencies.
 #
