@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectScope } from 'vue';
 
 const mockPlayerStore = {
 	getPlayerById: vi.fn(),
@@ -15,10 +16,13 @@ const mockEventId = ref<number | null>(1);
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerDeckCache', () => () => ({ fetchDeck: mockFetchDeck }));
+const mockCardDataHealth = ref<'complete' | 'degraded'>('complete');
+
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } }),
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
+	cardDataHealth: mockCardDataHealth,
 }));
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({ playerId: mockPlayerId.value })));
 mockNuxtImport('useScryfallBatch', () => () => ({
@@ -102,18 +106,33 @@ function createEnrichedCard(name: string, imageUrl: string, overrides: Record<st
 }
 
 describe('useDeckModeData', () => {
+	// Each instance registers watchers on the shared mocked refs; a stopped scope
+	// keeps earlier tests' instances from reacting to later tests' ref writes.
+	const activeScopes: Array<ReturnType<typeof effectScope>> = [];
+
+	function mountDeckModeData() {
+		const scope = effectScope();
+		activeScopes.push(scope);
+		return scope.run(() => useDeckModeData())!;
+	}
+
+	afterEach(() => {
+		activeScopes.splice(0).forEach(scope => scope.stop());
+	});
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		MockImage.loadedUrls = [];
 		mockPlayerId.value = null;
 		mockEventId.value = 1;
+		mockCardDataHealth.value = 'complete';
 		mockFetchDeck.mockResolvedValue(createDeckResponse([]));
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 
 	it('returns expected properties for staged deck swaps', () => {
-		const result = useDeckModeData();
+		const result = mountDeckModeData();
 		expect(result).toHaveProperty('config');
 		expect(result).toHaveProperty('playerName');
 		expect(result).toHaveProperty('deckName');
@@ -130,7 +149,7 @@ describe('useDeckModeData', () => {
 	});
 
 	it('starts blank with no loading state when no player is selected', () => {
-		const { playerName, deckName, mainboard, sideboard, loading, hasDisplayedDeck } = useDeckModeData();
+		const { playerName, deckName, mainboard, sideboard, loading, hasDisplayedDeck } = mountDeckModeData();
 		expect(playerName.value).toBe('');
 		expect(deckName.value).toBe('');
 		expect(mainboard.value).toEqual([]);
@@ -152,7 +171,7 @@ describe('useDeckModeData', () => {
 		});
 
 		mockPlayerId.value = 5;
-		const { playerName, deckName, deckColors, hasDisplayedDeck, displayedDeckVersion } = useDeckModeData();
+		const { playerName, deckName, deckColors, hasDisplayedDeck, displayedDeckVersion } = mountDeckModeData();
 
 		await flushPromises();
 
@@ -182,7 +201,7 @@ describe('useDeckModeData', () => {
 		}));
 
 		mockPlayerId.value = 1;
-		const result = useDeckModeData();
+		const result = mountDeckModeData();
 		await flushPromises();
 
 		expect(result.playerName.value).toBe('Alice');
@@ -228,7 +247,7 @@ describe('useDeckModeData', () => {
 		}));
 
 		mockPlayerId.value = 1;
-		const result = useDeckModeData();
+		const result = mountDeckModeData();
 		await flushPromises();
 
 		mockPlayerId.value = 2;
@@ -253,6 +272,165 @@ describe('useDeckModeData', () => {
 		expect(result.deckName.value).toBe('Deck C');
 	});
 
+	it('keeps a degraded deck on program and exposes the degradation instead of an error', async () => {
+		mockPlayerStore.getPlayerById.mockResolvedValue({
+			id: 5,
+			name: 'Alice',
+			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+		});
+		mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+		mockBuildDeckListArrays.mockReturnValue({
+			mainboard: [{ ...createEnrichedCard('Counterspell', ''), mtgCard: null }],
+			sideboard: [],
+		});
+
+		mockPlayerId.value = 5;
+		const result = mountDeckModeData();
+		await flushPromises();
+
+		expect(result.hasDisplayedDeck.value).toBe(true);
+		expect(result.error.value).toBeNull();
+		expect(result.cardDataDegraded.value).toBe(true);
+	});
+
+	it('re-fetches degraded card data without a reload and recovers when Scryfall answers', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockResolvedValue({
+				id: 5,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			});
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards
+				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValue({ cards: new Map(), degraded: false });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(result.cardDataDegraded.value).toBe(true);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+
+			// One minute later the output re-fetches by itself — no reload, no operator action.
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			expect(result.cardDataDegraded.value).toBe(false);
+
+			// The recovered deck arrives through the ordinary staged swap.
+			expect(result.pendingSwapVersion.value).toBe(1);
+
+			// Recovered: nothing left to re-fetch.
+			await vi.advanceTimersByTimeAsync(120_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('reports card data health through the screen context, and settles it on teardown', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockResolvedValue({
+				id: 5,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			});
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(mockCardDataHealth.value).toBe('degraded');
+
+			// Recovery reports itself the same way.
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockCardDataHealth.value).toBe('complete');
+
+			// A degraded surface that goes away must not leave its report standing.
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockPlayerId.value = 6;
+			await vi.advanceTimersByTimeAsync(0);
+			expect(mockCardDataHealth.value).toBe('degraded');
+			activeScopes.splice(0).forEach(scope => scope.stop());
+			expect(mockCardDataHealth.value).toBe('complete');
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('stops re-fetching and clears the degradation when the player selection is cleared', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockResolvedValue({
+				id: 5,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			});
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.cardDataDegraded.value).toBe(true);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+
+			mockPlayerId.value = null;
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.cardDataDegraded.value).toBe(false);
+
+			await vi.advanceTimersByTimeAsync(180_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('cancels a degraded re-fetch when the operator selects another player, so the stale deck cannot come back', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockImplementation(async (_eventId: number, playerId: number) =>
+				playerId === 5
+					? { id: 5, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } }
+					: { id: 6, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } });
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards
+				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValue({ cards: new Map(), degraded: false });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.cardDataDegraded.value).toBe(true);
+
+			mockPlayerId.value = 6;
+			await vi.advanceTimersByTimeAsync(0);
+			result.commitPendingDeck();
+			expect(result.playerName.value).toBe('Bob');
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+
+			// The degraded player-5 re-fetch must not fire and drag Alice back on program.
+			await vi.advanceTimersByTimeAsync(180_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			expect(result.playerName.value).toBe('Bob');
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('clears to blank when playerId becomes null', async () => {
 		mockPlayerStore.getPlayerById.mockResolvedValue({
 			id: 5,
@@ -266,7 +444,7 @@ describe('useDeckModeData', () => {
 		});
 
 		mockPlayerId.value = 5;
-		const result = useDeckModeData();
+		const result = mountDeckModeData();
 		await flushPromises();
 
 		mockPlayerId.value = null;

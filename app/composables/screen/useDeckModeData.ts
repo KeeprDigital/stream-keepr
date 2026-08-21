@@ -79,6 +79,13 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
 	return result;
 }
 
+/**
+ * How long a degraded rendering waits before re-fetching its card data. Slow on
+ * purpose: the batch fetch has already retried with backoff by the time a load
+ * reports degraded, so this is outage pacing, not request retry.
+ */
+const DECK_CARD_DATA_REFETCH_MS = 60_000;
+
 function preloadDeckImage(url: string): Promise<void> {
 	return new Promise((resolve) => {
 		const image = new Image();
@@ -128,7 +135,7 @@ async function preloadDeckImages(cards: DeckListCardWithData[]) {
 }
 
 export function useDeckModeData() {
-	const { eventId } = useScreenContext();
+	const { eventId, cardDataHealth } = useScreenContext();
 	const config = useScreenModeConfig('deck');
 
 	const playerStore = usePlayerStore();
@@ -137,6 +144,14 @@ export function useDeckModeData() {
 
 	const loading = ref(false);
 	const error = ref<string | null>(null);
+	/**
+	 * True while the deck on program is rendering placeholders it should not be:
+	 * a Scryfall fetch exhausted its retries, so card data that exists could not
+	 * be resolved. Deliberately not `error` — an output on program never blanks
+	 * for missing card images, and the degradation is reported rather than shown
+	 * so a control surface can say so while the broadcast output does not (#465).
+	 */
+	const cardDataDegraded = ref(false);
 	const displayedDeck = ref<DeckDisplayState | null>(null);
 	const pendingDeck = ref<DeckDisplayState | null>(null);
 	const pendingSwapVersion = ref(0);
@@ -154,6 +169,44 @@ export function useDeckModeData() {
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
+
+	let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelScheduledRefetch() {
+		if (refetchTimer !== null) {
+			clearTimeout(refetchTimer);
+			refetchTimer = null;
+		}
+	}
+
+	/**
+	 * The reload-free recovery path (#465): a degraded deck re-fetches itself on a
+	 * slow cadence until a load resolves completely, the selection changes, or the
+	 * surface goes away. Program keeps the degraded rendering the whole time — the
+	 * recovered deck arrives through the ordinary staged swap.
+	 */
+	function scheduleRefetch(playerId: number) {
+		cancelScheduledRefetch();
+		refetchTimer = setTimeout(() => {
+			refetchTimer = null;
+			void loadPlayerDeck(playerId);
+		}, DECK_CARD_DATA_REFETCH_MS);
+	}
+
+	function reportCardDataHealth(degraded: boolean) {
+		cardDataDegraded.value = degraded;
+		if (cardDataHealth) {
+			cardDataHealth.value = degraded ? 'degraded' : 'complete';
+		}
+	}
+
+	onScopeDispose(() => {
+		cancelScheduledRefetch();
+		// A degraded report must not outlive the rendering that measured it.
+		if (cardDataHealth) {
+			cardDataHealth.value = 'complete';
+		}
+	});
 
 	function clearDeck() {
 		displayedDeck.value = null;
@@ -174,7 +227,7 @@ export function useDeckModeData() {
 		}
 	}
 
-	async function buildDeckDisplayState(player: Player, deckResponse: PlayerDeckResponse): Promise<DeckDisplayState> {
+	async function buildDeckDisplayState(player: Player, deckResponse: PlayerDeckResponse): Promise<{ deck: DeckDisplayState; degraded: boolean }> {
 		// Map PlayerDeckCardEntry → DeckListCard-compatible shape for Scryfall batch
 		const deckCards = deckResponse.cards.map(c => ({
 			name: c.name,
@@ -188,7 +241,7 @@ export function useDeckModeData() {
 		}));
 		const lookupCards = createDeckLookupCards(deckCards, deckResponse.companion);
 
-		const { cards: cardDataMap } = await fetchScryfallCards(lookupCards);
+		const { cards: cardDataMap, degraded } = await fetchScryfallCards(lookupCards);
 		const arrays = buildDeckListArrays(deckCards, cardDataMap);
 		const deckCounters = counterConfigsForDeckCounterTypes(
 			deckCards.flatMap(card => card.deckCounterTypes ?? []),
@@ -197,22 +250,28 @@ export function useDeckModeData() {
 		await preloadDeckImages([...arrays.mainboard, ...arrays.sideboard]);
 
 		return {
-			version: ++deckVersion,
-			playerId: player.id,
-			playerName: player.name,
-			deckName: deckResponse.name,
-			deckColors: deckResponse.colors,
-			companion: deckResponse.companion ?? null,
-			highlander: deckResponse.highlander ?? null,
-			deckCounters,
-			deckStats: computeDeckStats(deckCards),
-			mainboard: arrays.mainboard,
-			sideboard: arrays.sideboard,
+			deck: {
+				version: ++deckVersion,
+				playerId: player.id,
+				playerName: player.name,
+				deckName: deckResponse.name,
+				deckColors: deckResponse.colors,
+				companion: deckResponse.companion ?? null,
+				highlander: deckResponse.highlander ?? null,
+				deckCounters,
+				deckStats: computeDeckStats(deckCards),
+				mainboard: arrays.mainboard,
+				sideboard: arrays.sideboard,
+			},
+			degraded,
 		};
 	}
 
 	async function loadPlayerDeck(playerId: number) {
 		const requestId = ++activeRequestId;
+		// A fresh load supersedes any pending degraded re-fetch; a degraded
+		// completion schedules the next one itself.
+		cancelScheduledRefetch();
 		const evtId = eventId.value;
 		if (!evtId) {
 			if (!displayedDeck.value) {
@@ -248,9 +307,14 @@ export function useDeckModeData() {
 				return;
 			}
 
-			const nextDeck = await buildDeckDisplayState(player, deckResponse);
+			const { deck: nextDeck, degraded } = await buildDeckDisplayState(player, deckResponse);
 			if (requestId !== activeRequestId) {
 				return;
+			}
+
+			reportCardDataHealth(degraded);
+			if (degraded) {
+				scheduleRefetch(playerId);
 			}
 
 			if (!displayedDeck.value) {
@@ -282,6 +346,8 @@ export function useDeckModeData() {
 			else {
 				error.value = null;
 				activeRequestId++;
+				cancelScheduledRefetch();
+				reportCardDataHealth(false);
 				if (displayedDeck.value) {
 					queuePendingDeck(null);
 				}
@@ -306,6 +372,7 @@ export function useDeckModeData() {
 		sideboard,
 		loading,
 		error,
+		cardDataDegraded: readonly(cardDataDegraded),
 		hasDisplayedDeck,
 		displayedDeckVersion,
 		pendingSwapVersion: readonly(pendingSwapVersion),

@@ -2,6 +2,7 @@ import type { InjectionKey, Ref } from 'vue';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import type { ScreenCardDataHealth } from '~/types/screen';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 export interface ScreenContext {
@@ -25,6 +26,12 @@ export interface ScreenContext {
 	previewSafeAreas?: Ref<boolean>;
 	/** Opaque capability supplied to an unattended Screen Output via its URL fragment. */
 	assetCapability?: Ref<string | null>;
+	/**
+	 * Where the rendering self-reports whether it resolved all its card data.
+	 * Owned by the host so it can carry the report to control surfaces (via
+	 * presence, like `assetAccess`) instead of showing it on program (#465).
+	 */
+	cardDataHealth?: Ref<ScreenCardDataHealth>;
 }
 
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');
