@@ -33,12 +33,18 @@ export function normalizeTimeInput(input: string): string | null {
 	if (!trimmed)
 		return null;
 
-	// If already contains colons, validate and pass through
+	// If already contains colons, validate and pass through. Range checks must
+	// match parseTimeInput's — every string returned here is canonical, so the
+	// parser must accept it.
 	if (trimmed.includes(':')) {
 		const parts = trimmed.split(':');
-		if ((parts.length === 2 || parts.length === 3) && parts.every(p => DIGITS_ONLY_RE.test(p)))
-			return trimmed;
-		return null;
+		if ((parts.length !== 2 && parts.length !== 3) || !parts.every(p => DIGITS_ONLY_RE.test(p)))
+			return null;
+		const seconds = Number(parts[parts.length - 1]);
+		const minutes = Number(parts[parts.length - 2]);
+		if (seconds >= 60 || (parts.length === 3 && minutes >= 60))
+			return null;
+		return trimmed;
 	}
 
 	// Strip non-digits for pure numeric input
