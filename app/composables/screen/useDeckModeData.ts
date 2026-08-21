@@ -188,7 +188,7 @@ export function useDeckModeData() {
 		}));
 		const lookupCards = createDeckLookupCards(deckCards, deckResponse.companion);
 
-		const cardDataMap = await fetchScryfallCards(lookupCards);
+		const { cards: cardDataMap } = await fetchScryfallCards(lookupCards);
 		const arrays = buildDeckListArrays(deckCards, cardDataMap);
 		const deckCounters = counterConfigsForDeckCounterTypes(
 			deckCards.flatMap(card => card.deckCounterTypes ?? []),

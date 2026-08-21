@@ -108,7 +108,7 @@ describe('useDeckModeData', () => {
 		mockPlayerId.value = null;
 		mockEventId.value = 1;
 		mockFetchDeck.mockResolvedValue(createDeckResponse([]));
-		mockFetchScryfallCards.mockResolvedValue(new Map());
+		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 

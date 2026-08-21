@@ -266,7 +266,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			// Batch fetch all cards from both players in one go.
 			const allCards = [...p1Cards, ...p2Cards];
 			const cardDataMap = allCards.length > 0
-				? await fetchScryfallCards(allCards)
+				? (await fetchScryfallCards(allCards)).cards
 				: new Map<string, MtgCard>();
 
 			state.deckListPlayer1.value = p1Name
@@ -324,7 +324,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 			const deckResponse = await deckCache.fetchDeck(player.id, evtId, player.updatedAt);
 			const deckCards = toDeckListCards(deckResponse);
 			const cardDataMap = deckCards.length > 0
-				? await fetchScryfallCards(deckCards)
+				? (await fetchScryfallCards(deckCards)).cards
 				: new Map<string, MtgCard>();
 
 			state.playerDeckData.value = buildDeckSource(player.name, deckResponse, deckCards, cardDataMap);

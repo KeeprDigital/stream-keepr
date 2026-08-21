@@ -205,7 +205,7 @@ watch(selectedDeck, async (deck) => {
 	if (!deck)
 		return;
 	const lookupCards = createDeckLookupCards(deck.cards, deck.companion);
-	cardDataMap.value = await fetchScryfallCards(lookupCards);
+	cardDataMap.value = (await fetchScryfallCards(lookupCards)).cards;
 }, { immediate: true });
 
 function getCardImageUrl(card: DeckListCard): string | null {
