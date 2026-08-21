@@ -2,8 +2,9 @@
 # `pnpm deploy` locally. It exists as an *option*, not a replacement: deploys
 # are never merge-triggered, because deploy day is a human procedure
 # (README.md § Deploy day, in order). This workflow covers only what
-# `pnpm deploy` covers — build, Wasm dry run, D1 migration, Worker promotion,
-# health verify. Everything after promotion stays with the operator:
+# `pnpm deploy` covers — build, Wasm dry run, Worker smoke against the
+# production-env build, D1 migration, Worker promotion, health verify.
+# Everything after promotion stays with the operator:
 #
 #   - The seven `:deployed` acceptance gates run locally, in order, stopping
 #     at the first failure. Two of them cannot run on a hosted runner at all
@@ -93,17 +94,20 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          # Dispatch inputs cross into the shell via env, never by expression
+          # interpolation inside `run:` — this job holds the Cloudflare token.
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ inputs.version }}" = "latest" ]; then
+          if [ "$INPUT_VERSION" = "latest" ]; then
             tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
           else
-            tag="${{ inputs.version }}"
+            tag="$INPUT_VERSION"
             # Fail fast on a tag that is not a published release.
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName > /dev/null
           fi
           echo "Deploying release $tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.release.outputs.tag }}
           # Full history: the validator detection diffs the deployed commit
@@ -113,9 +117,10 @@ jobs:
         id: validator
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VALIDATOR: ${{ inputs.validator }}
         run: |
           decide() {
-            case "${{ inputs.validator }}" in
+            case "$INPUT_VALIDATOR" in
               always) echo "true|forced by the always input"; return ;;
               never) echo "false|suppressed by the never input"; return ;;
             esac
@@ -155,8 +160,8 @@ jobs:
           echo "Validator deploy: $deploy ($reason)"
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -164,12 +169,17 @@ jobs:
       - name: Deploy the silent-video validator
         if: steps.validator.outputs.deploy == 'true'
         run: pnpm deploy:validator
-      - name: Deploy (build, dry run, migrate D1, promote, verify)
+      - name: Deploy (build, dry run, smoke, migrate D1, promote, verify)
         run: pnpm deploy
       - name: Move the production tag to the deployed commit
         run: git push origin +HEAD:refs/tags/production
       - name: Remind the operator what is still owed
+        env:
+          # Step outputs derive from dispatch inputs; same env discipline as above.
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          VALIDATOR_OUTCOME: ${{ steps.validator.outputs.deploy == 'true' && 'deployed' || 'not deployed' }}
+          VALIDATOR_REASON: ${{ steps.validator.outputs.reason }}
         run: |
-          echo "Release ${{ steps.release.outputs.tag }} promoted and verified against https://stream.keepr.digital." >> "$GITHUB_STEP_SUMMARY"
-          echo "Validator: ${{ steps.validator.outputs.deploy == 'true' && 'deployed' || 'not deployed' }} — ${{ steps.validator.outputs.reason }}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Release $RELEASE_TAG promoted and verified against https://stream.keepr.digital." >> "$GITHUB_STEP_SUMMARY"
+          echo "Validator: $VALIDATOR_OUTCOME — $VALIDATOR_REASON." >> "$GITHUB_STEP_SUMMARY"
           echo 'Run the seven `:deployed` gates locally, in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"

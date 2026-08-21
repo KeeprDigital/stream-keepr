@@ -260,7 +260,11 @@ file will not run there again; recover missing legacy deck rows from a backup or
 Time Travel before continuing.
 
 The deploy scripts use the repository-pinned Wrangler version. They perform a
-build and dry run, apply pending D1 migrations, and only then deploy the Worker.
+build, the Wasm dry run, and the Worker smoke — run here against the
+`CLOUDFLARE_ENV=production` build itself, so an env-conditional build
+difference fails under local workerd instead of first executing in
+production — then apply pending D1 migrations, and only then deploy the
+Worker.
 D1 migration and Worker promotion are separate Cloudflare operations, not one
 atomic transaction. Schedule incompatible schema changes for a maintenance
 window; if Worker promotion fails after a migration, use the verified D1 Time

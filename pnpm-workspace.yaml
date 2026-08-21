@@ -1,5 +1,9 @@
 engineStrict: true
 verifyDepsBeforeRun: error
+# 24h supply-chain cooldown on new releases. This matches pnpm 11's effective
+# default, pinned explicitly so the gate the exclusion list below relies on
+# cannot vanish with a package-manager default change (#461).
+minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@antfu/eslint-config@9.2.0'
   - miniflare@4.20260721.0 || 5.20260804.0-alpha
