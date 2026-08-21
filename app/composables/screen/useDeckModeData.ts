@@ -12,6 +12,13 @@ import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 interface DeckDisplayState {
 	version: number;
 	playerId: number;
+	/**
+	 * When this deck's source record last changed, as epoch milliseconds — the
+	 * same freshness signal the deck cache keys on. It is how a still-degraded
+	 * rebuild can tell "identical placeholder rendering, keep program" from
+	 * "the deck itself changed mid-outage, swap it in" (#465 review).
+	 */
+	sourceUpdatedAt: number | null;
 	playerName: string;
 	deckName: string;
 	deckColors: string;
@@ -85,6 +92,10 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
  * reports degraded, so this is outage pacing, not request retry.
  */
 const DECK_CARD_DATA_REFETCH_MS = 60_000;
+
+function deckSourceStamp(updatedAt: Date | string | null | undefined): number | null {
+	return updatedAt == null ? null : new Date(updatedAt).getTime();
+}
 
 function preloadDeckImage(url: string): Promise<void> {
 	return new Promise((resolve) => {
@@ -253,6 +264,7 @@ export function useDeckModeData() {
 			deck: {
 				version: ++deckVersion,
 				playerId: player.id,
+				sourceUpdatedAt: deckSourceStamp(player.updatedAt),
 				playerName: player.name,
 				deckName: deckResponse.name,
 				deckColors: deckResponse.colors,
@@ -289,6 +301,11 @@ export function useDeckModeData() {
 			}
 
 			if (!player) {
+				// Same cadence rule as the catch below: a degraded rendering keeps
+				// re-fetching even when one attempt finds nothing to build from.
+				if (cardDataDegraded.value) {
+					scheduleRefetch(playerId);
+				}
 				if (!displayedDeck.value) {
 					error.value = 'Player not found';
 				}
@@ -301,6 +318,9 @@ export function useDeckModeData() {
 			}
 
 			if (!deckResponse || deckResponse.cards.length === 0) {
+				if (cardDataDegraded.value) {
+					scheduleRefetch(playerId);
+				}
 				if (!displayedDeck.value) {
 					error.value = 'Player has no deck list';
 				}
@@ -315,10 +335,14 @@ export function useDeckModeData() {
 			reportCardDataHealth(degraded);
 			if (degraded) {
 				scheduleRefetch(playerId);
-				// A still-degraded re-fetch for the deck already on program has
-				// nothing better to show: keep the rendering rather than cross-fade
-				// to an identical placeholder deck on every cadence tick.
-				if (displayedDeck.value?.playerId === playerId) {
+				// A still-degraded re-fetch of the unchanged deck has nothing better
+				// to show: keep the rendering rather than cross-fade to an identical
+				// placeholder deck on every cadence tick. A rebuild whose source has
+				// since changed carries new cards and must still reach program.
+				if (
+					displayedDeck.value?.playerId === playerId
+					&& displayedDeck.value.sourceUpdatedAt === nextDeck.sourceUpdatedAt
+				) {
 					return;
 				}
 			}
@@ -334,6 +358,13 @@ export function useDeckModeData() {
 			console.error('Failed to load player deck:', err);
 			if (requestId !== activeRequestId) {
 				return;
+			}
+
+			// A failed load must not end a degraded rendering's recovery cadence —
+			// the deck endpoint failing during the same outage would otherwise
+			// leave the degradation permanent until a reload (#465 review).
+			if (cardDataDegraded.value) {
+				scheduleRefetch(playerId);
 			}
 
 			if (!displayedDeck.value) {

@@ -429,6 +429,73 @@ describe('useDeckModeData', () => {
 		}
 	});
 
+	it('keeps the recovery cadence alive when a re-fetch itself fails mid-outage', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockResolvedValue({
+				id: 5,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			});
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards
+				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValue({ cards: new Map(), degraded: false });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.cardDataDegraded.value).toBe(true);
+
+			// The same outage takes down the deck endpoint for one cadence tick.
+			mockFetchDeck.mockRejectedValueOnce(new Error('network down'));
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.cardDataDegraded.value).toBe(true);
+
+			// A failed re-fetch must not end the cadence: the next tick recovers.
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.cardDataDegraded.value).toBe(false);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('swaps in a still-degraded rebuild when the deck itself changed during the outage', async () => {
+		vi.useFakeTimers();
+		try {
+			let updatedAt = '2026-08-21T00:00:00.000Z';
+			mockPlayerStore.getPlayerById.mockImplementation(async () => ({
+				id: 5,
+				name: 'Alice',
+				updatedAt,
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			}));
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.hasDisplayedDeck.value).toBe(true);
+
+			// Unchanged deck: the still-degraded rebuild is suppressed.
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.pendingSwapVersion.value).toBe(0);
+
+			// The operator edits the deck mid-outage: the rebuild carries new cards
+			// and must reach program even though its card data is still degraded.
+			updatedAt = '2026-08-21T01:00:00.000Z';
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.pendingSwapVersion.value).toBe(1);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('cancels a degraded re-fetch when the operator selects another player, so the stale deck cannot come back', async () => {
 		vi.useFakeTimers();
 		try {
