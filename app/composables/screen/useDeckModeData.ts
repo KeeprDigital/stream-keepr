@@ -315,6 +315,12 @@ export function useDeckModeData() {
 			reportCardDataHealth(degraded);
 			if (degraded) {
 				scheduleRefetch(playerId);
+				// A still-degraded re-fetch for the deck already on program has
+				// nothing better to show: keep the rendering rather than cross-fade
+				// to an identical placeholder deck on every cadence tick.
+				if (displayedDeck.value?.playerId === playerId) {
+					return;
+				}
 			}
 
 			if (!displayedDeck.value) {

@@ -397,6 +397,38 @@ describe('useDeckModeData', () => {
 		}
 	});
 
+	it('keeps program untouched while a re-fetch is still degraded, and keeps retrying', async () => {
+		vi.useFakeTimers();
+		try {
+			mockPlayerStore.getPlayerById.mockResolvedValue({
+				id: 5,
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
+			});
+			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.hasDisplayedDeck.value).toBe(true);
+
+			// A still-degraded re-fetch has nothing better to show: no staged swap,
+			// so program does not cross-fade to an identical placeholder deck.
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			expect(result.pendingSwapVersion.value).toBe(0);
+
+			// And the cadence continues until Scryfall answers.
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockFetchScryfallCards).toHaveBeenCalledTimes(3);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('cancels a degraded re-fetch when the operator selects another player, so the stale deck cannot come back', async () => {
 		vi.useFakeTimers();
 		try {
