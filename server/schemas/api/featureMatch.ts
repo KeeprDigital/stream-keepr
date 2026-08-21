@@ -213,8 +213,9 @@ const startOvertimePayloadSchema = z
 
 // Batch carries absolute setters only — see FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
 // Sub-commands carry no commandId or baseSequence of their own: the Batch's
-// receipt and sequence claim cover the whole save.
-const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
+// receipt and sequence claim cover the whole save. Exported so a test can pin
+// this union's membership to FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
+export const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('SetLife'), payload: setLifePayloadSchema }).strict(),
 	z.object({ type: z.literal('SetCounters'), payload: setCountersPayloadSchema }).strict(),
 	z.object({ type: z.literal('SetCardsKept'), payload: setCardsKeptPayloadSchema }).strict(),
