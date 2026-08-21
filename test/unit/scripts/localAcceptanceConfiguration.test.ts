@@ -98,6 +98,13 @@ describe('which required names a local acceptance run needs', () => {
 		expect(missingLocalAcceptanceNames({ NUXT_LOCAL_AUTH_BYPASS: 'true' }))
 			.toEqual([SIGNING_KEY, AUTH_SECRET, BOOTSTRAP_TOKEN]);
 	});
+
+	it('lets the explicitly attested preview staging path omit its two Better Auth setup names', () => {
+		expect(missingLocalAcceptanceNames(
+			{ NUXT_LOCAL_AUTH_BYPASS: 'true' },
+			{ localAuthBypassActive: true },
+		)).toEqual([SIGNING_KEY]);
+	});
 });
 
 /**

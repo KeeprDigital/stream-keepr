@@ -3,8 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { assertWorkerConfigurationDoesNotAttestLocalRuntime } from '~~/build/localAuthDeployment';
 import {
 	announcesLocalConfiguration,
+	assertLocalAuthBypassDisarmedForBuild,
 	LOCAL_NUXT_NAME_SURFACES,
 	localAuthBypassLogLine,
 	localConfigurationBootNotice,
@@ -14,6 +16,11 @@ import {
 	missingLocalNuxtNames,
 	parseDotenv,
 } from '~~/build/localConfiguration';
+import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_RUNTIME_ATTESTATION_VALUE,
+} from '~~/shared/utils/localDeveloperAuth';
 
 /** The name of the file #412 deleted, named once for the rows that rule it out. */
 const DELETED_FILE = '.dev.vars';
@@ -329,7 +336,10 @@ describe('the Local Developer Session startup warning', () => {
 	it('conspicuously names the bypass and the risk of binding beyond loopback', () => {
 		const line = localAuthBypassLogLine({
 			dev: true,
-			env: { NUXT_LOCAL_AUTH_BYPASS: 'true' },
+			env: {
+				NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+				[LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE,
+			},
 		});
 
 		expect(line?.level).toBe('warn');
@@ -339,9 +349,64 @@ describe('the Local Developer Session startup warning', () => {
 		expect(line?.message).toContain('other machines');
 	});
 
-	it('stays silent for malformed values and non-development runs', () => {
-		expect(localAuthBypassLogLine({ dev: true, env: { NUXT_LOCAL_AUTH_BYPASS: 'TRUE' } })).toBeUndefined();
-		expect(localAuthBypassLogLine({ dev: false, env: { NUXT_LOCAL_AUTH_BYPASS: 'true' } })).toBeUndefined();
+	it('stays silent without both exact enabling values', () => {
+		expect(localAuthBypassLogLine({
+			dev: true,
+			env: { NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE },
+		})).toBeUndefined();
+		expect(localAuthBypassLogLine({
+			dev: true,
+			env: { NUXT_LOCAL_AUTH_BYPASS: 'TRUE', [LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE },
+		})).toBeUndefined();
+	});
+});
+
+describe('the production build auth boundary', () => {
+	it('fails loudly when a production build sees the bypass choice armed', () => {
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: false,
+			env: { NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE },
+		})).toThrow(/NUXT_LOCAL_AUTH_BYPASS.*pnpm preview/u);
+	});
+
+	it('does not let a runtime attestation make an armed production build promotable', () => {
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: false,
+			env: {
+				NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+				[LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE,
+			},
+		})).toThrow(/production build/u);
+	});
+
+	it('accepts daily development and a disarmed production build', () => {
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: true,
+			env: { NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE },
+		})).not.toThrow();
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: false,
+			env: { NUXT_LOCAL_AUTH_BYPASS: '' },
+		})).not.toThrow();
+	});
+});
+
+describe('the generated Worker configuration auth boundary', () => {
+	it('rejects a local-runtime attestation anywhere in generated deployment configuration', () => {
+		expect(() => assertWorkerConfigurationDoesNotAttestLocalRuntime({
+			env: {
+				production: {
+					vars: { [LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE },
+				},
+			},
+		})).toThrow(/local-runtime attestation.*deploy/u);
+	});
+
+	it('accepts ordinary generated Worker configuration', () => {
+		expect(() => assertWorkerConfigurationDoesNotAttestLocalRuntime({
+			name: 'stream',
+			vars: { ORDINARY_CONFIGURATION: 'value' },
+		})).not.toThrow();
 	});
 });
 

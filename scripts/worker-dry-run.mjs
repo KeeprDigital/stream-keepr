@@ -21,9 +21,10 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { assertWorkerConfigurationDoesNotAttestLocalRuntime } from '../build/localAuthDeployment.ts';
 import { nativeScryptScan } from './assert-native-scrypt.mjs';
 import { runtimeWasmScan } from './assert-no-runtime-wasm.mjs';
 
@@ -42,6 +43,15 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const outDir = fileURLToPath(new URL(`../${OUT_DIR}`, import.meta.url));
 // The repository-pinned wrangler, not whatever a bare `wrangler` would find.
 const wrangler = fileURLToPath(new URL('../node_modules/.bin/wrangler', import.meta.url));
+
+try {
+	const configuration = JSON.parse(readFileSync(new URL(`../${CONFIG}`, import.meta.url), 'utf8'));
+	assertWorkerConfigurationDoesNotAttestLocalRuntime(configuration);
+}
+catch (error) {
+	process.stderr.write(`worker:dry-run: unsafe or unreadable generated configuration — ${error.message}\n`);
+	process.exit(1);
+}
 
 // Emptied first so what the guard reads is always what this run produced. A
 // scan that passes over a previous run's leftovers is the same false clean the

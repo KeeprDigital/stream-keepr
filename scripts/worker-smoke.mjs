@@ -3,7 +3,10 @@
  * production-shaped smoke probes from a separate Node process.
  *
  * This command never builds. `pnpm verify` and CI build once, run the static
- * dry run, then hand the same artifact here.
+ * dry run, then hand the same artifact here. It first exercises real Better
+ * Auth, then restarts that artifact to prove the bypass flag fails closed by
+ * itself and admits the Local Developer Session only with an explicit local
+ * runtime attestation.
  */
 
 import process from 'node:process';

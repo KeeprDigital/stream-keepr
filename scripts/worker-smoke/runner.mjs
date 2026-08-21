@@ -7,6 +7,14 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_DEVELOPER_SESSION_COOKIE,
+	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
+	LOCAL_DEVELOPER_USER_ID,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_RUNTIME_ATTESTATION_VALUE,
+} from '../../shared/utils/localDeveloperAuth.ts';
 
 const PIXEL_PNG = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -139,33 +147,69 @@ export async function runWorkerSmoke({
 		activeChild = undefined;
 		activeChildExit = undefined;
 
-		const port = await availableLoopbackPort();
-		activeChild = spawnProcess(wranglerPath, [
-			'dev',
-			'--local',
-			'--config',
-			configPath,
-			'--persist-to',
-			persistencePath,
-			'--ip',
-			'127.0.0.1',
-			'--port',
-			String(port),
-		], { ...childProcessOptions, detached: true });
-		captureChildOutput(activeChild, workerLog);
-		activeChildExit = childExit(activeChild, 'startup');
-		await waitUntilReady({
-			origin: `http://127.0.0.1:${port}`,
-			fetchRequest,
-			exit: activeChildExit,
-			readinessTimeoutMs,
-			signal: smokeSignal,
-		});
+		const startWorker = async ({ attested = false } = {}) => {
+			const port = await availableLoopbackPort();
+			const arguments_ = [
+				'dev',
+				'--local',
+				'--config',
+				configPath,
+				'--persist-to',
+				persistencePath,
+				'--ip',
+				'127.0.0.1',
+				'--port',
+				String(port),
+			];
+			if (attested)
+				arguments_.push('--var', `${LOCAL_RUNTIME_ATTESTATION_NAME}:${LOCAL_RUNTIME_ATTESTATION_VALUE}`);
+			activeChild = spawnProcess(wranglerPath, arguments_, { ...childProcessOptions, detached: true });
+			captureChildOutput(activeChild, workerLog);
+			activeChildExit = childExit(activeChild, 'startup');
+			const origin = `http://127.0.0.1:${port}`;
+			await waitUntilReady({
+				origin,
+				fetchRequest,
+				exit: activeChildExit,
+				readinessTimeoutMs,
+				signal: smokeSignal,
+			});
+			return origin;
+		};
+		const stopWorker = async () => {
+			await terminateChild(activeChild, activeChildExit);
+			activeChild = undefined;
+			activeChildExit = undefined;
+		};
+
+		const productionOrigin = await startWorker();
 		await runProductProbes({
-			origin: `http://127.0.0.1:${port}`,
+			origin: productionOrigin,
 			fetchRequest,
 			generated,
 			sensitiveValues,
+			signal: smokeSignal,
+		});
+		await stopWorker();
+
+		await writeFile(stagedEnvPath, `${generated.body}NUXT_LOCAL_AUTH_BYPASS=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`, {
+			mode: 0o600,
+		});
+		const unattestedOrigin = await startWorker();
+		await expectStatus({
+			probe: 'local-auth-unattested-refusal',
+			expected: 401,
+			origin: unattestedOrigin,
+			path: '/api/events',
+			fetchRequest,
+			signal: smokeSignal,
+		});
+		await stopWorker();
+
+		const attestedOrigin = await startWorker({ attested: true });
+		await runLocalPreviewAuthProbes({
+			origin: attestedOrigin,
+			fetchRequest,
 			signal: smokeSignal,
 		});
 		return { elapsedMs: Date.now() - startedAt };
@@ -192,6 +236,61 @@ export async function runWorkerSmoke({
 				await rm(persistencePath, { recursive: true, force: true });
 		}
 	}
+}
+
+async function runLocalPreviewAuthProbes({ origin, fetchRequest, signal }) {
+	const firstResponse = await expectStatus({
+		probe: 'local-auth-attested-session',
+		expected: 200,
+		origin,
+		path: '/api/auth/get-session',
+		fetchRequest,
+		signal,
+	});
+	const first = await responseJson(firstResponse, 'local-auth-attested-session');
+	const firstCookie = sessionCookie(firstResponse);
+	if (first?.user?.id !== LOCAL_DEVELOPER_USER_ID
+		|| typeof first?.session?.id !== 'string'
+		|| !first.session.id.startsWith(LOCAL_DEVELOPER_SESSION_ID_PREFIX)
+		|| !firstCookie.includes(`${LOCAL_DEVELOPER_SESSION_COOKIE}=`)) {
+		throwShapeFailure('local-auth-attested-session', 'Local Developer User and Session cookie');
+	}
+
+	const repeatedResponse = await expectStatus({
+		probe: 'local-auth-attested-session-repeat',
+		expected: 200,
+		origin,
+		path: '/api/auth/get-session',
+		fetchRequest,
+		signal,
+		init: { headers: { cookie: firstCookie } },
+	});
+	const repeated = await responseJson(repeatedResponse, 'local-auth-attested-session-repeat');
+	const otherResponse = await expectStatus({
+		probe: 'local-auth-attested-other-browser',
+		expected: 200,
+		origin,
+		path: '/api/auth/get-session',
+		fetchRequest,
+		signal,
+	});
+	const other = await responseJson(otherResponse, 'local-auth-attested-other-browser');
+	if (repeated?.user?.id !== first.user.id
+		|| other?.user?.id !== first.user.id
+		|| repeated?.session?.id !== first.session.id
+		|| other?.session?.id === first.session.id) {
+		throwShapeFailure('local-auth-attested-session-semantics', 'stable User and one stable Session per browser');
+	}
+
+	await expectStatus({
+		probe: 'local-auth-attested-api',
+		expected: 200,
+		origin,
+		path: '/api/events',
+		fetchRequest,
+		signal,
+		init: { headers: { cookie: firstCookie } },
+	});
 }
 
 function generatedConfiguration() {
@@ -573,11 +672,15 @@ async function expectStatus({ probe, expected, origin, path, fetchRequest, signa
 
 async function expectJson(options) {
 	const response = await expectStatus(options);
+	return await responseJson(response, options.probe);
+}
+
+async function responseJson(response, probe) {
 	try {
 		return await response.json();
 	}
 	catch {
-		throw new WorkerSmokeFailure(options.probe, 'invalid-json', {
+		throw new WorkerSmokeFailure(probe, 'invalid-json', {
 			expected: 'JSON response',
 			actual: 'unparseable body',
 		});

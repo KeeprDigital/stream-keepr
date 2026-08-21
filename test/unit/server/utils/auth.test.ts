@@ -6,6 +6,8 @@ import {
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_RUNTIME_ATTESTATION_VALUE,
 } from '~~/shared/utils/localDeveloperAuth';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
@@ -218,6 +220,7 @@ describe('the Local Developer Session', () => {
 	async function freshLocalAuth(cookie?: string) {
 		vi.resetModules();
 		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', LOCAL_AUTH_BYPASS_ENABLED_VALUE);
+		vi.stubEnv(LOCAL_RUNTIME_ATTESTATION_NAME, LOCAL_RUNTIME_ATTESTATION_VALUE);
 		mockGetCookie.mockReset();
 		mockSetCookie.mockReset();
 		mockGetCookie.mockReturnValue(cookie);
@@ -274,5 +277,27 @@ describe('the Local Developer Session', () => {
 
 		expect(auth.localAuthBypassIsActive(requestEvent())).toBe(false);
 		await expect(auth.requestUserSession(requestEvent())).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
+	});
+
+	it('keeps a production-shaped Worker closed when only the bypass choice is present', async () => {
+		vi.resetModules();
+		vi.stubEnv('NODE_ENV', 'production');
+		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', LOCAL_AUTH_BYPASS_ENABLED_VALUE);
+		vi.stubEnv(LOCAL_RUNTIME_ATTESTATION_NAME, '');
+		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
+		const auth = await import('~~/server/utils/auth');
+
+		expect(auth.localAuthBypassIsActive(requestEvent())).toBe(false);
+		await expect(auth.requestUserSession(requestEvent())).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
+	});
+
+	it('admits an explicitly attested production-shaped local Worker', async () => {
+		vi.stubEnv('NODE_ENV', 'production');
+		const auth = await freshLocalAuth();
+
+		expect(auth.localAuthBypassIsActive(requestEvent())).toBe(true);
+		await expect(auth.requestUserSession(requestEvent())).resolves.toMatchObject({
+			user: { id: LOCAL_DEVELOPER_USER_ID },
+		});
 	});
 });

@@ -144,9 +144,10 @@ export const LOCAL_CONFIGURATION_FILES = ['.env', RESOLVED_PREVIEW_ENV];
  * `cp .env.example .env` holds a file full of blanks.
  *
  * @param {Record<string, string | undefined>} env
+ * @param {{ localAuthBypassActive?: boolean }} [options]
  */
-export function missingLocalAcceptanceNames(env) {
-	return missingLocalNuxtNames(env)
+export function missingLocalAcceptanceNames(env, options = {}) {
+	return missingLocalNuxtNames(env, options)
 		.filter(name => LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.includes(name));
 }
 

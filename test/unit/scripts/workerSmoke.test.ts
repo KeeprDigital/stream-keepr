@@ -11,6 +11,10 @@ import {
 	runWorkerSmoke,
 	WorkerSmokeFailure,
 } from '../../../scripts/worker-smoke/runner.mjs';
+import {
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_RUNTIME_ATTESTATION_VALUE,
+} from '../../../shared/utils/localDeveloperAuth';
 
 describe('the built Worker smoke runner', () => {
 	const temporaryRoots: string[] = [];
@@ -279,5 +283,21 @@ describe('the built Worker smoke runner', () => {
 		expect(workerGuard.indexOf('pnpm build')).toBeLessThan(workerGuard.indexOf('pnpm worker:dry-run'));
 		expect(workerGuard.indexOf('pnpm worker:dry-run')).toBeLessThan(workerGuard.indexOf('pnpm worker:smoke'));
 		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
+	});
+
+	it('attests only supported local launchers and keeps the preview build disarmed', async () => {
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		const attestationAssignment = `${LOCAL_RUNTIME_ATTESTATION_NAME}=${LOCAL_RUNTIME_ATTESTATION_VALUE}`;
+		const attestationBinding = `${LOCAL_RUNTIME_ATTESTATION_NAME}:${LOCAL_RUNTIME_ATTESTATION_VALUE}`;
+
+		expect(packageJson.scripts.dev).toContain(`${attestationAssignment} nuxt dev`);
+		expect(packageJson.scripts['dev:local']).toContain(`${attestationAssignment} nuxt dev`);
+		expect(packageJson.scripts.preview).toContain('NUXT_LOCAL_AUTH_BYPASS= pnpm build');
+		expect(packageJson.scripts.preview).toContain(`${attestationAssignment} node scripts/stage-preview-secrets.mjs`);
+		expect(packageJson.scripts.preview).toContain(`--var ${attestationBinding}`);
+		expect(packageJson.scripts.deploy).not.toContain(LOCAL_RUNTIME_ATTESTATION_NAME);
 	});
 });

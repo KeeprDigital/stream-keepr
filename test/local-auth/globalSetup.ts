@@ -2,6 +2,10 @@ import type { NuxtConfig } from '@nuxt/schema';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createTest, exposeContextToEnv, fetch } from '@nuxt/test-utils/e2e';
+import {
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_RUNTIME_ATTESTATION_VALUE,
+} from '../../shared/utils/localDeveloperAuth';
 import { prepareIntegrationD1 } from '../integration/integrationD1';
 import {
 	INTEGRATION_MODE_ENV,
@@ -18,10 +22,12 @@ export async function setup() {
 		integration: process.env[INTEGRATION_MODE_ENV],
 		persistDir: process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV],
 		bypass: process.env.NUXT_LOCAL_AUTH_BYPASS,
+		attestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
 	};
 	process.env[INTEGRATION_MODE_ENV] = 'true';
 	process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV] = PERSIST_DIR;
 	process.env.NUXT_LOCAL_AUTH_BYPASS = 'true';
+	process.env[LOCAL_RUNTIME_ATTESTATION_NAME] = LOCAL_RUNTIME_ATTESTATION_VALUE;
 
 	await resetIntegrationWranglerState(PERSIST_DIR);
 	await prepareIntegrationD1();
@@ -32,6 +38,7 @@ export async function setup() {
 			[INTEGRATION_MODE_ENV]: 'true',
 			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: PERSIST_DIR,
 			NUXT_LOCAL_AUTH_BYPASS: 'true',
+			[LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE,
 			NUXT_BETTER_AUTH_SECRET: '',
 			NUXT_ADMIN_BOOTSTRAP_TOKEN: '',
 			NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
@@ -58,6 +65,7 @@ export async function setup() {
 			[INTEGRATION_MODE_ENV, previous.integration],
 			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV, previous.persistDir],
 			['NUXT_LOCAL_AUTH_BYPASS', previous.bypass],
+			[LOCAL_RUNTIME_ATTESTATION_NAME, previous.attestation],
 		] as const) {
 			if (value === undefined)
 				delete process.env[name];

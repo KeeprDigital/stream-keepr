@@ -23,7 +23,9 @@
  */
 
 import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_DEVELOPER_USER_NAME,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
 	localAuthBypassEnabled,
 } from '../shared/utils/localDeveloperAuth.ts';
 
@@ -34,8 +36,10 @@ const EXPORT_PREFIX = /^export\s+/;
  * The `NUXT_` names an ordinary local checkout has to be given before the surfaces
  * that read them stop refusing, and the whole of what the #130 notice is asserting.
  * `missingLocalNuxtNames` removes the two account-setup names when the exact
- * development bypass is active; the canonical list remains complete for preview
- * and acceptance harnesses, where the bypass is deliberately inert.
+ * development bypass is active. Acceptance harnesses keep the canonical list
+ * complete because a flag in their own process cannot attest the installation
+ * they target; the supported preview staging path passes the active decision
+ * explicitly after verifying both local enabling values.
  *
  * These are `.env.example`'s assignments minus everything in
  * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
@@ -269,11 +273,21 @@ export interface LocalConfigurationContext {
 	env: Record<string, string | undefined>;
 }
 
-/** Whether the one named local-development switch is exactly active. */
+/** Refuse to create promotable output while its local authentication choice is armed. */
+export function assertLocalAuthBypassDisarmedForBuild(context: LocalConfigurationContext): void {
+	if (!context.dev && context.env.NUXT_LOCAL_AUTH_BYPASS === LOCAL_AUTH_BYPASS_ENABLED_VALUE) {
+		throw new Error(
+			'NUXT_LOCAL_AUTH_BYPASS=true cannot be used for a production build. '
+			+ 'Use pnpm preview for an explicitly attested local Worker, or remove the flag before building or deploying.',
+		);
+	}
+}
+
+/** Whether both explicit local-authentication switches are exactly active. */
 export function localAuthBypassActive(context: LocalConfigurationContext): boolean {
 	return localAuthBypassEnabled({
-		dev: context.dev,
-		value: context.env.NUXT_LOCAL_AUTH_BYPASS,
+		bypassValue: context.env.NUXT_LOCAL_AUTH_BYPASS,
+		runtimeAttestation: context.env[LOCAL_RUNTIME_ATTESTATION_NAME],
 	});
 }
 

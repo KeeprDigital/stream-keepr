@@ -10,6 +10,7 @@ import {
 	LOCAL_DEVELOPER_USER_EMAIL,
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
 	localAuthBypassEnabled,
 } from '~~/shared/utils/localDeveloperAuth';
 import { authStaticOptions } from './authOptions';
@@ -148,8 +149,8 @@ export type UserSession = Awaited<ReturnType<ServerAuth['api']['getSession']>>;
 /** Whether this request is allowed to substitute the Local Developer Session. */
 export function localAuthBypassIsActive(_event: H3Event): boolean {
 	return localAuthBypassEnabled({
-		dev: process.env.NODE_ENV !== 'production',
-		value: process.env.NUXT_LOCAL_AUTH_BYPASS,
+		bypassValue: process.env.NUXT_LOCAL_AUTH_BYPASS,
+		runtimeAttestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
 	});
 }
 

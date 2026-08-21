@@ -1,6 +1,10 @@
 /** The one value that opts a development server out of Better Auth. */
 export const LOCAL_AUTH_BYPASS_ENABLED_VALUE = 'true';
 
+/** The non-secret Worker binding that attests this runtime was started locally. */
+export const LOCAL_RUNTIME_ATTESTATION_NAME = 'STREAM_KEEPR_LOCAL_RUNTIME';
+export const LOCAL_RUNTIME_ATTESTATION_VALUE = 'true';
+
 /** The stable person that owns work while the development bypass is active. */
 export const LOCAL_DEVELOPER_USER_ID = 'local-developer-user';
 export const LOCAL_DEVELOPER_USER_NAME = 'Local Developer User';
@@ -23,9 +27,16 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  *
  * Exact string comparison is deliberate: environment variables arrive as
  * strings, and a misspelling must preserve the real authentication boundary.
- * The development check makes the setting inert in every built deployment even
- * if somebody accidentally carries it into that environment.
+ * The separate runtime attestation is supplied only by supported local launchers.
+ * It is deliberately not inferred from Node mode, hostnames, addressing, or the
+ * kind of bindings attached to a Worker: none of those facts proves who can reach
+ * the process. A production-shaped Worker therefore stays closed when only the
+ * developer's bypass choice leaks into its environment.
  */
-export function localAuthBypassEnabled(context: { dev: boolean; value: unknown }): boolean {
-	return context.dev && context.value === LOCAL_AUTH_BYPASS_ENABLED_VALUE;
+export function localAuthBypassEnabled(context: {
+	bypassValue: unknown;
+	runtimeAttestation: unknown;
+}): boolean {
+	return context.bypassValue === LOCAL_AUTH_BYPASS_ENABLED_VALUE
+		&& context.runtimeAttestation === LOCAL_RUNTIME_ATTESTATION_VALUE;
 }
