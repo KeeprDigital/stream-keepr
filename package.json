@@ -15,7 +15,7 @@
 		"preview": "NUXT_LOCAL_AUTH_BYPASS= pnpm build && pnpm db:migrate:local:built && STREAM_KEEPR_LOCAL_RUNTIME=true node scripts/stage-preview-secrets.mjs && wrangler dev --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker --var STREAM_KEEPR_LOCAL_RUNTIME:true",
 		"worker:dry-run": "node scripts/worker-dry-run.mjs",
 		"worker:smoke": "node scripts/worker-smoke.mjs",
-		"deploy": "CLOUDFLARE_ENV=production pnpm build && pnpm worker:dry-run && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
+		"deploy": "CLOUDFLARE_ENV=production pnpm build && pnpm worker:dry-run && pnpm worker:smoke && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
 		"deploy:verify": "bash scripts/deploy-verify.sh",
 		"deploy:validator": "wrangler deploy --config workers/silent-video-validator/wrangler.jsonc",
 		"postinstall": "nuxt prepare",
