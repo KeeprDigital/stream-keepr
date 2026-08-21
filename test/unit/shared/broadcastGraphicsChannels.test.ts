@@ -392,6 +392,122 @@ describe('cancelling and cutting a Graphic Channel handoff', () => {
 	});
 });
 
+describe('the channel handoff Out carries interrupted phases exactly as a direct Out does', () => {
+	const NAME = {
+		type: 'text',
+		key: 'name',
+		label: 'Name',
+		required: false,
+		updatePolicy: 'staged',
+		default: '',
+		maxLength: 40,
+	} as const;
+
+	function withContext(at: number) {
+		return { inputs: [NAME], durations: TIMING, acceptedAt: at, channel: LOWER_THIRDS };
+	}
+
+	/** alpha settled on air with a graphic update crossing mid-flight at T0 + 5200. */
+	function midUpdate(): BroadcastGraphicsLiveState {
+		let state = applyBroadcastGraphicsCommand(
+			createInitialBroadcastGraphicsLiveState(),
+			{ type: 'Take', payload: { graphicId: 'alpha' } },
+			withContext(T0),
+		);
+		state = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Set Input', payload: { graphicId: 'alpha', inputKey: 'name', value: 'CHANGED' } },
+			withContext(T0 + 4000),
+		);
+		return applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Update Graphic', payload: { graphicId: 'alpha', basedOnAcceptedRevision: 1 } },
+			withContext(T0 + 5000),
+		);
+	}
+
+	it('carries a graphic update still crossing when a Take of another member Outs the selection', () => {
+		const state = midUpdate();
+
+		// The same instant, the same interruption: one through the channel handoff a Take
+		// of another member performs, one through the operator's own direct Out.
+		const viaTake = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Take', payload: { graphicId: 'bravo' } },
+			withContext(T0 + 5200),
+		);
+		const viaOut = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Out', payload: { graphicId: 'alpha' } },
+			withContext(T0 + 5200),
+		);
+
+		expect(viaTake.playout.alpha).toEqual(viaOut.playout.alpha);
+		expect(broadcastGraphicInputsState(viaTake, 'alpha'))
+			.toEqual(broadcastGraphicInputsState(viaOut, 'alpha'));
+		// The crossing keeps travelling underneath the exit rather than snapping.
+		expect(broadcastGraphicPhaseProjections(viaTake, 'alpha', at(T0 + 5300, LOWER_THIRDS)))
+			.toEqual([
+				{ phase: 'update', elapsed: 300 },
+				{ phase: 'exit', elapsed: 100 },
+			]);
+	});
+
+	it('carries the cycling origin out of the record the handoff overwrites', () => {
+		const cycling: BroadcastGraphicChannelContext = {
+			handoff: 'overlap',
+			members: [
+				{ graphicId: 'alpha', durations: TIMING, onScreen: true },
+				{ graphicId: 'bravo', durations: TIMING },
+			],
+		};
+		const context = (at: number) => ({
+			inputs: [],
+			durations: TIMING,
+			acceptedAt: at,
+			onScreen: true,
+			channel: cycling,
+		});
+		const state = applyBroadcastGraphicsCommand(
+			createInitialBroadcastGraphicsLiveState(),
+			{ type: 'Take', payload: { graphicId: 'alpha' } },
+			context(T0),
+		);
+
+		const viaTake = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Take', payload: { graphicId: 'bravo' } },
+			{ inputs: [], durations: TIMING, acceptedAt: T0 + 5000, channel: cycling },
+		);
+		const viaOut = applyBroadcastGraphicsCommand(
+			state,
+			{ type: 'Out', payload: { graphicId: 'alpha' } },
+			context(T0 + 5000),
+		);
+
+		// Cycling began the instant alpha's entrance settled; the exit the handoff starts
+		// must keep projecting the excursion from that same origin.
+		expect(viaOut.playout.alpha!.cyclingStartedAt).toBe(T0 + TIMING.enter);
+		expect(viaTake.playout.alpha).toEqual(viaOut.playout.alpha);
+	});
+
+	it('derives each member\'s on-screen cycling flag from authored Screen configuration', () => {
+		const cyclingAlpha = {
+			...graphic('alpha', 'thirds'),
+			animation: {
+				'on-screen': { duration: 2000, easing: 'linear' as const, delay: 0, pause: 500, repeat: 3 },
+			},
+		};
+		const contexts = broadcastGraphicChannelContexts({
+			graphics: [cyclingAlpha, graphic('bravo', 'thirds')],
+			channels: [{ id: 'thirds', name: 'Lower thirds' }],
+		});
+
+		expect(contexts.alpha?.members.map(member => [member.graphicId, member.onScreen]))
+			.toEqual([['alpha', true], ['bravo', false]]);
+	});
+});
+
 describe('what a Graphic Channel does not persist', () => {
 	it('stores no channel state of its own: a handoff writes only playout intents', () => {
 		let state = take(createInitialBroadcastGraphicsLiveState(), 'alpha', { channel: QUEUED_THIRDS });
