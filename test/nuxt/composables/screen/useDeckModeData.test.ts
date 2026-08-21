@@ -116,10 +116,6 @@ describe('useDeckModeData', () => {
 		return scope.run(() => useDeckModeData())!;
 	}
 
-	afterEach(() => {
-		activeScopes.splice(0).forEach(scope => scope.stop());
-	});
-
 	beforeEach(() => {
 		vi.clearAllMocks();
 		MockImage.loadedUrls = [];
@@ -129,6 +125,10 @@ describe('useDeckModeData', () => {
 		mockFetchDeck.mockResolvedValue(createDeckResponse([]));
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+	});
+
+	afterEach(() => {
+		activeScopes.splice(0).forEach(scope => scope.stop());
 	});
 
 	it('returns expected properties for staged deck swaps', () => {

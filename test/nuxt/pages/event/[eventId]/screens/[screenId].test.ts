@@ -33,6 +33,7 @@ let pendingLoads: PendingLoad[] = [];
 
 const mockScreenStore = reactive({
 	screens: [] as Array<{ id: number; screenConfig?: Record<string, unknown> }>,
+	screenPresence: new Map<number, { count: number; members: Array<{ clientId: string; data?: Record<string, unknown> }> }>(),
 	subscribeToScreenPresence: vi.fn(),
 	unsubscribeFromScreenPresence: vi.fn(),
 	getConnectedCount: vi.fn(() => 0),
@@ -239,6 +240,66 @@ describe('screen config page — screenId route changes', () => {
 
 		expect(mockScreenStore.subscribeToScreenPresence).toHaveBeenCalledWith(3);
 		expect(wrapper.text()).toContain('Screen 3');
+	});
+});
+
+/**
+ * The presence-carried card data self-report (#465), shown where the operator is
+ * rather than on program — the same channel and reasoning as the asset-access
+ * report (#231). Outputs that report nothing are silent, not degraded.
+ */
+describe('screen config page — degraded card data on connected outputs', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screens = [];
+		mockScreenStore.screenPresence = new Map();
+		stubModePolicy(null);
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+	});
+
+	async function mountLoadedPage() {
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		return wrapper;
+	}
+
+	it('warns about the outputs currently reporting degraded card data', async () => {
+		mockScreenStore.screenPresence = new Map([[1, {
+			count: 2,
+			members: [
+				{ clientId: 'a', data: { screenId: 1, cardData: 'degraded' } },
+				{ clientId: 'b', data: { screenId: 1, cardData: 'complete' } },
+			],
+		}]]);
+
+		const page = await mountLoadedPage();
+
+		expect(page.text()).toContain('Card data incomplete on 1 output');
+	});
+
+	it('says nothing while every reporting output is complete or silent', async () => {
+		mockScreenStore.screenPresence = new Map([[1, {
+			count: 2,
+			members: [
+				{ clientId: 'a', data: { screenId: 1, cardData: 'complete' } },
+				// An output that predates the field is silent about its card data,
+				// not degraded.
+				{ clientId: 'b', data: { screenId: 1 } },
+			],
+		}]]);
+
+		const page = await mountLoadedPage();
+
+		expect(page.text()).not.toContain('Card data incomplete');
 	});
 });
 

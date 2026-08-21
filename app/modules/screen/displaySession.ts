@@ -1,7 +1,7 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenPresenceData } from '~/types/screen';
+import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
 import {
@@ -23,6 +23,7 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 interface ScreenRealtimeDisplaySession {
 	start: (eventId: number, screenId: number) => Promise<void>;
 	stop: () => Promise<void>;
+	updatePresenceData: () => Promise<void>;
 }
 
 interface ScreenDisplaySessionExportAdapter {
@@ -143,6 +144,13 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const activeScreen = toRef(screenStore, 'activeScreen');
 	const interactiveRef = ref(false);
 	const overlayContainer = ref<HTMLElement | null>(null);
+	/**
+	 * The rendering's self-report on its card data, carried to control surfaces
+	 * through presence exactly as `assetAccess` is (#231, #465). It reaches
+	 * program never: outputs keep rendering whatever they resolved, and the
+	 * operator learns about the degradation beside the controls instead.
+	 */
+	const cardDataHealth = ref<ScreenCardDataHealth>('complete');
 	const screenContext: ScreenContext = {
 		screen: activeScreen,
 		eventId,
@@ -154,6 +162,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		previewGuides,
 		previewSafeAreas,
 		assetCapability,
+		cardDataHealth,
 	};
 
 	watch(isControlScreen, (isControl) => {
@@ -192,6 +201,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		// capability this output renders every graphic except its media, and the two
 		// look the same from the far end of a venue (#231).
 		assetAccess: assetCapability.value ? 'granted' : 'absent',
+		cardData: cardDataHealth.value,
 		uptime: uptimeSeconds.value,
 		connectionState: realtime.connectionState,
 	}));
@@ -225,7 +235,15 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			userAgent: navigator.userAgent,
 			outputMode: outputMode.value,
 			assetAccess: assetCapability.value ? 'granted' : 'absent',
+			cardData: cardDataHealth.value,
 		}),
+	});
+
+	// A health change after entry re-announces this output's presence data; the
+	// session makes it a no-op on any surface that never entered (previews,
+	// monitors), so only real Screen Outputs report.
+	watch(cardDataHealth, () => {
+		void screenRealtimeSession.updatePresenceData();
 	});
 
 	async function captureDownload() {

@@ -88,6 +88,7 @@ function createHarness(options: {
 		stop: vi.fn(async () => {
 			order.push('stop');
 		}),
+		updatePresenceData: vi.fn(async () => {}),
 	};
 	const exportElementPng = options.exportElementPng ?? vi.fn(async () => undefined);
 	const closeWindow = vi.fn();
@@ -208,6 +209,27 @@ describe('useScreenDisplaySession', () => {
 
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 		expect(harness.session.screenContext.isPreview?.value).toBe(true);
+	});
+
+	it('carries card data health in presence data and re-announces it when a rendering reports a change', async () => {
+		const harness = createHarness();
+		await flushPromises();
+
+		const callbacks = harness.realtimeCallbacks[0]!;
+		expect(callbacks.getPresenceData(42, 7)).toMatchObject({ cardData: 'complete' });
+		expect(harness.realtimeSession.updatePresenceData).not.toHaveBeenCalled();
+
+		harness.session.screenContext.cardDataHealth!.value = 'degraded';
+		await nextTick();
+
+		expect(harness.realtimeSession.updatePresenceData).toHaveBeenCalledOnce();
+		expect(callbacks.getPresenceData(42, 7)).toMatchObject({ cardData: 'degraded' });
+
+		harness.session.screenContext.cardDataHealth!.value = 'complete';
+		await nextTick();
+
+		expect(harness.realtimeSession.updatePresenceData).toHaveBeenCalledTimes(2);
+		expect(callbacks.getPresenceData(42, 7)).toMatchObject({ cardData: 'complete' });
 	});
 
 	/**

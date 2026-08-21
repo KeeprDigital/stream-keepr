@@ -32,4 +32,14 @@ export interface ScreenPresenceData {
 	 * and why a reader must not treat "not reported" as "absent".
 	 */
 	assetAccess?: 'granted' | 'absent';
+	/**
+	 * Whether this Screen Output's rendering resolved all the card data it asked
+	 * for, reported by the output about itself like `assetAccess` — a degraded
+	 * deck keeps rendering placeholders on program and re-fetches on its own, so
+	 * only this report lets a control surface state it (#465).
+	 *
+	 * Optional for the same reason as `assetAccess`: an output that predates the
+	 * field is silent about its card data, not degraded.
+	 */
+	cardData?: ScreenCardDataHealth;
 }
