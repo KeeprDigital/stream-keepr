@@ -26,6 +26,32 @@ export function isStateConflictFailure(error: unknown): boolean {
 }
 
 /**
+ * Run the compensating write for a multi-step operation that has already failed.
+ *
+ * The compensation is subordinate to the failure it cleans up after: when the
+ * compensating write itself fails, that failure is attached to the original as
+ * `compensationFailure` and logged, never thrown, because a thrown compensation
+ * failure replaces the root cause the operator must act on (#462). The caller
+ * rethrows the original failure after this resolves; the log line exists because
+ * a failed compensation means the partial write it was meant to undo is still
+ * there.
+ */
+export async function runCompensation(originalFailure: unknown, compensation: () => Promise<unknown>): Promise<void> {
+	try {
+		await compensation();
+	}
+	catch (compensationFailure) {
+		console.error(JSON.stringify({
+			message: 'compensation_failed',
+			errorName: compensationFailure instanceof Error ? compensationFailure.name : null,
+			errorMessage: compensationFailure instanceof Error ? compensationFailure.message : String(compensationFailure),
+		}));
+		if (originalFailure && typeof originalFailure === 'object')
+			(originalFailure as { compensationFailure?: unknown }).compensationFailure = compensationFailure;
+	}
+}
+
+/**
  * The server is running, but something it needs was never configured.
  *
  * The name of the setting is the whole point of the message, so it is carried

@@ -34,8 +34,12 @@ vi.mock('~~/server/db/schema', () => ({
 		id: 'featureMatches.id',
 		eventId: 'featureMatches.eventId',
 		sortOrder: 'featureMatches.sortOrder',
+		matchId: 'featureMatches.matchId',
 		externalId: 'featureMatches.externalId',
 		externalSource: 'featureMatches.externalSource',
+		player1Id: 'featureMatches.player1Id',
+		player2Id: 'featureMatches.player2Id',
+		activeSessionId: 'featureMatches.activeSessionId',
 	},
 }));
 vi.mock('~~/server/services/featureMatchState', () => ({
@@ -211,6 +215,19 @@ describe('featureMatchService', () => {
 
 			expect(mockDb.delete).toHaveBeenCalledOnce();
 		});
+
+		it('surfaces the session failure when the compensating delete also fails, attaching the delete failure', async () => {
+			const newMatch = createMockFeatureMatch({ id: 10 });
+			getChain('insert').returning.mockResolvedValue([newMatch]);
+			const sessionFailure = new Error('session failed');
+			featureMatchStateServiceMocks.createSessionForSlot.mockRejectedValueOnce(sessionFailure);
+			const deleteFailure = new Error('delete failed');
+			getChain('delete').where.mockRejectedValueOnce(deleteFailure);
+
+			await expect(featureMatchService().create(1, {} as any)).rejects.toBe(sessionFailure);
+
+			expect((sessionFailure as { compensationFailure?: unknown }).compensationFailure).toBe(deleteFailure);
+		});
 	});
 
 	describe('update', () => {
@@ -331,6 +348,19 @@ describe('featureMatchService', () => {
 
 			expect(result.created).toHaveLength(0);
 			expect(result.deleted).toEqual([3, 2]);
+		});
+
+		it('surfaces the session failure when the compensating delete also fails, attaching the delete failure', async () => {
+			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
+			getChain('insert').returning.mockResolvedValue([createMockFeatureMatch({ id: 1 })]);
+			const sessionFailure = new Error('session failed');
+			featureMatchStateServiceMocks.createSessionForSlot.mockRejectedValueOnce(sessionFailure);
+			const deleteFailure = new Error('delete failed');
+			getChain('delete').where.mockRejectedValueOnce(deleteFailure);
+
+			await expect(featureMatchService().syncFeatureMatches(1, 1)).rejects.toBe(sessionFailure);
+
+			expect((sessionFailure as { compensationFailure?: unknown }).compensationFailure).toBe(deleteFailure);
 		});
 
 		it('returns empty arrays when target === current', async () => {

@@ -1,14 +1,16 @@
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { DbFeatureMatch, DbFeatureMatchSession } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
+import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -186,6 +188,18 @@ export async function buildClearImportedMatchDataQueries(
 	};
 }
 
+/**
+ * The equality a compare-and-swap guard needs over nullable columns: `eq`
+ * compiles `= NULL`, which SQLite answers false for every row, so a guard built
+ * with it alone would report every unpaired Slot as concurrently modified.
+ */
+function observedValue<TColumn extends SQLiteColumn>(
+	column: TColumn,
+	value: TColumn['_']['data'] | null,
+) {
+	return value === null ? isNull(column) : eq(column, value);
+}
+
 export function featureMatchService() {
 	const resolveMatchProvenance = async (eventId: number, matchId: number | null | undefined) => {
 		if (matchId == null)
@@ -274,10 +288,10 @@ export function featureMatchService() {
 		}
 		catch (error) {
 			// A Slot is not usable without its initial Session projection.
-			await db.delete(featureMatches).where(and(
+			await runCompensation(error, () => db.delete(featureMatches).where(and(
 				eq(featureMatches.id, newMatch.id),
 				eq(featureMatches.eventId, eventId),
-			));
+			)));
 			throw error;
 		}
 
@@ -355,6 +369,11 @@ export function featureMatchService() {
 			: {};
 		const shouldCreateSession = await shouldCreateSessionForIdentityChange(current, { ...manualData, ...provenance });
 
+		// Compare-and-swap on everything the create-session-vs-correct decision
+		// read: the pairing identity and the active Session pointer. A concurrent
+		// write that moved any of them makes this statement match zero rows, so a
+		// stale decision can never apply to a Slot that no longer holds the state
+		// it was computed from — the loser re-reads and retries instead.
 		const [updatedMatch] = await db
 			.update(featureMatches)
 			.set({ ...manualData, ...provenance })
@@ -362,27 +381,41 @@ export function featureMatchService() {
 				and(
 					eq(featureMatches.id, id),
 					eq(featureMatches.eventId, eventId),
+					observedValue(featureMatches.matchId, current.matchId),
+					observedValue(featureMatches.externalId, current.externalId),
+					observedValue(featureMatches.externalSource, current.externalSource),
+					observedValue(featureMatches.player1Id, current.player1Id),
+					observedValue(featureMatches.player2Id, current.player2Id),
+					observedValue(featureMatches.activeSessionId, current.activeSessionId),
 				),
 			)
 			.returning();
 
-		if (updatedMatch) {
-			const stateSvc = featureMatchStateService();
-			if (shouldCreateSession) {
-				await stateSvc.createSessionForSlot(updatedMatch.id, eventId);
-			}
-			else {
-				const snapshot = await stateSvc.buildSourceSnapshot(updatedMatch);
-				await stateSvc.applyCommandToActiveSession(updatedMatch.id, eventId, session => ({
-					commandId: randomCommandId('SnapshotCorrected'),
-					type: 'SnapshotCorrected',
-					payload: { sourceSnapshot: snapshot },
-					baseSequence: session.sequence,
-				}));
-			}
+		if (!updatedMatch) {
+			const survivingSlot = await db.query.featureMatches.findFirst({
+				where: and(eq(featureMatches.id, id), eq(featureMatches.eventId, eventId)),
+				columns: { id: true },
+			});
+			if (!survivingSlot)
+				return undefined;
+			throw new StateConflictError('Feature match slot', id);
 		}
 
-		return updatedMatch ? await findById(updatedMatch.id, eventId) : undefined;
+		const stateSvc = featureMatchStateService();
+		if (shouldCreateSession) {
+			await stateSvc.createSessionForSlot(updatedMatch.id, eventId);
+		}
+		else {
+			const snapshot = await stateSvc.buildSourceSnapshot(updatedMatch);
+			await stateSvc.applyCommandToActiveSession(updatedMatch.id, eventId, session => ({
+				commandId: randomCommandId('SnapshotCorrected'),
+				type: 'SnapshotCorrected',
+				payload: { sourceSnapshot: snapshot },
+				baseSequence: session.sequence,
+			}));
+		}
+
+		return await findById(updatedMatch.id, eventId);
 	};
 
 	const remove = async (id: number, eventId: number): Promise<boolean> => {
@@ -455,10 +488,10 @@ export function featureMatchService() {
 				}
 			}
 			catch (error) {
-				await db.delete(featureMatches).where(and(
+				await runCompensation(error, () => db.delete(featureMatches).where(and(
 					eq(featureMatches.eventId, eventId),
 					inArray(featureMatches.id, createdMatches.map(match => match.id)),
-				));
+				)));
 				throw error;
 			}
 		}
