@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSocialProfileProjectionAcceptances } from '~~/shared/modules/broadcast-graphics-live-session';
+import {
+	broadcastGraphicsRecoveryFault,
+	resolveSocialProfileProjectionAcceptances,
+} from '~~/shared/modules/broadcast-graphics-live-session';
 import {
 	canonicalSocialProfileUrl,
 	MAX_SOCIAL_PROFILE_HANDLE_LENGTH,
@@ -114,5 +117,29 @@ describe('social Profile Projection acceptance', () => {
 			talent: { id: 7, name: 'Legacy Talent' },
 			acceptedProfiles: [],
 		});
+	});
+
+	it('omits a zero-length legacy handle instead of persisting state recovery would reject', () => {
+		const resolved = acceptance('');
+
+		expect(resolved.profile).toEqual({
+			talent: { id: 7, name: 'Legacy Talent' },
+			acceptedProfiles: [],
+		});
+	});
+
+	it('never accepts a profile set recovery refuses, whatever handle Event Data holds', () => {
+		const handles = ['', 'a', 'Caster', 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH), 'a'.repeat(MAX_SOCIAL_PROFILE_HANDLE_LENGTH + 1)];
+
+		for (const handle of handles) {
+			const stored = {
+				playout: {},
+				inputs: {},
+				sources: {},
+				socialProfileProjections: { lower: acceptance(handle) },
+			};
+
+			expect(broadcastGraphicsRecoveryFault(JSON.parse(JSON.stringify(stored)))).toBeNull();
+		}
 	});
 });

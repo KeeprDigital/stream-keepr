@@ -108,6 +108,46 @@ function sameSocialProfileTuple(
 		&& left.profileUrl === right.profileUrl;
 }
 
+function structurallySame(left: unknown, right: unknown): boolean {
+	if (left === right)
+		return true;
+	if (Array.isArray(left) || Array.isArray(right)) {
+		return Array.isArray(left)
+			&& Array.isArray(right)
+			&& left.length === right.length
+			&& left.every((entry, index) => structurallySame(entry, right[index]));
+	}
+	if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null)
+		return false;
+	const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+	for (const key of keys) {
+		if (!structurallySame(
+			(left as Record<string, unknown>)[key],
+			(right as Record<string, unknown>)[key],
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Whether two stored projection-state maps hold the same content.
+ *
+ * Structural rather than serialized, because the states being compared reach the
+ * comparison through different routes — one read back from storage or applied from
+ * a peer's change, the other rebuilt in declaration order — and a key-order-only
+ * difference between those routes is not a difference in what program shows.
+ * Scheduling an update or advancing the authoritative sequence over one would
+ * animate identical content.
+ */
+export function sameSocialProfileProjectionStates(
+	left: BroadcastGraphicSocialProfileProjectionStates | null | undefined,
+	right: BroadcastGraphicSocialProfileProjectionStates | null | undefined,
+): boolean {
+	return structurallySame(left ?? null, right ?? null);
+}
+
 /** Whether Event Data resolves the same accepted Talent and correlated profile set. */
 export function sameSocialProfileProjectionAcceptance(
 	left: Pick<SocialProfileProjectionLiveState, 'talent' | 'acceptedProfiles'> | undefined,
@@ -237,9 +277,14 @@ export function projectSocialProfilePresentation(
 ): SocialProfilePresentationProjection {
 	const rotation = projectSocialProfileRotation(state, declaration, context);
 	const transitionAnchor = state.transitionAnchor;
+	// The sampled visual is used only for the transition that sampled it. An anchored
+	// transition is the one projection the rotation answers without an outgoing
+	// profile, so an automatic transition — which names its own outgoing profile —
+	// never renders from an anchor a completed manual command left behind.
 	if (
 		rotation.phase.kind === 'transition'
 		&& transitionAnchor
+		&& !rotation.outgoing
 		&& rotation.phase.durationMs !== null
 	) {
 		const durationMs = rotation.phase.durationMs;
@@ -405,7 +450,10 @@ export function resolveSocialProfileProjectionAcceptances(
 		const acceptedProfiles = talent && talentId !== undefined
 			? SUPPORTED_SOCIAL_NETWORKS.flatMap((network) => {
 					const handle = talent.socialProfiles[network.key];
-					return handle === undefined || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
+					// Acceptance rejects exactly what recovery rejects: a zero-length or
+					// over-bound handle committed here would make every later read judge the
+					// whole session incompatible, and the next Take re-commit the same tuple.
+					return handle === undefined || handle.length === 0 || handle.length > MAX_SOCIAL_PROFILE_HANDLE_LENGTH
 						? []
 						: [{
 							network: network.key,

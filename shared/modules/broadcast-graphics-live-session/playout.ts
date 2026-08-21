@@ -51,6 +51,7 @@ import {
 	projectSocialProfilePresentation,
 	projectSocialProfileRotation,
 	sameSocialProfileProjectionAcceptance,
+	sameSocialProfileProjectionStates,
 	socialProfilePresentationProjections,
 } from './socialProfiles';
 
@@ -490,6 +491,12 @@ export interface BroadcastGraphicChannelMember {
 	durations?: BroadcastGraphicPhaseDurations;
 	/** Authored rotations to freeze if a Take of another member hides this one. */
 	socialProfileProjections?: readonly SocialProfileProjectionDeclaration[];
+	/**
+	 * Whether this member authored any on-screen Graphic Animation Recipe, for the
+	 * same one decision the addressed graphic's own flag serves: the exit a handoff
+	 * starts has to carry cycling's origin out of the record it overwrites.
+	 */
+	onScreen?: boolean;
 }
 
 /**
@@ -1157,7 +1164,9 @@ function requireClaimMatchesShownValue(
  *   member is cancelled outright rather than sent to exit, because it never reached
  *   program and so has nothing to animate off; every other selection is Out'd
  *   normally, which reverses an entrance still in flight and starts a clean exit
- *   otherwise.
+ *   otherwise — carrying an update still crossing and cycling's origin exactly as a
+ *   direct Out does, because the member being replaced cannot tell which command
+ *   took it off air and its outgoing frame must not snap either way.
  * - **An older outgoing graphic** — already on its way off program before this
  *   command. Under Overlap it is cut off, so a channel racing through three graphics
  *   never accumulates exits; under Out then in the current outgoing graphic finishes
@@ -1174,30 +1183,53 @@ function channelHandoff(
 	graphicId: string,
 	cut: boolean,
 	context: BroadcastGraphicsReductionContext,
-): { playout: Record<string, BroadcastGraphicPlayout>; entersAt: number } {
+): { state: BroadcastGraphicsLiveState; entersAt: number } {
 	const acceptedAt = context.acceptedAt;
 	const channel = context.channel;
 	if (!channel)
-		return { playout: state.playout, entersAt: acceptedAt };
+		return { state, entersAt: acceptedAt };
 
-	let playout = state.playout;
+	let next = state;
 
 	for (const member of channel.members) {
 		if (member.graphicId === graphicId)
 			continue;
 
-		const current = playout[member.graphicId];
+		const current = next.playout[member.graphicId];
 		if (!current)
 			continue;
 
 		if (current.onAir) {
-			const waiting = channelHoldsWaiting(state.playout, member.graphicId, channel, acceptedAt);
-			playout = {
-				...playout,
-				[member.graphicId]: cut || waiting
-					? cutOff(acceptedAt)
-					: nextPlayout(current, { onAir: false, cut: false }, acceptedAt, member.durations),
+			if (cut || channelHoldsWaiting(state.playout, member.graphicId, channel, acceptedAt)) {
+				next = { ...next, playout: { ...next.playout, [member.graphicId]: cutOff(acceptedAt) } };
+				continue;
+			}
+
+			// The same exit a direct Out starts, carried the same way: the schedule for
+			// the phases this exit interrupts is decided against the member's own
+			// authored durations and cycling flag, exactly as `reduceOut` decides it.
+			const memberContext: BroadcastGraphicsReductionContext = {
+				...context,
+				durations: member.durations,
+				onScreen: member.onScreen === true,
 			};
+			const started = nextPlayout(current, { onAir: false, cut: false }, acceptedAt, member.durations);
+			const inputs = broadcastGraphicInputsState(next, member.graphicId);
+			const carried = exitCarryingInterruptedPhases(started, current, inputs, memberContext);
+			const carriedProjections = exitCarryingSocialProfileUpdate(
+				started,
+				current,
+				inputs,
+				next.socialProfileProjections?.[member.graphicId],
+				member.socialProfileProjections,
+				memberContext,
+			);
+			next = withSocialProfileProjections(
+				carried.inputs ? withInputs(next, member.graphicId, carried.inputs) : next,
+				member.graphicId,
+				carriedProjections,
+			);
+			next = { ...next, playout: { ...next.playout, [member.graphicId]: carried.playout } };
 			continue;
 		}
 
@@ -1206,16 +1238,16 @@ function channelHandoff(
 			continue;
 
 		if (cut || channel.handoff === 'overlap')
-			playout = { ...playout, [member.graphicId]: cutOff(acceptedAt) };
+			next = { ...next, playout: { ...next.playout, [member.graphicId]: cutOff(acceptedAt) } };
 	}
 
 	return {
-		playout,
+		state: next,
 		// Read back off the members this handoff has just written, so the instant the
 		// newcomer enters at is the same one every reader will hold it waiting until.
 		entersAt: cut || channel.handoff === 'overlap'
 			? acceptedAt
-			: channelClearsAt(playout, graphicId, channel, acceptedAt),
+			: channelClearsAt(next.playout, graphicId, channel, acceptedAt),
 	};
 }
 
@@ -1261,11 +1293,12 @@ function reduceTake(
 	}
 
 	const handoff = restated
-		? { playout: acceptanceState.playout, entersAt: context.acceptedAt }
+		? { state: acceptanceState, entersAt: context.acceptedAt }
 		: channelHandoff(acceptanceState, payload.graphicId, cut, context);
+	const handoffState = handoff.state;
 
 	const playout = {
-		...handoff.playout,
+		...handoffState.playout,
 		[payload.graphicId]: nextPlayout(
 			current,
 			{ onAir: true, cut },
@@ -1275,18 +1308,18 @@ function reduceTake(
 		),
 	};
 
-	let socialProfileProjections = acceptanceState.socialProfileProjections;
+	let socialProfileProjections = handoffState.socialProfileProjections;
 	if (
 		current?.onAir !== true
 		&& (context.socialProfileProjections?.length ?? 0) > 0
 		&& context.resolveSocialProfileProjections
 	) {
-		const previous = acceptanceState.socialProfileProjections?.[payload.graphicId] ?? {};
+		const previous = handoffState.socialProfileProjections?.[payload.graphicId] ?? {};
 		const declarations = new Map(
 			(context.socialProfileProjections ?? []).map(declaration => [declaration.key, declaration]),
 		);
 		const resolved = context.resolveSocialProfileProjections(
-			broadcastGraphicSourceSelections(acceptanceState, payload.graphicId),
+			broadcastGraphicSourceSelections(handoffState, payload.graphicId),
 		);
 		const accepted = Object.fromEntries(Object.entries(resolved).map(([projectionKey, projection]) => {
 			const declaration = declarations.get(projectionKey);
@@ -1305,16 +1338,16 @@ function reduceTake(
 				: projection];
 		}));
 		socialProfileProjections = {
-			...acceptanceState.socialProfileProjections,
+			...handoffState.socialProfileProjections,
 			[payload.graphicId]: accepted,
 		};
 	}
 
 	if (current?.onAir)
-		return { ...acceptanceState, playout, ...(socialProfileProjections ? { socialProfileProjections } : {}) };
+		return { ...handoffState, playout, ...(socialProfileProjections ? { socialProfileProjections } : {}) };
 
-	const inputs = broadcastGraphicInputsState(acceptanceState, payload.graphicId);
-	const bound = boundValuesFor(acceptanceState, payload.graphicId, context);
+	const inputs = broadcastGraphicInputsState(handoffState, payload.graphicId);
+	const bound = boundValuesFor(handoffState, payload.graphicId, context);
 	const blocked = unavailableRequiredGraphicInputs(inputs, context.inputs, context.bindings, bound);
 	if (blocked.length > 0) {
 		throw new BroadcastGraphicsCommandRejection(
@@ -1327,7 +1360,7 @@ function reduceTake(
 	// An off-air acceptance: a Take composes its values afresh rather than holding a
 	// value from the last time this graphic was on air.
 	return {
-		...withInputs(acceptanceState, payload.graphicId, {
+		...withInputs(handoffState, payload.graphicId, {
 			...inputs,
 			accepted: acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, false),
 			acceptedRevision: inputs.acceptedRevision + 1,
@@ -1597,9 +1630,7 @@ function withLiveSocialProfileAcceptance(
 ): BroadcastGraphicsLiveState {
 	if (projections === undefined)
 		return state;
-	const changed = JSON.stringify(state.socialProfileProjections?.[graphicId] ?? null)
-		!== JSON.stringify(projections);
-	if (!changed)
+	if (sameSocialProfileProjectionStates(state.socialProfileProjections?.[graphicId], projections))
 		return state;
 
 	const settled = withoutSocialProfileUpdateSnapshots(projections)!;
@@ -1944,8 +1975,11 @@ function freezeSocialProfileRotations(
 			now: acceptedAt,
 		});
 		const current = rotation.current?.network;
-		const automaticTransitionAnchor = !projection.transitionAnchor
-			&& rotation.phase.kind === 'transition'
+		// An automatic transition names its own outgoing profile, which is also the
+		// proof that no stored anchor is driving it — an anchor still inside its window
+		// projects without one. So a stale anchor a completed manual command left
+		// behind is replaced here rather than blocking the freeze.
+		const automaticTransitionAnchor = rotation.phase.kind === 'transition'
 			&& rotation.outgoing
 			? {
 					startedAt: acceptedAt - rotation.phase.elapsedMs,
@@ -2143,8 +2177,10 @@ function reduceUpdateGraphic(
 	// accepted value, because program must not blank mid-show.
 	const accepted = acceptGraphicInputValues(inputs, context.inputs, context.bindings, bound, true);
 	const projections = acceptStagedSocialProfileProjections(state, payload.graphicId, context);
-	const projectionsChanged = JSON.stringify(state.socialProfileProjections?.[payload.graphicId] ?? null)
-		!== JSON.stringify(projections ?? null);
+	const projectionsChanged = !sameSocialProfileProjectionStates(
+		state.socialProfileProjections?.[payload.graphicId],
+		projections,
+	);
 	const acceptedRevision = inputs.acceptedRevision + 1;
 	const updateMs = durationOf(context.durations, 'update');
 	const flight = rollUpdateChain(
@@ -2468,8 +2504,10 @@ export function broadcastGraphicsResolveBindingsDue(
 	return !sameGraphicInputValues(
 		broadcastGraphicInputsState(normalized, graphicId).accepted,
 		broadcastGraphicInputsState(resolved, graphicId).accepted,
-	) || JSON.stringify(normalized.socialProfileProjections?.[graphicId] ?? null)
-	!== JSON.stringify(resolved.socialProfileProjections?.[graphicId] ?? null);
+	) || !sameSocialProfileProjectionStates(
+		normalized.socialProfileProjections?.[graphicId],
+		resolved.socialProfileProjections?.[graphicId],
+	);
 }
 
 /**
@@ -2575,6 +2613,7 @@ export function broadcastGraphicChannelContexts(
 				graphicId: graphic.id,
 				durations: broadcastGraphicPhaseDurations(graphic),
 				socialProfileProjections: graphic.socialProfileProjections ?? [],
+				onScreen: broadcastGraphicHasPhaseAnimation(graphic, 'on-screen'),
 			}));
 		if (members.length === 0)
 			continue;

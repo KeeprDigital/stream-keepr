@@ -5,6 +5,7 @@ import {
 	applyBroadcastGraphicsCommand,
 	broadcastGraphicRenderedSocialProfilePresentations,
 	broadcastGraphicRenderedSocialProfileValues,
+	broadcastGraphicsResolveBindingsDue,
 	createInitialBroadcastGraphicsLiveState,
 	MAX_SOCIAL_PROFILE_PRESENTATION_LAYERS,
 	projectSocialProfilePresentation,
@@ -774,6 +775,122 @@ describe('social profile transition projection', () => {
 			phase: { kind: 'dwell', elapsedMs: 0, durationMs: 8_000 },
 			layers: [{ values: youtube, opacity: 1, offsetX: 0, offsetY: 0 }],
 		});
+	});
+
+	it('projects an automatic transition from the profile that finished its dwell, not a stale manual anchor', () => {
+		// A manual Select long since completed left this durable sampled visual behind:
+		// nothing expires it, so the next automatic transition must not render from it.
+		const staleAnchored = state({
+			rotationAnchor: { network: 'twitch', anchoredAt: 1_000_250 },
+			transitionAnchor: {
+				startedAt: 1_000_000,
+				from: [{ values: x, opacity: 1, offsetX: 0, offsetY: 0 }],
+			},
+		});
+
+		// 150ms into the first automatic transition after twitch's dwell completes.
+		const presentation = projectSocialProfilePresentation(staleAnchored, declaration, {
+			onAir: true,
+			now: 1_008_400,
+		});
+
+		expect(presentation.phase).toEqual({ kind: 'transition', elapsedMs: 150, durationMs: 250 });
+		expect(presentation.layers).toEqual([
+			{ values: twitch, opacity: 0.4, offsetX: 0, offsetY: 0 },
+			{ values: youtube, opacity: 0.6, offsetX: 0, offsetY: 0 },
+		]);
+	});
+
+	it('freezes the automatic transition an Out interrupts even when a stale manual anchor remains', () => {
+		const exiting = applyBroadcastGraphicsCommand({
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { lower: { onAir: true, effectiveStartedAt: 1_000_000, cut: false } },
+			socialProfileProjections: { lower: { profile: state({
+				rotationAnchor: { network: 'twitch', anchoredAt: 1_000_250 },
+				transitionAnchor: {
+					startedAt: 1_000_000,
+					from: [{ values: x, opacity: 1, offsetX: 0, offsetY: 0 }],
+				},
+			}) } },
+		}, {
+			type: 'Out',
+			payload: { graphicId: 'lower' },
+		}, {
+			inputs: [],
+			acceptedAt: 1_008_400,
+			durations: { exit: 1_000 },
+			socialProfileProjections: [declaration],
+		});
+		const frozen = exiting.socialProfileProjections!.lower!.profile!;
+
+		expect(frozen.currentNetwork).toBe('youtube');
+		expect(frozen.transitionAnchor).toEqual({
+			startedAt: 1_008_250,
+			from: [{ values: twitch, opacity: 1, offsetX: 0, offsetY: 0 }],
+		});
+	});
+
+	it('schedules no graphic update for a stored projection map that differs only in key order', () => {
+		const first = { ...declaration, key: 'first', updatePolicy: 'staged' as const };
+		const second = { ...declaration, key: 'second', updatePolicy: 'staged' as const };
+		const projection = state({
+			talent: { id: 7, name: 'Ava Reed' },
+			acceptedProfiles: [twitch],
+		});
+		const updated = applyBroadcastGraphicsCommand({
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { lower: { onAir: true, effectiveStartedAt: 1_000_000, cut: false } },
+			// Stored in the reverse of declaration order, as a recovered or peer-applied
+			// state is free to be: the content is identical either way.
+			socialProfileProjections: { lower: { second: projection, first: projection } },
+		}, {
+			type: 'Update Graphic',
+			payload: { graphicId: 'lower', basedOnAcceptedRevision: 0 },
+		}, {
+			inputs: [],
+			acceptedAt: 1_010_000,
+			durations: { enter: 0, exit: 0, update: 400 },
+			socialProfileProjections: [first, second],
+			resolveSocialProfileProjections: () => ({
+				first: { talent: { id: 7, name: 'Ava Reed' }, acceptedProfiles: [twitch] },
+				second: { talent: { id: 7, name: 'Ava Reed' }, acceptedProfiles: [twitch] },
+			}),
+		});
+
+		expect(updated.playout.lower!.updateStartedAt).toBeUndefined();
+	});
+
+	it('reports no live re-resolve due for a stored projection map that differs only in key order', () => {
+		const first = { ...declaration, key: 'first', updatePolicy: 'live' as const };
+		const second = { ...declaration, key: 'second', updatePolicy: 'live' as const };
+		const projection = state({
+			talent: { id: 7, name: 'Ava Reed' },
+			acceptedProfiles: [twitch],
+		});
+		const live = {
+			...createInitialBroadcastGraphicsLiveState(),
+			playout: { lower: { onAir: true, effectiveStartedAt: 1_000_000, cut: false } },
+			socialProfileProjections: { lower: { second: projection, first: projection } },
+		};
+		const context = {
+			inputs: [],
+			acceptedAt: 1_010_000,
+			socialProfileProjections: [first, second],
+			resolveSocialProfileProjections: () => ({
+				first: { talent: { id: 7, name: 'Ava Reed' }, acceptedProfiles: [twitch] },
+				second: { talent: { id: 7, name: 'Ava Reed' }, acceptedProfiles: [twitch] },
+			}),
+		};
+
+		expect(broadcastGraphicsResolveBindingsDue(live, 'lower', context)).toBe(false);
+
+		// The reduction itself leaves the stored entry untouched rather than rewriting
+		// identical content in a new key order and announcing a change.
+		const resolved = applyBroadcastGraphicsCommand(live, {
+			type: 'Resolve Bindings',
+			payload: { graphicId: 'lower' },
+		}, context);
+		expect(resolved.socialProfileProjections!.lower).toBe(live.socialProfileProjections.lower);
 	});
 
 	it('continues the exact automatic transition frame underneath Out and a Take reversal', () => {
