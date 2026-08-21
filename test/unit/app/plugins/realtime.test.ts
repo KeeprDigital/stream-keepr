@@ -16,6 +16,7 @@ class MockChannel {
 	presence = {
 		enter: vi.fn().mockResolvedValue(undefined),
 		leave: vi.fn().mockResolvedValue(undefined),
+		update: vi.fn().mockResolvedValue(undefined),
 		get: vi.fn(async () => this.presenceMembers),
 		subscribe: vi.fn((event: string, handler: PresenceHandler) => {
 			const handlers = this.presenceHandlers.get(event) ?? new Set<PresenceHandler>();
@@ -558,6 +559,21 @@ describe('realtime plugin', () => {
 		expect(callback).toHaveBeenCalledWith([{ clientId: 'a' }, { clientId: 'b' }]);
 		expect(channel.presence.leave).toHaveBeenCalledOnce();
 		expect(channel.presence.unsubscribe).toHaveBeenCalledTimes(3);
+	});
+
+	it('updates presence only on a channel this client already holds', async () => {
+		const realtime = await createTransport();
+		const channel = new MockChannel();
+		channels.set('screen:1:2', channel);
+
+		// Never entered anywhere: an update must not create the channel and enter it.
+		await realtime.updatePresence('screen:9:9', { cardData: 'degraded' });
+		expect(channels.has('screen:9:9')).toBe(false);
+
+		await realtime.enterPresence('screen:1:2', { screenId: 2, cardData: 'complete' });
+		await realtime.updatePresence('screen:1:2', { screenId: 2, cardData: 'degraded' });
+
+		expect(channel.presence.update).toHaveBeenCalledWith({ screenId: 2, cardData: 'degraded' });
 	});
 
 	it('keeps presence subscriptions synchronous while cleaning up attach failures', async () => {

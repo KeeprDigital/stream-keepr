@@ -28,6 +28,7 @@ export interface MockRealtime {
 	// Presence
 	enterPresence: ReturnType<typeof vi.fn>;
 	leavePresence: ReturnType<typeof vi.fn>;
+	updatePresence: ReturnType<typeof vi.fn>;
 	watchPresence: ReturnType<typeof vi.fn>;
 }
 
@@ -51,6 +52,7 @@ export function createMockRealtime(): MockRealtime {
 		// Presence
 		enterPresence: vi.fn().mockResolvedValue(undefined),
 		leavePresence: vi.fn().mockResolvedValue(undefined),
+		updatePresence: vi.fn().mockResolvedValue(undefined),
 		watchPresence: vi.fn().mockReturnValue(() => {}),
 	};
 }

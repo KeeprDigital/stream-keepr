@@ -11,6 +11,49 @@ const SCRYFALL_FUZZY_CONCURRENCY = 4;
 const SCRYFALL_CLIENT_TIMEOUT_MS = 10_000;
 
 /**
+ * Backoff before each retry of one transient Scryfall failure. The length is the
+ * bound: a request is attempted at most one more time than there are delays.
+ */
+const SCRYFALL_RETRY_DELAYS_MS = [500, 2000];
+
+/**
+ * What one batch fetch resolved, and whether it resolved everything it could.
+ *
+ * `degraded` is true when a transient Scryfall failure survived every retry, so
+ * cards that should have resolved are missing from `cards` and the caller is
+ * rendering placeholders a later re-fetch could fill in. A fuzzy-search 404 is a
+ * genuine not-found — the placeholder is the correct rendering — and never marks
+ * the result degraded.
+ */
+export interface ScryfallCardFetchResult {
+	cards: Map<string, MtgCard>;
+	degraded: boolean;
+}
+
+function delay(ms: number): Promise<void> {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isNotFound(error: unknown): boolean {
+	const candidate = error as { statusCode?: number; status?: number; response?: { status?: number } } | null;
+	return candidate?.statusCode === 404 || candidate?.status === 404 || candidate?.response?.status === 404;
+}
+
+async function fetchWithRetry<T>(request: () => Promise<T>, isPermanent?: (error: unknown) => boolean): Promise<T> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await request();
+		}
+		catch (error) {
+			if (isPermanent?.(error) || attempt >= SCRYFALL_RETRY_DELAYS_MS.length) {
+				throw error;
+			}
+			await delay(SCRYFALL_RETRY_DELAYS_MS[attempt]!);
+		}
+	}
+}
+
+/**
  * Composable for batch-fetching Scryfall card data.
  * Shared between the card store and overlay DeckDisplay component.
  */
@@ -20,12 +63,14 @@ export function useScryfallBatch() {
 	 * Cards with scryfallId use the collection endpoint (batched in 75s).
 	 * Cards without scryfallId fall back to fuzzy name search.
 	 * Returns a map of scryfallId -> MtgCard, plus a name-based index
-	 * for cards that were resolved by fuzzy search (no scryfallId).
+	 * for cards that were resolved by fuzzy search (no scryfallId), and
+	 * whether any transient failure exhausted its retries (#465).
 	 */
-	async function fetchScryfallCards(allCards: Array<{ name: string; scryfallId: string | null }>): Promise<Map<string, MtgCard>> {
+	async function fetchScryfallCards(allCards: Array<{ name: string; scryfallId: string | null }>): Promise<ScryfallCardFetchResult> {
 		const cardsWithIds = allCards.filter(c => c.scryfallId);
 		const cardsWithoutIds = allCards.filter(c => !c.scryfallId);
 		const cardDataMap = new Map<string, MtgCard>();
+		let degraded = false;
 
 		// Batch fetch by scryfall ID (collection endpoint, max 75 per request)
 		if (cardsWithIds.length > 0) {
@@ -37,10 +82,10 @@ export function useScryfallBatch() {
 
 			for (const batch of batches) {
 				try {
-					const response = await $fetch<ScryfallList.Cards>(
+					const response = await fetchWithRetry(() => $fetch<ScryfallList.Cards>(
 						'https://api.scryfall.com/cards/collection',
 						{ method: 'POST', body: { identifiers: batch }, timeout: SCRYFALL_CLIENT_TIMEOUT_MS },
-					);
+					));
 					for (const card of response.data) {
 						cardDataMap.set(card.id, {
 							...cardParser(card),
@@ -50,7 +95,9 @@ export function useScryfallBatch() {
 					}
 				}
 				catch {
-					// Continue with other batches if one fails
+					// Retries exhausted: continue with other batches, but say so —
+					// this batch's cards will render as placeholders until a re-fetch.
+					degraded = true;
 				}
 			}
 		}
@@ -63,10 +110,10 @@ export function useScryfallBatch() {
 			const chunk = uniqueNames.slice(index, index + SCRYFALL_FUZZY_CONCURRENCY);
 			await Promise.all(chunk.map(async (name) => {
 				try {
-					const response = await $fetch<ScryfallCard.Any>(
+					const response = await fetchWithRetry(() => $fetch<ScryfallCard.Any>(
 						'https://api.scryfall.com/cards/named',
 						{ query: { fuzzy: name }, timeout: SCRYFALL_CLIENT_TIMEOUT_MS },
-					);
+					), isNotFound);
 					const parsed = {
 						...cardParser(response),
 						deckCounterTypes: deriveDeckCounterTypesFromScryfallCard(response),
@@ -77,13 +124,18 @@ export function useScryfallBatch() {
 					// without a scryfallId can still be enriched during display
 					cardDataMap.set(`name:${name.toLowerCase()}`, parsed);
 				}
-				catch {
-					// Card not found, will show placeholder
+				catch (error) {
+					// A 404 is a card that genuinely does not exist: the placeholder
+					// is the correct rendering. Anything else is a transient failure
+					// that exhausted its retries.
+					if (!isNotFound(error)) {
+						degraded = true;
+					}
 				}
 			}));
 		}
 
-		return cardDataMap;
+		return { cards: cardDataMap, degraded };
 	}
 
 	/**

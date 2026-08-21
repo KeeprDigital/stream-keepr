@@ -20,6 +20,7 @@ describe('useScreenRealtimeSession', () => {
 		}),
 		enterPresence: vi.fn(),
 		leavePresence: vi.fn(),
+		updatePresence: vi.fn(),
 	};
 	const callbacks = {
 		onRefresh: vi.fn(),
@@ -35,6 +36,7 @@ describe('useScreenRealtimeSession', () => {
 		disposeCallback = undefined;
 		realtime.enterPresence.mockResolvedValue(undefined);
 		realtime.leavePresence.mockResolvedValue(undefined);
+		realtime.updatePresence.mockResolvedValue(undefined);
 
 		vi.stubGlobal('useRealtime', () => realtime);
 		vi.stubGlobal('ref', (value: unknown) => ({ value }));
@@ -43,15 +45,17 @@ describe('useScreenRealtimeSession', () => {
 		});
 	});
 
-	async function createSession() {
+	async function createSession(
+		getPresenceData: (eventId: number, screenId: number) => Record<string, unknown> = (_eventId, screenId) => ({
+			screenId,
+			connectedAt: 123,
+		}),
+	) {
 		const { useScreenRealtimeSession } = await import('~~/app/composables/screen/useScreenRealtimeSession');
 
 		return useScreenRealtimeSession({
 			...callbacks,
-			getPresenceData: (_eventId: number, screenId: number) => ({
-				screenId,
-				connectedAt: 123,
-			}),
+			getPresenceData,
 		});
 	}
 
@@ -79,6 +83,37 @@ describe('useScreenRealtimeSession', () => {
 		expect(unsubscribers.identify).toHaveBeenCalledOnce();
 		expect(unsubscribers.debug).toHaveBeenCalledOnce();
 		expect(realtime.leavePresence).toHaveBeenCalledWith('screen:1:10');
+	});
+
+	it('re-reads presence data and updates it on the entered channel', async () => {
+		let cardData = 'complete';
+		const session = await createSession((_eventId, screenId) => ({
+			screenId,
+			connectedAt: 123,
+			cardData,
+		}));
+		await session.start(1, 10);
+
+		cardData = 'degraded';
+		await session.updatePresenceData();
+
+		expect(realtime.updatePresence).toHaveBeenCalledWith('screen:1:10', {
+			screenId: 10,
+			connectedAt: 123,
+			cardData: 'degraded',
+		});
+	});
+
+	it('does not update presence before entering or after leaving', async () => {
+		const session = await createSession();
+
+		await session.updatePresenceData();
+		expect(realtime.updatePresence).not.toHaveBeenCalled();
+
+		await session.start(1, 10);
+		await session.stop();
+		await session.updatePresenceData();
+		expect(realtime.updatePresence).not.toHaveBeenCalled();
 	});
 
 	it('cleans up on scope disposal', async () => {

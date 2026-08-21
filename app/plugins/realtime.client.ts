@@ -483,6 +483,16 @@ export default defineNuxtPlugin({
 			}
 		}
 
+		async function updatePresence(channelName: string, data: RealtimePresenceData): Promise<void> {
+			// Only a channel this client already holds: Ably's presence.update on a
+			// fresh channel would enter it, and entering is enterPresence's job with
+			// its own coverage check.
+			const channel = channels.get(channelName);
+			if (channel) {
+				await channel.presence.update(data);
+			}
+		}
+
 		function watchPresence<Data extends RealtimePresenceData>(
 			channelName: string,
 			callback: RealtimePresenceCallback<Data>,
@@ -584,6 +594,7 @@ export default defineNuxtPlugin({
 					onChannel,
 					enterPresence,
 					leavePresence,
+					updatePresence,
 					watchPresence,
 				},
 			},

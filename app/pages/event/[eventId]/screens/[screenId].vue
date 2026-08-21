@@ -49,6 +49,11 @@ const hasContainerSettings = computed(() => {
 // Connected count from presence
 const connectedCount = computed(() => screen.value ? screenStore.getConnectedCount(screen.value.id) : 0);
 
+// Outputs self-reporting degraded card data through presence (#465). They are
+// already re-fetching on their own; this row is where the operator learns that
+// program is showing placeholder cards, since the output itself never says so.
+const degradedCardDataCount = useScreenOutputCardDataHealth(() => screenId.value);
+
 const modeSettingsComponent = computed(() => {
 	const mode = screen.value?.currentMode;
 	if (!mode)
@@ -555,6 +560,14 @@ async function sendCommand(command: ScreenCommand) {
 							</span>
 							<span v-else class="text-xs text-muted">
 								No clients
+							</span>
+							<span
+								v-if="degradedCardDataCount > 0"
+								class="flex items-center gap-1.5 text-xs text-warning"
+								data-testid="card-data-degraded"
+							>
+								<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
+								Card data incomplete on {{ degradedCardDataCount }} {{ degradedCardDataCount === 1 ? 'output' : 'outputs' }} — re-fetching until Scryfall answers
 							</span>
 						</div>
 					</div>

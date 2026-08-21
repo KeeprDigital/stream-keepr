@@ -54,8 +54,8 @@ describe('useScryfallBatch', () => {
 			'https://api.scryfall.com/cards/collection',
 			expect.objectContaining({ method: 'POST' }),
 		);
-		expect(result.has('abc-123')).toBe(true);
-		expect(result.get('abc-123')?.deckTokens).toEqual([{
+		expect(result.cards.has('abc-123')).toBe(true);
+		expect(result.cards.get('abc-123')?.deckTokens).toEqual([{
 			id: 'treasure',
 			scryfallId: 'treasure',
 			name: 'Treasure Token',
@@ -79,8 +79,8 @@ describe('useScryfallBatch', () => {
 			'https://api.scryfall.com/cards/named',
 			expect.objectContaining({ query: { fuzzy: 'Counterspell' } }),
 		);
-		expect(result.has('xyz-789')).toBe(true);
-		expect(result.has('name:counterspell')).toBe(true);
+		expect(result.cards.has('xyz-789')).toBe(true);
+		expect(result.cards.has('name:counterspell')).toBe(true);
 	});
 
 	it('limits concurrent fuzzy lookups to four requests', async () => {
@@ -110,6 +110,105 @@ describe('useScryfallBatch', () => {
 		await request;
 		expect(mockFetch.mock.calls.filter(([url]) => url === 'https://api.scryfall.com/cards/named')).toHaveLength(9);
 		expect(maximumActiveRequests).toBe(4);
+	});
+
+	it('retries a failed collection batch with backoff before succeeding', async () => {
+		vi.useFakeTimers();
+		try {
+			mockFetch
+				.mockRejectedValueOnce(new Error('scryfall 503'))
+				.mockRejectedValueOnce(new Error('scryfall 503'))
+				.mockResolvedValueOnce({ data: [{ id: 'abc-123', name: 'Lightning Bolt' }] });
+
+			const batch = useScryfallBatch();
+			const request = batch.fetchScryfallCards([
+				createCard({ name: 'Lightning Bolt', scryfallId: 'abc-123' }),
+			]);
+
+			await vi.advanceTimersByTimeAsync(0);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+
+			// First backoff: no retry before 500ms, one at it.
+			await vi.advanceTimersByTimeAsync(499);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+
+			// Second backoff: no retry before 2000ms, one at it.
+			await vi.advanceTimersByTimeAsync(1999);
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+
+			const result = await request;
+			expect(result.degraded).toBe(false);
+			expect(result.cards.has('abc-123')).toBe(true);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('marks the result degraded when a batch exhausts its retries, and still fetches the other batches', async () => {
+		vi.useFakeTimers();
+		try {
+			// 76 unique ids → two collection batches (75 + 1).
+			const cards = Array.from({ length: 76 }, (_, index) => createCard({ name: `Card ${index}`, scryfallId: `id-${index}` }));
+			mockFetch
+				.mockRejectedValueOnce(new Error('scryfall 503'))
+				.mockRejectedValueOnce(new Error('scryfall 503'))
+				.mockRejectedValueOnce(new Error('scryfall 503'))
+				.mockResolvedValueOnce({ data: [{ id: 'id-75', name: 'Card 75' }] });
+
+			const batch = useScryfallBatch();
+			const request = batch.fetchScryfallCards(cards);
+
+			await vi.advanceTimersByTimeAsync(500);
+			await vi.advanceTimersByTimeAsync(2000);
+			const result = await request;
+
+			expect(mockFetch).toHaveBeenCalledTimes(4);
+			expect(result.degraded).toBe(true);
+			expect(result.cards.has('id-75')).toBe(true);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('does not retry or degrade on a fuzzy-search 404: the card genuinely does not exist', async () => {
+		mockFetch.mockRejectedValueOnce({ statusCode: 404 });
+
+		const batch = useScryfallBatch();
+		const result = await batch.fetchScryfallCards([
+			createCard({ name: 'Not A Card', scryfallId: undefined }),
+		]);
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		expect(result.degraded).toBe(false);
+		expect(result.cards.size).toBe(0);
+	});
+
+	it('marks the result degraded when a fuzzy lookup exhausts retries on a transient failure', async () => {
+		vi.useFakeTimers();
+		try {
+			mockFetch.mockRejectedValue(new Error('network down'));
+
+			const batch = useScryfallBatch();
+			const request = batch.fetchScryfallCards([
+				createCard({ name: 'Counterspell', scryfallId: undefined }),
+			]);
+
+			await vi.advanceTimersByTimeAsync(500);
+			await vi.advanceTimersByTimeAsync(2000);
+			const result = await request;
+
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+			expect(result.degraded).toBe(true);
+		}
+		finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('splits mainboard and sideboard in buildDeckListArrays', () => {

@@ -37,7 +37,7 @@ mockNuxtImport('useCardRepository', () => () => mockCardRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
-	fetchScryfallCards: vi.fn().mockResolvedValue(new Map()),
+	fetchScryfallCards: vi.fn().mockResolvedValue({ cards: new Map(), degraded: false }),
 	buildDeckListArrays: vi.fn().mockReturnValue({ mainboard: [], sideboard: [] }),
 }));
 const mockFetchDeck = vi.fn().mockResolvedValue(null);

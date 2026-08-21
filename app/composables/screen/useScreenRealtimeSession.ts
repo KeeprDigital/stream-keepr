@@ -15,6 +15,7 @@ export function useScreenRealtimeSession(options: ScreenRealtimeSessionOptions) 
 	const realtime = useRealtime();
 	const commandUnsubscribers: (() => void)[] = [];
 	const activePresenceChannel = ref<string | null>(null);
+	let enteredScreen: { eventId: number; screenId: number } | null = null;
 	const session = createGuardedSequence();
 
 	function unsubscribeFromCommands() {
@@ -67,6 +68,7 @@ export function useScreenRealtimeSession(options: ScreenRealtimeSessionOptions) 
 			}
 
 			activePresenceChannel.value = channel;
+			enteredScreen = { eventId, screenId };
 		}
 		catch (err) {
 			console.warn('Failed to enter screen presence:', err);
@@ -79,7 +81,29 @@ export function useScreenRealtimeSession(options: ScreenRealtimeSessionOptions) 
 			return;
 
 		activePresenceChannel.value = null;
+		enteredScreen = null;
 		await leaveChannel(channel);
+	}
+
+	/**
+	 * Re-read this output's presence data and announce it on the channel it has
+	 * entered, so a fact that changed after entry (card data health, for one)
+	 * reaches the control surfaces watching. A strict no-op while not entered:
+	 * a presence update on an unentered channel would enter it, which is how a
+	 * control surface's own rendering could count itself as a client watching.
+	 */
+	async function updatePresenceData() {
+		const channel = activePresenceChannel.value;
+		const entered = enteredScreen;
+		if (!channel || !entered)
+			return;
+
+		try {
+			await realtime.updatePresence(channel, options.getPresenceData(entered.eventId, entered.screenId));
+		}
+		catch (err) {
+			console.warn('Failed to update screen presence:', err);
+		}
 	}
 
 	async function start(eventId: number, screenId: number) {
@@ -104,5 +128,6 @@ export function useScreenRealtimeSession(options: ScreenRealtimeSessionOptions) 
 	return {
 		start,
 		stop,
+		updatePresenceData,
 	};
 }

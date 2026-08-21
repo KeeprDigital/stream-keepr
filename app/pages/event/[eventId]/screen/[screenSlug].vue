@@ -53,6 +53,9 @@ provideScreenContext(session.screenContext);
 			<div :class="debugInfo.assetAccess === 'absent' ? 'text-warning' : undefined">
 				Asset access: {{ debugInfo.assetAccess }}
 			</div>
+			<div :class="debugInfo.cardData === 'degraded' ? 'text-warning' : undefined">
+				Card data: {{ debugInfo.cardData }}
+			</div>
 			<div v-if="debugInfo.outputWarning" class="text-warning">
 				{{ debugInfo.outputWarning }}
 			</div>
