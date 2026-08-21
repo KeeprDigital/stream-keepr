@@ -162,6 +162,24 @@ describe('realtime plugin', () => {
 		expect(realtime.error).toEqual(new Error('network lost'));
 	});
 
+	it('reflects closed and closing transitions, which the resync layer reads as disconnections', async () => {
+		// useReconnectResync counts `closed` among the out-of-touch states, but the
+		// plugin never published it: a connection Ably closed kept reporting whatever
+		// state it last passed through, and no surface could see it had gone.
+		const realtime = await createTransport();
+		connectionHandlers.get('connected')?.();
+		expect(realtime.isConnected).toBe(true);
+
+		connectionHandlers.get('closing')?.();
+		expect(realtime.connectionState).toBe('closing');
+		expect(realtime.isConnected).toBe(false);
+
+		connectionHandlers.get('closed')?.();
+		expect(realtime.connectionState).toBe('closed');
+		expect(realtime.isConnected).toBe(false);
+		expect(realtime.error).toBeNull();
+	});
+
 	it('waits for an event before requesting the initial token, then scopes it to the first room', async () => {
 		// Typed against the plain signature rather than the route table: matching a
 		// resolved value against `$fetch`'s route-conditional return type exhausts
@@ -474,6 +492,89 @@ describe('realtime plugin', () => {
 		});
 	});
 
+	/**
+	 * The first connection's half of the "coverage only on success" contract.
+	 *
+	 * The event-switch path already held it (#307), but the initial branch claimed
+	 * `coveredEventId` the moment it released the waiting authCallback — while the
+	 * token fetch was still in flight. A failed first mint left the event looking
+	 * covered, so every later subscribe took the fast path onto a connection with
+	 * no token at all, and nothing published `tokenError`.
+	 */
+	describe('the first mint after connection', () => {
+		it('does not subscribe until the initial token fetch actually lands', async () => {
+			let resolveFetch!: (value: unknown) => void;
+			vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
+				.mockReturnValueOnce(new Promise((resolve) => {
+					resolveFetch = resolve;
+				}));
+			const realtime = await createTransport();
+			const callback = vi.fn();
+			void (realtimeInstances[0]!.options as any).authCallback({}, callback);
+			await Promise.resolve();
+
+			const handler = vi.fn();
+			realtime.setRoom('event:7');
+			realtime.onRoom('player', { 'player:updated': handler });
+			await settle();
+
+			// The fetch is still in flight — coverage must not have been claimed.
+			expect(channels.get('event:7')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
+
+			resolveFetch({ token: 'token-request' });
+			await settle();
+
+			channels.get('event:7')!.emit('player:updated', { player: { id: 7 } });
+			expect(handler).toHaveBeenCalledOnce();
+			// The initial mint is the authCallback's own fetch; no separate authorize.
+			expect(realtimeInstances[0]!.auth.authorize).not.toHaveBeenCalled();
+		});
+
+		describe('when it fails', () => {
+			beforeEach(() => {
+				vi.useFakeTimers();
+			});
+
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			async function settleRetries() {
+				await vi.advanceTimersByTimeAsync(30_000);
+			}
+
+			it('publishes tokenError and leaves the event uncovered for the next subscribe', async () => {
+				const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+				vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
+					.mockRejectedValueOnce(new Error('token endpoint down'));
+				const realtime = await createTransport();
+				const callback = vi.fn();
+				void (realtimeInstances[0]!.options as any).authCallback({}, callback);
+				await Promise.resolve();
+
+				realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+				realtime.setRoom('event:7');
+				realtime.onChannel('screen:7:1', 'screen:command:debug', vi.fn());
+				await settleRetries();
+
+				expect(channels.get('screen:7:1')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
+				expect(realtime.tokenError).toBeInstanceOf(Error);
+
+				// Uncovered means the next subscribe mints again — and recovers.
+				realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+				const handler = vi.fn();
+				realtime.onChannel('screen:7:2', 'screen:command:debug', handler);
+				await settleRetries();
+
+				expect(realtimeInstances[0]!.auth.authorize).toHaveBeenCalled();
+				expect(realtime.tokenError).toBeNull();
+				channels.get('screen:7:2')!.emit('screen:command:debug', { screenId: 2 });
+				expect(handler).toHaveBeenCalledOnce();
+				consoleSpy.mockRestore();
+			});
+		});
+	});
+
 	it('does not expose authorizeForEvent — token scope is owned by the transport', async () => {
 		const realtime = await createTransport();
 
@@ -528,6 +629,29 @@ describe('realtime plugin', () => {
 
 		expect(handler).toHaveBeenCalledOnce();
 		expect(handler).toHaveBeenCalledWith({ player: { id: 2 } }, expect.any(Object));
+	});
+
+	it('keeps channel subscriptions to the same channel and type independent', async () => {
+		// Not replacement semantics: onChannel hands each caller its own unsubscribe,
+		// and a second subscription to the same channel+type must not evict the
+		// first. The old bookkeeping *read* as replacement — a "unsubscribe
+		// previous" lookup keyed by a fresh counter — and could never fire (#466).
+		const realtime = await createTransport();
+		const firstHandler = vi.fn();
+		const secondHandler = vi.fn();
+
+		const unsubscribeFirst = realtime.onChannel('screen:1:2', 'screen:command:debug', firstHandler);
+		realtime.onChannel('screen:1:2', 'screen:command:debug', secondHandler);
+		await settle();
+
+		channels.get('screen:1:2')!.emit('screen:command:debug', { screenId: 2 });
+		expect(firstHandler).toHaveBeenCalledOnce();
+		expect(secondHandler).toHaveBeenCalledOnce();
+
+		unsubscribeFirst();
+		channels.get('screen:1:2')!.emit('screen:command:debug', { screenId: 2 });
+		expect(firstHandler).toHaveBeenCalledOnce();
+		expect(secondHandler).toHaveBeenCalledTimes(2);
 	});
 
 	it('direct channel subscription returns a working unsubscribe function', async () => {
