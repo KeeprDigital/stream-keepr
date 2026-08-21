@@ -1,6 +1,11 @@
 import type { GraphicsActorNaming } from '~~/shared/types/graphicsAsset';
 import { eq, inArray } from 'drizzle-orm';
 import { db, schema } from 'hub:db';
+import {
+	isLocalDeveloperSessionId,
+	isLocalDeveloperUserId,
+	LOCAL_DEVELOPER_USER_NAME,
+} from '~~/shared/utils/localDeveloperAuth';
 import { chunkArray, SAFE_INARRAY_SIZE } from './db';
 
 /**
@@ -49,11 +54,13 @@ const ANONYMOUS_ERA_ACTOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
  * time.
  *
  * The answer covers **every** actor asked about, so a caller renders
- * `names[actor]` and never has to know which of the three kinds it is holding —
- * a person, a machine actor, or an identity from before this installation had
- * people. Unresolvable is not an error: the ledger only grows, and an account
- * deleted after writing evidence must not take the page it appears on down with
- * it.
+ * `names[actor]` and never has to know which kind it is holding — a directory
+ * User, the development-only Local Developer User, a machine actor, or an
+ * identity from before this installation had people. Directory names resolve
+ * when read so renames flow into old evidence; the synthetic local identity has
+ * no directory row and therefore keeps its one fixed, conspicuous name.
+ * Unresolvable is not an error: the ledger only grows, and an account deleted
+ * after writing evidence must not take the page it appears on down with it.
  *
  * Reads are chunked at `SAFE_INARRAY_SIZE` because a page of the ledger is
  * bounded at 500 entries and D1 binds at most 100 parameters per statement.
@@ -64,7 +71,13 @@ export async function graphicsActorNames(actors: Iterable<string>): Promise<Reco
 		return {};
 
 	const found = new Map<string, string>();
-	for (const chunk of chunkArray(asked, SAFE_INARRAY_SIZE)) {
+	const directoryActors = asked.filter((actor) => {
+		if (!isLocalDeveloperUserId(actor))
+			return true;
+		found.set(actor, LOCAL_DEVELOPER_USER_NAME);
+		return false;
+	});
+	for (const chunk of chunkArray(directoryActors, SAFE_INARRAY_SIZE)) {
 		const rows = await db
 			.select({ id: schema.user.id, name: schema.user.name, email: schema.user.email })
 			.from(schema.user)
@@ -124,6 +137,9 @@ export async function withActorNames<Reading>(
  * shows this says so in its own words rather than being handed an invented one.
  */
 export async function sessionHolderName(sessionId: string): Promise<string | null> {
+	if (isLocalDeveloperSessionId(sessionId))
+		return LOCAL_DEVELOPER_USER_NAME;
+
 	const [holder] = await db
 		.select({ name: schema.user.name })
 		.from(schema.session)

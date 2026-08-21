@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '#ui/types';
+import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
 
@@ -40,23 +41,28 @@ const colorModeItem = computed<NavigationMenuItem[]>(() => [{
 
 const session = useAuthSession();
 const currentUser = session.user;
+const isLocalDeveloperUser = computed(() => currentUser.value !== null && isLocalDeveloperUserId(currentUser.value.id));
+const accountLabel = computed(() => isLocalDeveloperUser.value ? currentUser.value?.name : currentUser.value?.email);
 const toast = useToast();
 
 /**
  * Sign-out lives in the sidebar footer, beside the colour mode, because that
  * is where the things belonging to this browser rather than to the Event sit.
  *
- * The operator's address is shown next to it: this is a small invited team on
- * shared production machines, and "whose session is this laptop holding" is a
- * question the shell should answer without being asked.
+ * In ordinary authentication the operator's address and sign-out action answer
+ * which account this laptop holds. The Local Developer User instead shows its
+ * conspicuous name and no sign-out action: the bypass would immediately mint
+ * the same identity again, so sign-out would claim to do something it cannot.
  */
-const accountItems: NavigationMenuItem[] = [{
-	label: 'Sign out',
-	icon: 'i-lucide-log-out',
-	onSelect: () => {
-		void signOut();
-	},
-}];
+const accountItems = computed<NavigationMenuItem[]>(() => isLocalDeveloperUser.value
+	? []
+	: [{
+			label: 'Sign out',
+			icon: 'i-lucide-log-out',
+			onSelect: () => {
+				void signOut();
+			},
+		}]);
 
 /**
  * Navigating only after the server agreed the session is over. A sign-out that
@@ -245,7 +251,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 						class="px-3 pb-1 text-xs text-muted truncate"
 						:title="currentUser.email"
 					>
-						{{ currentUser.email }}
+						{{ accountLabel }}
 					</div>
 					<UNavigationMenu
 						:collapsed="collapsed"

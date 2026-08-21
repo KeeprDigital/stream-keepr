@@ -22,12 +22,24 @@
  * (`scripts/graphics-acceptance/local-configuration.mjs`).
  */
 
+import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_DEVELOPER_USER_NAME,
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	localAuthBypassEnabled,
+} from '../shared/utils/localDeveloperAuth.ts';
+
 const NAME = /^[A-Z_]\w*$/i;
 const EXPORT_PREFIX = /^export\s+/;
 
 /**
- * The `NUXT_` names a local checkout has to be given before the surfaces that read
- * them stop refusing, and the whole of what the #130 notice is asserting.
+ * The `NUXT_` names an ordinary local checkout has to be given before the surfaces
+ * that read them stop refusing, and the whole of what the #130 notice is asserting.
+ * `missingLocalNuxtNames` removes the two account-setup names when the exact
+ * development bypass is active. Acceptance harnesses keep the canonical list
+ * complete because a flag in their own process cannot attest the installation
+ * they target; the supported preview staging path passes the active decision
+ * explicitly after verifying both local enabling values.
  *
  * These are `.env.example`'s assignments minus everything in
  * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
@@ -89,6 +101,7 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
+	'NUXT_LOCAL_AUTH_BYPASS',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
@@ -140,8 +153,17 @@ export const LOCAL_NUXT_NAME_SURFACES = {
  * empty string — and because the likeliest way to hold a populated `.env` full of
  * blanks is `cp .env.example .env`, which is advice this very notice gives.
  */
-export function missingLocalNuxtNames(env: Record<string, string | undefined>): LocallyRequiredNuxtName[] {
-	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name => (env[name] ?? '').trim().length === 0);
+export function missingLocalNuxtNames(
+	env: Record<string, string | undefined>,
+	options: { localAuthBypassActive?: boolean } = {},
+): LocallyRequiredNuxtName[] {
+	const bypassedAuthNames = options.localAuthBypassActive
+		? new Set<LocallyRequiredNuxtName>(['NUXT_BETTER_AUTH_SECRET', 'NUXT_ADMIN_BOOTSTRAP_TOKEN'])
+		: new Set<LocallyRequiredNuxtName>();
+
+	return LOCALLY_REQUIRED_NUXT_NAMES.filter(name =>
+		!bypassedAuthNames.has(name) && (env[name] ?? '').trim().length === 0,
+	);
 }
 
 /**
@@ -246,6 +268,29 @@ export function announcesLocalConfiguration(context: {
 	return context.dev && context.env.STREAM_KEEPR_INTEGRATION !== 'true';
 }
 
+export interface LocalConfigurationContext {
+	dev: boolean;
+	env: Record<string, string | undefined>;
+}
+
+/** Refuse to create promotable output while its local authentication choice is armed. */
+export function assertLocalAuthBypassDisarmedForBuild(context: LocalConfigurationContext): void {
+	if (!context.dev && context.env.NUXT_LOCAL_AUTH_BYPASS === LOCAL_AUTH_BYPASS_ENABLED_VALUE) {
+		throw new Error(
+			'NUXT_LOCAL_AUTH_BYPASS=true cannot be used for a production build. '
+			+ 'Use pnpm preview for an explicitly attested local Worker, or remove the flag before building or deploying.',
+		);
+	}
+}
+
+/** Whether both explicit local-authentication switches are exactly active. */
+export function localAuthBypassActive(context: LocalConfigurationContext): boolean {
+	return localAuthBypassEnabled({
+		bypassValue: context.env.NUXT_LOCAL_AUTH_BYPASS,
+		runtimeAttestation: context.env[LOCAL_RUNTIME_ATTESTATION_NAME],
+	});
+}
+
 /** Reads a dotenv body — `.env`, or the copy of it staged for a previewed Worker. */
 export function parseDotenv(source: string): Map<string, string> {
 	const values = new Map<string, string>();
@@ -287,16 +332,35 @@ function unquote(value: string): string {
  * pins them into the *server child's* environment, not its own — so gating on
  * `missing` alone would warn them on every run.
  */
-export function localConfigurationLogLine(context: {
-	dev: boolean;
-	env: Record<string, string | undefined>;
-}): { level: 'warn'; message: string } | undefined {
+export function localConfigurationLogLine(
+	context: LocalConfigurationContext,
+	bypassActive = localAuthBypassActive(context),
+): { level: 'warn'; message: string } | undefined {
 	if (!announcesLocalConfiguration(context))
 		return undefined;
 
-	const missing = missingLocalNuxtNames(context.env);
+	const missing = missingLocalNuxtNames(context.env, {
+		localAuthBypassActive: bypassActive,
+	});
 	if (missing.length === 0)
 		return undefined;
 
 	return { level: 'warn', message: localConfigurationBootNotice(missing) };
+}
+
+/** The warning an intentionally unauthenticated development server emits. */
+export function localAuthBypassLogLine(
+	context: LocalConfigurationContext,
+	bypassActive = localAuthBypassActive(context),
+): { level: 'warn'; message: string } | undefined {
+	if (!announcesLocalConfiguration(context) || !bypassActive) {
+		return undefined;
+	}
+
+	return {
+		level: 'warn',
+		message: `AUTHENTICATION BYPASSED: every request is acting as ${LOCAL_DEVELOPER_USER_NAME}. `
+			+ 'Keep the development server bound to loopback; binding it to 0.0.0.0 or another non-loopback '
+			+ 'address exposes the application to other machines without authentication.',
+	};
 }

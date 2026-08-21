@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
+	LOCAL_DEVELOPER_USER_ID,
+	LOCAL_DEVELOPER_USER_NAME,
+} from '~~/shared/utils/localDeveloperAuth';
 
 /**
  * What an administrator reading calls the identities it carries (#398, ADR-0010).
@@ -89,6 +94,14 @@ describe('the names an administrator reading shows for its actors', () => {
 			});
 	});
 
+	it('names work owned by the synthetic local-development User', async () => {
+		directoryOf();
+
+		await expect(graphicsActorNames([LOCAL_DEVELOPER_USER_ID]))
+			.resolves
+			.toEqual({ [LOCAL_DEVELOPER_USER_ID]: LOCAL_DEVELOPER_USER_NAME });
+	});
+
 	it('names every actor it was asked about, so a caller looks up rather than falls back', async () => {
 		directoryOf({ id: 'user-1', name: 'Marcus Angel', email: 'marcus@keepr.digital' });
 
@@ -141,6 +154,15 @@ describe('the names an administrator reading shows for its actors', () => {
  * rather than in the composable that renders the notice.
  */
 describe('the name behind a lease holder\'s session', () => {
+	it('names a local-development browser without querying a Better Auth session row', async () => {
+		mockJoinedWhere.mockClear();
+
+		await expect(sessionHolderName(`${LOCAL_DEVELOPER_SESSION_ID_PREFIX}browser-a`))
+			.resolves
+			.toBe(LOCAL_DEVELOPER_USER_NAME);
+		expect(mockJoinedWhere).not.toHaveBeenCalled();
+	});
+
 	it('answers the person the holding session belongs to', async () => {
 		mockJoinedWhere.mockResolvedValue([{ name: 'Marcus Angel' }]);
 

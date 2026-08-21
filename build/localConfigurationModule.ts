@@ -1,6 +1,11 @@
 import process from 'node:process';
 import { defineNuxtModule, useLogger } from 'nuxt/kit';
-import { localConfigurationLogLine } from './localConfiguration';
+import {
+	assertLocalAuthBypassDisarmedForBuild,
+	localAuthBypassActive,
+	localAuthBypassLogLine,
+	localConfigurationLogLine,
+} from './localConfiguration';
 
 /**
  * Says once, at boot, that this checkout cannot supply the names its surfaces need
@@ -20,9 +25,16 @@ import { localConfigurationLogLine } from './localConfiguration';
 export const localConfigurationModule = defineNuxtModule({
 	meta: { name: 'local-configuration' },
 	setup(_options, nuxt) {
-		const line = localConfigurationLogLine({ dev: nuxt.options.dev, env: process.env });
-
-		if (line !== undefined)
-			useLogger('local-configuration')[line.level](line.message);
+		const context = { dev: nuxt.options.dev, env: process.env };
+		assertLocalAuthBypassDisarmedForBuild(context);
+		const bypassActive = localAuthBypassActive(context);
+		const logger = useLogger('local-configuration');
+		for (const line of [
+			localAuthBypassLogLine(context, bypassActive),
+			localConfigurationLogLine(context, bypassActive),
+		]) {
+			if (line !== undefined)
+				logger[line.level](line.message);
+		}
 	},
 });

@@ -63,6 +63,10 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import {
+	LOCAL_RUNTIME_ATTESTATION_NAME,
+	localAuthBypassEnabled,
+} from '../shared/utils/localDeveloperAuth.ts';
+import {
 	localConfigurationNotice,
 	missingLocalAcceptanceNames,
 	previewStagingPlan,
@@ -120,6 +124,12 @@ catch (error) {
 // Keyed on the name being unusable rather than on the file being absent, so a
 // verbatim copy of `.env.example` — every name present and empty — is told
 // the same thing as a checkout with no file at all.
-const missing = missingLocalAcceptanceNames(suppliedNames([process.env, body]));
+const supplied = suppliedNames([process.env, body]);
+const missing = missingLocalAcceptanceNames(supplied, {
+	localAuthBypassActive: localAuthBypassEnabled({
+		bypassValue: supplied.NUXT_LOCAL_AUTH_BYPASS,
+		runtimeAttestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
+	}),
+});
 if (missing.length > 0)
 	process.stderr.write(`${localConfigurationNotice(missing)}\n`);

@@ -42,21 +42,53 @@ pnpm install
 pnpm dev
 ```
 
+By default, local development uses Better Auth exactly like a deployed
+installation. To work without creating an account or signing in, set this in the
+ignored `.env` file and restart the dev server:
+
+```dotenv
+NUXT_LOCAL_AUTH_BYPASS=true
+```
+
+The value must be exactly `true`. It is only one of two enabling conditions:
+the supported `pnpm dev` and `pnpm preview` launchers also supply the separate
+`STREAM_KEEPR_LOCAL_RUNTIME=true` runtime attestation. Do not put that attestation
+in `.env` or Worker configuration; it is launcher-owned, non-secret evidence that
+this process was intentionally started for local use. The server does not infer it
+from `NODE_ENV`, a hostname, loopback addressing, or local bindings. A built Worker
+with only `NUXT_LOCAL_AUTH_BYPASS=true` therefore keeps normal Better Auth behavior.
+
+In bypass mode `NUXT_BETTER_AUTH_SECRET` and `NUXT_ADMIN_BOOTSTRAP_TOKEN` may
+remain blank. The app enters protected pages as the stable **Local Developer
+User**, while each browser receives a distinct local Session so Graphics Authoring
+Leases still distinguish concurrent editors. The shell shows that identity and
+omits sign-out because the next request would create the same local identity again.
+
+This bypass does not cover the Graphics Administrator token, Screen Output
+capabilities, or any other configuration. In particular,
+`NUXT_GRAPHICS_ADMIN_TOKEN` is still required for Graphics Administrator routes.
+Remove the setting or set it to `false` to return to real sign-in.
+
+Keep either bypassed launcher on loopback. Binding Nuxt or local workerd to
+`0.0.0.0` or another non-loopback address gives every machine that can reach it
+unauthenticated access; local workerd is not inherently private merely because its
+bindings are local. Daily Nuxt startup prints the same warning conspicuously.
+
 ## Testing
 
 Which script, when:
 
-| When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                   |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`                                  | Watch mode for the tier you are touching; append `:run` for a single pass.                                                                                                                                                                              |
-| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                   |
-| Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                      |
-| Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, auth, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one.                   |
-| Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                    |
-| Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`. |
-| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                            |
-| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                    |
-| Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                  |
+| When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:local-auth:run`, `pnpm test:integration`      | Watch mode is available for the unit, Nuxt, and integration tiers; append `:run` for a single pass. The local-auth tier is one focused spawned-dev-server pass.                                                                                                                                              |
+| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                                                                        |
+| Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                                                                           |
+| Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, real Better Auth, bypass refusal without attestation, attested preview auth, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one. |
+| Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                                                                         |
+| Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`.                                                      |
+| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                                                                                 |
+| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                                                                         |
+| Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                                                                       |
 
 CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
 — the same gates `pnpm verify` runs locally, split across two jobs. It does
@@ -132,7 +164,13 @@ pnpm preview
 ```
 
 The preview command applies migrations to an ignored local D1 store before
-starting the generated Worker; it never connects to a remote database.
+starting the generated Worker; it never connects to a remote database. When
+`NUXT_LOCAL_AUTH_BYPASS=true`, the command deliberately disarms the flag for its
+production build (a plain armed `pnpm build` fails), stages the local `.env` only
+afterward, and passes the local-runtime attestation directly to `wrangler dev` with
+`--var`. Neither the attestation nor the bypass choice is written into generated
+production configuration. The previewed Worker enables the Local Developer Session
+only when it receives both exact runtime values.
 
 Validate the generated artifact without deploying:
 
