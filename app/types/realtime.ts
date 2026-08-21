@@ -68,6 +68,13 @@ export interface RealtimeTransport {
 	enterPresence: (channel: string, data: RealtimePresenceData) => Promise<void>;
 	leavePresence: (channel: string) => Promise<void>;
 	/**
+	 * Replace the presence data this client already entered a channel with.
+	 * Only meaningful on a channel this client has entered: the transport treats
+	 * an update on an unentered channel as an enter, so callers gate on having
+	 * entered rather than relying on the transport to refuse.
+	 */
+	updatePresence: (channel: string, data: RealtimePresenceData) => Promise<void>;
+	/**
 	 * Watch one channel's presence set.
 	 *
 	 * The payload shape is the caller's to name, because only the caller knows what
