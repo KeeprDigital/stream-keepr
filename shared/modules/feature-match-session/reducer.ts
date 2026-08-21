@@ -40,7 +40,48 @@ interface FeatureMatchBatchedEvent {
 }
 
 function batchedEvents(payload: FeatureMatchSessionEventPayload): FeatureMatchBatchedEvent[] {
-	return (payload.commands ?? []) as FeatureMatchBatchedEvent[];
+	if (!Array.isArray(payload.commands))
+		return [];
+	return payload.commands
+		.filter((command): command is Record<string, unknown> => typeof command === 'object' && command !== null)
+		.map(command => ({
+			type: command.type as FeatureMatchCommandType,
+			payload: (typeof command.payload === 'object' && command.payload !== null
+				? command.payload
+				: {}) as FeatureMatchSessionEventPayload,
+		}));
+}
+
+// ─── Payload boundary guards ────────────────────────────────────────────────
+// Payloads reach the reducer from the persisted event log as well as from
+// clients, and both replay: a non-finite number committed once survives every
+// later event (Math.max(0, NaN) is NaN). An action whose payload fails a guard
+// is rejected wholesale — state is returned unchanged — so no shape of payload
+// can commit a non-finite number.
+
+/** Coerce like `Number(...)` but refuse to hand back a non-finite result. */
+function finiteNumber(value: unknown): number | null {
+	const coerced = Number(value);
+	return Number.isFinite(coerced) ? coerced : null;
+}
+
+function playerSideOf(value: unknown): PlayerSide | null {
+	return value === 'player1' || value === 'player2' ? value : null;
+}
+
+function countersOf(value: unknown): { type: string; value: number }[] | null {
+	if (!Array.isArray(value))
+		return null;
+	const counters: { type: string; value: number }[] = [];
+	for (const entry of value) {
+		if (typeof entry !== 'object' || entry === null)
+			return null;
+		const { type, value: counterValue } = entry as { type?: unknown; value?: unknown };
+		if (typeof type !== 'string' || typeof counterValue !== 'number' || !Number.isFinite(counterValue))
+			return null;
+		counters.push({ type, value: counterValue });
+	}
+	return counters;
 }
 
 export function normalizeFeatureMatchSessionCommandPayload(
@@ -144,8 +185,10 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'AdjustLife') {
-		const player = payload.player as PlayerSide;
-		const delta = Number(payload.delta ?? 0);
+		const player = playerSideOf(payload.player);
+		const delta = finiteNumber(payload.delta ?? 0);
+		if (!player || delta === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
@@ -159,83 +202,102 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetLife') {
-		const player = payload.player as PlayerSide;
+		const player = playerSideOf(payload.player);
+		const lifeTotal = finiteNumber(payload.lifeTotal);
+		if (!player || lifeTotal === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
 					...currentState[player],
-					lifeTotal: Number(payload.lifeTotal),
+					lifeTotal,
 				},
 			},
 		};
 	}
 
 	if (type === 'SetCounters') {
-		const player = payload.player as PlayerSide;
+		const player = playerSideOf(payload.player);
+		const counters = countersOf(payload.counters);
+		if (!player || counters === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
 					...currentState[player],
-					counters: payload.counters as { type: string; value: number }[],
+					counters,
 				},
 			},
 		};
 	}
 
 	if (type === 'SetCardsKept') {
-		const player = payload.player as PlayerSide;
+		const player = playerSideOf(payload.player);
+		const cardsKept = finiteNumber(payload.cardsKept);
+		if (!player || cardsKept === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
 					...currentState[player],
-					cardsKept: Number(payload.cardsKept),
+					cardsKept,
 				},
 			},
 		};
 	}
 
 	if (type === 'AdjustClock') {
+		const at = finiteNumber(payload.at);
+		const deltaDisplayMs = finiteNumber(payload.deltaMs ?? 0);
+		if (at === null || deltaDisplayMs === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
-				clock: applyClockAdjustment(currentState.clock, Number(payload.at), { deltaDisplayMs: Number(payload.deltaMs ?? 0) }),
+				clock: applyClockAdjustment(currentState.clock, at, { deltaDisplayMs }),
 			},
 		};
 	}
 
 	if (type === 'SetClock') {
+		const at = finiteNumber(payload.at);
+		const targetDisplayMs = finiteNumber(payload.targetMs ?? 0);
+		if (at === null || targetDisplayMs === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
-				clock: applyClockAdjustment(currentState.clock, Number(payload.at), { targetDisplayMs: Number(payload.targetMs ?? 0) }),
+				clock: applyClockAdjustment(currentState.clock, at, { targetDisplayMs }),
 			},
 		};
 	}
 
 	if (type === 'StartClock') {
-		if (currentState.clock.isRunning)
+		const at = finiteNumber(payload.at);
+		if (currentState.clock.isRunning || at === null)
 			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
-				clock: { ...currentState.clock, isRunning: true, lastStartedAt: Number(payload.at) },
+				clock: { ...currentState.clock, isRunning: true, lastStartedAt: at },
 			},
 		};
 	}
 
 	if (type === 'PauseClock') {
-		if (!currentState.clock.isRunning)
+		const at = finiteNumber(payload.at);
+		if (!currentState.clock.isRunning || at === null)
 			return { currentState, sourceSnapshot };
-		const additionalElapsed = currentState.clock.lastStartedAt ? Number(payload.at) - currentState.clock.lastStartedAt : 0;
+		const additionalElapsed = currentState.clock.lastStartedAt ? at - currentState.clock.lastStartedAt : 0;
 		return {
 			sourceSnapshot,
 			currentState: {
@@ -251,6 +313,9 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'ResetClock') {
+		const durationMs = payload.durationMs == null ? undefined : finiteNumber(payload.durationMs);
+		if (durationMs === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
@@ -260,7 +325,7 @@ export function applyFeatureMatchSessionEvent(
 					elapsedMs: 0,
 					isRunning: false,
 					lastStartedAt: null,
-					...(payload.durationMs !== undefined && { durationMs: Number(payload.durationMs) }),
+					...(durationMs !== undefined && { durationMs }),
 				},
 				overtime: undefined,
 			},
@@ -268,17 +333,22 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'RestartClock') {
+		const at = finiteNumber(payload.at);
+		if (at === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
-				clock: { ...currentState.clock, elapsedMs: 0, isRunning: true, lastStartedAt: Number(payload.at) },
+				clock: { ...currentState.clock, elapsedMs: 0, isRunning: true, lastStartedAt: at },
 			},
 		};
 	}
 
 	if (type === 'SelectFirstPlayer') {
-		const player = payload.player as PlayerSide;
+		const player = playerSideOf(payload.player);
+		if (!player)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
 			currentState: { ...currentState, firstPlayer: player, activePlayer: player, turnNumber: 1 },
@@ -286,32 +356,43 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetFirstPlayer') {
+		const player = playerSideOf(payload.player);
+		if (!player)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, firstPlayer: payload.player as PlayerSide },
+			currentState: { ...currentState, firstPlayer: player },
 		};
 	}
 
 	if (type === 'SetActivePlayer') {
+		const player = playerSideOf(payload.player);
+		if (!player && payload.player != null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, activePlayer: payload.player as PlayerSide | null },
+			currentState: { ...currentState, activePlayer: player },
 		};
 	}
 
 	if (type === 'SetTurnNumber') {
+		const turnNumber = finiteNumber(payload.turnNumber);
+		if (turnNumber === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, turnNumber: Number(payload.turnNumber) },
+			currentState: { ...currentState, turnNumber },
 		};
 	}
 
 	if (type === 'RecordGameWin') {
-		const player = payload.player as PlayerSide;
+		const player = playerSideOf(payload.player);
+		const startingLife = finiteNumber(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
+		if (!player || startingLife === null)
+			return { currentState, sourceSnapshot };
 		const opponent = otherFeatureMatchPlayer(player);
 		const resetLife = payload.resetLife !== false;
 		const resetCounters = payload.resetCounters !== false;
-		const startingLife = Number(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
 		const winner = currentState[player];
 		const wins = winner.gameWins + 1;
 		const winsNeeded = Math.ceil(sourceSnapshot.bestOf / 2);
@@ -343,13 +424,13 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'UndoGameWin') {
-		const player = payload.player as PlayerSide;
-		if (currentState[player].gameWins <= 0)
+		const player = playerSideOf(payload.player);
+		const startingLife = finiteNumber(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
+		if (!player || startingLife === null || currentState[player].gameWins <= 0)
 			return { currentState, sourceSnapshot };
 		const opponent = otherFeatureMatchPlayer(player);
 		const resetLife = payload.resetLife === true;
 		const resetCounters = payload.resetCounters === true;
-		const startingLife = Number(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
 
 		return {
 			sourceSnapshot,
@@ -373,7 +454,9 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'ResetState') {
-		const startingLife = Number(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
+		const startingLife = finiteNumber(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
+		if (startingLife === null)
+			return { currentState, sourceSnapshot };
 		if (payload.type === 'match') {
 			return { sourceSnapshot, currentState: createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot) };
 		}
@@ -392,23 +475,32 @@ export function applyFeatureMatchSessionEvent(
 	}
 
 	if (type === 'StartOvertime') {
+		const totalTurns = finiteNumber(payload.totalTurns);
+		if (totalTurns === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: { ...currentState, overtime: createInitialOvertimeState(Number(payload.totalTurns)) },
+			currentState: { ...currentState, overtime: createInitialOvertimeState(totalTurns) },
 		};
 	}
 
 	if (type === 'StepTurn') {
+		const delta = finiteNumber(payload.delta ?? 0);
+		if (delta === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: applyFeatureMatchTurnStep(currentState, Number(payload.delta ?? 0)),
+			currentState: applyFeatureMatchTurnStep(currentState, delta),
 		};
 	}
 
 	if (type === 'StepOvertime') {
+		const delta = finiteNumber(payload.delta ?? 0);
+		if (delta === null)
+			return { currentState, sourceSnapshot };
 		return {
 			sourceSnapshot,
-			currentState: applyFeatureMatchOvertimeStep(currentState, Number(payload.delta ?? 0)),
+			currentState: applyFeatureMatchOvertimeStep(currentState, delta),
 		};
 	}
 

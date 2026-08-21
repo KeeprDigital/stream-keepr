@@ -91,6 +91,55 @@ describe('normalizeTimeInput', () => {
 	it('strips non-digit characters from numeric input', () => {
 		expect(normalizeTimeInput('12.34')).toBe('12:34');
 	});
+
+	it('rejects colon-form seconds of 60 or more', () => {
+		expect(normalizeTimeInput('5:99')).toBeNull();
+		expect(normalizeTimeInput('5:60')).toBeNull();
+		expect(normalizeTimeInput('1:23:99')).toBeNull();
+	});
+
+	it('rejects colon-form minutes of 60 or more when hours are present', () => {
+		expect(normalizeTimeInput('1:99:00')).toBeNull();
+		expect(normalizeTimeInput('1:60:00')).toBeNull();
+	});
+
+	it('still allows mm:ss minutes above 59 (no hours field to overflow into)', () => {
+		expect(normalizeTimeInput('75:00')).toBe('75:00');
+	});
+});
+
+// ──────────────── normalize/parse agreement ────────────────
+
+describe('normalizeTimeInput and parseTimeInput agree', () => {
+	it('accepts every string normalizeTimeInput returns as canonical', () => {
+		const inputs: string[] = [
+			'5:', ':5', '5::5', ' 12:34 ', '0:00', '00:00', '005:009',
+			'abc', '5.99', '1:23:45:67', '99999999999999999999:00',
+		];
+		for (let minutes = 0; minutes <= 70; minutes += 1) {
+			for (let seconds = 0; seconds <= 70; seconds += 7) {
+				inputs.push(`${minutes}:${seconds}`);
+				inputs.push(`${minutes}:${String(seconds).padStart(2, '0')}`);
+			}
+		}
+		for (const hours of [0, 1, 12, 99]) {
+			for (let minutes = 0; minutes <= 70; minutes += 7) {
+				for (let seconds = 0; seconds <= 70; seconds += 7) {
+					inputs.push(`${hours}:${minutes}:${seconds}`);
+				}
+			}
+		}
+		for (const digits of ['0', '9', '59', '60', '99', '099', '559', '599', '1234', '1299', '5999', '12345', '19999', '123456', '129999', '1234567']) {
+			inputs.push(digits);
+		}
+
+		for (const input of inputs) {
+			const normalized = normalizeTimeInput(input);
+			if (normalized !== null) {
+				expect(parseTimeInput(normalized), `normalizeTimeInput(${JSON.stringify(input)}) -> ${JSON.stringify(normalized)} must be parseable`).not.toBeNull();
+			}
+		}
+	});
 });
 
 // ──────────────── parseTimeInput ────────────────
