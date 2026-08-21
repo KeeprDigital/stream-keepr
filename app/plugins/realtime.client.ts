@@ -68,6 +68,11 @@ export default defineNuxtPlugin({
 		 */
 		let notifyInitialMintOutcome: ((minted: boolean) => void) | null = null;
 
+		function settleInitialMint(minted: boolean) {
+			notifyInitialMintOutcome?.(minted);
+			notifyInitialMintOutcome = null;
+		}
+
 		const ably = new Ably.Realtime({
 			authCallback: async (_tokenParams, callback) => {
 				try {
@@ -90,14 +95,12 @@ export default defineNuxtPlugin({
 						),
 					});
 					callback(null, tokenRequest);
-					notifyInitialMintOutcome?.(true);
-					notifyInitialMintOutcome = null;
+					settleInitialMint(true);
 				}
 				catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					callback(message, null);
-					notifyInitialMintOutcome?.(false);
-					notifyInitialMintOutcome = null;
+					settleInitialMint(false);
 				}
 			},
 		});
@@ -115,6 +118,16 @@ export default defineNuxtPlugin({
 		const AUTHORIZE_RETRY_DELAYS_MS = [250, 1_000, 3_000, 4_000];
 
 		const tokenError = ref<Error | null>(null);
+
+		/**
+		 * The one place coverage is ever claimed — the "only on success" contract
+		 * this file exists to hold (#307, #466). Every path that reaches it has a
+		 * token for the Event actually in hand.
+		 */
+		function claimCoverage(eventId: number) {
+			coveredEventId = eventId;
+			tokenError.value = null;
+		}
 
 		function wait(ms: number) {
 			return new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -137,8 +150,7 @@ export default defineNuxtPlugin({
 					await ably.auth.authorize();
 					if (flight.stale)
 						return false;
-					coveredEventId = eventId;
-					tokenError.value = null;
+					claimCoverage(eventId);
 					return true;
 				}
 				catch (err) {
@@ -204,11 +216,15 @@ export default defineNuxtPlugin({
 					});
 					resolve(eventId);
 					const minted = await outcome;
+					// The stale check must stay ahead of any use of `minted`: a
+					// superseding switch runs authorize() through the same
+					// authCallback, whose settle consumes whatever notify is still
+					// standing — so `minted` can be the *newer* flight's answer.
+					// That is harmless precisely because this flight is stale by then.
 					if (flight.stale)
 						return false;
 					if (minted) {
-						coveredEventId = eventId;
-						tokenError.value = null;
+						claimCoverage(eventId);
 						return true;
 					}
 					// Fall through to the retrying mint, so a first-connection blip
