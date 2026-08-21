@@ -166,7 +166,7 @@ describe('feature match session reducer payload guards', () => {
 		expect(applyFeatureMatchSessionEvent(state, snapshot, 'SetCardsKept', { player: 'player1', cardsKept: 5 }).currentState.player1.cardsKept).toBe(5);
 	});
 
-	it('rejects a malformed sub-command inside a Batch while applying the rest', () => {
+	it('rejects the whole Batch when any sub-command is malformed — the save lands whole or not at all', () => {
 		const snapshot = createSnapshot();
 		const state = createBusyState();
 
@@ -178,17 +178,38 @@ describe('feature match session reducer payload guards', () => {
 			],
 		});
 
-		expect(result.currentState.player1.lifeTotal).toBe(11);
-		expect(result.currentState.player2.lifeTotal).toBe(18);
-		expect(result.currentState.turnNumber).toBe(6);
+		expect(result.currentState).toEqual(state);
 		expect(nonFinitePaths(result.currentState)).toEqual([]);
+	});
+
+	it('applies a fully well-formed Batch as one reduction', () => {
+		const snapshot = createSnapshot();
+		const state = createBusyState();
+
+		const result = applyFeatureMatchSessionEvent(state, snapshot, 'Batch', {
+			commands: [
+				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } },
+				{ type: 'SetTurnNumber', payload: { turnNumber: 6 } },
+			],
+		});
+
+		expect(result.currentState.player1.lifeTotal).toBe(11);
+		expect(result.currentState.turnNumber).toBe(6);
 	});
 
 	it('tolerates malformed Batch shapes without throwing', () => {
 		const snapshot = createSnapshot();
 		const state = createBusyState();
 
-		for (const commands of ['not-an-array', 42, null, [null, 'junk', { type: 'SetLife' }, { type: 'SetLife', payload: 'junk' }]]) {
+		for (const commands of [
+			'not-an-array',
+			42,
+			null,
+			[null, 'junk', { type: 'SetLife' }, { type: 'SetLife', payload: 'junk' }],
+			// A shape-garbage entry sinks the well-formed one beside it too.
+			[null, { type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } }],
+			[{ type: 'SetLife', payload: 'junk' }, { type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } }],
+		]) {
 			const result = applyFeatureMatchSessionEvent(state, snapshot, 'Batch', { commands });
 			expect(result.currentState, JSON.stringify(commands)).toEqual(state);
 		}

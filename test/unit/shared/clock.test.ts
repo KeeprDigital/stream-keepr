@@ -113,8 +113,17 @@ describe('normalizeTimeInput', () => {
 describe('normalizeTimeInput and parseTimeInput agree', () => {
 	it('accepts every string normalizeTimeInput returns as canonical', () => {
 		const inputs: string[] = [
-			'5:', ':5', '5::5', ' 12:34 ', '0:00', '00:00', '005:009',
-			'abc', '5.99', '1:23:45:67', '99999999999999999999:00',
+			'5:',
+			':5',
+			'5::5',
+			' 12:34 ',
+			'0:00',
+			'00:00',
+			'005:009',
+			'abc',
+			'5.99',
+			'1:23:45:67',
+			'99999999999999999999:00',
 		];
 		for (let minutes = 0; minutes <= 70; minutes += 1) {
 			for (let seconds = 0; seconds <= 70; seconds += 7) {
