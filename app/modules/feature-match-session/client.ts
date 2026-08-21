@@ -32,7 +32,16 @@ export interface FeatureMatchCommandStateResult {
 	sequence: number;
 }
 
-export type FeatureMatchStateUpdate = Partial<FeatureMatchState>;
+/**
+ * A partial-state save: only the fields present claim ownership, and the
+ * nested player/clock patches are themselves partial so a save can set one
+ * player's life without speaking for their counters.
+ */
+export type FeatureMatchStateUpdate = Partial<Omit<FeatureMatchState, 'player1' | 'player2' | 'clock'>> & {
+	player1?: Partial<FeatureMatchState['player1']>;
+	player2?: Partial<FeatureMatchState['player2']>;
+	clock?: Partial<FeatureMatchState['clock']>;
+};
 
 const PLAYER_SIDES: readonly PlayerSide[] = ['player1', 'player2'];
 

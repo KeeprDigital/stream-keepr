@@ -1,5 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
+import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { useIntervalFn } from '@vueuse/core';
 import { getStartingHandSize } from '~~/shared/config/games';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
@@ -230,11 +231,44 @@ export function useFeatureMatchGameMode(
 		}
 	}
 
+	// ── Edit state dialog ──
+
+	const editStateOpen = ref(false);
+	const editStateSaving = ref(false);
+
+	/**
+	 * One dialog save is one store call: the whole diff goes through
+	 * `updateState`, which sends it as a single atomic command and rolls the
+	 * whole prediction back if it is refused — so the modal closes only on a
+	 * save that landed, and a refused one keeps the operator's edit on screen.
+	 */
+	async function handleEditStateSave(update: FeatureMatchStateUpdate) {
+		if (!eid())
+			return;
+		editStateSaving.value = true;
+		try {
+			const result = await featureMatchStateStore.updateState(eid()!, mid(), update);
+			if (result)
+				editStateOpen.value = false;
+		}
+		finally {
+			editStateSaving.value = false;
+		}
+	}
+
 	// ── Action items ──
 
 	const matchActionItems = computed(() => {
 		const items: import('@nuxt/ui').DropdownMenuItem[][] = [];
-		const actions: import('@nuxt/ui').DropdownMenuItem[] = [];
+		const actions: import('@nuxt/ui').DropdownMenuItem[] = [
+			{
+				label: 'Edit Match State…',
+				icon: 'i-lucide-pencil',
+				onSelect: () => {
+					editStateOpen.value = true;
+				},
+			},
+		];
 
 		if (activePlayerTrackingEnabled.value && matchState.value?.firstPlayer) {
 			actions.push({
@@ -244,8 +278,7 @@ export function useFeatureMatchGameMode(
 			});
 		}
 
-		if (actions.length > 0)
-			items.push(actions);
+		items.push(actions);
 		return items;
 	});
 
@@ -265,8 +298,10 @@ export function useFeatureMatchGameMode(
 
 	return {
 		// Feature flags
+		turnTrackingEnabled,
 		activePlayerTrackingEnabled,
 		extraTurnsEnabled,
+		mulliganTrackingEnabled,
 		pronounsEnabled,
 		standingsEnabled,
 		lgsEnabled,
@@ -296,6 +331,11 @@ export function useFeatureMatchGameMode(
 		handleNextOvertimeTurn,
 		handlePrevOvertimeTurn,
 		handleResetGame,
+
+		// Edit state dialog
+		editStateOpen,
+		editStateSaving,
+		handleEditStateSave,
 
 		// Dropdown
 		matchActionItems,
