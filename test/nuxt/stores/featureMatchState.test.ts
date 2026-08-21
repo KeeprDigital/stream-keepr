@@ -229,6 +229,24 @@ describe('useFeatureMatchStateStore', () => {
 			expect(store.featureMatchStates.get(MATCH_ID)!.turnNumber).toBe(5);
 		});
 
+		it('rolls back every field of a failed multi-field save, leaving no partial state', async () => {
+			const state = seedState({ turnNumber: 2 });
+			mockRepo.updateState.mockRejectedValue(transportFailure({
+				status: 409,
+				body: { message: 'Feature match session has advanced' },
+			}));
+
+			await store.updateState(EVENT_ID, MATCH_ID, {
+				turnNumber: 9,
+				activePlayer: 'player2',
+				player1: { ...state.player1, lifeTotal: 3 },
+				clock: { ...state.clock, elapsedMs: 60_000 },
+			});
+
+			expect(store.error).toBe('Feature match session has advanced');
+			expect(store.featureMatchStates.get(MATCH_ID)).toEqual(state);
+		});
+
 		it('merges player sub-objects', async () => {
 			seedState();
 			const serverState = createMockFeatureMatchState({

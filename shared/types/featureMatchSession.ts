@@ -30,6 +30,7 @@ export const FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES = [
 	'StepTurn',
 	'StepOvertime',
 	'SwapPlayers',
+	'Batch',
 ] as const;
 
 export type FeatureMatchSessionEventType = typeof FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES[number];
@@ -149,7 +150,7 @@ export interface FeatureMatchCommandBase<TType extends FeatureMatchCommandType, 
 	baseSequence?: number;
 }
 
-export type FeatureMatchSessionCommand
+type FeatureMatchPrimitiveSessionCommand
 	= | FeatureMatchCommandBase<'SnapshotCorrected', { sourceSnapshot: FeatureMatchSourceSnapshot }>
 		| FeatureMatchCommandBase<'AdjustLife', { player: PlayerSide; delta: number }>
 		| FeatureMatchCommandBase<'SetLife', { player: PlayerSide; lifeTotal: number }>
@@ -172,6 +173,44 @@ export type FeatureMatchSessionCommand
 		| FeatureMatchCommandBase<'StepTurn', { delta: number }>
 		| FeatureMatchCommandBase<'StepOvertime', { delta: number }>
 		| FeatureMatchCommandBase<'SwapPlayers', Record<string, never>>;
+
+/**
+ * The command types a `Batch` may carry. Absolute setters only: a batch is one
+ * atomic all-or-nothing write of the fields an operator edited together, and it
+ * claims the sequence it saw as a whole. Relative commands (adjusts, steps)
+ * stay out because wrapping one in a batch would forfeit its merge-retry
+ * semantics, and lifecycle commands (game wins, resets, swaps) stay out
+ * because they are actions, not field edits a dialog accumulates.
+ */
+export const FEATURE_MATCH_BATCHABLE_COMMAND_TYPES = [
+	'SetLife',
+	'SetCounters',
+	'SetCardsKept',
+	'SetClock',
+	'SelectFirstPlayer',
+	'SetFirstPlayer',
+	'SetActivePlayer',
+	'SetTurnNumber',
+	'StartOvertime',
+] as const satisfies readonly FeatureMatchCommandType[];
+
+export type FeatureMatchBatchableCommandType = typeof FEATURE_MATCH_BATCHABLE_COMMAND_TYPES[number];
+
+export type FeatureMatchBatchSubCommand = {
+	[K in FeatureMatchBatchableCommandType]: {
+		type: K;
+		payload: Extract<FeatureMatchPrimitiveSessionCommand, { type: K }>['payload'];
+	};
+}[FeatureMatchBatchableCommandType];
+
+/**
+ * `Batch` folds its sub-commands through the reducer in order as ONE event:
+ * one sequence increment, one receipt, one publication — so a multi-field
+ * operator save is a single round trip that either lands whole or not at all.
+ */
+export type FeatureMatchSessionCommand
+	= | FeatureMatchPrimitiveSessionCommand
+		| FeatureMatchCommandBase<'Batch', { commands: FeatureMatchBatchSubCommand[] }>;
 
 export interface FeatureMatchSessionEventAppliedPayload {
 	slotId: number;
