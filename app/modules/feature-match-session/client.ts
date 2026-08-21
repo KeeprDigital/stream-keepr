@@ -1,5 +1,6 @@
 import type { BulkClockAction, PlayerSide, ResetType } from '~~/shared/types/enums';
 import type {
+	FeatureMatchBatchSubCommand,
 	FeatureMatchSessionCommand,
 	FeatureMatchSessionCommandResult,
 	FeatureMatchSessionResponse,
@@ -31,7 +32,28 @@ export interface FeatureMatchCommandStateResult {
 	sequence: number;
 }
 
-export type FeatureMatchStateUpdate = Partial<FeatureMatchState>;
+/** The per-player fields a state save can set. */
+export interface FeatureMatchPlayerStatePatch {
+	lifeTotal?: number;
+	counters?: FeatureMatchState['player1']['counters'];
+	cardsKept?: number;
+}
+
+/**
+ * A partial-state save. Only the fields present claim ownership, and every
+ * field here maps to a setter command — the type admits nothing the seam
+ * would silently drop. The clock field is the reading the operator sees
+ * (`SetClock` targets display time), not raw elapsed milliseconds.
+ */
+export interface FeatureMatchStateUpdate {
+	player1?: FeatureMatchPlayerStatePatch;
+	player2?: FeatureMatchPlayerStatePatch;
+	clock?: { targetDisplayMs: number };
+	firstPlayer?: PlayerSide;
+	activePlayer?: PlayerSide | null;
+	turnNumber?: number;
+	overtime?: { totalTurns: number };
+}
 
 const PLAYER_SIDES: readonly PlayerSide[] = ['player1', 'player2'];
 
@@ -49,6 +71,47 @@ function sessionStateResult(session: FeatureMatchSessionResponse): FeatureMatchC
 		session,
 		sequence: session.sequence,
 	};
+}
+
+/**
+ * Decompose a partial-state update into the setter commands that express it.
+ * The order mirrors the serial sends this replaced: player fields, clock,
+ * first/active player, turn number, overtime — so a batch reduces to exactly
+ * the state the serial commands produced.
+ */
+function buildStateUpdateCommands(update: FeatureMatchStateUpdate): FeatureMatchBatchSubCommand[] {
+	const commands: FeatureMatchBatchSubCommand[] = [];
+
+	for (const player of PLAYER_SIDES) {
+		const patch = update[player];
+		if (!patch)
+			continue;
+		if (patch.lifeTotal !== undefined)
+			commands.push({ type: 'SetLife', payload: { player, lifeTotal: patch.lifeTotal } });
+		if (patch.counters !== undefined)
+			commands.push({ type: 'SetCounters', payload: { player, counters: patch.counters } });
+		if (patch.cardsKept !== undefined)
+			commands.push({ type: 'SetCardsKept', payload: { player, cardsKept: patch.cardsKept } });
+	}
+
+	if (update.clock !== undefined)
+		commands.push({ type: 'SetClock', payload: { targetMs: update.clock.targetDisplayMs } });
+
+	const { firstPlayer, activePlayer, turnNumber } = update;
+	const selectsInitialFirstPlayer = firstPlayer !== undefined && activePlayer === firstPlayer && turnNumber === 1;
+	if (firstPlayer) {
+		commands.push(selectsInitialFirstPlayer
+			? { type: 'SelectFirstPlayer', payload: { player: firstPlayer } }
+			: { type: 'SetFirstPlayer', payload: { player: firstPlayer } });
+	}
+	if (activePlayer !== undefined && !selectsInitialFirstPlayer)
+		commands.push({ type: 'SetActivePlayer', payload: { player: activePlayer } });
+	if (turnNumber !== undefined && !selectsInitialFirstPlayer)
+		commands.push({ type: 'SetTurnNumber', payload: { turnNumber } });
+	if (update.overtime !== undefined)
+		commands.push({ type: 'StartOvertime', payload: { totalTurns: update.overtime.totalTurns } });
+
+	return commands;
 }
 
 function createBulkClockCommand(
@@ -111,6 +174,13 @@ export function useFeatureMatchSessionClient() {
 		return session?.currentState ?? null;
 	};
 
+	/**
+	 * One save, one command. The update decomposes into the same setter commands
+	 * it always has, but they travel inside a single `Batch` (or alone, when only
+	 * one field changed) against one ensured session — so the request count is
+	 * bounded regardless of how many fields the operator edited, and the server
+	 * applies the whole save atomically or not at all.
+	 */
 	const updateState = async (
 		eventId: number,
 		slotId: number,
@@ -120,89 +190,15 @@ export function useFeatureMatchSessionClient() {
 		if (!session)
 			throw new Error('Feature match session not found');
 
-		let result = sessionStateResult(session);
-		for (const player of PLAYER_SIDES) {
-			const patch = update[player];
-			if (!patch)
-				continue;
-			if (patch.lifeTotal !== undefined) {
-				const lifeTotal = patch.lifeTotal;
-				result = await sendSlotCommand(eventId, slotId, session => ({
-					commandId: randomCommandId('SetLife'),
-					type: 'SetLife',
-					payload: { player, lifeTotal },
-					baseSequence: session.sequence,
-				}));
-			}
-			if (patch.counters !== undefined) {
-				const counters = patch.counters;
-				result = await sendSlotCommand(eventId, slotId, session => ({
-					commandId: randomCommandId('SetCounters'),
-					type: 'SetCounters',
-					payload: { player, counters },
-					baseSequence: session.sequence,
-				}));
-			}
-			if (patch.cardsKept !== undefined) {
-				const cardsKept = patch.cardsKept;
-				result = await sendSlotCommand(eventId, slotId, session => ({
-					commandId: randomCommandId('SetCardsKept'),
-					type: 'SetCardsKept',
-					payload: { player, cardsKept },
-					baseSequence: session.sequence,
-				}));
-			}
-		}
+		const commands = buildStateUpdateCommands(update);
+		if (commands.length === 0)
+			return sessionStateResult(session);
 
-		if (update.clock?.elapsedMs !== undefined) {
-			const targetMs = update.clock.elapsedMs;
-			result = await sendSlotCommand(eventId, slotId, session => ({
-				commandId: randomCommandId('SetClock'),
-				type: 'SetClock',
-				payload: { targetMs },
-				baseSequence: session.sequence,
-			}));
-		}
+		const command: FeatureMatchSessionCommand = commands.length === 1
+			? { ...commands[0]!, commandId: randomCommandId(commands[0]!.type), baseSequence: session.sequence }
+			: { commandId: randomCommandId('Batch'), type: 'Batch', payload: { commands }, baseSequence: session.sequence };
 
-		const firstPlayer = update.firstPlayer;
-		const activePlayer = update.activePlayer;
-		const turnNumber = update.turnNumber;
-		const selectsInitialFirstPlayer = firstPlayer !== undefined && activePlayer === firstPlayer && turnNumber === 1;
-		if (firstPlayer) {
-			const type = selectsInitialFirstPlayer ? 'SelectFirstPlayer' : 'SetFirstPlayer';
-			result = await sendSlotCommand(eventId, slotId, session => ({
-				commandId: randomCommandId(type),
-				type,
-				payload: { player: firstPlayer },
-				baseSequence: session.sequence,
-			}));
-		}
-		if (activePlayer !== undefined && !selectsInitialFirstPlayer) {
-			result = await sendSlotCommand(eventId, slotId, session => ({
-				commandId: randomCommandId('SetActivePlayer'),
-				type: 'SetActivePlayer',
-				payload: { player: activePlayer },
-				baseSequence: session.sequence,
-			}));
-		}
-		if (turnNumber !== undefined && !selectsInitialFirstPlayer) {
-			result = await sendSlotCommand(eventId, slotId, session => ({
-				commandId: randomCommandId('SetTurnNumber'),
-				type: 'SetTurnNumber',
-				payload: { turnNumber },
-				baseSequence: session.sequence,
-			}));
-		}
-		if (update.overtime !== undefined) {
-			result = await sendSlotCommand(eventId, slotId, session => ({
-				commandId: randomCommandId('StartOvertime'),
-				type: 'StartOvertime',
-				payload: { totalTurns: update.overtime!.totalTurns },
-				baseSequence: session.sequence,
-			}));
-		}
-
-		return result;
+		return toCommandStateResult(await repository.sendCommand(eventId, session.id, command));
 	};
 
 	const startClock = (eventId: number, slotId: number) => sendSlotCommand(eventId, slotId, session => ({

@@ -34,11 +34,30 @@ export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: Feat
 	);
 }
 
+interface FeatureMatchBatchedEvent {
+	type: FeatureMatchCommandType;
+	payload: FeatureMatchSessionEventPayload;
+}
+
+function batchedEvents(payload: FeatureMatchSessionEventPayload): FeatureMatchBatchedEvent[] {
+	return (payload.commands ?? []) as FeatureMatchBatchedEvent[];
+}
+
 export function normalizeFeatureMatchSessionCommandPayload(
 	type: FeatureMatchCommandType,
 	payload: FeatureMatchSessionEventPayload,
 	now: () => number = Date.now,
 ): FeatureMatchSessionEventPayload {
+	if (type === 'Batch') {
+		return {
+			...payload,
+			commands: batchedEvents(payload).map(command => ({
+				...command,
+				payload: normalizeFeatureMatchSessionCommandPayload(command.type, command.payload, now),
+			})),
+		};
+	}
+
 	if (
 		type === 'AdjustClock'
 		|| type === 'SetClock'
@@ -112,6 +131,16 @@ export function applyFeatureMatchSessionEvent(
 				sourceSnapshot,
 			),
 		};
+	}
+
+	// One event, many field writes: an operator's multi-field save folds through
+	// the same reducer cases it would have hit as serial commands, but commits as
+	// a single all-or-nothing reduction.
+	if (type === 'Batch') {
+		return batchedEvents(payload).reduce<FeatureMatchSessionReducerResult>(
+			(acc, command) => applyFeatureMatchSessionEvent(acc.currentState, acc.sourceSnapshot, command.type, command.payload),
+			{ currentState, sourceSnapshot },
+		);
 	}
 
 	if (type === 'AdjustLife') {

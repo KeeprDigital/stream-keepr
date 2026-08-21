@@ -145,7 +145,9 @@ const {
 const hasAnyDeckList = computed(() => player1HasDeckList.value || player2HasDeckList.value);
 
 const {
+	turnTrackingEnabled,
 	activePlayerTrackingEnabled,
+	mulliganTrackingEnabled,
 	pronounsEnabled,
 	standingsEnabled,
 	lgsEnabled,
@@ -162,6 +164,9 @@ const {
 	handleSelectFirstPlayer,
 	handleNextOvertimeTurn,
 	handlePrevOvertimeTurn,
+	editStateOpen,
+	editStateSaving,
+	handleEditStateSave,
 	matchActionItems,
 	resetActionItems,
 } = useFeatureMatchGameMode(() => props.match.id, matchState);
@@ -540,6 +545,19 @@ async function save() {
 		:match-title="matchTitle"
 		:player-one="player1ForDeckList"
 		:player-two="player2ForDeckList"
+	/>
+
+	<FeatureMatchStateEditStateModal
+		v-if="matchState"
+		v-model:open="editStateOpen"
+		:state="matchState"
+		:player1-name="player1Data.name"
+		:player2-name="player2Data.name"
+		:show-turn-number="turnTrackingEnabled || activePlayerTrackingEnabled"
+		:show-player-tracking="activePlayerTrackingEnabled"
+		:show-cards-kept="mulliganTrackingEnabled"
+		:saving="editStateSaving"
+		@save="handleEditStateSave"
 	/>
 </template>
 

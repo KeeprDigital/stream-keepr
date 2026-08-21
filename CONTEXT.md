@@ -120,6 +120,10 @@ _Avoid_: event store, event sourcing, command bus, write-ahead log.
 The record that one command ID was already accepted for a live aggregate, holding the command's canonical content so a retry of the same command can be answered with the current authoritative snapshot and a reuse of the ID with different content can be rejected. Retained for a bounded window of recent commands, not as history.
 _Avoid_: event row, command log, audit record, idempotency key.
 
+**Batch Command**:
+One Feature Match Session command carrying the absolute setter commands of a multi-field operator save, sequenced, receipted, and announced as a single command so the save lands whole or not at all. Relative commands stay out of it because wrapping one would forfeit its merge-retry semantics.
+_Avoid_: bulk update, transaction, multi-command, command group.
+
 **Event Data**:
 The client-side access path for Event-scoped data such as Players, Phases, Rounds, Matches, Feature Match Slots, Feature Match Assignments, Screens, Talents, Archetypes, and Player Lists.
 

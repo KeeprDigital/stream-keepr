@@ -185,6 +185,47 @@ const counterSchema = z
 		value: z.number().int(),
 	})
 	.strict();
+
+// Payloads shared between the standalone command union and the Batch
+// sub-command union, so the two cannot drift.
+const setLifePayloadSchema = z
+	.object({ player: playerSideSchema, lifeTotal: z.number().int() })
+	.strict();
+const setCountersPayloadSchema = z
+	.object({ player: playerSideSchema, counters: z.array(counterSchema) })
+	.strict();
+const setCardsKeptPayloadSchema = z
+	.object({ player: playerSideSchema, cardsKept: z.number().int().nonnegative() })
+	.strict();
+const setClockPayloadSchema = z
+	.object({ targetMs: z.number().int().nonnegative() })
+	.strict();
+const firstPlayerPayloadSchema = z.object({ player: playerSideSchema }).strict();
+const setActivePlayerPayloadSchema = z
+	.object({ player: playerSideSchema.nullable() })
+	.strict();
+const setTurnNumberPayloadSchema = z
+	.object({ turnNumber: z.number().int().nonnegative() })
+	.strict();
+const startOvertimePayloadSchema = z
+	.object({ totalTurns: z.number().int().positive() })
+	.strict();
+
+// Batch carries absolute setters only — see FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
+// Sub-commands carry no commandId or baseSequence of their own: the Batch's
+// receipt and sequence claim cover the whole save. Exported so a test can pin
+// this union's membership to FEATURE_MATCH_BATCHABLE_COMMAND_TYPES.
+export const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
+	z.object({ type: z.literal('SetLife'), payload: setLifePayloadSchema }).strict(),
+	z.object({ type: z.literal('SetCounters'), payload: setCountersPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetCardsKept'), payload: setCardsKeptPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetClock'), payload: setClockPayloadSchema }).strict(),
+	z.object({ type: z.literal('SelectFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetActivePlayer'), payload: setActivePlayerPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetTurnNumber'), payload: setTurnNumberPayloadSchema }).strict(),
+	z.object({ type: z.literal('StartOvertime'), payload: startOvertimePayloadSchema }).strict(),
+]);
 // SnapshotCorrected is deliberately absent from the client command schema:
 // authoritative snapshots carry Melee provenance and are replayed as truth,
 // so only the server may construct them (featureMatchService.update builds
@@ -203,30 +244,21 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetLife'),
-			payload: z
-				.object({ player: playerSideSchema, lifeTotal: z.number().int() })
-				.strict(),
+			payload: setLifePayloadSchema,
 		})
 		.strict(),
 	z
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetCounters'),
-			payload: z
-				.object({ player: playerSideSchema, counters: z.array(counterSchema) })
-				.strict(),
+			payload: setCountersPayloadSchema,
 		})
 		.strict(),
 	z
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetCardsKept'),
-			payload: z
-				.object({
-					player: playerSideSchema,
-					cardsKept: z.number().int().nonnegative(),
-				})
-				.strict(),
+			payload: setCardsKeptPayloadSchema,
 		})
 		.strict(),
 	z
@@ -240,7 +272,7 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetClock'),
-			payload: z.object({ targetMs: z.number().int().nonnegative() }).strict(),
+			payload: setClockPayloadSchema,
 		})
 		.strict(),
 	z
@@ -277,30 +309,28 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SelectFirstPlayer'),
-			payload: z.object({ player: playerSideSchema }).strict(),
+			payload: firstPlayerPayloadSchema,
 		})
 		.strict(),
 	z
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetFirstPlayer'),
-			payload: z.object({ player: playerSideSchema }).strict(),
+			payload: firstPlayerPayloadSchema,
 		})
 		.strict(),
 	z
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetActivePlayer'),
-			payload: z.object({ player: playerSideSchema.nullable() }).strict(),
+			payload: setActivePlayerPayloadSchema,
 		})
 		.strict(),
 	z
 		.object({
 			...commandBaseSchema,
 			type: z.literal('SetTurnNumber'),
-			payload: z
-				.object({ turnNumber: z.number().int().nonnegative() })
-				.strict(),
+			payload: setTurnNumberPayloadSchema,
 		})
 		.strict(),
 	z
@@ -347,7 +377,7 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 		.object({
 			...commandBaseSchema,
 			type: z.literal('StartOvertime'),
-			payload: z.object({ totalTurns: z.number().int().positive() }).strict(),
+			payload: startOvertimePayloadSchema,
 		})
 		.strict(),
 	z
@@ -381,6 +411,15 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('SwapPlayers'),
 			payload: emptyPayloadSchema,
+		})
+		.strict(),
+	z
+		.object({
+			...commandBaseSchema,
+			type: z.literal('Batch'),
+			payload: z
+				.object({ commands: z.array(featureMatchBatchSubCommandSchema).min(1).max(20) })
+				.strict(),
 		})
 		.strict(),
 ]).superRefine((command, context) => {

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createFeatureMatchSchema,
+	featureMatchBatchSubCommandSchema,
 	featureMatchCommandSchema,
 	featureMatchSlotParamsSchema,
 	updateFeatureMatchSchema,
 } from '~~/server/schemas/api/featureMatch';
+import { FEATURE_MATCH_BATCHABLE_COMMAND_TYPES } from '~~/shared/types/featureMatchSession';
 
 // ──────────────── createFeatureMatchSchema ────────────────
 
@@ -197,6 +199,47 @@ describe('featureMatchCommandSchema', () => {
 			type: 'AdjustLife',
 			payload: { player: 'player1', delta: -1 },
 		}).success).toBe(true);
+	});
+
+	it('admits exactly the batchable command types as Batch sub-commands', () => {
+		// The batchable list exists as a type-level const and as this zod union;
+		// nothing derives one from the other, so this pins them together.
+		const schemaTypes = featureMatchBatchSubCommandSchema.options
+			.map(option => option.shape.type.value)
+			.toSorted();
+		expect(schemaTypes).toEqual([...FEATURE_MATCH_BATCHABLE_COMMAND_TYPES].toSorted());
+	});
+
+	it('requires baseSequence for a Batch — the sequence claim covers the whole save', () => {
+		const commands = [{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 10 } }];
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'batch-unsequenced',
+			type: 'Batch',
+			payload: { commands },
+		}).success).toBe(false);
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'batch-sequenced',
+			type: 'Batch',
+			payload: { commands },
+			baseSequence: 1,
+		}).success).toBe(true);
+	});
+
+	it('rejects a Batch carrying non-batchable or nested commands, or nothing at all', () => {
+		const batch = (commands: unknown[]) => featureMatchCommandSchema.safeParse({
+			commandId: 'batch-contents',
+			type: 'Batch',
+			payload: { commands },
+			baseSequence: 1,
+		}).success;
+
+		// Relative commands keep their merge-retry semantics by staying standalone.
+		expect(batch([{ type: 'AdjustLife', payload: { player: 'player1', delta: -1 } }])).toBe(false);
+		// Server-only snapshot corrections stay unreachable through a batch.
+		expect(batch([{ type: 'SnapshotCorrected', payload: { sourceSnapshot } }])).toBe(false);
+		// A batch cannot nest a batch.
+		expect(batch([{ type: 'Batch', payload: { commands: [] } }])).toBe(false);
+		expect(batch([])).toBe(false);
 	});
 });
 

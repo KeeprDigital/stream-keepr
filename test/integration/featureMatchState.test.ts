@@ -87,6 +87,80 @@ describe('feature match session command API', () => {
 		expect(result.currentState.player1.gameWins).toBe(0);
 	});
 
+	it('applies a Batch of state setters as one command with one sequence increment', async () => {
+		const harness = await createCommandHarness(eventId);
+		const baseSequence = harness.session().sequence;
+
+		const result = await harness.send({
+			commandId: commandId('batch-save'),
+			type: 'Batch',
+			payload: {
+				commands: [
+					{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
+					{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
+					{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
+					{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
+					{ type: 'SetClock', payload: { targetMs: 30_000 } },
+					{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
+					{ type: 'SetActivePlayer', payload: { player: 'player1' } },
+					{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
+				],
+			},
+			baseSequence,
+		});
+
+		expect(result.sequence).toBe(baseSequence + 1);
+		expect(result.currentState).toMatchObject({
+			player1: expect.objectContaining({ lifeTotal: 12, counters: [{ type: 'poison', value: 3 }] }),
+			player2: expect.objectContaining({ lifeTotal: 9, cardsKept: 6 }),
+			firstPlayer: 'player2',
+			activePlayer: 'player1',
+			turnNumber: 4,
+		});
+		// SetClock targets display time: on the default countdown clock with no
+		// elapsed time, 30s remaining lands as durationMs.
+		expect(result.currentState.clock.durationMs).toBe(30_000);
+		expect(result.currentState.clock.elapsedMs).toBe(0);
+	});
+
+	it('refuses a stale Batch whole, leaving no partially-applied field set', async () => {
+		const harness = await createCommandHarness(eventId);
+		const staleBaseSequence = harness.session().sequence;
+
+		await harness.send({
+			commandId: commandId('advance-before-batch'),
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 15 },
+			baseSequence: staleBaseSequence,
+		});
+
+		const response = await $fetchRaw(
+			`/api/events/${eventId}/feature-match-sessions/${harness.session().id}/commands`,
+			{
+				method: 'POST',
+				body: {
+					commandId: commandId('stale-batch'),
+					type: 'Batch',
+					payload: {
+						commands: [
+							{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 3 } },
+							{ type: 'SetTurnNumber', payload: { turnNumber: 9 } },
+						],
+					},
+					baseSequence: staleBaseSequence,
+				},
+			},
+		);
+
+		expect(response.status).toBe(409);
+		const slot = await $fetch<{ activeSession: { sequence: number; currentState: { player1: { lifeTotal: number }; turnNumber: number } } }>(
+			`/api/events/${eventId}/feature-match-slots/${harness.slot.id}`,
+		);
+		expect(slot.activeSession.sequence).toBe(staleBaseSequence + 1);
+		expect(slot.activeSession.currentState.player1.lifeTotal).toBe(15);
+		expect(slot.activeSession.currentState.turnNumber).toBe(0);
+	});
+
 	it('deduplicates commandId by returning the existing projection without appending', async () => {
 		const harness = await createCommandHarness(eventId);
 		const idempotentCommandId = commandId('idempotent-life');

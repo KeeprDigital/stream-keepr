@@ -29,6 +29,7 @@ vi.stubGlobal('createError', (opts: any) => {
 
 const { commandContentKey } = await import('~~/server/modules/live-state');
 const { applyFeatureMatchSessionEvent, featureMatchStateService } = await import('~~/server/services/featureMatchState');
+const { normalizeFeatureMatchSessionCommandPayload } = await import('~~/shared/modules/feature-match-session');
 
 function createSnapshot(overrides: Partial<FeatureMatchSourceSnapshot> = {}): FeatureMatchSourceSnapshot {
 	return {
@@ -307,6 +308,65 @@ describe('feature match session reducer', () => {
 
 		expect(result.sourceSnapshot.player1.data?.name).toBe('Alice');
 		expect(result.sourceSnapshot.player2.data?.name).toBe('Bob');
+	});
+
+	it('folds a Batch of setter events into one atomic reduction', () => {
+		const snapshot = createSnapshot();
+		const state = createInitialFeatureMatchState();
+
+		const result = reduce(state, snapshot, 'Batch', {
+			commands: [
+				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
+				{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
+				{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
+				{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
+				{ type: 'SetClock', payload: { at: 6000, targetMs: 30_000 } },
+				{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
+				{ type: 'SetActivePlayer', payload: { player: 'player1' } },
+				{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
+				{ type: 'StartOvertime', payload: { totalTurns: 3 } },
+			],
+		});
+
+		expect(result.currentState.player1.lifeTotal).toBe(12);
+		expect(result.currentState.player2.lifeTotal).toBe(9);
+		expect(result.currentState.player1.counters).toEqual([{ type: 'poison', value: 3 }]);
+		expect(result.currentState.player2.cardsKept).toBe(6);
+		expect(result.currentState.firstPlayer).toBe('player2');
+		expect(result.currentState.activePlayer).toBe('player1');
+		expect(result.currentState.turnNumber).toBe(4);
+		expect(result.currentState.overtime?.totalTurns).toBe(3);
+		expect(result.sourceSnapshot).toEqual(snapshot);
+	});
+
+	it('applies Batch sub-commands in order, so later fields win over earlier side effects', () => {
+		const snapshot = createSnapshot();
+		const state = createInitialFeatureMatchState();
+
+		// SelectFirstPlayer forces turnNumber to 1; a later SetTurnNumber in the
+		// same batch must land on top of it, exactly as the serial commands did.
+		const result = reduce(state, snapshot, 'Batch', {
+			commands: [
+				{ type: 'SelectFirstPlayer', payload: { player: 'player1' } },
+				{ type: 'SetTurnNumber', payload: { turnNumber: 7 } },
+			],
+		});
+
+		expect(result.currentState.firstPlayer).toBe('player1');
+		expect(result.currentState.activePlayer).toBe('player1');
+		expect(result.currentState.turnNumber).toBe(7);
+	});
+
+	it('stamps clock timestamps inside a Batch payload during normalization', () => {
+		const normalized = normalizeFeatureMatchSessionCommandPayload('Batch', {
+			commands: [
+				{ type: 'SetClock', payload: { targetMs: 30_000 } },
+				{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
+			],
+		}, () => 4242) as { commands: { type: string; payload: Record<string, unknown> }[] };
+
+		expect(normalized.commands[0]?.payload).toEqual({ targetMs: 30_000, at: 4242 });
+		expect(normalized.commands[1]?.payload).toEqual({ player: 'player1', lifeTotal: 12 });
 	});
 
 	it('replays an event stream to the same projection', () => {

@@ -76,6 +76,64 @@ describe('feature Match Session client module', () => {
 		}));
 	});
 
+	it('sends a multi-field state update as one Batch command in one round trip', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.updateState(1, 2, {
+			player1: { lifeTotal: 12, counters: [{ type: 'poison', value: 3 }] },
+			player2: { lifeTotal: 9, cardsKept: 6, counters: [] },
+			clock: { targetDisplayMs: 30_000 },
+			firstPlayer: 'player2',
+			activePlayer: 'player1',
+			turnNumber: 4,
+			overtime: { totalTurns: 3 },
+		});
+
+		// The bound the operator control path relies on: session ensure + command,
+		// independent of how many fields the save touched.
+		expect(repository.getSlot).toHaveBeenCalledTimes(1);
+		expect(repository.sendCommand).toHaveBeenCalledTimes(1);
+
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'Batch',
+			baseSequence: 4,
+			payload: {
+				commands: [
+					{ type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 } },
+					{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
+					{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
+					{ type: 'SetCounters', payload: { player: 'player2', counters: [] } },
+					{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
+					{ type: 'SetClock', payload: { targetMs: 30_000 } },
+					{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
+					{ type: 'SetActivePlayer', payload: { player: 'player1' } },
+					{ type: 'SetTurnNumber', payload: { turnNumber: 4 } },
+					{ type: 'StartOvertime', payload: { totalTurns: 3 } },
+				],
+			},
+		}));
+	});
+
+	it('sends a single-field state update as its primitive command, not a Batch', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.updateState(1, 2, { turnNumber: 4 });
+
+		expect(repository.sendCommand).toHaveBeenCalledTimes(1);
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'SetTurnNumber',
+			payload: { turnNumber: 4 },
+			baseSequence: 4,
+		}));
+	});
+
+	it('sends nothing for a state update with no batchable fields', async () => {
+		const client = useFeatureMatchSessionClient();
+		const session = createSession();
+		const result = await client.updateState(1, 2, {});
+
+		expect(repository.sendCommand).not.toHaveBeenCalled();
+		expect(result.session).toMatchObject({ id: session.id, sequence: session.sequence });
+	});
+
 	it('orchestrates bulk clock actions from slot sessions', async () => {
 		repository.listSlots.mockResolvedValue([
 			{ id: 2, activeSession: createSession() },

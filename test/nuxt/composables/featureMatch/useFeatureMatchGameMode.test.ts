@@ -9,6 +9,7 @@ const { useIntervalFn: realUseIntervalFn } = await vi.importActual<typeof import
 // ── Mock Dependencies ──
 
 const mockFeatureMatchStateStore = {
+	updateState: vi.fn(),
 	startOvertime: vi.fn(),
 	setCardsKept: vi.fn(),
 	stepTurn: vi.fn(),
@@ -27,6 +28,8 @@ const mockOverlay = {
 	})),
 };
 
+const mockToast = { add: vi.fn() };
+
 const mockEventData = ref(createMockEvent({
 	featureMatchDefaultTurnTrackingEnabled: true,
 	featureMatchDefaultActivePlayerTrackingEnabled: true,
@@ -42,6 +45,7 @@ mockNuxtImport('useEventStore', () => () => ({
 }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
+mockNuxtImport('useToast', () => () => mockToast);
 
 // Mock useIntervalFn to pass through to the real @vueuse/core implementation,
 // bypassing the Nuxt auto-import proxy to avoid infinite recursion.
@@ -403,15 +407,59 @@ describe('useFeatureMatchGameMode', () => {
 	// ── matchActionItems ──
 
 	describe('matchActionItems', () => {
-		it('is empty when no operational actions are available', () => {
+		it('always offers Edit Match State, even with no other operational actions', () => {
 			const mode = createSetup({ firstPlayer: null });
-			expect(mode.matchActionItems.value).toEqual([]);
+			const labels = mode.matchActionItems.value[0]!.map(a => a.label);
+			expect(labels).toEqual(['Edit Match State…']);
 		});
 
 		it('includes Change First Player when active tracking enabled and firstPlayer set', () => {
 			const mode = createSetup({ firstPlayer: 'player1' });
 			const labels = mode.matchActionItems.value[0]!.map(a => a.label);
 			expect(labels).toContain('Change First Player');
+		});
+
+		it('opens the edit-state modal from its action item', () => {
+			const mode = createSetup();
+			expect(mode.editStateOpen.value).toBe(false);
+
+			const editItem = mode.matchActionItems.value[0]!.find(a => a.label === 'Edit Match State…')!;
+			(editItem.onSelect as () => void)();
+
+			expect(mode.editStateOpen.value).toBe(true);
+		});
+	});
+
+	// ── handleEditStateSave ──
+
+	describe('handleEditStateSave', () => {
+		it('routes the whole diff through one updateState call and closes on success', async () => {
+			mockFeatureMatchStateStore.updateState.mockResolvedValue(createMockFeatureMatchState());
+			const mode = createSetup();
+			mode.editStateOpen.value = true;
+
+			await mode.handleEditStateSave({ turnNumber: 7, player1: { lifeTotal: 12 } });
+
+			expect(mockFeatureMatchStateStore.updateState).toHaveBeenCalledExactlyOnceWith(
+				1,
+				10,
+				{ turnNumber: 7, player1: { lifeTotal: 12 } },
+			);
+			expect(mode.editStateOpen.value).toBe(false);
+		});
+
+		it('keeps the modal open and says why when the save is refused, so the edit is not lost', async () => {
+			mockFeatureMatchStateStore.updateState.mockResolvedValue(null);
+			const mode = createSetup();
+			mode.editStateOpen.value = true;
+
+			await mode.handleEditStateSave({ turnNumber: 7 });
+
+			expect(mode.editStateOpen.value).toBe(true);
+			expect(mockToast.add).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+				title: 'Failed to update match state',
+				color: 'error',
+			}));
 		});
 	});
 
