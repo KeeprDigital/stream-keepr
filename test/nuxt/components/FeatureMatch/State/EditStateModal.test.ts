@@ -121,7 +121,7 @@ describe('feature match edit state modal', () => {
 		await wrapper.get('[data-testid="state-save"]').trigger('click');
 
 		expect(lastSave(wrapper)).toEqual({
-			clock: { elapsedMs: 10 * 60 * 1000 },
+			clock: { targetDisplayMs: 10 * 60 * 1000 },
 			activePlayer: null,
 		});
 	});
@@ -154,6 +154,22 @@ describe('feature match edit state modal', () => {
 		await wrapper.get('[data-testid="state-clock"]').setValue('nonsense');
 
 		expect(wrapper.get('[data-testid="state-save"]').attributes('disabled')).toBeDefined();
+	});
+
+	it('disables Save while a touched numeric field is invalid, instead of discarding the edit', async () => {
+		const wrapper = await mountModal();
+
+		// A number input admits decimals and out-of-range negatives even though
+		// the fields are whole, non-negative counts.
+		await wrapper.get('[data-testid="state-life-player1"]').setValue('12.5');
+		expect(wrapper.get('[data-testid="state-save"]').attributes('disabled')).toBeDefined();
+
+		await wrapper.get('[data-testid="state-life-player1"]').setValue('12');
+		await wrapper.get('[data-testid="state-cards-player2"]').setValue('-3');
+		expect(wrapper.get('[data-testid="state-save"]').attributes('disabled')).toBeDefined();
+
+		await wrapper.get('[data-testid="state-cards-player2"]').setValue('4');
+		expect(wrapper.get('[data-testid="state-save"]').attributes('disabled')).toBeUndefined();
 	});
 
 	it('hides the flag-gated fields when their tracking is off', async () => {

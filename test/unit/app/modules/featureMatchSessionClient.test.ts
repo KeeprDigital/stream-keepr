@@ -79,13 +79,13 @@ describe('feature Match Session client module', () => {
 	it('sends a multi-field state update as one Batch command in one round trip', async () => {
 		const client = useFeatureMatchSessionClient();
 		await client.updateState(1, 2, {
-			player1: { lifeTotal: 12, counters: [{ type: 'poison', value: 3 }], gameWins: 0 },
-			player2: { lifeTotal: 9, cardsKept: 6, gameWins: 0, counters: [] },
-			clock: { elapsedMs: 30_000, durationMs: 0, isRunning: false, lastStartedAt: null, type: 'countdown', countUpAfterCountdown: false },
+			player1: { lifeTotal: 12, counters: [{ type: 'poison', value: 3 }] },
+			player2: { lifeTotal: 9, cardsKept: 6, counters: [] },
+			clock: { targetDisplayMs: 30_000 },
 			firstPlayer: 'player2',
 			activePlayer: 'player1',
 			turnNumber: 4,
-			overtime: { active: true, turnsRemaining: 3, totalTurns: 3 },
+			overtime: { totalTurns: 3 },
 		});
 
 		// The bound the operator control path relies on: session ensure + command,

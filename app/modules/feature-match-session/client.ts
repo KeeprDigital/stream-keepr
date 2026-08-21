@@ -32,16 +32,28 @@ export interface FeatureMatchCommandStateResult {
 	sequence: number;
 }
 
+/** The per-player fields a state save can set. */
+export interface FeatureMatchPlayerStatePatch {
+	lifeTotal?: number;
+	counters?: FeatureMatchState['player1']['counters'];
+	cardsKept?: number;
+}
+
 /**
- * A partial-state save: only the fields present claim ownership, and the
- * nested player/clock patches are themselves partial so a save can set one
- * player's life without speaking for their counters.
+ * A partial-state save. Only the fields present claim ownership, and every
+ * field here maps to a setter command — the type admits nothing the seam
+ * would silently drop. The clock field is the reading the operator sees
+ * (`SetClock` targets display time), not raw elapsed milliseconds.
  */
-export type FeatureMatchStateUpdate = Partial<Omit<FeatureMatchState, 'player1' | 'player2' | 'clock'>> & {
-	player1?: Partial<FeatureMatchState['player1']>;
-	player2?: Partial<FeatureMatchState['player2']>;
-	clock?: Partial<FeatureMatchState['clock']>;
-};
+export interface FeatureMatchStateUpdate {
+	player1?: FeatureMatchPlayerStatePatch;
+	player2?: FeatureMatchPlayerStatePatch;
+	clock?: { targetDisplayMs: number };
+	firstPlayer?: PlayerSide;
+	activePlayer?: PlayerSide | null;
+	turnNumber?: number;
+	overtime?: { totalTurns: number };
+}
 
 const PLAYER_SIDES: readonly PlayerSide[] = ['player1', 'player2'];
 
@@ -82,8 +94,8 @@ function buildStateUpdateCommands(update: FeatureMatchStateUpdate): FeatureMatch
 			commands.push({ type: 'SetCardsKept', payload: { player, cardsKept: patch.cardsKept } });
 	}
 
-	if (update.clock?.elapsedMs !== undefined)
-		commands.push({ type: 'SetClock', payload: { targetMs: update.clock.elapsedMs } });
+	if (update.clock !== undefined)
+		commands.push({ type: 'SetClock', payload: { targetMs: update.clock.targetDisplayMs } });
 
 	const { firstPlayer, activePlayer, turnNumber } = update;
 	const selectsInitialFirstPlayer = firstPlayer !== undefined && activePlayer === firstPlayer && turnNumber === 1;

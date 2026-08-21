@@ -252,13 +252,24 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return optimistic.run(
 			null,
 			matchId,
-			current => ({
-				...current,
-				...update,
-				player1: update.player1 ? { ...current.player1, ...update.player1 } : current.player1,
-				player2: update.player2 ? { ...current.player2, ...update.player2 } : current.player2,
-				clock: update.clock ? { ...current.clock, ...update.clock } : current.clock,
-			}),
+			(current) => {
+				const { player1, player2, clock, overtime, ...fields } = update;
+				return {
+					...current,
+					...fields,
+					player1: player1 ? { ...current.player1, ...player1 } : current.player1,
+					player2: player2 ? { ...current.player2, ...player2 } : current.player2,
+					// The clock field is the display reading, so the prediction runs
+					// the same adjustment the server's SetClock applies — writing the
+					// value into elapsedMs would show a countdown clock's complement.
+					clock: clock
+						? applyClockAdjustment(current.clock, getServerTime(), { targetDisplayMs: clock.targetDisplayMs })
+						: current.clock,
+					overtime: overtime
+						? { active: true, turnsRemaining: overtime.totalTurns, totalTurns: overtime.totalTurns }
+						: current.overtime,
+				};
+			},
 			() => repo.updateState(eventId, matchId, update).then(cacheSessionOnly),
 		);
 	}

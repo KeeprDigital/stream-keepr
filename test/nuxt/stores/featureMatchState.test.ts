@@ -182,16 +182,16 @@ describe('useFeatureMatchStateStore', () => {
 		});
 
 		it('reports the sentence a refused optimistic action carries, and rolls the prediction back', async () => {
-			const state = seedState({ currentGame: 1 });
+			const state = seedState({ turnNumber: 1 });
 			mockRepo.updateState.mockRejectedValue(transportFailure({
 				status: 409,
 				body: { message: 'This Feature Match has already been reset' },
 			}));
 
-			await store.updateState(EVENT_ID, MATCH_ID, { currentGame: 2 });
+			await store.updateState(EVENT_ID, MATCH_ID, { turnNumber: 2 });
 
 			expect(store.error).toBe('This Feature Match has already been reset');
-			expect(store.featureMatchStates.get(MATCH_ID)!.currentGame).toBe(state.currentGame);
+			expect(store.featureMatchStates.get(MATCH_ID)!.turnNumber).toBe(state.turnNumber);
 		});
 	});
 
@@ -239,8 +239,8 @@ describe('useFeatureMatchStateStore', () => {
 			await store.updateState(EVENT_ID, MATCH_ID, {
 				turnNumber: 9,
 				activePlayer: 'player2',
-				player1: { ...state.player1, lifeTotal: 3 },
-				clock: { ...state.clock, elapsedMs: 60_000 },
+				player1: { lifeTotal: 3 },
+				clock: { targetDisplayMs: 60_000 },
 			});
 
 			expect(store.error).toBe('Feature match session has advanced');
@@ -254,9 +254,35 @@ describe('useFeatureMatchStateStore', () => {
 			});
 			mockRepo.updateState.mockResolvedValue(commandResult(serverState));
 
-			await store.updateState(EVENT_ID, MATCH_ID, { player1: { lifeTotal: 15, gameWins: 0, counters: [] } });
+			await store.updateState(EVENT_ID, MATCH_ID, { player1: { lifeTotal: 15 } });
 
 			expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(15);
+		});
+
+		it('predicts a clock save as the display reading, not raw elapsed milliseconds', async () => {
+			// Paused countdown: 50:00 duration, 10:00 elapsed → the panel shows 40:00.
+			seedState({
+				clock: {
+					type: 'countdown',
+					durationMs: 50 * 60 * 1000,
+					elapsedMs: 10 * 60 * 1000,
+					isRunning: false,
+					lastStartedAt: null,
+					countUpAfterCountdown: false,
+				},
+			});
+			let predicted: { durationMs: number; elapsedMs: number } | undefined;
+			mockRepo.updateState.mockImplementation(async () => {
+				const clock = store.featureMatchStates.get(MATCH_ID)!.clock;
+				predicted = { durationMs: clock.durationMs, elapsedMs: clock.elapsedMs };
+				return commandResult();
+			});
+
+			// The operator types 10:00 — the clock should read 10:00, not 40:00.
+			await store.updateState(EVENT_ID, MATCH_ID, { clock: { targetDisplayMs: 10 * 60 * 1000 } });
+
+			expect(predicted).toBeDefined();
+			expect(predicted!.durationMs - predicted!.elapsedMs).toBe(10 * 60 * 1000);
 		});
 	});
 

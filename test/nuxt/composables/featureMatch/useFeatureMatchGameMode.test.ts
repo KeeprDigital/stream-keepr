@@ -28,6 +28,8 @@ const mockOverlay = {
 	})),
 };
 
+const mockToast = { add: vi.fn() };
+
 const mockEventData = ref(createMockEvent({
 	featureMatchDefaultTurnTrackingEnabled: true,
 	featureMatchDefaultActivePlayerTrackingEnabled: true,
@@ -43,6 +45,7 @@ mockNuxtImport('useEventStore', () => () => ({
 }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
+mockNuxtImport('useToast', () => () => mockToast);
 
 // Mock useIntervalFn to pass through to the real @vueuse/core implementation,
 // bypassing the Nuxt auto-import proxy to avoid infinite recursion.
@@ -445,7 +448,7 @@ describe('useFeatureMatchGameMode', () => {
 			expect(mode.editStateOpen.value).toBe(false);
 		});
 
-		it('keeps the modal open when the save is refused, so the edit is not lost', async () => {
+		it('keeps the modal open and says why when the save is refused, so the edit is not lost', async () => {
 			mockFeatureMatchStateStore.updateState.mockResolvedValue(null);
 			const mode = createSetup();
 			mode.editStateOpen.value = true;
@@ -453,6 +456,10 @@ describe('useFeatureMatchGameMode', () => {
 			await mode.handleEditStateSave({ turnNumber: 7 });
 
 			expect(mode.editStateOpen.value).toBe(true);
+			expect(mockToast.add).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+				title: 'Failed to update match state',
+				color: 'error',
+			}));
 		});
 	});
 

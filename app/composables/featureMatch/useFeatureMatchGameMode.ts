@@ -19,6 +19,7 @@ export function useFeatureMatchGameMode(
 	const eventStore = useEventStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
 	const overlay = useOverlay();
+	const toast = useToast();
 	const confirmModal = overlay.create(LazyUIConfirmActionModal);
 
 	const mid = () => toValue(matchId);
@@ -240,7 +241,8 @@ export function useFeatureMatchGameMode(
 	 * One dialog save is one store call: the whole diff goes through
 	 * `updateState`, which sends it as a single atomic command and rolls the
 	 * whole prediction back if it is refused — so the modal closes only on a
-	 * save that landed, and a refused one keeps the operator's edit on screen.
+	 * save that landed, and a refused one keeps the operator's edit on screen
+	 * and says why it was refused.
 	 */
 	async function handleEditStateSave(update: FeatureMatchStateUpdate) {
 		if (!eid())
@@ -248,8 +250,16 @@ export function useFeatureMatchGameMode(
 		editStateSaving.value = true;
 		try {
 			const result = await featureMatchStateStore.updateState(eid()!, mid(), update);
-			if (result)
+			if (result) {
 				editStateOpen.value = false;
+			}
+			else {
+				toast.add({
+					title: 'Failed to update match state',
+					description: featureMatchStateStore.error ?? undefined,
+					color: 'error',
+				});
+			}
 		}
 		finally {
 			editStateSaving.value = false;

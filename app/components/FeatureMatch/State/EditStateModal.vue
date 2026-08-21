@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
+import type { FeatureMatchPlayerStatePatch, FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { formatClockTime, getEffectiveElapsedMs, parseTimeInput } from '~~/shared/utils/clock';
 
 const props = defineProps<{
@@ -73,10 +73,15 @@ watch(() => props.open, (isOpen) => {
 		takeSnapshot();
 }, { immediate: true });
 
-const playerItems = computed(() => [
-	{ label: props.player1Name || 'Player 1', value: 'player1' },
-	{ label: props.player2Name || 'Player 2', value: 'player2' },
-]);
+function playerLabel(player: PlayerSide): string {
+	const name = player === 'player1' ? props.player1Name : props.player2Name;
+	return name || (player === 'player1' ? 'Player 1' : 'Player 2');
+}
+
+const playerItems = computed(() => (['player1', 'player2'] as const).map(player => ({
+	label: playerLabel(player),
+	value: player,
+})));
 // A first player can be chosen but never unset, so "Not selected" is offered
 // only while it is the current truth.
 const firstPlayerItems = computed(() => snapshot.firstPlayer === NONE
@@ -86,6 +91,26 @@ const activePlayerItems = computed(() => [{ label: 'None', value: NONE }, ...pla
 
 const clockParsedMs = computed(() => parseTimeInput(clockInput.value));
 const clockValid = computed(() => clockInput.value.trim() === '' || clockParsedMs.value !== null);
+
+// A touched-but-unparseable field must block Save rather than be silently
+// treated as untouched — closing the dialog would discard an edit the
+// operator believes they made. Empty means "leave it alone" and stays valid.
+function integerFieldValid(input: string, min?: number): boolean {
+	const trimmed = input.trim();
+	if (trimmed === '')
+		return true;
+	const value = Number(trimmed);
+	return Number.isInteger(value) && (min === undefined || value >= min);
+}
+
+const numbersValid = computed(() =>
+	integerFieldValid(lifeInput.player1)
+	&& integerFieldValid(lifeInput.player2)
+	&& (!props.showCardsKept || (integerFieldValid(cardsKeptInput.player1, 0) && integerFieldValid(cardsKeptInput.player2, 0)))
+	&& (!props.showTurnNumber || integerFieldValid(turnNumberInput.value, 0)),
+);
+
+const formValid = computed(() => clockValid.value && numbersValid.value);
 
 function parsedChange(input: string, original: string, options?: { min?: number }): number | undefined {
 	const trimmed = input.trim();
@@ -101,7 +126,7 @@ function buildUpdate(): FeatureMatchStateUpdate {
 	const update: FeatureMatchStateUpdate = {};
 
 	for (const player of ['player1', 'player2'] as const) {
-		const patch: FeatureMatchStateUpdate['player1'] = {};
+		const patch: FeatureMatchPlayerStatePatch = {};
 		const lifeTotal = parsedChange(lifeInput[player], snapshot.life[player]);
 		if (lifeTotal !== undefined)
 			patch.lifeTotal = lifeTotal;
@@ -128,10 +153,8 @@ function buildUpdate(): FeatureMatchStateUpdate {
 	}
 
 	const clockMs = clockParsedMs.value;
-	if (clockMs !== null && clockInput.value.trim() !== '' && clockMs !== snapshot.clockDisplayMs) {
-		// The seam's SetClock targets the clock's display reading.
-		update.clock = { elapsedMs: clockMs };
-	}
+	if (clockMs !== null && clockMs !== snapshot.clockDisplayMs)
+		update.clock = { targetDisplayMs: clockMs };
 
 	return update;
 }
@@ -149,10 +172,9 @@ function handleCancel() {
 	emit('update:open', false);
 }
 
-function playerLabel(player: PlayerSide): string {
-	const name = player === 'player1' ? props.player1Name : props.player2Name;
-	return name || (player === 'player1' ? 'Player 1' : 'Player 2');
-}
+// Unlike the sibling confirm modals, this form deliberately has no
+// Enter-to-submit: Enter is how the selects commit a choice, and a stray
+// Enter in a text field would save a half-finished correction.
 </script>
 
 <template>
@@ -245,7 +267,7 @@ function playerLabel(player: PlayerSide): string {
 				label="Save"
 				color="primary"
 				:loading="saving"
-				:disabled="!clockValid || saving"
+				:disabled="!formValid || saving"
 				@click="handleSave"
 			/>
 		</template>
