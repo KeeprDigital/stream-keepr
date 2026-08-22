@@ -65,9 +65,12 @@ export function maxInsertChunkSize(colCount: number): number {
 	return Math.floor(D1_MAX_PARAMS / colCount);
 }
 
-/** One select expression per insertable column of the target table. */
+/**
+ * One select expression per insertable column of the target table.
+ * Generated-always columns are excluded, mirroring the runtime filter below.
+ */
 export type InsertSelectColumns<TTable extends SQLiteTable> = {
-	[K in keyof TTable['_']['columns']]: SQL;
+	[K in keyof TTable['_']['columns'] as TTable['_']['columns'][K]['_']['generated'] extends { type: 'always' } ? never : K]: SQL;
 };
 
 /**
@@ -101,7 +104,8 @@ export function selectForInsert<TTable extends SQLiteTable>(
 ): SQL {
 	// Mirrors drizzle's own insert-order filter: generated-always columns are
 	// excluded from the column list it emits.
-	const insertable = Object.entries(getTableColumns(table))
+	const allColumns = getTableColumns(table);
+	const insertable = Object.entries(allColumns)
 		.filter(([, column]) => column.generated === undefined || column.generated.type === 'byDefault');
 	const provided = new Set(Object.keys(columns));
 	const expected = new Set(insertable.map(([key]) => key));
@@ -110,8 +114,10 @@ export function selectForInsert<TTable extends SQLiteTable>(
 	if (missing.length > 0)
 		throw new Error(`selectForInsert: missing expressions for columns: ${missing.join(', ')}`);
 	const unknown = [...provided].filter(key => !expected.has(key));
-	if (unknown.length > 0)
-		throw new Error(`selectForInsert: unknown columns: ${unknown.join(', ')}`);
+	if (unknown.length > 0) {
+		const labelled = unknown.map(key => key in allColumns ? `${key} (generated — not insertable)` : key);
+		throw new Error(`selectForInsert: unknown or non-insertable columns: ${labelled.join(', ')}`);
+	}
 
 	const expressions = insertable.map(([key]) => (columns as Record<string, SQL>)[key]!);
 	return sql`select ${sql.join(expressions, sql`, `)} ${tail}`;
