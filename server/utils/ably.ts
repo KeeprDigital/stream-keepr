@@ -41,8 +41,26 @@ export function getAblyClient(): Ably.Rest {
 	return ablyClient;
 }
 
+/**
+ * Ably connection ids are short base64url-style tokens (connection keys add
+ * `!`). Generous against the observed ~14 characters, tight against the header
+ * being an arbitrary channel: the value rides inside every message published
+ * with it, so an unbounded one inflates published bytes on someone else's dime.
+ */
+const ORIGIN_CONNECTION_ID_SHAPE = /^[\w!-]{1,64}$/;
+
+/**
+ * The origin connection id the client self-reports so the echo filter can drop
+ * its own updates. Client-supplied and unverifiable, so the one thing this does
+ * is refuse to relay a value the provider could never have issued — malformed or
+ * oversized reads as no origin at all, which only costs that client its echo
+ * suppression.
+ */
 export function getOriginConnectionId(event: H3Event): string | undefined {
-	return getHeader(event, 'x-realtime-connection-id') || undefined;
+	const raw = getHeader(event, 'x-realtime-connection-id');
+	if (!raw || !ORIGIN_CONNECTION_ID_SHAPE.test(raw))
+		return undefined;
+	return raw;
 }
 
 /**

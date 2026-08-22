@@ -61,6 +61,17 @@ export default defineNuxtPlugin({
 		let eventIdReady: Promise<number> | null = null;
 		let resolveEventIdReady: ((eventId: number) => void) | null = null;
 		let pendingAuthorize: { eventId: number; promise: Promise<boolean> } | null = null;
+		/**
+		 * How the coverage flight that released the initial connection's authCallback
+		 * hears whether the token fetch it released actually landed. The callback is
+		 * the only code that knows, and coverage must not be claimed before it says so.
+		 */
+		let notifyInitialMintOutcome: ((minted: boolean) => void) | null = null;
+
+		function settleInitialMint(minted: boolean) {
+			notifyInitialMintOutcome?.(minted);
+			notifyInitialMintOutcome = null;
+		}
 
 		const ably = new Ably.Realtime({
 			authCallback: async (_tokenParams, callback) => {
@@ -84,10 +95,12 @@ export default defineNuxtPlugin({
 						),
 					});
 					callback(null, tokenRequest);
+					settleInitialMint(true);
 				}
 				catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					callback(message, null);
+					settleInitialMint(false);
 				}
 			},
 		});
@@ -105,6 +118,16 @@ export default defineNuxtPlugin({
 		const AUTHORIZE_RETRY_DELAYS_MS = [250, 1_000, 3_000, 4_000];
 
 		const tokenError = ref<Error | null>(null);
+
+		/**
+		 * The one place coverage is ever claimed — the "only on success" contract
+		 * this file exists to hold (#307, #466). Every path that reaches it has a
+		 * token for the Event actually in hand.
+		 */
+		function claimCoverage(eventId: number) {
+			coveredEventId = eventId;
+			tokenError.value = null;
+		}
 
 		function wait(ms: number) {
 			return new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -127,8 +150,7 @@ export default defineNuxtPlugin({
 					await ably.auth.authorize();
 					if (flight.stale)
 						return false;
-					coveredEventId = eventId;
-					tokenError.value = null;
+					claimCoverage(eventId);
 					return true;
 				}
 				catch (err) {
@@ -183,14 +205,31 @@ export default defineNuxtPlugin({
 				if (resolveEventIdReady) {
 					// The initial connection's authCallback is waiting for an event
 					// to be chosen; releasing it fetches a token for this event.
+					// Coverage is claimed only once that fetch lands — claiming it on
+					// release alone put later subscribes on the fast path of a
+					// connection whose first mint had failed, with no tokenError.
 					const resolve = resolveEventIdReady;
 					resolveEventIdReady = null;
 					eventIdReady = null;
+					const outcome = new Promise<boolean>((resolveOutcome) => {
+						notifyInitialMintOutcome = resolveOutcome;
+					});
 					resolve(eventId);
+					const minted = await outcome;
+					// The stale check must stay ahead of any use of `minted`: a
+					// superseding switch runs authorize() through the same
+					// authCallback, whose settle consumes whatever notify is still
+					// standing — so `minted` can be the *newer* flight's answer.
+					// That is harmless precisely because this flight is stale by then.
 					if (flight.stale)
 						return false;
-					coveredEventId = eventId;
-					return true;
+					if (minted) {
+						claimCoverage(eventId);
+						return true;
+					}
+					// Fall through to the retrying mint, so a first-connection blip
+					// heals the same way an event-switch blip does, and a persistent
+					// failure is published the same way too.
 				}
 
 				return await mintTokenFor(eventId, flight);
@@ -255,6 +294,16 @@ export default defineNuxtPlugin({
 			updateConnectionState('suspended', new Error(String(stateChange.reason)));
 		});
 
+		// Closing/closed carry no error: a close is deliberate (ours or Ably's),
+		// not a fault. The resync layer still counts `closed` as out of touch.
+		ably.connection.on('closing', () => {
+			updateConnectionState('closing');
+		});
+
+		ably.connection.on('closed', () => {
+			updateConnectionState('closed');
+		});
+
 		function connect() {
 			if (connectionSnapshot.isConnected)
 				return;
@@ -296,6 +345,9 @@ export default defineNuxtPlugin({
 			return `room:${owner}:${type}`;
 		}
 
+		// Unique per call, never looked up by shape: a channel subscription is not
+		// replaced by a later one for the same channel and type — each caller holds
+		// its own unsubscribe, and the map exists only so cleanup() can drain them.
 		function channelSubscriptionKey(channel: string, type: string) {
 			return `channel:${++channelSubscriptionId}:${channel}:${type}`;
 		}
@@ -439,9 +491,6 @@ export default defineNuxtPlugin({
 			handler: RealtimeHandler<T>,
 		): Unsubscribe {
 			const key = channelSubscriptionKey(channelName, type);
-			channelSubscriptions.get(key)?.();
-			channelSubscriptions.delete(key);
-
 			const channel = getChannel(channelName);
 			const messageHandler = (message: Ably.Message) => {
 				handler(message.data, message);

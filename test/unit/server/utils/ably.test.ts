@@ -72,6 +72,50 @@ describe('getOriginConnectionId', () => {
 		expect(getOriginConnectionId(mockEvent)).toBe('conn-abc-123');
 		expect(getHeader).toHaveBeenCalledWith(mockEvent, 'x-realtime-connection-id');
 	});
+
+	it('accepts the shapes Ably actually issues', async () => {
+		// Connection ids are base64url-style tokens; connection keys carry `!`.
+		const { getOriginConnectionId } = await import('~~/server/utils/ably');
+		for (const id of ['veTb7EJgYVFI7g', 'cf80Ju!xxxx-yyyy_zzzz', 'a']) {
+			vi.mocked(getHeader).mockReturnValue(id);
+			expect(getOriginConnectionId({} as any)).toBe(id);
+		}
+	});
+
+	/**
+	 * The header is client-supplied and feeds two places: the echo filter (a forged
+	 * id suppresses another client's updates) and the published message itself (an
+	 * oversized value inflates every publish it rides on). Shape and length are the
+	 * bounds a server can actually enforce — an id it cannot verify it can at least
+	 * refuse to relay when it could not have come from the provider.
+	 */
+	it('ignores an oversized connection id instead of relaying it', async () => {
+		vi.mocked(getHeader).mockReturnValue('a'.repeat(65));
+		const { getOriginConnectionId } = await import('~~/server/utils/ably');
+		expect(getOriginConnectionId({} as any)).toBeUndefined();
+	});
+
+	it('accepts an id at exactly the length bound', async () => {
+		vi.mocked(getHeader).mockReturnValue('a'.repeat(64));
+		const { getOriginConnectionId } = await import('~~/server/utils/ably');
+		expect(getOriginConnectionId({} as any)).toBe('a'.repeat(64));
+	});
+
+	it('ignores a malformed connection id instead of relaying it', async () => {
+		const { getOriginConnectionId } = await import('~~/server/utils/ably');
+		for (const malformed of ['has spaces', 'json{"a":1}', 'line\nbreak', 'quote"d', '<script>', 'né']) {
+			vi.mocked(getHeader).mockReturnValue(malformed);
+			expect(getOriginConnectionId({} as any)).toBeUndefined();
+		}
+	});
+
+	it('treats an absent or empty header as no origin', async () => {
+		const { getOriginConnectionId } = await import('~~/server/utils/ably');
+		vi.mocked(getHeader).mockReturnValue(undefined as any);
+		expect(getOriginConnectionId({} as any)).toBeUndefined();
+		vi.mocked(getHeader).mockReturnValue('');
+		expect(getOriginConnectionId({} as any)).toBeUndefined();
+	});
 });
 
 // ──────────────── getAblyClient ────────────────
