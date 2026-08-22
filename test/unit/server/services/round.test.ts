@@ -166,33 +166,6 @@ describe('roundService', () => {
 		});
 	});
 
-	describe('getMaxRoundNumber', () => {
-		it('returns max round number for event', async () => {
-			getChain('select').where.mockResolvedValue([{ max: 5 }]);
-
-			const result = await roundService().getMaxRoundNumber(1);
-
-			expect(result).toBe(5);
-			expect(mockDb.select).toHaveBeenCalledOnce();
-		});
-
-		it('returns 0 when no rounds exist', async () => {
-			getChain('select').where.mockResolvedValue([{ max: 0 }]);
-
-			const result = await roundService().getMaxRoundNumber(1);
-
-			expect(result).toBe(0);
-		});
-
-		it('returns 0 when result is undefined', async () => {
-			getChain('select').where.mockResolvedValue([undefined]);
-
-			const result = await roundService().getMaxRoundNumber(1);
-
-			expect(result).toBe(0);
-		});
-	});
-
 	describe('findByPhaseId', () => {
 		it('returns rounds for a specific phase', async () => {
 			const rounds = [

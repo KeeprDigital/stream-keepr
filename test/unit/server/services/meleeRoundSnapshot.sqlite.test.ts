@@ -77,4 +77,34 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 		expect((await client.execute('select count(*) as count from matches')).rows[0]!.count).toBe(1);
 		expect((await client.execute('select count(*) as count from player_round_standings')).rows[0]!.count).toBe(1);
 	});
+
+	it('scopes the existing-match probe and stale sweep to the snapshot\'s Event (#468)', async () => {
+		// A second Event whose Round holds the identical Melee external id.
+		// Event 1's `match-2` (updated above) must be invisible to it.
+		await client.execute('insert into rounds (event_id, phase_id, external_id, external_source, name, round_number) values (2, 2, \'round-1\', \'melee\', \'Round 1\', 1)');
+
+		const service = meleeRoundSnapshotService();
+		const first = await service.replace({
+			eventId: 2,
+			roundId: 2,
+			matches: [{ eventId: 2, roundId: 2, externalId: 'match-2', externalSource: 'melee', player1Data: { name: 'Other Show' }, sortOrder: 0 }],
+			standings: [{ playerId: 30, wins: 1, losses: 0, draws: 0, position: 1, points: 3 }],
+		});
+		// Created, not updated: the colliding external id belongs to Event 1.
+		expect(first).toMatchObject({ created: 1, updated: 0, staleDeleted: 0 });
+
+		const second = await service.replace({
+			eventId: 2,
+			roundId: 2,
+			matches: [{ eventId: 2, roundId: 2, externalId: 'match-3', externalSource: 'melee', player1Data: { name: 'Replacement' }, sortOrder: 0 }],
+			standings: [{ playerId: 30, wins: 1, losses: 0, draws: 0, position: 1, points: 3 }],
+		});
+		// The stale sweep removes Event 2's own `match-2` and nothing else.
+		expect(second).toMatchObject({ created: 1, updated: 0, staleDeleted: 1 });
+
+		const eventOneMatches = await client.execute('select external_id, player1_data from matches where event_id = 1');
+		expect(eventOneMatches.rows).toMatchObject([{ external_id: 'match-2' }]);
+		expect(JSON.parse(eventOneMatches.rows[0]!.player1_data as string)).toEqual({ name: 'Two Updated' });
+		expect((await client.execute('select count(*) as count from player_round_standings where event_id = 1')).rows[0]!.count).toBe(1);
+	});
 });

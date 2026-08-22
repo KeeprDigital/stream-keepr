@@ -141,14 +141,6 @@ export function roundService() {
 		return !!round;
 	};
 
-	const getMaxRoundNumber = async (phaseId: number): Promise<number> => {
-		const [result] = await db
-			.select({ max: sql<number>`coalesce(max(${rounds.roundNumber}), 0)` })
-			.from(rounds)
-			.where(eq(rounds.phaseId, phaseId));
-		return result?.max ?? 0;
-	};
-
 	const upsertByExternalId = async (data: RoundUpsertInput): Promise<{ round: DbRound; created: boolean }> => {
 		if (!data.externalId || !data.externalSource) {
 			const newRound = await create(data.eventId, data);
@@ -186,7 +178,6 @@ export function roundService() {
 		update,
 		remove,
 		exists,
-		getMaxRoundNumber,
 		upsertByExternalId,
 	};
 }
