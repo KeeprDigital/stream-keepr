@@ -1,3 +1,4 @@
+import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type {
 	DbPlayer,
@@ -52,6 +53,19 @@ export interface PlayerDeckSelection {
 interface ReconcilePrimaryArchetypeOptions {
 	/** Only restore the projection when the primary deck has completed review. */
 	reviewedOnly?: boolean;
+}
+
+/**
+ * Correlated lookup of a Melee deck's id from the surrounding `json_each`
+ * row's `externalId`. Only meaningful inside a select iterating a `json_each`
+ * whose rows carry an `externalId` field.
+ */
+function meleeDeckIdByExternalId(eventId: number): SQL {
+	return sql`(select ${playerDecks.id} from ${playerDecks}
+		where ${playerDecks.eventId} = ${eventId}
+			and ${playerDecks.externalId} = json_extract(value, '$.externalId')
+			and ${playerDecks.externalSource} = 'melee'
+		limit 1)`;
 }
 
 export function playerDeckService() {
@@ -218,11 +232,7 @@ export function playerDeckService() {
 		for (const payload of chunkJsonRows(cardRows)) {
 			queries.push(db.insert(playerDeckCards).select(selectForInsert(playerDeckCards, {
 				id: sql`null`,
-				deckId: sql`(select ${playerDecks.id} from ${playerDecks}
-					where ${playerDecks.eventId} = ${eventId}
-						and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-						and ${playerDecks.externalSource} = 'melee'
-					limit 1)`,
+				deckId: meleeDeckIdByExternalId(eventId),
 				cardId: sql`json_extract(value, '$.cardId')`,
 				quantity: sql`json_extract(value, '$.quantity')`,
 				compartment: sql`json_extract(value, '$.compartment')`,
@@ -237,11 +247,7 @@ export function playerDeckService() {
 		for (const payload of chunkJsonRows(unresolvedRows)) {
 			queries.push(db.insert(playerDeckUnresolvedCards).select(selectForInsert(playerDeckUnresolvedCards, {
 				id: sql`null`,
-				deckId: sql`(select ${playerDecks.id} from ${playerDecks}
-					where ${playerDecks.eventId} = ${eventId}
-						and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-						and ${playerDecks.externalSource} = 'melee'
-					limit 1)`,
+				deckId: meleeDeckIdByExternalId(eventId),
 				entryType: sql`json_extract(value, '$.entryType')`,
 				originalName: sql`json_extract(value, '$.originalName')`,
 				normalizedOriginalName: sql`json_extract(value, '$.normalizedOriginalName')`,
@@ -279,11 +285,7 @@ export function playerDeckService() {
 				.insert(playerDeckCompanions)
 				.select(selectForInsert(playerDeckCompanions, {
 					id: sql`null`,
-					deckId: sql`(select ${playerDecks.id} from ${playerDecks}
-						where ${playerDecks.eventId} = ${eventId}
-							and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-							and ${playerDecks.externalSource} = 'melee'
-						limit 1)`,
+					deckId: meleeDeckIdByExternalId(eventId),
 					companionCardId: sql`json_extract(value, '$.companionCardId')`,
 					source: sql`'melee'`,
 					createdAt: sql`${nowMs}`,

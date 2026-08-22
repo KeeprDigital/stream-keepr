@@ -97,3 +97,41 @@ describe('selectForInsert', () => {
 		}, sql`where true`)).toThrow(/colour/);
 	});
 });
+
+describe('selectForInsert with a generated column', () => {
+	// Drizzle omits generated-always columns from the column list it emits, so
+	// the map must neither require nor accept an expression for one — in the
+	// type as well as at runtime.
+	const gizmos = sqliteTable('gizmos', {
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		width: integer('width').notNull(),
+		doubled: integer('doubled').generatedAlwaysAs(sql`width * 2`),
+	});
+
+	beforeAll(async () => {
+		await client.execute(`create table gizmos (
+			id integer primary key autoincrement,
+			width integer not null,
+			doubled integer generated always as (width * 2) virtual
+		)`);
+	});
+
+	it('inserts without an expression for the generated column', async () => {
+		await db.insert(gizmos).select(selectForInsert(gizmos, {
+			id: sql`null`,
+			width: sql`${21}`,
+		}, sql`where true`));
+
+		const rows = await db.select().from(gizmos);
+		expect(rows).toEqual([{ id: expect.any(Number), width: 21, doubled: 42 }]);
+	});
+
+	it('rejects an expression for the generated column, naming it', () => {
+		expect(() => selectForInsert(gizmos, {
+			id: sql`null`,
+			width: sql`${21}`,
+			// @ts-expect-error — generated columns take no insert expression
+			doubled: sql`0`,
+		}, sql`where true`)).toThrow(/doubled/);
+	});
+});
