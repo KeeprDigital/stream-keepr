@@ -21,50 +21,6 @@ const mockFetchScryfallCardById = vi.fn();
 class MockDeckCompanionValidationError extends Error {}
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	cards: {
-		id: 'cards.id',
-		name: 'cards.name',
-		game: 'cards.game',
-		scryfallId: 'cards.scryfall_id',
-		oracleId: 'cards.oracle_id',
-		cardType: 'cards.card_type',
-		colors: 'cards.colors',
-		cmc: 'cards.cmc',
-		manaCost: 'cards.mana_cost',
-		deckCounterTypes: 'cards.deck_counter_types',
-		deckTokens: 'cards.deck_tokens',
-		updatedAt: 'cards.updated_at',
-	},
-	eventCardNameOverrides: {
-		eventId: 'event_card_name_overrides.event_id',
-		inputName: 'event_card_name_overrides.input_name',
-		normalizedInputName: 'event_card_name_overrides.normalized_input_name',
-		inputSetCode: 'event_card_name_overrides.input_set_code',
-		normalizedInputSetCode: 'event_card_name_overrides.normalized_input_set_code',
-		resolvedCardId: 'event_card_name_overrides.resolved_card_id',
-		updatedAt: 'event_card_name_overrides.updated_at',
-	},
-	playerDeckCards: {
-		id: 'player_deck_cards.id',
-		deckId: 'player_deck_cards.deck_id',
-		cardId: 'player_deck_cards.card_id',
-		quantity: 'player_deck_cards.quantity',
-		compartment: 'player_deck_cards.compartment',
-		sortOrder: 'player_deck_cards.sort_order',
-	},
-	playerDeckCompanions: {
-		deckId: 'player_deck_companions.deck_id',
-		companionCardId: 'player_deck_companions.companion_card_id',
-		source: 'player_deck_companions.source',
-		updatedAt: 'player_deck_companions.updated_at',
-	},
-	playerDeckUnresolvedCards: {
-		id: 'player_deck_unresolved_cards.id',
-		quantity: 'player_deck_unresolved_cards.quantity',
-		sortOrder: 'player_deck_unresolved_cards.sort_order',
-	},
-}));
 vi.mock('~~/server/modules/melee-sync/eventData', () => ({
 	requireMeleeSyncEventData: mockRequireMeleeSyncEventData,
 }));

@@ -3,48 +3,6 @@ import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockMatch } from '~~/test/helpers/fixtures';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	matches: {
-		id: 'matches.id',
-		eventId: 'matches.eventId',
-		roundId: 'matches.roundId',
-		externalId: 'matches.externalId',
-		externalSource: 'matches.externalSource',
-		tableNumber: 'matches.tableNumber',
-		player1Id: 'matches.player1Id',
-		player2Id: 'matches.player2Id',
-		player1Data: 'matches.player1Data',
-		player2Data: 'matches.player2Data',
-		hasResult: 'matches.hasResult',
-		player1GameWins: 'matches.player1GameWins',
-		player2GameWins: 'matches.player2GameWins',
-		gameDraws: 'matches.gameDraws',
-		isBye: 'matches.isBye',
-		resultString: 'matches.resultString',
-		sortOrder: 'matches.sortOrder',
-	},
-	playerRoundStandings: {
-		eventId: 'playerRoundStandings.eventId',
-		playerId: 'playerRoundStandings.playerId',
-		roundId: 'playerRoundStandings.roundId',
-		position: 'playerRoundStandings.position',
-	},
-	players: {
-		id: 'players.id',
-		eventId: 'players.eventId',
-	},
-	rounds: {
-		id: 'rounds.id',
-		eventId: 'rounds.eventId',
-		phaseId: 'rounds.phaseId',
-		lastSyncedAt: 'rounds.lastSyncedAt',
-	},
-	phases: {
-		id: 'phases.id',
-		sortOrder: 'phases.sortOrder',
-	},
-	featureMatches: {},
-}));
 
 const { meleeRoundSnapshotService } = await import('~~/server/services/meleeRoundSnapshot');
 

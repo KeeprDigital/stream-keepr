@@ -3,26 +3,6 @@ import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	players: {
-		id: 'players.id',
-		eventId: 'players.eventId',
-		position: 'players.position',
-		externalId: 'players.externalId',
-		externalSource: 'players.externalSource',
-		externalStatus: 'players.externalStatus',
-		isActive: 'players.isActive',
-		lastSeenAt: 'players.lastSeenAt',
-	},
-	playerListMembers: {
-		playerId: 'playerListMembers.playerId',
-		listId: 'playerListMembers.listId',
-	},
-	playerLists: {
-		id: 'playerLists.id',
-		eventId: 'playerLists.eventId',
-	},
-}));
 
 const { playerService } = await import('~~/server/services/player');
 

@@ -9,7 +9,7 @@ import { db } from 'hub:db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
@@ -108,26 +108,24 @@ export async function buildClearImportedMatchDataQueries(
 
 	const insertSessionQueries = payloads.map(payload => db
 		.insert(featureMatchSessions)
-		.select(sql`
-			select
-				null,
-				${eventId},
-				cast(json_extract(input.value, '$.slotId') as integer),
-				'active',
-				json_extract(input.value, '$.sourceSnapshot'),
-				json_extract(input.value, '$.currentState'),
-				1,
-				null,
-				${resetAtMs},
-				${resetAtMs}
-			from json_each(${payload}) as input
+		.select(selectForInsert(featureMatchSessions, {
+			id: sql`null`,
+			eventId: sql`${eventId}`,
+			slotId: sql`cast(json_extract(input.value, '$.slotId') as integer)`,
+			status: sql`'active'`,
+			sourceSnapshot: sql`json_extract(input.value, '$.sourceSnapshot')`,
+			currentState: sql`json_extract(input.value, '$.currentState')`,
+			sequence: sql`1`,
+			closedAt: sql`null`,
+			createdAt: sql`${resetAtMs}`,
+			updatedAt: sql`${resetAtMs}`,
+		}, sql`from json_each(${payload}) as input
 			where cast(json_extract(input.value, '$.slotId') as integer) in (
 				select ${featureMatches.id}
 				from ${featureMatches}
 				where ${featureMatches.eventId} = ${eventId}
 					and ${featureMatches.externalSource} = 'melee'
-			)
-		`));
+			)`)));
 
 	// The Sessions closed above can never accept another command, so their command
 	// receipts have nothing left to protect against.

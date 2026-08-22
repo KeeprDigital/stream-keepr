@@ -15,7 +15,7 @@ import { playerDeckService } from '~~/server/services/playerDeck';
 import { DeckCompanionValidationError, playerDeckCompanionService } from '~~/server/services/playerDeckCompanion';
 import { playerDeckUnresolvedCardService } from '~~/server/services/playerDeckUnresolvedCard';
 import { normalizeImportedCardName, normalizeImportedSetCode } from '~~/server/utils/cardNameNormalization';
-import { chunkArray, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
+import { chunkArray, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
 import { throwRetryableUpstreamRefusal } from '~~/server/utils/retryableUpstreamRefusal';
 import { fetchScryfallCardById } from '~~/server/utils/scryfall';
 
@@ -250,12 +250,16 @@ export function deckListResolutionModule() {
 				const entryIds = deckEntries.slice(0, SAFE_INARRAY_SIZE).map(entry => entry.id);
 				queries.push(db
 					.insert(playerDeckCompanions)
-					.select(sql`
-						select ${deckId}, ${resolvedCardId}, ${'melee'}
-						from ${playerDeckUnresolvedCards}
+					.select(selectForInsert(playerDeckCompanions, {
+						id: sql`null`,
+						deckId: sql`${deckId}`,
+						companionCardId: sql`${resolvedCardId}`,
+						source: sql`${'melee'}`,
+						createdAt: sql`${now.getTime()}`,
+						updatedAt: sql`${now.getTime()}`,
+					}, sql`from ${playerDeckUnresolvedCards}
 						where ${inArray(playerDeckUnresolvedCards.id, entryIds)}
-						limit 1
-					`)
+						limit 1`))
 					.onConflictDoUpdate({
 						target: playerDeckCompanions.deckId,
 						set: { companionCardId: resolvedCardId, source: 'melee', updatedAt: now },
@@ -300,17 +304,16 @@ export function deckListResolutionModule() {
 				else {
 					queries.push(db
 						.insert(playerDeckCards)
-						.select(sql`
-							select
-								${group.deckId},
-								${resolvedCardId},
-								sum(${playerDeckUnresolvedCards.quantity}),
-								${group.compartment},
-								min(${playerDeckUnresolvedCards.sortOrder})
-							from ${playerDeckUnresolvedCards}
+						.select(selectForInsert(playerDeckCards, {
+							id: sql`null`,
+							deckId: sql`${group.deckId}`,
+							cardId: sql`${resolvedCardId}`,
+							quantity: sql`sum(${playerDeckUnresolvedCards.quantity})`,
+							compartment: sql`${group.compartment}`,
+							sortOrder: sql`min(${playerDeckUnresolvedCards.sortOrder})`,
+						}, sql`from ${playerDeckUnresolvedCards}
 							where ${inArray(playerDeckUnresolvedCards.id, firstChunk)}
-							having count(*) > 0
-						`));
+							having count(*) > 0`)));
 				}
 
 				for (const entryIdChunk of entryIdChunks.slice(1)) {

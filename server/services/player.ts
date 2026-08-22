@@ -5,7 +5,7 @@ import type { CreatePlayerInput, UpdatePlayerInput } from '~~/shared/api';
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
 /** Full insert data including eventId (used by sync/upsert operations). archetypeId excluded — set separately. */
@@ -71,30 +71,27 @@ function buildBulkPlayerUpsertQueries(
 			lastSeenAt: data.lastSeenAt?.getTime(),
 		}))).map(payload => db
 			.insert(players)
-			.select(sql`
-			select
-				null,
-				json_extract(value, '$.eventId'),
-				json_extract(value, '$.name'),
-				json_extract(value, '$.pronouns'),
-				json_extract(value, '$.externalId'),
-				json_extract(value, '$.externalSource'),
-				json_extract(value, '$.externalStatus'),
-				coalesce(json_extract(value, '$.isActive'), 1),
-				json_extract(value, '$.lastSeenAt'),
-				json_extract(value, '$.wins'),
-				json_extract(value, '$.losses'),
-				json_extract(value, '$.draws'),
-				json_extract(value, '$.position'),
-				json_extract(value, '$.points'),
-				null,
-				json_extract(value, '$.lgs'),
-				json_extract(value, '$.gameData'),
-				${writeAtMs},
-				${writeAtMs}
-			from json_each(${payload})
-			where true
-		`)
+			.select(selectForInsert(players, {
+				id: sql`null`,
+				eventId: sql`json_extract(value, '$.eventId')`,
+				name: sql`json_extract(value, '$.name')`,
+				pronouns: sql`json_extract(value, '$.pronouns')`,
+				externalId: sql`json_extract(value, '$.externalId')`,
+				externalSource: sql`json_extract(value, '$.externalSource')`,
+				externalStatus: sql`json_extract(value, '$.externalStatus')`,
+				isActive: sql`coalesce(json_extract(value, '$.isActive'), 1)`,
+				lastSeenAt: sql`json_extract(value, '$.lastSeenAt')`,
+				wins: sql`json_extract(value, '$.wins')`,
+				losses: sql`json_extract(value, '$.losses')`,
+				draws: sql`json_extract(value, '$.draws')`,
+				position: sql`json_extract(value, '$.position')`,
+				points: sql`json_extract(value, '$.points')`,
+				archetypeId: sql`null`,
+				lgs: sql`json_extract(value, '$.lgs')`,
+				gameData: sql`json_extract(value, '$.gameData')`,
+				createdAt: sql`${writeAtMs}`,
+				updatedAt: sql`${writeAtMs}`,
+			}, sql`from json_each(${payload}) where true`))
 			.onConflictDoUpdate({
 				target: [players.eventId, players.externalId, players.externalSource],
 				set,

@@ -8,6 +8,10 @@
  * Reference: https://developers.cloudflare.com/d1/platform/limits/
  */
 
+import type { SQL } from 'drizzle-orm';
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { getTableColumns, sql } from 'drizzle-orm';
+
 export const D1_MAX_PARAMS = 100;
 
 /**
@@ -59,6 +63,58 @@ export function maxInsertChunkSize(colCount: number): number {
 		throw new Error('maxInsertChunkSize: colCount must be a positive integer');
 
 	return Math.floor(D1_MAX_PARAMS / colCount);
+}
+
+/** One select expression per insertable column of the target table. */
+export type InsertSelectColumns<TTable extends SQLiteTable> = {
+	[K in keyof TTable['_']['columns']]: SQL;
+};
+
+/**
+ * The `select …` half of an `INSERT INTO … SELECT`, with every expression named
+ * by the column it feeds.
+ *
+ * Drizzle's `.insert(table).select(sql)` emits its column list from the table's
+ * declared column order and trusts the raw select to match it positionally — a
+ * same-affinity column swap in the schema would corrupt data without an error
+ * (#467). This helper takes the expressions keyed by column instead, checks the
+ * map covers the insertable columns exactly, and emits them in the order
+ * drizzle's column list uses, so no call site depends on declaration order.
+ *
+ * `tail` is everything after the select list: `from json_each(…)`, guard
+ * `where` clauses, or both.
+ *
+ * @example
+ * db.insert(playerListMembers).select(selectForInsert(playerListMembers, {
+ * 	id: sql`null`,
+ * 	listId: sql`${listId}`,
+ * 	playerId: sql`json_extract(value, '$.playerId')`,
+ * 	sortOrder: sql`json_extract(value, '$.sortOrder')`,
+ * 	createdAt: sql`${nowMs}`,
+ * 	updatedAt: sql`${nowMs}`,
+ * }, sql`from json_each(${payload}) where true`))
+ */
+export function selectForInsert<TTable extends SQLiteTable>(
+	table: TTable,
+	columns: InsertSelectColumns<TTable>,
+	tail: SQL,
+): SQL {
+	// Mirrors drizzle's own insert-order filter: generated-always columns are
+	// excluded from the column list it emits.
+	const insertable = Object.entries(getTableColumns(table))
+		.filter(([, column]) => column.generated === undefined || column.generated.type === 'byDefault');
+	const provided = new Set(Object.keys(columns));
+	const expected = new Set(insertable.map(([key]) => key));
+
+	const missing = [...expected].filter(key => !provided.has(key));
+	if (missing.length > 0)
+		throw new Error(`selectForInsert: missing expressions for columns: ${missing.join(', ')}`);
+	const unknown = [...provided].filter(key => !expected.has(key));
+	if (unknown.length > 0)
+		throw new Error(`selectForInsert: unknown columns: ${unknown.join(', ')}`);
+
+	const expressions = insertable.map(([key]) => (columns as Record<string, SQL>)[key]!);
+	return sql`select ${sql.join(expressions, sql`, `)} ${tail}`;
 }
 
 export interface JsonBulkChunkOptions {

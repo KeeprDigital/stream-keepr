@@ -2,63 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	playerDecks: {
-		id: 'player_decks.id',
-		eventId: 'player_decks.event_id',
-		playerId: 'player_decks.player_id',
-		externalId: 'player_decks.external_id',
-		externalSource: 'player_decks.external_source',
-		formatExternalId: 'player_decks.format_external_id',
-		name: 'player_decks.name',
-		colors: 'player_decks.colors',
-		sortOrder: 'player_decks.sort_order',
-		isPrimary: 'player_decks.is_primary',
-		archetypeId: 'player_decks.archetype_id',
-		reviewedAt: 'player_decks.reviewed_at',
-		updatedAt: 'player_decks.updated_at',
-	},
-	playerDeckCards: {
-		id: 'player_deck_cards.id',
-		deckId: 'player_deck_cards.deck_id',
-		cardId: 'player_deck_cards.card_id',
-		quantity: 'player_deck_cards.quantity',
-		compartment: 'player_deck_cards.compartment',
-		sortOrder: 'player_deck_cards.sort_order',
-	},
-	playerDeckCompanions: {
-		id: 'player_deck_companions.id',
-		deckId: 'player_deck_companions.deck_id',
-		companionCardId: 'player_deck_companions.companion_card_id',
-		source: 'player_deck_companions.source',
-		updatedAt: 'player_deck_companions.updated_at',
-	},
-	playerDeckUnresolvedCards: {
-		id: 'player_deck_unresolved_cards.id',
-		deckId: 'player_deck_unresolved_cards.deck_id',
-	},
-	players: {
-		id: 'players.id',
-		eventId: 'players.event_id',
-		archetypeId: 'players.archetype_id',
-		gameData: 'players.game_data',
-	},
-	archetypes: {
-		id: 'archetypes.id',
-		name: 'archetypes.name',
-		colors: 'archetypes.colors',
-	},
-	phases: {
-		id: 'phases.id',
-		eventId: 'phases.event_id',
-		formatExternalId: 'phases.format_external_id',
-	},
-	rounds: {
-		id: 'rounds.id',
-		eventId: 'rounds.event_id',
-		phaseId: 'rounds.phase_id',
-	},
-}));
 
 const { playerDeckService } = await import('~~/server/services/playerDeck');
 

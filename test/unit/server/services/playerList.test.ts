@@ -3,24 +3,6 @@ import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	playerLists: {
-		id: 'playerLists.id',
-		eventId: 'playerLists.eventId',
-		name: 'playerLists.name',
-	},
-	playerListMembers: {
-		id: 'playerListMembers.id',
-		listId: 'playerListMembers.listId',
-		playerId: 'playerListMembers.playerId',
-		sortOrder: 'playerListMembers.sortOrder',
-	},
-	players: {
-		id: 'players.id',
-		eventId: 'players.eventId',
-		isActive: 'players.isActive',
-	},
-}));
 
 // createError is auto-imported in Nitro
 vi.stubGlobal('createError', (opts: any) => {

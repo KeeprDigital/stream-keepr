@@ -19,7 +19,7 @@ import {
 	players,
 	rounds,
 } from '~~/server/db/schema';
-import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
+import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
 
 export type UpsertMeleePlayerDeck = Omit<DbPlayerDeckInsert, 'id' | 'createdAt' | 'updatedAt' | 'externalSource' | 'archetypeId' | 'reviewedAt'>;
 
@@ -172,25 +172,22 @@ export function playerDeckService() {
 		for (const payload of chunkJsonRows(deckRows)) {
 			queries.push(db
 				.insert(playerDecks)
-				.select(sql`
-					select
-						null,
-						json_extract(value, '$.eventId'),
-						json_extract(value, '$.playerId'),
-						json_extract(value, '$.externalId'),
-						'melee',
-						json_extract(value, '$.formatExternalId'),
-						json_extract(value, '$.name'),
-						coalesce(json_extract(value, '$.colors'), ''),
-						coalesce(json_extract(value, '$.sortOrder'), 0),
-						0,
-						null,
-						null,
-						${nowMs},
-						${nowMs}
-					from json_each(${payload})
-					where true
-				`)
+				.select(selectForInsert(playerDecks, {
+					id: sql`null`,
+					eventId: sql`json_extract(value, '$.eventId')`,
+					playerId: sql`json_extract(value, '$.playerId')`,
+					externalId: sql`json_extract(value, '$.externalId')`,
+					externalSource: sql`'melee'`,
+					formatExternalId: sql`json_extract(value, '$.formatExternalId')`,
+					name: sql`json_extract(value, '$.name')`,
+					colors: sql`coalesce(json_extract(value, '$.colors'), '')`,
+					sortOrder: sql`coalesce(json_extract(value, '$.sortOrder'), 0)`,
+					isPrimary: sql`0`,
+					archetypeId: sql`null`,
+					reviewedAt: sql`null`,
+					createdAt: sql`${nowMs}`,
+					updatedAt: sql`${nowMs}`,
+				}, sql`from json_each(${payload}) where true`))
 				.onConflictDoUpdate({
 					target: [playerDecks.eventId, playerDecks.externalId, playerDecks.externalSource],
 					set: {
@@ -219,20 +216,18 @@ export function playerDeckService() {
 			...card,
 		})));
 		for (const payload of chunkJsonRows(cardRows)) {
-			queries.push(db.insert(playerDeckCards).select(sql`
-				select
-					null,
-					(select ${playerDecks.id} from ${playerDecks}
-						where ${playerDecks.eventId} = ${eventId}
-							and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-							and ${playerDecks.externalSource} = 'melee'
-						limit 1),
-					json_extract(value, '$.cardId'),
-					json_extract(value, '$.quantity'),
-					json_extract(value, '$.compartment'),
-					json_extract(value, '$.sortOrder')
-				from json_each(${payload})
-			`));
+			queries.push(db.insert(playerDeckCards).select(selectForInsert(playerDeckCards, {
+				id: sql`null`,
+				deckId: sql`(select ${playerDecks.id} from ${playerDecks}
+					where ${playerDecks.eventId} = ${eventId}
+						and ${playerDecks.externalId} = json_extract(value, '$.externalId')
+						and ${playerDecks.externalSource} = 'melee'
+					limit 1)`,
+				cardId: sql`json_extract(value, '$.cardId')`,
+				quantity: sql`json_extract(value, '$.quantity')`,
+				compartment: sql`json_extract(value, '$.compartment')`,
+				sortOrder: sql`json_extract(value, '$.sortOrder')`,
+			}, sql`from json_each(${payload})`)));
 		}
 
 		const unresolvedRows = snapshots.flatMap(snapshot => snapshot.unresolvedCards.map(card => ({
@@ -240,27 +235,25 @@ export function playerDeckService() {
 			...card,
 		})));
 		for (const payload of chunkJsonRows(unresolvedRows)) {
-			queries.push(db.insert(playerDeckUnresolvedCards).select(sql`
-				select
-					null,
-					(select ${playerDecks.id} from ${playerDecks}
-						where ${playerDecks.eventId} = ${eventId}
-							and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-							and ${playerDecks.externalSource} = 'melee'
-						limit 1),
-					json_extract(value, '$.entryType'),
-					json_extract(value, '$.originalName'),
-					json_extract(value, '$.normalizedOriginalName'),
-					json_extract(value, '$.setCode'),
-					coalesce(json_extract(value, '$.normalizedSetCode'), ''),
-					coalesce(json_extract(value, '$.quantity'), 1),
-					json_extract(value, '$.compartment'),
-					coalesce(json_extract(value, '$.sortOrder'), 0),
-					json_extract(value, '$.cardType'),
-					${nowMs},
-					${nowMs}
-				from json_each(${payload})
-			`));
+			queries.push(db.insert(playerDeckUnresolvedCards).select(selectForInsert(playerDeckUnresolvedCards, {
+				id: sql`null`,
+				deckId: sql`(select ${playerDecks.id} from ${playerDecks}
+					where ${playerDecks.eventId} = ${eventId}
+						and ${playerDecks.externalId} = json_extract(value, '$.externalId')
+						and ${playerDecks.externalSource} = 'melee'
+					limit 1)`,
+				entryType: sql`json_extract(value, '$.entryType')`,
+				originalName: sql`json_extract(value, '$.originalName')`,
+				normalizedOriginalName: sql`json_extract(value, '$.normalizedOriginalName')`,
+				setCode: sql`json_extract(value, '$.setCode')`,
+				normalizedSetCode: sql`coalesce(json_extract(value, '$.normalizedSetCode'), '')`,
+				quantity: sql`coalesce(json_extract(value, '$.quantity'), 1)`,
+				compartment: sql`json_extract(value, '$.compartment')`,
+				sortOrder: sql`coalesce(json_extract(value, '$.sortOrder'), 0)`,
+				cardType: sql`json_extract(value, '$.cardType')`,
+				createdAt: sql`${nowMs}`,
+				updatedAt: sql`${nowMs}`,
+			}, sql`from json_each(${payload})`)));
 		}
 
 		const companionClearRows = snapshots
@@ -284,21 +277,18 @@ export function playerDeckService() {
 		for (const payload of chunkJsonRows(companionSetRows)) {
 			queries.push(db
 				.insert(playerDeckCompanions)
-				.select(sql`
-					select
-						null,
-						(select ${playerDecks.id} from ${playerDecks}
-							where ${playerDecks.eventId} = ${eventId}
-								and ${playerDecks.externalId} = json_extract(value, '$.externalId')
-								and ${playerDecks.externalSource} = 'melee'
-							limit 1),
-						json_extract(value, '$.companionCardId'),
-						'melee',
-						${nowMs},
-						${nowMs}
-					from json_each(${payload})
-					where true
-				`)
+				.select(selectForInsert(playerDeckCompanions, {
+					id: sql`null`,
+					deckId: sql`(select ${playerDecks.id} from ${playerDecks}
+						where ${playerDecks.eventId} = ${eventId}
+							and ${playerDecks.externalId} = json_extract(value, '$.externalId')
+							and ${playerDecks.externalSource} = 'melee'
+						limit 1)`,
+					companionCardId: sql`json_extract(value, '$.companionCardId')`,
+					source: sql`'melee'`,
+					createdAt: sql`${nowMs}`,
+					updatedAt: sql`${nowMs}`,
+				}, sql`from json_each(${payload}) where true`))
 				.onConflictDoUpdate({
 					target: playerDeckCompanions.deckId,
 					set: {

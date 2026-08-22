@@ -2,7 +2,7 @@ import type { DbCard, DbCardInsert } from '~~/server/db/schema';
 import { sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { cards } from '~~/server/db/schema';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 
 export type UpsertCardInput = Omit<DbCardInsert, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -57,24 +57,21 @@ export function mtgCardService() {
 			};
 			return chunkJsonRows(group.map(input => ({ ...input, game: input.game ?? 'mtg' }))).map(payload => db
 				.insert(cards)
-				.select(sql`
-				select
-					null,
-					json_extract(value, '$.name'),
-					coalesce(json_extract(value, '$.game'), 'mtg'),
-					json_extract(value, '$.scryfallId'),
-					json_extract(value, '$.oracleId'),
-					json_extract(value, '$.cardType'),
-					json_extract(value, '$.colors'),
-					json_extract(value, '$.cmc'),
-					json_extract(value, '$.manaCost'),
-					coalesce(json_extract(value, '$.deckCounterTypes'), '[]'),
-					coalesce(json_extract(value, '$.deckTokens'), '[]'),
-					${writeAtMs},
-					${writeAtMs}
-				from json_each(${payload})
-				where true
-			`)
+				.select(selectForInsert(cards, {
+					id: sql`null`,
+					name: sql`json_extract(value, '$.name')`,
+					game: sql`coalesce(json_extract(value, '$.game'), 'mtg')`,
+					scryfallId: sql`json_extract(value, '$.scryfallId')`,
+					oracleId: sql`json_extract(value, '$.oracleId')`,
+					cardType: sql`json_extract(value, '$.cardType')`,
+					colors: sql`json_extract(value, '$.colors')`,
+					cmc: sql`json_extract(value, '$.cmc')`,
+					manaCost: sql`json_extract(value, '$.manaCost')`,
+					deckCounterTypes: sql`coalesce(json_extract(value, '$.deckCounterTypes'), '[]')`,
+					deckTokens: sql`coalesce(json_extract(value, '$.deckTokens'), '[]')`,
+					createdAt: sql`${writeAtMs}`,
+					updatedAt: sql`${writeAtMs}`,
+				}, sql`from json_each(${payload}) where true`))
 				.onConflictDoUpdate({
 					target: [cards.name, cards.game],
 					set,

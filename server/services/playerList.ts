@@ -3,7 +3,7 @@ import type { CreatePlayerListInput, UpdatePlayerListInput } from '~~/shared/api
 import { and, asc, eq, getTableColumns, inArray, max, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
-import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
+import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
 
 export function playerListService() {
 	const validatePlayersBelongToEvent = async (eventId: number, playerIds: number[]) => {
@@ -121,17 +121,14 @@ export function playerListService() {
 			sortOrder: startOrder + index,
 		})));
 		const queries = payloads.map(payload => db.insert(playerListMembers)
-			.select(sql`
-				select
-					null,
-					${listId},
-					cast(json_extract(value, '$.playerId') as integer),
-					cast(json_extract(value, '$.sortOrder') as integer),
-					${nowMs},
-					${nowMs}
-				from json_each(${payload})
-				where true
-			`)
+			.select(selectForInsert(playerListMembers, {
+				id: sql`null`,
+				listId: sql`${listId}`,
+				playerId: sql`cast(json_extract(value, '$.playerId') as integer)`,
+				sortOrder: sql`cast(json_extract(value, '$.sortOrder') as integer)`,
+				createdAt: sql`${nowMs}`,
+				updatedAt: sql`${nowMs}`,
+			}, sql`from json_each(${payload}) where true`))
 			.onConflictDoNothing()
 			.returning());
 		const results = await db.batch(queries as [typeof queries[0], ...typeof queries]);

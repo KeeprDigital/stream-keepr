@@ -6,7 +6,7 @@ import { db } from 'hub:db';
 import { matches, playerRoundStandings } from '~~/server/db/schema';
 import { buildDeleteStaleMatchesByRoundQuery } from '~~/server/services/match';
 import { buildMarkRoundSyncedQuery } from '~~/server/services/round';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 
 export interface MeleeRoundSnapshotInput {
 	eventId: number;
@@ -71,30 +71,27 @@ export function meleeRoundSnapshotService() {
 			)));
 		const matchQueries = chunkJsonRows(input.matches).map(payload => db
 			.insert(matches)
-			.select(sql`
-				select
-					null,
-					json_extract(value, '$.eventId'),
-					json_extract(value, '$.roundId'),
-					json_extract(value, '$.externalId'),
-					json_extract(value, '$.externalSource'),
-					json_extract(value, '$.tableNumber'),
-					json_extract(value, '$.player1Id'),
-					json_extract(value, '$.player2Id'),
-					json_extract(value, '$.player1Data'),
-					json_extract(value, '$.player2Data'),
-					coalesce(json_extract(value, '$.hasResult'), 0),
-					json_extract(value, '$.player1GameWins'),
-					json_extract(value, '$.player2GameWins'),
-					json_extract(value, '$.gameDraws'),
-					coalesce(json_extract(value, '$.isBye'), 0),
-					json_extract(value, '$.resultString'),
-					coalesce(json_extract(value, '$.sortOrder'), 0),
-					${writeAtMs},
-					${writeAtMs}
-				from json_each(${payload})
-				where true
-			`)
+			.select(selectForInsert(matches, {
+				id: sql`null`,
+				eventId: sql`json_extract(value, '$.eventId')`,
+				roundId: sql`json_extract(value, '$.roundId')`,
+				externalId: sql`json_extract(value, '$.externalId')`,
+				externalSource: sql`json_extract(value, '$.externalSource')`,
+				tableNumber: sql`json_extract(value, '$.tableNumber')`,
+				player1Id: sql`json_extract(value, '$.player1Id')`,
+				player2Id: sql`json_extract(value, '$.player2Id')`,
+				player1Data: sql`json_extract(value, '$.player1Data')`,
+				player2Data: sql`json_extract(value, '$.player2Data')`,
+				hasResult: sql`coalesce(json_extract(value, '$.hasResult'), 0)`,
+				player1GameWins: sql`json_extract(value, '$.player1GameWins')`,
+				player2GameWins: sql`json_extract(value, '$.player2GameWins')`,
+				gameDraws: sql`json_extract(value, '$.gameDraws')`,
+				isBye: sql`coalesce(json_extract(value, '$.isBye'), 0)`,
+				resultString: sql`json_extract(value, '$.resultString')`,
+				sortOrder: sql`coalesce(json_extract(value, '$.sortOrder'), 0)`,
+				createdAt: sql`${writeAtMs}`,
+				updatedAt: sql`${writeAtMs}`,
+			}, sql`from json_each(${payload}) where true`))
 			.onConflictDoUpdate({
 				target: [matches.eventId, matches.externalId, matches.externalSource],
 				set: {
@@ -123,21 +120,19 @@ export function meleeRoundSnapshotService() {
 			));
 		const standingsInsertQueries = chunkJsonRows(input.standings).map(payload => db
 			.insert(playerRoundStandings)
-			.select(sql`
-				select
-					null,
-					${input.eventId},
-					json_extract(value, '$.playerId'),
-					${input.roundId},
-					json_extract(value, '$.wins'),
-					json_extract(value, '$.losses'),
-					json_extract(value, '$.draws'),
-					json_extract(value, '$.position'),
-					json_extract(value, '$.points'),
-					${writeAtMs},
-					${writeAtMs}
-				from json_each(${payload})
-			`));
+			.select(selectForInsert(playerRoundStandings, {
+				id: sql`null`,
+				eventId: sql`${input.eventId}`,
+				playerId: sql`json_extract(value, '$.playerId')`,
+				roundId: sql`${input.roundId}`,
+				wins: sql`json_extract(value, '$.wins')`,
+				losses: sql`json_extract(value, '$.losses')`,
+				draws: sql`json_extract(value, '$.draws')`,
+				position: sql`json_extract(value, '$.position')`,
+				points: sql`json_extract(value, '$.points')`,
+				createdAt: sql`${writeAtMs}`,
+				updatedAt: sql`${writeAtMs}`,
+			}, sql`from json_each(${payload})`)));
 		const standingsQueries = [standingsDeleteQuery, ...standingsInsertQueries];
 		const staleDeleteQuery = buildDeleteStaleMatchesByRoundQuery(
 			input.eventId,

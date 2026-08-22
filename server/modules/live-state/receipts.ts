@@ -4,6 +4,7 @@ import type { DbLiveStateCommandReceipt } from '~~/server/db/schema';
 import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { liveStateCommandReceipts } from '~~/server/db/schema';
+import { selectForInsert } from '~~/server/utils/db';
 
 /**
  * How many of an aggregate's most recent commands keep a receipt.
@@ -86,19 +87,17 @@ export function commandReceiptStatements(input: {
 	const { aggregateKind, aggregateId, eventId, receipt, guard } = input;
 
 	return [
-		db.insert(liveStateCommandReceipts).select(sql`
-			select
-				null,
-				${eventId},
-				${aggregateKind},
-				${aggregateId},
-				${receipt.commandId},
-				${receipt.commandType},
-				${receipt.contentKey},
-				${receipt.sequence},
-				${Date.now()}
-			${guard}
-		`),
+		db.insert(liveStateCommandReceipts).select(selectForInsert(liveStateCommandReceipts, {
+			id: sql`null`,
+			eventId: sql`${eventId}`,
+			aggregateKind: sql`${aggregateKind}`,
+			aggregateId: sql`${aggregateId}`,
+			commandId: sql`${receipt.commandId}`,
+			commandType: sql`${receipt.commandType}`,
+			contentKey: sql`${receipt.contentKey}`,
+			sequence: sql`${receipt.sequence}`,
+			createdAt: sql`${Date.now()}`,
+		}, guard)),
 		db.delete(liveStateCommandReceipts).where(and(
 			eq(liveStateCommandReceipts.aggregateKind, aggregateKind),
 			eq(liveStateCommandReceipts.aggregateId, aggregateId),

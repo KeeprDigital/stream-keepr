@@ -4,6 +4,7 @@ import type { CreateFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInp
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { featureMatchAssignments } from '~~/server/db/schema';
+import { selectForInsert } from '~~/server/utils/db';
 
 /**
  * Build the displacement/move/create statements for an Assignment without
@@ -80,18 +81,18 @@ export function buildAssignmentDisplacementGuardQuery(
 				and ${featureMatchAssignments.slotId} = ${input.slotId}
 				and ${featureMatchAssignments.matchId} != ${input.incomingMatchId}
 		)`;
-	return db.insert(featureMatchAssignments).select(sql`
-		select
-			0,
-			null,
-			0,
-			0,
-			0,
-			null,
-			${now},
-			${now}
-		where ${unsafeDestination}
-	`);
+	return db.insert(featureMatchAssignments).select(selectForInsert(featureMatchAssignments, {
+		id: sql`0`,
+		// The null event_id is the mechanism: it trips the NOT NULL constraint
+		// isAssignmentDisplacementGuardViolation() recognises, aborting the batch.
+		eventId: sql`null`,
+		roundId: sql`0`,
+		slotId: sql`0`,
+		matchId: sql`0`,
+		note: sql`null`,
+		createdAt: sql`${now}`,
+		updatedAt: sql`${now}`,
+	}, sql`where ${unsafeDestination}`));
 }
 
 export function isAssignmentDisplacementGuardViolation(error: unknown): boolean {

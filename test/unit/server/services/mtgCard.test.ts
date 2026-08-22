@@ -4,19 +4,6 @@ import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 // ── Mocks ──
 
 vi.mock('hub:db', () => ({ db: mockDb }));
-vi.mock('~~/server/db/schema', () => ({
-	cards: {
-		id: 'cards.id',
-		name: 'cards.name',
-		game: 'cards.game',
-		scryfallId: 'cards.scryfallId',
-		oracleId: 'cards.oracleId',
-		cardType: 'cards.cardType',
-		colors: 'cards.colors',
-		cmc: 'cards.cmc',
-		manaCost: 'cards.manaCost',
-	},
-}));
 
 const { mtgCardService } = await import('~~/server/services/mtgCard');
 
