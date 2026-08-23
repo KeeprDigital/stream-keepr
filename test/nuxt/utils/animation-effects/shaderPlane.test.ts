@@ -73,6 +73,20 @@ describe('createShaderPlaneEffect', () => {
 		expect(resolution.y).toBe(2160);
 	});
 
+	it('creates no feedback buffers unless the effect asks for them', () => {
+		const { three, renderers } = createThreeStub();
+		const instance = createShaderPlaneEffect<Params>({
+			three,
+			host: createHostStub(),
+			fragmentShader: 'void main() {}',
+			uniforms: () => ({}),
+		}, { tint: '#ff0000', strength: 2, speed: 0.5 });
+		const renderer = renderers[0] as StubRenderer;
+		instance.render(1);
+		expect(StubMaterial.lastCreated!.uniforms.iBuffer).toBeUndefined();
+		expect(renderer.setRenderTarget).not.toHaveBeenCalled();
+	});
+
 	it('disposes everything it created and removes its canvas', () => {
 		const { instance, material, renderer } = mountEffect();
 		instance.dispose();
@@ -80,5 +94,59 @@ describe('createShaderPlaneEffect', () => {
 		expect(renderer.dispose).toHaveBeenCalled();
 		expect(renderer.forceContextLoss).toHaveBeenCalled();
 		expect(renderer.domElement.remove).toHaveBeenCalled();
+	});
+});
+
+describe('createShaderPlaneEffect with a feedback buffer', () => {
+	function mountFeedbackEffect() {
+		const { three, renderers, renderTargets } = createThreeStub();
+		const instance = createShaderPlaneEffect<Params>({
+			three,
+			host: createHostStub(),
+			fragmentShader: 'void main() {}',
+			uniforms: () => ({}),
+			feedback: true,
+		}, { tint: '#ff0000', strength: 2, speed: 0.5 });
+		const renderer = renderers[0] as StubRenderer;
+		const material = StubMaterial.lastCreated!;
+		return { instance, renderer, material, renderTargets };
+	}
+
+	it('draws each frame into a buffer and then onto the screen', () => {
+		const { instance, renderer, renderTargets } = mountFeedbackEffect();
+		expect(renderTargets).toHaveLength(2);
+		instance.render(1);
+		expect(renderer.renderedTargets).toHaveLength(2);
+		expect(renderTargets).toContain(renderer.renderedTargets[0]);
+		expect(renderer.renderedTargets[1]).toBeNull();
+	});
+
+	it('feeds each frame the previous frame through iBuffer, never the buffer being written', () => {
+		const { instance, renderer, material } = mountFeedbackEffect();
+		instance.render(1);
+		const firstWrite = renderer.renderedTargets[0]!;
+		expect(material.uniforms.iBuffer!.value).not.toBe(firstWrite.texture);
+		instance.render(2);
+		// This frame reads what the previous frame wrote, and writes the other buffer.
+		expect(material.uniforms.iBuffer!.value).toBe(firstWrite.texture);
+		const secondWrite = renderer.renderedTargets[2]!;
+		expect(secondWrite).not.toBeNull();
+		expect(secondWrite).not.toBe(firstWrite);
+		expect(renderer.renderedTargets[3]).toBeNull();
+	});
+
+	it('sizes the feedback buffers with the drawing buffer, in device pixels', () => {
+		const { instance, renderer, renderTargets } = mountFeedbackEffect();
+		renderer.pixelRatio = 2;
+		instance.resize(1920, 1080);
+		expect(renderTargets[0]!.setSize).toHaveBeenCalledWith(3840, 2160);
+		expect(renderTargets[1]!.setSize).toHaveBeenCalledWith(3840, 2160);
+	});
+
+	it('disposes both feedback buffers with the effect', () => {
+		const { instance, renderTargets } = mountFeedbackEffect();
+		instance.dispose();
+		expect(renderTargets[0]!.dispose).toHaveBeenCalled();
+		expect(renderTargets[1]!.dispose).toHaveBeenCalled();
 	});
 });

@@ -66,6 +66,14 @@ export class StubMesh {
 
 export class StubCamera {}
 
+export class StubRenderTarget {
+	texture = { isStubTexture: true };
+	setSize = vi.fn();
+	dispose = vi.fn();
+
+	constructor(public width = 1, public height = 1) {}
+}
+
 export class StubRenderer {
 	domElement = {
 		style: {} as Record<string, string>,
@@ -80,13 +88,25 @@ export class StubRenderer {
 
 	getPixelRatio = vi.fn(() => this.pixelRatio);
 	setSize = vi.fn();
-	render = vi.fn();
+
+	/** The render target each render() call drew into, `null` being the canvas. */
+	renderedTargets: (StubRenderTarget | null)[] = [];
+	private currentRenderTarget: StubRenderTarget | null = null;
+	setRenderTarget = vi.fn((target: StubRenderTarget | null) => {
+		this.currentRenderTarget = target;
+	});
+
+	render = vi.fn(() => {
+		this.renderedTargets.push(this.currentRenderTarget);
+	});
+
 	dispose = vi.fn();
 	forceContextLoss = vi.fn();
 }
 
 export function createThreeStub() {
 	const renderers: StubRenderer[] = [];
+	const renderTargets: StubRenderTarget[] = [];
 	const three = {
 		WebGLRenderer: class extends StubRenderer {
 			constructor() {
@@ -94,6 +114,13 @@ export function createThreeStub() {
 				renderers.push(this);
 			}
 		},
+		WebGLRenderTarget: class extends StubRenderTarget {
+			constructor(width?: number, height?: number) {
+				super(width, height);
+				renderTargets.push(this);
+			}
+		},
+		LinearFilter: 'linear-filter',
 		Scene: StubScene,
 		ShaderMaterial: StubMaterial,
 		MeshBasicMaterial: StubMaterial,
@@ -104,7 +131,7 @@ export function createThreeStub() {
 		Vector2: StubVector2,
 		Color: StubColor,
 	};
-	return { three: three as unknown as typeof import('three'), renderers };
+	return { three: three as unknown as typeof import('three'), renderers, renderTargets };
 }
 
 export function createHostStub(): HTMLElement {

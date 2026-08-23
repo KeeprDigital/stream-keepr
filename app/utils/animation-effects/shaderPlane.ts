@@ -22,6 +22,15 @@ export interface ShaderPlaneEffectOptions<Params> {
 	 * the rate from now on instead of jumping the whole animation phase.
 	 */
 	timeScale?: (params: Params) => number;
+	/**
+	 * Give the fragment shader its own previous frame as the `iBuffer` sampler,
+	 * for effects that accumulate — trails, smears, decay. Each frame draws once
+	 * into an offscreen buffer reading the frame before it from the other buffer,
+	 * then again onto the screen; the pair swap roles every frame so the shader
+	 * never samples the buffer it is writing. Both buffers match the drawing
+	 * buffer's device-pixel size, and resizing restarts the accumulation.
+	 */
+	feedback?: boolean;
 }
 
 const FULLSCREEN_VERTEX_SHADER = `
@@ -37,9 +46,17 @@ export function createShaderPlaneEffect<Params>(
 	const { three, host } = options;
 	const harness = createEffectRenderer(three, host);
 
+	const feedbackTargets = options.feedback
+		? {
+				read: new three.WebGLRenderTarget(1, 1, { minFilter: three.LinearFilter, magFilter: three.LinearFilter }),
+				write: new three.WebGLRenderTarget(1, 1, { minFilter: three.LinearFilter, magFilter: three.LinearFilter }),
+			}
+		: null;
+
 	const uniforms: Record<string, { value: unknown }> = {
 		iTime: { value: 0 },
 		iResolution: { value: new three.Vector2(1, 1) },
+		...feedbackTargets ? { iBuffer: { value: feedbackTargets.read.texture } } : {},
 	};
 	for (const [key, value] of Object.entries(options.uniforms(params))) {
 		uniforms[key] = { value: typeof value === 'string' ? new three.Color(value) : value };
@@ -77,14 +94,33 @@ export function createShaderPlaneEffect<Params>(
 			harness.renderer.setSize(width, height, false);
 			const pixelRatio = harness.renderer.getPixelRatio();
 			(uniforms.iResolution!.value as THREE.Vector2).set(width * pixelRatio, height * pixelRatio);
+			if (feedbackTargets) {
+				feedbackTargets.read.setSize(width * pixelRatio, height * pixelRatio);
+				feedbackTargets.write.setSize(width * pixelRatio, height * pixelRatio);
+			}
 		},
 		render: (elapsedSeconds) => {
 			effectSeconds += (elapsedSeconds - lastElapsedSeconds) * timeScale;
 			lastElapsedSeconds = elapsedSeconds;
 			uniforms.iTime!.value = effectSeconds;
-			harness.renderer.render(scene, camera);
+			if (feedbackTargets) {
+				// One pass into the write buffer reading the previous frame from the
+				// read buffer, one identical pass onto the screen, then swap so the
+				// next frame reads what this one wrote.
+				uniforms.iBuffer!.value = feedbackTargets.read.texture;
+				harness.renderer.setRenderTarget(feedbackTargets.write);
+				harness.renderer.render(scene, camera);
+				harness.renderer.setRenderTarget(null);
+				harness.renderer.render(scene, camera);
+				[feedbackTargets.read, feedbackTargets.write] = [feedbackTargets.write, feedbackTargets.read];
+			}
+			else {
+				harness.renderer.render(scene, camera);
+			}
 		},
 		dispose: () => {
+			feedbackTargets?.read.dispose();
+			feedbackTargets?.write.dispose();
 			geometry.dispose();
 			material.dispose();
 			harness.dispose();
