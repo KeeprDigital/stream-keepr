@@ -96,6 +96,7 @@ export const useCardStore = defineStore('card', () => {
 	});
 	const canUseDeckListMode = deckSourceRuntime.canUseDeckListMode;
 	const canUsePlayerDeckMode = deckSourceRuntime.canUsePlayerDeckMode;
+	const cardDataDegraded = deckSourceRuntime.cardDataDegraded;
 
 	// ──────────────── Active Screen ────────────────
 
@@ -209,6 +210,7 @@ export const useCardStore = defineStore('card', () => {
 		deckListMatchId,
 		deckListFilter,
 		canUseDeckListMode,
+		cardDataDegraded,
 		// Player deck state
 		playerDeckPlayerId,
 		playerDeckData,

@@ -36,9 +36,11 @@ const mockEventStoreState = {
 mockNuxtImport('useCardRepository', () => () => mockCardRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
+const mockFetchScryfallCards = vi.fn();
+const mockBuildDeckListArrays = vi.fn();
 mockNuxtImport('useScryfallBatch', () => () => ({
-	fetchScryfallCards: vi.fn().mockResolvedValue({ cards: new Map(), degraded: false }),
-	buildDeckListArrays: vi.fn().mockReturnValue({ mainboard: [], sideboard: [] }),
+	fetchScryfallCards: mockFetchScryfallCards,
+	buildDeckListArrays: mockBuildDeckListArrays,
 }));
 const mockFetchDeck = vi.fn().mockResolvedValue(null);
 const mockGetCachedDeck = vi.fn().mockReturnValue(null);
@@ -117,6 +119,8 @@ describe('useCardStore deck sources and search', () => {
 		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
+		mockFetchScryfallCards.mockReset().mockResolvedValue({ cards: new Map(), degraded: false });
+		mockBuildDeckListArrays.mockReset().mockReturnValue({ mainboard: [], sideboard: [] });
 	});
 
 	afterEach(() => {
@@ -517,6 +521,224 @@ describe('useCardStore deck sources and search', () => {
 			mockPlayerStoreState.players = [] as any;
 
 			expect(store.canUseDeckListMode).toBe(false);
+		});
+	});
+
+	// ── Degraded card data (#471) ──
+
+	describe('degraded card data', () => {
+		function primeMatchup() {
+			mockPlayerStoreState.players = [
+				{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+			];
+			mockFeatureMatchStoreState.featureMatches = [
+				{ id: 1, player1Id: 42, player1Data: { name: 'Alice', deckId: 77 }, player2Id: null, player2Data: null },
+			] as any;
+		}
+
+		function createDeckResponse() {
+			return {
+				id: 77,
+				externalId: 'deck-77',
+				formatExternalId: 'modern',
+				phaseIds: [1],
+				phaseName: 'Swiss',
+				name: 'Burn',
+				colors: 'R',
+				sortOrder: 0,
+				isPrimary: true,
+				companion: null,
+				highlander: null,
+				cards: [{ name: 'Lightning Bolt', scryfallId: 'sc-1', quantity: 4, compartment: 'mainboard', cardType: 'Instant' }],
+			} as any;
+		}
+
+		beforeEach(() => {
+			mockFetchDeck.mockReset().mockResolvedValue(createDeckResponse());
+		});
+
+		it('exposes a degraded matchup load and returns to complete on a clean load', async () => {
+			primeMatchup();
+			mockFetchScryfallCards.mockResolvedValueOnce({ cards: new Map(), degraded: true });
+
+			await store.loadMatchDeckLists(1);
+
+			expect(store.cardDataDegraded).toBe(true);
+			// The degraded rendering itself stays up — placeholders, not a blank.
+			expect(store.deckListPlayer1).not.toBeNull();
+
+			await store.loadMatchDeckLists(1);
+
+			expect(store.cardDataDegraded).toBe(false);
+		});
+
+		it('re-fetches a degraded matchup on the slow cadence and recovers without a reload', async () => {
+			vi.useFakeTimers();
+			try {
+				primeMatchup();
+				mockFetchScryfallCards
+					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+					.mockResolvedValue({ cards: new Map(), degraded: false });
+
+				await store.loadMatchDeckLists(1);
+				expect(store.cardDataDegraded).toBe(true);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+
+				// One minute later the surface re-fetches by itself — no reload.
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+				expect(store.cardDataDegraded).toBe(false);
+
+				// Recovered: nothing left to re-fetch.
+				await vi.advanceTimersByTimeAsync(120_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('keeps the current rendering when a re-fetch is still degraded, and keeps retrying', async () => {
+			vi.useFakeTimers();
+			try {
+				primeMatchup();
+				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+
+				await store.loadMatchDeckLists(1);
+				const rendered = store.deckListPlayer1;
+				expect(rendered).not.toBeNull();
+
+				// A still-degraded re-fetch of the unchanged source has nothing
+				// better to show: no swap, no loading flash on the cadence tick.
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+				expect(store.deckListPlayer1).toBe(rendered);
+				expect(store.loadingDeckList).toBe(false);
+
+				// And the cadence continues until Scryfall answers.
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(3);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('keeps the recovery cadence and the rendering when a re-fetch itself fails mid-outage', async () => {
+			vi.useFakeTimers();
+			try {
+				primeMatchup();
+				mockFetchScryfallCards
+					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+					.mockResolvedValue({ cards: new Map(), degraded: false });
+
+				await store.loadMatchDeckLists(1);
+				expect(store.cardDataDegraded).toBe(true);
+
+				// The same outage takes down the deck endpoint for one cadence tick.
+				mockFetchDeck.mockRejectedValueOnce(new Error('network down'));
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(store.cardDataDegraded).toBe(true);
+				expect(store.deckListPlayer1).not.toBeNull();
+
+				// A failed re-fetch must not end the cadence: the next tick recovers.
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(store.cardDataDegraded).toBe(false);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('stops the cadence and clears the degradation when the matchup surface is cleared', async () => {
+			vi.useFakeTimers();
+			try {
+				primeMatchup();
+				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+
+				await store.loadMatchDeckLists(1);
+				expect(store.cardDataDegraded).toBe(true);
+
+				// A degraded report must not outlive the rendering that measured it.
+				store.clearMatchDeckLists();
+				expect(store.cardDataDegraded).toBe(false);
+
+				await vi.advanceTimersByTimeAsync(180_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('exposes a degraded player deck load and recovers on the cadence', async () => {
+			vi.useFakeTimers();
+			try {
+				mockPlayerStoreState.players = [
+					{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+				];
+				mockFetchScryfallCards
+					.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+					.mockResolvedValue({ cards: new Map(), degraded: false });
+
+				await store.loadPlayerDeck(42);
+				expect(store.cardDataDegraded).toBe(true);
+				expect(store.playerDeckData).not.toBeNull();
+
+				await vi.advanceTimersByTimeAsync(60_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+				expect(store.cardDataDegraded).toBe(false);
+
+				// Recovered: nothing left to re-fetch.
+				await vi.advanceTimersByTimeAsync(120_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('stops the cadence and clears the degradation when the player deck is cleared', async () => {
+			vi.useFakeTimers();
+			try {
+				mockPlayerStoreState.players = [
+					{ id: 42, name: 'Alice', gameData: { type: 'mtg', deckName: 'Burn' }, updatedAt: new Date('2026-08-20T00:00:00.000Z') },
+				];
+				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+
+				await store.loadPlayerDeck(42);
+				expect(store.cardDataDegraded).toBe(true);
+
+				store.clearPlayerDeck();
+				expect(store.cardDataDegraded).toBe(false);
+
+				await vi.advanceTimersByTimeAsync(180_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(1);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('settles both surfaces on $reset', async () => {
+			vi.useFakeTimers();
+			try {
+				primeMatchup();
+				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+
+				await store.loadMatchDeckLists(1);
+				await store.loadPlayerDeck(42);
+				expect(store.cardDataDegraded).toBe(true);
+
+				store.$reset();
+				expect(store.cardDataDegraded).toBe(false);
+
+				await vi.advanceTimersByTimeAsync(180_000);
+				expect(mockFetchScryfallCards).toHaveBeenCalledTimes(2);
+			}
+			finally {
+				vi.useRealTimers();
+			}
 		});
 	});
 
