@@ -32,6 +32,14 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  * kind of bindings attached to a Worker: none of those facts proves who can reach
  * the process. A production-shaped Worker therefore stays closed when only the
  * developer's bypass choice leaks into its environment.
+ *
+ * Setting BOTH values on a deployed Worker does activate the bypass, and no
+ * runtime signal guards against it. That is ADR-0013's accepted residual:
+ * editing Worker vars or secrets takes the same edit permission as deploying
+ * code, so whoever can stage it can already ship an arbitrary Worker — and the
+ * worker-smoke suite depends on exactly this activation to authenticate its
+ * probes against the production artifact. The deploy-side guards remain the
+ * defence against accidental activation.
  */
 export function localAuthBypassEnabled(context: {
 	bypassValue: unknown;
