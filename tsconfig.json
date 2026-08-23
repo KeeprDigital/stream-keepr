@@ -1,4 +1,13 @@
 {
 	// https://nuxt.com/docs/guide/concepts/typescript
-	"extends": "./.nuxt/tsconfig.json"
+	"extends": "./.nuxt/tsconfig.json",
+	// The dev-mode vue-tsc checker watches every file in the program — ~10k
+	// including dependency declarations — and TypeScript's default per-file
+	// watcher holds one kqueue fd per file on macOS. That exhausts the dev
+	// process's descriptors the moment the checker arms, and every spawn that
+	// needs a pipe (the nuxt CLI fork pool, the wrangler bindings proxy) then
+	// dies with `spawn EBADF`. Directory-level watching keeps it to ~1k fds.
+	"watchOptions": {
+		"watchFile": "useFsEventsOnParentDirectory"
+	}
 }
