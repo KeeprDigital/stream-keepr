@@ -275,6 +275,27 @@ describe('useGraphicsTemplateLibrary', () => {
 			expect(library.packageImport.reported).toBe(false);
 		});
 
+		it('keeps the paused report and says why when the confirmation is refused', async () => {
+			repository.receivePackage.mockResolvedValue(operation({
+				stage: 'awaiting-confirmation',
+				templatePackagePreflight: {
+					outcome: 'accepted-with-warnings',
+					issues: [{ code: 'duplicate-content' }],
+					fingerprint: 'fingerprint-1',
+				},
+			}));
+			repository.confirmPackage.mockRejectedValue(transportFailure({ status: 409, body: { message: 'The report has expired.' } }));
+			const library = await mountedLibrary();
+			await library.packageImport.receive(packageFile);
+
+			await library.packageImport.confirm();
+
+			expect(repository.installPackage).not.toHaveBeenCalled();
+			expect(library.error.value).toBe('The report has expired.');
+			expect(library.packageImport.awaitingConfirmation).toBe(true);
+			expect(library.packageImport.busy).toBe(false);
+		});
+
 		it('does not confirm a report that carries no fingerprint', async () => {
 			repository.receivePackage.mockResolvedValue(operation({
 				stage: 'awaiting-confirmation',

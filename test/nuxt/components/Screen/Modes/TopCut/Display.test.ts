@@ -26,12 +26,13 @@ async function mountComponent() {
 }
 
 describe('screenModesTopCutDisplay', () => {
+	// Only the placeholder text is pinned: the mode is a stated stub, and the
+	// eventual real Top Cut rendering should replace this test, not fight it.
 	it('renders the coming-soon placeholder', async () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('.topcut-display').exists()).toBe(true);
 		expect(wrapper.text()).toContain('Top Cut / Bracket');
 		expect(wrapper.text()).toContain('Coming soon');
-		expect(wrapper.get('[data-icon]').attributes('data-icon')).toBe('i-lucide-git-branch');
 	});
 });

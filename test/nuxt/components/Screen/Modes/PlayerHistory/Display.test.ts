@@ -23,22 +23,19 @@ const headerText = ref('Player Match History');
 const pageData = ref<any[]>([]);
 const player = ref<any>(null);
 
-// Mirrors usePlayerHistoryModeData's formatOutcome contract; the real
-// implementation is covered by the composable's own test.
+// Canned strings, not a copy of the real algorithm: the component only splits
+// whatever the composable returns on the first space, and the real formatOutcome
+// is covered by the composable's own test.
+const cannedOutcomes: Record<string, string> = {
+	win: 'WIN 2-1',
+	loss: 'LOSS 0-2',
+	draw: 'DRAW 1-1-1',
+	bye: 'BYE',
+	pending: 'Pending',
+};
+
 function formatOutcome(row: any): string {
-	if (row.outcome === 'bye') {
-		return 'BYE';
-	}
-	if (!row.hasResult) {
-		return 'Pending';
-	}
-	if (row.playerGameWins != null && row.opponentGameWins != null) {
-		const draws = row.gameDraws ? `-${row.gameDraws}` : '';
-
-		return `${String(row.outcome).toUpperCase()} ${row.playerGameWins}-${row.opponentGameWins}${draws}`;
-	}
-
-	return row.resultString ?? 'Result';
+	return cannedOutcomes[row.outcome as string] ?? 'Result';
 }
 
 mockNuxtImport('useScreenContext', () => () => ({

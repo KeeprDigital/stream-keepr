@@ -231,6 +231,25 @@ describe('usePlayerHistoryModeData', () => {
 		expect(pageData.value).toHaveLength(1);
 	});
 
+	it('never writes mode config from a rendering, even with auto-page on', async () => {
+		// The persist callbacks handed to the pagination runtime fire only from
+		// setPage/nextPage/prevPage, which this composable does not expose: a
+		// rendering of a Page Rotation computes its page and writes nothing.
+		mutableConfig.playerId = 7;
+		mutableConfig.autoPageEnabled = true;
+		mockInteractive.value = true;
+		mockFetch.mockResolvedValue({
+			player: mockPlayer,
+			history: [historyEntry({ id: 1 }), historyEntry({ id: 2 })],
+		});
+
+		const { pageData } = makePlayerHistoryModeData();
+		await flushPromises();
+
+		expect(pageData.value).toHaveLength(2);
+		expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
+	});
+
 	it('pages rows by the configured page size and current page', async () => {
 		mutableConfig.playerId = 7;
 		mutableConfig.rowsPerPage = 2;

@@ -121,6 +121,8 @@ describe('useGraphicsAdminReading', () => {
 
 	describe('polling', () => {
 		beforeEach(() => {
+			// Advancing the clock exercises the poll itself; shouldAdvanceTime
+			// keeps the zero-delay awaits in flushPromises() resolving.
 			vi.useFakeTimers({ shouldAdvanceTime: true });
 		});
 
