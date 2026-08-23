@@ -341,24 +341,17 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 				backgroundImageFit: 'cover',
 				gradient: 'linear-gradient(180deg, rgba(10,0,16,0.2) 0%, rgba(122,0,122,0.28) 48%, rgba(4,0,10,0.5) 100%)',
 				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true },
-				// Spread over the shared defaults rather than stated alone, so an author
-				// who switches the effect finds every other shader parameter already set.
+				// Caustics stands in for the fork's `net` until that port lands (#473);
+				// magenta light over near-black water keeps the neon read.
 				animation: {
-					...DEFAULT_FRAME_ANIMATION,
 					enabled: true,
-					effect: 'net',
+					effect: 'caustics',
 					opacity: 0.34,
-					color: '#d600ff',
-					color2: '#6d5cff',
-					backgroundColor: '#050008',
-					points: 12,
-					maxDistance: 34,
-					spacing: 18,
-					showDots: false,
-					showLines: true,
-					speed: 0.35,
-					mouseDriftSeconds: 22,
-					mouseDriftRadius: 0.22,
+					params: {
+						lightColor: '#d600ff',
+						waterColor: '#050008',
+						speed: 0.6,
+					},
 				},
 				borderVisible: true,
 				borderColor: NEON_LINE,

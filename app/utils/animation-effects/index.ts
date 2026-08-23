@@ -1,22 +1,25 @@
-import type { FeatureMatchOverlayFrameAnimationEffect } from '~~/shared/types/screenConfig';
-import type { AnimationFactory } from './types';
+import type { AnimationEffectName, AnimationEffectParamsMap } from '~~/shared/animationEffects';
+import type { AnimationEffectFactory } from './types';
 
-const effectLoaders = {
-	cells: () => import('./cells'),
-	dots: () => import('./dots'),
+/**
+ * The renderers behind the Animation Effect catalogue, one lazy chunk per
+ * effect so a Screen Output only downloads the effect (and three.js) it shows.
+ * The keys are pinned to the catalogue's closed vocabulary: an effect name that
+ * validates always resolves a renderer here, and one that does not validate
+ * never reaches this map — refused upstream rather than approximated.
+ */
+const effectLoaders: {
+	[Effect in AnimationEffectName]: () => Promise<{ default: AnimationEffectFactory<AnimationEffectParamsMap[Effect]> }>;
+} = {
+	caustics: () => import('./caustics'),
 	fog: () => import('./fog'),
-	globe: () => import('./globe'),
-	halo: () => import('./halo'),
-	net: () => import('./net'),
-	rings: () => import('./rings'),
-	ripple: () => import('./ripple'),
-	waves: () => import('./waves'),
-} satisfies Record<FeatureMatchOverlayFrameAnimationEffect, () => Promise<{ default: unknown }>>;
+};
 
-export async function loadAnimationEffect(effect: FeatureMatchOverlayFrameAnimationEffect): Promise<AnimationFactory> {
-	const loader = effectLoaders[effect] ?? effectLoaders.fog;
-	const module = await loader();
-	return module.default as AnimationFactory;
+export async function loadAnimationEffect<Effect extends AnimationEffectName>(
+	effect: Effect,
+): Promise<AnimationEffectFactory<AnimationEffectParamsMap[Effect]>> {
+	const module = await effectLoaders[effect]();
+	return module.default;
 }
 
-export type { AnimationFactory, AnimationInstance, AnimationOptions } from './types';
+export type { AnimationEffectFactory, AnimationEffectInstance } from './types';

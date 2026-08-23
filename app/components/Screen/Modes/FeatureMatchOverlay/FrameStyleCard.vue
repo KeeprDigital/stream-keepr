@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayFrameAnimationConfig, FeatureMatchOverlayFrameAnimationEffect, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import type { AnimationEffectName, AnimationEffectParamField, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import {
+	ANIMATION_EFFECT_CATALOGUE,
+	ANIMATION_EFFECT_VALUES,
+	animationEffectDefaultParams,
+	animationEffectParamFields,
+	featureMatchOverlayFrameAnimationConfigSchema,
+	isAnimationEffectHexColor,
+	parseFrameAnimationConfig,
+} from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
@@ -17,33 +27,24 @@ const BACKGROUND_IMAGE_FIT_OPTIONS = [
 	{ label: 'Contain', value: 'contain' },
 	{ label: 'Fill', value: 'fill' },
 ] satisfies Array<{ label: string; value: NonNullable<FeatureMatchLayoutFrameConfig['backgroundImageFit']> }>;
-const ANIMATION_EFFECT_OPTIONS: { label: string; value: FeatureMatchOverlayFrameAnimationEffect }[] = [
-	{ label: 'Cells', value: 'cells' },
-	{ label: 'Dots', value: 'dots' },
-	{ label: 'Fog', value: 'fog' },
-	{ label: 'Globe', value: 'globe' },
-	{ label: 'Halo', value: 'halo' },
-	{ label: 'Net', value: 'net' },
-	{ label: 'Rings', value: 'rings' },
-	{ label: 'Ripple', value: 'ripple' },
-	{ label: 'Waves', value: 'waves' },
-];
-const ANIMATION_MOVEMENT_OPTIONS = [
-	{ label: 'Smooth orbit', value: 'orbit' },
-	{ label: 'Random wander', value: 'random' },
-];
+const ANIMATION_EFFECT_OPTIONS = ANIMATION_EFFECT_VALUES.map(value => ({
+	value,
+	label: ANIMATION_EFFECT_CATALOGUE[value].label,
+}));
 
-const DEFAULT_ANIMATION: FeatureMatchOverlayFrameAnimationConfig = {
-	...DEFAULT_FRAME_ANIMATION,
-	color1: '#008c8c',
-	amplitudeFactor: 1,
-	ringFactor: 1,
-	rotationFactor: 1,
-	xOffset: 0,
-	yOffset: 0,
-};
+/**
+ * A pre-rebuild or unknown-effect config starts the editor over from the
+ * defaults rather than carrying fields no effect declares into its next write.
+ */
+const animation = computed(() =>
+	parseFrameAnimationConfig(props.config.layout.frame.animation)
+	?? featureMatchOverlayFrameAnimationConfigSchema.parse(DEFAULT_FRAME_ANIMATION),
+);
 
-const animation = computed(() => ({ ...DEFAULT_ANIMATION, ...(props.config.layout.frame.animation ?? {}) }));
+const animationParamFields = computed(() => animationEffectParamFields(animation.value.effect));
+const animationParams = computed<Record<string, string | number>>(() =>
+	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, string | number>,
+);
 const mediaBackground = computed<ScreenMediaBackgroundConfig>(() => ({
 	...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
 	...(props.config.layout.frame.mediaBackground ?? {}),
@@ -53,8 +54,46 @@ function updateFrame(updates: Partial<FeatureMatchLayoutFrameConfig>) {
 	props.patchFrame(updates);
 }
 
-function updateAnimation(updates: Partial<FeatureMatchOverlayFrameAnimationConfig>) {
+function updateAnimation(updates: Partial<Pick<FeatureMatchOverlayFrameAnimationConfig, 'enabled' | 'opacity'>>) {
 	updateFrame({ animation: { ...animation.value, ...updates } });
+}
+
+/**
+ * Switching effect starts from that effect's schema defaults: params are
+ * per-effect, so nothing from the previous effect's bag can carry over.
+ */
+function selectAnimationEffect(effect: AnimationEffectName) {
+	updateFrame({
+		animation: {
+			enabled: animation.value.enabled,
+			opacity: animation.value.opacity,
+			effect,
+		} as FeatureMatchOverlayFrameAnimationConfig,
+	});
+}
+
+function updateAnimationParam(field: AnimationEffectParamField, value: string | number | undefined) {
+	let next = value;
+	if (field.control === 'color') {
+		if (next === undefined || next === '')
+			next = field.defaultValue;
+		else if (typeof next !== 'string' || !isAnimationEffectHexColor(next))
+			return;
+	}
+	else {
+		const numeric = Number(next);
+		if (!Number.isFinite(numeric))
+			return;
+		next = Math.min(field.max ?? numeric, Math.max(field.min ?? numeric, numeric));
+	}
+	// The full bag is written back, pinning every current value: a default that
+	// changes in a later release must not restyle a Frame an author has tuned.
+	updateFrame({
+		animation: {
+			...animation.value,
+			params: { ...animationParams.value, [field.key]: next },
+		} as FeatureMatchOverlayFrameAnimationConfig,
+	});
 }
 
 function updateMediaBackground(updates: Partial<ScreenMediaBackgroundConfig>) {
@@ -76,8 +115,8 @@ function borderSideValue(side: 'borderTopVisible' | 'borderRightVisible' | 'bord
 	return props.config.layout.frame[side] ?? true;
 }
 
-function animationEffectLabel(effect: FeatureMatchOverlayFrameAnimationEffect) {
-	return ANIMATION_EFFECT_OPTIONS.find(option => option.value === effect)?.label ?? effect;
+function animationEffectLabel(effect: AnimationEffectName) {
+	return ANIMATION_EFFECT_CATALOGUE[effect].label;
 }
 
 function animationSummary() {
@@ -144,7 +183,7 @@ function animationSummary() {
 							value-key="value"
 							size="sm"
 							class="w-full"
-							@update:model-value="updateAnimation({ effect: $event as FeatureMatchOverlayFrameAnimationEffect })"
+							@update:model-value="selectAnimationEffect($event as AnimationEffectName)"
 						/>
 					</UFormField>
 					<UFormField label="Layer opacity">
@@ -166,520 +205,31 @@ function animationSummary() {
 					:badge="animationEffectLabel(animation.effect)"
 					:summary="animationSummary()"
 				>
-					<div v-if="animation.effect === 'fog'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Highlight color">
-							<UIColorPicker :model-value="animation.highlightColor" placeholder="#f59e0b" @update:model-value="updateAnimation({ highlightColor: $event || DEFAULT_ANIMATION.highlightColor })" />
-						</UFormField>
-						<UFormField label="Midtone color">
-							<UIColorPicker :model-value="animation.midtoneColor" placeholder="#7c3aed" @update:model-value="updateAnimation({ midtoneColor: $event || DEFAULT_ANIMATION.midtoneColor })" />
-						</UFormField>
-						<UFormField label="Lowlight color">
-							<UIColorPicker :model-value="animation.lowlightColor" placeholder="#06b6d4" @update:model-value="updateAnimation({ lowlightColor: $event || DEFAULT_ANIMATION.lowlightColor })" />
-						</UFormField>
-						<UFormField label="Base color">
-							<UIColorPicker :model-value="animation.baseColor" placeholder="#111111" @update:model-value="updateAnimation({ baseColor: $event || DEFAULT_ANIMATION.baseColor })" />
-						</UFormField>
-						<UFormField label="Softness">
-							<UInputNumber
-								:model-value="animation.blurFactor"
-								:step="0.05"
-								:min="0.1"
-								:max="0.95"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ blurFactor: Number($event) })"
+					<div class="grid gap-3 md:grid-cols-3">
+						<UFormField
+							v-for="field in animationParamFields"
+							:key="`${animation.effect}-${field.key}`"
+							:label="field.label"
+						>
+							<UIColorPicker
+								v-if="field.control === 'color'"
+								:model-value="String(animationParams[field.key])"
+								:placeholder="String(field.defaultValue)"
+								@update:model-value="updateAnimationParam(field, $event)"
 							/>
-						</UFormField>
-						<UFormField label="Speed">
 							<UInputNumber
-								:model-value="animation.speed"
-								:step="0.1"
-								:min="0"
-								:max="4"
+								v-else
+								:model-value="Number(animationParams[field.key])"
+								:min="field.min"
+								:max="field.max"
+								:step="field.step"
 								size="sm"
 								class="w-full"
-								@update:model-value="updateAnimation({ speed: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Zoom">
-							<UInputNumber
-								:model-value="animation.zoom"
-								:step="0.1"
-								:min="0.5"
-								:max="3"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ zoom: Number($event) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'cells'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Primary color">
-							<UIColorPicker :model-value="animation.color1" placeholder="#008c8c" @update:model-value="updateAnimation({ color1: $event || DEFAULT_ANIMATION.color1 })" />
-						</UFormField>
-						<UFormField label="Secondary color">
-							<UIColorPicker :model-value="animation.color2" placeholder="#06b6d4" @update:model-value="updateAnimation({ color2: $event || DEFAULT_ANIMATION.color2 })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Intensity">
-							<UInputNumber
-								:model-value="animation.amplitudeFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ amplitudeFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Ring scale">
-							<UInputNumber
-								:model-value="animation.ringFactor"
-								:step="0.1"
-								:min="0"
-								:max="8"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ ringFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Rotation">
-							<UInputNumber
-								:model-value="animation.rotationFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ rotationFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Cell size">
-							<UInputNumber
-								:model-value="animation.size"
-								:step="0.1"
-								:min="0.2"
-								:max="5"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ size: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Speed">
-							<UInputNumber
-								:model-value="animation.speed"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ speed: Number($event) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'globe'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Primary color">
-							<UIColorPicker :model-value="animation.color" placeholder="#7c3aed" @update:model-value="updateAnimation({ color: $event || DEFAULT_ANIMATION.color })" />
-						</UFormField>
-						<UFormField label="Secondary color">
-							<UIColorPicker :model-value="animation.color2" placeholder="#06b6d4" @update:model-value="updateAnimation({ color2: $event || DEFAULT_ANIMATION.color2 })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Point size">
-							<UInputNumber
-								:model-value="animation.size"
-								:step="0.1"
-								:min="0.2"
-								:max="5"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ size: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Point count">
-							<UInputNumber
-								:model-value="animation.points"
-								:step="1"
-								:min="2"
-								:max="30"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ points: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Connection distance">
-							<UInputNumber
-								:model-value="animation.maxDistance"
-								:step="1"
-								:min="1"
-								:max="80"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ maxDistance: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Spacing">
-							<UInputNumber
-								:model-value="animation.spacing"
-								:step="1"
-								:min="2"
-								:max="80"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ spacing: Number($event) })"
-							/>
-						</UFormField>
-						<ScreenSettingsToggle
-							label="Point markers"
-							description="Render point markers around the globe."
-							:model-value="animation.showDots"
-							@update:model-value="updateAnimation({ showDots: $event })"
-						/>
-					</div>
-
-					<div v-else-if="animation.effect === 'halo'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Base color">
-							<UIColorPicker :model-value="animation.baseColor" placeholder="#111111" @update:model-value="updateAnimation({ baseColor: $event || DEFAULT_ANIMATION.baseColor })" />
-						</UFormField>
-						<UFormField label="Accent color">
-							<UIColorPicker :model-value="animation.color2" placeholder="#06b6d4" @update:model-value="updateAnimation({ color2: $event || DEFAULT_ANIMATION.color2 })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Intensity">
-							<UInputNumber
-								:model-value="animation.amplitudeFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ amplitudeFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Ring scale">
-							<UInputNumber
-								:model-value="animation.ringFactor"
-								:step="0.1"
-								:min="0"
-								:max="8"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ ringFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Rotation">
-							<UInputNumber
-								:model-value="animation.rotationFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ rotationFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Horizontal offset">
-							<UInputNumber
-								:model-value="animation.xOffset"
-								:step="0.05"
-								:min="-1"
-								:max="1"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ xOffset: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Vertical offset">
-							<UInputNumber
-								:model-value="animation.yOffset"
-								:step="0.05"
-								:min="-1"
-								:max="1"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ yOffset: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Size">
-							<UInputNumber
-								:model-value="animation.size"
-								:step="0.1"
-								:min="0.2"
-								:max="5"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ size: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Speed">
-							<UInputNumber
-								:model-value="animation.speed"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ speed: Number($event) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'rings'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Ring color">
-							<UIColorPicker :model-value="animation.color" placeholder="#7c3aed" @update:model-value="updateAnimation({ color: $event || DEFAULT_ANIMATION.color })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'ripple'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Primary color">
-							<UIColorPicker :model-value="animation.color1" placeholder="#008c8c" @update:model-value="updateAnimation({ color1: $event || DEFAULT_ANIMATION.color1 })" />
-						</UFormField>
-						<UFormField label="Secondary color">
-							<UIColorPicker :model-value="animation.color2" placeholder="#06b6d4" @update:model-value="updateAnimation({ color2: $event || DEFAULT_ANIMATION.color2 })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Intensity">
-							<UInputNumber
-								:model-value="animation.amplitudeFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ amplitudeFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Ripple scale">
-							<UInputNumber
-								:model-value="animation.ringFactor"
-								:step="0.1"
-								:min="0"
-								:max="12"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ ringFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Rotation">
-							<UInputNumber
-								:model-value="animation.rotationFactor"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ rotationFactor: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Speed">
-							<UInputNumber
-								:model-value="animation.speed"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ speed: Number($event) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'waves'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Wave color">
-							<UIColorPicker :model-value="animation.color" placeholder="#7c3aed" @update:model-value="updateAnimation({ color: $event || DEFAULT_ANIMATION.color })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Shine">
-							<UInputNumber
-								:model-value="animation.shininess"
-								:step="1"
-								:min="0"
-								:max="100"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ shininess: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Wave height">
-							<UInputNumber
-								:model-value="animation.waveHeight"
-								:step="1"
-								:min="0"
-								:max="50"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ waveHeight: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Wave speed">
-							<UInputNumber
-								:model-value="animation.waveSpeed"
-								:step="0.1"
-								:min="0"
-								:max="4"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ waveSpeed: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Zoom">
-							<UInputNumber
-								:model-value="animation.zoom"
-								:step="0.1"
-								:min="0.5"
-								:max="3"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ zoom: Number($event) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-else-if="animation.effect === 'net'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Line color">
-							<UIColorPicker :model-value="animation.color" placeholder="#7c3aed" @update:model-value="updateAnimation({ color: $event || DEFAULT_ANIMATION.color })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Point count">
-							<UInputNumber
-								:model-value="animation.points"
-								:step="1"
-								:min="2"
-								:max="30"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ points: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Connection distance">
-							<UInputNumber
-								:model-value="animation.maxDistance"
-								:step="1"
-								:min="1"
-								:max="80"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ maxDistance: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Spacing">
-							<UInputNumber
-								:model-value="animation.spacing"
-								:step="1"
-								:min="2"
-								:max="80"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ spacing: Number($event) })"
-							/>
-						</UFormField>
-						<ScreenSettingsToggle
-							label="Point markers"
-							description="Render point markers at net intersections."
-							:model-value="animation.showDots"
-							@update:model-value="updateAnimation({ showDots: $event })"
-						/>
-					</div>
-
-					<div v-else-if="animation.effect === 'dots'" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Dot color">
-							<UIColorPicker :model-value="animation.color" placeholder="#7c3aed" @update:model-value="updateAnimation({ color: $event || DEFAULT_ANIMATION.color })" />
-						</UFormField>
-						<UFormField label="Accent color">
-							<UIColorPicker :model-value="animation.color2" placeholder="#06b6d4" @update:model-value="updateAnimation({ color2: $event || DEFAULT_ANIMATION.color2 })" />
-						</UFormField>
-						<UFormField label="Background color">
-							<UIColorPicker :model-value="animation.backgroundColor" placeholder="#111111" @update:model-value="updateAnimation({ backgroundColor: $event || DEFAULT_ANIMATION.backgroundColor })" />
-						</UFormField>
-						<UFormField label="Dot size">
-							<UInputNumber
-								:model-value="animation.size"
-								:step="0.5"
-								:min="0.5"
-								:max="20"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ size: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Spacing">
-							<UInputNumber
-								:model-value="animation.spacing"
-								:step="1"
-								:min="5"
-								:max="100"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ spacing: Number($event) })"
-							/>
-						</UFormField>
-						<ScreenSettingsToggle
-							label="Connecting lines"
-							description="Render connecting line segments between dots."
-							:model-value="animation.showLines"
-							@update:model-value="updateAnimation({ showLines: $event })"
-						/>
-					</div>
-				</FeatureMatchOverlayControlSection>
-
-				<ScreenSettingsToggle
-					v-if="animation.enabled"
-					label="Movement"
-					:model-value="animation.mouseDriftEnabled"
-					@update:model-value="updateAnimation({ mouseDriftEnabled: $event })"
-				>
-					<div v-if="animation.mouseDriftEnabled" class="grid gap-3 md:grid-cols-3">
-						<UFormField label="Movement style">
-							<USelect
-								:model-value="animation.mouseDriftMode"
-								:items="ANIMATION_MOVEMENT_OPTIONS"
-								value-key="value"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ mouseDriftMode: $event as 'orbit' | 'random' })"
-							/>
-						</UFormField>
-						<UFormField label="Movement speed">
-							<UInputNumber
-								:model-value="animation.mouseDriftSeconds"
-								:step="1"
-								:min="2"
-								:max="120"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ mouseDriftSeconds: Number($event) })"
-							/>
-						</UFormField>
-						<UFormField label="Movement range">
-							<UInputNumber
-								:model-value="animation.mouseDriftRadius"
-								:step="0.02"
-								:min="0"
-								:max="0.5"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimation({ mouseDriftRadius: Number($event) })"
+								@update:model-value="updateAnimationParam(field, Number($event))"
 							/>
 						</UFormField>
 					</div>
-				</ScreenSettingsToggle>
+				</FeatureMatchOverlayControlSection>
 			</section>
 
 			<section class="space-y-3 py-4 first:pt-0 last:pb-0">

@@ -24,31 +24,13 @@ export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig
 	loop: true,
 };
 
+/**
+ * Effect params are deliberately absent: each Animation Effect's Zod schema is
+ * the single source of its defaults, so an empty bag means "as shipped" and
+ * never goes stale against the catalogue.
+ */
 export const DEFAULT_FRAME_ANIMATION: FeatureMatchOverlayFrameAnimationConfig = {
 	enabled: false,
 	effect: 'fog',
 	opacity: 0.45,
-	highlightColor: '#f59e0b',
-	midtoneColor: '#7c3aed',
-	lowlightColor: '#06b6d4',
-	baseColor: '#111111',
-	blurFactor: 0.55,
-	speed: 0.6,
-	zoom: 1,
-	color: '#7c3aed',
-	color2: '#06b6d4',
-	backgroundColor: '#111111',
-	shininess: 30,
-	waveHeight: 20,
-	waveSpeed: 1,
-	points: 10,
-	maxDistance: 22,
-	spacing: 16,
-	showDots: true,
-	size: 3,
-	showLines: true,
-	mouseDriftEnabled: true,
-	mouseDriftMode: 'orbit',
-	mouseDriftSeconds: 18,
-	mouseDriftRadius: 0.28,
 };

@@ -32,6 +32,52 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).success).toBe(true);
 	});
 
+	it('accepts a layout edit that carries a stale pre-rebuild frame animation along, resetting the animation', () => {
+		// Every layout write re-sends the whole stored layout, so a border tweak on
+		// an installation with a pre-Animation-Effect-rebuild config carries the old
+		// flat bag with it. The edit lands and the animation resets (ADR-0014).
+		const config = configWith([item('text', 'name')]);
+		const parsed = featureMatchOverlayModeConfigSchema.safeParse({
+			...config,
+			layout: {
+				...config.layout,
+				frame: {
+					...config.layout.frame,
+					animation: {
+						enabled: true,
+						effect: 'waves',
+						opacity: 0.6,
+						color: '#ffffff',
+						waveHeight: 25,
+						mouseDriftEnabled: true,
+						mouseDriftMode: 'orbit',
+						mouseDriftSeconds: 12,
+						mouseDriftRadius: 0.4,
+					},
+				},
+			},
+		});
+
+		expect(parsed.success).toBe(true);
+		expect(parsed.success && parsed.data.layout.frame.animation).toBeUndefined();
+	});
+
+	it('refuses a current-shape frame animation naming an effect outside the closed vocabulary', () => {
+		const config = configWith([item('text', 'name')]);
+		const parsed = featureMatchOverlayModeConfigSchema.safeParse({
+			...config,
+			layout: {
+				...config.layout,
+				frame: {
+					...config.layout.frame,
+					animation: { enabled: true, effect: 'waves', opacity: 0.6 },
+				},
+			},
+		});
+
+		expect(parsed.success).toBe(false);
+	});
+
 	it('accepts the shared base kinds and the three context-gated kinds', () => {
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(configWith([
 			item('text', 'name'),
