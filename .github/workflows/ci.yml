@@ -52,7 +52,8 @@ jobs:
       # Ably key is configured in CI by decision; realtime coverage runs
       # locally (#189). The unit and nuxt tiers run with --coverage, so the
       # thresholds in vitest.shared.ts fail this step when coverage drops
-      # below them (#469); measured overhead is ~2s per suite.
+      # below them (#469); the overhead measurement lives with those
+      # thresholds.
       - run: pnpm test
 
   worker-guard:

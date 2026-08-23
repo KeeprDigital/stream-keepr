@@ -97,8 +97,9 @@ the workflow header). Realtime integration tests self-skip there — no Ably key
 configured in CI by decision (#189). The prerequisite-bound suites in the table
 above stay local.
 
-Ad-hoc vitest modes still work without dedicated scripts: `pnpm exec vitest --ui`,
-`pnpm exec vitest run --coverage`.
+Ad-hoc vitest modes still work without dedicated scripts, e.g.
+`pnpm exec vitest --ui`; coverage passes have their own scripts
+(`test:unit:coverage`, `test:nuxt:coverage`).
 
 ## Database
 
