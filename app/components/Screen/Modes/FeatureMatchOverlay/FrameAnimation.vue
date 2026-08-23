@@ -2,7 +2,7 @@
 import type { AnimationEffectName, AnimationEffectParamsMap, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { AnimationEffectInstance } from '~/utils/animation-effects';
-import { animationEffectDefaultParams, featureMatchOverlayFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { animationEffectDefaultParams, parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import { loadAnimationEffect } from '~/utils/animation-effects';
 
 const props = defineProps<{
@@ -26,18 +26,10 @@ const instance = shallowRef<AnimationEffectInstance<AnyAnimationEffectParams> | 
 let currentEffect: AnimationEffectName | null = null;
 let mountGeneration = 0;
 let frameHandle: number | null = null;
-let mountedSize: { width: number; height: number } | null = null;
+let appliedSize: { width: number; height: number } | null = null;
 
-/**
- * The stored config re-proven rather than trusted: a stored animation that
- * predates the in-house Animation Effect rebuild — or names an effect this
- * build does not ship — parses to nothing and renders nothing, which is the
- * "reset, not migrated" ADR-0014 accepts.
- */
-const parsedAnimation = computed(() => {
-	const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse(props.animation);
-	return outcome.success ? outcome.data : null;
-});
+/** A pre-rebuild or unknown-effect config parses to nothing and renders nothing. */
+const parsedAnimation = computed(() => parseFrameAnimationConfig(props.animation));
 
 const isVisible = computed(() => props.output !== 'key' && parsedAnimation.value?.enabled === true);
 const hostStyle = computed(() => ({ opacity: parsedAnimation.value?.opacity ?? 0 }));
@@ -77,7 +69,7 @@ function disposeAnimation() {
 	instance.value?.dispose();
 	instance.value = null;
 	currentEffect = null;
-	mountedSize = null;
+	appliedSize = null;
 }
 
 function destroyAnimation() {
@@ -87,10 +79,10 @@ function destroyAnimation() {
 
 function resizeToCanvas() {
 	const size = { width: props.canvasWidth, height: props.canvasHeight };
-	if (mountedSize && mountedSize.width === size.width && mountedSize.height === size.height)
+	if (appliedSize && appliedSize.width === size.width && appliedSize.height === size.height)
 		return;
 	instance.value?.resize(size.width, size.height);
-	mountedSize = size;
+	appliedSize = size;
 }
 
 async function mountAnimation() {

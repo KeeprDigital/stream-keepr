@@ -7,6 +7,8 @@ import {
 	animationEffectDefaultParams,
 	animationEffectParamFields,
 	featureMatchOverlayFrameAnimationConfigSchema,
+	isAnimationEffectHexColor,
+	parseFrameAnimationConfig,
 } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
@@ -30,18 +32,14 @@ const ANIMATION_EFFECT_OPTIONS = ANIMATION_EFFECT_VALUES.map(value => ({
 	label: ANIMATION_EFFECT_CATALOGUE[value].label,
 }));
 
-const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-
 /**
- * The stored animation re-proven through the shared schema: a stored config
- * that predates the in-house Animation Effect rebuild fails the parse and the
- * editor starts over from the defaults — the reset ADR-0014 accepts — rather
- * than carrying fields no effect declares into its next write.
+ * A pre-rebuild or unknown-effect config starts the editor over from the
+ * defaults rather than carrying fields no effect declares into its next write.
  */
-const animation = computed(() => {
-	const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse(props.config.layout.frame.animation);
-	return outcome.success ? outcome.data : featureMatchOverlayFrameAnimationConfigSchema.parse(DEFAULT_FRAME_ANIMATION);
-});
+const animation = computed(() =>
+	parseFrameAnimationConfig(props.config.layout.frame.animation)
+	?? featureMatchOverlayFrameAnimationConfigSchema.parse(DEFAULT_FRAME_ANIMATION),
+);
 
 const animationParamFields = computed(() => animationEffectParamFields(animation.value.effect));
 const animationParams = computed<Record<string, string | number>>(() =>
@@ -79,7 +77,7 @@ function updateAnimationParam(field: AnimationEffectParamField, value: string | 
 	if (field.control === 'color') {
 		if (next === undefined || next === '')
 			next = field.defaultValue;
-		else if (typeof next !== 'string' || !HEX_COLOR_PATTERN.test(next))
+		else if (typeof next !== 'string' || !isAnimationEffectHexColor(next))
 			return;
 	}
 	else {

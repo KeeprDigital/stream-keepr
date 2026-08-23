@@ -56,6 +56,11 @@ export function createShaderPlaneEffect<Params>(
 	const camera = new three.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 	let timeScale = options.timeScale?.(params) ?? 1;
+	// Effect time is accumulated from deltas rather than derived from elapsed
+	// time, so a speed change scales only the time still to come — deriving it
+	// would rescale the whole history and jump the animation phase.
+	let effectSeconds = 0;
+	let lastElapsedSeconds = 0;
 
 	return {
 		setParams: (next) => {
@@ -74,7 +79,9 @@ export function createShaderPlaneEffect<Params>(
 			(uniforms.iResolution!.value as THREE.Vector2).set(width * pixelRatio, height * pixelRatio);
 		},
 		render: (elapsedSeconds) => {
-			uniforms.iTime!.value = elapsedSeconds * timeScale;
+			effectSeconds += (elapsedSeconds - lastElapsedSeconds) * timeScale;
+			lastElapsedSeconds = elapsedSeconds;
+			uniforms.iTime!.value = effectSeconds;
 			harness.renderer.render(scene, camera);
 		},
 		dispose: () => {

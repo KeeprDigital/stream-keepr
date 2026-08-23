@@ -9,22 +9,23 @@ import { createEffectRenderer } from './rendererHarness';
  * the frame loop's render call, camera aspect, and teardown of whatever the
  * delegate built; the delegate owns everything effect-shaped.
  */
-export interface SceneEffectContext<Params> {
+/** The stable half of every delegate call: the scene the base owns for it. */
+export interface SceneEffectContext {
 	three: typeof THREE;
 	scene: THREE.Scene;
-	params: Params;
+	camera: THREE.Camera;
 }
 
 export interface SceneEffectDelegate<Params> {
 	createCamera: (three: typeof THREE, viewport: { width: number; height: number }) => THREE.Camera;
 	/** Populate the scene for the starting params. Called once. */
-	build: (context: SceneEffectContext<Params>) => void;
+	build: (context: SceneEffectContext & { params: Params }) => void;
 	/** Reflect changed params in the built scene, without a rebuild. */
-	applyParams: (context: SceneEffectContext<Params>) => void;
+	applyParams: (context: SceneEffectContext & { params: Params }) => void;
 	/** Advance the scene to this elapsed time; runs before every render. */
-	update: (context: { three: typeof THREE; scene: THREE.Scene; camera: THREE.Camera; elapsedSeconds: number }) => void;
+	update: (context: SceneEffectContext & { elapsedSeconds: number }) => void;
 	/** Extra viewport handling beyond the camera aspect the base already keeps. */
-	resize?: (context: { three: typeof THREE; scene: THREE.Scene; camera: THREE.Camera; width: number; height: number }) => void;
+	resize?: (context: SceneEffectContext & { width: number; height: number }) => void;
 }
 
 function disposeSceneContents(scene: THREE.Scene) {
@@ -51,13 +52,12 @@ export function createSceneEffect<Params>(
 		height: Math.max(1, host.clientHeight),
 	};
 	const camera = delegate.createCamera(three, viewport);
-	let currentParams = params;
-	delegate.build({ three, scene, params: currentParams });
+	const context: SceneEffectContext = { three, scene, camera };
+	delegate.build({ ...context, params });
 
 	return {
 		setParams: (next) => {
-			currentParams = next;
-			delegate.applyParams({ three, scene, params: currentParams });
+			delegate.applyParams({ ...context, params: next });
 		},
 		resize: (width, height) => {
 			harness.renderer.setSize(width, height, false);
@@ -66,10 +66,10 @@ export function createSceneEffect<Params>(
 				perspective.aspect = width / height;
 				perspective.updateProjectionMatrix?.();
 			}
-			delegate.resize?.({ three, scene, camera, width, height });
+			delegate.resize?.({ ...context, width, height });
 		},
 		render: (elapsedSeconds) => {
-			delegate.update({ three, scene, camera, elapsedSeconds });
+			delegate.update({ ...context, elapsedSeconds });
 			harness.renderer.render(scene, camera);
 		},
 		dispose: () => {

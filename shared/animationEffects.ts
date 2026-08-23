@@ -35,6 +35,11 @@ interface AnimationEffectParamMeta {
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
+/** Whether a string is a colour an effect param accepts (see `colorParam`). */
+export function isAnimationEffectHexColor(value: string): boolean {
+	return HEX_COLOR_PATTERN.test(value);
+}
+
 /**
  * Effect colours are hex-only, unlike the looser CSS colour strings elsewhere in
  * a Screen configuration: each one becomes a shader uniform via `THREE.Color`,
@@ -168,6 +173,21 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
  * through the schema to get the fully-defaulted `AnimationEffectParamsMap` form.
  */
 export type FeatureMatchOverlayFrameAnimationConfig = z.input<typeof featureMatchOverlayFrameAnimationConfigSchema>;
+
+/**
+ * A stored `frame.animation` value re-proven rather than trusted, for the
+ * consumers that read one: the parsed config, or `null` for anything else — a
+ * config that predates the in-house Animation Effect rebuild, or one naming an
+ * effect this build does not ship. Callers treat `null` as "no animation"
+ * (renderer) or start over from defaults (editor), which is the "reset, not
+ * migrated" ADR-0014 accepts.
+ */
+export function parseFrameAnimationConfig(
+	value: unknown,
+): z.output<typeof featureMatchOverlayFrameAnimationConfigSchema> | null {
+	const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse(value);
+	return outcome.success ? outcome.data : null;
+}
 
 /**
  * The retired pre-rebuild shape, recognisable by the `mouseDrift*` fields every

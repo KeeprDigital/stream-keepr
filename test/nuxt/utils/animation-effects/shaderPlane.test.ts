@@ -54,6 +54,15 @@ describe('createShaderPlaneEffect', () => {
 		expect(material.uniforms.iTime!.value).toBe(20);
 	});
 
+	it('scales only the time still to come on a speed change, never jumping the phase', () => {
+		const { instance, material } = mountEffect();
+		instance.render(10);
+		expect(material.uniforms.iTime!.value).toBe(5);
+		instance.setParams({ tint: '#ff0000', strength: 2, speed: 2 });
+		instance.render(11);
+		expect(material.uniforms.iTime!.value).toBe(7);
+	});
+
 	it('sizes the drawing buffer and the resolution uniform together', () => {
 		const { instance, material, renderer } = mountEffect();
 		renderer.pixelRatio = 2;

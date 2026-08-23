@@ -38,11 +38,16 @@ import {
  *
  * ADR-0014 asked whether per-effect animation params — which reshaped what a
  * `frame.animation` payload carries — need a version bump. They do not: the
- * effect terms still mean the same renderers, and the payload shape is guarded
- * by the strict layout document schema, not by this version. A pre-rebuild
- * document always carries the retired `mouseDrift*` fields, so it fails the new
- * schema in both directions rather than half-parsing; a bump would additionally
- * refuse older packages that carry no animation at all, which install fine.
+ * effect terms still mean the same renderers, and no payload ever half-parses
+ * under the wrong shape. A new-shape payload reaching a pre-rebuild
+ * installation fails its strict document schema. A pre-rebuild bag reaching
+ * this one is recognised by the retired `mouseDrift*` fields it was required to
+ * carry and *resets to no animation* rather than being refused — that is the
+ * stored-payload schema applying the reset ADR-0014 accepts, not a schema gap —
+ * while a package whose manifest declares an effect this build does not ship is
+ * still refused at capability preflight on the identity alone. A bump would
+ * additionally refuse older packages that carry no animation at all, which
+ * install fine.
  */
 
 export const FEATURE_MATCH_LAYOUT_FORMAT_VERSION = 1;
