@@ -46,10 +46,18 @@ export function createShaderPlaneEffect<Params>(
 	const { three, host } = options;
 	const harness = createEffectRenderer(three, host);
 
+	// Linear filtering is load-bearing: accumulating shaders sample iBuffer at
+	// sub-texel offsets, and nearest sampling would turn the smear into stepping.
+	// No depth buffer — nothing here but one fullscreen quad.
+	const feedbackTargetOptions = {
+		minFilter: three.LinearFilter,
+		magFilter: three.LinearFilter,
+		depthBuffer: false,
+	};
 	const feedbackTargets = options.feedback
 		? {
-				read: new three.WebGLRenderTarget(1, 1, { minFilter: three.LinearFilter, magFilter: three.LinearFilter }),
-				write: new three.WebGLRenderTarget(1, 1, { minFilter: three.LinearFilter, magFilter: three.LinearFilter }),
+				read: new three.WebGLRenderTarget(1, 1, feedbackTargetOptions),
+				write: new three.WebGLRenderTarget(1, 1, feedbackTargetOptions),
 			}
 		: null;
 
