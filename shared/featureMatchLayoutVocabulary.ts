@@ -33,6 +33,16 @@ import {
  * receiver does not know is refused on the identity alone. The version is for the
  * harder case — a term whose *meaning* changes, where the identity still resolves
  * and only the version can say the sender meant something else by it.
+ *
+ * ## Why the Animation Effect rebuild did not bump it
+ *
+ * ADR-0014 asked whether per-effect animation params — which reshaped what a
+ * `frame.animation` payload carries — need a version bump. They do not: the
+ * effect terms still mean the same renderers, and the payload shape is guarded
+ * by the strict layout document schema, not by this version. A pre-rebuild
+ * document always carries the retired `mouseDrift*` fields, so it fails the new
+ * schema in both directions rather than half-parsing; a bump would additionally
+ * refuse older packages that carry no animation at all, which install fine.
  */
 
 export const FEATURE_MATCH_LAYOUT_FORMAT_VERSION = 1;

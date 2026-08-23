@@ -250,7 +250,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			featureMatchLayoutVocabularyIdentity('source-role', 'main'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player1'),
 			featureMatchLayoutVocabularyIdentity('source-role', 'player2'),
-			featureMatchLayoutVocabularyIdentity('frame-animation-effect', 'waves'),
+			featureMatchLayoutVocabularyIdentity('frame-animation-effect', 'caustics'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Name'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Record'),
 			// Named by a Graphic Placeholder Style rather than by the template text: a

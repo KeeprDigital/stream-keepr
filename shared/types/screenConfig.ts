@@ -1,3 +1,4 @@
+import type { FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetReference } from './graphicsAsset';
@@ -305,54 +306,19 @@ export interface ScreenMediaBackgroundConfig {
 /**
  * The Feature Match Overlay Frame's animation effects.
  *
- * A closed vocabulary for the same reason a Source Role is: an effect names a
- * renderer that ships with Stream Keepr, so a Feature Match Layout Template
- * carries the name and the receiving installation supplies the renderer. One it
- * does not implement is a capability it lacks, not a value it can approximate.
+ * A closed vocabulary for the same reason a Source Role is: an effect names an
+ * Animation Effect renderer that ships with Stream Keepr, so a Feature Match
+ * Layout Template carries the name and the receiving installation supplies the
+ * renderer. One it does not implement is a capability it lacks, not a value it
+ * can approximate. The vocabulary, and each effect's own params, live in the
+ * Animation Effect catalogue (`shared/animationEffects.ts`); this module
+ * re-exports them under the Frame's names so Screen configuration keeps one
+ * import.
  */
-export const FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES = ['cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+export { ANIMATION_EFFECT_VALUES as FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES } from '../animationEffects';
+export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as FeatureMatchOverlayFrameAnimationEffect } from '../animationEffects';
 
-export type FeatureMatchOverlayFrameAnimationEffect = typeof FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES[number];
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
-
-export interface FeatureMatchOverlayFrameAnimationConfig {
-	enabled: boolean;
-	effect: FeatureMatchOverlayFrameAnimationEffect;
-	opacity: number;
-	// Animation color options
-	highlightColor?: string;
-	midtoneColor?: string;
-	lowlightColor?: string;
-	baseColor?: string;
-	color1?: string;
-	color2?: string;
-	backgroundColor?: string;
-	// Animation numeric shader / effect options
-	blurFactor?: number;
-	speed?: number;
-	zoom?: number;
-	amplitudeFactor?: number;
-	ringFactor?: number;
-	rotationFactor?: number;
-	xOffset?: number;
-	yOffset?: number;
-	// Animation wave / graph options
-	color?: string;
-	shininess?: number;
-	waveHeight?: number;
-	waveSpeed?: number;
-	points?: number;
-	maxDistance?: number;
-	spacing?: number;
-	showDots?: boolean;
-	size?: number;
-	showLines?: boolean;
-	// Stream Keepr synthetic movement options
-	mouseDriftEnabled: boolean;
-	mouseDriftMode?: 'orbit' | 'random';
-	mouseDriftSeconds: number;
-	mouseDriftRadius: number;
-}
 
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
 	backgroundColor: string;

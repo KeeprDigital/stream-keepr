@@ -8,6 +8,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
@@ -104,7 +105,6 @@ import {
 } from '~~/shared/types/graphics';
 import {
 	FEATURE_MATCH_OVERLAY_ANCHOR_VALUES,
-	FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES,
 	FEATURE_MATCH_SOURCE_ROLE_VALUES,
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
@@ -398,7 +398,6 @@ export const playerHistoryModeConfigSchema = z.object({
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
 const featureMatchOverlayAnchorValueSchema = z.enum(FEATURE_MATCH_OVERLAY_ANCHOR_VALUES);
-const featureMatchOverlayFrameAnimationEffectSchema = z.enum(FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES);
 
 const featureMatchOverlayRectSchema = z.object({
 	x: pixelPositionSchema,
@@ -440,41 +439,6 @@ const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchem
 	glowOpacity: opacitySchema.optional(),
 }).strict();
 
-const featureMatchOverlayFrameAnimationConfigSchema = z.object({
-	enabled: z.boolean(),
-	effect: featureMatchOverlayFrameAnimationEffectSchema,
-	opacity: opacitySchema,
-	highlightColor: optionalCssColorSchema,
-	midtoneColor: optionalCssColorSchema,
-	lowlightColor: optionalCssColorSchema,
-	baseColor: optionalCssColorSchema,
-	color1: optionalCssColorSchema,
-	color2: optionalCssColorSchema,
-	backgroundColor: optionalCssColorSchema,
-	blurFactor: opacitySchema.optional(),
-	speed: finiteNumberSchema.nonnegative().max(20).optional(),
-	zoom: finiteNumberSchema.positive().max(20).optional(),
-	amplitudeFactor: finiteNumberSchema.nonnegative().max(20).optional(),
-	ringFactor: finiteNumberSchema.nonnegative().max(50).optional(),
-	rotationFactor: finiteNumberSchema.nonnegative().max(20).optional(),
-	xOffset: finiteNumberSchema.min(-1).max(1).optional(),
-	yOffset: finiteNumberSchema.min(-1).max(1).optional(),
-	color: optionalCssColorSchema,
-	shininess: finiteNumberSchema.nonnegative().max(500).optional(),
-	waveHeight: finiteNumberSchema.nonnegative().max(500).optional(),
-	waveSpeed: finiteNumberSchema.nonnegative().max(20).optional(),
-	points: finiteNumberSchema.int().min(1).max(1000).optional(),
-	maxDistance: finiteNumberSchema.nonnegative().max(1000).optional(),
-	spacing: finiteNumberSchema.positive().max(1000).optional(),
-	showDots: z.boolean().optional(),
-	size: finiteNumberSchema.positive().max(1000).optional(),
-	showLines: z.boolean().optional(),
-	mouseDriftEnabled: z.boolean(),
-	mouseDriftMode: z.enum(['orbit', 'random']).optional(),
-	mouseDriftSeconds: finiteNumberSchema.positive().max(600),
-	mouseDriftRadius: finiteNumberSchema.nonnegative().max(1),
-}).strict();
-
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
 	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
@@ -482,7 +446,10 @@ const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchem
 	backgroundImageFit: z.enum(['cover', 'contain', 'fill']).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
 	gradient: z.string().max(1000).optional(),
-	animation: featureMatchOverlayFrameAnimationConfigSchema.optional(),
+	// The stored-payload wrapper rather than the plain config schema: every
+	// layout write re-sends the whole stored layout, so a pre-rebuild animation
+	// bag resets to absent here instead of vetoing the edit it rides along on.
+	animation: storedFrameAnimationConfigSchema.optional(),
 	borderVisible: z.boolean().optional(),
 	borderColor: optionalCssColorSchema,
 	borderWidth: nonNegativePixelSchema.optional(),
