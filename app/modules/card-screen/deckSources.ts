@@ -11,7 +11,6 @@ import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters'
 import { uniqueDeckTokens } from '~~/shared/utils/deckTokens';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createPlayerDeckList } from '~~/shared/utils/playerDeck';
-import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
 interface CardDeckSourceRuntimeState {
 	eventId: MaybeRefOrGetter<number | null | undefined>;
@@ -37,17 +36,6 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 	const deckCache = usePlayerDeckCache();
 	const roundStore = useRoundStore();
-
-	/**
-	 * True while a deck source on this surface is rendering placeholders it
-	 * should not be: a Scryfall batch exhausted its retries, so card data that
-	 * exists could not be resolved (#465, #471). Tracked per source because both
-	 * can hold data at once; consumed combined because one Screen has one
-	 * `cardDataHealth` ref to report through.
-	 */
-	const deckListDegraded = ref(false);
-	const playerDeckDegraded = ref(false);
-	const cardDataDegraded = computed(() => deckListDegraded.value || playerDeckDegraded.value);
 
 	const canUseDeckListMode = computed(() => {
 		const players = toValue(state.players);
@@ -261,34 +249,6 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		player2DeckId?: number | null;
 	}
 
-	/**
-	 * One surface's slot in the reload-free recovery path (#465, #471): while
-	 * degraded, `schedule` arms a silent re-fetch of that surface on the Deck
-	 * mode's slow cadence; `cancel` disarms it when a fresh load supersedes it or
-	 * the surface goes away.
-	 */
-	function createDegradedRefetch(refetch: () => void) {
-		let timer: ReturnType<typeof setTimeout> | null = null;
-
-		function cancel() {
-			if (timer !== null) {
-				clearTimeout(timer);
-				timer = null;
-			}
-		}
-
-		function schedule() {
-			cancel();
-			timer = setTimeout(() => {
-				timer = null;
-				refetch();
-			}, DECK_CARD_DATA_REFETCH_MS);
-		}
-
-		return { cancel, schedule };
-	}
-
-	let matchupRequestId = 0;
 	let lastMatchupArgs: MatchupDeckListArgs | null = null;
 	/**
 	 * The deck responses the current matchup rendering was built from. The deck
@@ -299,17 +259,25 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	 */
 	let renderedMatchupSources: { p1: PlayerDeckResponse | null; p2: PlayerDeckResponse | null } | null = null;
 
-	const matchupRefetch = createDegradedRefetch(() => {
-		if (lastMatchupArgs) {
-			void runMatchupDeckListLoad(lastMatchupArgs, { silent: true });
-		}
+	/**
+	 * One surface's slot in the reload-free recovery path (#465, #471): while
+	 * degraded, the lifecycle arms a silent re-fetch of that surface on the Deck
+	 * mode's slow cadence.
+	 */
+	const matchupLifecycle = createDegradedRefetchLifecycle<{ p1: PlayerDeckResponse | null; p2: PlayerDeckResponse | null }>({
+		refetch: () => {
+			if (lastMatchupArgs) {
+				void runMatchupDeckListLoad(lastMatchupArgs, { silent: true });
+			}
+		},
+		isUnchanged: next =>
+			renderedMatchupSources !== null
+			&& renderedMatchupSources.p1 === next.p1
+			&& renderedMatchupSources.p2 === next.p2,
 	});
 
 	async function runMatchupDeckListLoad(args: MatchupDeckListArgs, options: { silent: boolean }) {
-		const requestId = ++matchupRequestId;
-		// A fresh load supersedes any pending degraded re-fetch; a degraded
-		// completion schedules the next one itself.
-		matchupRefetch.cancel();
+		const requestId = matchupLifecycle.begin();
 		lastMatchupArgs = args;
 		if (!options.silent) {
 			state.loadingDeckList.value = true;
@@ -336,23 +304,15 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 				? await fetchScryfallCards(allCards)
 				: { cards: new Map<string, MtgCard>(), degraded: false };
 
-			if (requestId !== matchupRequestId) {
+			if (!matchupLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
-			deckListDegraded.value = degraded;
-			if (degraded) {
-				matchupRefetch.schedule();
-				// A still-degraded re-fetch of unchanged decks has nothing better
-				// to show: keep the current rendering rather than rebuild an
-				// identical placeholder surface on every cadence tick.
-				if (
-					renderedMatchupSources
-					&& renderedMatchupSources.p1 === p1DeckResponse
-					&& renderedMatchupSources.p2 === p2DeckResponse
-				) {
-					return;
-				}
+			// A still-degraded re-fetch of unchanged decks keeps the current
+			// rendering rather than rebuilding an identical placeholder surface on
+			// every cadence tick.
+			if (matchupLifecycle.completeLoad(degraded, { p1: p1DeckResponse, p2: p2DeckResponse }) === 'keep') {
+				return;
 			}
 
 			state.deckListPlayer1.value = p1Name
@@ -366,14 +326,13 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		}
 		catch (err) {
 			console.error('Failed to load match deck lists:', err);
-			if (requestId !== matchupRequestId) {
+			if (!matchupLifecycle.isCurrent(requestId)) {
 				return;
 			}
-			// A failed load must not end a degraded surface's recovery cadence or
-			// blank the rendering — the deck endpoint failing during the same
-			// outage would otherwise leave the degradation permanent (#465 review).
-			if (deckListDegraded.value) {
-				matchupRefetch.schedule();
+			// A failed load while degraded must not blank the rendering — the deck
+			// endpoint failing during the same outage would otherwise take down the
+			// placeholder surface too (#465 review).
+			if (matchupLifecycle.keepCadence()) {
 				return;
 			}
 			state.deckListPlayer1.value = null;
@@ -422,11 +381,9 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	 * left to re-fetch.
 	 */
 	function settleMatchupDegradation() {
-		matchupRefetch.cancel();
-		matchupRequestId++;
+		matchupLifecycle.settle();
 		lastMatchupArgs = null;
 		renderedMatchupSources = null;
-		deckListDegraded.value = false;
 	}
 
 	function clearMatchDeckLists() {
@@ -436,20 +393,22 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		state.deckListFilter.value = '';
 	}
 
-	let playerDeckRequestId = 0;
 	let lastPlayerDeckPlayerId: number | null = null;
 	/** The deck response the current player-deck rendering was built from — see `renderedMatchupSources`. */
 	let renderedPlayerDeckSource: PlayerDeckResponse | null = null;
 
-	const playerDeckRefetch = createDegradedRefetch(() => {
-		if (lastPlayerDeckPlayerId !== null) {
-			void runPlayerDeckLoad(lastPlayerDeckPlayerId, { silent: true });
-		}
+	/** See `matchupLifecycle` — the player-deck surface's counterpart. */
+	const playerDeckLifecycle = createDegradedRefetchLifecycle<PlayerDeckResponse | null>({
+		refetch: () => {
+			if (lastPlayerDeckPlayerId !== null) {
+				void runPlayerDeckLoad(lastPlayerDeckPlayerId, { silent: true });
+			}
+		},
+		isUnchanged: next => renderedPlayerDeckSource !== null && renderedPlayerDeckSource === next,
 	});
 
 	async function runPlayerDeckLoad(playerId: number, options: { silent: boolean }) {
-		const requestId = ++playerDeckRequestId;
-		playerDeckRefetch.cancel();
+		const requestId = playerDeckLifecycle.begin();
 		lastPlayerDeckPlayerId = playerId;
 
 		const player = toValue(state.players).find(p => p.id === playerId);
@@ -457,9 +416,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		if (!player || !getMtgGameData(player.gameData).deckName || !evtId) {
 			// A degraded rendering keeps re-fetching even when one attempt finds
 			// nothing to build from — same cadence rule as the catch below.
-			if (playerDeckDegraded.value) {
-				playerDeckRefetch.schedule();
-			}
+			playerDeckLifecycle.keepCadence();
 			return;
 		}
 
@@ -475,18 +432,14 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 				? await fetchScryfallCards(deckCards)
 				: { cards: new Map<string, MtgCard>(), degraded: false };
 
-			if (requestId !== playerDeckRequestId) {
+			if (!playerDeckLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
-			playerDeckDegraded.value = degraded;
-			if (degraded) {
-				playerDeckRefetch.schedule();
-				// Same rule as the matchup surface: an unchanged, still-degraded
-				// deck keeps its current rendering.
-				if (renderedPlayerDeckSource !== null && renderedPlayerDeckSource === deckResponse) {
-					return;
-				}
+			// Same rule as the matchup surface: an unchanged, still-degraded deck
+			// keeps its current rendering.
+			if (playerDeckLifecycle.completeLoad(degraded, deckResponse) === 'keep') {
+				return;
 			}
 
 			state.playerDeckData.value = buildDeckSource(player.name, deckResponse, deckCards, cardDataMap);
@@ -494,13 +447,11 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 		}
 		catch (err) {
 			console.error('Failed to load player deck:', err);
-			if (requestId !== playerDeckRequestId) {
+			if (!playerDeckLifecycle.isCurrent(requestId)) {
 				return;
 			}
-			// A failed load must not end a degraded surface's recovery cadence or
-			// blank the rendering (#465 review).
-			if (playerDeckDegraded.value) {
-				playerDeckRefetch.schedule();
+			// A failed load while degraded must not blank the rendering (#465 review).
+			if (playerDeckLifecycle.keepCadence()) {
 				return;
 			}
 			state.playerDeckData.value = null;
@@ -519,12 +470,18 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 
 	/** See `settleMatchupDegradation` — the player-deck surface's counterpart. */
 	function settlePlayerDeckDegradation() {
-		playerDeckRefetch.cancel();
-		playerDeckRequestId++;
+		playerDeckLifecycle.settle();
 		lastPlayerDeckPlayerId = null;
 		renderedPlayerDeckSource = null;
-		playerDeckDegraded.value = false;
 	}
+
+	/**
+	 * True while a deck source on this surface is rendering placeholders it
+	 * should not be (#465, #471). Tracked per source because both can hold data
+	 * at once; consumed combined because one Screen has one `cardDataHealth` ref
+	 * to report through.
+	 */
+	const cardDataDegraded = computed(() => matchupLifecycle.degraded.value || playerDeckLifecycle.degraded.value);
 
 	function clearPlayerDeck() {
 		settlePlayerDeckDegradation();

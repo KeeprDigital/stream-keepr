@@ -8,7 +8,6 @@ import type { DeckListCardWithData } from '~/types/card/deckList';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
-import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
 interface DeckDisplayState {
 	version: number;
@@ -149,19 +148,38 @@ export function useDeckModeData() {
 
 	const loading = ref(false);
 	const error = ref<string | null>(null);
-	/**
-	 * True while the deck on program is rendering placeholders it should not be:
-	 * a Scryfall fetch exhausted its retries, so card data that exists could not
-	 * be resolved. Deliberately not `error` — an output on program never blanks
-	 * for missing card images, and the degradation is reported rather than shown
-	 * so a control surface can say so while the broadcast output does not (#465).
-	 */
-	const cardDataDegraded = ref(false);
 	const displayedDeck = ref<DeckDisplayState | null>(null);
 	const pendingDeck = ref<DeckDisplayState | null>(null);
 	const pendingSwapVersion = ref(0);
-	let activeRequestId = 0;
 	let deckVersion = 0;
+	let lastRequestedPlayerId: number | null = null;
+
+	/**
+	 * The reload-free recovery path (#465): a degraded deck re-fetches itself on
+	 * a slow cadence until a load resolves completely, the selection changes, or
+	 * the surface goes away. Program keeps the degraded rendering the whole time
+	 * — the recovered deck arrives through the ordinary staged swap. Degradation
+	 * is deliberately not `error`: an output on program never blanks for missing
+	 * card images, and the report lets a control surface say so while the
+	 * broadcast output does not.
+	 */
+	const degradedLifecycle = createDegradedRefetchLifecycle<DeckDisplayState>({
+		refetch: () => {
+			if (lastRequestedPlayerId !== null) {
+				void loadPlayerDeck(lastRequestedPlayerId);
+			}
+		},
+		// Identity is what is on program: a rebuild of the same player's deck
+		// whose source record has not changed since carries nothing new.
+		isUnchanged: next =>
+			displayedDeck.value?.playerId === next.playerId
+			&& displayedDeck.value.sourceUpdatedAt === next.sourceUpdatedAt,
+		report: (degraded) => {
+			if (cardDataHealth) {
+				cardDataHealth.value = degraded ? 'degraded' : 'complete';
+			}
+		},
+	});
 
 	const playerName = computed(() => displayedDeck.value?.playerName ?? '');
 	const deckName = computed(() => displayedDeck.value?.deckName ?? '');
@@ -175,38 +193,8 @@ export function useDeckModeData() {
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
 
-	let refetchTimer: ReturnType<typeof setTimeout> | null = null;
-
-	function cancelScheduledRefetch() {
-		if (refetchTimer !== null) {
-			clearTimeout(refetchTimer);
-			refetchTimer = null;
-		}
-	}
-
-	/**
-	 * The reload-free recovery path (#465): a degraded deck re-fetches itself on a
-	 * slow cadence until a load resolves completely, the selection changes, or the
-	 * surface goes away. Program keeps the degraded rendering the whole time — the
-	 * recovered deck arrives through the ordinary staged swap.
-	 */
-	function scheduleRefetch(playerId: number) {
-		cancelScheduledRefetch();
-		refetchTimer = setTimeout(() => {
-			refetchTimer = null;
-			void loadPlayerDeck(playerId);
-		}, DECK_CARD_DATA_REFETCH_MS);
-	}
-
-	function reportCardDataHealth(degraded: boolean) {
-		cardDataDegraded.value = degraded;
-		if (cardDataHealth) {
-			cardDataHealth.value = degraded ? 'degraded' : 'complete';
-		}
-	}
-
 	onScopeDispose(() => {
-		cancelScheduledRefetch();
+		degradedLifecycle.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {
 			cardDataHealth.value = 'complete';
@@ -274,10 +262,8 @@ export function useDeckModeData() {
 	}
 
 	async function loadPlayerDeck(playerId: number) {
-		const requestId = ++activeRequestId;
-		// A fresh load supersedes any pending degraded re-fetch; a degraded
-		// completion schedules the next one itself.
-		cancelScheduledRefetch();
+		const requestId = degradedLifecycle.begin();
+		lastRequestedPlayerId = playerId;
 		const evtId = eventId.value;
 		if (!evtId) {
 			if (!displayedDeck.value) {
@@ -290,16 +276,14 @@ export function useDeckModeData() {
 
 		try {
 			const player = await playerStore.getPlayerById(evtId, playerId);
-			if (requestId !== activeRequestId) {
+			if (!degradedLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
 			if (!player) {
-				// Same cadence rule as the catch below: a degraded rendering keeps
-				// re-fetching even when one attempt finds nothing to build from.
-				if (cardDataDegraded.value) {
-					scheduleRefetch(playerId);
-				}
+				// A degraded rendering keeps re-fetching even when one attempt finds
+				// nothing to build from.
+				degradedLifecycle.keepCadence();
 				if (!displayedDeck.value) {
 					error.value = 'Player not found';
 				}
@@ -307,14 +291,12 @@ export function useDeckModeData() {
 			}
 
 			const deckResponse = await deckCache.fetchDeck(playerId, evtId, player.updatedAt);
-			if (requestId !== activeRequestId) {
+			if (!degradedLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
 			if (!deckResponse || deckResponse.cards.length === 0) {
-				if (cardDataDegraded.value) {
-					scheduleRefetch(playerId);
-				}
+				degradedLifecycle.keepCadence();
 				if (!displayedDeck.value) {
 					error.value = 'Player has no deck list';
 				}
@@ -322,23 +304,16 @@ export function useDeckModeData() {
 			}
 
 			const { deck: nextDeck, degraded } = await buildDeckDisplayState(player, deckResponse);
-			if (requestId !== activeRequestId) {
+			if (!degradedLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
-			reportCardDataHealth(degraded);
-			if (degraded) {
-				scheduleRefetch(playerId);
-				// A still-degraded re-fetch of the unchanged deck has nothing better
-				// to show: keep the rendering rather than cross-fade to an identical
-				// placeholder deck on every cadence tick. A rebuild whose source has
-				// since changed carries new cards and must still reach program.
-				if (
-					displayedDeck.value?.playerId === playerId
-					&& displayedDeck.value.sourceUpdatedAt === nextDeck.sourceUpdatedAt
-				) {
-					return;
-				}
+			// A still-degraded re-fetch of the unchanged deck keeps the rendering
+			// rather than cross-fading to an identical placeholder deck on every
+			// cadence tick. A rebuild whose source has since changed carries new
+			// cards and must still reach program.
+			if (degradedLifecycle.completeLoad(degraded, nextDeck) === 'keep') {
+				return;
 			}
 
 			if (!displayedDeck.value) {
@@ -350,16 +325,11 @@ export function useDeckModeData() {
 		}
 		catch (err) {
 			console.error('Failed to load player deck:', err);
-			if (requestId !== activeRequestId) {
+			if (!degradedLifecycle.isCurrent(requestId)) {
 				return;
 			}
 
-			// A failed load must not end a degraded rendering's recovery cadence —
-			// the deck endpoint failing during the same outage would otherwise
-			// leave the degradation permanent until a reload (#465 review).
-			if (cardDataDegraded.value) {
-				scheduleRefetch(playerId);
-			}
+			degradedLifecycle.keepCadence();
 
 			if (!displayedDeck.value) {
 				error.value = 'Failed to load deck';
@@ -376,9 +346,7 @@ export function useDeckModeData() {
 			}
 			else {
 				error.value = null;
-				activeRequestId++;
-				cancelScheduledRefetch();
-				reportCardDataHealth(false);
+				degradedLifecycle.settle();
 				if (displayedDeck.value) {
 					queuePendingDeck(null);
 				}
@@ -403,7 +371,7 @@ export function useDeckModeData() {
 		sideboard,
 		loading,
 		error,
-		cardDataDegraded: readonly(cardDataDegraded),
+		cardDataDegraded: degradedLifecycle.degraded,
 		hasDisplayedDeck,
 		displayedDeckVersion,
 		pendingSwapVersion: readonly(pendingSwapVersion),
