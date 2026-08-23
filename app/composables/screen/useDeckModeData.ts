@@ -8,6 +8,7 @@ import type { DeckListCardWithData } from '~/types/card/deckList';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
+import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
 interface DeckDisplayState {
 	version: number;
@@ -85,13 +86,6 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
 
 	return result;
 }
-
-/**
- * How long a degraded rendering waits before re-fetching its card data. Slow on
- * purpose: the batch fetch has already retried with backoff by the time a load
- * reports degraded, so this is outage pacing, not request retry.
- */
-const DECK_CARD_DATA_REFETCH_MS = 60_000;
 
 function deckSourceStamp(updatedAt: Date | string | null | undefined): number | null {
 	return updatedAt == null ? null : new Date(updatedAt).getTime();

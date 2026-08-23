@@ -30,6 +30,15 @@ export interface ScryfallCardFetchResult {
 	degraded: boolean;
 }
 
+/**
+ * How long a degraded rendering waits before re-fetching its card data. Slow on
+ * purpose: the batch fetch has already retried with backoff by the time a load
+ * reports degraded, so this is outage pacing, not request retry. Shared by
+ * every surface that recovers from a degraded fetch (#465, #471) so their
+ * cadences cannot drift apart.
+ */
+export const DECK_CARD_DATA_REFETCH_MS = 60_000;
+
 function delay(ms: number): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }

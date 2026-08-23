@@ -38,6 +38,14 @@ const modeLabel = computed(() => getScreenModeLabel(props.screen.currentMode));
 const modeIcon = computed(() => getScreenModeIcon(props.screen.currentMode));
 const displayType = computed(() => getScreenModeDisplayType(props.screen.currentMode));
 
+// Outputs self-reporting degraded card data through presence (#465), whatever
+// mode they render. The settings page says it as a sentence; this row says it as
+// a badge, so one glance down the index covers every Screen.
+const degradedCardDataCount = useScreenOutputCardDataHealth(() => props.screen.id);
+const degradedCardDataTooltip = computed(() =>
+	`Card data incomplete on ${degradedCardDataCount.value} ${degradedCardDataCount.value === 1 ? 'output' : 'outputs'} — re-fetching until Scryfall answers`,
+);
+
 function accessUrlOptions() {
 	return {
 		eventId: props.eventId,
@@ -185,6 +193,18 @@ const actionItems: DropdownMenuItem[][] = [
 						<UIcon name="i-lucide-monitor" class="size-3 mr-1" />
 						{{ connectedCount }}
 					</UBadge>
+					<UTooltip v-if="degradedCardDataCount > 0" :text="degradedCardDataTooltip">
+						<UBadge
+							size="xs"
+							color="warning"
+							variant="subtle"
+							data-testid="card-data-degraded-badge"
+							:aria-label="degradedCardDataTooltip"
+						>
+							<UIcon name="i-lucide-triangle-alert" class="size-3 mr-1" />
+							{{ degradedCardDataCount }}
+						</UBadge>
+					</UTooltip>
 				</div>
 				<p class="text-sm text-muted mt-1 truncate">
 					{{ screenUrl }}
