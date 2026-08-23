@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'fog'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'fog', 'ripple'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -74,6 +74,35 @@ export const fogAnimationParamsSchema = z.strictObject({
 	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
 });
 
+/**
+ * Cells: a Worley-noise cellular field, ported from the retired fork under its
+ * old name. Only the params the fragment shader reads survive the port: the
+ * fork's editor also offered `amplitudeFactor`, `ringFactor`, `rotationFactor`,
+ * and a background colour that its cells shader declared but never referenced.
+ * Defaults are the pre-rebuild application's, not the fork's.
+ */
+export const cellsAnimationParamsSchema = z.strictObject({
+	color1: colorParam('Primary color', '#008c8c'),
+	color2: colorParam('Secondary color', '#06b6d4'),
+	size: numberParam('Cell size', { min: 0.2, max: 5, step: 0.1, default: 3 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
+});
+
+/**
+ * Ripple: rings of orbiting lights accumulating over a background colour,
+ * ported from the retired fork under its old name and the pre-rebuild
+ * application's defaults.
+ */
+export const rippleAnimationParamsSchema = z.strictObject({
+	color1: colorParam('Primary color', '#008c8c'),
+	color2: colorParam('Secondary color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
+	ringFactor: numberParam('Ripple scale', { min: 0, max: 12, step: 0.1, default: 1 }),
+	rotationFactor: numberParam('Rotation', { min: 0, max: 4, step: 0.1, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -86,15 +115,21 @@ export const causticsAnimationParamsSchema = z.strictObject({
 /** Fully-defaulted params, as an effect renderer receives them. */
 export type FogAnimationParams = z.output<typeof fogAnimationParamsSchema>;
 export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSchema>;
+export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
+export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 
 export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
+	cells: CellsAnimationParams;
 	fog: FogAnimationParams;
+	ripple: RippleAnimationParams;
 }
 
 export const ANIMATION_EFFECT_CATALOGUE = {
 	caustics: { label: 'Caustics', paramsSchema: causticsAnimationParamsSchema },
+	cells: { label: 'Cells', paramsSchema: cellsAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
+	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
 
 export function animationEffectDefaultParams<Effect extends AnimationEffectName>(
@@ -163,8 +198,18 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	}),
 	z.strictObject({
 		...frameAnimationShape,
+		effect: z.literal('cells'),
+		params: cellsAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
 		effect: z.literal('fog'),
 		params: fogAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('ripple'),
+		params: rippleAnimationParamsSchema.optional(),
 	}),
 ]);
 

@@ -22,8 +22,28 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'fog']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'ripple']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
+	});
+
+	it('ports cells and ripple under the defaults the pre-rebuild application shipped', () => {
+		// The ports keep their old names and their old on-air look: defaults come
+		// from the retired editor's shared bag, not the fork's own defaultOptions.
+		expect(animationEffectDefaultParams('cells')).toEqual({
+			color1: '#008c8c',
+			color2: '#06b6d4',
+			size: 3,
+			speed: 0.6,
+		});
+		expect(animationEffectDefaultParams('ripple')).toEqual({
+			color1: '#008c8c',
+			color2: '#06b6d4',
+			backgroundColor: '#111111',
+			amplitudeFactor: 1,
+			ringFactor: 1,
+			rotationFactor: 1,
+			speed: 0.6,
+		});
 	});
 
 	it('fills every parameter from the schema alone, so an empty config renders', () => {
