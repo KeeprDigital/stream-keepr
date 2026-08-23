@@ -12,7 +12,9 @@ const effectLoaders: {
 	[Effect in AnimationEffectName]: () => Promise<{ default: AnimationEffectFactory<AnimationEffectParamsMap[Effect]> }>;
 } = {
 	caustics: () => import('./caustics'),
+	cells: () => import('./cells'),
 	fog: () => import('./fog'),
+	ripple: () => import('./ripple'),
 };
 
 export async function loadAnimationEffect<Effect extends AnimationEffectName>(
