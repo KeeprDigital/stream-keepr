@@ -1,8 +1,9 @@
 import type { Ref } from 'vue';
+import type { Flight } from '~/utils/guardedSequence';
 import { readonly, ref } from 'vue';
 import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
-export interface DegradedRefetchLifecycleOptions<TSource> {
+export interface DegradedRefetchOptions<TSource> {
 	/**
 	 * Re-run the surface's load silently. Fired on the shared
 	 * `DECK_CARD_DATA_REFETCH_MS` cadence while the surface is degraded.
@@ -19,16 +20,15 @@ export interface DegradedRefetchLifecycleOptions<TSource> {
 	report?: (degraded: boolean) => void;
 }
 
-export interface DegradedRefetchLifecycle<TSource> {
+export interface DegradedRefetch<TSource> {
 	/** True while this surface renders placeholders it should not be (#465). */
 	degraded: Readonly<Ref<boolean>>;
 	/**
 	 * Start a load: supersedes any in-flight load and cancels a pending
 	 * re-fetch (a degraded completion schedules the next one itself). Returns
-	 * the token to check with `isCurrent` after each await.
+	 * the load's Flight, checked for staleness after each await.
 	 */
-	begin: () => number;
-	isCurrent: (token: number) => boolean;
+	begin: () => Flight;
 	/**
 	 * Record a completed build. While degraded, arms the next re-fetch and
 	 * answers whether the current rendering should be kept: a still-degraded
@@ -56,16 +56,16 @@ export interface DegradedRefetchLifecycle<TSource> {
 /**
  * The reload-free degraded-recovery lifecycle shared by every surface that
  * renders Scryfall-enriched deck data (#465, #471, extracted by #472):
- * request-id supersede, a slow re-fetch cadence while degraded,
+ * supersede via Guarded Sequence, a slow re-fetch cadence while degraded,
  * keep-on-unchanged, keep-cadence-on-failure, and a settle on clear. What
  * varies per surface stays outside: source identity, health reporting, and
  * what a failed load does to the rendering.
  */
-export function createDegradedRefetchLifecycle<TSource>(
-	options: DegradedRefetchLifecycleOptions<TSource>,
-): DegradedRefetchLifecycle<TSource> {
+export function useDegradedRefetch<TSource>(
+	options: DegradedRefetchOptions<TSource>,
+): DegradedRefetch<TSource> {
 	const degraded = ref(false);
-	let requestId = 0;
+	const loads = createGuardedSequence();
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	function cancel() {
@@ -88,13 +88,9 @@ export function createDegradedRefetchLifecycle<TSource>(
 		options.report?.(next);
 	}
 
-	function begin(): number {
+	function begin(): Flight {
 		cancel();
-		return ++requestId;
-	}
-
-	function isCurrent(token: number): boolean {
-		return token === requestId;
+		return loads.begin();
 	}
 
 	function completeLoad(nowDegraded: boolean, next: TSource): 'keep' | 'render' {
@@ -116,14 +112,13 @@ export function createDegradedRefetchLifecycle<TSource>(
 
 	function settle() {
 		cancel();
-		requestId++;
+		loads.supersede();
 		setDegraded(false);
 	}
 
 	return {
 		degraded: readonly(degraded),
 		begin,
-		isCurrent,
 		completeLoad,
 		keepCadence,
 		settle,

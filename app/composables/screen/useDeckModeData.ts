@@ -163,7 +163,7 @@ export function useDeckModeData() {
 	 * card images, and the report lets a control surface say so while the
 	 * broadcast output does not.
 	 */
-	const degradedLifecycle = createDegradedRefetchLifecycle<DeckDisplayState>({
+	const degradedRefetch = useDegradedRefetch<DeckDisplayState>({
 		refetch: () => {
 			if (lastRequestedPlayerId !== null) {
 				void loadPlayerDeck(lastRequestedPlayerId);
@@ -194,7 +194,7 @@ export function useDeckModeData() {
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
 
 	onScopeDispose(() => {
-		degradedLifecycle.cancel();
+		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {
 			cardDataHealth.value = 'complete';
@@ -262,7 +262,7 @@ export function useDeckModeData() {
 	}
 
 	async function loadPlayerDeck(playerId: number) {
-		const requestId = degradedLifecycle.begin();
+		const flight = degradedRefetch.begin();
 		lastRequestedPlayerId = playerId;
 		const evtId = eventId.value;
 		if (!evtId) {
@@ -276,14 +276,14 @@ export function useDeckModeData() {
 
 		try {
 			const player = await playerStore.getPlayerById(evtId, playerId);
-			if (!degradedLifecycle.isCurrent(requestId)) {
+			if (flight.stale) {
 				return;
 			}
 
 			if (!player) {
 				// A degraded rendering keeps re-fetching even when one attempt finds
 				// nothing to build from.
-				degradedLifecycle.keepCadence();
+				degradedRefetch.keepCadence();
 				if (!displayedDeck.value) {
 					error.value = 'Player not found';
 				}
@@ -291,12 +291,12 @@ export function useDeckModeData() {
 			}
 
 			const deckResponse = await deckCache.fetchDeck(playerId, evtId, player.updatedAt);
-			if (!degradedLifecycle.isCurrent(requestId)) {
+			if (flight.stale) {
 				return;
 			}
 
 			if (!deckResponse || deckResponse.cards.length === 0) {
-				degradedLifecycle.keepCadence();
+				degradedRefetch.keepCadence();
 				if (!displayedDeck.value) {
 					error.value = 'Player has no deck list';
 				}
@@ -304,7 +304,7 @@ export function useDeckModeData() {
 			}
 
 			const { deck: nextDeck, degraded } = await buildDeckDisplayState(player, deckResponse);
-			if (!degradedLifecycle.isCurrent(requestId)) {
+			if (flight.stale) {
 				return;
 			}
 
@@ -312,7 +312,7 @@ export function useDeckModeData() {
 			// rather than cross-fading to an identical placeholder deck on every
 			// cadence tick. A rebuild whose source has since changed carries new
 			// cards and must still reach program.
-			if (degradedLifecycle.completeLoad(degraded, nextDeck) === 'keep') {
+			if (degradedRefetch.completeLoad(degraded, nextDeck) === 'keep') {
 				return;
 			}
 
@@ -325,11 +325,11 @@ export function useDeckModeData() {
 		}
 		catch (err) {
 			console.error('Failed to load player deck:', err);
-			if (!degradedLifecycle.isCurrent(requestId)) {
+			if (flight.stale) {
 				return;
 			}
 
-			degradedLifecycle.keepCadence();
+			degradedRefetch.keepCadence();
 
 			if (!displayedDeck.value) {
 				error.value = 'Failed to load deck';
@@ -346,7 +346,7 @@ export function useDeckModeData() {
 			}
 			else {
 				error.value = null;
-				degradedLifecycle.settle();
+				degradedRefetch.settle();
 				if (displayedDeck.value) {
 					queuePendingDeck(null);
 				}
@@ -371,7 +371,7 @@ export function useDeckModeData() {
 		sideboard,
 		loading,
 		error,
-		cardDataDegraded: degradedLifecycle.degraded,
+		cardDataDegraded: degradedRefetch.degraded,
 		hasDisplayedDeck,
 		displayedDeckVersion,
 		pendingSwapVersion: readonly(pendingSwapVersion),
