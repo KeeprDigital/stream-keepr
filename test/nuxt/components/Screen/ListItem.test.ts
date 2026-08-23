@@ -29,8 +29,16 @@ mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToC
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('navigateTo', () => vi.fn());
 
+/** What this Screen's outputs report of themselves through presence. */
+const mockScreenPresence = { value: new Map<number, { count: number; members: Array<{ data?: { cardData?: string } }> }>() };
+mockNuxtImport('useScreenStore', () => () => ({ screenPresence: mockScreenPresence.value }));
+
 const CardStub = defineComponent({ template: '<div><slot /></div>' });
 const NuxtLinkStub = defineComponent({ template: '<a><slot /></a>' });
+const UTooltipStub = defineComponent({
+	props: { text: { type: String, default: '' } },
+	template: '<span :data-tooltip="text"><slot /></span>',
+});
 const UBadgeStub = defineComponent({ template: '<span><slot /></span>' });
 const UIconStub = defineComponent({ template: '<i />' });
 const ScreenTypeBadgeStub = defineComponent({ template: '<span />' });
@@ -105,6 +113,7 @@ async function mountComponent() {
 				UBadge: UBadgeStub,
 				UIcon: UIconStub,
 				UButton: UButtonStub,
+				UTooltip: UTooltipStub,
 				UDropdownMenu: UDropdownMenuStub,
 				ScreenTypeBadge: ScreenTypeBadgeStub,
 			},
@@ -124,6 +133,58 @@ async function mountComponent() {
  * Output Asset Capability — the bare one loads, renders, and silently omits every
  * image, video and library font (#231).
  */
+/**
+ * The list-row reading of the presence-carried card-data report (#465): the same
+ * per-screen count the settings page renders as a sentence, shown as a badge so
+ * one glance down the screens index covers every Screen, whatever its mode.
+ */
+describe('screen list item — card data health badge', () => {
+	beforeEach(() => {
+		mockApiFetch.mockReset().mockResolvedValue({});
+		mockScreenPresence.value = new Map();
+	});
+
+	it('shows how many outputs report degraded card data, and says what is happening', async () => {
+		mockScreenPresence.value = new Map([[4, {
+			count: 3,
+			members: [
+				{ data: { cardData: 'degraded' } },
+				{ data: { cardData: 'degraded' } },
+				{ data: { cardData: 'complete' } },
+			],
+		}]]);
+
+		const wrapper = await mountComponent();
+
+		const badge = wrapper.get('[data-testid="card-data-degraded-badge"]');
+		expect(badge.text()).toContain('2');
+		expect(badge.attributes('data-tooltip') ?? wrapper.get('[data-tooltip]').attributes('data-tooltip'))
+			.toContain('re-fetching until Scryfall answers');
+	});
+
+	it('shows nothing when every reporting output is complete', async () => {
+		mockScreenPresence.value = new Map([[4, {
+			count: 1,
+			members: [{ data: { cardData: 'complete' } }],
+		}]]);
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="card-data-degraded-badge"]').exists()).toBe(false);
+	});
+
+	it('counts a silent output as saying nothing, not as degraded', async () => {
+		mockScreenPresence.value = new Map([[4, {
+			count: 1,
+			members: [{ data: {} }],
+		}]]);
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="card-data-degraded-badge"]').exists()).toBe(false);
+	});
+});
+
 describe('screen list item — handing out this Screen’s output', () => {
 	beforeEach(() => {
 		mockCapabilityResponse.value = 'list-capability';
