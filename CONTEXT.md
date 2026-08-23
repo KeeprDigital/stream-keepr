@@ -598,6 +598,11 @@ _Avoid_: Overlay config
 The continuous graphic area of a Feature Match Layout that sits behind and around Layout Items.
 _Avoid_: Panel area, background panel
 
+**Animation Effect**:
+A named, autonomously animating background renderer that ships with Stream Keepr, referenced by name from Screen configuration and Template Packages, with its own per-effect configuration.
+Its hosts are the Feature Match Overlay Frame and the Idle background; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
+_Avoid_: Vanta effect, frame animation, shader background, background effect
+
 **Feature Match Layout Item**:
 A Graphic Item placed in a Feature Match Layout.
 Feature Match Layouts use the shared Graphic Item hierarchy rather than a separate Layout Item or Widget hierarchy.
@@ -622,7 +627,7 @@ Templates are not live Screen state: a Template carries no Feature Match Slot as
 _Avoid_: Preset when referring to user-owned reusable layouts.
 
 **Feature Match Layout Host Vocabulary**:
-The terms a Feature Match Layout uses whose meaning the installation supplies rather than the layout carrying it: a Source Item's Source Role, a Feature Match Overlay Frame animation effect, and a Feature Match token a Graphic Text Template binds.
+The terms a Feature Match Layout uses whose meaning the installation supplies rather than the layout carrying it: a Source Item's Source Role, an Animation Effect the Feature Match Overlay Frame names, and a Feature Match token a Graphic Text Template binds.
 Each is closed and pinned by one Feature Match Layout format version, so a Template Package naming a term an installation does not implement is refused before anything is installed.
 _Avoid_: Free-form role, camera name
 

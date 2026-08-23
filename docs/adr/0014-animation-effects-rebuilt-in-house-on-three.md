@@ -1,0 +1,16 @@
+# Animation Effects are rebuilt in-house on three.js, replacing the vendored Vanta fork
+
+The animated backgrounds behind the Feature Match Overlay Frame come from a vendored, `@ts-nocheck` Vanta.js fork (`app/utils/animation-effects/`) that needs synthetic mouse drift to move on a headless browser source and shares one flat config bag across all nine effects. We decided to rebuild the effects in-house behind a typed, host-agnostic Animation Effect contract (`create/setParams/resize/render(t)/dispose`) with per-effect configuration, port all nine existing effects onto it under their existing names, and delete the fork as ports land. Rendering stays on three.js rather than a hand-rolled WebGL2 harness because five of the nine effects are mesh-based (waves, rings, dots, net, globe) and three.js is already a dependency; shader-only effects use a fullscreen `ShaderMaterial` base, and a Canvas2D backend remains possible under the same contract.
+
+## Considered Options
+
+- **Extend the Vanta fork** — rejected: untyped, mouse-driven motion model, and a flat config whose param ranges already diverge across three copies (Zod, runtime clamp, editor).
+- **Hand-rolled WebGL2 fragment harness** (per the originating spec) — rejected: cannot host the five mesh-based effects that must survive the port, so it would force a second GL stack alongside three.js.
+- **Offline export pipeline (WebCodecs → looping video)** — rejected: effects render live in the OBS browser source; there is no replay, so loop-seamlessness and frame determinism machinery buys nothing.
+
+## Consequences
+
+- Effect names stay a closed vocabulary pinned by the Feature Match Layout format version; ports keep their names so Template Packages and stored configs keep resolving. Per-effect config changes what a `frame.animation` capability payload carries — check whether that requires a format-version bump when the shape lands.
+- Existing saved frame-animation settings are reset, not migrated (accepted; small install base).
+- Synthetic mouse drift retires with the fork: new effects animate autonomously from elapsed time.
+- The Idle background becomes a second Animation Effect host (`animation` joins the background type union), so the renderer component must not assume the Feature Match Overlay.
