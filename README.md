@@ -81,7 +81,7 @@ Which script, when:
 | When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:local-auth:run`, `pnpm test:integration`      | Watch mode is available for the unit, Nuxt, and integration tiers; append `:run` for a single pass. The local-auth tier is one focused spawned-dev-server pass.                                                                                                                                              |
-| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                                                                        |
+| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt (both with coverage, gated by the thresholds in `vitest.shared.ts`) + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).    |
 | Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                                                                           |
 | Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, real Better Auth, bypass refusal without attestation, attested preview auth, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one. |
 | Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                                                                         |
@@ -97,8 +97,9 @@ the workflow header). Realtime integration tests self-skip there — no Ably key
 configured in CI by decision (#189). The prerequisite-bound suites in the table
 above stay local.
 
-Ad-hoc vitest modes still work without dedicated scripts: `pnpm exec vitest --ui`,
-`pnpm exec vitest run --coverage`.
+Ad-hoc vitest modes still work without dedicated scripts, e.g.
+`pnpm exec vitest --ui`; coverage passes have their own scripts
+(`test:unit:coverage`, `test:nuxt:coverage`).
 
 ## Database
 
