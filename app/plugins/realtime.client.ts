@@ -41,10 +41,12 @@ export default defineNuxtPlugin({
 		// The token is scoped to a single event's channels (see
 		// server/api/realtime/token.get.ts), so the auth flow needs to know
 		// which event is active before it can request one. `activeEventId` is
-		// read fresh on every auth attempt; until an event is chosen (e.g. on
-		// the event-less index page) authCallback waits on `eventIdReady`
-		// instead of erroring, so the initial connection just stays pending —
-		// no failed/suspended state, no reconnect spam.
+		// read fresh on every auth attempt. Until an event is chosen (e.g. on
+		// the event-less index page) the client does not connect at all — an
+		// authCallback that parks instead is timed out by Ably after 10s
+		// (realtimeRequestTimeout) into a disconnected/retry cycle: console
+		// errors every ~25s and a fault on the status indicator, on a page
+		// with nothing to connect to (#474).
 		let activeEventId: number | null = null;
 		/**
 		 * The Event the token in hand actually covers.
@@ -58,30 +60,24 @@ export default defineNuxtPlugin({
 		 * (#307).
 		 */
 		let coveredEventId: number | null = null;
-		let eventIdReady: Promise<number> | null = null;
-		let resolveEventIdReady: ((eventId: number) => void) | null = null;
 		let pendingAuthorize: { eventId: number; promise: Promise<boolean> } | null = null;
-		/**
-		 * How the coverage flight that released the initial connection's authCallback
-		 * hears whether the token fetch it released actually landed. The callback is
-		 * the only code that knows, and coverage must not be claimed before it says so.
-		 */
-		let notifyInitialMintOutcome: ((minted: boolean) => void) | null = null;
-
-		function settleInitialMint(minted: boolean) {
-			notifyInitialMintOutcome?.(minted);
-			notifyInitialMintOutcome = null;
-		}
 
 		const ably = new Ably.Realtime({
+			// The first connect is `mintTokenFor`'s: `auth.authorize()` initiates
+			// the connection itself from the `initialized` state (RTC8c; verified
+			// against ably@2.27.0 on #474), so every connection attempt — first,
+			// reconnect, event switch — starts with an Event in hand and the
+			// authCallback never runs without one.
+			autoConnect: false,
 			authCallback: async (_tokenParams, callback) => {
 				try {
-					if (activeEventId == null) {
-						eventIdReady ??= new Promise<number>((resolve) => {
-							resolveEventIdReady = resolve;
-						});
+					const eventId = activeEventId;
+					if (eventId == null) {
+						// Unreachable while the only connect path is a coverage mint,
+						// which sets `activeEventId` first. Failing fast keeps a future
+						// stray connect from re-creating #474's parked-callback timeout.
+						throw new Error('Realtime token requested with no active Event');
 					}
-					const eventId = activeEventId ?? await eventIdReady!;
 					// Whichever credential this document has. A Screen Output holds its
 					// capability in the URL fragment and has no session; an operator's
 					// page has the session cookie and no fragment. The token route reads
@@ -95,12 +91,10 @@ export default defineNuxtPlugin({
 						),
 					});
 					callback(null, tokenRequest);
-					settleInitialMint(true);
 				}
 				catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					callback(message, null);
-					settleInitialMint(false);
 				}
 			},
 		});
@@ -200,40 +194,10 @@ export default defineNuxtPlugin({
 
 			activeEventId = eventId;
 			const flight = coverageFlights.begin();
-
-			const promise = (async () => {
-				if (resolveEventIdReady) {
-					// The initial connection's authCallback is waiting for an event
-					// to be chosen; releasing it fetches a token for this event.
-					// Coverage is claimed only once that fetch lands — claiming it on
-					// release alone put later subscribes on the fast path of a
-					// connection whose first mint had failed, with no tokenError.
-					const resolve = resolveEventIdReady;
-					resolveEventIdReady = null;
-					eventIdReady = null;
-					const outcome = new Promise<boolean>((resolveOutcome) => {
-						notifyInitialMintOutcome = resolveOutcome;
-					});
-					resolve(eventId);
-					const minted = await outcome;
-					// The stale check must stay ahead of any use of `minted`: a
-					// superseding switch runs authorize() through the same
-					// authCallback, whose settle consumes whatever notify is still
-					// standing — so `minted` can be the *newer* flight's answer.
-					// That is harmless precisely because this flight is stale by then.
-					if (flight.stale)
-						return false;
-					if (minted) {
-						claimCoverage(eventId);
-						return true;
-					}
-					// Fall through to the retrying mint, so a first-connection blip
-					// heals the same way an event-switch blip does, and a persistent
-					// failure is published the same way too.
-				}
-
-				return await mintTokenFor(eventId, flight);
-			})();
+			// One mint path for first connection, event switch, and recovery alike:
+			// authorize() connects a not-yet-connected client as part of the mint,
+			// so a first-connection blip heals the same way an event-switch blip does.
+			const promise = mintTokenFor(eventId, flight);
 
 			pendingAuthorize = { eventId, promise };
 			void promise
@@ -303,20 +267,6 @@ export default defineNuxtPlugin({
 		ably.connection.on('closed', () => {
 			updateConnectionState('closed');
 		});
-
-		function connect() {
-			if (connectionSnapshot.isConnected)
-				return;
-
-			try {
-				ably.connection.connect();
-			}
-			catch (err) {
-				const error = err instanceof Error ? err : new Error('Connection failed');
-				updateConnectionState('failed', error);
-				throw error;
-			}
-		}
 
 		function disconnect() {
 			if (connectionSnapshot.connectionState === 'closed' || connectionSnapshot.connectionState === 'closing')
@@ -624,8 +574,6 @@ export default defineNuxtPlugin({
 
 			void disconnect();
 		}
-
-		connect();
 
 		window.addEventListener('beforeunload', cleanup);
 
