@@ -65,6 +65,22 @@ describe('uiRealtimeStatus', () => {
 		expect(wrapper.get('[data-icon]').attributes('data-icon')).toBe('i-lucide-radio');
 	});
 
+	it('calls a page with no Event standing by, not a fault', async () => {
+		// With connect deferred until an Event is known (#474), an event-less page
+		// sits in `initialized` indefinitely. That is nothing to chase: before the
+		// deferral this surfaced as "Disconnected" plus console errors, and an
+		// operator on the index page read a healthy client as broken.
+		connectionState.value = 'initialized';
+		isConnected.value = false;
+
+		const wrapper = await mountStatus();
+
+		expect(wrapper.text()).toContain('Live Updates Standing By');
+		expect(wrapper.text()).toContain('connect when an Event is open');
+		expect(wrapper.text()).not.toContain('Disconnected');
+		expect(wrapper.text()).not.toContain('Reconnecting automatically');
+	});
+
 	it('does not call a page load a fault', async () => {
 		// Settling states are not disconnections; reporting one would make every
 		// reload flash a fault at the operator.

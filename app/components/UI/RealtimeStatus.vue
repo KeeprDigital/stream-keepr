@@ -22,17 +22,18 @@ const tokenError = computed(() => realtime?.tokenError ?? null);
 
 const isConnected = computed(() => realtime?.isConnected ?? false);
 
-/** Settling states are not faults: a page load is not a lost connection. */
-const isSettling = computed(() =>
-	connectionState.value === 'initialized' || connectionState.value === 'connecting',
-);
-
 const status = computed(() => {
 	if (tokenError.value)
 		return 'unauthorized' as const;
 	if (isConnected.value)
 		return 'connected' as const;
-	return isSettling.value ? 'settling' as const : 'disconnected' as const;
+	// Standing by, not a fault: the client does not connect until an Event is
+	// known (#474), so an event-less page sits in `initialized` indefinitely.
+	// Named `standby` rather than `idle` — Idle is a Screen Mode in the glossary.
+	if (connectionState.value === 'initialized')
+		return 'standby' as const;
+	// Settling is not a fault either: a page load is not a lost connection.
+	return connectionState.value === 'connecting' ? 'settling' as const : 'disconnected' as const;
 });
 
 const statusIcon = computed(() => {
@@ -47,6 +48,7 @@ const statusTone = computed(() => {
 	switch (status.value) {
 		case 'connected': return { text: 'text-success', dot: 'bg-success' };
 		case 'unauthorized': return { text: 'text-error', dot: 'bg-error' };
+		case 'standby': return { text: 'text-dimmed', dot: 'bg-accented' };
 		default: return { text: 'text-warning', dot: 'bg-warning' };
 	}
 });
@@ -55,6 +57,7 @@ const statusLabel = computed(() => {
 	switch (status.value) {
 		case 'connected': return 'Live Updates Connected';
 		case 'unauthorized': return 'Live Updates Unauthorized';
+		case 'standby': return 'Live Updates Standing By';
 		case 'settling': return 'Connecting Live Updates';
 		default: return 'Live Updates Disconnected';
 	}
@@ -103,6 +106,10 @@ const statusLabel = computed(() => {
 					<p v-else-if="status === 'disconnected'">
 						Reconnecting automatically. Everything on screen holds what it last
 						received, and is re-read as soon as the connection returns.
+					</p>
+					<p v-else-if="status === 'standby'">
+						No Event is open here, so there is nothing to stream. Live updates
+						connect when an Event is open.
 					</p>
 				</div>
 			</div>

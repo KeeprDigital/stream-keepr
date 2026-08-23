@@ -142,10 +142,19 @@ describe('realtime plugin', () => {
 		window.location.hash = '';
 	});
 
-	it('connects immediately and updates exposed connection state from Ably events', async () => {
+	it('does not connect at setup — the first connect belongs to the first Event\'s mint (#474)', async () => {
+		// An eager connect with no Event in hand parks the authCallback, and Ably
+		// times a parked token request out (10s) into a disconnected/retry cycle:
+		// console spam and a fault indicator on pages with nothing to connect to.
+		await createTransport();
+
+		expect((realtimeInstances[0]!.options as { autoConnect?: boolean }).autoConnect).toBe(false);
+		expect(mockConnection.connect).not.toHaveBeenCalled();
+	});
+
+	it('updates exposed connection state from Ably events', async () => {
 		const realtime = await createTransport();
 
-		expect(mockConnection.connect).toHaveBeenCalledOnce();
 		expect(realtime.connectionState).toBe('initialized');
 		expect(realtime.isConnected).toBe(false);
 
@@ -180,25 +189,43 @@ describe('realtime plugin', () => {
 		expect(realtime.error).toBeNull();
 	});
 
-	it('waits for an event before requesting the initial token, then scopes it to the first room', async () => {
+	it('fails the auth callback rather than parking it when no Event is active', async () => {
+		// Parking is what #474 diagnosed: Ably times a parked token request out
+		// (10s) into a disconnected/retry cycle. With connect deferred until an
+		// Event is known this callback cannot fire event-less — but if a stray
+		// connect ever reaches it, a fast failure beats a silent timeout loop.
+		await createTransport();
+		const callback = vi.fn();
+
+		await (realtimeInstances[0]!.options as any).authCallback({}, callback);
+
+		expect($fetch).not.toHaveBeenCalled();
+		expect(callback).toHaveBeenCalledWith(expect.stringContaining('no active Event'), null);
+	});
+
+	it('mints the first token through authorize, which also makes the first connection', async () => {
+		// One mint path for first connection and event switch alike: with
+		// autoConnect off, `authorize()` initiates the connection itself from
+		// `initialized` (RTC8c; verified against ably@2.27.0 on #474).
+		const realtime = await createTransport();
+
+		realtime.setRoom('event:7');
+		await settle();
+
+		expect(realtimeInstances[0]!.auth.authorize).toHaveBeenCalledOnce();
+	});
+
+	it('scopes the token to the Event of the room being minted for', async () => {
 		// Typed against the plain signature rather than the route table: matching a
 		// resolved value against `$fetch`'s route-conditional return type exhausts
 		// the type comparison depth limit.
 		vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
 			.mockResolvedValueOnce({ token: 'token-request' });
 		const realtime = await createTransport();
+		realtime.setRoom('event:7');
 		const callback = vi.fn();
 
-		const authCallbackPromise = (realtimeInstances[0]!.options as any).authCallback({}, callback);
-
-		// No event chosen yet (e.g. the event-less index page) — must not
-		// fetch a token or surface an error while waiting.
-		await Promise.resolve();
-		expect($fetch).not.toHaveBeenCalled();
-		expect(callback).not.toHaveBeenCalled();
-
-		realtime.setRoom('event:7');
-		await authCallbackPromise;
+		await (realtimeInstances[0]!.options as any).authCallback({}, callback);
 
 		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
 			query: { eventId: 7 },
@@ -207,7 +234,6 @@ describe('realtime plugin', () => {
 			headers: undefined,
 		});
 		expect(callback).toHaveBeenCalledWith(null, { token: 'token-request' });
-		expect(realtimeInstances[0]!.auth.authorize).not.toHaveBeenCalled();
 	});
 
 	/**
@@ -226,9 +252,8 @@ describe('realtime plugin', () => {
 		const realtime = await createTransport();
 		const callback = vi.fn();
 
-		const authCallbackPromise = (realtimeInstances[0]!.options as any).authCallback({}, callback);
 		realtime.setRoom('event:7');
-		await authCallbackPromise;
+		await (realtimeInstances[0]!.options as any).authCallback({}, callback);
 
 		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
 			query: { eventId: 7 },
@@ -247,9 +272,8 @@ describe('realtime plugin', () => {
 		const realtime = await createTransport();
 		const callback = vi.fn();
 
-		const authCallbackPromise = (realtimeInstances[0]!.options as any).authCallback({}, callback);
 		realtime.setRoom('event:7');
-		await authCallbackPromise;
+		await (realtimeInstances[0]!.options as any).authCallback({}, callback);
 
 		expect($fetch).toHaveBeenCalledWith('/api/realtime/token', {
 			query: { eventId: 7 },
@@ -495,83 +519,48 @@ describe('realtime plugin', () => {
 	/**
 	 * The first connection's half of the "coverage only on success" contract.
 	 *
-	 * The event-switch path already held it (#307), but the initial branch claimed
-	 * `coveredEventId` the moment it released the waiting authCallback — while the
-	 * token fetch was still in flight. A failed first mint left the event looking
-	 * covered, so every later subscribe took the fast path onto a connection with
-	 * no token at all, and nothing published `tokenError`.
+	 * Since #474 the first mint runs through the same authorize() path as an
+	 * event switch (autoConnect off; the mint makes the first connection), so
+	 * one mechanism holds the contract — this pins that the very first Event
+	 * gets it too: tokenError published, nothing subscribed, next subscribe
+	 * mints again and recovers.
 	 */
 	describe('the first mint after connection', () => {
-		it('does not subscribe until the initial token fetch actually lands', async () => {
-			let resolveFetch!: (value: unknown) => void;
-			vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
-				.mockReturnValueOnce(new Promise((resolve) => {
-					resolveFetch = resolve;
-				}));
-			const realtime = await createTransport();
-			const callback = vi.fn();
-			void (realtimeInstances[0]!.options as any).authCallback({}, callback);
-			await Promise.resolve();
-
-			const handler = vi.fn();
-			realtime.setRoom('event:7');
-			realtime.onRoom('player', { 'player:updated': handler });
-			await settle();
-
-			// The fetch is still in flight — coverage must not have been claimed.
-			expect(channels.get('event:7')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
-
-			resolveFetch({ token: 'token-request' });
-			await settle();
-
-			channels.get('event:7')!.emit('player:updated', { player: { id: 7 } });
-			expect(handler).toHaveBeenCalledOnce();
-			// The initial mint is the authCallback's own fetch; no separate authorize.
-			expect(realtimeInstances[0]!.auth.authorize).not.toHaveBeenCalled();
+		beforeEach(() => {
+			vi.useFakeTimers();
 		});
 
-		describe('when it fails', () => {
-			beforeEach(() => {
-				vi.useFakeTimers();
-			});
+		afterEach(() => {
+			vi.useRealTimers();
+		});
 
-			afterEach(() => {
-				vi.useRealTimers();
-			});
+		async function settleRetries() {
+			await vi.advanceTimersByTimeAsync(30_000);
+		}
 
-			async function settleRetries() {
-				await vi.advanceTimersByTimeAsync(30_000);
-			}
+		it('publishes tokenError when the very first mint keeps failing, and the next subscribe recovers', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
 
-			it('publishes tokenError and leaves the event uncovered for the next subscribe', async () => {
-				const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-				vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
-					.mockRejectedValueOnce(new Error('token endpoint down'));
-				const realtime = await createTransport();
-				const callback = vi.fn();
-				void (realtimeInstances[0]!.options as any).authCallback({}, callback);
-				await Promise.resolve();
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:7');
+			realtime.onChannel('screen:7:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
 
-				realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
-				realtime.setRoom('event:7');
-				realtime.onChannel('screen:7:1', 'screen:command:debug', vi.fn());
-				await settleRetries();
+			expect(channels.get('screen:7:1')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
 
-				expect(channels.get('screen:7:1')?.subscribe ?? vi.fn()).not.toHaveBeenCalled();
-				expect(realtime.tokenError).toBeInstanceOf(Error);
+			// Uncovered means the next subscribe mints again — and recovers.
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:2', 'screen:command:debug', handler);
+			await settleRetries();
 
-				// Uncovered means the next subscribe mints again — and recovers.
-				realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
-				const handler = vi.fn();
-				realtime.onChannel('screen:7:2', 'screen:command:debug', handler);
-				await settleRetries();
-
-				expect(realtimeInstances[0]!.auth.authorize).toHaveBeenCalled();
-				expect(realtime.tokenError).toBeNull();
-				channels.get('screen:7:2')!.emit('screen:command:debug', { screenId: 2 });
-				expect(handler).toHaveBeenCalledOnce();
-				consoleSpy.mockRestore();
-			});
+			expect(realtimeInstances[0]!.auth.authorize).toHaveBeenCalled();
+			expect(realtime.tokenError).toBeNull();
+			channels.get('screen:7:2')!.emit('screen:command:debug', { screenId: 2 });
+			expect(handler).toHaveBeenCalledOnce();
+			consoleSpy.mockRestore();
 		});
 	});
 
