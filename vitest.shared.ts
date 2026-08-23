@@ -33,6 +33,11 @@ const coverageExclude = [
 	'server/db/migrations/**',
 ];
 
+// Thresholds gate for real: `pnpm test` (and so CI and `pnpm verify`) runs the
+// unit and nuxt suites through `test:unit:coverage` / `test:nuxt:coverage`,
+// which pass `--coverage` and fail the run below these floors (#469). Measured
+// overhead is ~2s per suite. Watch mode and single-file runs stay
+// uninstrumented.
 export const unitCoverageConfig: CoverageOptions = {
 	provider: 'v8',
 	reporter: ['text', 'html', 'json'],

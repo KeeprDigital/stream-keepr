@@ -50,7 +50,9 @@ jobs:
       # quiet machine" that docs/agents/parallel-rounds.md requires for
       # integration numbers. Realtime integration tests self-skip here — no
       # Ably key is configured in CI by decision; realtime coverage runs
-      # locally (#189).
+      # locally (#189). The unit and nuxt tiers run with --coverage, so the
+      # thresholds in vitest.shared.ts fail this step when coverage drops
+      # below them (#469); measured overhead is ~2s per suite.
       - run: pnpm test
 
   worker-guard:
