@@ -66,7 +66,7 @@ function layerView(layer: BackgroundLayer): BackgroundLayerView {
 			break;
 		case 'image':
 			view.imageUrl = sourceUrl(layer.source);
-			view.imageFit = layer.fit === 'fill' ? 'fill' : layer.fit;
+			view.imageFit = layer.fit;
 			break;
 		case 'video':
 			// Opacity stays on the layer wrapper — the layer owns it, so the
