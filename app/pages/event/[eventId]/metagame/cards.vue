@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MetagameCardBoardFilter, MetagameCardSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { useMetagameClient } from '~/modules/metagame/client';
@@ -13,7 +13,7 @@ const { runRequest } = useRequestFeedback();
 const cardData = ref<CardBreakdownResponse | null>(null);
 const cardLoading = ref(false);
 const cardSortBy = ref<MetagameCardSortBy>('inclusionRate');
-const cardBoardFilter = ref<MetagameCardBoardFilter>('both');
+const cardBoardFilter = ref<BoardSelection>('full');
 
 const hasDeckData = computed(() => playerStore.players.some(p => getMtgGameData(p.gameData).deckName));
 

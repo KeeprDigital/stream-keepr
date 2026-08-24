@@ -251,7 +251,7 @@ describe('archetype metagame detail page', () => {
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/events/99/metagame/archetypes/8',
-			{ query: { scope: 'all', board: 'both' } },
+			{ query: { scope: 'all', board: 'full' } },
 		);
 	});
 });

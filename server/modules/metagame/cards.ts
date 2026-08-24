@@ -1,4 +1,4 @@
-import type { MetagameCardBoardFilter } from '~~/shared/types/enums';
+import type { BoardSelection } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { computeBoardScopedCardMetrics } from '~~/server/services/metagameMetrics';
 import { isMetagameAnalysisCard } from '~~/shared/utils/metagame';
@@ -26,7 +26,7 @@ export function isEligibleMetagameCard(cardType: string | null): boolean {
 export function toCardBreakdownEntry(
 	row: AggregatedMetagameCardRow,
 	totalDecks: number,
-	board: MetagameCardBoardFilter,
+	board: BoardSelection,
 ): CardBreakdownEntry {
 	const metrics = computeBoardScopedCardMetrics(row, totalDecks, board);
 

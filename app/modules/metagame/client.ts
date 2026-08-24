@@ -1,5 +1,5 @@
 import type {
-	MetagameCardBoardFilter,
+	BoardSelection,
 	MetagameCardSortBy,
 	MetagameScope,
 	MetagameSortBy,
@@ -27,14 +27,14 @@ export interface MetagameArchetypeBreakdownOptions {
 export interface MetagameCardBreakdownOptions {
 	sortBy?: MetagameCardSortBy;
 	limit?: number;
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 	archetypeId?: number;
 	/** Legacy Screen config filter name; preserved while Screen config stores names instead of ids. */
 	archetype?: string;
 }
 
 export interface MetagameArchetypeDetailOptions {
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 }
 
 export function buildMetagameScopeQuery(input: MetagameScopeInput): MetagameQueryParams {

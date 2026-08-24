@@ -1,3 +1,4 @@
+import type { BoardSelection } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -73,10 +74,10 @@ async function mountComponent() {
 	return mount(defineComponent({
 		components: { CardsTable },
 		setup() {
-			const boardFilter = ref<'both' | 'mainboard' | 'sideboard'>('both');
+			const boardFilter = ref<BoardSelection>('full');
 			const loading = ref(false);
-			const entriesByBoard: Record<'both' | 'mainboard' | 'sideboard', CardBreakdownEntry[]> = {
-				both: [makeEntry()],
+			const entriesByBoard: Record<BoardSelection, CardBreakdownEntry[]> = {
+				full: [makeEntry()],
 				mainboard: [makeEntry({ inclusionRate: 25, avgCopies: 4, totalCopies: 4, deckCount: 1 })],
 				sideboard: [makeEntry({ inclusionRate: 25, avgCopies: 2, totalCopies: 2, deckCount: 1 })],
 			};

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui';
-import type { MetagameCardBoardFilter, MetagameCardSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 
 const props = defineProps<{
@@ -8,7 +8,7 @@ const props = defineProps<{
 	totalDecks?: number;
 	loading?: boolean;
 	sortBy: MetagameCardSortBy;
-	boardFilter: MetagameCardBoardFilter;
+	boardFilter: BoardSelection;
 	showDeckCount?: boolean;
 	/** When provided, row clicks navigate to this path */
 	getRowLink?: (entry: CardBreakdownEntry) => string;
@@ -16,7 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(e: 'update:sortBy', value: MetagameCardSortBy): void;
-	(e: 'update:boardFilter', value: MetagameCardBoardFilter): void;
+	(e: 'update:boardFilter', value: BoardSelection): void;
 }>();
 
 // ── Filters ──
@@ -39,13 +39,13 @@ const {
 function toggleMainboard() {
 	if (showMainboard.value && !showSideboard.value)
 		return;
-	emit('update:boardFilter', props.boardFilter === 'both' ? 'sideboard' : 'both');
+	emit('update:boardFilter', props.boardFilter === 'full' ? 'sideboard' : 'full');
 }
 
 function toggleSideboard() {
 	if (showSideboard.value && !showMainboard.value)
 		return;
-	emit('update:boardFilter', props.boardFilter === 'both' ? 'mainboard' : 'both');
+	emit('update:boardFilter', props.boardFilter === 'full' ? 'mainboard' : 'full');
 }
 
 // ── Table ──

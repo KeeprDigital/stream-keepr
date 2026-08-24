@@ -1,5 +1,5 @@
 import type { SQL } from 'drizzle-orm';
-import type { MetagameCardBoardFilter, MetagameScope } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameScope } from '~~/shared/types/enums';
 import type { PlayerScope } from './scope';
 import { and, eq } from 'drizzle-orm';
 import { db } from 'hub:db';
@@ -12,11 +12,11 @@ export interface MetagameScopeQuery {
 	playerListId?: number;
 	archetypeId?: number;
 	archetype?: string;
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 }
 
 export interface MetagameDeckUniverse {
-	board: MetagameCardBoardFilter;
+	board: BoardSelection;
 	countDecks: () => Promise<number>;
 }
 
@@ -59,7 +59,7 @@ export async function resolveMetagameScope(eventId: number, query: MetagameScope
 		playerFilters.push(eq(players.archetypeId, resolvedArchetypeId));
 
 	const deckUniverse: MetagameDeckUniverse = {
-		board: query.board ?? 'both',
+		board: query.board ?? 'full',
 		async countDecks() {
 			const deckCountRows = await db
 				.selectDistinct({ deckId: playerDecks.id })

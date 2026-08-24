@@ -127,6 +127,25 @@ describe('metagameCardsQuerySchema', () => {
 		if (result.success)
 			expect(result.data.limit).toBe(25);
 	});
+
+	it('defaults board to full when omitted', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all' });
+		expect(result.success).toBe(true);
+		if (result.success)
+			expect(result.data.board).toBe('full');
+	});
+
+	it('accepts each board selection value', () => {
+		for (const board of ['full', 'mainboard', 'sideboard']) {
+			const result = metagameCardsQuerySchema.safeParse({ scope: 'all', board });
+			expect(result.success).toBe(true);
+		}
+	});
+
+	it('rejects the retired board value both', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' });
+		expect(result.success).toBe(false);
+	});
 });
 
 // ──────────────── metagameParamsSchema ────────────────
