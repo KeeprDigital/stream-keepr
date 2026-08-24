@@ -5,12 +5,14 @@ export type MeleeGameCompatibility
 		| { status: 'mismatch'; meleeGame: Game }
 		| { status: 'unknown'; meleeGame: null };
 
+// Melee's tournament API serializes the game as a PascalCase enum name
+// (e.g. "MagicTheGathering"), so names are compared without separators to
+// cover both display names and enum names.
 function normalizeMeleeGameName(value: string): string {
 	return value
 		.normalize('NFKD')
 		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, ' ')
-		.trim();
+		.replace(/[^a-z0-9]+/g, '');
 }
 
 /**
@@ -22,16 +24,15 @@ export function mapMeleeGame(value: string): Game | null {
 	const normalized = normalizeMeleeGameName(value);
 	if (
 		normalized === 'mtg'
-		|| normalized === 'mtg arena'
-		|| normalized.startsWith('magic the gathering')
+		|| normalized === 'mtgarena'
+		|| normalized.startsWith('magicthegathering')
 	) {
 		return 'mtg';
 	}
 
 	if (
 		normalized === 'opcg'
-		|| normalized === 'onepiece'
-		|| normalized.startsWith('one piece')
+		|| normalized.startsWith('onepiece')
 	) {
 		return 'op';
 	}
