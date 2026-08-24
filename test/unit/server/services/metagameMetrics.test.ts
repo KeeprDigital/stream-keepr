@@ -8,7 +8,7 @@ describe('metagame metrics service helpers', () => {
 		expect(computeMetagameWinRate(0, 0)).toBeNull();
 	});
 
-	it('computes card metrics for both boards, mainboard, and sideboard', () => {
+	it('computes card metrics for the full deck, mainboard, and sideboard', () => {
 		const row = {
 			totalCopies: 18,
 			mainboardCount: 12,
@@ -18,7 +18,7 @@ describe('metagame metrics service helpers', () => {
 			deckCount: 5,
 		};
 
-		expect(computeBoardScopedCardMetrics(row, 20, 'both')).toEqual({
+		expect(computeBoardScopedCardMetrics(row, 20, 'full')).toEqual({
 			deckCount: 5,
 			totalCopies: 18,
 			inclusionRate: 25,
@@ -48,7 +48,7 @@ describe('metagame metrics service helpers', () => {
 			deckCount: 0,
 		};
 
-		expect(computeBoardScopedCardMetrics(row, 0, 'both')).toEqual({
+		expect(computeBoardScopedCardMetrics(row, 0, 'full')).toEqual({
 			deckCount: 0,
 			totalCopies: 0,
 			inclusionRate: 0,

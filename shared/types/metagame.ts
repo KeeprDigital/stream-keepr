@@ -1,6 +1,6 @@
 import type { DeckTokenRequirement } from '../utils/deckTokens';
 import type { DeckCompanion } from './deckCompanion';
-import type { ExternalSource, MetagameCardBoardFilter, MetagameScope } from './enums';
+import type { BoardSelection, ExternalSource, MetagameScope } from './enums';
 import type { HighlanderDeckSummary } from './highlander';
 
 // ─── Query params (shared between client + server) ──────────────
@@ -12,7 +12,7 @@ export interface MetagameQueryParams {
 }
 
 export interface MetagameCardTableQueryParams extends MetagameQueryParams {
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 }
 
 // ─── Card response ───────────────────────────────────────────────

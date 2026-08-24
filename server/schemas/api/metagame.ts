@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-	METAGAME_CARD_BOARD_FILTER_VALUES,
+	BOARD_SELECTION_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
 	METAGAME_SCOPE_VALUES,
 	METAGAME_SORT_BY_VALUES,
@@ -24,10 +24,10 @@ export const metagameQuerySchema = z.object({
 	{ message: 'playerListId is required when scope is playerList', path: ['playerListId'] },
 );
 
-export const metagameCardBoardFilterSchema = z.enum(METAGAME_CARD_BOARD_FILTER_VALUES).default('both');
+export const boardSelectionSchema = z.enum(BOARD_SELECTION_VALUES).default('full');
 
 export const metagameCardTableQuerySchema = metagameQuerySchema.and(z.object({
-	board: metagameCardBoardFilterSchema,
+	board: boardSelectionSchema,
 }));
 
 export const metagameCardsQuerySchema = metagameCardTableQuerySchema.and(z.object({

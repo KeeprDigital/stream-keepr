@@ -37,8 +37,8 @@ describe('metagame card rules', () => {
 	});
 
 	it('sorts Card breakdown entries by the selected metric', () => {
-		const low = toCardBreakdownEntry({ ...row, cardId: 1, deckCount: 1, totalCopies: 1 }, 10, 'both');
-		const high = toCardBreakdownEntry({ ...row, cardId: 2, deckCount: 5, totalCopies: 12 }, 10, 'both');
+		const low = toCardBreakdownEntry({ ...row, cardId: 1, deckCount: 1, totalCopies: 1 }, 10, 'full');
+		const high = toCardBreakdownEntry({ ...row, cardId: 2, deckCount: 5, totalCopies: 12 }, 10, 'full');
 
 		expect(compareCardBreakdownEntries('inclusionRate', low, high)).toBeGreaterThan(0);
 		expect(compareCardBreakdownEntries('totalCopies', low, high)).toBeGreaterThan(0);

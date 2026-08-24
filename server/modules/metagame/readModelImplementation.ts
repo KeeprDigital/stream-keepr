@@ -1,5 +1,5 @@
 import type { MetagameScopeModel } from '~~/server/modules/metagame/scopeModel';
-import type { MetagameCardBoardFilter, MetagameScope } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameScope } from '~~/shared/types/enums';
 import type {
 	ArchetypeBreakdownResponse,
 	ArchetypeDetailResponse,
@@ -208,7 +208,7 @@ export function createMetagameReadModelImplementation() {
 		topN?: number,
 		playerListId?: number,
 		archetypeId?: number,
-		board: MetagameCardBoardFilter = 'both',
+		board: BoardSelection = 'full',
 		archetypeName?: string,
 	): Promise<CardBreakdownResponse> {
 		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, archetype: archetypeName, board });
@@ -361,7 +361,7 @@ export function createMetagameReadModelImplementation() {
 		scope: MetagameScope,
 		topN?: number,
 		playerListId?: number,
-		board: MetagameCardBoardFilter = 'both',
+		board: BoardSelection = 'full',
 	): Promise<ArchetypeDetailResponse | null> {
 		const arch = await db.query.archetypes.findFirst({
 			where: and(eq(archetypes.id, archetypeId), eq(archetypes.eventId, eventId)),

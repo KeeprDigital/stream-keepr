@@ -1,4 +1,4 @@
-import type { MetagameCardBoardFilter, MetagameCardSortBy, MetagameScope, MetagameSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameCardSortBy, MetagameScope, MetagameSortBy } from '~~/shared/types/enums';
 import { createMetagameReadModelImplementation } from './readModelImplementation';
 
 export type { MetagameDeckUniverse, MetagameScopeModel } from './scopeModel';
@@ -17,13 +17,13 @@ export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
 	sortBy?: MetagameCardSortBy;
 	limit?: number;
 	archetypeId?: number;
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 	archetype?: string;
 }
 
 export interface MetagameArchetypeDetailQuery extends MetagameScopeQuery {
 	archetypeId: number;
-	board?: MetagameCardBoardFilter;
+	board?: BoardSelection;
 }
 
 export interface MetagameCardDetailQuery extends MetagameScopeQuery {

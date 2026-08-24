@@ -1,3 +1,5 @@
+import type { BoardSelection } from '~~/shared/types/enums';
+
 interface AggregatedCardMetrics {
 	totalCopies: number;
 	mainboardCount: number;
@@ -17,7 +19,7 @@ export function computeMetagameWinRate(wins: number, losses: number): number | n
 export function computeBoardScopedCardMetrics(
 	row: AggregatedCardMetrics,
 	totalDecks: number,
-	board: 'both' | 'mainboard' | 'sideboard',
+	board: BoardSelection,
 ) {
 	const deckCount = board === 'mainboard'
 		? row.mainboardDeckCount

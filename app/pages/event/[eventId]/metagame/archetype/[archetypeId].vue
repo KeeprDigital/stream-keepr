@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
-import type { MetagameCardBoardFilter, MetagameCardSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { ArchetypeDetailResponse } from '~~/shared/types/metagame';
 import { useMetagameClient } from '~/modules/metagame/client';
 
@@ -18,7 +18,7 @@ const { runRequest } = useRequestFeedback();
 const isMtg = computed(() => eventStore.event?.game === 'mtg');
 const archetypeId = computed(() => Number(route.params.archetypeId));
 const archetypeCardSortBy = ref<MetagameCardSortBy>('inclusionRate');
-const archetypeCardBoardFilter = ref<MetagameCardBoardFilter>('both');
+const archetypeCardBoardFilter = ref<BoardSelection>('full');
 
 const detail = ref<ArchetypeDetailResponse | null>(null);
 const loading = ref(false);
