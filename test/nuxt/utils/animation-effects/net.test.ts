@@ -101,6 +101,21 @@ describe('createNetDelegate', () => {
 		}
 	});
 
+	it('fills the buffer exactly at full connectivity, with no self-segments and no overflow', () => {
+		// The densest reachable field: a tiny doubled grid whose 18 points all
+		// sit within the maximum connection distance of each other, so every
+		// distinct pair connects. The fork's self-pair segments are skipped and
+		// its heuristic buffer could overflow here; the exact bound cannot.
+		const { delegate, scene, context } = mountDelegate({ points: 2, spacing: 2, maxDistance: 80 });
+		const lines = linesMesh(scene);
+		delegate.update({ ...context, elapsedSeconds: 1 });
+		const pointCount = 3 * 3 * 2;
+		const distinctPairs = pointCount * (pointCount - 1) / 2;
+		expect(lines.geometry.drawRange.count).toBe(distinctPairs * 2);
+		const position = lines.geometry.getAttribute('position') as THREE.BufferAttribute;
+		expect(position.count).toBe(distinctPairs * 2);
+	});
+
 	it('tightening the connection distance live draws fewer segments', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		const lines = linesMesh(scene);

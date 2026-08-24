@@ -60,7 +60,7 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 	let dotMaterial: THREE.MeshLambertMaterial | undefined;
 
 	/** Additive over a darker background, normal over a brighter one — the fork's choice. */
-	function additiveBlending(params: NetAnimationParams): boolean {
+	function usesAdditiveBlending(params: NetAnimationParams): boolean {
 		return luminance(new THREE.Color(params.color)) > luminance(new THREE.Color(params.backgroundColor));
 	}
 
@@ -110,9 +110,10 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 			}
 		}
 
-		// Sized for every pair connecting at once — the true upper bound, where
-		// the fork's heuristic allocation could silently drop segments when a
-		// tight spacing connected more pairs than it had room for.
+		// Sized for every distinct pair connecting at once — the true upper bound
+		// now that the pair loop skips self-pairs, where the fork's heuristic
+		// allocation could silently drop segments when a tight spacing connected
+		// more pairs than it had room for.
 		const maxSegments = points.length * (points.length - 1) / 2;
 		linePositions = new Float32Array(maxSegments * 6);
 		lineColors = new Float32Array(maxSegments * 6);
@@ -123,7 +124,7 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 		geometry.setDrawRange(0, 0);
 		lines = new three.LineSegments(geometry, new three.LineBasicMaterial({
 			vertexColors: true,
-			blending: additiveBlending(current) ? three.AdditiveBlending : three.NormalBlending,
+			blending: usesAdditiveBlending(current) ? three.AdditiveBlending : three.NormalBlending,
 			transparent: true,
 		}));
 		group.add(lines);
@@ -164,7 +165,7 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 				return;
 			}
 			dotMaterial?.color.set(params.color);
-			lines.material.blending = additiveBlending(params) ? three.AdditiveBlending : three.NormalBlending;
+			lines.material.blending = usesAdditiveBlending(params) ? three.AdditiveBlending : three.NormalBlending;
 		},
 
 		update: ({ three, elapsedSeconds }) => {
@@ -178,23 +179,30 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 
 			const backgroundColor = new three.Color(current.backgroundColor);
 			const color = new three.Color(current.color);
-			const additive = additiveBlending(current);
+			const additive = usesAdditiveBlending(current);
 			const differenceColor = color.clone().sub(backgroundColor);
+			// One scratch colour reused across the pair loop, which runs thousands
+			// of times a frame.
+			const lineColor = new three.Color();
 
 			let vertexIndex = 0;
 			let colorIndex = 0;
 			let connected = 0;
+			// `j = i + 1`, where the fork started at `j = i`: its self-pair drew a
+			// zero-length, invisible segment per point, and skipping them is what
+			// makes `maxSegments` the true bound.
 			for (let i = 0; i < points.length; i++) {
 				const a = points[i]!.holder.position;
-				for (let j = i; j < points.length; j++) {
+				for (let j = i + 1; j < points.length; j++) {
 					const b = points[j]!.holder.position;
 					const distance = a.distanceTo(b);
 					if (distance >= current.maxDistance)
 						continue;
 					const alpha = Math.min(Math.max((1 - distance / current.maxDistance) * 2, 0), 1);
-					const lineColor = additive
-						? new three.Color(0x000000).lerp(differenceColor, alpha)
-						: backgroundColor.clone().lerp(color, alpha);
+					if (additive)
+						lineColor.setScalar(0).lerp(differenceColor, alpha);
+					else
+						lineColor.copy(backgroundColor).lerp(color, alpha);
 
 					linePositions[vertexIndex++] = a.x;
 					linePositions[vertexIndex++] = a.y;
