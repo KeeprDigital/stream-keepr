@@ -353,7 +353,7 @@ describe('graphics Authoring Leases', () => {
 		await askForLease(browserA);
 		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: 'Idle Screen', slug: 'lease-idle-screen', currentMode: 'idle' },
+			body: { name: 'Background Screen', slug: 'lease-background-screen', currentMode: 'background' },
 		});
 
 		const resized = await request(`/api/events/${eventId}/screens/${other.id}/screen-config`, {
