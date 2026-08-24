@@ -341,16 +341,19 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 				backgroundImageFit: 'cover',
 				gradient: 'linear-gradient(180deg, rgba(10,0,16,0.2) 0%, rgba(122,0,122,0.28) 48%, rgba(4,0,10,0.5) 100%)',
 				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true },
-				// Caustics stands in for the fork's `net` until that port lands (#473);
-				// magenta light over near-black water keeps the neon read.
+				// The net port landing (#473) ends the caustics stand-in: this is the
+				// pre-rebuild preset's own net configuration, in per-effect params form.
 				animation: {
 					enabled: true,
-					effect: 'caustics',
+					effect: 'net',
 					opacity: 0.34,
 					params: {
-						lightColor: '#d600ff',
-						waterColor: '#050008',
-						speed: 0.6,
+						color: '#d600ff',
+						backgroundColor: '#050008',
+						points: 12,
+						maxDistance: 34,
+						spacing: 18,
+						showDots: false,
 					},
 				},
 				borderVisible: true,

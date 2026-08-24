@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'net', 'rings', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -109,6 +109,26 @@ describe('animationEffects catalogue', () => {
 		// cover the frame.
 		expect(animationEffectDefaultParams('rings')).toEqual({
 			backgroundColor: '#111111',
+		});
+	});
+
+	it('ports net under the defaults the pre-rebuild application shipped', () => {
+		// All six params are read by the renderer: color drives the connection
+		// lines and the point markers, backgroundColor the clear colour and the
+		// line gradient's dark end, and the rest the field's construction.
+		expect(animationEffectDefaultParams('net')).toEqual({
+			color: '#7c3aed',
+			backgroundColor: '#111111',
+			points: 10,
+			maxDistance: 22,
+			spacing: 16,
+			showDots: true,
+		});
+		const showDots = animationEffectParamFields('net').find(field => field.key === 'showDots');
+		expect(showDots).toMatchObject({
+			control: 'toggle',
+			defaultValue: true,
+			description: 'Render point markers at net intersections.',
 		});
 	});
 
