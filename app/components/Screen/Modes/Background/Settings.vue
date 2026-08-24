@@ -136,11 +136,15 @@ function selectAssetSource(
 	});
 }
 
+/**
+ * Only the picker's Clear reaches the configuration through this event: a
+ * choose also fires `select`, which is the write — it alone carries the asset's
+ * own facts (`videoCompatibility`), and a second write from here would race it
+ * with a fact-less reference.
+ */
 function clearAssetSource(layer: BackgroundLayer & { type: 'image' | 'video' }, reference: GraphicAssetReference | undefined) {
 	if (reference === undefined)
 		updateSource(layer, { kind: 'url', url: '' });
-	else
-		updateSource(layer, { kind: 'asset', assetId: reference.assetId, revisionId: reference.revisionId });
 }
 
 function sourceReference(layer: BackgroundLayer & { type: 'image' | 'video' }): GraphicAssetReference | undefined {
