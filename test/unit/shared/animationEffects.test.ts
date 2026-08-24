@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'ripple']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'halo', 'ripple']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -43,6 +43,21 @@ describe('animationEffects catalogue', () => {
 			ringFactor: 1,
 			rotationFactor: 1,
 			speed: 0.6,
+		});
+	});
+
+	it('ports halo under the defaults the pre-rebuild application shipped', () => {
+		// Only the params the halo fragment shader reads survive the port: the
+		// fork's editor also offered color2, ringFactor, and rotationFactor,
+		// which its halo shader declared and never referenced.
+		expect(animationEffectDefaultParams('halo')).toEqual({
+			baseColor: '#111111',
+			backgroundColor: '#111111',
+			amplitudeFactor: 1,
+			size: 1,
+			xOffset: 0,
+			yOffset: 0,
+			speed: 1,
 		});
 	});
 
