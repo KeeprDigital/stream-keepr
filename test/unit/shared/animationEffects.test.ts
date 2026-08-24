@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'rings', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -100,6 +100,18 @@ describe('animationEffects catalogue', () => {
 		expect(showLines?.step).toBeUndefined();
 	});
 
+	it('ports rings with only the background colour, as the pre-rebuild application rendered it', () => {
+		// The fork's rings renderer samples a hardcoded palette for every ring
+		// and never reads the colour option, so the pre-rebuild editor's "Ring
+		// color" picker was inert and drops with the port (the halo precedent for
+		// declared-but-unread params). backgroundColor survives under the
+		// slice-4 rule: the fork's base cleared the canvas to it, and the rings
+		// never cover the frame.
+		expect(animationEffectDefaultParams('rings')).toEqual({
+			backgroundColor: '#111111',
+		});
+	});
+
 	it('fills every parameter from the schema alone, so an empty config renders', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const defaults = animationEffectDefaultParams(effect);
@@ -129,9 +141,12 @@ describe('animationEffects catalogue', () => {
 	});
 
 	it('refuses an out-of-range parameter rather than clamping it', () => {
-		for (const effect of ANIMATION_EFFECT_VALUES) {
+		// Rings carries no number param — its schema is a background colour alone.
+		const effectsWithNumbers = ANIMATION_EFFECT_VALUES.filter(effect =>
+			animationEffectParamFields(effect).some(field => field.control === 'number'));
+		expect(effectsWithNumbers).toEqual(ANIMATION_EFFECT_VALUES.filter(effect => effect !== 'rings'));
+		for (const effect of effectsWithNumbers) {
 			const [numberField] = animationEffectParamFields(effect).filter(field => field.control === 'number');
-			expect(numberField).toBeDefined();
 			const outcome = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.safeParse({
 				[numberField!.key]: numberField!.max! + 1,
 			});

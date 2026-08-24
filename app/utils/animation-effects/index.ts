@@ -16,6 +16,7 @@ const effectLoaders: {
 	dots: () => import('./dots'),
 	fog: () => import('./fog'),
 	halo: () => import('./halo'),
+	rings: () => import('./rings'),
 	ripple: () => import('./ripple'),
 	waves: () => import('./waves'),
 };

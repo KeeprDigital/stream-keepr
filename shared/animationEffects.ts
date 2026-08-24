@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'rings', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -149,6 +149,20 @@ export const dotsAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Rings: a tumbling stack of extruded arc segments in the fork's fixed
+ * thirteen-colour palette, ported from the retired fork under its old name.
+ * Only the background colour survives as a param: the fork's renderer sampled
+ * its palette for every ring and never read the colour option, so the
+ * pre-rebuild editor's "Ring color" picker was inert and drops with the port
+ * (the halo precedent for declared-but-unread params). `backgroundColor`
+ * survives under the waves rule — the fork's base cleared the canvas to it,
+ * and the rings never cover the frame.
+ */
+export const ringsAnimationParamsSchema = z.strictObject({
+	backgroundColor: colorParam('Background color', '#111111'),
+});
+
+/**
  * Waves: a lit, choppy water plane — the first mesh-backend port from the
  * retired fork, under its old name. `backgroundColor` survives the port even
  * though the mesh never reads it: the fork's base cleared the canvas to it,
@@ -181,6 +195,7 @@ export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSch
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
+export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
 
@@ -190,6 +205,7 @@ export interface AnimationEffectParamsMap {
 	dots: DotsAnimationParams;
 	fog: FogAnimationParams;
 	halo: HaloAnimationParams;
+	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
 	waves: WavesAnimationParams;
 }
@@ -200,6 +216,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
+	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
@@ -289,6 +306,11 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 		...frameAnimationShape,
 		effect: z.literal('halo'),
 		params: haloAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('rings'),
+		params: ringsAnimationParamsSchema.optional(),
 	}),
 	z.strictObject({
 		...frameAnimationShape,
