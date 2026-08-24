@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'halo', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -74,6 +74,30 @@ describe('animationEffects catalogue', () => {
 			waveSpeed: 1,
 			zoom: 0.85,
 		});
+	});
+
+	it('ports dots under the defaults the pre-rebuild application shipped', () => {
+		// The catalogue's first toggle param: showLines is a boolean field, not a
+		// number or colour. backgroundColor survives for the same reason as waves'
+		// — the fork's base cleared the canvas to it, and a dot field never covers
+		// the frame. The spacing default is the dots-specific fallback of 34, not
+		// the shared bag's 16.
+		expect(animationEffectDefaultParams('dots')).toEqual({
+			color: '#7c3aed',
+			color2: '#06b6d4',
+			backgroundColor: '#111111',
+			size: 3,
+			spacing: 34,
+			showLines: true,
+		});
+		const showLines = animationEffectParamFields('dots').find(field => field.key === 'showLines');
+		expect(showLines).toMatchObject({
+			control: 'toggle',
+			defaultValue: true,
+			description: 'Render connecting line segments between dots.',
+		});
+		expect(showLines?.min).toBeUndefined();
+		expect(showLines?.step).toBeUndefined();
 	});
 
 	it('fills every parameter from the schema alone, so an empty config renders', () => {

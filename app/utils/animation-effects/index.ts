@@ -13,6 +13,7 @@ const effectLoaders: {
 } = {
 	caustics: () => import('./caustics'),
 	cells: () => import('./cells'),
+	dots: () => import('./dots'),
 	fog: () => import('./fog'),
 	halo: () => import('./halo'),
 	ripple: () => import('./ripple'),

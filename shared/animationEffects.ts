@@ -22,16 +22,20 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'fog', 'halo', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
 /** What a parameter's `.meta()` carries: the editor-facing facts Zod checks cannot. */
 interface AnimationEffectParamMeta {
 	label: string;
-	control: 'color' | 'number';
+	control: 'color' | 'number' | 'toggle';
 	step?: number;
+	description?: string;
 }
+
+/** What one effect parameter's value can be, across every control kind. */
+export type AnimationEffectParamValue = string | number | boolean;
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -58,6 +62,12 @@ function numberParam(label: string, range: { min: number; max: number; step: num
 		.max(range.max)
 		.default(range.default)
 		.meta({ label, control: 'number', step: range.step } satisfies AnimationEffectParamMeta);
+}
+
+function toggleParam(label: string, description: string, defaultValue: boolean) {
+	return z.boolean()
+		.default(defaultValue)
+		.meta({ label, control: 'toggle', description } satisfies AnimationEffectParamMeta);
 }
 
 /**
@@ -121,6 +131,24 @@ export const haloAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Dots: a drifting field of point sprites with slowly tumbling radial line
+ * segments, ported from the retired fork under its old name. `backgroundColor`
+ * survives for the same reason as waves' — the fork's base cleared the canvas
+ * to it, and a dot field never covers the frame. `showLines` is the
+ * catalogue's first toggle param. Defaults and ranges are the pre-rebuild
+ * application's, including the dots-specific `spacing` fallback of 34 rather
+ * than the shared bag's 16.
+ */
+export const dotsAnimationParamsSchema = z.strictObject({
+	color: colorParam('Dot color', '#7c3aed'),
+	color2: colorParam('Accent color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	size: numberParam('Dot size', { min: 0.5, max: 20, step: 0.5, default: 3 }),
+	spacing: numberParam('Spacing', { min: 5, max: 100, step: 1, default: 34 }),
+	showLines: toggleParam('Connecting lines', 'Render connecting line segments between dots.', true),
+});
+
+/**
  * Waves: a lit, choppy water plane — the first mesh-backend port from the
  * retired fork, under its old name. `backgroundColor` survives the port even
  * though the mesh never reads it: the fork's base cleared the canvas to it,
@@ -151,6 +179,7 @@ export const causticsAnimationParamsSchema = z.strictObject({
 export type FogAnimationParams = z.output<typeof fogAnimationParamsSchema>;
 export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSchema>;
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
+export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
@@ -158,6 +187,7 @@ export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
 export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
 	cells: CellsAnimationParams;
+	dots: DotsAnimationParams;
 	fog: FogAnimationParams;
 	halo: HaloAnimationParams;
 	ripple: RippleAnimationParams;
@@ -167,6 +197,7 @@ export interface AnimationEffectParamsMap {
 export const ANIMATION_EFFECT_CATALOGUE = {
 	caustics: { label: 'Caustics', paramsSchema: causticsAnimationParamsSchema },
 	cells: { label: 'Cells', paramsSchema: cellsAnimationParamsSchema },
+	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
@@ -183,11 +214,12 @@ export function animationEffectDefaultParams<Effect extends AnimationEffectName>
 export interface AnimationEffectParamField {
 	key: string;
 	label: string;
-	control: 'color' | 'number';
+	control: 'color' | 'number' | 'toggle';
 	min?: number;
 	max?: number;
 	step?: number;
-	defaultValue: string | number;
+	description?: string;
+	defaultValue: AnimationEffectParamValue;
 }
 
 /**
@@ -196,7 +228,7 @@ export interface AnimationEffectParamField {
  */
 export function animationEffectParamFields(effect: AnimationEffectName): AnimationEffectParamField[] {
 	const schema = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema;
-	const defaults = animationEffectDefaultParams(effect) as Record<string, string | number>;
+	const defaults = animationEffectDefaultParams(effect) as Record<string, AnimationEffectParamValue>;
 	return Object.entries(schema.shape).map(([key, field]) => {
 		const meta = field.meta() as unknown as AnimationEffectParamMeta;
 		// Every param is `.default()`-wrapped, so the checks live one level in.
@@ -210,6 +242,7 @@ export function animationEffectParamFields(effect: AnimationEffectName): Animati
 			control: meta.control,
 			...bounds,
 			step: meta.step,
+			description: meta.description,
 			defaultValue: defaults[key]!,
 		};
 	});
@@ -241,6 +274,11 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 		...frameAnimationShape,
 		effect: z.literal('cells'),
 		params: cellsAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('dots'),
+		params: dotsAnimationParamsSchema.optional(),
 	}),
 	z.strictObject({
 		...frameAnimationShape,
