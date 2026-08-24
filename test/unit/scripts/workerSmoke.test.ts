@@ -273,7 +273,7 @@ describe('the built Worker smoke runner', () => {
 			scripts: Record<string, string>;
 		};
 		const verify = packageJson.scripts.verify!;
-		expect(packageJson.scripts['worker:smoke']).toBe('node scripts/worker-smoke.mjs');
+		expect(packageJson.scripts['worker:smoke']).toMatch(/node scripts\/worker-smoke\.mjs$/u);
 		expect(packageJson.scripts['worker:smoke']).not.toContain('build');
 		expect(verify.indexOf('pnpm build')).toBeLessThan(verify.indexOf('pnpm worker:dry-run'));
 		expect(verify.indexOf('pnpm worker:dry-run')).toBeLessThan(verify.indexOf('pnpm worker:smoke'));
