@@ -15,9 +15,10 @@ export interface PlayerFeatureMatchState {
 	/**
 	 * Whether this player's sideboard is revealed on the live overlay. Match-scoped:
 	 * a game reset or game win must not touch it; only a match reset re-hides (#490).
-	 * Absent on states persisted before the flag existed, which reads as hidden.
+	 * Optional for the same reason `cardsKept` is: absent on states persisted
+	 * before the flag existed, which every reader treats as hidden.
 	 */
-	sideboardRevealed: boolean;
+	sideboardRevealed?: boolean;
 }
 
 // Clock state

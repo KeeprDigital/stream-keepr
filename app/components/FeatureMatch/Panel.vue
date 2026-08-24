@@ -192,7 +192,7 @@ const sideboardsRevealed = computed(() =>
 function handleSideboardRevealChange(revealed: boolean) {
 	if (!eventStore.eventId)
 		return;
-	featureMatchStateStore.setSideboardRevealed(eventStore.eventId, props.match.id, revealed);
+	void featureMatchStateStore.setSideboardRevealed(eventStore.eventId, props.match.id, revealed);
 }
 
 // ──────────────── Player Display Config ────────────────
