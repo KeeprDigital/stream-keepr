@@ -274,7 +274,9 @@ export function backgroundGraphicAssetReferences(
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
 
-	for (const layer of config.layers) {
+	// A stored configuration is legitimately partial — PATCH writes fragments —
+	// so a config with no stack yet publishes nothing rather than throwing.
+	for (const layer of config.layers ?? []) {
 		if (layer.type !== 'image' && layer.type !== 'video')
 			continue;
 		if (layer.source.kind !== 'asset')

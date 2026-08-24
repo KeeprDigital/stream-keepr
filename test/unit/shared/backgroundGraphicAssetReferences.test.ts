@@ -114,4 +114,11 @@ describe('backgroundGraphicAssetReferences', () => {
 		expect(screenModeGraphicAssetReferences('background', modeConfigs)).toHaveLength(1);
 		expect(screenModeGraphicAssetReferences('background', undefined)).toEqual([]);
 	});
+
+	it('answers nothing for a stored fragment that carries no layers key at all', () => {
+		// A mode configuration is legitimately partial in storage: PATCH writes
+		// fragments and readers complete them from defaults, so discovery must
+		// tolerate a background config with no stack rather than throwing.
+		expect(backgroundGraphicAssetReferences({} as BackgroundModeConfig)).toEqual([]);
+	});
 });
