@@ -61,15 +61,23 @@ export const FEATURE_MATCH_SAMPLE_TOKEN_VALUES: Readonly<Record<string, GraphicI
 	eventName: 'Sample Regional Championship',
 };
 
+/** One sampled sideboard card. Art stays unset: a preview never fetches remotely. */
+interface FeatureMatchSampleDeckListCard {
+	name: string;
+	quantity: number;
+	imageUrl: string | null;
+}
+
 /** One sampled player's live session state. */
 interface FeatureMatchSamplePlayerState {
 	lifeTotal: number | null;
 	gameWins: number;
+	sideboard: FeatureMatchSampleDeckListCard[] | null;
 }
 
 /**
- * The live session state the context-gated Clock, Player Life, and Game Wins
- * Graphic Item Definitions read.
+ * The live session state the context-gated Clock, Player Life, Game Wins, and
+ * Deck List Graphic Item Definitions read.
  *
  * Structurally the same shape the render model takes, and deliberately not typed
  * as it: that type belongs to the client render model and this file is shared, so
@@ -85,8 +93,36 @@ export interface FeatureMatchSampleContext {
 
 export const FEATURE_MATCH_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 	clockDisplayTime: '12:34',
-	player1: { lifeTotal: 17, gameWins: 1 },
-	player2: { lifeTotal: 4, gameWins: 1 },
+	// The sideboards are awkward the way real ones are: a full fifteen cards with
+	// a long name, a split card, and uneven quantities, so an author judging a
+	// Deck List Graphic Item's bounds sees the worst case rather than a tidy one.
+	// Art stays `null` — the canonical dataset never depends on a remote image —
+	// so the preview shows the 63:88 text-placeholder cards.
+	player1: {
+		lifeTotal: 17,
+		gameWins: 1,
+		sideboard: [
+			{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
+			{ name: 'Wear // Tear', quantity: 2, imageUrl: null },
+			{ name: 'Pithing Needle', quantity: 1, imageUrl: null },
+			{ name: 'Elspeth, Knight-Errant', quantity: 1, imageUrl: null },
+			{ name: 'Celestial Purge', quantity: 3, imageUrl: null },
+			{ name: 'Burrenton Forge-Tender', quantity: 4, imageUrl: null },
+			{ name: 'Path to Exile', quantity: 2, imageUrl: null },
+		],
+	},
+	player2: {
+		lifeTotal: 4,
+		gameWins: 1,
+		sideboard: [
+			{ name: 'Duress', quantity: 3, imageUrl: null },
+			{ name: 'Negate', quantity: 2, imageUrl: null },
+			{ name: 'Sheoldred, the Apocalypse', quantity: 2, imageUrl: null },
+			{ name: 'Gix\'s Command', quantity: 2, imageUrl: null },
+			{ name: 'Cut Down', quantity: 3, imageUrl: null },
+			{ name: 'Disdainful Stroke', quantity: 3, imageUrl: null },
+		],
+	},
 	bestOf: 3,
 };
 

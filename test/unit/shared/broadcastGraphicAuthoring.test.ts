@@ -20,6 +20,7 @@ import {
 	GRAPHIC_RULE_PRESET_HEIGHT,
 	moveBroadcastGraphic,
 	moveGraphicItem,
+	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
 	patchGraphicGlow,
 	patchGraphicGradientAngle,
@@ -63,10 +64,11 @@ function group(built: BroadcastGraphicConfig): GraphicGroupItemConfig {
 	return item;
 }
 
-// A Media Graphic Item and a Social Network Icon have no Graphic Surface Style,
-// so a reading of `surfaceStyle` has to say which kind it expected to be looking at.
+// A Media Graphic Item, a Social Network Icon, and a Deck List have no Graphic
+// Surface Style, so a reading of `surfaceStyle` has to say which kind it
+// expected to be looking at.
 function surfaced(item: GraphicItemConfig | GraphicGroupChildConfig | undefined) {
-	if (!item || item.type === 'media' || item.type === 'social-network-icon')
+	if (!item || item.type === 'media' || item.type === 'social-network-icon' || item.type === 'deck-list')
 		throw new Error('expected a Graphic Item carrying a Graphic Surface Style');
 	return item;
 }
@@ -866,7 +868,7 @@ describe('broadcastGraphicAuthoring', () => {
 	});
 	describe('the context-gated Feature Match Definitions', () => {
 		/** A Broadcast Graphic holding one item of a context-gated kind. */
-		function withKind(kind: 'clock' | 'player-life' | 'game-wins') {
+		function withKind(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list') {
 			return addGraphicItem(graphic('a'), { kind, id: kind, ...CANVAS }).graphic;
 		}
 
@@ -877,7 +879,7 @@ describe('broadcastGraphicAuthoring', () => {
 			return item;
 		}
 
-		it.each(['clock', 'player-life', 'game-wins'] as const)('sets the base typography of a %s Item', (kind) => {
+		it.each(['clock', 'player-life', 'game-wins', 'deck-list'] as const)('sets the base typography of a %s Item', (kind) => {
 			// Their string comes from the live Feature Match Session rather than from an
 			// author, which decides what they say and nothing about how it is set.
 			const built = patchGraphicTypography(withKind(kind), kind, { fontSize: 96 });
@@ -898,7 +900,8 @@ describe('broadcastGraphicAuthoring', () => {
 			const item = itemOf(built, kind);
 
 			expect(
-				item.type !== 'media' && item.type !== 'social-network-icon' && item.surfaceStyle,
+				item.type !== 'media' && item.type !== 'social-network-icon' && item.type !== 'deck-list'
+				&& item.surfaceStyle,
 			).toMatchObject({ fillOpacity: 0.4 });
 		});
 
@@ -909,6 +912,32 @@ describe('broadcastGraphicAuthoring', () => {
 			const item = itemOf(built, kind);
 
 			expect(item.type === kind && item).toMatchObject({ overflowPolicy: 'shrink', minFontSize: 30 });
+		});
+
+		it('sets a Deck List Item’s view, quantity gate, and Player', () => {
+			const built = patchDeckListGraphicItem(withKind('deck-list'), 'deck-list', {
+				playerSide: 'player2',
+				view: 'grid',
+				showQuantities: false,
+			});
+
+			expect(itemOf(built, 'deck-list')).toMatchObject({
+				type: 'deck-list',
+				playerSide: 'player2',
+				view: 'grid',
+				showQuantities: false,
+			});
+		});
+
+		it('never authors a Text Overflow Policy or a Graphic Surface Style onto a Deck List Item', () => {
+			// The overflow is a fixed shrink-then-clip and the item renders cards
+			// rather than painting a surface, so both edits resolve to nothing rather
+			// than storing fields the wire schema refuses.
+			const built = withKind('deck-list');
+
+			expect(patchGraphicTextOverflow(built, 'deck-list', { overflowPolicy: 'shrink', minFontSize: 30 }))
+				.toEqual(built);
+			expect(patchGraphicSurfaceStyle(built, 'deck-list', { fillOpacity: 0.4 })).toEqual(built);
 		});
 
 		it('sets the life-change animation a Player Life Item marks a change with', () => {

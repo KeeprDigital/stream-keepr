@@ -84,8 +84,8 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 			layout: layout([item('clock', 'clock'), item('player-life', 'life'), item('game-wins', 'wins')]),
 			featureMatch: {
 				clockDisplayTime: '4:31',
-				player1: { lifeTotal: 12, gameWins: 2 },
-				player2: { lifeTotal: 20, gameWins: 0 },
+				player1: { lifeTotal: 12, gameWins: 2, sideboard: null },
+				player2: { lifeTotal: 20, gameWins: 0, sideboard: null },
 				bestOf: 3,
 			},
 			...CANVAS,
@@ -248,7 +248,8 @@ describe('featureMatchGraphicsContext', () => {
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
 
 		expect(context.bestOf).toBe(5);
-		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2 });
+		// `null` deck data until the deck card data path lands (#491).
+		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null });
 	});
 
 	it('reports an absent life total as absent rather than as zero', () => {

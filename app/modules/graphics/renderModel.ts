@@ -4,6 +4,7 @@ import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometry
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
+	DeckListGraphicItemConfig,
 	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
 	GraphicAnimationPhase,
@@ -37,6 +38,7 @@ import {
 	resolveGraphicAnimationOrigin,
 	resolveGraphicAnimationValues,
 	resolveGraphicFontFamily,
+	roundedShapeGeometry,
 	shapeGeometryPath,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
@@ -433,11 +435,24 @@ export interface GraphicMediaIncompatibilityNoticeDescriptor {
 	style: CSSProperties;
 }
 
+/** One sideboard card, as the deck card data path resolves it for the host (#481). */
+export interface GraphicsDeckListCard {
+	name: string;
+	quantity: number;
+	/** `null` art renders a 63:88 text placeholder, so the card count stays honest. */
+	imageUrl: string | null;
+}
+
 /** One Player's live Feature Match Session state, as the context-gated kinds read it. */
 export interface GraphicsFeatureMatchPlayerState {
 	/** Absent while the session holds no total, which renders as an empty item. */
 	lifeTotal: number | null;
 	gameWins: number;
+	/**
+	 * `null` while the host resolved no deck data; `[]` is a genuinely empty
+	 * sideboard. A Deck List Graphic Item renders nothing for either.
+	 */
+	sideboard: ReadonlyArray<GraphicsDeckListCard> | null;
 }
 
 /**
@@ -478,6 +493,31 @@ export interface GraphicIconRenderDescriptor {
 	style: CSSProperties;
 }
 
+/** One sideboard card of a Deck List Graphic Item's grid view. */
+export interface GraphicDeckListCardRenderDescriptor {
+	name: string;
+	quantity: number;
+	/** The card cell's box: pure layout at the computed 63:88 size. */
+	style: CSSProperties;
+	/** The card's art, present when the host resolved an image for it. */
+	image?: { src: string; style: CSSProperties };
+	/**
+	 * The 63:88 placeholder standing in when no art resolved: an ordinary painted
+	 * surface plus the card's own name, so the count stays honest without art.
+	 */
+	placeholder?: { surface: GraphicSurfaceRenderDescriptor; textStyle: CSSProperties };
+	/** The fixed-styling quantity badge; absent while quantities are hidden. */
+	badge?: { text: string; style: CSSProperties };
+}
+
+/**
+ * A Deck List Graphic Item's grid view. The `list` view is a resolved string and
+ * renders through the shared text pipeline instead, so it never appears here.
+ */
+export interface GraphicDeckListRenderDescriptor {
+	cards: GraphicDeckListCardRenderDescriptor[];
+}
+
 export interface GraphicItemRenderDescriptor {
 	id: string;
 	label: string;
@@ -508,6 +548,8 @@ export interface GraphicItemRenderDescriptor {
 	lifeChange?: GraphicLifeChangeRenderDescriptor;
 	/** Present for a Game Wins Graphic Item in `boxes` display mode, in play order. */
 	winBoxes?: GraphicWinBoxRenderDescriptor[];
+	/** Present for a Deck List Graphic Item in `grid` view with cards to draw. */
+	deckList?: GraphicDeckListRenderDescriptor;
 	/** Present for Graphic Groups: the group's direct children, back to front. */
 	children?: GraphicItemRenderDescriptor[];
 	/** Correlated renderings of one Social Profile Presentation Group, back to front. */
@@ -1134,12 +1176,16 @@ function groupClip(group: GraphicGroupItemConfig): CSSProperties {
 /**
  * A child's own Graphic Surface Style, or the group's local style default.
  *
- * Only a child that can carry one asks: a Media Graphic Item paints an asset
- * rather than a surface, so it has nothing for a group default to fill in.
+ * Only a child that can carry one asks: a Media Graphic Item paints an asset and
+ * a Deck List Item renders cards rather than painting a surface, so neither has
+ * anything for a group default to fill in.
  */
 function resolveChildSurfaceStyle(
 	group: GraphicGroupItemConfig,
-	child: Exclude<GraphicGroupChildConfig, MediaGraphicItemConfig | SocialNetworkIconGraphicItemConfig>,
+	child: Exclude<
+		GraphicGroupChildConfig,
+		MediaGraphicItemConfig | SocialNetworkIconGraphicItemConfig | DeckListGraphicItemConfig
+	>,
 ): GraphicSurfaceStyle | undefined {
 	return child.surfaceStyle ?? group.defaultChildSurfaceStyle;
 }
@@ -1357,6 +1403,204 @@ function gameWinsDescriptor(
 				won ? item.wonBoxSurfaceStyle : item.boxSurfaceStyle,
 			),
 		})),
+	};
+}
+
+const DECK_LIST_GRID_GAP = 8;
+
+/** A physical card face is 63mm × 88mm; every grid cell and placeholder keeps it. */
+const DECK_LIST_CARD_ASPECT = 63 / 88;
+
+/**
+ * The fixed floor the list view shrinks to before clipping. The kind carries no
+ * authored Text Overflow Policy — shrink-then-clip is the whole vocabulary.
+ */
+const DECK_LIST_MIN_FONT_SIZE = 12;
+
+/**
+ * The floor for a grid cell's own text — placeholder name and quantity badge —
+ * which scales with the computed card size rather than shrinking to fit, so it
+ * is a separate floor from the list view's.
+ */
+const DECK_LIST_CARD_MIN_FONT_SIZE = 9;
+
+/** What a placeholder card paints where no art resolved: a dark face, outlined. */
+const DECK_LIST_PLACEHOLDER_SURFACE_STYLE: GraphicSurfaceStyle = {
+	fill: { type: 'solid', color: '#1e293b' },
+	fillOpacity: 0.9,
+	outline: { color: '#ffffff', width: 1 },
+};
+
+/**
+ * The widest 63:88 card the authored bounds can hold at the live card count.
+ *
+ * Knobless by design, the game-wins grows-without-re-authoring precedent: every
+ * column count is tried, each bounded by both axes, and the one yielding the
+ * largest card wins — so a changed sideboard re-fits without the layout being
+ * re-authored, and no card is ever cropped to fit.
+ */
+function deckListGridLayout(
+	item: DeckListGraphicItemConfig,
+	count: number,
+): { columns: number; cardWidth: number; cardHeight: number } {
+	const width = Math.max(0, item.width);
+	const height = Math.max(0, item.height);
+	let best = { columns: 1, cardWidth: 0 };
+
+	for (let columns = 1; columns <= count; columns++) {
+		const rows = Math.ceil(count / columns);
+		const widthLimit = (width - (DECK_LIST_GRID_GAP * (columns - 1))) / columns;
+		const heightLimit = ((height - (DECK_LIST_GRID_GAP * (rows - 1))) / rows) * DECK_LIST_CARD_ASPECT;
+		const cardWidth = Math.min(widthLimit, heightLimit);
+		if (cardWidth > best.cardWidth)
+			best = { columns, cardWidth };
+	}
+
+	const cardWidth = Math.max(1, Math.floor(best.cardWidth));
+	return {
+		columns: best.columns,
+		cardWidth,
+		cardHeight: Math.round(cardWidth / DECK_LIST_CARD_ASPECT),
+	};
+}
+
+function deckListCardDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: DeckListGraphicItemConfig,
+	card: GraphicsDeckListCard,
+	layout: { cardWidth: number; cardHeight: number },
+): GraphicDeckListCardRenderDescriptor {
+	const size = { width: layout.cardWidth, height: layout.cardHeight };
+	const nameFontSize = Math.max(DECK_LIST_CARD_MIN_FONT_SIZE, Math.round(layout.cardWidth * 0.14));
+
+	return {
+		name: card.name,
+		quantity: card.quantity,
+		style: { position: 'relative', width: `${size.width}px`, height: `${size.height}px` },
+		image: card.imageUrl === null
+			? undefined
+			: {
+					src: card.imageUrl,
+					// Contained, never cropped: card art is legible content, not decor.
+					style: {
+						display: 'block',
+						width: '100%',
+						height: '100%',
+						objectFit: 'contain',
+						filter: output === 'key' ? KEY_MEDIA_ALPHA_TO_WHITE : undefined,
+					},
+				},
+		placeholder: card.imageUrl !== null
+			? undefined
+			: {
+					surface: paintedSurface(
+						output,
+						scope,
+						size,
+						roundedShapeGeometry(Math.max(2, Math.round(size.width * 0.05))),
+						DECK_LIST_PLACEHOLDER_SURFACE_STYLE,
+					),
+					textStyle: {
+						position: 'absolute',
+						inset: '0',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						textAlign: 'center',
+						padding: `${Math.round(size.width * 0.08)}px`,
+						fontSize: `${nameFontSize}px`,
+						lineHeight: 1.15,
+						overflowWrap: 'break-word',
+						overflow: 'hidden',
+						color: paintColour(output, '#ffffff'),
+					},
+				},
+		badge: item.showQuantities
+			? {
+					text: `${card.quantity}x`,
+					// Fixed styling by design; no knobs. The Key Output is offered
+					// neither the plate nor its rounding — the count contributes its
+					// glyph alpha in white, and an authored dark plate would corrupt
+					// the matte exactly as any other authored colour would.
+					style: {
+						position: 'absolute',
+						top: '4%',
+						left: '4%',
+						padding: '1px 6px',
+						fontSize: `${nameFontSize}px`,
+						fontWeight: 700,
+						lineHeight: 1.4,
+						color: paintColour(output, '#ffffff'),
+						backgroundColor: output === 'key' ? undefined : 'rgba(15, 23, 42, 0.85)',
+						borderRadius: output === 'key' ? undefined : '4px',
+					},
+				}
+			: undefined,
+	};
+}
+
+/**
+ * A Deck List Graphic Item: one Player's sideboard from the live session.
+ *
+ * `null` deck data and an empty sideboard both render nothing — the
+ * absent-life-total idiom — rather than a zero state that reads as content. The
+ * `list` view is a resolved string, so it reuses the whole shared text pipeline
+ * with a fixed shrink-then-clip in place of an authored Text Overflow Policy.
+ * The `grid` view auto-fits the authored bounds from the live card count and
+ * never paints outside them. The item carries no Graphic Surface Style at all:
+ * it renders cards, and framing belongs to neighbouring items.
+ */
+function deckListDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: DeckListGraphicItemConfig,
+	placement: CSSProperties,
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+): GraphicItemRenderDescriptor {
+	const base = { id: item.id, label: item.label, kind: 'deck-list' as const };
+	const sideboard = featureMatch?.[item.playerSide].sideboard;
+	if (!sideboard || sideboard.length === 0)
+		return { ...base, style: { ...placement, overflow: 'hidden' } };
+
+	if (item.view === 'list') {
+		const text = sideboard
+			.map(card => item.showQuantities ? `${card.quantity}x ${card.name}` : card.name)
+			.join('\n');
+		return {
+			...base,
+			// Top-aligned rather than the text box's vertical centring: rows read
+			// from the top of a list, and shrink keeps them inside the bounds.
+			style: { ...placement, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflow: 'hidden' },
+			// `pre-wrap` in the shared text style is what turns the separators into rows.
+			textStyle: graphicTextStyle(output, {
+				typography: item.typography,
+				overflowPolicy: 'clip',
+				height: item.height,
+			}),
+			text,
+			textSegments: [{ text }],
+			shrink: { minFontSize: DECK_LIST_MIN_FONT_SIZE, maxFontSize: item.typography.fontSize },
+		};
+	}
+
+	const layout = deckListGridLayout(item, sideboard.length);
+	return {
+		...base,
+		style: {
+			...placement,
+			display: 'grid',
+			gridTemplateColumns: `repeat(${layout.columns}, ${layout.cardWidth}px)`,
+			gridAutoRows: `${layout.cardHeight}px`,
+			gap: `${DECK_LIST_GRID_GAP}px`,
+			justifyContent: 'center',
+			alignContent: 'center',
+			overflow: 'hidden',
+		},
+		deckList: {
+			cards: sideboard.map((card, index) =>
+				deckListCardDescriptor(output, `${scope}-card-${index}`, item, card, layout)),
+		},
 	};
 }
 
@@ -1602,13 +1846,15 @@ function childDescriptor(
 ): GraphicItemRenderDescriptor {
 	const scope = elementScope(graphicId, child.id);
 
-	// A Media Graphic Item carries no Graphic Surface Style, so it never inherits
-	// its Graphic Group's local style default either: there is nothing on it for
-	// that default to fill in.
+	// A Media Graphic Item and a Deck List Item carry no Graphic Surface Style, so
+	// neither inherits its Graphic Group's local style default either: there is
+	// nothing on them for that default to fill in.
 	if (child.type === 'media')
 		return mediaItemDescriptor(output, child, placement, assetContent, stackedChildClipSize(group, child));
 	if (child.type === 'social-network-icon')
 		return socialNetworkIconDescriptor(output, child, placement, inputs);
+	if (child.type === 'deck-list')
+		return deckListDescriptor(output, scope, child, placement, inputs.featureMatch);
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -1938,6 +2184,9 @@ function paintedItemDescriptor(
 
 	if (item.type === 'game-wins')
 		return gameWinsDescriptor(output, scope, item, placement, item.surfaceStyle, inputs.featureMatch);
+
+	if (item.type === 'deck-list')
+		return deckListDescriptor(output, scope, item, placement, inputs.featureMatch);
 
 	return {
 		id: item.id,

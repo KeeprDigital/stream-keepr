@@ -8,7 +8,7 @@ import { createFeatureMatchLayoutComposition } from '~~/shared/featureMatchLayou
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
-function item(kind: 'text' | 'clock' | 'player-life' | 'game-wins', id: string): GraphicItemConfig {
+function item(kind: 'text' | 'clock' | 'player-life' | 'game-wins' | 'deck-list', id: string): GraphicItemConfig {
 	return getGraphicItemDefinition(kind).createDefault({
 		id,
 		label: id,
@@ -78,15 +78,37 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(parsed.success).toBe(false);
 	});
 
-	it('accepts the shared base kinds and the three context-gated kinds', () => {
+	it('accepts the shared base kinds and the context-gated kinds', () => {
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(configWith([
 			item('text', 'name'),
 			item('clock', 'clock'),
 			item('player-life', 'life'),
 			item('game-wins', 'wins'),
+			item('deck-list', 'sideboard'),
 		]));
 
 		expect(parsed.success).toBe(true);
+	});
+
+	it('refuses a Deck List Item carrying a board field, which v1 deliberately has none of', () => {
+		// Sideboard-only at v1: a stored `board` would be silently misread by an
+		// installation that later gains one with different semantics, so the strict
+		// shape refuses it now rather than versioning around it later.
+		const sideboard = item('deck-list', 'sideboard');
+		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
+			configWith([{ ...sideboard, board: 'sideboard' } as unknown as GraphicItemConfig]),
+		);
+
+		expect(parsed.success).toBe(false);
+	});
+
+	it('refuses a Deck List view outside the closed vocabulary', () => {
+		const sideboard = item('deck-list', 'sideboard');
+		const parsed = featureMatchOverlayModeConfigSchema.safeParse(
+			configWith([{ ...sideboard, view: 'stack' } as unknown as GraphicItemConfig]),
+		);
+
+		expect(parsed.success).toBe(false);
 	});
 
 	it('refuses a Feature Match Layout that declares Graphic Inputs', () => {
@@ -158,7 +180,10 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			canvasHeight: 1080,
 		});
 		const parsed = featureMatchOverlayModeConfigSchema.safeParse(configWith([
-			{ ...group, children: [item('player-life', 'life'), item('game-wins', 'wins')] } as GraphicItemConfig,
+			{
+				...group,
+				children: [item('player-life', 'life'), item('game-wins', 'wins'), item('deck-list', 'sideboard')],
+			} as GraphicItemConfig,
 		]));
 
 		expect(parsed.success).toBe(true);

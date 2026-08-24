@@ -961,7 +961,8 @@ export type GraphicGroupChildConfig
 		| SocialNetworkIconGraphicItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
-		| GameWinsGraphicItemConfig;
+		| GameWinsGraphicItemConfig
+		| DeckListGraphicItemConfig;
 
 /**
  * A structural Graphic Item that arranges its direct children as a row, column,
@@ -993,20 +994,21 @@ export interface GraphicGroupItemConfig extends GraphicItemConfigBase {
 /**
  * The context-gated Graphic Items.
  *
- * Clock, Player Life, and Game Wins are shared Graphic Item Definitions that
- * require the Feature Match context rather than a Feature Match-specific
- * hierarchy: the same compositor lays them out, animates them, and paints their
- * surfaces, and only the Host Contract's declared context decides whether the
- * palette offers them. Each reads live Feature Match Session state instead of
- * substituting a placeholder, which is why they exist at all — a Graphic Text
- * Template resolves a value once per accepted change, and a ticking clock or a
- * life total is exactly the collection- and time-shaped state `CONTEXT.md` says
- * "require specialised Graphic Items".
+ * Clock, Player Life, Game Wins, and Deck List are shared Graphic Item
+ * Definitions that require the Feature Match context rather than a Feature
+ * Match-specific hierarchy: the same compositor lays them out, animates them, and
+ * paints their surfaces, and only the Host Contract's declared context decides
+ * whether the palette offers them. Each reads live Feature Match Session state
+ * instead of substituting a placeholder, which is why they exist at all — a
+ * Graphic Text Template resolves a value once per accepted change, and a ticking
+ * clock, a life total, or a sideboard is exactly the collection- and time-shaped
+ * state `CONTEXT.md` says "require specialised Graphic Items".
  *
- * The player side lives on Player Life and Game Wins rather than in a token key,
- * which is the mirror image of the Feature Match token catalogue's decision. A
- * Text Graphic Item has no side because its template names one — `{player1Name}`
- * — while these two render one player's state with nothing to name it in.
+ * The player side lives on Player Life, Game Wins, and Deck List rather than in a
+ * token key, which is the mirror image of the Feature Match token catalogue's
+ * decision. A Text Graphic Item has no side because its template names one —
+ * `{player1Name}` — while these kinds render one player's state with nothing to
+ * name it in.
  */
 
 /**
@@ -1078,6 +1080,36 @@ export interface GameWinsGraphicItemConfig extends GraphicItemConfigBase {
 	surfaceStyle?: GraphicSurfaceStyle;
 }
 
+export const DECK_LIST_VIEW_VALUES = ['grid', 'list'] as const;
+export type DeckListView = typeof DECK_LIST_VIEW_VALUES[number];
+
+/**
+ * A Graphic Item that renders one Player's sideboard from the live Feature Match
+ * Session's deck data.
+ *
+ * Sideboard-only at v1, and deliberately lean: no board field — a full deck
+ * outgrows any plausible overlay region — and none of the Deck Screen Mode's
+ * styling vocabulary. Framing, labels, and backgrounds come from neighbouring
+ * compositor items; this item renders cards and nothing else, never beyond its
+ * authored bounds. Widening to other boards later is an additive field and a
+ * configuration version bump on this same kind, which is why the kind keeps the
+ * general name.
+ *
+ * The `grid` view auto-fits the authored bounds knoblessly — rows, columns, and
+ * card size are computed from the bounds and the live card count, the Game Wins
+ * grows-without-re-authoring precedent. `typography` drives the `list` view's
+ * `4x Card Name` rows; overflow is a fixed shrink-then-clip rather than an
+ * authored Text Overflow Policy, so the item carries no policy fields.
+ */
+export interface DeckListGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'deck-list';
+	playerSide: PlayerSide;
+	view: DeckListView;
+	/** Renders the `4x` quantity prefix and grid quantity badges. */
+	showQuantities: boolean;
+	typography: GraphicTypography;
+}
+
 export type GraphicItemConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
@@ -1086,7 +1118,8 @@ export type GraphicItemConfig
 		| GraphicGroupItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
-		| GameWinsGraphicItemConfig;
+		| GameWinsGraphicItemConfig
+		| DeckListGraphicItemConfig;
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 

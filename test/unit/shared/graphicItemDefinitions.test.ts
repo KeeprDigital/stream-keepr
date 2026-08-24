@@ -44,14 +44,14 @@ describe('graphicItemDefinitions', () => {
 		expect(isGraphicItemDefinitionAvailable(definition, FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
 	});
 
-	it('offers the Feature Match host the base kinds and the three context-gated Definitions', () => {
-		// Clock, Player Life, and Game Wins are shared Definitions rather than a
-		// Feature Match hierarchy: the same compositor renders them, and only the
-		// declared context decides whether the palette offers them at all.
+	it('offers the Feature Match host the base kinds and the context-gated Definitions', () => {
+		// Clock, Player Life, Game Wins, and Deck List are shared Definitions rather
+		// than a Feature Match hierarchy: the same compositor renders them, and only
+		// the declared context decides whether the palette offers them at all.
 		const definitions = graphicItemDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins']);
+			.toEqual(['text', 'shape', 'media', 'group', 'clock', 'player-life', 'game-wins', 'deck-list']);
 	});
 
 	it('offers the context-gated Definitions inside a Graphic Group too', () => {
@@ -61,11 +61,11 @@ describe('graphicItemDefinitions', () => {
 		const definitions = graphicGroupChildDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT);
 
 		expect(definitions.map(definition => definition.kind))
-			.toEqual(['text', 'shape', 'media', 'clock', 'player-life', 'game-wins']);
+			.toEqual(['text', 'shape', 'media', 'clock', 'player-life', 'game-wins', 'deck-list']);
 	});
 
-	it('requires the Feature Match context for the Clock, Player Life, and Game Wins Definitions', () => {
-		for (const kind of ['clock', 'player-life', 'game-wins'] as const)
+	it('requires the Feature Match context for the Clock, Player Life, Game Wins, and Deck List Definitions', () => {
+		for (const kind of ['clock', 'player-life', 'game-wins', 'deck-list'] as const)
 			expect(getGraphicItemDefinition(kind).requiredContext).toBe('feature-match');
 
 		// The base kinds compose from nothing a host has to supply, so they require
@@ -119,6 +119,35 @@ describe('graphicItemDefinitions', () => {
 		expect(graphicItemSummary(wins)).toBe('Player 1 wins • boxes');
 		expect(graphicItemSummary({ ...wins, playerSide: 'player2', displayMode: 'number' }))
 			.toBe('Player 2 wins • number');
+	});
+
+	it('creates a sideboard-only Deck List Item for the first player, as a list with quantities', () => {
+		// Sideboard-only at v1, so the config surface is deliberately lean: the side,
+		// the view, the quantity gate, and the typography the list view renders with.
+		// No board field, and none of the Deck mode's styling carries over.
+		const item = getGraphicItemDefinition('deck-list').createDefault({
+			id: 'item-10',
+			label: 'Sideboard',
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+
+		expect(item).toMatchObject({
+			type: 'deck-list',
+			playerSide: 'player1',
+			view: 'list',
+			showQuantities: true,
+		});
+		if (item.type !== 'deck-list')
+			throw new Error('expected a Deck List Graphic Item');
+
+		// A sideboard is up to fifteen rows, so the default bounds are a tall panel
+		// rather than the one-line strip the other kinds start with.
+		expect(item.height).toBeGreaterThan(item.width / 2);
+		expect(item.typography.fontSize).toBeGreaterThan(0);
+		expect(graphicItemSummary(item)).toBe('Player 1 sideboard • list');
+		expect(graphicItemSummary({ ...item, playerSide: 'player2', view: 'grid' }))
+			.toBe('Player 2 sideboard • grid');
 	});
 
 	it('gives a Game Wins box the canonical Shape Geometry rather than a bespoke radius', () => {

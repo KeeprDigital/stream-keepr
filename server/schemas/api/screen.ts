@@ -48,6 +48,7 @@ import {
 	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
 } from '~~/shared/types/graphicItem';
 import {
+	DECK_LIST_VIEW_VALUES,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_ANCHOR_POINT_VALUES,
@@ -1166,6 +1167,22 @@ const gameWinsGraphicItemShape = {
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 };
 
+/**
+ * A Deck List Graphic Item. Sideboard-only at v1, so there is deliberately no
+ * board field — widening later is an additive field and a configuration version
+ * bump on the same kind. It renders cards and nothing else, so it carries no
+ * Graphic Surface Style, and its overflow is a fixed shrink-then-clip rather
+ * than an authored Text Overflow Policy.
+ */
+const deckListGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('deck-list'),
+	playerSide: z.enum(PLAYER_SIDE_VALUES),
+	view: z.enum(DECK_LIST_VIEW_VALUES),
+	showQuantities: z.boolean(),
+	typography: graphicTypographySchema,
+};
+
 const textGraphicItemConfigSchema = z.object(textGraphicItemShape).strict();
 const shapeGraphicItemConfigSchema = z.object(shapeGraphicItemShape).strict();
 const mediaGraphicItemConfigSchema = z.object(mediaGraphicItemShape).strict();
@@ -1173,6 +1190,7 @@ const socialNetworkIconGraphicItemConfigSchema = z.object(socialNetworkIconGraph
 const clockGraphicItemConfigSchema = z.object(clockGraphicItemShape).strict();
 const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).strict();
 const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
+const deckListGraphicItemConfigSchema = z.object(deckListGraphicItemShape).strict();
 
 /**
  * Main-axis sizing belongs to a Graphic Group child, so only a child carries
@@ -1197,6 +1215,7 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 	z.object({ ...clockGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...playerLifeGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 	z.object({ ...gameWinsGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
+	z.object({ ...deckListGraphicItemShape, sizing: graphicGroupChildSizingSchema.optional() }).strict(),
 ]);
 
 export const MAX_GRAPHIC_GROUP_CHILDREN = 50;
@@ -1236,6 +1255,7 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	clockGraphicItemConfigSchema,
 	playerLifeGraphicItemConfigSchema,
 	gameWinsGraphicItemConfigSchema,
+	deckListGraphicItemConfigSchema,
 ]);
 
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC = 100;

@@ -2,6 +2,7 @@ import type { CSSProperties } from 'vue';
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
+	DeckListGraphicItemConfig,
 	GameWinsGraphicItemConfig,
 	GraphicGroupChildConfig,
 	GraphicGroupItemConfig,
@@ -157,7 +158,7 @@ function graphic(id: string, items: BroadcastGraphicConfig['items']): BroadcastG
  * than from a literal: a default that drifts from the Definition would let these
  * tests pass against a shape no author can actually create.
  */
-function contextGated<K extends 'clock' | 'player-life' | 'game-wins'>(
+function contextGated<K extends 'clock' | 'player-life' | 'game-wins' | 'deck-list'>(
 	kind: K,
 	id: string,
 	overrides: Partial<Extract<GraphicItemConfig, { type: K }>> = {},
@@ -179,6 +180,9 @@ function playerLife(id: string, overrides: Partial<PlayerLifeGraphicItemConfig> 
 }
 function gameWins(id: string, overrides: Partial<GameWinsGraphicItemConfig> = {}) {
 	return contextGated('game-wins', id, overrides);
+}
+function deckList(id: string, overrides: Partial<DeckListGraphicItemConfig> = {}) {
+	return contextGated('deck-list', id, overrides);
 }
 
 /**
@@ -304,6 +308,10 @@ const NON_PAINTING_KEYS = new Set([
 	'WebkitLineClamp',
 	'whiteSpace',
 	'width',
+	// A Deck List Item's grid view lays its cards out; pure geometry, like the flex keys.
+	'alignContent',
+	'gridAutoRows',
+	'gridTemplateColumns',
 ]);
 
 /**
@@ -436,6 +444,34 @@ function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPain
 	return [...noticePaints, { color: '#ffffff', opacity: Number(media.style.opacity ?? 1) }];
 }
 
+/**
+ * A Deck List card's art follows the same rule as a Media Graphic Item's
+ * element: it cannot be recoloured by CSS, so the alpha-as-white conversion must
+ * be present or the card paints its own colours straight into the matte.
+ */
+function deckCardImagePaints(image: { src: string; style: CSSProperties }, path: string): KeyPaint[] {
+	for (const [key, value] of Object.entries(image.style)) {
+		if (value === undefined || value === null)
+			continue;
+		const text = String(value);
+
+		if (key === 'filter') {
+			if (text !== KEY_MEDIA_ALPHA_TO_WHITE)
+				throw new Error(`${path}.filter must be exactly the alpha-as-white conversion, got: ${text}`);
+			continue;
+		}
+
+		if (!MEDIA_NON_PAINTING_KEYS.has(key) && !NON_PAINTING_KEYS.has(key))
+			throw new Error(`${path}.${key} is an unrecognised style property in the Key Output: ${text}`);
+		if ((text.match(COLOUR_TOKEN) ?? []).length > 0)
+			throw new Error(`${path}.${key} is an unrecognised paint in the Key Output: ${text}`);
+	}
+
+	if (image.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
+		throw new Error(`${path} paints its own colours into the Key Output instead of its alpha as white`);
+	return [{ color: '#ffffff', opacity: 1 }];
+}
+
 function surfacePaints(surface: GraphicSurfaceRenderDescriptor, path: string): KeyPaint[] {
 	const paints: KeyPaint[] = [];
 	const gradient = surface.fill.gradient;
@@ -487,6 +523,19 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		...(item.surface ? surfacePaints(item.surface, path) : []),
 		...(item.media ? mediaPaints(item.media, path) : []),
 		...(item.icon ? stylePaints(item.icon.style, `${path}.icon`) : []),
+		// A Deck List Item's grid cards are painted subtrees like any other: the cell box,
+		// the art or its placeholder surface and name, and the quantity badge.
+		...(item.deckList?.cards ?? []).flatMap((card, index) => [
+			...stylePaints(card.style, `${path}.deckList[${index}]`),
+			...(card.image ? deckCardImagePaints(card.image, `${path}.deckList[${index}].image`) : []),
+			...(card.placeholder
+				? [
+						...surfacePaints(card.placeholder.surface, `${path}.deckList[${index}].placeholder`),
+						...stylePaints(card.placeholder.textStyle, `${path}.deckList[${index}].placeholder.text`),
+					]
+				: []),
+			...(card.badge ? stylePaints(card.badge.style, `${path}.deckList[${index}].badge`) : []),
+		]),
 		...(item.children ?? []).flatMap(child => itemPaints(child, `${path}>`)),
 		// An update phase's two renderings are two painted subtrees, so both are walked.
 		// Leaving the outgoing one out would let the rendering being replaced reach the
@@ -1040,10 +1089,15 @@ describe('graphicsCompositionRenderModel', () => {
 	});
 
 	describe('context-gated Graphic Items', () => {
+		const SIDEBOARD = [
+			{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
+			{ name: 'Wear // Tear', quantity: 3, imageUrl: null },
+			{ name: 'Pithing Needle', quantity: 1, imageUrl: 'https://cards.example/pithing-needle.jpg' },
+		];
 		const FEATURE_MATCH: GraphicsFeatureMatchContext = {
 			clockDisplayTime: '12:34',
-			player1: { lifeTotal: 17, gameWins: 1 },
-			player2: { lifeTotal: null, gameWins: 0 },
+			player1: { lifeTotal: 17, gameWins: 1, sideboard: SIDEBOARD },
+			player2: { lifeTotal: null, gameWins: 0, sideboard: null },
 			bestOf: 3,
 		};
 
@@ -1132,10 +1186,107 @@ describe('graphicsCompositionRenderModel', () => {
 			const rendered = contextItem(group('cluster', [
 				playerLife('life-1'),
 				gameWins('wins-1'),
+				deckList('side-1'),
 			]));
 
-			expect(rendered.children?.map(child => child.kind)).toEqual(['player-life', 'game-wins']);
+			expect(rendered.children?.map(child => child.kind)).toEqual(['player-life', 'game-wins', 'deck-list']);
 			expect(rendered.children?.[0]!.text).toBe('17');
+			expect(rendered.children?.[2]!.text).toContain('Rest in Peace');
+		});
+
+		it('renders the sideboard as quantity-prefixed list rows the typography drives', () => {
+			const rendered = contextItem(deckList('side-1'));
+
+			expect(rendered.kind).toBe('deck-list');
+			// One row per distinct card, `4x Card Name` only — no type column.
+			expect(rendered.text).toBe('2x Rest in Peace\n3x Wear // Tear\n1x Pithing Needle');
+			// It paints through the same typography path a Text Graphic Item does, and
+			// `pre-wrap` is what turns the row separators into rows.
+			expect(rendered.textStyle?.fontSize).toBe('32px');
+			expect(rendered.textStyle?.whiteSpace).toBe('pre-wrap');
+			// It renders cards only: no painted surface of its own.
+			expect(rendered.surface).toBeUndefined();
+		});
+
+		it('drops the quantity prefix while quantities are hidden', () => {
+			const rendered = contextItem(deckList('side-1', { showQuantities: false }));
+
+			expect(rendered.text).toBe('Rest in Peace\nWear // Tear\nPithing Needle');
+		});
+
+		it('bounds the list view with a fixed shrink-then-clip rather than an authored policy', () => {
+			// The config surface deliberately carries no Text Overflow Policy: a
+			// sideboard can always be longer than the author saw, so the item always
+			// shrinks to the fixed floor and then clips, never beyond authored bounds.
+			const rendered = contextItem(deckList('side-1'));
+
+			expect(rendered.shrink).toEqual({ minFontSize: 12, maxFontSize: 32 });
+			expect(rendered.textStyle?.textOverflow).toBe('clip');
+			expect(rendered.style.overflow).toBe('hidden');
+		});
+
+		it('renders nothing for a Player with no deck data and nothing for an empty sideboard', () => {
+			// `null` is no deck data resolved; `[]` is a genuinely empty sideboard.
+			// Both render nothing — the absent-life-total idiom — rather than a zero
+			// state that looks like content.
+			const noData = contextItem(deckList('side-2', { playerSide: 'player2' }));
+			expect(noData.text).toBeUndefined();
+			expect(noData.deckList).toBeUndefined();
+
+			const emptied = {
+				...FEATURE_MATCH,
+				player1: { ...FEATURE_MATCH.player1, sideboard: [] },
+			};
+			const empty = contextItem(deckList('side-1', { view: 'grid' }), emptied);
+			expect(empty.text).toBeUndefined();
+			expect(empty.deckList).toBeUndefined();
+
+			// No host context at all still resolves rather than throwing.
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [deckList('side-1')])],
+				...CANVAS,
+			});
+			expect(model.graphics[0]!.items[0]!.deckList).toBeUndefined();
+		});
+
+		it('auto-fits the grid view to the authored bounds from the live card count', () => {
+			// Knobless, the game-wins precedent: rows, columns, and card size come
+			// from the bounds and the live count, so a changed sideboard re-fits
+			// without the layout being re-authored. Three cards in a 400x300 box fit
+			// widest as one row of three 128px cards (63:88, 8px gaps).
+			const rendered = contextItem(deckList('grid-1', { view: 'grid', width: 400, height: 300 }));
+
+			expect(rendered.style.display).toBe('grid');
+			expect(rendered.style.gridTemplateColumns).toBe('repeat(3, 128px)');
+			expect(rendered.style.overflow).toBe('hidden');
+			expect(rendered.deckList?.cards).toHaveLength(3);
+			expect(rendered.text).toBeUndefined();
+		});
+
+		it('keeps card art 63:88 contain and paints a text placeholder for a card with no art', () => {
+			const rendered = contextItem(deckList('grid-1', { view: 'grid', width: 400, height: 300 }));
+			const cards = rendered.deckList!.cards;
+
+			// The 63:88 cell, held to the card ratio by the computed size.
+			expect(cards[0]!.style).toMatchObject({ width: '128px', height: '179px' });
+			// A card with no art renders a painted placeholder carrying its own name,
+			// so the count stays honest without a remote image.
+			expect(cards[0]!.image).toBeUndefined();
+			expect(cards[0]!.placeholder?.surface.path).toBeTruthy();
+			expect(cards[0]!.name).toBe('Rest in Peace');
+			// A card with art renders it contained, never cropped.
+			expect(cards[2]!.image?.src).toBe('https://cards.example/pithing-needle.jpg');
+			expect(cards[2]!.image?.style.objectFit).toBe('contain');
+			expect(cards[2]!.placeholder).toBeUndefined();
+		});
+
+		it('badges grid quantities with fixed styling, gated by showQuantities', () => {
+			const rendered = contextItem(deckList('grid-1', { view: 'grid' }));
+			expect(rendered.deckList!.cards.map(card => card.badge?.text)).toEqual(['2x', '3x', '1x']);
+
+			const hidden = contextItem(deckList('grid-1', { view: 'grid', showQuantities: false }));
+			expect(hidden.deckList!.cards.every(card => card.badge === undefined)).toBe(true);
 		});
 	});
 
@@ -1601,6 +1752,49 @@ describe('graphicsCompositionRenderModel', () => {
 				style: { color: '#ffffff' },
 				textSegments: [{ text: 'Ava Reed', inputKey: 'name', style: { background: '#ff0000' } }],
 			})).toThrow(/textSegments\[0\]/);
+		});
+
+		it('paints a Deck List Item white in the Key Output — cells, placeholders, names, badges, and art alpha', () => {
+			const featureMatch: GraphicsFeatureMatchContext = {
+				clockDisplayTime: '12:34',
+				player1: {
+					lifeTotal: 17,
+					gameWins: 1,
+					sideboard: [
+						{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
+						{ name: 'Pithing Needle', quantity: 1, imageUrl: 'https://cards.example/needle.jpg' },
+					],
+				},
+				player2: { lifeTotal: null, gameWins: 0, sideboard: null },
+				bestOf: 3,
+			};
+			const model = resolveGraphicsCompositionRenderModel({
+				output: 'key',
+				graphics: [graphic('a', [
+					deckList('side-grid', { view: 'grid' }),
+					deckList('side-list'),
+				])],
+				featureMatch,
+				...CANVAS,
+			});
+			const [gridItem, listItem] = model.graphics[0]!.items;
+
+			// Non-vacuous: the guard walks real cards, and they contribute paint.
+			expect(gridItem!.deckList!.cards).toHaveLength(2);
+			expect(itemPaints(gridItem!).length).toBeGreaterThan(0);
+			expect(() => itemPaints(gridItem!)).not.toThrow();
+
+			// The art's element carries the alpha-as-white conversion, exactly as a
+			// Media Graphic Item's does.
+			expect(gridItem!.deckList!.cards[1]!.image?.style.filter).toBe(KEY_MEDIA_ALPHA_TO_WHITE);
+			// The badge is offered no plate in the Key Output: its glyphs contribute
+			// alpha in white, and an authored dark plate would corrupt the matte.
+			expect(gridItem!.deckList!.cards[0]!.badge?.style.backgroundColor).toBeUndefined();
+			expect(gridItem!.deckList!.cards[0]!.badge?.style.color).toBe('#ffffff');
+
+			// The list view is text, so it whitens through the shared typography path.
+			expect(listItem!.textStyle?.color).toBe('#ffffff');
+			expect(() => itemPaints(listItem!)).not.toThrow();
 		});
 
 		it('paints a gradient in the Key Output as white at each stop opacity', () => {

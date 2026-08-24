@@ -275,16 +275,21 @@ function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 
 /**
  * The Graphic Surface Style of an item that can carry one. A Media Graphic Item
- * paints an asset rather than a surface and has none, so asking narrows it away.
+ * paints an asset and a Deck List Item renders cards rather than a surface, so both
+ * are narrowed away.
  */
 function surfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const item = itemOf(graphics, index);
-	return item && item.type !== 'media' && item.type !== 'social-network-icon' ? item.surfaceStyle : undefined;
+	return item && item.type !== 'media' && item.type !== 'social-network-icon' && item.type !== 'deck-list'
+		? item.surfaceStyle
+		: undefined;
 }
 
 function childSurfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const child = childOf(graphics, index);
-	return child && child.type !== 'media' && child.type !== 'social-network-icon' ? child.surfaceStyle : undefined;
+	return child && child.type !== 'media' && child.type !== 'social-network-icon' && child.type !== 'deck-list'
+		? child.surfaceStyle
+		: undefined;
 }
 
 function textInput(key: string): GraphicInputDeclaration {
@@ -849,7 +854,7 @@ describe('graphicsCompositorInspector', () => {
 	});
 
 	describe('context-gated Graphic Items', () => {
-		function contextItem(kind: 'clock' | 'player-life' | 'game-wins'): GraphicItemConfig {
+		function contextItem(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list'): GraphicItemConfig {
 			return getGraphicItemDefinition(kind).createDefault({
 				id: kind,
 				label: kind,
@@ -884,6 +889,19 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ type: 'game-wins', playerSide: 'player2' });
+		});
+
+		it('chooses the Player a Deck List Item reads', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([contextItem('deck-list')]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'deck-list' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+
+			selectField(wrapper, 'graphic-item-player-side')?.vm.$emit('update:modelValue', 'player2');
+			await nextTick();
+
+			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ type: 'deck-list', playerSide: 'player2' });
 		});
 
 		it('offers no Player for a Clock, which belongs to the Match rather than a side', async () => {
@@ -1998,7 +2016,7 @@ describe('graphicsCompositorInspector', () => {
 		 * under the Feature Match Overlay Host Contract, because that is the only host
 		 * that can supply the context these Definitions require.
 		 */
-		function featureMatchStack(kind: 'clock' | 'player-life' | 'game-wins') {
+		function featureMatchStack(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list') {
 			return stack([getGraphicItemDefinition(kind).createDefault({
 				id: kind,
 				label: kind,
@@ -2007,7 +2025,7 @@ describe('graphicsCompositorInspector', () => {
 			})]);
 		}
 
-		function mountKind(kind: 'clock' | 'player-life' | 'game-wins', graphics = featureMatchStack(kind)) {
+		function mountKind(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list', graphics = featureMatchStack(kind)) {
 			return mountComponent({
 				graphics,
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: kind },
@@ -2015,7 +2033,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 		}
 
-		it.each(['clock', 'player-life', 'game-wins'] as const)('sets the base typography of a %s Item', async (kind) => {
+		it.each(['clock', 'player-life', 'game-wins', 'deck-list'] as const)('sets the base typography of a %s Item', async (kind) => {
 			// A Game Wins Item paints text only while it renders its win count.
 			const graphics = featureMatchStack(kind);
 			const item = graphics[0]!.items[0]!;
@@ -2055,8 +2073,43 @@ describe('graphicsCompositorInspector', () => {
 
 			const item = itemOf(emittedGraphics(wrapper));
 			expect(
-				item?.type !== 'media' && item?.type !== 'social-network-icon' && item?.surfaceStyle,
+				item?.type !== 'media' && item?.type !== 'social-network-icon' && item?.type !== 'deck-list'
+				&& item?.surfaceStyle,
 			).toMatchObject({ fillOpacity: 1 });
+		});
+
+		it('sets a Deck List Item’s view and quantity gate', async () => {
+			const wrapper = await mountKind('deck-list');
+
+			selectField(wrapper, 'deck-list-view')?.vm.$emit('update:modelValue', 'grid');
+			await nextTick();
+			await switchField(wrapper, 'deck-list-show-quantities')?.trigger('click');
+
+			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ type: 'deck-list', view: 'grid' });
+			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ showQuantities: false });
+		});
+
+		it('offers a Deck List Item typography only in the list view, and never a Text Overflow Policy', async () => {
+			// Typography drives the list view's rows; the grid view renders cards, so
+			// offering it there would be a block of controls that change nothing on
+			// screen. Overflow is a fixed shrink-then-clip, so no policy is authored.
+			const list = await mountKind('deck-list');
+			expect(numberField(list, 'Font size')).toBeDefined();
+			expect(list.find('[data-testid="text-overflow-policy"]').exists()).toBe(false);
+
+			const graphics = featureMatchStack('deck-list');
+			const item = graphics[0]!.items[0]!;
+			if (item.type === 'deck-list')
+				item.view = 'grid';
+			const grid = await mountKind('deck-list', graphics);
+			expect(numberField(grid, 'Font size')).toBeUndefined();
+		});
+
+		it('offers a Deck List Item no Graphic Surface Style of its own', async () => {
+			// It renders cards only; framing and backgrounds come from other items.
+			const wrapper = await mountKind('deck-list');
+
+			expect(switchField(wrapper, 'surface-style-own')).toBeUndefined();
 		});
 
 		it('sets the life-change animation a Player Life Item marks a change with', async () => {
