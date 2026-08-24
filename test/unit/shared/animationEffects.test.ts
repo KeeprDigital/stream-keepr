@@ -91,7 +91,11 @@ describe('animationEffects catalogue', () => {
 			showLines: true,
 		});
 		const showLines = animationEffectParamFields('dots').find(field => field.key === 'showLines');
-		expect(showLines).toMatchObject({ control: 'toggle', defaultValue: true });
+		expect(showLines).toMatchObject({
+			control: 'toggle',
+			defaultValue: true,
+			description: 'Render connecting line segments between dots.',
+		});
 		expect(showLines?.min).toBeUndefined();
 		expect(showLines?.step).toBeUndefined();
 	});

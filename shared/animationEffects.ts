@@ -31,7 +31,11 @@ interface AnimationEffectParamMeta {
 	label: string;
 	control: 'color' | 'number' | 'toggle';
 	step?: number;
+	description?: string;
 }
+
+/** What one effect parameter's value can be, across every control kind. */
+export type AnimationEffectParamValue = string | number | boolean;
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -60,10 +64,10 @@ function numberParam(label: string, range: { min: number; max: number; step: num
 		.meta({ label, control: 'number', step: range.step } satisfies AnimationEffectParamMeta);
 }
 
-function toggleParam(label: string, defaultValue: boolean) {
+function toggleParam(label: string, description: string, defaultValue: boolean) {
 	return z.boolean()
 		.default(defaultValue)
-		.meta({ label, control: 'toggle' } satisfies AnimationEffectParamMeta);
+		.meta({ label, control: 'toggle', description } satisfies AnimationEffectParamMeta);
 }
 
 /**
@@ -141,7 +145,7 @@ export const dotsAnimationParamsSchema = z.strictObject({
 	backgroundColor: colorParam('Background color', '#111111'),
 	size: numberParam('Dot size', { min: 0.5, max: 20, step: 0.5, default: 3 }),
 	spacing: numberParam('Spacing', { min: 5, max: 100, step: 1, default: 34 }),
-	showLines: toggleParam('Connecting lines', true),
+	showLines: toggleParam('Connecting lines', 'Render connecting line segments between dots.', true),
 });
 
 /**
@@ -214,7 +218,8 @@ export interface AnimationEffectParamField {
 	min?: number;
 	max?: number;
 	step?: number;
-	defaultValue: string | number | boolean;
+	description?: string;
+	defaultValue: AnimationEffectParamValue;
 }
 
 /**
@@ -223,7 +228,7 @@ export interface AnimationEffectParamField {
  */
 export function animationEffectParamFields(effect: AnimationEffectName): AnimationEffectParamField[] {
 	const schema = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema;
-	const defaults = animationEffectDefaultParams(effect) as Record<string, string | number | boolean>;
+	const defaults = animationEffectDefaultParams(effect) as Record<string, AnimationEffectParamValue>;
 	return Object.entries(schema.shape).map(([key, field]) => {
 		const meta = field.meta() as unknown as AnimationEffectParamMeta;
 		// Every param is `.default()`-wrapped, so the checks live one level in.
@@ -237,6 +242,7 @@ export function animationEffectParamFields(effect: AnimationEffectName): Animati
 			control: meta.control,
 			...bounds,
 			step: meta.step,
+			description: meta.description,
 			defaultValue: defaults[key]!,
 		};
 	});

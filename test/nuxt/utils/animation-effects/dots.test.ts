@@ -47,12 +47,14 @@ describe('createDotsDelegate', () => {
 		delegate.update({ ...context, elapsedSeconds: 5 });
 		const midway = camera.position.clone();
 		expect(midway.y).toBeLessThan(250);
-		expect(midway.y).toBeGreaterThan(50);
+		expect(midway.y).toBeGreaterThan(75);
 		expect(midway.z).toBeGreaterThan(50);
 		expect(midway.z).toBeLessThan(350);
 		delegate.update({ ...context, elapsedSeconds: 90 });
+		// The resting height is the centred-pointer steady state the fork's base
+		// always fired at init: ty = 50 + 0.5 * 50.
 		expect(camera.position.x).toBeCloseTo(0, 1);
-		expect(camera.position.y).toBeCloseTo(50, 1);
+		expect(camera.position.y).toBeCloseTo(75, 1);
 		expect(camera.position.z).toBeCloseTo(350, 1);
 	});
 

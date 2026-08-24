@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnimationEffectName, AnimationEffectParamField, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { AnimationEffectName, AnimationEffectParamField, AnimationEffectParamValue, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
 import {
 	ANIMATION_EFFECT_CATALOGUE,
@@ -42,8 +42,8 @@ const animation = computed(() =>
 );
 
 const animationParamFields = computed(() => animationEffectParamFields(animation.value.effect));
-const animationParams = computed<Record<string, string | number | boolean>>(() =>
-	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, string | number | boolean>,
+const animationParams = computed<Record<string, AnimationEffectParamValue>>(() =>
+	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, AnimationEffectParamValue>,
 );
 const mediaBackground = computed<ScreenMediaBackgroundConfig>(() => ({
 	...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
@@ -72,7 +72,7 @@ function selectAnimationEffect(effect: AnimationEffectName) {
 	});
 }
 
-function updateAnimationParam(field: AnimationEffectParamField, value: string | number | boolean | undefined) {
+function updateAnimationParam(field: AnimationEffectParamField, value: AnimationEffectParamValue | undefined) {
 	let next = value;
 	if (field.control === 'color') {
 		if (next === undefined || next === '')
@@ -216,6 +216,7 @@ function animationSummary() {
 							<ScreenSettingsToggle
 								v-if="field.control === 'toggle'"
 								:label="field.label"
+								:description="field.description"
 								:model-value="Boolean(animationParams[field.key])"
 								@update:model-value="updateAnimationParam(field, $event)"
 							/>

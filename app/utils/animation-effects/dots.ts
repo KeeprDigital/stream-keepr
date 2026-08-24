@@ -8,14 +8,16 @@ import { createSceneEffect } from './sceneEffect';
  * Dots: a drifting field of point sprites under a slow camera pull-back, with
  * tumbling radial accent segments, ported from the retired Vanta fork under
  * its old name. The fork animated per rendered frame — easing the camera a
- * fixed fraction toward its target, accumulating a sine step onto each star,
- * nudging the line rotation — all at its 60fps-normalised clock, so each is
- * carried here as the closed form of that accumulation over elapsed seconds:
- * the same motion, now independent of frame rate. The fork's pointer easing
- * retires with the mouse pair; no pointer ever fired on a headless source, so
- * the camera target is the fork's untouched resting target. The fork's base
- * cleared the canvas to `backgroundColor`, and a dot field never covers the
- * frame, so the scene background carries that here.
+ * fixed fraction toward its target and nudging the line rotation each pass of
+ * its ~60fps loop, and accumulating a sine step onto each star at its
+ * 60fps-normalised clock — so each motion is carried here as the closed form
+ * of that accumulation over elapsed seconds: the same look, now independent of
+ * frame rate. The pointer easing retires with the mouse pair; the fork's base
+ * always fired a centred synthetic pointer at init, so the resting target the
+ * camera eased toward on air is `onMouseMove(0.5, 0.5)`'s — the centred-pointer
+ * steady state, per the waves-zoom precedent. The fork's base cleared the
+ * canvas to `backgroundColor`, and a dot field never covers the frame, so the
+ * scene background carries that here.
  */
 
 /** The fork's star grid: 61×61 points, jittered just above y = -150. */
@@ -27,9 +29,12 @@ const DRIFT_PHASE_X = 0.015;
 const DRIFT_PHASE_Z = 0.02;
 const DRIFT_AMPLITUDE = 5; // step 0.1 integrated over the 0.02/frame phase rate
 const DRIFT_RATE = 0.02 * 60; // phase advance per second at the fork's 60fps clock
-/** The fork's camera: intro position easing 0.003/frame toward the resting target. */
+/**
+ * The fork's camera: intro position easing 0.003/frame toward the resting
+ * target its always-fired centred pointer set — tx = 0, ty = 50 + 0.5 · 50.
+ */
 const CAMERA_START = { x: 0, y: 250, z: 50 };
-const CAMERA_TARGET = { x: 0, y: 50, z: 350 };
+const CAMERA_TARGET = { x: 0, y: 75, z: 350 };
 const CAMERA_REMAINING_PER_SECOND = 0.997 ** 60;
 /** The fork's line tumble, per-frame increments times its 60fps clock. */
 const LINE_ROTATION_Z = 0.002 * 60;
@@ -39,7 +44,6 @@ const LINE_SEGMENT_COUNT = 200;
 
 function buildLineSegments(
 	three: typeof THREE,
-	color: string,
 ): THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> {
 	// The fork's accent lines: radial spokes between two nested sphere shells,
 	// each direction drawn uniformly on the sphere.
@@ -56,7 +60,7 @@ function buildLineSegments(
 		points.push(new three.Vector3(x * outer, y * outer, z * outer));
 	}
 	const geometry = new three.BufferGeometry().setFromPoints(points);
-	return new three.LineSegments(geometry, new three.LineBasicMaterial({ color }));
+	return new three.LineSegments(geometry, new three.LineBasicMaterial());
 }
 
 export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
@@ -78,8 +82,9 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 		position.needsUpdate = true;
 	}
 
-	function setLinesVisible(three: typeof THREE, scene: THREE.Scene, visible: boolean, color: string) {
-		if (visible === Boolean(lines))
+	/** Build or tear down the line segments so their presence matches `showLines`. */
+	function syncLines(three: typeof THREE, scene: THREE.Scene, wanted: boolean) {
+		if (wanted === Boolean(lines))
 			return;
 		if (lines) {
 			scene.remove(lines);
@@ -88,7 +93,7 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 			lines = undefined;
 			return;
 		}
-		lines = buildLineSegments(three, color);
+		lines = buildLineSegments(three);
 		scene.add(lines);
 	}
 
@@ -121,7 +126,8 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 			scene.add(stars);
 			placeStars(params.spacing);
 
-			setLinesVisible(three, scene, params.showLines, params.color2);
+			syncLines(three, scene, params.showLines);
+			lines?.material.color.set(params.color2);
 		},
 
 		applyParams: ({ three, scene, params }) => {
@@ -129,7 +135,7 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 			stars.material.color.set(params.color);
 			stars.material.size = params.size;
 			placeStars(params.spacing);
-			setLinesVisible(three, scene, params.showLines, params.color2);
+			syncLines(three, scene, params.showLines);
 			lines?.material.color.set(params.color2);
 		},
 

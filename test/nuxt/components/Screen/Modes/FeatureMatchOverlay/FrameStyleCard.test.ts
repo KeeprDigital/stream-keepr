@@ -50,9 +50,10 @@ const ScreenSettingsToggleStub = defineComponent({
 	props: {
 		modelValue: { type: Boolean, required: false },
 		label: { type: String, required: false },
+		description: { type: String, required: false },
 	},
 	emits: ['update:modelValue'],
-	template: '<button type="button" data-testid="settings-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
+	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
 const ControlSectionStub = defineComponent({
@@ -100,6 +101,7 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 
 		const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(candidate => candidate.text() === 'Connecting lines');
 		expect(toggle).toBeDefined();
+		expect(toggle!.attributes('data-description')).toBe('Render connecting line segments between dots.');
 
 		await toggle!.trigger('click');
 
