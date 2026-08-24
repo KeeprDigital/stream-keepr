@@ -40,16 +40,16 @@ describe('createRingsDelegate', () => {
 		expect(camera.isPerspectiveCamera).toBe(true);
 		expect(camera.fov).toBe(25);
 		expect(camera.far).toBe(10000);
-		expect(camera.position.toArray()).toEqual([0, 150, 200]);
-	});
-
-	it('eases the camera to the centred-pointer resting height and pins the fork\'s near-plane fix', () => {
-		const { delegate, context, camera } = mountDelegate();
-		delegate.update({ ...context, elapsedSeconds: 0 });
-		expect(camera.position.y).toBe(150);
 		// The fork's per-frame anti-flicker: near = max(z * 0.5 - 20, 1), constant
 		// at 80 because z never moves.
 		expect(camera.near).toBe(80);
+		expect(camera.position.toArray()).toEqual([0, 150, 200]);
+	});
+
+	it('eases the camera to the centred-pointer resting height', () => {
+		const { delegate, context, camera } = mountDelegate();
+		delegate.update({ ...context, elapsedSeconds: 0 });
+		expect(camera.position.y).toBe(150);
 		delegate.update({ ...context, elapsedSeconds: 5 });
 		expect(camera.position.y).toBeLessThan(150);
 		expect(camera.position.y).toBeGreaterThan(125);
@@ -76,14 +76,23 @@ describe('createRingsDelegate', () => {
 		}
 	});
 
-	it('spins each ring at its own stored speed, absolute in elapsed time', () => {
+	it('spins each ring linearly in elapsed time, absolute rather than accumulated', () => {
 		const { delegate, scene, context } = mountDelegate();
 		const meshes = ringMeshes(scene);
+		// Sampled out of order on purpose: an absolute closed form gives the same
+		// angle for a time however it is reached, where an accumulator would not.
+		delegate.update({ ...context, elapsedSeconds: 1 });
+		const early = meshes.map(mesh => mesh.rotation.z);
+		delegate.update({ ...context, elapsedSeconds: 3 });
+		const late = meshes.map(mesh => mesh.rotation.z);
 		delegate.update({ ...context, elapsedSeconds: 2 });
-		for (const mesh of meshes.slice(0, 5)) {
-			const { startAngle, spinSpeed } = mesh.userData as { startAngle: number; spinSpeed: number };
-			expect(mesh.rotation.z).toBeCloseTo(startAngle + 0.06 * spinSpeed * 2);
-		}
+		let moved = 0;
+		meshes.forEach((mesh, index) => {
+			expect(mesh.rotation.z).toBeCloseTo((early[index]! + late[index]!) / 2);
+			if (Math.abs(late[index]! - early[index]!) > 0.01)
+				moved++;
+		});
+		expect(moved).toBeGreaterThan(0);
 	});
 
 	it('wobbles the group around the fork\'s base tilt as the closed form of its per-frame nudges', () => {

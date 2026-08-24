@@ -104,9 +104,9 @@ describe('animationEffects catalogue', () => {
 		// The fork's rings renderer samples a hardcoded palette for every ring
 		// and never reads the colour option, so the pre-rebuild editor's "Ring
 		// color" picker was inert and drops with the port (the halo precedent for
-		// declared-but-unread params). backgroundColor survives under the
-		// slice-4 rule: the fork's base cleared the canvas to it, and the rings
-		// never cover the frame.
+		// declared-but-unread params). backgroundColor survives under the waves
+		// rule: the fork's base cleared the canvas to it, and the rings never
+		// cover the frame.
 		expect(animationEffectDefaultParams('rings')).toEqual({
 			backgroundColor: '#111111',
 		});

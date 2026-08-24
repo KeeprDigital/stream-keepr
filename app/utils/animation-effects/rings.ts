@@ -18,7 +18,8 @@ import { createSceneEffect } from './sceneEffect';
  * 0.5 · 50), per the dots precedent. The fork's base cleared the canvas to
  * `backgroundColor`, and the rings never cover the frame, so the scene
  * background carries that here. The fork's mobile halving of the stack drops:
- * a Screen Output is never a mobile browser.
+ * a Screen Output is never a mobile browser. Its per-ring shadow flags drop
+ * too — it never enabled shadow maps on the renderer, so they were inert.
  */
 
 export const RINGS_PALETTE = [
@@ -65,21 +66,31 @@ function samplePalette(): string {
 	return RINGS_PALETTE[Math.floor(Math.random() * RINGS_PALETTE.length)]!;
 }
 
+/** One ring the delegate spins: the mesh and the spin the fork stored on it. */
+interface SpinningRing {
+	mesh: THREE.Mesh<THREE.ExtrudeGeometry, THREE.MeshLambertMaterial>;
+	startAngle: number;
+	spinSpeed: number;
+}
+
+/** The fork's per-ring construction inputs, threaded through its child recursion. */
+interface RingSpec {
+	color: string;
+	radius: number;
+	width: number;
+	startAngle: number;
+	arc: number;
+	y: number;
+	speed: number;
+}
+
 export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams> {
 	let group: THREE.Group;
-	let rings: THREE.Mesh<THREE.ExtrudeGeometry, THREE.MeshLambertMaterial>[];
+	let rings: SpinningRing[];
 
-	function generateRing(
-		three: typeof THREE,
-		color: string,
-		radius: number,
-		width: number,
-		startAngle: number,
-		arc: number,
-		y: number,
-		speed: number,
-	): void {
-		radius = Math.max(radius, 1);
+	function generateRing(three: typeof THREE, spec: RingSpec): void {
+		const { color, width, startAngle, arc, y, speed } = spec;
+		const radius = Math.max(spec.radius, 1);
 		const shape = new three.Shape();
 		shape.absarc(0, 0, radius + width, 0, arc, false);
 		shape.lineTo(radius * Math.cos(arc), radius * Math.sin(arc));
@@ -99,25 +110,22 @@ export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams>
 		mesh.rotation.x = Math.PI / 2;
 		mesh.rotation.z = startAngle;
 		mesh.position.y = y;
-		mesh.userData.startAngle = startAngle;
-		mesh.userData.spinSpeed = speed;
-		rings.push(mesh);
+		rings.push({ mesh, startAngle, spinSpeed: speed });
 		group.add(mesh);
 
 		// A tight, narrow ring may spawn a child continuing its arc — the fork
 		// swallowed any geometry error a degenerate child produced, so this does.
-		if (radius < 20 && arc < Math.PI * 1.3 && randomInt(0, 2)) {
+		if (radius < 20 && arc < Math.PI * 1.3 && randomInt(0, 2) !== 0) {
 			try {
-				generateRing(
-					three,
-					samplePalette(),
-					radius + randomBetween(-1, 3),
-					width + randomBetween(-2, 0),
-					startAngle + arc,
-					arc + randomBetween(-0.5, 0.5),
-					y + randomBetween(-3, 1),
+				generateRing(three, {
+					color: samplePalette(),
+					radius: radius + randomBetween(-1, 3),
+					width: width + randomBetween(-2, 0),
+					startAngle: startAngle + arc,
+					arc: arc + randomBetween(-0.5, 0.5),
+					y: y + randomBetween(-3, 1),
 					speed,
-				);
+				});
 			}
 			catch {}
 		}
@@ -126,6 +134,10 @@ export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams>
 	return {
 		createCamera: (three, viewport) => {
 			const camera = new three.PerspectiveCamera(25, viewport.width / viewport.height, 10, 10000);
+			// The fork's per-frame anti-flicker near plane, max(z * 0.5 - 20, 1) —
+			// constant here because the camera never moves in z.
+			camera.near = Math.max(CAMERA_Z * 0.5 - 20, 1);
+			camera.updateProjectionMatrix();
 			camera.position.set(0, CAMERA_START_Y, CAMERA_Z);
 			return camera;
 		},
@@ -156,16 +168,15 @@ export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams>
 				const minimumWidth = 2 ** randomInt(0, 4) * 0.05;
 				width = Math.max(width, minimumWidth);
 
-				generateRing(
-					three,
-					samplePalette(),
+				generateRing(three, {
+					color: samplePalette(),
 					radius,
 					width,
-					randomBetween(0, 1000),
-					randomBetween(1, 6),
-					randomBetween(0, 50 / (radius + 1) + 5) + 5 / width / (radius + 0.5),
-					Math.max(-randomBetween(0.5, 2), randomBetween(1, 50 - radius / 2) - radius / 2) * 0.25,
-				);
+					startAngle: randomBetween(0, 1000),
+					arc: randomBetween(1, 6),
+					y: randomBetween(0, 50 / (radius + 1) + 5) + 5 / width / (radius + 0.5),
+					speed: Math.max(-randomBetween(0.5, 2), randomBetween(1, 50 - radius / 2) - radius / 2) * 0.25,
+				});
 			}
 
 			const ambience = new three.AmbientLight(0xFFFFFF, 0.5);
@@ -191,16 +202,9 @@ export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams>
 			const remaining = CAMERA_REMAINING_PER_SECOND ** elapsedSeconds;
 			camera.position.set(0, CAMERA_TARGET_Y + (CAMERA_START_Y - CAMERA_TARGET_Y) * remaining, CAMERA_Z);
 			camera.lookAt(CAMERA_LOOK_TARGET.x, CAMERA_LOOK_TARGET.y, CAMERA_LOOK_TARGET.z);
-			// The fork's per-frame anti-flicker near plane, constant because the
-			// camera never moves in z.
-			const perspective = camera as THREE.PerspectiveCamera;
-			perspective.near = Math.max(CAMERA_Z * 0.5 - 20, 1);
-			perspective.updateProjectionMatrix();
 
-			for (const ring of rings) {
-				ring.rotation.z = (ring.userData.startAngle as number)
-					+ SPIN_RATE * (ring.userData.spinSpeed as number) * elapsedSeconds;
-			}
+			for (const { mesh, startAngle, spinSpeed } of rings)
+				mesh.rotation.z = startAngle + SPIN_RATE * spinSpeed * elapsedSeconds;
 
 			const wobblePhase = WOBBLE_PHASE_RATE * elapsedSeconds;
 			group.rotation.x = GROUP_TILT_X + WOBBLE_AMPLITUDE_X * (1 - Math.cos(wobblePhase));
