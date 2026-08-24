@@ -507,7 +507,7 @@ describe('backgroundModeConfigSchema', () => {
 
 	it('refuses an unsafe media URL source', () => {
 		expect(backgroundModeConfigSchema.safeParse({
-			// eslint-disable-next-line no-script-url
+
 			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'javascript:alert(1)' } }],
 		}).success).toBe(false);
 	});
