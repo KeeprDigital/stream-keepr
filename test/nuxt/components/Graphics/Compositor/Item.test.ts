@@ -108,6 +108,79 @@ describe('graphicsCompositorItem player life', () => {
 	});
 });
 
+describe('graphicsCompositorItem deck list grid', () => {
+	function deckListDescriptor(
+		cards: NonNullable<GraphicItemRenderDescriptor['deckList']>['cards'],
+	): GraphicItemRenderDescriptor {
+		return {
+			id: 'sideboard',
+			label: 'Sideboard',
+			kind: 'deck-list',
+			style: { position: 'absolute', display: 'grid', gridTemplateColumns: 'repeat(2, 128px)' },
+			deckList: { cards },
+		};
+	}
+
+	const cardStyle = { position: 'relative', width: '128px', height: '179px' } as const;
+
+	const placeholderCard = {
+		name: 'Rest in Peace',
+		quantity: 2,
+		style: { ...cardStyle },
+		placeholder: {
+			surface: {
+				width: 128,
+				height: 179,
+				path: 'M 0 0 L 128 0 L 128 179 L 0 179 Z',
+				fill: { color: '#1e293b', opacity: 0.9 },
+				outline: { color: '#ffffff', width: 1, clipId: 'clip-card-0' },
+			},
+			textStyle: { color: '#ffffff', textAlign: 'center' as const },
+		},
+		badge: { text: '2x', style: { position: 'absolute' as const, color: '#ffffff' } },
+	};
+
+	const artCard = {
+		name: 'Pithing Needle',
+		quantity: 1,
+		style: { ...cardStyle },
+		image: {
+			src: 'https://cards.example/needle.jpg',
+			style: { display: 'block' as const, objectFit: 'contain' as const },
+		},
+		badge: { text: '1x', style: { position: 'absolute' as const, color: '#ffffff' } },
+	};
+
+	it('renders one cell per card: art contained, or a placeholder carrying the name', async () => {
+		const wrapper = await mountItem(deckListDescriptor([placeholderCard, artCard]));
+
+		const cells = wrapper.findAll('[data-deck-card]');
+		expect(cells.map(cell => cell.attributes('data-deck-card'))).toEqual(['Rest in Peace', 'Pithing Needle']);
+
+		// The placeholder is a painted surface plus the card's own name, so an
+		// art-less sideboard still reads as the right count of the right cards.
+		expect(cells[0]!.find('img').exists()).toBe(false);
+		expect(cells[0]!.find('svg path').exists()).toBe(true);
+		expect(cells[0]!.text()).toContain('Rest in Peace');
+
+		const art = cells[1]!.get('img');
+		expect(art.attributes('src')).toBe('https://cards.example/needle.jpg');
+		expect(art.attributes('alt')).toBe('');
+		// The art card paints no placeholder name over its image.
+		expect(cells[1]!.find('svg').exists()).toBe(false);
+	});
+
+	it('badges quantities only while the model offers a badge', async () => {
+		const badged = await mountItem(deckListDescriptor([placeholderCard, artCard]));
+		expect(badged.findAll('[data-deck-card-quantity]').map(badge => badge.text())).toEqual(['2x', '1x']);
+
+		const { badge: _first, ...quietPlaceholder } = placeholderCard;
+		const { badge: _second, ...quietArt } = artCard;
+		const quiet = await mountItem(deckListDescriptor([quietPlaceholder, quietArt]));
+		expect(quiet.findAll('[data-deck-card-quantity]')).toHaveLength(0);
+	});
+});
+
 describe('graphicsCompositorItem social network icon', () => {
 	it.each(SUPPORTED_SOCIAL_NETWORKS)(
 		'renders the application-owned $label vector with its authored colour and opacity',

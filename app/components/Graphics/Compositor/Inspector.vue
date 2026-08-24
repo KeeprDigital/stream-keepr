@@ -10,6 +10,8 @@ import type { Game, PlayerSide } from '~~/shared/types/enums';
 import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
+	DeckListGraphicItemConfig,
+	DeckListView,
 	GameWinsBoxOrientation,
 	GameWinsDisplayMode,
 	GameWinsGraphicItemConfig,
@@ -67,6 +69,7 @@ import {
 	moveGraphicRectToAnchoredPosition,
 	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
+	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
 	patchGraphicGroup,
 	patchGraphicGroupChildSizing,
@@ -94,6 +97,7 @@ import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	applicationGraphicFont,
+	DECK_LIST_VIEW_VALUES,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
@@ -200,6 +204,7 @@ const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ l
 const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
+const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({ label: value, value }));
 const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
 	label: network.label,
@@ -311,6 +316,9 @@ const selectedPlayerLife = computed<PlayerLifeGraphicItemConfig | null>(() =>
 const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'game-wins' ? selectedItem.value : null,
 );
+const selectedDeckList = computed<DeckListGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'deck-list' ? selectedItem.value : null,
+);
 
 /**
  * The base typography of whatever the selection paints text with.
@@ -337,6 +345,9 @@ const selectedTypography = computed<GraphicTypography | null>(() => {
 	}
 	if (item.type === 'game-wins')
 		return item.displayMode === 'number' ? item.typography : null;
+	// A Deck List paints text only in its list view; the grid renders cards.
+	if (item.type === 'deck-list')
+		return item.view === 'list' ? item.typography : null;
 	return item.typography;
 });
 
@@ -362,7 +373,9 @@ const selectedTextOverflow = computed(() => {
  */
 const selectedPlayerSide = computed<PlayerSide | null>(() => {
 	const item = selectedItem.value;
-	return item?.type === 'player-life' || item?.type === 'game-wins' ? item.playerSide : null;
+	return item?.type === 'player-life' || item?.type === 'game-wins' || item?.type === 'deck-list'
+		? item.playerSide
+		: null;
 });
 
 const PLAYER_SIDE_OPTIONS = [
@@ -416,11 +429,12 @@ const isStackedChild = computed(() =>
  * edited on the group itself.
  *
  * A Media Graphic Item never has one: fill, outline, and glow belong to the kinds
- * that paint a surface, and it paints an asset.
+ * that paint a surface, and it paints an asset. A Deck List Item renders cards
+ * only, so it has none either.
  */
 const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
 	const item = selectedItem.value;
-	if (!item || item.type === 'media' || item.type === 'social-network-icon')
+	if (!item || item.type === 'media' || item.type === 'social-network-icon' || item.type === 'deck-list')
 		return null;
 	return item.surfaceStyle ?? null;
 });
@@ -665,6 +679,10 @@ function updatePlayerLifeItem(patch: Partial<Omit<PlayerLifeGraphicItemConfig, '
 
 function updateGameWinsItem(patch: Partial<Omit<GameWinsGraphicItemConfig, 'type' | 'id'>>) {
 	applyToSelectedGraphic((graphic, itemId) => patchGameWinsGraphicItem(graphic, itemId, patch));
+}
+
+function updateDeckListItem(patch: Partial<Omit<DeckListGraphicItemConfig, 'type' | 'id'>>) {
+	applyToSelectedGraphic((graphic, itemId) => patchDeckListGraphicItem(graphic, itemId, patch));
 }
 
 function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>) {
@@ -1669,6 +1687,36 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</div>
 		</div>
 
+		<!--
+			A Deck List Item's own controls. The bounds are the only sizing an author
+			does: the grid view auto-fits rows, columns, and card size from them and
+			the live card count, so there are deliberately no layout knobs here.
+		-->
+		<div v-if="selectedDeckList" class="rounded-lg border border-default/70 p-3 space-y-2">
+			<p class="text-xs font-semibold text-muted">
+				Deck List
+			</p>
+			<div class="grid grid-cols-2 gap-2">
+				<UFormField label="View" size="sm">
+					<USelect
+						:model-value="selectedDeckList.view"
+						:items="DECK_LIST_VIEW_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="deck-list-view"
+						@update:model-value="updateDeckListItem({ view: $event as DeckListView })"
+					/>
+				</UFormField>
+				<UFormField label="Show quantities" size="sm">
+					<USwitch
+						:model-value="selectedDeckList.showQuantities"
+						data-testid="deck-list-show-quantities"
+						@update:model-value="updateDeckListItem({ showQuantities: $event })"
+					/>
+				</UFormField>
+			</div>
+		</div>
+
 		<template v-if="selectedTextItem">
 			<UFormField label="Text" size="sm">
 				<UTextarea
@@ -2236,13 +2284,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			A Media Graphic Item paints an asset and a Social Network Icon paints its
-			application vector, so neither is offered a surface. Every other kind gets
-			them three times over — its own surface, and the two that paint a win box
-			before and after the Player wins it.
+			A Media Graphic Item paints an asset, a Social Network Icon paints its
+			application vector, and a Deck List renders cards, so none is offered a
+			surface. Every other kind gets them three times over — its own surface,
+			and the two that paint a win box before and after the Player wins it.
 		-->
 		<GraphicsCompositorSurfaceStyleFields
-			v-if="selectedItem && selectedItem.type !== 'media' && selectedItem.type !== 'social-network-icon'"
+			v-if="selectedItem && selectedItem.type !== 'media' && selectedItem.type !== 'social-network-icon'
+				&& selectedItem.type !== 'deck-list'"
 			:surface-style="ownSurfaceStyle"
 			title="Graphic Surface Style"
 			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"

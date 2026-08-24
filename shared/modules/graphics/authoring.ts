@@ -2,6 +2,7 @@ import type { Game } from '../../types/enums';
 import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
+	DeckListGraphicItemConfig,
 	GameWinsGraphicItemConfig,
 	GraphicAnimationPhase,
 	GraphicAnimationRecipe,
@@ -1093,9 +1094,9 @@ export type GraphicSurfaceStyleSlot = Extract<
 >;
 
 /**
- * The kinds each slot exists on. A Media Graphic Item paints an asset rather
- * than a surface and so carries none; the two box slots belong to Game Wins
- * alone.
+ * The kinds each slot exists on. A Media Graphic Item paints an asset and a Deck
+ * List Item renders cards rather than painting a surface, so neither carries
+ * one; the two box slots belong to Game Wins alone.
  *
  * Exported because it is the *only* statement of this fact. Graphic Style Sets
  * inherit into these same three surfaces, and a second table saying which kinds own
@@ -1112,15 +1113,16 @@ export const GRAPHIC_SURFACE_STYLE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, r
 const SURFACE_KINDS = GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle;
 
 /**
- * The kinds that carry typography. The three context-gated Definitions render a
- * live string rather than an authored one, but they render it as text.
+ * The kinds that carry typography. The context-gated Definitions render a live
+ * string rather than an authored one, but they render it as text.
  */
-const TYPOGRAPHY_KINDS = ['text', 'clock', 'player-life', 'game-wins'] as const;
+const TYPOGRAPHY_KINDS = ['text', 'clock', 'player-life', 'game-wins', 'deck-list'] as const;
 
 /**
  * The kinds bounded by a Text Overflow Policy: the ones whose rendered string can
  * exceed its authored bounds. A Game Wins Item is absent because its `number`
- * display mode renders a win count, which cannot.
+ * display mode renders a win count, which cannot; a Deck List Item because its
+ * overflow is a fixed shrink-then-clip rather than an authored policy.
  */
 const TEXT_OVERFLOW_KINDS = ['text', 'clock', 'player-life'] as const;
 
@@ -1546,6 +1548,15 @@ export function patchPlayerLifeGraphicItem(
 	patch: Partial<Omit<PlayerLifeGraphicItemConfig, 'type' | 'id'>>,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['player-life'], () => patch);
+}
+
+/** Replace top-level properties of a Deck List Graphic Item, with its own type checked. */
+export function patchDeckListGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	patch: Partial<Omit<DeckListGraphicItemConfig, 'type' | 'id'>>,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['deck-list'], () => patch);
 }
 
 /** Replace top-level properties of a Game Wins Graphic Item, with its own type checked. */

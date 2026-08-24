@@ -235,6 +235,7 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 			'clock',
 			'player-life',
 			'game-wins',
+			'deck-list',
 		] as const;
 
 		for (const slot of ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
@@ -243,6 +244,16 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 					.toBe(GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot].includes(kind));
 			}
 		}
+	});
+
+	it('inherits typography into a Deck List Item and offers it no surface', () => {
+		// A Deck List renders cards rather than painting a surface, so typography is
+		// the one property group a Style Set can reach.
+		const deckList = { type: 'deck-list' } as GraphicItemConfig;
+
+		expect(graphicStyleOwnerSupportsSlot(deckList, 'typography')).toBe(true);
+		expect(graphicStyleOwnerSupportsSlot(deckList, 'surfaceStyle')).toBe(false);
+		expect(graphicStyleOwnerSupportsSlot(deckList, 'geometry')).toBe(false);
 	});
 
 	it('gives every slot in the vocabulary a list', () => {

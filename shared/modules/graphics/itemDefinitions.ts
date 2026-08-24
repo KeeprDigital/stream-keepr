@@ -17,8 +17,14 @@ import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
  * Item kind — stable identifier, configuration version, editor metadata,
  * defaults, and summary.
  *
- * Adding a kind means one entry here plus a branch in the compositor renderer;
- * nothing else enumerates kinds. Templates never provide executable Definitions.
+ * Adding a kind is a sweep, not an entry: this table (whose `satisfies` closure
+ * forces the new member), the config interface and unions in
+ * `shared/types/graphics.ts`, the wire schema arms in `server/schemas/api/screen.ts`,
+ * the kind lists in `authoring.ts` and `graphic-style-sets/slots.ts`, the
+ * descriptor arms in `app/modules/graphics/renderModel.ts`, and the compositor's
+ * `Item.vue` and `Inspector.vue`. The definition palette and Template Package
+ * requirements are definition-driven and follow this table for free. Templates
+ * never provide executable Definitions.
  *
  * ## The configuration version is a portability contract, not a changelog
  *
@@ -320,6 +326,35 @@ const DEFINITIONS = {
 		summary: item => item.type === 'game-wins'
 			? `${playerSideLabel(item.playerSide)} wins • ${item.displayMode}`
 			: 'Wins',
+	},
+	'deck-list': {
+		kind: 'deck-list',
+		configurationVersion: 1,
+		label: 'Deck List',
+		icon: 'i-lucide-list',
+		requiredContext: 'feature-match',
+		createDefault: options => ({
+			type: 'deck-list',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			// A sideboard is up to fifteen rows, so the default bounds are a tall
+			// panel rather than the one-line strip the other kinds start with.
+			x: Math.round(options.canvasWidth * 0.1),
+			y: Math.round(options.canvasHeight * 0.1),
+			width: Math.round(options.canvasWidth * 0.2),
+			height: Math.round(options.canvasHeight * 0.45),
+			playerSide: 'player1',
+			view: 'list',
+			showQuantities: true,
+			// A card name per row rather than a headline, so the default size is a
+			// row's rather than the display typography the other kinds start with.
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, fontSize: 32 },
+		}),
+		summary: item => item.type === 'deck-list'
+			? `${playerSideLabel(item.playerSide)} sideboard • ${item.view}`
+			: 'Deck List',
 	},
 } satisfies Record<GraphicItemKind, GraphicItemDefinition>;
 

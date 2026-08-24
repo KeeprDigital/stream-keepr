@@ -58,17 +58,18 @@ export function maximalFeatureMatchLayoutDocument(
 	options: MaximalFeatureMatchLayoutOptions,
 ): FeatureMatchLayoutConfig {
 	const base = createFeatureMatchLayoutComposition();
-	// Every branch of `GraphicItemConfig`. All three context-gated Definitions belong
+	// Every branch of `GraphicItemConfig`. All four context-gated Definitions belong
 	// here rather than only in the Broadcast Graphic fixture: a Feature Match Overlay
 	// is the host that actually declares the `feature-match` context, so Clock, Player
-	// Life, and Game Wins are Definitions a real layout places.
+	// Life, Game Wins, and Deck List are Definitions a real layout places.
 	const withGroup = addGraphicItem(base, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	const withChild = addGraphicGroupChild(withGroup, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
 	const withName = addGraphicItem(withChild, { kind: 'text', id: 'player1-name', ...CANVAS }).graphic;
 	const withBackdrop = addGraphicItem(withName, { kind: 'media', id: 'backdrop', ...CANVAS }).graphic;
 	const withClock = addGraphicItem(withBackdrop, { kind: 'clock', id: 'clock', ...CANVAS }).graphic;
 	const withLife = addGraphicItem(withClock, { kind: 'player-life', id: 'life', ...CANVAS }).graphic;
-	const composition = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
+	const withWins = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
+	const composition = addGraphicItem(withWins, { kind: 'deck-list', id: 'sideboard', ...CANVAS }).graphic;
 
 	const group = composition.items.find(item => item.id === 'cluster');
 	if (group?.type !== 'group')
@@ -91,6 +92,9 @@ export function maximalFeatureMatchLayoutDocument(
 	const wins = composition.items.find(item => item.id === 'wins');
 	if (wins?.type !== 'game-wins')
 		throw new Error('expected a Game Wins Graphic Item');
+	const sideboard = composition.items.find(item => item.id === 'sideboard');
+	if (sideboard?.type !== 'deck-list')
+		throw new Error('expected a Deck List Graphic Item');
 
 	backdrop.asset = { ...options.itemAsset };
 	backdrop.clipGeometry = {
@@ -159,6 +163,13 @@ export function maximalFeatureMatchLayoutDocument(
 		outline: { color: '#ffffff', width: 2 },
 		glow: { color: '#22c55e', size: 12, opacity: 0.5 },
 	};
+
+	// Non-default values on every Deck List field, so the round trip proves they
+	// travel rather than being reconstructed from Definition defaults.
+	sideboard.playerSide = 'player2';
+	sideboard.view = 'grid';
+	sideboard.showQuantities = false;
+	sideboard.rotation = 2;
 
 	group.surfaceStyle = maximalSurfaceStyle();
 	group.defaultChildSurfaceStyle = {

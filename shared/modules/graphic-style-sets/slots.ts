@@ -111,7 +111,8 @@ function ownerKind(owner: GraphicStyleOwnerNode): GraphicItemConfig['type'] | nu
 }
 
 /** The Graphic Item kinds that carry base typography. */
-const TYPOGRAPHY_KINDS: readonly GraphicItemConfig['type'][] = ['text', 'clock', 'player-life', 'game-wins'];
+const TYPOGRAPHY_KINDS: readonly GraphicItemConfig['type'][]
+	= ['text', 'clock', 'player-life', 'game-wins', 'deck-list'];
 
 /**
  * Whether one owner can hold this slot at all.

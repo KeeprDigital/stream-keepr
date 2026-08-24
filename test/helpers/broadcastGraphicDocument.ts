@@ -26,8 +26,8 @@ import {
  * re-exporting repairs nothing.
  *
  * Built through the same authoring operations an editor uses, so its base items can
- * never drift from what the editor actually produces. All eight `GraphicItemConfig`
- * branches appear, including the three the Broadcast Graphics palette does not offer
+ * never drift from what the editor actually produces. All nine `GraphicItemConfig`
+ * branches appear, including the four the Broadcast Graphics palette does not offer
  * — see the item list below for why they belong here anyway.
  *
  * ## One field is deliberately absent: `channelId`
@@ -95,13 +95,13 @@ export function maximalBroadcastGraphicDocument(
 		name: options.name ?? 'Lower third',
 		items: [],
 	};
-	// Every branch of `GraphicItemConfig`, the three context-gated Definitions
-	// included. A Broadcast Graphics palette does not offer Clock, Player Life, or
-	// Game Wins today — the Host Contract declares only the `event` context — but
-	// `broadcastGraphicConfigSchema` validates all eight kinds and a `.skgraphic`
-	// receiver resolves capability identities against all eight, so a package
-	// carrying one is accepted and installed. A transfer that has never been held to
-	// three of the seven branches is a transfer nobody has tested.
+	// Every branch of `GraphicItemConfig`, the four context-gated Definitions
+	// included. A Broadcast Graphics palette does not offer Clock, Player Life,
+	// Game Wins, or Deck List today — the Host Contract declares only the `event`
+	// context — but `broadcastGraphicConfigSchema` validates all nine kinds and a
+	// `.skgraphic` receiver resolves capability identities against all nine, so a
+	// package carrying one is accepted and installed. A transfer that has never
+	// been held to four of the nine branches is a transfer nobody has tested.
 	const withGroup = addGraphicItem(base, { kind: 'group', id: 'cluster', ...CANVAS }).graphic;
 	const withChild = addGraphicGroupChild(withGroup, { kind: 'shape', groupId: 'cluster', id: 'child' }).graphic;
 	const withProjectedText = addGraphicGroupChild(
@@ -120,7 +120,8 @@ export function maximalBroadcastGraphicDocument(
 	).graphic;
 	const withClock = addGraphicItem(withSocialIcon, { kind: 'clock', id: 'countdown', ...CANVAS }).graphic;
 	const withLife = addGraphicItem(withClock, { kind: 'player-life', id: 'life', ...CANVAS }).graphic;
-	const document = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
+	const withWins = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
+	const document = addGraphicItem(withWins, { kind: 'deck-list', id: 'sideboard', ...CANVAS }).graphic;
 
 	const group = document.items.find(item => item.id === 'cluster');
 	if (group?.type !== 'group')
@@ -152,6 +153,9 @@ export function maximalBroadcastGraphicDocument(
 	const wins = document.items.find(item => item.id === 'wins');
 	if (wins?.type !== 'game-wins')
 		throw new Error('expected a Game Wins Graphic Item');
+	const sideboard = document.items.find(item => item.id === 'sideboard');
+	if (sideboard?.type !== 'deck-list')
+		throw new Error('expected a Deck List Graphic Item');
 
 	// The one field a Template Package is *defined* to rewrite, so the round trip has
 	// something to prove it rewrote as well as something to prove it carried.
@@ -232,6 +236,14 @@ export function maximalBroadcastGraphicDocument(
 		outline: { color: '#ffffff', width: 2 },
 		glow: { color: '#22c55e', size: 12, opacity: 0.5 },
 	};
+
+	// A Deck List carries no optional fields of its own beyond the shared base, so
+	// non-default values are what prove the fields travel rather than being
+	// reconstructed from Definition defaults.
+	sideboard.playerSide = 'player2';
+	sideboard.view = 'grid';
+	sideboard.showQuantities = false;
+	sideboard.rotation = 2;
 
 	group.surfaceStyle = maximalSurfaceStyle();
 	group.defaultChildSurfaceStyle = {

@@ -26,9 +26,11 @@ import { fitGraphicTextFontSize } from '~/modules/graphics/textFit';
  * hierarchy. A Clock and a Player Life are text whose string the host resolved, so
  * they take the same paragraph, typography, and `shrink` measurement a Text
  * Graphic Item does. A Game Wins indicator is either that same text or a row of
- * painted Shape Geometry boxes. Only the life-change animation is local, because
- * it fires on a value arriving from the live session rather than on a lifecycle
- * phase the render model projects.
+ * painted Shape Geometry boxes. A Deck List's list view is that same resolved
+ * text again, one row per card; its grid view is a set of card cells, each an
+ * image or a painted placeholder surface. Only the life-change animation is
+ * local, because it fires on a value arriving from the live session rather than
+ * on a lifecycle phase the render model projects.
  */
 const props = defineProps<{ render: GraphicItemRenderDescriptor }>();
 
@@ -390,6 +392,77 @@ watch(
 		</div>
 
 		<!--
+			A Deck List's grid cards. Art is contained, never cropped; a card with no
+			art paints a 63:88 placeholder surface carrying its own name, so the count
+			stays honest. The quantity badge appears only when the model offers one.
+			Empty alt for the same reason a Media Graphic Item's: a broken image would
+			draw its alt text into the Key Output's matte.
+		-->
+		<div
+			v-for="(card, index) in render.deckList?.cards"
+			:key="`card-${index}`"
+			class="graphics-compositor-item__deck-card"
+			:data-deck-card="card.name"
+			:style="card.style"
+		>
+			<img
+				v-if="card.image"
+				:src="card.image.src"
+				alt=""
+				:style="card.image.style"
+			>
+			<template v-else-if="card.placeholder">
+				<svg
+					:viewBox="`0 0 ${Math.max(card.placeholder.surface.width, 0)} ${Math.max(card.placeholder.surface.height, 0)}`"
+					preserveAspectRatio="none"
+					aria-hidden="true"
+					focusable="false"
+				>
+					<defs>
+						<linearGradient
+							v-if="card.placeholder.surface.fill.gradient"
+							:id="card.placeholder.surface.fill.gradient.id"
+							:x1="card.placeholder.surface.fill.gradient.x1"
+							:y1="card.placeholder.surface.fill.gradient.y1"
+							:x2="card.placeholder.surface.fill.gradient.x2"
+							:y2="card.placeholder.surface.fill.gradient.y2"
+						>
+							<stop
+								v-for="(stop, stopIndex) in card.placeholder.surface.fill.gradient.stops"
+								:key="stopIndex"
+								:offset="stop.offset"
+								:stop-color="stop.color"
+								:stop-opacity="stop.opacity"
+							/>
+						</linearGradient>
+						<clipPath v-if="card.placeholder.surface.outline" :id="card.placeholder.surface.outline.clipId">
+							<path :d="card.placeholder.surface.path" />
+						</clipPath>
+					</defs>
+					<path
+						:d="card.placeholder.surface.path"
+						:fill="card.placeholder.surface.fill.color"
+						:fill-opacity="card.placeholder.surface.fill.opacity"
+					/>
+					<path
+						v-if="card.placeholder.surface.outline"
+						:d="card.placeholder.surface.path"
+						fill="none"
+						:stroke="card.placeholder.surface.outline.color"
+						:stroke-width="card.placeholder.surface.outline.width * 2"
+						:clip-path="`url(#${card.placeholder.surface.outline.clipId})`"
+					/>
+				</svg>
+				<span :style="card.placeholder.textStyle">{{ card.name }}</span>
+			</template>
+			<span
+				v-if="card.badge"
+				data-deck-card-quantity
+				:style="card.badge.style"
+			>{{ card.badge.text }}</span>
+		</div>
+
+		<!--
 			A Media Graphic Item renders nothing at all without resolvable content: an
 			empty `src` would be a broken element, and in the Key Output a broken
 			element still paints a box.
@@ -455,6 +528,16 @@ watch(
 }
 
 .graphics-compositor-item__win-box > svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.graphics-compositor-item__deck-card > svg {
 	position: absolute;
 	inset: 0;
 	width: 100%;

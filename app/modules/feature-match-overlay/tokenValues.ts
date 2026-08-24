@@ -132,13 +132,17 @@ export function featureMatchGraphicsContext(
 ): GraphicsFeatureMatchContext {
 	return {
 		clockDisplayTime: input.displayTime,
+		// `null` deck data until the deck card data path lands (#491): a Deck List
+		// Graphic Item renders nothing rather than a placeholder sideboard.
 		player1: {
 			lifeTotal: input.matchState?.player1?.lifeTotal ?? null,
 			gameWins: input.matchState?.player1?.gameWins ?? 0,
+			sideboard: null,
 		},
 		player2: {
 			lifeTotal: input.matchState?.player2?.lifeTotal ?? null,
 			gameWins: input.matchState?.player2?.gameWins ?? 0,
+			sideboard: null,
 		},
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf
 			?? input.featureMatch?.bestOf
