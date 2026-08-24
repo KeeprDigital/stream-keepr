@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -255,6 +255,23 @@ export const ridgelinesAnimationParamsSchema = z.strictObject({
 	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 });
 
+/**
+ * Weave: an interlaced fabric of undulating warp and weft threads crossing
+ * over and under in strict alternation, with a soft sheen sweeping the cloth.
+ * A new effect (no fork ancestry), so the params carry semantic names and the
+ * defaults are the recorded design's (#473). `scale` sets the thread grid,
+ * `thickness` the band width within it, `sheen` the travelling highlight.
+ */
+export const weaveAnimationParamsSchema = z.strictObject({
+	warpColor: colorParam('Warp color', '#7c3aed'),
+	weftColor: colorParam('Weft color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	scale: numberParam('Weave scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	thickness: numberParam('Thread width', { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }),
+	sheen: numberParam('Sheen', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -277,6 +294,7 @@ export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParam
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
+export type WeaveAnimationParams = z.output<typeof weaveAnimationParamsSchema>;
 
 export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
@@ -291,6 +309,7 @@ export interface AnimationEffectParamsMap {
 	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
 	waves: WavesAnimationParams;
+	weave: WeaveAnimationParams;
 }
 
 export const ANIMATION_EFFECT_CATALOGUE = {
@@ -306,6 +325,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
+	weave: { label: 'Weave', paramsSchema: weaveAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
 
 export function animationEffectDefaultParams<Effect extends AnimationEffectName>(
@@ -370,6 +390,7 @@ const selectionBranches = {
 	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
 	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
 	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
+	weave: z.strictObject({ effect: z.literal('weave'), params: weaveAnimationParamsSchema.optional() }),
 } satisfies Record<AnimationEffectName, z.ZodObject>;
 
 /**
@@ -398,6 +419,7 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.rings,
 	selectionBranches.ripple,
 	selectionBranches.waves,
+	selectionBranches.weave,
 ]);
 
 /** The stored/authored selection shape: params sparse, defaults implied. */
@@ -444,6 +466,7 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.rings.extend(frameAnimationShape),
 	selectionBranches.ripple.extend(frameAnimationShape),
 	selectionBranches.waves.extend(frameAnimationShape),
+	selectionBranches.weave.extend(frameAnimationShape),
 ]);
 
 /**

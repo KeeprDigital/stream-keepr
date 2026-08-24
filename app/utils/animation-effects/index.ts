@@ -23,6 +23,7 @@ const effectLoaders: {
 	rings: () => import('./rings'),
 	ripple: () => import('./ripple'),
 	waves: () => import('./waves'),
+	weave: () => import('./weave'),
 };
 
 export async function loadAnimationEffect<Effect extends AnimationEffectName>(

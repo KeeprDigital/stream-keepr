@@ -24,7 +24,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -38,6 +38,20 @@ describe('animationEffects catalogue', () => {
 			ridges: 7,
 			relief: 1,
 			glow: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships weave under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('weave')).toEqual({
+			warpColor: '#7c3aed',
+			weftColor: '#06b6d4',
+			backgroundColor: '#111111',
+			scale: 1,
+			thickness: 0.6,
+			sheen: 1,
 			speed: 1,
 		});
 	});
