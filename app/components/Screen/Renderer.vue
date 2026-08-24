@@ -25,7 +25,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener('resize', updateViewportSize);
 });
 
-const currentMode = computed(() => screen.value?.currentMode ?? 'idle');
+const currentMode = computed(() => screen.value?.currentMode ?? 'background');
 const currentModeDefinition = computed(() => getScreenModeDefinition(currentMode.value));
 const screenConfig = computed<ScreenConfig>(() => (screen.value?.screenConfig ?? {}) as ScreenConfig);
 

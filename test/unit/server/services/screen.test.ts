@@ -223,12 +223,12 @@ describe('screenService', () => {
 		});
 
 		it('merges config for given mode', async () => {
-			const screen = createMockScreen({ modeConfigs: { idle: { text: 'Hello' } } as any });
+			const screen = createMockScreen({ modeConfigs: { card: { text: 'Hello' } } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
 			mockDb.batch.mockResolvedValue([[updatedScreen]]);
 
-			const result = await screenService().updateModeConfig(1, 1, 'idle' as any, { text: 'World' });
+			const result = await screenService().updateModeConfig(1, 1, 'card' as any, { text: 'World' });
 
 			expect(result).toEqual(updatedScreen);
 		});

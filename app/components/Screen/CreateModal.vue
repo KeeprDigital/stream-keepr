@@ -29,12 +29,12 @@ const formId = computed(() => props.editScreen ? `edit-screen-${props.editScreen
 const formData = ref<CreateScreenInput>({
 	name: props.editScreen?.name ?? '',
 	slug: props.editScreen?.slug ?? '',
-	currentMode: props.editScreen?.currentMode ?? 'idle',
+	currentMode: props.editScreen?.currentMode ?? 'background',
 	modeConfigs: props.editScreen?.modeConfigs ?? null,
 });
 
 const derivedDisplayType = computed(() => {
-	const mode = formData.value.currentMode ?? 'idle';
+	const mode = formData.value.currentMode ?? 'background';
 	return getScreenModeDefinition(mode);
 });
 

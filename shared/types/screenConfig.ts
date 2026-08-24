@@ -1,7 +1,7 @@
-import type { FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
-import type { GraphicAssetReference } from './graphicsAsset';
+import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
 
@@ -304,6 +304,79 @@ export interface ScreenMediaBackgroundConfig {
 }
 
 /**
+ * Where a Screen's media comes from: a Graphics Asset Library revision, or a
+ * remote URL.
+ *
+ * This is the standardised media source shape the Background Screen mints and
+ * the rest of the application adopts over time (#484). An asset source pins an
+ * exact revision and carries the same facts a media Graphic Input value does —
+ * `videoCompatibility` recorded at the moment of selection, because nothing
+ * downstream can go and ask the library for it. A URL source is the escape
+ * hatch the old media background always was: the application serves nothing and
+ * checks nothing.
+ */
+export type ScreenMediaSource
+	= | { kind: 'asset'; assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId; videoCompatibility?: 'all-supported' | 'chromium-transparency' }
+		| { kind: 'url'; url: string };
+
+export const BACKGROUND_LAYER_TYPE_VALUES = ['color', 'gradient', 'image', 'video', 'animation'] as const;
+export type BackgroundLayerType = typeof BACKGROUND_LAYER_TYPE_VALUES[number];
+
+/**
+ * What every Background Layer owns regardless of its type: its identity, its
+ * own enabled state, and its own opacity. Opacity belongs to the layer — never
+ * to the stack or to the renderer behind it — so stacking a translucent colour
+ * over an Animation Effect is one layer's setting, not a mode-level knob.
+ * Ids are how a reorder stays a reorder rather than a rewrite.
+ */
+interface BackgroundLayerBase {
+	id: string;
+	enabled: boolean;
+	opacity: number;
+}
+
+export interface ColorBackgroundLayer extends BackgroundLayerBase {
+	type: 'color';
+	color: string;
+}
+
+/** `gradient` is a raw CSS gradient string, as the Feature Match Overlay Frame's is. */
+export interface GradientBackgroundLayer extends BackgroundLayerBase {
+	type: 'gradient';
+	gradient: string;
+}
+
+export interface ImageBackgroundLayer extends BackgroundLayerBase {
+	type: 'image';
+	source: ScreenMediaSource;
+	fit: ScreenMediaBackgroundFit;
+}
+
+export interface VideoBackgroundLayer extends BackgroundLayerBase {
+	type: 'video';
+	source: ScreenMediaSource;
+	fit: ScreenMediaBackgroundFit;
+	playbackRate: number;
+	loop: boolean;
+}
+
+export interface AnimationBackgroundLayer extends BackgroundLayerBase {
+	type: 'animation';
+	animation: AnimationEffectSelection;
+}
+
+/**
+ * One entry in a Background Screen's ordered stack. Painter's order: the first
+ * layer is the bottom of the stack.
+ */
+export type BackgroundLayer
+	= | ColorBackgroundLayer
+		| GradientBackgroundLayer
+		| ImageBackgroundLayer
+		| VideoBackgroundLayer
+		| AnimationBackgroundLayer;
+
+/**
  * The Feature Match Overlay Frame's animation effects.
  *
  * A closed vocabulary for the same reason a Source Role is: an effect names an
@@ -456,15 +529,21 @@ export interface MetagameModeConfig {
 }
 
 // Union type for all mode configs
-export type ScreenModeConfig = DeckModeConfig | CardModeConfig | IdleModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
+export type ScreenModeConfig = DeckModeConfig | CardModeConfig | BackgroundModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
 
-// Default configs for each mode
-export interface IdleModeConfig {
-	mediaBackground?: ScreenMediaBackgroundConfig;
+/**
+ * The Background Screen's configuration: an ordered stack of Background Layers,
+ * replacing the former Idle mode's single optional media background. The old
+ * `mediaBackground` config resets rather than mapping onto a layer — the
+ * ADR-0014 reset precedent, accepted for the same small install base.
+ */
+export interface BackgroundModeConfig {
+	layers: BackgroundLayer[];
 }
 
-export const DEFAULT_IDLE_CONFIG: IdleModeConfig = {
-	mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG },
+/** A fresh Background Screen starts empty — black until configured. */
+export const DEFAULT_BACKGROUND_CONFIG: BackgroundModeConfig = {
+	layers: [],
 };
 
 export const DEFAULT_CARD_DISPLAY_CONFIG: CardDisplayConfig = {
@@ -629,7 +708,7 @@ export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 
 // Canonical default config map for all screen modes.
 export const DEFAULT_MODE_CONFIGS = {
-	'idle': DEFAULT_IDLE_CONFIG,
+	'background': DEFAULT_BACKGROUND_CONFIG,
 	'card': DEFAULT_CARD_CONFIG,
 	'deck': DEFAULT_DECK_CONFIG,
 	'standings': DEFAULT_STANDINGS_CONFIG,
@@ -667,7 +746,9 @@ type ModeResetPreservedKeysMap = {
 };
 
 const MODE_RESET_PRESERVED_KEYS = {
-	'idle': [],
+	// The layer stack is authored content with no recovery path, like the
+	// Broadcast Graphics stack: a display reset must not empty it.
+	'background': ['layers'],
 	'card': ['featureMatchId'],
 	'deck': ['playerId'],
 	'topCut': [],

@@ -15,8 +15,8 @@ import {
 	getScreenModeHostDefinition as getSharedScreenModeHostDefinition,
 } from '~~/shared/screenModeDefinitions';
 
-const ScreenModesIdleDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Idle/Display.vue'));
-const ScreenModesIdleSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Idle/Settings.vue'));
+const ScreenModesBackgroundDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Display.vue'));
+const ScreenModesBackgroundSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Settings.vue'));
 const ScreenModesCardDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Card/Display.vue'));
 const ScreenModesCardSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Card/Settings.vue'));
 const ScreenModesDeckDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Deck/Display.vue'));
@@ -61,7 +61,7 @@ export interface ResolvedScreenModeHost {
 export interface ScreenModeDefinitionWithComponents extends SharedScreenModeDefinition, ScreenModeRuntimeDefinition {}
 
 export const SCREEN_MODE_RUNTIME = {
-	'idle': { displayComponent: ScreenModesIdleDisplay, settingsComponent: ScreenModesIdleSettings },
+	'background': { displayComponent: ScreenModesBackgroundDisplay, settingsComponent: ScreenModesBackgroundSettings },
 	'card': { displayComponent: ScreenModesCardDisplay, settingsComponent: ScreenModesCardSettings },
 	'deck': { displayComponent: ScreenModesDeckDisplay, settingsComponent: ScreenModesDeckSettings },
 	'standings': { displayComponent: ScreenModesStandingsDisplay, settingsComponent: ScreenModesStandingsSettings },

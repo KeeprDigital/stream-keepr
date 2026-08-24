@@ -34,8 +34,17 @@ describe('sCREEN_MODES', () => {
 		expect(SCREEN_MODES['feature-match'].displayType).toBe('control');
 	});
 
-	it('overlay modes are idle, card, deck, standings, topCut, metagame', () => {
-		expect(SCREEN_MODES.idle.displayType).toBe('overlay');
+	it('background replaces the former idle mode as a full-screen layered background', () => {
+		expect(SCREEN_MODES.background).toMatchObject({
+			label: 'Background',
+			displayType: 'overlay',
+			description: 'Full-screen layered background',
+		});
+		expect(Object.keys(SCREEN_MODES)).not.toContain('idle');
+	});
+
+	it('overlay modes are background, card, deck, standings, topCut, metagame', () => {
+		expect(SCREEN_MODES.background.displayType).toBe('overlay');
 		expect(SCREEN_MODES.card.displayType).toBe('overlay');
 		expect(SCREEN_MODES.deck.displayType).toBe('overlay');
 		expect(SCREEN_MODES.standings.displayType).toBe('overlay');
@@ -74,8 +83,8 @@ describe('getContainerControls', () => {
 });
 
 describe('getDisplayType', () => {
-	it('returns overlay for idle', () => {
-		expect(getDisplayType('idle')).toBe('overlay');
+	it('returns overlay for background', () => {
+		expect(getDisplayType('background')).toBe('overlay');
 	});
 
 	it('returns overlay for card', () => {

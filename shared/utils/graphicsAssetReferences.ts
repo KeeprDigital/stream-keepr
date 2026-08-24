@@ -7,6 +7,7 @@ import type {
 } from '../types/graphics';
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
+	BackgroundModeConfig,
 	BroadcastGraphicsModeConfig,
 	FeatureMatchLayoutConfig,
 	FeatureMatchOverlayModeConfig,
@@ -259,13 +260,49 @@ export function broadcastGraphicsGraphicAssetReferences(
 }
 
 /**
+ * Every Graphic Asset Revision a Background Screen's layer stack pins.
+ *
+ * Only an asset-sourced image or video layer pins one; colour, gradient,
+ * animation, and URL-sourced layers carry no library reference. A disabled
+ * layer still publishes — disabled is a display state, not a removal, so the
+ * pinned revision must stay resolvable for the re-enable, exactly as a hidden
+ * Media Graphic Item's does. Slots are built from layer ids rather than stack
+ * positions, so a reorder does not read as a set of changed references.
+ */
+export function backgroundGraphicAssetReferences(
+	config: BackgroundModeConfig,
+): ScreenGraphicAssetReference[] {
+	const references: ScreenGraphicAssetReference[] = [];
+
+	for (const layer of config.layers) {
+		if (layer.type !== 'image' && layer.type !== 'video')
+			continue;
+		if (layer.source.kind !== 'asset')
+			continue;
+		references.push(mediaScreenGraphicAssetReference(
+			{
+				assetId: layer.source.assetId,
+				revisionId: layer.source.revisionId,
+				...(layer.source.videoCompatibility !== undefined
+					? { videoCompatibility: layer.source.videoCompatibility }
+					: {}),
+			},
+			layer.type === 'video' ? 'silent-video' : 'image',
+			`layers.${layer.id}.source`,
+		));
+	}
+
+	return references;
+}
+
+/**
  * The Screen Modes whose configuration publishes Graphic Asset References.
  *
  * Every other mode publishes none, so its configuration writes go through the
  * ordinary versioned write. A mode listed here writes its configuration and its
  * reference index in one atomic operation instead.
  */
-export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = ['feature-match-overlay', 'broadcast-graphics'] as const;
+export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = ['feature-match-overlay', 'broadcast-graphics', 'background'] as const;
 
 export type GraphicAssetReferencingScreenMode = typeof GRAPHIC_ASSET_REFERENCING_SCREEN_MODES[number];
 
@@ -292,6 +329,7 @@ export function isGraphicAssetReferencingScreenMode(mode: string): mode is Graph
 export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
 	'feature-match-overlay': 'layout.',
 	'broadcast-graphics': 'graphics.',
+	'background': 'layers.',
 } as const satisfies Record<GraphicAssetReferencingScreenMode, string>;
 
 export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
@@ -329,6 +367,7 @@ export function screenOutputResolvableSlotPrefixes(
 export interface GraphicAssetReferencingScreenModeConfigs {
 	'feature-match-overlay'?: FeatureMatchOverlayModeConfig;
 	'broadcast-graphics'?: BroadcastGraphicsModeConfig;
+	'background'?: BackgroundModeConfig;
 }
 
 /**
@@ -354,6 +393,10 @@ export function screenModeGraphicAssetReferences(
 		case 'broadcast-graphics': {
 			const config = modeConfigs?.['broadcast-graphics'];
 			return config ? broadcastGraphicsGraphicAssetReferences(config) : [];
+		}
+		case 'background': {
+			const config = modeConfigs?.background;
+			return config ? backgroundGraphicAssetReferences(config) : [];
 		}
 		default: {
 			const unreachable: never = mode;

@@ -226,10 +226,10 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: 0, currentMode: 'idle' } as never,
+			input: { stateVersion: 0, currentMode: 'background' } as never,
 		});
 
-		expect((await screenRow())?.currentMode).toBe('idle');
+		expect((await screenRow())?.currentMode).toBe('background');
 		expect(await activeSession()).toBeUndefined();
 		expect(await publishesLiveSessionMedia()).toBe(false);
 		expect(epochEndedAnnouncements()).toHaveLength(1);
@@ -247,7 +247,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await expect(screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: 0, currentMode: 'idle' } as never,
+			input: { stateVersion: 0, currentMode: 'background' } as never,
 		})).rejects.toThrow();
 
 		const screen = await screenRow();
@@ -264,9 +264,9 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: 0, currentMode: 'idle' } as never,
+			input: { stateVersion: 0, currentMode: 'background' } as never,
 		});
-		expect((await screenRow())?.currentMode).toBe('idle');
+		expect((await screenRow())?.currentMode).toBe('background');
 		expect(await activeSession()).toBeUndefined();
 	});
 
@@ -277,7 +277,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await expect(screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: 0, currentMode: 'idle' } as never,
+			input: { stateVersion: 0, currentMode: 'background' } as never,
 		})).rejects.toThrow();
 
 		// Whatever the failure left behind, the Screen's next activation of Broadcast
@@ -286,7 +286,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: (await screenRow())!.stateVersion, currentMode: 'idle' } as never,
+			input: { stateVersion: (await screenRow())!.stateVersion, currentMode: 'background' } as never,
 		});
 		await screenWriteModule().updateScreen({
 			eventId,
@@ -308,7 +308,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await expect(screenWriteModule().updateScreen({
 			eventId,
 			screenId,
-			input: { stateVersion: 99, currentMode: 'idle' } as never,
+			input: { stateVersion: 99, currentMode: 'background' } as never,
 		})).rejects.toThrow();
 
 		expect((await screenRow())?.currentMode).toBe('broadcast-graphics');

@@ -267,7 +267,7 @@ export function createMockScreen(overrides?: Partial<DbScreen>): DbScreen {
 		eventId: 1,
 		name: 'Test Screen',
 		slug: 'test-screen',
-		currentMode: 'idle',
+		currentMode: 'background',
 		modeConfigs: null,
 		screenConfig: null,
 		stateVersion: 0,

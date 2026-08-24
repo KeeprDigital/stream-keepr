@@ -121,10 +121,10 @@ describe('useScreenStore config and realtime', () => {
 			const screen = createMockScreen({ id: 1, modeConfigs: {} });
 			store.screens = [screen];
 			store.activeScreen = screen;
-			const updated = createMockScreen({ id: 1, modeConfigs: { idle: {} } });
+			const updated = createMockScreen({ id: 1, modeConfigs: { background: { layers: [] } } });
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
-			await store.updateModeConfig(1, 1, 'idle', {});
+			await store.updateModeConfig(1, 1, 'background', {});
 
 			expect(store.activeScreen).toEqual(updated);
 		});
@@ -152,12 +152,12 @@ describe('useScreenStore config and realtime', () => {
 		it('uses default config for mode when no existing config', async () => {
 			const screen = createMockScreen({ id: 1, modeConfigs: null });
 			store.screens = [screen];
-			const updated = createMockScreen({ id: 1, modeConfigs: { idle: {} } });
+			const updated = createMockScreen({ id: 1, modeConfigs: { background: { layers: [] } } });
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
-			await store.updateModeConfig(1, 1, 'idle', {});
+			await store.updateModeConfig(1, 1, 'background', {});
 
-			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'idle', {}, screen.stateVersion);
+			expect(mockRepo.updateModeConfig).toHaveBeenCalledWith(1, 1, 'background', {}, screen.stateVersion);
 		});
 	});
 

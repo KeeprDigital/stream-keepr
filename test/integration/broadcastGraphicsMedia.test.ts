@@ -1038,7 +1038,7 @@ describe('media Graphic Input values on air', () => {
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, {
 			method: 'PATCH',
-			body: { currentMode: 'idle', stateVersion: screen.stateVersion },
+			body: { currentMode: 'background', stateVersion: screen.stateVersion },
 		});
 
 		await expect(usageOf(backdrop)).resolves.toEqual([]);

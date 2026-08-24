@@ -6,8 +6,8 @@ import {
 	DEFAULT_CARD_CONFIG,
 	DEFAULT_DECK_CONFIG,
 	DEFAULT_FEATURE_MATCH_CONFIG,
+	DEFAULT_BACKGROUND_CONFIG,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-	DEFAULT_IDLE_CONFIG,
 	DEFAULT_METAGAME_CONFIG,
 	DEFAULT_PLAYER_HISTORY_CONFIG,
 	DEFAULT_SCREEN_CONFIG,
@@ -18,8 +18,8 @@ import {
 } from '~~/shared/types/screenConfig';
 
 describe('getDefaultConfigForMode', () => {
-	it('returns idle config for idle mode', () => {
-		expect(getDefaultConfigForMode('idle')).toEqual(DEFAULT_IDLE_CONFIG);
+	it('returns background config for background mode', () => {
+		expect(getDefaultConfigForMode('background')).toEqual(DEFAULT_BACKGROUND_CONFIG);
 	});
 
 	it('returns card config for card mode', () => {
@@ -61,8 +61,13 @@ describe('getDefaultConfigForMode', () => {
 
 describe('getDisplayDefaultsForMode', () => {
 	it('returns full config for modes without data bindings', () => {
-		expect(getDisplayDefaultsForMode('idle')).toEqual(DEFAULT_IDLE_CONFIG);
 		expect(getDisplayDefaultsForMode('topCut')).toEqual(DEFAULT_TOPCUT_CONFIG);
+	});
+
+	it('preserves the authored Background Layer stack on a display reset', () => {
+		// Like the Broadcast Graphics stack: authored content with no recovery
+		// path, so "Reset to Defaults" must not empty it.
+		expect(getDisplayDefaultsForMode('background')).not.toHaveProperty('layers');
 	});
 
 	it('returns display defaults that preserve visual settings only', () => {
@@ -103,13 +108,8 @@ describe('default config constants', () => {
 		expect(DEFAULT_SCREEN_CONFIG.secondaryTextColor).toBeUndefined();
 	});
 
-	it('default idle config has disabled media playback', () => {
-		expect(DEFAULT_IDLE_CONFIG.mediaBackground).toMatchObject({
-			enabled: false,
-			type: 'video',
-			playbackRate: 1,
-			loop: true,
-		});
+	it('default background config starts with an empty layer stack — black until configured', () => {
+		expect(DEFAULT_BACKGROUND_CONFIG).toEqual({ layers: [] });
 	});
 
 	it('default card config has null featureMatchId', () => {

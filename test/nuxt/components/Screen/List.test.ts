@@ -17,7 +17,7 @@ vi.mock('~/modules/screen-mode', () => ({
 	getScreenModeIcon: vi.fn(() => 'i-lucide-monitor'),
 	getScreenModeLabel: vi.fn((mode: string) => mode),
 	getScreenModeSelectOptions: vi.fn(() => [
-		{ label: 'Idle', icon: 'i-lucide-moon', value: 'idle' },
+		{ label: 'Background', icon: 'i-lucide-wallpaper', value: 'background' },
 		{ label: 'Standings', icon: 'i-lucide-list', value: 'standings' },
 	]),
 }));
@@ -86,7 +86,7 @@ function makeScreen(fields: Pick<Screen, 'id' | 'name' | 'slug' | 'currentMode'>
 }
 
 const screens = [
-	makeScreen({ id: 4, name: 'Stage Left', slug: 'stage-left', currentMode: 'idle' }),
+	makeScreen({ id: 4, name: 'Stage Left', slug: 'stage-left', currentMode: 'background' }),
 	makeScreen({ id: 7, name: 'Stage Right', slug: 'stage-right', currentMode: 'standings' }),
 	makeScreen({ id: 11, name: 'Feature Table', slug: 'feature-table', currentMode: 'card' }),
 ];
@@ -195,7 +195,7 @@ describe('screen list — the cards it composes, and the Screen each one is for'
 		]);
 		// Each card's mode is its own Screen's, so a row bound to a neighbour shows it.
 		expect(rendered.map(card => card.text())).toEqual([
-			expect.stringContaining('idle'),
+			expect.stringContaining('background'),
 			expect.stringContaining('standings'),
 			expect.stringContaining('card'),
 		]);

@@ -343,12 +343,12 @@ describe('feature Match Layout Template library', () => {
 	 * render and no output would ever show.
 	 */
 	it('refuses to place a layout on a Screen that is not a Feature Match Overlay', async () => {
-		const idleScreen = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
+		const backgroundScreen = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
 			method: 'POST',
-			body: { name: `Idle Screen ${runId}`, slug: `idle-screen-${runId}`, currentMode: 'idle' },
+			body: { name: `Background Screen ${runId}`, slug: `background-screen-${runId}`, currentMode: 'background' },
 		});
 
-		const refused = await place(otherEventId, idleScreen.id, { templateId }, authorCookie);
+		const refused = await place(otherEventId, backgroundScreen.id, { templateId }, authorCookie);
 
 		expect(refused.status).toBe(409);
 	});

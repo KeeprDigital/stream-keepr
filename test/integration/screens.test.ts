@@ -29,7 +29,7 @@ describe('screens API', () => {
 			body: {
 				name: 'Main Overlay',
 				slug: testSlug,
-				currentMode: 'idle',
+				currentMode: 'background',
 			},
 		});
 
@@ -37,7 +37,7 @@ describe('screens API', () => {
 		expect(res._data).toMatchObject({
 			name: 'Main Overlay',
 			slug: testSlug,
-			currentMode: 'idle',
+			currentMode: 'background',
 			eventId,
 		});
 		expect(res._data.id).toBeTypeOf('number');
@@ -90,7 +90,7 @@ describe('screens API', () => {
 			body: {
 				name: 'Delete Me Screen',
 				slug: 'integration-delete-me',
-				currentMode: 'idle',
+				currentMode: 'background',
 			},
 		});
 

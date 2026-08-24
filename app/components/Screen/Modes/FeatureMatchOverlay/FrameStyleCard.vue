@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import type { AnimationEffectName, AnimationEffectParamField, AnimationEffectParamValue, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { AnimationEffectName, AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
 import {
 	ANIMATION_EFFECT_CATALOGUE,
-	ANIMATION_EFFECT_VALUES,
-	animationEffectDefaultParams,
-	animationEffectParamFields,
 	featureMatchOverlayFrameAnimationConfigSchema,
-	isAnimationEffectHexColor,
 	parseFrameAnimationConfig,
 } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
@@ -27,11 +23,6 @@ const BACKGROUND_IMAGE_FIT_OPTIONS = [
 	{ label: 'Contain', value: 'contain' },
 	{ label: 'Fill', value: 'fill' },
 ] satisfies Array<{ label: string; value: NonNullable<FeatureMatchLayoutFrameConfig['backgroundImageFit']> }>;
-const ANIMATION_EFFECT_OPTIONS = ANIMATION_EFFECT_VALUES.map(value => ({
-	value,
-	label: ANIMATION_EFFECT_CATALOGUE[value].label,
-}));
-
 /**
  * A pre-rebuild or unknown-effect config starts the editor over from the
  * defaults rather than carrying fields no effect declares into its next write.
@@ -41,10 +32,10 @@ const animation = computed(() =>
 	?? featureMatchOverlayFrameAnimationConfigSchema.parse(DEFAULT_FRAME_ANIMATION),
 );
 
-const animationParamFields = computed(() => animationEffectParamFields(animation.value.effect));
-const animationParams = computed<Record<string, AnimationEffectParamValue>>(() =>
-	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, AnimationEffectParamValue>,
-);
+const animationSelection = computed<AnimationEffectSelection>(() => ({
+	effect: animation.value.effect,
+	params: animation.value.params,
+} as AnimationEffectSelection));
 const mediaBackground = computed<ScreenMediaBackgroundConfig>(() => ({
 	...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
 	...(props.config.layout.frame.mediaBackground ?? {}),
@@ -58,43 +49,13 @@ function updateAnimation(updates: Partial<Pick<FeatureMatchOverlayFrameAnimation
 	updateFrame({ animation: { ...animation.value, ...updates } });
 }
 
-/**
- * Switching effect starts from that effect's schema defaults: params are
- * per-effect, so nothing from the previous effect's bag can carry over.
- */
-function selectAnimationEffect(effect: AnimationEffectName) {
+/** The shared fields own effect switching and param coercion; the Frame adds its own fields back. */
+function applyAnimationSelection(selection: AnimationEffectSelection) {
 	updateFrame({
 		animation: {
 			enabled: animation.value.enabled,
 			opacity: animation.value.opacity,
-			effect,
-		} as FeatureMatchOverlayFrameAnimationConfig,
-	});
-}
-
-function updateAnimationParam(field: AnimationEffectParamField, value: AnimationEffectParamValue | undefined) {
-	let next = value;
-	if (field.control === 'color') {
-		if (next === undefined || next === '')
-			next = field.defaultValue;
-		else if (typeof next !== 'string' || !isAnimationEffectHexColor(next))
-			return;
-	}
-	else if (field.control === 'toggle') {
-		next = next === true;
-	}
-	else {
-		const numeric = Number(next);
-		if (!Number.isFinite(numeric))
-			return;
-		next = Math.min(field.max ?? numeric, Math.max(field.min ?? numeric, numeric));
-	}
-	// The full bag is written back, pinning every current value: a default that
-	// changes in a later release must not restyle a Frame an author has tuned.
-	updateFrame({
-		animation: {
-			...animation.value,
-			params: { ...animationParams.value, [field.key]: next },
+			...selection,
 		} as FeatureMatchOverlayFrameAnimationConfig,
 	});
 }
@@ -179,16 +140,6 @@ function animationSummary() {
 				/>
 
 				<div v-if="animation.enabled" class="grid gap-3 md:grid-cols-2">
-					<UFormField label="Effect">
-						<USelect
-							:model-value="animation.effect"
-							:items="ANIMATION_EFFECT_OPTIONS"
-							value-key="value"
-							size="sm"
-							class="w-full"
-							@update:model-value="selectAnimationEffect($event as AnimationEffectName)"
-						/>
-					</UFormField>
 					<UFormField label="Layer opacity">
 						<UInputNumber
 							:model-value="animation.opacity"
@@ -208,41 +159,10 @@ function animationSummary() {
 					:badge="animationEffectLabel(animation.effect)"
 					:summary="animationSummary()"
 				>
-					<div class="grid gap-3 md:grid-cols-3">
-						<template
-							v-for="field in animationParamFields"
-							:key="`${animation.effect}-${field.key}`"
-						>
-							<ScreenSettingsToggle
-								v-if="field.control === 'toggle'"
-								:label="field.label"
-								:description="field.description"
-								:model-value="Boolean(animationParams[field.key])"
-								@update:model-value="updateAnimationParam(field, $event)"
-							/>
-							<UFormField
-								v-else
-								:label="field.label"
-							>
-								<UIColorPicker
-									v-if="field.control === 'color'"
-									:model-value="String(animationParams[field.key])"
-									:placeholder="String(field.defaultValue)"
-									@update:model-value="updateAnimationParam(field, $event)"
-								/>
-								<UInputNumber
-									v-else
-									:model-value="Number(animationParams[field.key])"
-									:min="field.min"
-									:max="field.max"
-									:step="field.step"
-									size="sm"
-									class="w-full"
-									@update:model-value="updateAnimationParam(field, Number($event))"
-								/>
-							</UFormField>
-						</template>
-					</div>
+					<ScreenAnimationEffectFields
+						:selection="animationSelection"
+						@update:selection="applyAnimationSelection"
+					/>
 				</FeatureMatchOverlayControlSection>
 			</section>
 

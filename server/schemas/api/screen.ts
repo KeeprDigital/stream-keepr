@@ -1,6 +1,6 @@
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
-import type { BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, IdleModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { BackgroundModeConfig, BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -8,7 +8,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
-import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { animationEffectSelectionSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
@@ -251,10 +251,89 @@ const screenMediaBackgroundConfigSchema = z.object({
 	loop: z.boolean(),
 }).strict();
 
+/**
+ * Where a Screen's media comes from: a Graphics Asset Library revision or a
+ * remote URL — the standardised media source shape the Background Screen mints
+ * (#484 adopts it app-wide). The asset branch carries the same facts a media
+ * Graphic Input value does, recorded at the moment of selection.
+ */
+const screenMediaSourceSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('asset'),
+		assetId: z.string().min(1).max(100).transform(graphicAssetId),
+		revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
+		videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+	}).strict(),
+	z.object({
+		kind: z.literal('url'),
+		url: safeMediaUrlSchema,
+	}).strict(),
+]);
+
+/** What every Background Layer owns regardless of type — see `BackgroundLayerBase`. */
+const backgroundLayerShape = {
+	id: z.string().min(1).max(100),
+	enabled: z.boolean(),
+	opacity: opacitySchema,
+};
+
+const backgroundLayerSchema = z.discriminatedUnion('type', [
+	z.object({
+		...backgroundLayerShape,
+		type: z.literal('color'),
+		color: cssColorSchema,
+	}).strict(),
+	z.object({
+		...backgroundLayerShape,
+		type: z.literal('gradient'),
+		gradient: z.string().min(1).max(1000),
+	}).strict(),
+	z.object({
+		...backgroundLayerShape,
+		type: z.literal('image'),
+		source: screenMediaSourceSchema,
+		fit: z.enum(['cover', 'contain', 'fill']),
+	}).strict(),
+	z.object({
+		...backgroundLayerShape,
+		type: z.literal('video'),
+		source: screenMediaSourceSchema,
+		fit: z.enum(['cover', 'contain', 'fill']),
+		playbackRate: finiteNumberSchema.positive().min(0.1).max(16),
+		loop: z.boolean(),
+	}).strict(),
+	z.object({
+		...backgroundLayerShape,
+		type: z.literal('animation'),
+		animation: animationEffectSelectionSchema,
+	}).strict(),
+]);
+
+/**
+ * A guardrail, not a derived cap: a real show stacks a handful of layers, and
+ * the 512 KiB mode-configuration budget is the binding constraint long before
+ * twenty video elements are.
+ */
+const MAX_BACKGROUND_LAYERS = 20;
+
 // Per-mode config schemas
-export const idleModeConfigSchema = z.object({
-	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
-}).strict() satisfies z.ZodType<IdleModeConfig>;
+export const backgroundModeConfigSchema = z.object({
+	/**
+	 * Painter's order: first layer is the bottom of the stack. Both rules live on
+	 * this array field rather than on the mode object, because a field-level rule
+	 * survives the PATCH-schema derivation and an object-level one cannot reach
+	 * that path (see `assertNoUnenforceableModeConfigRules`, #85).
+	 *
+	 * At most one animation layer per Screen: each is its own WebGL context, and
+	 * an OBS browser source is memory-tight. Liftable if a show ever needs two.
+	 */
+	layers: z.array(backgroundLayerSchema)
+		.max(MAX_BACKGROUND_LAYERS)
+		.refine(
+			layers => layers.filter(layer => layer.type === 'animation').length <= 1,
+			'A Background Screen carries at most one animation layer',
+		),
+}).strict() satisfies z.ZodType<BackgroundModeConfig>;
 
 export const cardDisplayConfigSchema = z.object({
 	scale: z.number().min(0.1).max(5).optional(),
@@ -1695,7 +1774,7 @@ export const metagameModeConfigSchema = z.object({
 
 // Map of mode name to its config schema
 export const modeConfigSchemaMap = {
-	'idle': idleModeConfigSchema,
+	'background': backgroundModeConfigSchema,
 	'card': cardModeConfigSchema,
 	'deck': deckModeConfigSchema,
 	'standings': standingsModeConfigSchema,
@@ -1708,7 +1787,7 @@ export const modeConfigSchemaMap = {
 } as const;
 
 export const modeConfigPatchSchemaMap = {
-	'idle': createModeConfigPatchSchema(idleModeConfigSchema),
+	'background': createModeConfigPatchSchema(backgroundModeConfigSchema),
 	'card': createModeConfigPatchSchema(cardModeConfigSchema),
 	'deck': createModeConfigPatchSchema(deckModeConfigSchema),
 	'standings': createModeConfigPatchSchema(standingsModeConfigSchema),

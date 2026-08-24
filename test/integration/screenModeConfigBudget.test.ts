@@ -266,7 +266,7 @@ describe('mode configuration byte total', () => {
 	async function createScreen(slug: string) {
 		const screen = await $fetch(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: `Budget ${slug}`, slug, currentMode: 'idle' },
+			body: { name: `Budget ${slug}`, slug, currentMode: 'background' },
 		});
 		return screen.id as number;
 	}
@@ -283,7 +283,7 @@ describe('mode configuration byte total', () => {
 
 		const failure = await $fetch(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: 'Oversized', slug: 'budget-oversized', currentMode: 'idle', modeConfigs },
+			body: { name: 'Oversized', slug: 'budget-oversized', currentMode: 'background', modeConfigs },
 		}).then(() => null).catch((error: FetchFailure) => error);
 
 		expect(failure?.data?.statusCode).toBe(400);
