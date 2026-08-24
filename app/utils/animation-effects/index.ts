@@ -18,6 +18,7 @@ const effectLoaders: {
 	fog: () => import('./fog'),
 	globe: () => import('./globe'),
 	halo: () => import('./halo'),
+	inkmap: () => import('./inkmap'),
 	net: () => import('./net'),
 	ridgelines: () => import('./ridgelines'),
 	rings: () => import('./rings'),

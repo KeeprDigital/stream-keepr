@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -239,6 +239,24 @@ export const emberAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Inkmap: slow-morphing ink islands on dark paper, drawn like a living map —
+ * a domain-warped noise field thresholded into hard-edged pools with a
+ * luminous rim, ringed by faint topographic contour lines in the surrounding
+ * paper. A new effect (no fork ancestry), so the params carry semantic names
+ * and the defaults are the recorded design's (#473). `coverage` moves the ink
+ * threshold, `contours` counts the iso-lines outside the islands.
+ */
+export const inkmapAnimationParamsSchema = z.strictObject({
+	inkColor: colorParam('Ink color', '#312e81'),
+	edgeColor: colorParam('Edge color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	coverage: numberParam('Coverage', { min: 0.2, max: 0.8, step: 0.05, default: 0.5 }),
+	contours: numberParam('Contour lines', { min: 0, max: 8, step: 1, default: 4 }),
+	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
+/**
  * Ridgelines: stacked mountain-ridge silhouettes receding into the frame, each
  * a drifting 1D-noise profile with a glowing crest line — a joyplot horizon.
  * A new effect (no fork ancestry), so the params carry semantic names and the
@@ -289,6 +307,7 @@ export type EmberAnimationParams = z.output<typeof emberAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
+export type InkmapAnimationParams = z.output<typeof inkmapAnimationParamsSchema>;
 export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
 export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
@@ -304,6 +323,7 @@ export interface AnimationEffectParamsMap {
 	fog: FogAnimationParams;
 	globe: GlobeAnimationParams;
 	halo: HaloAnimationParams;
+	inkmap: InkmapAnimationParams;
 	net: NetAnimationParams;
 	ridgelines: RidgelinesAnimationParams;
 	rings: RingsAnimationParams;
@@ -320,6 +340,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
+	inkmap: { label: 'Inkmap', paramsSchema: inkmapAnimationParamsSchema },
 	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
 	ridgelines: { label: 'Ridgelines', paramsSchema: ridgelinesAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
@@ -385,6 +406,7 @@ const selectionBranches = {
 	fog: z.strictObject({ effect: z.literal('fog'), params: fogAnimationParamsSchema.optional() }),
 	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
 	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
+	inkmap: z.strictObject({ effect: z.literal('inkmap'), params: inkmapAnimationParamsSchema.optional() }),
 	net: z.strictObject({ effect: z.literal('net'), params: netAnimationParamsSchema.optional() }),
 	ridgelines: z.strictObject({ effect: z.literal('ridgelines'), params: ridgelinesAnimationParamsSchema.optional() }),
 	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
@@ -414,6 +436,7 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.fog,
 	selectionBranches.globe,
 	selectionBranches.halo,
+	selectionBranches.inkmap,
 	selectionBranches.net,
 	selectionBranches.ridgelines,
 	selectionBranches.rings,
@@ -461,6 +484,7 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.fog.extend(frameAnimationShape),
 	selectionBranches.globe.extend(frameAnimationShape),
 	selectionBranches.halo.extend(frameAnimationShape),
+	selectionBranches.inkmap.extend(frameAnimationShape),
 	selectionBranches.net.extend(frameAnimationShape),
 	selectionBranches.ridgelines.extend(frameAnimationShape),
 	selectionBranches.rings.extend(frameAnimationShape),

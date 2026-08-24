@@ -24,7 +24,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -52,6 +52,20 @@ describe('animationEffects catalogue', () => {
 			scale: 1,
 			thickness: 0.6,
 			sheen: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships inkmap under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('inkmap')).toEqual({
+			inkColor: '#312e81',
+			edgeColor: '#06b6d4',
+			backgroundColor: '#111111',
+			coverage: 0.5,
+			contours: 4,
+			zoom: 1,
 			speed: 1,
 		});
 	});
