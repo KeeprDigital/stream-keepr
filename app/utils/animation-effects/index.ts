@@ -14,6 +14,7 @@ const effectLoaders: {
 	caustics: () => import('./caustics'),
 	cells: () => import('./cells'),
 	dots: () => import('./dots'),
+	ember: () => import('./ember'),
 	fog: () => import('./fog'),
 	globe: () => import('./globe'),
 	halo: () => import('./halo'),

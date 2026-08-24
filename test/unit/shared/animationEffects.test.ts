@@ -24,8 +24,23 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
+	});
+
+	it('ships ember under its designed defaults', () => {
+		// The first new effect after the ports: no fork ancestry, so the params
+		// carry semantic names (the caustics precedent) and the defaults are the
+		// tenth-slice design's, not a pre-rebuild bag's.
+		expect(animationEffectDefaultParams('ember')).toEqual({
+			emberColor: '#f97316',
+			coreColor: '#fef3c7',
+			backgroundColor: '#111111',
+			density: 1,
+			size: 1,
+			intensity: 1,
+			speed: 1,
+		});
 	});
 
 	it('ports cells and ripple under the defaults the pre-rebuild application shipped', () => {
