@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -204,6 +204,24 @@ export const ringsAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Shards: a pane of shattered glass — slowly shifting Voronoi facets, each
+ * tinted a hashed shade between the background and the shard colour, crack
+ * lines glowing along every facet boundary, and an occasional glint sweeping
+ * across facets whose hashed orientation catches it. A new effect (no fork
+ * ancestry), so the params carry semantic names and the defaults are the
+ * recorded design's (#473). `size` scales the facets, `intensity` the crack
+ * glow and the glint together.
+ */
+export const shardsAnimationParamsSchema = z.strictObject({
+	shardColor: colorParam('Shard color', '#312e81'),
+	edgeColor: colorParam('Edge color', '#7dd3fc'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	size: numberParam('Shard size', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
+/**
  * Waves: a lit, choppy water plane — the first mesh-backend port from the
  * retired fork, under its old name. `backgroundColor` survives the port even
  * though the mesh never reads it: the fork's base cleared the canvas to it,
@@ -238,6 +256,58 @@ export const emberAnimationParamsSchema = z.strictObject({
 	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 });
 
+/**
+ * Inkmap: slow-morphing ink islands on dark paper, drawn like a living map —
+ * a domain-warped noise field thresholded into hard-edged pools with a
+ * luminous rim, ringed by faint topographic contour lines in the surrounding
+ * paper. A new effect (no fork ancestry), so the params carry semantic names
+ * and the defaults are the recorded design's (#473). `coverage` moves the ink
+ * threshold, `contours` counts the iso-lines outside the islands.
+ */
+export const inkmapAnimationParamsSchema = z.strictObject({
+	inkColor: colorParam('Ink color', '#312e81'),
+	edgeColor: colorParam('Edge color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	coverage: numberParam('Coverage', { min: 0.2, max: 0.8, step: 0.05, default: 0.5 }),
+	contours: numberParam('Contour lines', { min: 0, max: 8, step: 1, default: 4 }),
+	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
+/**
+ * Ridgelines: stacked mountain-ridge silhouettes receding into the frame, each
+ * a drifting 1D-noise profile with a glowing crest line — a joyplot horizon.
+ * A new effect (no fork ancestry), so the params carry semantic names and the
+ * defaults are the recorded design's (#473). `ridges` counts the silhouettes,
+ * `relief` scales every profile's amplitude, `glow` the crest-line halo.
+ */
+export const ridgelinesAnimationParamsSchema = z.strictObject({
+	crestColor: colorParam('Crest color', '#06b6d4'),
+	fillColor: colorParam('Ridge color', '#1e1b4b'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	ridges: numberParam('Ridge count', { min: 3, max: 12, step: 1, default: 7 }),
+	relief: numberParam('Relief', { min: 0.2, max: 2, step: 0.1, default: 1 }),
+	glow: numberParam('Crest glow', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
+/**
+ * Weave: an interlaced fabric of undulating warp and weft threads crossing
+ * over and under in strict alternation, with a soft sheen sweeping the cloth.
+ * A new effect (no fork ancestry), so the params carry semantic names and the
+ * defaults are the recorded design's (#473). `scale` sets the thread grid,
+ * `thickness` the band width within it, `sheen` the travelling highlight.
+ */
+export const weaveAnimationParamsSchema = z.strictObject({
+	warpColor: colorParam('Warp color', '#7c3aed'),
+	weftColor: colorParam('Weft color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	scale: numberParam('Weave scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	thickness: numberParam('Thread width', { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }),
+	sheen: numberParam('Sheen', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -255,10 +325,14 @@ export type EmberAnimationParams = z.output<typeof emberAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
+export type InkmapAnimationParams = z.output<typeof inkmapAnimationParamsSchema>;
 export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
+export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
+export type ShardsAnimationParams = z.output<typeof shardsAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
+export type WeaveAnimationParams = z.output<typeof weaveAnimationParamsSchema>;
 
 export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
@@ -268,10 +342,14 @@ export interface AnimationEffectParamsMap {
 	fog: FogAnimationParams;
 	globe: GlobeAnimationParams;
 	halo: HaloAnimationParams;
+	inkmap: InkmapAnimationParams;
 	net: NetAnimationParams;
+	ridgelines: RidgelinesAnimationParams;
 	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
+	shards: ShardsAnimationParams;
 	waves: WavesAnimationParams;
+	weave: WeaveAnimationParams;
 }
 
 export const ANIMATION_EFFECT_CATALOGUE = {
@@ -282,10 +360,14 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
+	inkmap: { label: 'Inkmap', paramsSchema: inkmapAnimationParamsSchema },
 	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
+	ridgelines: { label: 'Ridgelines', paramsSchema: ridgelinesAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
+	shards: { label: 'Shards', paramsSchema: shardsAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
+	weave: { label: 'Weave', paramsSchema: weaveAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
 
 export function animationEffectDefaultParams<Effect extends AnimationEffectName>(
@@ -345,10 +427,14 @@ const selectionBranches = {
 	fog: z.strictObject({ effect: z.literal('fog'), params: fogAnimationParamsSchema.optional() }),
 	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
 	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
+	inkmap: z.strictObject({ effect: z.literal('inkmap'), params: inkmapAnimationParamsSchema.optional() }),
 	net: z.strictObject({ effect: z.literal('net'), params: netAnimationParamsSchema.optional() }),
+	ridgelines: z.strictObject({ effect: z.literal('ridgelines'), params: ridgelinesAnimationParamsSchema.optional() }),
 	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
 	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
+	shards: z.strictObject({ effect: z.literal('shards'), params: shardsAnimationParamsSchema.optional() }),
 	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
+	weave: z.strictObject({ effect: z.literal('weave'), params: weaveAnimationParamsSchema.optional() }),
 } satisfies Record<AnimationEffectName, z.ZodObject>;
 
 /**
@@ -372,10 +458,14 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.fog,
 	selectionBranches.globe,
 	selectionBranches.halo,
+	selectionBranches.inkmap,
 	selectionBranches.net,
+	selectionBranches.ridgelines,
 	selectionBranches.rings,
 	selectionBranches.ripple,
+	selectionBranches.shards,
 	selectionBranches.waves,
+	selectionBranches.weave,
 ]);
 
 /** The stored/authored selection shape: params sparse, defaults implied. */
@@ -417,10 +507,14 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.fog.extend(frameAnimationShape),
 	selectionBranches.globe.extend(frameAnimationShape),
 	selectionBranches.halo.extend(frameAnimationShape),
+	selectionBranches.inkmap.extend(frameAnimationShape),
 	selectionBranches.net.extend(frameAnimationShape),
+	selectionBranches.ridgelines.extend(frameAnimationShape),
 	selectionBranches.rings.extend(frameAnimationShape),
 	selectionBranches.ripple.extend(frameAnimationShape),
+	selectionBranches.shards.extend(frameAnimationShape),
 	selectionBranches.waves.extend(frameAnimationShape),
+	selectionBranches.weave.extend(frameAnimationShape),
 ]);
 
 /**

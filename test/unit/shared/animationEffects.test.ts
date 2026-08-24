@@ -24,8 +24,63 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
+	});
+
+	it('ships ridgelines under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('ridgelines')).toEqual({
+			crestColor: '#06b6d4',
+			fillColor: '#1e1b4b',
+			backgroundColor: '#111111',
+			ridges: 7,
+			relief: 1,
+			glow: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships weave under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('weave')).toEqual({
+			warpColor: '#7c3aed',
+			weftColor: '#06b6d4',
+			backgroundColor: '#111111',
+			scale: 1,
+			thickness: 0.6,
+			sheen: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships inkmap under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('inkmap')).toEqual({
+			inkColor: '#312e81',
+			edgeColor: '#06b6d4',
+			backgroundColor: '#111111',
+			coverage: 0.5,
+			contours: 4,
+			zoom: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships shards under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('shards')).toEqual({
+			shardColor: '#312e81',
+			edgeColor: '#7dd3fc',
+			backgroundColor: '#111111',
+			size: 1,
+			intensity: 1,
+			speed: 1,
+		});
 	});
 
 	it('ships ember under its designed defaults', () => {

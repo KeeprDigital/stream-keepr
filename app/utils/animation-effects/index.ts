@@ -18,10 +18,14 @@ const effectLoaders: {
 	fog: () => import('./fog'),
 	globe: () => import('./globe'),
 	halo: () => import('./halo'),
+	inkmap: () => import('./inkmap'),
 	net: () => import('./net'),
+	ridgelines: () => import('./ridgelines'),
 	rings: () => import('./rings'),
 	ripple: () => import('./ripple'),
+	shards: () => import('./shards'),
 	waves: () => import('./waves'),
+	weave: () => import('./weave'),
 };
 
 export async function loadAnimationEffect<Effect extends AnimationEffectName>(
