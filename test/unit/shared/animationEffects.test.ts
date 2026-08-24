@@ -31,7 +31,7 @@ describe('animationEffects catalogue', () => {
 	it('ships ember under its designed defaults', () => {
 		// The first new effect after the ports: no fork ancestry, so the params
 		// carry semantic names (the caustics precedent) and the defaults are the
-		// tenth-slice design's, not a pre-rebuild bag's.
+		// recorded design's, not a pre-rebuild bag's.
 		expect(animationEffectDefaultParams('ember')).toEqual({
 			emberColor: '#f97316',
 			coreColor: '#fef3c7',

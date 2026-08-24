@@ -50,9 +50,13 @@ void main() {
 		vec2 homeCell = floor(p);
 		vec2 f = p - homeCell;
 
-		// An ember's halo can reach past its own cell (up to half a cell of core
-		// at the largest size, with the halo at 3.2 times that), so each fragment
-		// gathers from its 3x3 neighbourhood rather than clipping at cell walls.
+		// An ember's halo can reach past its own cell, so each fragment gathers
+		// from its 3x3 neighbourhood rather than clipping at cell walls. The
+		// halo radius is capped at one cell to keep every reachable halo inside
+		// that neighbourhood: the nearest ungathered ember sits at least 1.06
+		// cells away (offset 2, minus in-cell placement and sway), so past the
+		// cap — size above ~3.7 — the core keeps growing while the halo
+		// saturates instead of stepping at the neighbourhood edge.
 		for (int cy = -1; cy <= 1; cy++) {
 			for (int cx = -1; cx <= 1; cx++) {
 				vec2 offset = vec2(float(cx), float(cy));
@@ -77,7 +81,7 @@ void main() {
 				// A tight hot core resolving toward the core colour, inside a
 				// wider soft halo of the ember colour.
 				float coreRadius = 0.085 * size;
-				float haloRadius = coreRadius * 3.2;
+				float haloRadius = min(coreRadius * 3.2, 1.0);
 				float dist = length(f - emberPosition);
 				float halo = pow(clamp(1.0 - dist / haloRadius, 0.0, 1.0), 3.0);
 				float core = pow(clamp(1.0 - dist / coreRadius, 0.0, 1.0), 2.0);
