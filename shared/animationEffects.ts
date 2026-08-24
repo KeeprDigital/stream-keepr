@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -221,6 +221,23 @@ export const wavesAnimationParamsSchema = z.strictObject({
 	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 0.85 }),
 });
 
+/**
+ * Ember: drifting embers rising through a dark frame — the first new effect
+ * after the ports, so the params carry semantic names (the caustics precedent)
+ * rather than a fork bag's. `density` thins or crowds the field without
+ * resizing any ember; `size` and `intensity` scale one ember's glow radius and
+ * brightness.
+ */
+export const emberAnimationParamsSchema = z.strictObject({
+	emberColor: colorParam('Ember color', '#f97316'),
+	coreColor: colorParam('Core color', '#fef3c7'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	density: numberParam('Density', { min: 0.2, max: 3, step: 0.1, default: 1 }),
+	size: numberParam('Ember size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -234,6 +251,7 @@ export const causticsAnimationParamsSchema = z.strictObject({
 export type FogAnimationParams = z.output<typeof fogAnimationParamsSchema>;
 export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSchema>;
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
+export type EmberAnimationParams = z.output<typeof emberAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
@@ -246,6 +264,7 @@ export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
 	cells: CellsAnimationParams;
 	dots: DotsAnimationParams;
+	ember: EmberAnimationParams;
 	fog: FogAnimationParams;
 	globe: GlobeAnimationParams;
 	halo: HaloAnimationParams;
@@ -259,6 +278,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	caustics: { label: 'Caustics', paramsSchema: causticsAnimationParamsSchema },
 	cells: { label: 'Cells', paramsSchema: cellsAnimationParamsSchema },
 	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
+	ember: { label: 'Ember', paramsSchema: emberAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
@@ -321,6 +341,7 @@ const selectionBranches = {
 	caustics: z.strictObject({ effect: z.literal('caustics'), params: causticsAnimationParamsSchema.optional() }),
 	cells: z.strictObject({ effect: z.literal('cells'), params: cellsAnimationParamsSchema.optional() }),
 	dots: z.strictObject({ effect: z.literal('dots'), params: dotsAnimationParamsSchema.optional() }),
+	ember: z.strictObject({ effect: z.literal('ember'), params: emberAnimationParamsSchema.optional() }),
 	fog: z.strictObject({ effect: z.literal('fog'), params: fogAnimationParamsSchema.optional() }),
 	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
 	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
@@ -347,6 +368,7 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.caustics,
 	selectionBranches.cells,
 	selectionBranches.dots,
+	selectionBranches.ember,
 	selectionBranches.fog,
 	selectionBranches.globe,
 	selectionBranches.halo,
@@ -391,6 +413,7 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.caustics.extend(frameAnimationShape),
 	selectionBranches.cells.extend(frameAnimationShape),
 	selectionBranches.dots.extend(frameAnimationShape),
+	selectionBranches.ember.extend(frameAnimationShape),
 	selectionBranches.fog.extend(frameAnimationShape),
 	selectionBranches.globe.extend(frameAnimationShape),
 	selectionBranches.halo.extend(frameAnimationShape),
