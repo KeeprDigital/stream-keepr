@@ -7,6 +7,7 @@ import {
 import { archetypeService } from '~~/server/services/archetype';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
 import { meleeRoundSnapshotService } from '~~/server/services/meleeRoundSnapshot';
+import { MeleeTransportError } from '~~/server/services/meleeTransport';
 import { playerService } from '~~/server/services/player';
 import { playerDeckService } from '~~/server/services/playerDeck';
 
@@ -70,9 +71,30 @@ export async function syncMatchesFromMelee(
 	// boundary in workflows.ts before this operation runs.
 	const meleeRoundId = Number(round.externalId);
 
+	// Melee.gg returns 404 from the round list endpoints when a round has not
+	// been paired yet. Only a never-synced round may treat that as "not ready";
+	// once a round holds a synced snapshot, a 404 is an upstream anomaly and
+	// must not be allowed to read as an empty authoritative refresh.
+	const notReadyOn404 = async <T>(fetchItems: Promise<T[]>): Promise<T[]> => {
+		try {
+			return await fetchItems;
+		}
+		catch (error) {
+			if (
+				round.lastSyncedAt == null
+				&& error instanceof MeleeTransportError
+				&& error.category === 'http'
+				&& error.upstreamStatus === 404
+			) {
+				throw new MeleeRoundNotReadyError(round);
+			}
+			throw error;
+		}
+	};
+
 	const [meleeMatches, standings, allPlayers, allDecks] = await Promise.all([
-		melee.fetchMatchesByRound(meleeRoundId),
-		melee.fetchStandingsByRound(meleeRoundId),
+		notReadyOn404(melee.fetchMatchesByRound(meleeRoundId)),
+		notReadyOn404(melee.fetchStandingsByRound(meleeRoundId)),
 		// Historical rounds may still reference players no longer present in the
 		// current Melee snapshot, so retain inactive identities for mapping.
 		playerSvc.findAll({ eventId, includeInactive: true }),
