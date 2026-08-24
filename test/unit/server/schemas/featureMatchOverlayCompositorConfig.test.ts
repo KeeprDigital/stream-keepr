@@ -70,7 +70,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 				...config.layout,
 				frame: {
 					...config.layout.frame,
-					animation: { enabled: true, effect: 'globe', opacity: 0.6 },
+					animation: { enabled: true, effect: 'not-an-effect', opacity: 0.6 },
 				},
 			},
 		});

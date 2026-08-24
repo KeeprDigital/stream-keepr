@@ -15,6 +15,7 @@ const effectLoaders: {
 	cells: () => import('./cells'),
 	dots: () => import('./dots'),
 	fog: () => import('./fog'),
+	globe: () => import('./globe'),
 	halo: () => import('./halo'),
 	net: () => import('./net'),
 	rings: () => import('./rings'),

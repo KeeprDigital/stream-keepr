@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'halo', 'net', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -132,6 +132,29 @@ describe('animationEffects catalogue', () => {
 		});
 	});
 
+	it('ports globe under the defaults the pre-rebuild application shipped', () => {
+		// Every param is read by the renderer. One label is corrected in the
+		// port: the pre-rebuild editor called `size` "Point size", but the fork
+		// only ever read it as the wireframe globe's radius scale.
+		expect(animationEffectDefaultParams('globe')).toEqual({
+			color: '#7c3aed',
+			color2: '#06b6d4',
+			backgroundColor: '#111111',
+			size: 1,
+			points: 10,
+			maxDistance: 22,
+			spacing: 16,
+			showDots: true,
+		});
+		const fields = animationEffectParamFields('globe');
+		expect(fields.find(field => field.key === 'size')?.label).toBe('Globe size');
+		expect(fields.find(field => field.key === 'showDots')).toMatchObject({
+			control: 'toggle',
+			defaultValue: true,
+			description: 'Render point markers around the globe.',
+		});
+	});
+
 	it('fills every parameter from the schema alone, so an empty config renders', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const defaults = animationEffectDefaultParams(effect);
@@ -218,7 +241,7 @@ describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
 	it('refuses an effect outside the closed vocabulary rather than approximating it', () => {
 		const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse({
 			enabled: true,
-			effect: 'globe',
+			effect: 'not-an-effect',
 			opacity: 0.5,
 		});
 		expect(outcome.success).toBe(false);
@@ -249,7 +272,7 @@ describe('storedFrameAnimationConfigSchema', () => {
 	it('still refuses a current-shape config naming an effect outside the vocabulary', () => {
 		const outcome = storedFrameAnimationConfigSchema.safeParse({
 			enabled: true,
-			effect: 'globe',
+			effect: 'not-an-effect',
 			opacity: 0.5,
 		});
 		expect(outcome.success).toBe(false);

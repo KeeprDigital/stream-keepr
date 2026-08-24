@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -149,6 +149,26 @@ export const dotsAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Globe: a wireframe sphere with radial accents and pole lines turning over a
+ * waving, line-strung point plane, ported from the retired fork under its old
+ * name. Every param is read. Net's vertex-colour restoration applies here too —
+ * the fork passed the removed `THREE.VertexColors` constant, so its connection
+ * lines rendered flat white on air; the port enables vertex colours. One label
+ * is corrected: the pre-rebuild editor called `size` "Point size", but the
+ * fork only ever read it as the wireframe globe's radius scale.
+ */
+export const globeAnimationParamsSchema = z.strictObject({
+	color: colorParam('Primary color', '#7c3aed'),
+	color2: colorParam('Secondary color', '#06b6d4'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	size: numberParam('Globe size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+	points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
+	maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+	spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
+	showDots: toggleParam('Point markers', 'Render point markers around the globe.', true),
+});
+
+/**
  * Net: a slowly orbiting point field strung with distance-faded connection
  * lines, ported from the retired fork under its old name. Every param is read:
  * `color` drives the lines and the point markers, `backgroundColor` the clear
@@ -216,6 +236,7 @@ export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSch
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
+export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
 export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
@@ -226,6 +247,7 @@ export interface AnimationEffectParamsMap {
 	cells: CellsAnimationParams;
 	dots: DotsAnimationParams;
 	fog: FogAnimationParams;
+	globe: GlobeAnimationParams;
 	halo: HaloAnimationParams;
 	net: NetAnimationParams;
 	rings: RingsAnimationParams;
@@ -238,6 +260,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	cells: { label: 'Cells', paramsSchema: cellsAnimationParamsSchema },
 	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
+	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
 	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
@@ -325,6 +348,11 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 		...frameAnimationShape,
 		effect: z.literal('fog'),
 		params: fogAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('globe'),
+		params: globeAnimationParamsSchema.optional(),
 	}),
 	z.strictObject({
 		...frameAnimationShape,
