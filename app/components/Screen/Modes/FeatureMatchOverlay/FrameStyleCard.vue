@@ -42,8 +42,8 @@ const animation = computed(() =>
 );
 
 const animationParamFields = computed(() => animationEffectParamFields(animation.value.effect));
-const animationParams = computed<Record<string, string | number>>(() =>
-	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, string | number>,
+const animationParams = computed<Record<string, string | number | boolean>>(() =>
+	(animation.value.params ?? animationEffectDefaultParams(animation.value.effect)) as Record<string, string | number | boolean>,
 );
 const mediaBackground = computed<ScreenMediaBackgroundConfig>(() => ({
 	...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
@@ -72,13 +72,16 @@ function selectAnimationEffect(effect: AnimationEffectName) {
 	});
 }
 
-function updateAnimationParam(field: AnimationEffectParamField, value: string | number | undefined) {
+function updateAnimationParam(field: AnimationEffectParamField, value: string | number | boolean | undefined) {
 	let next = value;
 	if (field.control === 'color') {
 		if (next === undefined || next === '')
 			next = field.defaultValue;
 		else if (typeof next !== 'string' || !isAnimationEffectHexColor(next))
 			return;
+	}
+	else if (field.control === 'toggle') {
+		next = next === true;
 	}
 	else {
 		const numeric = Number(next);
@@ -206,28 +209,38 @@ function animationSummary() {
 					:summary="animationSummary()"
 				>
 					<div class="grid gap-3 md:grid-cols-3">
-						<UFormField
+						<template
 							v-for="field in animationParamFields"
 							:key="`${animation.effect}-${field.key}`"
-							:label="field.label"
 						>
-							<UIColorPicker
-								v-if="field.control === 'color'"
-								:model-value="String(animationParams[field.key])"
-								:placeholder="String(field.defaultValue)"
+							<ScreenSettingsToggle
+								v-if="field.control === 'toggle'"
+								:label="field.label"
+								:model-value="Boolean(animationParams[field.key])"
 								@update:model-value="updateAnimationParam(field, $event)"
 							/>
-							<UInputNumber
+							<UFormField
 								v-else
-								:model-value="Number(animationParams[field.key])"
-								:min="field.min"
-								:max="field.max"
-								:step="field.step"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateAnimationParam(field, Number($event))"
-							/>
-						</UFormField>
+								:label="field.label"
+							>
+								<UIColorPicker
+									v-if="field.control === 'color'"
+									:model-value="String(animationParams[field.key])"
+									:placeholder="String(field.defaultValue)"
+									@update:model-value="updateAnimationParam(field, $event)"
+								/>
+								<UInputNumber
+									v-else
+									:model-value="Number(animationParams[field.key])"
+									:min="field.min"
+									:max="field.max"
+									:step="field.step"
+									size="sm"
+									class="w-full"
+									@update:model-value="updateAnimationParam(field, Number($event))"
+								/>
+							</UFormField>
+						</template>
 					</div>
 				</FeatureMatchOverlayControlSection>
 			</section>
