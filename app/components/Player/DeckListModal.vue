@@ -33,11 +33,8 @@ async function reviewDeck() {
 	await navigateTo(reviewPagePath.value);
 }
 
-const localDeckLists = ref<PlayerDeckList[]>(props.deckLists.map(deck => structuredClone(deck)));
-
-watch(() => props.deckLists, (nextDeckLists) => {
-	localDeckLists.value = nextDeckLists.map(deck => structuredClone(deck));
-}, { deep: true });
+// Props arrive as reactive proxies from useOverlay, so they must not be structuredClone()d.
+const localDeckLists = computed(() => props.deckLists);
 
 // Send deck to screen functionality (only when playerId is provided)
 const { hasDeckScreens, deckScreens, sendToScreen, sendToFirstDeckScreen } = useSendDeckToScreen();
