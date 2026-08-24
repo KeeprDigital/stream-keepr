@@ -53,6 +53,18 @@ The bounded, synchronized visual change between profiles in a Social Profile Rot
 **Deck List**:
 A Player's submitted cards for a game and Phase.
 
+**Mainboard**:
+The starting portion of a Deck List — the cards a Player begins each game with.
+
+**Sideboard**:
+The reserve portion of a Deck List, exchanged with Mainboard cards between games.
+
+**Board Selection**:
+The choice of which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. One shared vocabulary for every deck-rendering surface — deck screens, deck-list graphics, and Metagame card filtering alike.
+
+**Deck List Graphic Item**:
+A feature-match-context Graphic Item that renders one Player's Sideboard as cards or a text list within its authored bounds, bound to one player side. It carries no framing, labels, or board choice of its own; an empty or unavailable Sideboard renders nothing.
+
 **Melee Sync**:
 The workflow that imports and refreshes Event structure, Players, Deck Lists, standings, Matches, and Rounds from Melee.gg.
 
@@ -290,7 +302,7 @@ The bounded behaviour when a Text Graphic Item's rendered text exceeds its autho
 Text does not render with visible overflow beyond its authored bounds.
 
 **Graphic Item**:
-A visual part within a Broadcast Graphic or Feature Match Layout, such as text, media, or a shape. Graphic Items are edited individually but are not taken on or off air independently of their containing composition.
+A visual part within a Broadcast Graphic or Feature Match Layout, such as text, media, or a shape. Graphic Items are edited individually but are not taken on or off air independently of their containing composition. An item whose live data says it has nothing to show — an absent life total, a hidden sideboard — renders nothing while remaining on air; a data-driven empty state is not an off-air item.
 _Avoid_: Element
 
 **Graphic Item Definition**:
