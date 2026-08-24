@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'fog', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -149,6 +149,27 @@ export const dotsAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Net: a slowly orbiting point field strung with distance-faded connection
+ * lines, ported from the retired fork under its old name. Every param is read:
+ * `color` drives the lines and the point markers, `backgroundColor` the clear
+ * colour and the line gradient's dark end, and the rest the field's
+ * construction. One knowing restoration rides the port: the fork passed the
+ * `THREE.VertexColors` constant that three had removed, so on air its
+ * per-vertex line gradient silently degraded to flat default-white lines and
+ * "Line color" coloured only the dots — proven by running the fork against
+ * three 0.185 in unattended Chromium. The port enables vertex colours, so the
+ * lines render the gradient the fork wrote and the label describes.
+ */
+export const netAnimationParamsSchema = z.strictObject({
+	color: colorParam('Line color', '#7c3aed'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
+	maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+	spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
+	showDots: toggleParam('Point markers', 'Render point markers at net intersections.', true),
+});
+
+/**
  * Rings: a tumbling stack of extruded arc segments in the fork's fixed
  * thirteen-colour palette, ported from the retired fork under its old name.
  * Only the background colour survives as a param: the fork's renderer sampled
@@ -195,6 +216,7 @@ export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSch
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
 export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
+export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
@@ -205,6 +227,7 @@ export interface AnimationEffectParamsMap {
 	dots: DotsAnimationParams;
 	fog: FogAnimationParams;
 	halo: HaloAnimationParams;
+	net: NetAnimationParams;
 	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
 	waves: WavesAnimationParams;
@@ -216,6 +239,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
+	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
@@ -306,6 +330,11 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 		...frameAnimationShape,
 		effect: z.literal('halo'),
 		params: haloAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('net'),
+		params: netAnimationParamsSchema.optional(),
 	}),
 	z.strictObject({
 		...frameAnimationShape,
