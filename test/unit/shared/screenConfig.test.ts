@@ -15,6 +15,7 @@ import {
 	DEFAULT_TOPCUT_CONFIG,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
+	resolveDeckBoards,
 } from '~~/shared/types/screenConfig';
 
 describe('getDefaultConfigForMode', () => {
@@ -77,9 +78,11 @@ describe('getDisplayDefaultsForMode', () => {
 		});
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
-			listColumns: DEFAULT_DECK_CONFIG.listColumns,
-			showSideboard: DEFAULT_DECK_CONFIG.showSideboard,
+			board: DEFAULT_DECK_CONFIG.board,
+			mainboard: DEFAULT_DECK_CONFIG.mainboard,
+			sideboard: DEFAULT_DECK_CONFIG.sideboard,
 		});
+		expect('playerId' in getDisplayDefaultsForMode('deck')).toBe(false);
 
 		expect(getDisplayDefaultsForMode('feature-match')).toMatchObject({
 			showNames: DEFAULT_FEATURE_MATCH_CONFIG.showNames,
@@ -97,6 +100,28 @@ describe('getDisplayDefaultsForMode', () => {
 			columns: DEFAULT_PLAYER_HISTORY_CONFIG.columns,
 			showHeader: DEFAULT_PLAYER_HISTORY_CONFIG.showHeader,
 		});
+	});
+});
+
+describe('resolveDeckBoards', () => {
+	it('resolves an empty config to the defaults', () => {
+		expect(resolveDeckBoards({})).toEqual({
+			board: 'full',
+			sideboardPlacement: 'beside',
+			mainboard: DEFAULT_DECK_CONFIG.mainboard,
+			sideboard: DEFAULT_DECK_CONFIG.sideboard,
+		});
+	});
+
+	it('completes a partial board block from its default block', () => {
+		const resolved = resolveDeckBoards({
+			board: 'sideboard',
+			sideboard: { columns: 6 },
+		});
+
+		expect(resolved.board).toBe('sideboard');
+		expect(resolved.sideboard).toEqual({ ...DEFAULT_DECK_CONFIG.sideboard, columns: 6 });
+		expect(resolved.mainboard).toEqual(DEFAULT_DECK_CONFIG.mainboard);
 	});
 });
 
@@ -120,9 +145,30 @@ describe('default config constants', () => {
 		expect(DEFAULT_DECK_CONFIG.playerId).toBeNull();
 	});
 
+	it('default deck config shows the full deck with per-board layout blocks', () => {
+		expect(DEFAULT_DECK_CONFIG.board).toBe('full');
+		expect(DEFAULT_DECK_CONFIG.sideboardPlacement).toBe('beside');
+		expect(DEFAULT_DECK_CONFIG.mainboard).toEqual({
+			view: 'grid',
+			columns: 4,
+			listColumns: 2,
+			cardSize: 'medium',
+			dynamicCardSize: false,
+			cardGap: 8,
+			stackOverlap: 15,
+		});
+		expect(DEFAULT_DECK_CONFIG.sideboard).toEqual({
+			view: 'stack',
+			columns: 4,
+			listColumns: 2,
+			cardSize: 'medium',
+			dynamicCardSize: false,
+			cardGap: 8,
+			stackOverlap: 15,
+		});
+	});
+
 	it('default deck config includes Highlander display defaults', () => {
-		expect(DEFAULT_DECK_CONFIG.listColumns).toBe(2);
-		expect(DEFAULT_DECK_CONFIG.showSideboard).toBe(true);
 		expect(DEFAULT_DECK_CONFIG.showDeckMetaPill).toBe(true);
 		expect(DEFAULT_DECK_CONFIG.deckMetaPillSize).toBe('medium');
 		expect(DEFAULT_DECK_CONFIG.deckMetaPillTextColor).toBe('#111827');

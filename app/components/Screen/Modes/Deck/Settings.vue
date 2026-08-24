@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
+import type { BoardSelection, DeckBoardView, SideboardPlacement } from '~~/shared/types/enums';
+import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import {
 	DECK_CARD_SIZE_SELECT_OPTIONS,
 	QUANTITY_POSITION_SELECT_OPTIONS,
 	QUANTITY_SIZE_SELECT_OPTIONS,
-	SIDEBOARD_LAYOUT_SELECT_OPTIONS,
+	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
 } from '~~/shared/utils/selectOptions';
 
 const props = defineProps<{
@@ -49,11 +52,79 @@ const playerOptions = computed(() => {
 	];
 });
 
-// View mode tabs
-const viewModeTabs: TabsItem[] = [
+// Board selection tabs
+const boardTabs: TabsItem[] = [
+	{ label: 'Full deck', value: 'full' },
+	{ label: 'Mainboard', value: 'mainboard' },
+	{ label: 'Sideboard', value: 'sideboard' },
+];
+
+// Per-board view tabs
+const boardViewTabs: TabsItem[] = [
 	{ label: 'Grid', value: 'grid', icon: 'i-lucide-grid-3x3' },
+	{ label: 'Stack', value: 'stack', icon: 'i-lucide-layers' },
 	{ label: 'List', value: 'list', icon: 'i-lucide-list' },
 ];
+
+const resolvedBoards = computed(() => resolveDeckBoards(config.value));
+const board = computed<BoardSelection>(() => resolvedBoards.value.board);
+
+type BoardKey = 'mainboard' | 'sideboard';
+
+interface BoardSection {
+	key: BoardKey;
+	title: string;
+	layout: ResolvedDeckBoardLayout;
+}
+
+const boardSections = computed<BoardSection[]>(() => {
+	const sections: BoardSection[] = [];
+	if (board.value !== 'sideboard') {
+		sections.push({ key: 'mainboard', title: 'Mainboard', layout: resolvedBoards.value.mainboard });
+	}
+	if (board.value !== 'mainboard') {
+		sections.push({ key: 'sideboard', title: 'Sideboard', layout: resolvedBoards.value.sideboard });
+	}
+	return sections;
+});
+
+// The mode-config PATCH replaces a board block wholesale, so every knob change
+// writes the complete resolved block back.
+function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>) {
+	updateConfig({ [key]: { ...resolvedBoards.value[key], ...patch } });
+}
+
+// Empty-sideboard hint (#477/#478): the output renders nothing for an empty
+// sideboard by design, so the control surface is the place that says so.
+const deckCache = usePlayerDeckCache();
+const sideboardEmpty = ref(false);
+const sideboardLookup = createGuardedSequence();
+
+watch([() => config.value.playerId, () => playerStore.players], async ([playerId]) => {
+	const flight = sideboardLookup.begin();
+	sideboardEmpty.value = false;
+	if (!playerId) {
+		return;
+	}
+
+	const player = playerStore.players.find(p => p.id === playerId);
+	if (!player) {
+		return;
+	}
+
+	try {
+		const deck = await deckCache.fetchDeck(playerId, props.eventId, player.updatedAt);
+		if (flight.stale) {
+			return;
+		}
+		sideboardEmpty.value = !!deck && !deck.cards.some(card => card.compartment === 'sideboard');
+	}
+	catch {
+		// The hint is a convenience; a failed deck fetch just leaves it off.
+	}
+}, { immediate: true });
+
+const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sideboardEmpty.value);
 </script>
 
 <template>
@@ -259,36 +330,73 @@ const viewModeTabs: TabsItem[] = [
 
 		<ScreenSettingsCard title="Layout">
 			<UFormField
-				label="View Mode"
-				description="How the deck cards are shown."
+				label="Boards"
+				description="Which boards of the deck are shown."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UISegmentedTabs
-					:items="viewModeTabs"
-					:model-value="config.viewMode"
+					:items="boardTabs"
+					:model-value="board"
 					size="sm"
-					@update:model-value="updateConfig({ viewMode: $event as 'grid' | 'list' })"
+					@update:model-value="updateConfig({ board: $event as BoardSelection })"
+				/>
+			</UFormField>
+
+			<p
+				v-if="showEmptySideboardHint"
+				data-testid="empty-sideboard-hint"
+				class="text-xs text-muted"
+			>
+				This player's deck has no sideboard cards, so the output shows nothing for the sideboard.
+			</p>
+
+			<UFormField
+				v-if="board === 'full'"
+				label="Sideboard Placement"
+				description="Where the sideboard sits relative to the mainboard."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<USelect
+					:model-value="resolvedBoards.sideboardPlacement"
+					:items="SIDEBOARD_PLACEMENT_SELECT_OPTIONS"
+					class="w-48"
+					@update:model-value="updateConfig({ sideboardPlacement: $event as SideboardPlacement })"
+				/>
+			</UFormField>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard
+			v-for="section in boardSections"
+			:key="section.key"
+			:title="`${section.title} Layout`"
+		>
+			<UFormField
+				label="View"
+				:description="`How the ${section.title.toLowerCase()} cards are shown.`"
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UISegmentedTabs
+					:items="boardViewTabs"
+					:model-value="section.layout.view"
+					size="sm"
+					@update:model-value="updateBoardLayout(section.key, { view: $event as DeckBoardView })"
 				/>
 			</UFormField>
 
 			<USeparator />
 
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				{{ config.viewMode === 'grid' ? 'Grid Layout' : 'List Layout' }}
-			</p>
-
-			<template v-if="config.viewMode === 'grid'">
+			<template v-if="section.layout.view === 'grid'">
 				<UFormField
 					label="Grid Columns"
 					description="Number of columns in the card grid."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
-						:model-value="config.columns"
+						:model-value="section.layout.columns"
 						:min="1"
 						:max="12"
 						class="w-32"
-						@update:model-value="updateConfig({ columns: Number($event) })"
+						@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
 					/>
 				</UFormField>
 
@@ -298,11 +406,11 @@ const viewModeTabs: TabsItem[] = [
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
-						:model-value="config.cardGap"
+						:model-value="section.layout.cardGap"
 						:min="0"
 						:max="48"
 						class="w-32"
-						@update:model-value="updateConfig({ cardGap: Number($event) })"
+						@update:model-value="updateBoardLayout(section.key, { cardGap: Number($event) })"
 					/>
 				</UFormField>
 
@@ -311,92 +419,70 @@ const viewModeTabs: TabsItem[] = [
 				<ScreenSettingsToggle
 					label="Dynamic Card Size"
 					description="Cards automatically fill the available column width."
-					:model-value="config.dynamicCardSize"
-					@update:model-value="updateConfig({ dynamicCardSize: $event })"
+					:model-value="section.layout.dynamicCardSize"
+					@update:model-value="updateBoardLayout(section.key, { dynamicCardSize: $event })"
 				/>
 
 				<UFormField
-					v-if="!config.dynamicCardSize"
+					v-if="!section.layout.dynamicCardSize"
 					label="Card Size"
 					description="Fixed card size when dynamic sizing is disabled."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<USelect
-						:model-value="config.cardSize"
+						:model-value="section.layout.cardSize"
 						:items="DECK_CARD_SIZE_SELECT_OPTIONS"
 						class="w-32"
-						@update:model-value="updateConfig({ cardSize: $event })"
+						@update:model-value="updateBoardLayout(section.key, { cardSize: $event })"
+					/>
+				</UFormField>
+			</template>
+
+			<template v-else-if="section.layout.view === 'stack'">
+				<UFormField
+					label="Card Size"
+					description="Size of the stacked cards."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<USelect
+						:model-value="section.layout.cardSize"
+						:items="DECK_CARD_SIZE_SELECT_OPTIONS"
+						class="w-32"
+						@update:model-value="updateBoardLayout(section.key, { cardSize: $event })"
 					/>
 				</UFormField>
 
-				<USeparator />
+				<UFormField
+					label="Stack Visible %"
+					description="Percentage of each card visible when stacked (5-50%)."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="section.layout.stackOverlap"
+						:min="5"
+						:max="50"
+						:step="1"
+						class="w-32"
+						@update:model-value="updateBoardLayout(section.key, { stackOverlap: Number($event) })"
+					/>
+				</UFormField>
 			</template>
 
 			<template v-else>
 				<UFormField
 					label="List Columns"
-					description="Number of columns in each deck list section."
+					description="Number of columns in the list."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
-						:model-value="config.listColumns"
+						:model-value="section.layout.listColumns"
 						:min="1"
 						:max="4"
 						class="w-32"
-						@update:model-value="updateConfig({ listColumns: Number($event) })"
+						@update:model-value="updateBoardLayout(section.key, { listColumns: Number($event) })"
 					/>
 				</UFormField>
-
-				<USeparator />
 			</template>
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Deck Sections
-			</p>
-
-			<ScreenSettingsToggle
-				label="Show Mainboard"
-				description="Show the main deck cards."
-				:model-value="config.showMainboard"
-				@update:model-value="updateConfig({ showMainboard: $event })"
-			/>
-
-			<ScreenSettingsToggle
-				label="Show Sideboard"
-				description="Show the sideboard as a separate section."
-				:model-value="config.showSideboard"
-				@update:model-value="updateConfig({ showSideboard: $event })"
-			/>
-
-			<UFormField
-				v-if="config.viewMode === 'grid' && config.showSideboard !== false"
-				label="Sideboard Layout"
-				description="How the sideboard is shown."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.sideboardLayout"
-					:items="SIDEBOARD_LAYOUT_SELECT_OPTIONS"
-					class="w-48"
-					@update:model-value="updateConfig({ sideboardLayout: $event })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="config.viewMode === 'grid' && config.showSideboard !== false && config.sideboardLayout === 'stack'"
-				label="Stack Visible %"
-				description="Percentage of each card visible when stacked (5-50%)."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.stackOverlap"
-					:min="5"
-					:max="50"
-					:step="1"
-					class="w-32"
-					@update:model-value="updateConfig({ stackOverlap: Number($event) })"
-				/>
-			</UFormField>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Card Badges">

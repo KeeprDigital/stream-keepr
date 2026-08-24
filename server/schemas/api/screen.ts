@@ -20,9 +20,10 @@ import {
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
+	BOARD_SELECTION_VALUES,
 	CARD_ANIMATION_SPEED_VALUES,
+	DECK_BOARD_VIEW_VALUES,
 	DECK_CARD_SIZE_VALUES,
-	DECK_VIEW_MODE_VALUES,
 	HORIZONTAL_ALIGN_VALUES,
 	METAGAME_ARCHETYPE_COLUMN_KEY_VALUES,
 	METAGAME_CARD_COLUMN_KEY_VALUES,
@@ -38,7 +39,7 @@ import {
 	REVEAL_TRIGGER_VALUES,
 	SCREEN_COLOR_MODE_VALUES,
 	SCREEN_COMMAND_VALUES,
-	SIDEBOARD_LAYOUT_VALUES,
+	SIDEBOARD_PLACEMENT_VALUES,
 	STANDINGS_COLUMN_KEY_VALUES,
 	STANDINGS_VIEW_MODE_VALUES,
 	VERTICAL_ALIGN_VALUES,
@@ -195,11 +196,12 @@ function createModeConfigPatchSchema<T extends z.ZodRawShape>(schema: z.ZodObjec
  * ──────────────────────────────────────────────── */
 
 // Shared enums
-const deckViewModeSchema = z.enum(DECK_VIEW_MODE_VALUES);
+const deckBoardViewSchema = z.enum(DECK_BOARD_VIEW_VALUES);
 const deckCardSizeSchema = z.enum(DECK_CARD_SIZE_VALUES);
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
 const quantitySizeSchema = z.enum(QUANTITY_SIZE_VALUES);
-const sideboardLayoutSchema = z.enum(SIDEBOARD_LAYOUT_VALUES);
+const boardSelectionSchema = z.enum(BOARD_SELECTION_VALUES);
+const sideboardPlacementSchema = z.enum(SIDEBOARD_PLACEMENT_VALUES);
 const cardAnimationSpeedSchema = z.enum(CARD_ANIMATION_SPEED_VALUES);
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
@@ -346,12 +348,24 @@ export const cardModeConfigSchema = cardDisplayConfigSchema.extend({
 	featureMatchId: z.number().int().positive().nullable().optional(),
 }).strict();
 
-export const deckModeConfigSchema = z.object({
-	playerId: z.number().int().positive().nullable(),
-	viewMode: deckViewModeSchema,
+// One board's layout block. Both boards share the shape; visibility is the
+// `board` enum's concern, so a block carries no show/hide of its own.
+const deckBoardLayoutConfigSchema = z.object({
+	view: deckBoardViewSchema.optional(),
 	columns: z.number().int().min(1).max(20).optional(),
 	listColumns: z.number().int().min(1).max(4).optional(),
 	cardSize: deckCardSizeSchema.optional(),
+	dynamicCardSize: z.boolean().optional(),
+	cardGap: z.number().min(0).optional(),
+	stackOverlap: z.number().min(0).optional(),
+}).strict();
+
+export const deckModeConfigSchema = z.object({
+	playerId: z.number().int().positive().nullable(),
+	board: boardSelectionSchema.optional(),
+	sideboardPlacement: sideboardPlacementSchema.optional(),
+	mainboard: deckBoardLayoutConfigSchema.optional(),
+	sideboard: deckBoardLayoutConfigSchema.optional(),
 	showQuantities: z.boolean().optional(),
 	showDeckName: z.boolean().optional(),
 	showDeckColors: z.boolean().optional(),
@@ -378,12 +392,6 @@ export const deckModeConfigSchema = z.object({
 	quantitySize: quantitySizeSchema.optional(),
 	quantityTextColor: z.string().max(50).optional(),
 	quantityBgColor: z.string().max(50).optional(),
-	dynamicCardSize: z.boolean().optional(),
-	cardGap: z.number().min(0).optional(),
-	showMainboard: z.boolean().optional(),
-	showSideboard: z.boolean().optional(),
-	sideboardLayout: sideboardLayoutSchema.optional(),
-	stackOverlap: z.number().min(0).optional(),
 }).strict();
 
 const standingsColumnConfigSchema = z.object({

@@ -115,7 +115,10 @@ describe('screenDeckDisplay', () => {
 	beforeEach(() => {
 		mutableConfig = {
 			playerId: 1,
-			viewMode: 'grid',
+			board: 'full',
+			sideboardPlacement: 'beside',
+			mainboard: { view: 'grid', columns: 4, listColumns: 2 },
+			sideboard: { view: 'stack', stackOverlap: 15 },
 			showDeckName: true,
 			showDeckColors: true,
 			showDeckStats: true,
@@ -125,10 +128,6 @@ describe('screenDeckDisplay', () => {
 			deckMetaPillBgColor: 'linear-gradient(red, blue)',
 			deckMetaPillAccentColor: '#ff00aa',
 			deckMetaPillBorderColor: '#fedcba',
-			listColumns: 2,
-			showMainboard: true,
-			showSideboard: true,
-			sideboardLayout: 'stack',
 			showHighlanderTotal: true,
 			showHighlanderPointedCards: true,
 			highlanderPointedCardsSize: 'large',
@@ -184,8 +183,8 @@ describe('screenDeckDisplay', () => {
 	it('uses shared screen-level text colors for general deck text', async () => {
 		mutableConfig = {
 			...mutableConfig,
-			viewMode: 'list',
-			listColumns: 2,
+			mainboard: { view: 'list', listColumns: 2 },
+			sideboard: { view: 'list', listColumns: 2 },
 		};
 		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
 
@@ -199,28 +198,115 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.findAll('.type')[0]!.attributes('style')).toContain('color: #aabbcc;');
 	});
 
-	it('uses configurable columns for each list section and can hide the sideboard', async () => {
+	it('gives each board its own list columns and hides the sideboard at board: mainboard', async () => {
 		mutableConfig = {
 			...mutableConfig,
-			viewMode: 'list',
-			listColumns: 3,
-			showSideboard: true,
+			mainboard: { view: 'list', listColumns: 3 },
+			sideboard: { view: 'list', listColumns: 2 },
 		};
 		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
 
 		let wrapper = await mountComponent();
 
 		expect(wrapper.get('[data-testid="mainboard-list"]').attributes('style')).toContain('repeat(3, minmax(0, 1fr))');
-		expect(wrapper.get('[data-testid="sideboard-list"]').attributes('style')).toContain('repeat(3, minmax(0, 1fr))');
+		expect(wrapper.get('[data-testid="sideboard-list"]').attributes('style')).toContain('repeat(2, minmax(0, 1fr))');
 		expect(wrapper.text()).toContain('Sideboard');
 
 		mutableConfig = {
 			...mutableConfig,
-			showSideboard: false,
+			board: 'mainboard',
 		};
 
 		wrapper = await mountComponent();
 		expect(wrapper.find('[data-testid="sideboard-list"]').exists()).toBe(false);
+	});
+
+	it('gives each board its own grid columns at board: full', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: { view: 'grid', columns: 4 },
+			sideboard: { view: 'grid', columns: 6 },
+			sideboardPlacement: 'below',
+		};
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="mainboard-grid"]').attributes('style')).toContain('repeat(4, minmax(0, 1fr))');
+		expect(wrapper.get('[data-testid="sideboard-grid"]').attributes('style')).toContain('repeat(6, minmax(0, 1fr))');
+	});
+
+	it('sizes beside boards proportionally to their column counts', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: { view: 'grid', columns: 4 },
+			sideboard: { view: 'grid', columns: 2 },
+		};
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow: 4');
+		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain('flex-grow: 2');
+	});
+
+	it('keeps a beside stacked sideboard content-sized while the mainboard flexes', async () => {
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow:');
+		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '').not.toContain('flex-grow:');
+	});
+
+	it('renders a stacked sideboard as a vertical strip beside the mainboard and a row below it', async () => {
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+			createCard({ name: 'Flusterstorm', compartment: 'sideboard' }),
+		];
+
+		let wrapper = await mountComponent();
+		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="sideboard-stack-row"]').exists()).toBe(false);
+
+		mutableConfig = {
+			...mutableConfig,
+			sideboardPlacement: 'below',
+		};
+
+		wrapper = await mountComponent();
+		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="sideboard-stack-row"]').exists()).toBe(true);
+	});
+
+	it('fills the frame with a lone sideboard, whose stack reads as a horizontal row', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			board: 'sideboard',
+		};
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+			createCard({ name: 'Flusterstorm', compartment: 'sideboard' }),
+		];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="sideboard-stack-row"]').findAll('[data-testid="deck-card"]')).toHaveLength(2);
+	});
+
+	it('renders no cards at board: sideboard when the sideboard is empty', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			board: 'sideboard',
+		};
+		sideboard.value = [];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="deck-card"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="sideboard-section"]').exists()).toBe(false);
 	});
 
 	it('does not render token metadata on the Deck display', async () => {
@@ -260,7 +346,7 @@ describe('screenDeckDisplay', () => {
 	it('shows list-view point badges only when enabled', async () => {
 		mutableConfig = {
 			...mutableConfig,
-			viewMode: 'list',
+			mainboard: { view: 'list' },
 			showHighlanderPoints: true,
 		};
 
