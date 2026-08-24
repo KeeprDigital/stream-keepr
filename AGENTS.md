@@ -15,6 +15,15 @@ Those failures move with dependencies, bundling, `nuxt.config.ts`, and server
 code, so a change touching any of the four is one `pnpm verify` covers and the
 test loop does not.
 
+## Orphaned workerd
+
+A dev server or test run that dies to SIGKILL or SIGHUP strands its workerd
+process (miniflare's exit hooks cover only SIGINT/SIGTERM), leaving it holding
+memory and sqlite locks on `.wrangler` persist state. `pnpm dev`, `pnpm
+preview`, `pnpm worker:smoke`, and the integration suite reap these on start;
+`pnpm reap` sweeps them on demand — it kills only workerd whose parent is gone,
+so it is always safe to run. Stop dev servers with SIGTERM or SIGINT.
+
 ## Agent skills
 
 ### Issue tracker

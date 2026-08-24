@@ -1,3 +1,4 @@
+import { main as reapStrandedWorkerd } from '../../scripts/reap-workerd.mjs';
 import { createTest, exposeContextToEnv, fetch } from './client';
 import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationRealtimeConfigured, integrationSetupOptions } from './helpers';
 import { prepareIntegrationD1 } from './integrationD1';
@@ -40,6 +41,10 @@ export async function setup() {
 	// skipped tests rather than having to work back to it from a bare skip mark.
 	if (!integrationRealtimeConfigured)
 		console.warn(INTEGRATION_REALTIME_SKIP_NOTICE);
+
+	// A workerd stranded by a killed session still holds sqlite locks on the
+	// persist directories; sweep them before touching that state.
+	await reapStrandedWorkerd();
 
 	await resetIntegrationWranglerState();
 	await prepareIntegrationD1();
