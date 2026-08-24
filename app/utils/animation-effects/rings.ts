@@ -2,6 +2,7 @@ import type { RingsAnimationParams } from '~~/shared/animationEffects';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { randomBetween, randomInt } from './random';
 import { createSceneEffect } from './sceneEffect';
 
 /**
@@ -53,14 +54,6 @@ const CAMERA_TARGET_Y = 125;
 const CAMERA_REMAINING_PER_SECOND = 0.98 ** 60;
 const CAMERA_Z = 200;
 const CAMERA_LOOK_TARGET = { x: 0, y: 25, z: 7 };
-
-function randomBetween(start: number, end: number): number {
-	return start + Math.random() * (end - start);
-}
-
-function randomInt(start: number, end: number): number {
-	return Math.floor(start + Math.random() * (end - start + 1));
-}
 
 function samplePalette(): string {
 	return RINGS_PALETTE[Math.floor(Math.random() * RINGS_PALETTE.length)]!;
