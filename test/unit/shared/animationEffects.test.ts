@@ -22,7 +22,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'halo', 'ripple']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'fog', 'halo', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -58,6 +58,19 @@ describe('animationEffects catalogue', () => {
 			xOffset: 0,
 			yOffset: 0,
 			speed: 1,
+		});
+	});
+
+	it('ports waves under the defaults the pre-rebuild application shipped', () => {
+		// Only the params the waves renderer reads survive the port: the fork's
+		// editor also offered a background colour its mesh never referenced. The
+		// zoom default is the pre-rebuild application's waves-specific fallback.
+		expect(animationEffectDefaultParams('waves')).toEqual({
+			color: '#7c3aed',
+			shininess: 30,
+			waveHeight: 20,
+			waveSpeed: 1,
+			zoom: 0.85,
 		});
 	});
 
@@ -144,7 +157,7 @@ describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
 	it('refuses an effect outside the closed vocabulary rather than approximating it', () => {
 		const outcome = featureMatchOverlayFrameAnimationConfigSchema.safeParse({
 			enabled: true,
-			effect: 'waves',
+			effect: 'globe',
 			opacity: 0.5,
 		});
 		expect(outcome.success).toBe(false);
@@ -175,7 +188,7 @@ describe('storedFrameAnimationConfigSchema', () => {
 	it('still refuses a current-shape config naming an effect outside the vocabulary', () => {
 		const outcome = storedFrameAnimationConfigSchema.safeParse({
 			enabled: true,
-			effect: 'waves',
+			effect: 'globe',
 			opacity: 0.5,
 		});
 		expect(outcome.success).toBe(false);
