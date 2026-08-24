@@ -164,7 +164,7 @@ export function maximalFeatureMatchLayoutDocument(
 		glow: { color: '#22c55e', size: 12, opacity: 0.5 },
 	};
 
-	// Non-default values on every Deck List field, so the round trip proves they
+	// Non-default values on every Deck List Item field, so the round trip proves they
 	// travel rather than being reconstructed from Definition defaults.
 	sideboard.playerSide = 'player2';
 	sideboard.view = 'grid';

@@ -26,7 +26,7 @@ import { fitGraphicTextFontSize } from '~/modules/graphics/textFit';
  * hierarchy. A Clock and a Player Life are text whose string the host resolved, so
  * they take the same paragraph, typography, and `shrink` measurement a Text
  * Graphic Item does. A Game Wins indicator is either that same text or a row of
- * painted Shape Geometry boxes. A Deck List's list view is that same resolved
+ * painted Shape Geometry boxes. A Deck List Item's list view is that same resolved
  * text again, one row per card; its grid view is a set of card cells, each an
  * image or a painted placeholder surface. Only the life-change animation is
  * local, because it fires on a value arriving from the live session rather than
@@ -392,7 +392,7 @@ watch(
 		</div>
 
 		<!--
-			A Deck List's grid cards. Art is contained, never cropped; a card with no
+			A Deck List Item's grid cards. Art is contained, never cropped; a card with no
 			art paints a 63:88 placeholder surface carrying its own name, so the count
 			stays honest. The quantity badge appears only when the model offers one.
 			Empty alt for the same reason a Media Graphic Item's: a broken image would

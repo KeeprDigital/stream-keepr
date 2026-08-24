@@ -345,7 +345,7 @@ const selectedTypography = computed<GraphicTypography | null>(() => {
 	}
 	if (item.type === 'game-wins')
 		return item.displayMode === 'number' ? item.typography : null;
-	// A Deck List paints text only in its list view; the grid renders cards.
+	// A Deck List Item paints text only in its list view; the grid renders cards.
 	if (item.type === 'deck-list')
 		return item.view === 'list' ? item.typography : null;
 	return item.typography;
@@ -2285,7 +2285,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 
 		<!--
 			A Media Graphic Item paints an asset, a Social Network Icon paints its
-			application vector, and a Deck List renders cards, so none is offered a
+			application vector, and a Deck List Item renders cards, so none is offered a
 			surface. Every other kind gets them three times over — its own surface,
 			and the two that paint a win box before and after the Player wins it.
 		-->

@@ -1417,6 +1417,13 @@ const DECK_LIST_CARD_ASPECT = 63 / 88;
  */
 const DECK_LIST_MIN_FONT_SIZE = 12;
 
+/**
+ * The floor for a grid cell's own text — placeholder name and quantity badge —
+ * which scales with the computed card size rather than shrinking to fit, so it
+ * is a separate floor from the list view's.
+ */
+const DECK_LIST_CARD_MIN_FONT_SIZE = 9;
+
 /** What a placeholder card paints where no art resolved: a dark face, outlined. */
 const DECK_LIST_PLACEHOLDER_SURFACE_STYLE: GraphicSurfaceStyle = {
 	fill: { type: 'solid', color: '#1e293b' },
@@ -1465,7 +1472,7 @@ function deckListCardDescriptor(
 	layout: { cardWidth: number; cardHeight: number },
 ): GraphicDeckListCardRenderDescriptor {
 	const size = { width: layout.cardWidth, height: layout.cardHeight };
-	const nameFontSize = Math.max(9, Math.round(layout.cardWidth * 0.14));
+	const nameFontSize = Math.max(DECK_LIST_CARD_MIN_FONT_SIZE, Math.round(layout.cardWidth * 0.14));
 
 	return {
 		name: card.name,

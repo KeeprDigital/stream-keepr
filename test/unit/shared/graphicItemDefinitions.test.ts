@@ -121,7 +121,7 @@ describe('graphicItemDefinitions', () => {
 			.toBe('Player 2 wins • number');
 	});
 
-	it('creates a sideboard-only Deck List for the first player, as a list with quantities', () => {
+	it('creates a sideboard-only Deck List Item for the first player, as a list with quantities', () => {
 		// Sideboard-only at v1, so the config surface is deliberately lean: the side,
 		// the view, the quantity gate, and the typography the list view renders with.
 		// No board field, and none of the Deck mode's styling carries over.

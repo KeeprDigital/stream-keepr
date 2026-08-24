@@ -275,7 +275,7 @@ function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 
 /**
  * The Graphic Surface Style of an item that can carry one. A Media Graphic Item
- * paints an asset and a Deck List renders cards rather than a surface, so both
+ * paints an asset and a Deck List Item renders cards rather than a surface, so both
  * are narrowed away.
  */
 function surfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
@@ -891,7 +891,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ type: 'game-wins', playerSide: 'player2' });
 		});
 
-		it('chooses the Player a Deck List reads', async () => {
+		it('chooses the Player a Deck List Item reads', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([contextItem('deck-list')]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'deck-list' },
@@ -2089,7 +2089,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ showQuantities: false });
 		});
 
-		it('offers a Deck List typography only in the list view, and never a Text Overflow Policy', async () => {
+		it('offers a Deck List Item typography only in the list view, and never a Text Overflow Policy', async () => {
 			// Typography drives the list view's rows; the grid view renders cards, so
 			// offering it there would be a block of controls that change nothing on
 			// screen. Overflow is a fixed shrink-then-clip, so no policy is authored.
@@ -2105,7 +2105,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(numberField(grid, 'Font size')).toBeUndefined();
 		});
 
-		it('offers a Deck List no Graphic Surface Style of its own', async () => {
+		it('offers a Deck List Item no Graphic Surface Style of its own', async () => {
 			// It renders cards only; framing and backgrounds come from other items.
 			const wrapper = await mountKind('deck-list');
 

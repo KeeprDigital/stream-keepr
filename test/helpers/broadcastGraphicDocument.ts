@@ -237,7 +237,7 @@ export function maximalBroadcastGraphicDocument(
 		glow: { color: '#22c55e', size: 12, opacity: 0.5 },
 	};
 
-	// A Deck List carries no optional fields of its own beyond the shared base, so
+	// A Deck List Item carries no optional fields of its own beyond the shared base, so
 	// non-default values are what prove the fields travel rather than being
 	// reconstructed from Definition defaults.
 	sideboard.playerSide = 'player2';

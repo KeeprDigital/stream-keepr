@@ -308,7 +308,7 @@ const NON_PAINTING_KEYS = new Set([
 	'WebkitLineClamp',
 	'whiteSpace',
 	'width',
-	// A Deck List's grid view lays its cards out; pure geometry, like the flex keys.
+	// A Deck List Item's grid view lays its cards out; pure geometry, like the flex keys.
 	'alignContent',
 	'gridAutoRows',
 	'gridTemplateColumns',
@@ -523,7 +523,7 @@ function itemPaints(item: GraphicItemRenderDescriptor, prefix = ''): KeyPaint[] 
 		...(item.surface ? surfacePaints(item.surface, path) : []),
 		...(item.media ? mediaPaints(item.media, path) : []),
 		...(item.icon ? stylePaints(item.icon.style, `${path}.icon`) : []),
-		// A Deck List's grid cards are painted subtrees like any other: the cell box,
+		// A Deck List Item's grid cards are painted subtrees like any other: the cell box,
 		// the art or its placeholder surface and name, and the quantity badge.
 		...(item.deckList?.cards ?? []).flatMap((card, index) => [
 			...stylePaints(card.style, `${path}.deckList[${index}]`),
@@ -1754,7 +1754,7 @@ describe('graphicsCompositionRenderModel', () => {
 			})).toThrow(/textSegments\[0\]/);
 		});
 
-		it('paints a Deck List white in the Key Output — cells, placeholders, names, badges, and art alpha', () => {
+		it('paints a Deck List Item white in the Key Output — cells, placeholders, names, badges, and art alpha', () => {
 			const featureMatch: GraphicsFeatureMatchContext = {
 				clockDisplayTime: '12:34',
 				player1: {
