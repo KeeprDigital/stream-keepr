@@ -193,8 +193,8 @@ export function createGlobeDelegate(): SceneEffectDelegate<GlobeAnimationParams>
 
 		update: ({ elapsedSeconds }) => {
 			for (const position of positions)
-				position.y = 2 * Math.sin(position.x / 10 + WAVE_RATE * elapsedSeconds + position.z / 10 * 0.5);
-			lines?.update(positions, current);
+				position.y = 2 * Math.sin(position.x / 10 + WAVE_RATE * elapsedSeconds + position.z / 20);
+			lines!.update(positions, current);
 
 			ball.rotation.set(
 				BALL_ROTATION.x * elapsedSeconds,
