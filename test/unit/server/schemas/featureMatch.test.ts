@@ -201,6 +201,27 @@ describe('featureMatchCommandSchema', () => {
 		}).success).toBe(true);
 	});
 
+	it('accepts SetSideboardRevealed with a strict boolean and rejects anything else', () => {
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'reveal-ok',
+			type: 'SetSideboardRevealed',
+			payload: { player: 'player1', revealed: true },
+			baseSequence: 1,
+		}).success).toBe(true);
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'reveal-coerced',
+			type: 'SetSideboardRevealed',
+			payload: { player: 'player1', revealed: 1 },
+			baseSequence: 1,
+		}).success).toBe(false);
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'reveal-bad-side',
+			type: 'SetSideboardRevealed',
+			payload: { player: 'playerX', revealed: true },
+			baseSequence: 1,
+		}).success).toBe(false);
+	});
+
 	it('admits exactly the batchable command types as Batch sub-commands', () => {
 		// The batchable list exists as a type-level const and as this zod union;
 		// nothing derives one from the other, so this pins them together.

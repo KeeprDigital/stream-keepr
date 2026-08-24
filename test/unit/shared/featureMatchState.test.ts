@@ -22,6 +22,11 @@ describe('createInitialPlayerFeatureMatchState', () => {
 		const state = createInitialPlayerFeatureMatchState(40);
 		expect(state.lifeTotal).toBe(40);
 	});
+
+	it('creates player with the sideboard hidden', () => {
+		const state = createInitialPlayerFeatureMatchState();
+		expect(state.sideboardRevealed).toBe(false);
+	});
 });
 
 describe('createInitialClockState', () => {
@@ -109,6 +114,7 @@ describe('resetPlayerFeatureMatchStateForNewGame', () => {
 		gameWins: 2,
 		counters: [{ type: 'poison', value: 3 }],
 		cardsKept: 6,
+		sideboardRevealed: true,
 	};
 
 	it('resets life to default and clears counters', () => {
@@ -136,6 +142,11 @@ describe('resetPlayerFeatureMatchStateForNewGame', () => {
 	it('clears cardsKept regardless of resetCounters', () => {
 		const result = resetPlayerFeatureMatchStateForNewGame(existingState, DEFAULT_STARTING_LIFE, false);
 		expect(result.cardsKept).toBeUndefined();
+	});
+
+	it('preserves sideboardRevealed — the reveal is match-scoped, not game-scoped', () => {
+		const result = resetPlayerFeatureMatchStateForNewGame(existingState);
+		expect(result.sideboardRevealed).toBe(true);
 	});
 });
 

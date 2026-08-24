@@ -231,8 +231,8 @@ describe('graphic Input Binding resolution', () => {
 					activeSession: {
 						sourceSnapshot: { tableNumber: 9, player1: { data: { name: 'Ava R.' } } },
 						currentState: {
-							player1: { lifeTotal: 17, gameWins: 1, counters: [] },
-							player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+							player1: { lifeTotal: 17, gameWins: 1, counters: [], sideboardRevealed: false },
+							player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 							clock: { type: 'countdown', durationMs: 0, elapsedMs: 0, isRunning: false, lastStartedAt: null, countUpAfterCountdown: false },
 							currentGame: 2,
 							turnNumber: 4,

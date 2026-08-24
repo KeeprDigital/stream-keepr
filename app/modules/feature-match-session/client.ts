@@ -37,6 +37,7 @@ export interface FeatureMatchPlayerStatePatch {
 	lifeTotal?: number;
 	counters?: FeatureMatchState['player1']['counters'];
 	cardsKept?: number;
+	sideboardRevealed?: boolean;
 }
 
 /**
@@ -92,6 +93,8 @@ function buildStateUpdateCommands(update: FeatureMatchStateUpdate): FeatureMatch
 			commands.push({ type: 'SetCounters', payload: { player, counters: patch.counters } });
 		if (patch.cardsKept !== undefined)
 			commands.push({ type: 'SetCardsKept', payload: { player, cardsKept: patch.cardsKept } });
+		if (patch.sideboardRevealed !== undefined)
+			commands.push({ type: 'SetSideboardRevealed', payload: { player, revealed: patch.sideboardRevealed } });
 	}
 
 	if (update.clock !== undefined)
@@ -312,6 +315,15 @@ export function useFeatureMatchSessionClient() {
 				commandId: randomCommandId('SetCardsKept'),
 				type: 'SetCardsKept',
 				payload: { player, cardsKept },
+				baseSequence: session.sequence,
+			}));
+		}
+		if (update.sideboardRevealed !== undefined) {
+			const revealed = update.sideboardRevealed;
+			result = await sendSlotCommand(eventId, slotId, session => ({
+				commandId: randomCommandId('SetSideboardRevealed'),
+				type: 'SetSideboardRevealed',
+				payload: { player, revealed },
 				baseSequence: session.sequence,
 			}));
 		}

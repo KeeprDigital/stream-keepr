@@ -128,7 +128,7 @@ describe('feature match edit state modal', () => {
 
 	it('includes cards kept only when set, and never claims an untouched field', async () => {
 		const wrapper = await mountModal({}, {
-			player2: { lifeTotal: 20, gameWins: 0, counters: [], cardsKept: 6 },
+			player2: { lifeTotal: 20, gameWins: 0, counters: [], cardsKept: 6, sideboardRevealed: false },
 		});
 
 		await wrapper.get('[data-testid="state-cards-player1"]').setValue('5');

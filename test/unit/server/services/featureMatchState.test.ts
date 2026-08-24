@@ -137,6 +137,40 @@ describe('feature match session reducer', () => {
 		expect(state.player2.cardsKept).toBe(5);
 	});
 
+	it('sets sideboardRevealed per player as an absolute setter', () => {
+		const snapshot = createSnapshot();
+		let state = createInitialFeatureMatchState();
+
+		state = reduce(state, snapshot, 'SetSideboardRevealed', { player: 'player1', revealed: true }).currentState;
+		expect(state.player1.sideboardRevealed).toBe(true);
+		expect(state.player2.sideboardRevealed).toBe(false);
+
+		state = reduce(state, snapshot, 'SetSideboardRevealed', { player: 'player1', revealed: false }).currentState;
+		expect(state.player1.sideboardRevealed).toBe(false);
+	});
+
+	it('keeps sideboardRevealed across game boundaries and re-hides only on match reset', () => {
+		const snapshot = createSnapshot();
+		let state = createInitialFeatureMatchState();
+		state = reduce(state, snapshot, 'SetSideboardRevealed', { player: 'player1', revealed: true }).currentState;
+		state = reduce(state, snapshot, 'SetSideboardRevealed', { player: 'player2', revealed: true }).currentState;
+
+		// A game win moves to the next game; the reveal survives, and nothing auto-reveals.
+		state = reduce(state, snapshot, 'RecordGameWin', { player: 'player1' }).currentState;
+		expect(state.player1.sideboardRevealed).toBe(true);
+		expect(state.player2.sideboardRevealed).toBe(true);
+
+		// A game reset must not touch it either.
+		state = reduce(state, snapshot, 'ResetState', { type: 'game' }).currentState;
+		expect(state.player1.sideboardRevealed).toBe(true);
+		expect(state.player2.sideboardRevealed).toBe(true);
+
+		// Only a match reset re-hides.
+		state = reduce(state, snapshot, 'ResetState', { type: 'match' }).currentState;
+		expect(state.player1.sideboardRevealed).toBe(false);
+		expect(state.player2.sideboardRevealed).toBe(false);
+	});
+
 	it('applies clock events with persisted timestamps', () => {
 		const snapshot = createSnapshot();
 		let state = createInitialFeatureMatchState();
@@ -320,6 +354,8 @@ describe('feature match session reducer', () => {
 				{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
 				{ type: 'SetCounters', payload: { player: 'player1', counters: [{ type: 'poison', value: 3 }] } },
 				{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
+				{ type: 'SetSideboardRevealed', payload: { player: 'player1', revealed: true } },
+				{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
 				{ type: 'SetClock', payload: { at: 6000, targetMs: 30_000 } },
 				{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
 				{ type: 'SetActivePlayer', payload: { player: 'player1' } },
@@ -332,6 +368,8 @@ describe('feature match session reducer', () => {
 		expect(result.currentState.player2.lifeTotal).toBe(9);
 		expect(result.currentState.player1.counters).toEqual([{ type: 'poison', value: 3 }]);
 		expect(result.currentState.player2.cardsKept).toBe(6);
+		expect(result.currentState.player1.sideboardRevealed).toBe(true);
+		expect(result.currentState.player2.sideboardRevealed).toBe(true);
 		expect(result.currentState.firstPlayer).toBe('player2');
 		expect(result.currentState.activePlayer).toBe('player1');
 		expect(result.currentState.turnNumber).toBe(4);

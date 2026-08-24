@@ -453,6 +453,12 @@ export interface GraphicsFeatureMatchPlayerState {
 	 * sideboard. A Deck List Graphic Item renders nothing for either.
 	 */
 	sideboard: ReadonlyArray<GraphicsDeckListCard> | null;
+	/**
+	 * The live show/hide flag (#490): while `false` a Deck List Graphic Item
+	 * renders nothing, the same on-air idiom as an absent sideboard. ANDs with
+	 * the authored `visible` — the flag cannot resurrect an item its author hid.
+	 */
+	sideboardRevealed: boolean;
 }
 
 /**
@@ -1559,8 +1565,12 @@ function deckListDescriptor(
 	featureMatch: GraphicsFeatureMatchContext | undefined,
 ): GraphicItemRenderDescriptor {
 	const base = { id: item.id, label: item.label, kind: 'deck-list' as const };
+	// Absent context (a Broadcast Graphics host) is treated as revealed: visibility
+	// there stays an authoring concern (ADR 0015). With context, the live flag
+	// ANDs with data presence and hidden renders nothing while staying on air.
+	const revealed = featureMatch?.[item.playerSide].sideboardRevealed ?? true;
 	const sideboard = featureMatch?.[item.playerSide].sideboard;
-	if (!sideboard || sideboard.length === 0)
+	if (!revealed || !sideboard || sideboard.length === 0)
 		return { ...base, style: { ...placement, overflow: 'hidden' } };
 
 	if (item.view === 'list') {

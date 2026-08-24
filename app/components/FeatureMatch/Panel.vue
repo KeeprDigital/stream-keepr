@@ -181,6 +181,20 @@ const {
 	getDeckForCurrentPhase,
 });
 
+// ──────────────── Sideboard Reveal ────────────────
+
+// The control is match-level while the model stays per-player (#490): checked
+// only when both sideboards are revealed, and a toggle writes both together.
+const sideboardsRevealed = computed(() =>
+	(matchState.value?.player1.sideboardRevealed ?? false)
+	&& (matchState.value?.player2.sideboardRevealed ?? false));
+
+function handleSideboardRevealChange(revealed: boolean) {
+	if (!eventStore.eventId)
+		return;
+	featureMatchStateStore.setSideboardRevealed(eventStore.eventId, props.match.id, revealed);
+}
+
 // ──────────────── Player Display Config ────────────────
 
 function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
@@ -324,6 +338,15 @@ async function save() {
 						@change="handleTurnChange"
 						@select="handleSelectFirstPlayer"
 					/>
+					<!-- Match-level sideboard reveal: one save for both players (#490) -->
+					<div class="sideboard-toggle">
+						<USwitch
+							:model-value="sideboardsRevealed"
+							label="Show sideboards"
+							size="sm"
+							@update:model-value="handleSideboardRevealChange"
+						/>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -583,6 +606,12 @@ async function save() {
 			z-index: 1;
 			background: var(--ui-bg-elevated);
 			border-radius: 0.5rem;
+		}
+
+		.sideboard-toggle {
+			padding: 0.5rem 0.75rem;
+			display: flex;
+			justify-content: center;
 		}
 	}
 

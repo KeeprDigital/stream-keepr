@@ -16,8 +16,8 @@ import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 
 function state(lifeTotal: number): FeatureMatchState {
 	return {
-		player1: { lifeTotal, gameWins: 1, counters: [] },
-		player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+		player1: { lifeTotal, gameWins: 1, counters: [], sideboardRevealed: false },
+		player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 		clock: {
 			type: 'countdown',
 			durationMs: 0,

@@ -62,6 +62,7 @@ const GUARD_CASES: GuardCase[] = [
 	{ type: 'AdjustLife', valid: { player: 'player1', delta: 3 }, numericFields: ['delta'] },
 	{ type: 'SetLife', valid: { player: 'player1', lifeTotal: 15 }, numericFields: ['lifeTotal'] },
 	{ type: 'SetCardsKept', valid: { player: 'player1', cardsKept: 6 }, numericFields: ['cardsKept'] },
+	{ type: 'SetSideboardRevealed', valid: { player: 'player1', revealed: true }, numericFields: [] },
 	{ type: 'AdjustClock', valid: { at: 5_000, deltaMs: 1_000 }, numericFields: ['at', 'deltaMs'] },
 	{ type: 'SetClock', valid: { at: 5_000, targetMs: 60_000 }, numericFields: ['at', 'targetMs'] },
 	{
@@ -118,7 +119,7 @@ describe('feature match session reducer payload guards', () => {
 	it('rejects player-scoped actions whose player is not a valid side, without throwing', () => {
 		const snapshot = createSnapshot();
 		const state = createBusyState();
-		for (const type of ['AdjustLife', 'SetLife', 'SetCounters', 'SetCardsKept', 'SelectFirstPlayer', 'SetFirstPlayer', 'RecordGameWin', 'UndoGameWin'] as FeatureMatchCommandType[]) {
+		for (const type of ['AdjustLife', 'SetLife', 'SetCounters', 'SetCardsKept', 'SetSideboardRevealed', 'SelectFirstPlayer', 'SetFirstPlayer', 'RecordGameWin', 'UndoGameWin'] as FeatureMatchCommandType[]) {
 			for (const player of ['playerX', null, undefined, {}, 3]) {
 				const result = applyFeatureMatchSessionEvent(state, snapshot, type, { ...GUARD_CASES.find(c => c.type === type)?.valid, player });
 				expect(result.currentState, `${type} with player=${String(player)}`).toEqual(state);
@@ -154,6 +155,18 @@ describe('feature match session reducer payload guards', () => {
 
 		const applied = applyFeatureMatchSessionEvent(state, snapshot, 'SetCounters', { player: 'player1', counters: [{ type: 'energy', value: 4 }] });
 		expect(applied.currentState.player1.counters).toEqual([{ type: 'energy', value: 4 }]);
+	});
+
+	it('rejects SetSideboardRevealed payloads whose revealed flag is not a strict boolean', () => {
+		const snapshot = createSnapshot();
+		const state = createBusyState();
+		for (const revealed of ['true', 1, 0, null, undefined, {}, []]) {
+			const result = applyFeatureMatchSessionEvent(state, snapshot, 'SetSideboardRevealed', { player: 'player1', revealed });
+			expect(result.currentState, `revealed=${String(revealed)}`).toEqual(state);
+		}
+
+		const applied = applyFeatureMatchSessionEvent(state, snapshot, 'SetSideboardRevealed', { player: 'player1', revealed: true });
+		expect(applied.currentState.player1.sideboardRevealed).toBe(true);
 	});
 
 	it('still applies well-formed payloads', () => {

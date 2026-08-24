@@ -138,11 +138,15 @@ export function featureMatchGraphicsContext(
 			lifeTotal: input.matchState?.player1?.lifeTotal ?? null,
 			gameWins: input.matchState?.player1?.gameWins ?? 0,
 			sideboard: null,
+			// Hidden by default (#490): absent state, and states persisted before
+			// the flag existed, both read as not yet revealed.
+			sideboardRevealed: input.matchState?.player1?.sideboardRevealed ?? false,
 		},
 		player2: {
 			lifeTotal: input.matchState?.player2?.lifeTotal ?? null,
 			gameWins: input.matchState?.player2?.gameWins ?? 0,
 			sideboard: null,
+			sideboardRevealed: input.matchState?.player2?.sideboardRevealed ?? false,
 		},
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf
 			?? input.featureMatch?.bestOf

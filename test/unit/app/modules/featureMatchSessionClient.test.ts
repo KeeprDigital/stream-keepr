@@ -80,7 +80,7 @@ describe('feature Match Session client module', () => {
 		const client = useFeatureMatchSessionClient();
 		await client.updateState(1, 2, {
 			player1: { lifeTotal: 12, counters: [{ type: 'poison', value: 3 }] },
-			player2: { lifeTotal: 9, cardsKept: 6, counters: [] },
+			player2: { lifeTotal: 9, cardsKept: 6, counters: [], sideboardRevealed: true },
 			clock: { targetDisplayMs: 30_000 },
 			firstPlayer: 'player2',
 			activePlayer: 'player1',
@@ -103,6 +103,7 @@ describe('feature Match Session client module', () => {
 					{ type: 'SetLife', payload: { player: 'player2', lifeTotal: 9 } },
 					{ type: 'SetCounters', payload: { player: 'player2', counters: [] } },
 					{ type: 'SetCardsKept', payload: { player: 'player2', cardsKept: 6 } },
+					{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
 					{ type: 'SetClock', payload: { targetMs: 30_000 } },
 					{ type: 'SetFirstPlayer', payload: { player: 'player2' } },
 					{ type: 'SetActivePlayer', payload: { player: 'player1' } },
@@ -110,6 +111,38 @@ describe('feature Match Session client module', () => {
 					{ type: 'StartOvertime', payload: { totalTurns: 3 } },
 				],
 			},
+		}));
+	});
+
+	it('sends a match-level sideboard reveal as one Batch of two per-player commands', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.updateState(1, 2, {
+			player1: { sideboardRevealed: true },
+			player2: { sideboardRevealed: true },
+		});
+
+		expect(repository.sendCommand).toHaveBeenCalledTimes(1);
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'Batch',
+			baseSequence: 4,
+			payload: {
+				commands: [
+					{ type: 'SetSideboardRevealed', payload: { player: 'player1', revealed: true } },
+					{ type: 'SetSideboardRevealed', payload: { player: 'player2', revealed: true } },
+				],
+			},
+		}));
+	});
+
+	it('sends a lone sideboardRevealed player update as its primitive command', async () => {
+		const client = useFeatureMatchSessionClient();
+		await client.updatePlayerFeatureMatchState(1, 2, 'player1', { sideboardRevealed: false });
+
+		expect(repository.sendCommand).toHaveBeenCalledTimes(1);
+		expect(repository.sendCommand).toHaveBeenCalledWith(1, 7, expect.objectContaining({
+			type: 'SetSideboardRevealed',
+			payload: { player: 'player1', revealed: false },
+			baseSequence: 4,
 		}));
 	});
 

@@ -73,6 +73,7 @@ interface FeatureMatchSamplePlayerState {
 	lifeTotal: number | null;
 	gameWins: number;
 	sideboard: FeatureMatchSampleDeckListCard[] | null;
+	sideboardRevealed: boolean;
 }
 
 /**
@@ -110,6 +111,8 @@ export const FEATURE_MATCH_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 			{ name: 'Burrenton Forge-Tender', quantity: 4, imageUrl: null },
 			{ name: 'Path to Exile', quantity: 2, imageUrl: null },
 		],
+		// Revealed, so an author judging a Deck List Graphic Item's bounds sees it.
+		sideboardRevealed: true,
 	},
 	player2: {
 		lifeTotal: 4,
@@ -122,6 +125,7 @@ export const FEATURE_MATCH_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 			{ name: 'Cut Down', quantity: 3, imageUrl: null },
 			{ name: 'Disdainful Stroke', quantity: 3, imageUrl: null },
 		],
+		sideboardRevealed: true,
 	},
 	bestOf: 3,
 };

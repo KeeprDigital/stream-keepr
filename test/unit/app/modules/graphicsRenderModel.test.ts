@@ -1096,8 +1096,8 @@ describe('graphicsCompositionRenderModel', () => {
 		];
 		const FEATURE_MATCH: GraphicsFeatureMatchContext = {
 			clockDisplayTime: '12:34',
-			player1: { lifeTotal: 17, gameWins: 1, sideboard: SIDEBOARD },
-			player2: { lifeTotal: null, gameWins: 0, sideboard: null },
+			player1: { lifeTotal: 17, gameWins: 1, sideboard: SIDEBOARD, sideboardRevealed: true },
+			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: true },
 			bestOf: 3,
 		};
 
@@ -1248,6 +1248,22 @@ describe('graphicsCompositionRenderModel', () => {
 				...CANVAS,
 			});
 			expect(model.graphics[0]!.items[0]!.deckList).toBeUndefined();
+		});
+
+		it('renders nothing while the sideboard is not revealed, in both views', () => {
+			// The live flag ANDs with data presence: hidden is a renders-nothing
+			// state while the item stays on air (ADR 0015).
+			const hidden = {
+				...FEATURE_MATCH,
+				player1: { ...FEATURE_MATCH.player1, sideboardRevealed: false },
+			};
+			const list = contextItem(deckList('side-1'), hidden);
+			expect(list.text).toBeUndefined();
+			expect(list.deckList).toBeUndefined();
+
+			const grid = contextItem(deckList('side-1', { view: 'grid' }), hidden);
+			expect(grid.text).toBeUndefined();
+			expect(grid.deckList).toBeUndefined();
 		});
 
 		it('auto-fits the grid view to the authored bounds from the live card count', () => {
@@ -1764,8 +1780,9 @@ describe('graphicsCompositionRenderModel', () => {
 						{ name: 'Rest in Peace', quantity: 2, imageUrl: null },
 						{ name: 'Pithing Needle', quantity: 1, imageUrl: 'https://cards.example/needle.jpg' },
 					],
+					sideboardRevealed: true,
 				},
-				player2: { lifeTotal: null, gameWins: 0, sideboard: null },
+				player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: true },
 				bestOf: 3,
 			};
 			const model = resolveGraphicsCompositionRenderModel({

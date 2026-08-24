@@ -13,6 +13,7 @@ export const FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES = [
 	'SetLife',
 	'SetCounters',
 	'SetCardsKept',
+	'SetSideboardRevealed',
 	'AdjustClock',
 	'SetClock',
 	'StartClock',
@@ -156,6 +157,7 @@ type FeatureMatchPrimitiveSessionCommand
 		| FeatureMatchCommandBase<'SetLife', { player: PlayerSide; lifeTotal: number }>
 		| FeatureMatchCommandBase<'SetCounters', { player: PlayerSide; counters: { type: string; value: number }[] }>
 		| FeatureMatchCommandBase<'SetCardsKept', { player: PlayerSide; cardsKept: number }>
+		| FeatureMatchCommandBase<'SetSideboardRevealed', { player: PlayerSide; revealed: boolean }>
 		| FeatureMatchCommandBase<'AdjustClock', { deltaMs: number }>
 		| FeatureMatchCommandBase<'SetClock', { targetMs: number }>
 		| FeatureMatchCommandBase<'StartClock', Record<string, never>>
@@ -186,6 +188,7 @@ export const FEATURE_MATCH_BATCHABLE_COMMAND_TYPES = [
 	'SetLife',
 	'SetCounters',
 	'SetCardsKept',
+	'SetSideboardRevealed',
 	'SetClock',
 	'SelectFirstPlayer',
 	'SetFirstPlayer',

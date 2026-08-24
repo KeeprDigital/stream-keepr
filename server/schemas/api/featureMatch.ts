@@ -197,6 +197,9 @@ const setCountersPayloadSchema = z
 const setCardsKeptPayloadSchema = z
 	.object({ player: playerSideSchema, cardsKept: z.number().int().nonnegative() })
 	.strict();
+const setSideboardRevealedPayloadSchema = z
+	.object({ player: playerSideSchema, revealed: z.boolean() })
+	.strict();
 const setClockPayloadSchema = z
 	.object({ targetMs: z.number().int().nonnegative() })
 	.strict();
@@ -219,6 +222,7 @@ export const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('SetLife'), payload: setLifePayloadSchema }).strict(),
 	z.object({ type: z.literal('SetCounters'), payload: setCountersPayloadSchema }).strict(),
 	z.object({ type: z.literal('SetCardsKept'), payload: setCardsKeptPayloadSchema }).strict(),
+	z.object({ type: z.literal('SetSideboardRevealed'), payload: setSideboardRevealedPayloadSchema }).strict(),
 	z.object({ type: z.literal('SetClock'), payload: setClockPayloadSchema }).strict(),
 	z.object({ type: z.literal('SelectFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
 	z.object({ type: z.literal('SetFirstPlayer'), payload: firstPlayerPayloadSchema }).strict(),
@@ -259,6 +263,13 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('SetCardsKept'),
 			payload: setCardsKeptPayloadSchema,
+		})
+		.strict(),
+	z
+		.object({
+			...commandBaseSchema,
+			type: z.literal('SetSideboardRevealed'),
+			payload: setSideboardRevealedPayloadSchema,
 		})
 		.strict(),
 	z

@@ -84,8 +84,8 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 			layout: layout([item('clock', 'clock'), item('player-life', 'life'), item('game-wins', 'wins')]),
 			featureMatch: {
 				clockDisplayTime: '4:31',
-				player1: { lifeTotal: 12, gameWins: 2, sideboard: null },
-				player2: { lifeTotal: 20, gameWins: 0, sideboard: null },
+				player1: { lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true },
+				player2: { lifeTotal: 20, gameWins: 0, sideboard: null, sideboardRevealed: true },
 				bestOf: 3,
 			},
 			...CANVAS,
@@ -243,13 +243,14 @@ describe('featureMatchGraphicsContext', () => {
 		// the session in progress draws.
 		const context = featureMatchGraphicsContext({
 			featureMatch: { bestOf: 3, activeSession: { sourceSnapshot: { bestOf: 5 } } },
-			matchState: { player1: { lifeTotal: 12, gameWins: 2 }, player2: { lifeTotal: 20, gameWins: 0 } },
+			matchState: { player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true }, player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false } },
 			displayTime: '4:31',
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
 
 		expect(context.bestOf).toBe(5);
 		// `null` deck data until the deck card data path lands (#491).
-		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null });
+		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true });
+		expect(context.player2.sideboardRevealed).toBe(false);
 	});
 
 	it('reports an absent life total as absent rather than as zero', () => {
@@ -262,5 +263,24 @@ describe('featureMatchGraphicsContext', () => {
 		expect(context.player1.lifeTotal).toBeNull();
 		expect(context.player1.gameWins).toBe(0);
 		expect(context.bestOf).toBe(3);
+	});
+
+	it('treats an absent or legacy session state as sideboards hidden', () => {
+		// Default false: nothing shows before an operator reveals it, including on
+		// states persisted before the flag existed.
+		const absent = featureMatchGraphicsContext({
+			featureMatch: null,
+			matchState: null,
+			displayTime: '0:00',
+		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
+		expect(absent.player1.sideboardRevealed).toBe(false);
+		expect(absent.player2.sideboardRevealed).toBe(false);
+
+		const legacy = featureMatchGraphicsContext({
+			featureMatch: null,
+			matchState: { player1: { lifeTotal: 20, gameWins: 0 }, player2: { lifeTotal: 20, gameWins: 0 } },
+			displayTime: '0:00',
+		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
+		expect(legacy.player1.sideboardRevealed).toBe(false);
 	});
 });

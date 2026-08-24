@@ -287,6 +287,23 @@ function reduceFeatureMatchSessionEvent(
 		};
 	}
 
+	if (type === 'SetSideboardRevealed') {
+		const player = playerSideOf(payload.player);
+		const revealed = payload.revealed;
+		if (!player || typeof revealed !== 'boolean')
+			return null;
+		return {
+			sourceSnapshot,
+			currentState: {
+				...currentState,
+				[player]: {
+					...currentState[player],
+					sideboardRevealed: revealed,
+				},
+			},
+		};
+	}
+
 	if (type === 'AdjustClock') {
 		const at = finiteNumber(payload.at);
 		const deltaDisplayMs = finiteNumber(payload.deltaMs ?? 0);
