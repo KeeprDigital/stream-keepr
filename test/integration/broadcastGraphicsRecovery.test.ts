@@ -73,7 +73,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
 			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
 
-			await setScreenMode(eventId, harness.screen.id, 'idle');
+			await setScreenMode(eventId, harness.screen.id, 'background');
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 
 			const next = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
@@ -100,7 +100,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
 			await harness.send({ commandId: playoutCommandId('take'), type: 'Take', payload: { graphicId: 'a' } });
 
-			await setScreenMode(eventId, harness.screen.id, 'idle');
+			await setScreenMode(eventId, harness.screen.id, 'background');
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 
 			const next = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
@@ -131,7 +131,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			// Now unavailable: longer than the declaration allows, so never acceptable.
 			await setBroadcastGraphicInput(harness, 'a', 'name', 'A'.repeat(50));
 
-			await setScreenMode(eventId, harness.screen.id, 'idle');
+			await setScreenMode(eventId, harness.screen.id, 'background');
 			await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 			const next = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
 
@@ -230,7 +230,7 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-reset-wrong-mode', [
 				integrationBroadcastGraphic('a'),
 			]);
-			await setScreenMode(eventId, harness.screen.id, 'idle');
+			await setScreenMode(eventId, harness.screen.id, 'background');
 
 			const res = await $fetchRaw(
 				`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-session/reset`,

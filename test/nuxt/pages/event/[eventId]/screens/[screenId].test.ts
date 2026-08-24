@@ -125,7 +125,7 @@ function makeScreen(id: number) {
 		id,
 		name: `Screen ${id}`,
 		slug: `screen-${id}`,
-		currentMode: 'idle',
+		currentMode: 'background',
 		screenConfig: {},
 	};
 }

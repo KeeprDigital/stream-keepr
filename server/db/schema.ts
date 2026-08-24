@@ -823,7 +823,7 @@ export const screens = sqliteTable('screens', {
 	name: text('name').notNull(),
 	slug: text('slug').notNull(),
 
-	currentMode: text('current_mode', { enum: SCREEN_MODE_VALUES }).notNull().default('idle'),
+	currentMode: text('current_mode', { enum: SCREEN_MODE_VALUES }).notNull().default('background'),
 	modeConfigs: text('mode_configs', { mode: 'json' }).$type<ModeConfigsMap>(),
 	screenConfig: text('screen_config', { mode: 'json' }).$type<ScreenConfig>(),
 	stateVersion: integer('state_version').notNull().default(0),

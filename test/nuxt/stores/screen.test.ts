@@ -522,7 +522,7 @@ describe('useScreenStore', () => {
 			const created = createMockScreen({ id: 3, name: 'New Screen' });
 			mockRepo.create.mockResolvedValue(created);
 
-			await store.createScreen(1, { name: 'New Screen', slug: 'new-screen', currentMode: 'idle' });
+			await store.createScreen(1, { name: 'New Screen', slug: 'new-screen', currentMode: 'background' });
 
 			expect(store.screens).toContainEqual(created);
 		});
@@ -531,7 +531,7 @@ describe('useScreenStore', () => {
 			const created = createMockScreen({ id: 3 });
 			mockRepo.create.mockResolvedValue(created);
 
-			const result = await store.createScreen(1, { name: 'Screen', slug: 's', currentMode: 'idle' });
+			const result = await store.createScreen(1, { name: 'Screen', slug: 's', currentMode: 'background' });
 
 			expect(result).toEqual(created);
 		});
@@ -545,8 +545,8 @@ describe('useScreenStore', () => {
 				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'first', stateVersion: 1 }))
 				.mockResolvedValueOnce(createMockScreen({ id: 10, name: 'second', stateVersion: 2 }));
 
-			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
-			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
 
 			expect(store.screens.map(s => s.id)).toEqual([10]);
 			expect(store.screens[0]!.name).toBe('second');
@@ -559,7 +559,7 @@ describe('useScreenStore', () => {
 			store.screens = [createMockScreen({ id: 10, name: 'Saved', stateVersion: 4 })];
 			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Created', stateVersion: 3 }));
 
-			const created = await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+			const created = await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
 
 			expect(store.screens.map(s => s.name)).toEqual(['Saved']);
 			// Unlike a loader — whose caller mirrors the answer into its own view of the
@@ -573,7 +573,7 @@ describe('useScreenStore', () => {
 			store.screens = [createMockScreen({ id: 10, name: 'Old', stateVersion: 4 })];
 			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Fresh', stateVersion: 4 }));
 
-			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'idle' });
+			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
 
 			expect(store.screens.map(s => s.name)).toEqual(['Fresh']);
 		});
@@ -645,7 +645,7 @@ describe('useScreenStore', () => {
 
 	describe('setScreenMode', () => {
 		it('delegates to updateScreen with currentMode', async () => {
-			const screen = createMockScreen({ id: 1, currentMode: 'idle' });
+			const screen = createMockScreen({ id: 1, currentMode: 'background' });
 			store.screens = [screen];
 			const updated = { ...screen, currentMode: 'card' as const };
 			mockRepo.update.mockResolvedValue(updated);

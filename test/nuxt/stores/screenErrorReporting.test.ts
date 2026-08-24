@@ -121,7 +121,7 @@ describe('useScreenStore error reporting', () => {
 			`[POST] "/api/events/1/screens"`,
 		));
 
-		await store.createScreen(1, { name: 'Screen', slug: 'main', currentMode: 'idle' });
+		await store.createScreen(1, { name: 'Screen', slug: 'main', currentMode: 'background' });
 
 		expect(store.error).toBe('A Screen with that slug already exists');
 	});

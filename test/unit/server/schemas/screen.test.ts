@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	backgroundModeConfigSchema,
 	createScreenSchema,
 	deckModeConfigSchema,
 	featureMatchOverlayModeConfigSchema,
-	idleModeConfigSchema,
 	matchModeConfigSchema,
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
@@ -24,7 +24,7 @@ describe('createScreenSchema', () => {
 	const validInput = {
 		name: 'Feature Match',
 		slug: 'feature-match',
-		currentMode: 'idle' as const,
+		currentMode: 'background' as const,
 	};
 
 	it('accepts valid input with required fields', () => {
@@ -452,21 +452,73 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	});
 });
 
-describe('idleModeConfigSchema', () => {
-	it('accepts standalone video background playback settings', () => {
-		const result = idleModeConfigSchema.safeParse({
-			mediaBackground: {
-				enabled: true,
-				type: 'video',
-				url: '/backgrounds/standalone-loop.mp4',
-				fit: 'contain',
-				opacity: 1,
-				playbackRate: 1.25,
-				loop: true,
-			},
-		});
+describe('backgroundModeConfigSchema', () => {
+	const colorLayer = { id: 'wash', type: 'color', enabled: true, opacity: 0.4, color: '#0b1020' };
+	const gradientLayer = { id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(180deg, #000, #123)' };
+	const urlImageLayer = { id: 'img-url', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '/backgrounds/plate.png' }, fit: 'cover' };
+	const assetImageLayer = { id: 'img-asset', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' }, fit: 'contain' };
+	const assetVideoLayer = { id: 'vid-asset', type: 'video', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2', videoCompatibility: 'all-supported' }, fit: 'fill', playbackRate: 1.25, loop: true };
+	const animationLayer = { id: 'anim', type: 'animation', enabled: true, opacity: 0.6, animation: { effect: 'fog' } };
 
+	it('accepts an ordered stack of every layer type', () => {
+		const result = backgroundModeConfigSchema.safeParse({
+			layers: [gradientLayer, animationLayer, urlImageLayer, assetImageLayer, assetVideoLayer, colorLayer],
+		});
 		expect(result.success).toBe(true);
+	});
+
+	it('accepts an empty stack — black until configured', () => {
+		expect(backgroundModeConfigSchema.safeParse({ layers: [] }).success).toBe(true);
+	});
+
+	it('refuses a second animation layer: one WebGL context per memory-tight OBS source', () => {
+		const result = backgroundModeConfigSchema.safeParse({
+			layers: [animationLayer, { ...animationLayer, id: 'anim-2', enabled: false }],
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it('validates an animation layer selection against the named effect, and refuses one outside the vocabulary', () => {
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...animationLayer, animation: { effect: 'fog', params: { speed: 2 } } }],
+		}).success).toBe(true);
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...animationLayer, animation: { effect: 'not-an-effect' } }],
+		}).success).toBe(false);
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...animationLayer, animation: { effect: 'fog', params: { lightColor: '#7dd3fc' } } }],
+		}).success).toBe(false);
+	});
+
+	it('refuses a layer outside the closed type vocabulary and any unknown key', () => {
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ id: 'x', type: 'starfield', enabled: true, opacity: 1 }],
+		}).success).toBe(false);
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...colorLayer, mouseDriftEnabled: true }],
+		}).success).toBe(false);
+	});
+
+	it('refuses an out-of-range layer opacity', () => {
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...colorLayer, opacity: 1.5 }],
+		}).success).toBe(false);
+	});
+
+	it('refuses an unsafe media URL source', () => {
+		expect(backgroundModeConfigSchema.safeParse({
+
+			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'javascript:alert(1)' } }],
+		}).success).toBe(false);
+	});
+
+	it('enforces the one-animation-layer rule on the PATCH path too, because it lives on the layers field', () => {
+		expect(modeConfigPatchSchemaMap.background.safeParse({
+			layers: [animationLayer, { ...animationLayer, id: 'anim-2' }],
+		}).success).toBe(false);
+		expect(modeConfigPatchSchemaMap.background.safeParse({
+			layers: [animationLayer],
+		}).success).toBe(true);
 	});
 });
 
@@ -673,7 +725,7 @@ describe('modeConfigParamsSchema', () => {
 	});
 
 	it('coerces string id and screenId', () => {
-		const result = modeConfigParamsSchema.safeParse({ id: '42', screenId: '99', mode: 'idle' });
+		const result = modeConfigParamsSchema.safeParse({ id: '42', screenId: '99', mode: 'background' });
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.id).toBe(42);

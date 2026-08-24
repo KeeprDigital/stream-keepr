@@ -87,7 +87,7 @@ const screen = {
 	eventId: 2,
 	name: 'Stage Left',
 	slug: 'stage-left',
-	currentMode: 'idle',
+	currentMode: 'background',
 	modeConfigs: null,
 	screenConfig: null,
 	stateVersion: 1,

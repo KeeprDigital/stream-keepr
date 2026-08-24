@@ -312,73 +312,92 @@ export function animationEffectParamFields(effect: AnimationEffectName): Animati
 	});
 }
 
+/**
+ * One effect selection branch: the effect's name paired with that effect's own
+ * params and nothing else. `.strictObject` so a bag from any other effect — or
+ * from the retired pre-rebuild flat shape — is refused rather than half-read.
+ */
+const selectionBranches = {
+	caustics: z.strictObject({ effect: z.literal('caustics'), params: causticsAnimationParamsSchema.optional() }),
+	cells: z.strictObject({ effect: z.literal('cells'), params: cellsAnimationParamsSchema.optional() }),
+	dots: z.strictObject({ effect: z.literal('dots'), params: dotsAnimationParamsSchema.optional() }),
+	fog: z.strictObject({ effect: z.literal('fog'), params: fogAnimationParamsSchema.optional() }),
+	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
+	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
+	net: z.strictObject({ effect: z.literal('net'), params: netAnimationParamsSchema.optional() }),
+	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
+	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
+	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
+} satisfies Record<AnimationEffectName, z.ZodObject>;
+
+/**
+ * The host-neutral Animation Effect selection: which effect, with that effect's
+ * own params. Discriminated on the effect so a selection can only ever carry
+ * params the named effect declares.
+ *
+ * This is the part of an animation configuration every host shares. What a host
+ * adds around it — the Frame's `enabled`/`opacity`, a Background Layer's own
+ * enabled state and opacity — is the host's concern and lives on the host's
+ * schema, which composes these branches rather than restating them.
+ *
+ * `params` is optional and may be sparse: every field defaults from the effect's
+ * schema, so an absent bag means "as shipped" and survives new params being added.
+ */
+export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
+	selectionBranches.caustics,
+	selectionBranches.cells,
+	selectionBranches.dots,
+	selectionBranches.fog,
+	selectionBranches.globe,
+	selectionBranches.halo,
+	selectionBranches.net,
+	selectionBranches.rings,
+	selectionBranches.ripple,
+	selectionBranches.waves,
+]);
+
+/** The stored/authored selection shape: params sparse, defaults implied. */
+export type AnimationEffectSelection = z.input<typeof animationEffectSelectionSchema>;
+
+/**
+ * A stored Animation Effect selection re-proven rather than trusted: the parsed
+ * selection, or `null` for one naming an effect this build does not ship.
+ * Callers treat `null` as "no animation" — the vocabulary refusal, applied at
+ * render time (the Frame's `parseFrameAnimationConfig` is this rule plus the
+ * Frame's own fields).
+ */
+export function parseAnimationEffectSelection(
+	value: unknown,
+): z.output<typeof animationEffectSelectionSchema> | null {
+	const outcome = animationEffectSelectionSchema.safeParse(value);
+	return outcome.success ? outcome.data : null;
+}
+
 const frameAnimationShape = {
 	enabled: z.boolean(),
 	opacity: z.number().min(0).max(1),
 };
 
 /**
- * The Feature Match Overlay Frame's animation configuration: which effect, at
- * what opacity, with that effect's own params. Discriminated on the effect so a
- * config can only ever carry params the named effect declares, and `.strict()`
- * throughout so a stored pre-rebuild flat-bag config — which always carried the
- * retired `mouseDrift*` fields — is refused and resets to defaults rather than
- * being half-read (the reset ADR-0014 accepts).
- *
- * `params` is optional and may be sparse: every field defaults from the effect's
- * schema, so an absent bag means "as shipped" and survives new params being added.
+ * The Feature Match Overlay Frame's animation configuration: the shared effect
+ * selection plus the Frame's own `enabled` and `opacity`. Each branch is the
+ * selection branch extended, so the Frame can never accept a selection the
+ * shared schema would refuse — `.extend` keeps the branches strict, which is
+ * what makes a stored pre-rebuild flat-bag config (recognisable by its retired
+ * `mouseDrift*` fields) reset to defaults rather than being half-read (the
+ * reset ADR-0014 accepts).
  */
 export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnion('effect', [
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('caustics'),
-		params: causticsAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('cells'),
-		params: cellsAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('dots'),
-		params: dotsAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('fog'),
-		params: fogAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('globe'),
-		params: globeAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('halo'),
-		params: haloAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('net'),
-		params: netAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('rings'),
-		params: ringsAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('ripple'),
-		params: rippleAnimationParamsSchema.optional(),
-	}),
-	z.strictObject({
-		...frameAnimationShape,
-		effect: z.literal('waves'),
-		params: wavesAnimationParamsSchema.optional(),
-	}),
+	selectionBranches.caustics.extend(frameAnimationShape),
+	selectionBranches.cells.extend(frameAnimationShape),
+	selectionBranches.dots.extend(frameAnimationShape),
+	selectionBranches.fog.extend(frameAnimationShape),
+	selectionBranches.globe.extend(frameAnimationShape),
+	selectionBranches.halo.extend(frameAnimationShape),
+	selectionBranches.net.extend(frameAnimationShape),
+	selectionBranches.rings.extend(frameAnimationShape),
+	selectionBranches.ripple.extend(frameAnimationShape),
+	selectionBranches.waves.extend(frameAnimationShape),
 ]);
 
 /**

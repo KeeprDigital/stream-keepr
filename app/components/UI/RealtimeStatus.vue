@@ -29,7 +29,8 @@ const status = computed(() => {
 		return 'connected' as const;
 	// Standing by, not a fault: the client does not connect until an Event is
 	// known (#474), so an event-less page sits in `initialized` indefinitely.
-	// Named `standby` rather than `idle` — Idle is a Screen Mode in the glossary.
+	// Named `standby` rather than `idle` — the glossary reserves that word for
+	// the former Idle Screen Mode (now the Background Screen) and avoids it.
 	if (connectionState.value === 'initialized')
 		return 'standby' as const;
 	// Settling is not a fault either: a page load is not a lost connection.

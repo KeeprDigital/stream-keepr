@@ -232,7 +232,7 @@ describe('broadcast graphics playout command API', () => {
 		const endedSessionId = harness.session().id;
 		await harness.send({ commandId: playoutCommandId('epoch-take'), type: 'Take', payload: { graphicId: 'a' } });
 
-		await setScreenMode(eventId, harness.screen.id, 'idle');
+		await setScreenMode(eventId, harness.screen.id, 'background');
 		await setScreenMode(eventId, harness.screen.id, 'broadcast-graphics');
 
 		const nextEpoch = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
@@ -284,7 +284,7 @@ describe('broadcast graphics playout command API', () => {
 
 	it('refuses a snapshot for a Screen that is not in Broadcast Graphics mode', async () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-wrong-mode', ['a']);
-		await setScreenMode(eventId, harness.screen.id, 'idle');
+		await setScreenMode(eventId, harness.screen.id, 'background');
 
 		const res = await $fetchRaw(
 			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-session`,

@@ -319,12 +319,12 @@ describe('screenWriteModule', () => {
 
 		it('ends the Broadcast Graphics Live Session in the commit that changes the mode', async () => {
 			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
-			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'idle' }));
+			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'background' }));
 
 			await screenWriteModule().updateScreen({
 				eventId: 1,
 				screenId: 7,
-				input: { stateVersion: 0, currentMode: 'idle' } as never,
+				input: { stateVersion: 0, currentMode: 'background' } as never,
 				originConnectionId: 'origin-1',
 			});
 
@@ -336,7 +336,7 @@ describe('screenWriteModule', () => {
 			expect(mockScreenService.update).toHaveBeenCalledWith(
 				7,
 				1,
-				{ currentMode: 'idle' },
+				{ currentMode: 'background' },
 				0,
 				epochEndStatements,
 			);
@@ -356,7 +356,7 @@ describe('screenWriteModule', () => {
 			await expect(screenWriteModule().updateScreen({
 				eventId: 1,
 				screenId: 7,
-				input: { stateVersion: 0, currentMode: 'idle' } as never,
+				input: { stateVersion: 0, currentMode: 'background' } as never,
 			})).rejects.toMatchObject({ statusCode: 404 });
 
 			expect(announceEpochEnded).not.toHaveBeenCalled();
@@ -417,7 +417,7 @@ describe('screenWriteModule', () => {
 		});
 
 		it('does not touch playout state when deleting a Screen that was never in Broadcast Graphics mode', async () => {
-			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'idle' }));
+			mockScreenService.findById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'background' }));
 
 			await screenWriteModule().deleteScreen({ eventId: 1, screenId: 7 });
 

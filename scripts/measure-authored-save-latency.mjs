@@ -217,7 +217,7 @@ async function main() {
 	try {
 		const screen = await json(`/api/events/${event.id}/screens`, {
 			method: 'POST',
-			...jsonBody({ name: 'Latency probe', slug: 'latency-probe-374', currentMode: 'idle' }),
+			...jsonBody({ name: 'Latency probe', slug: 'latency-probe-374', currentMode: 'background' }),
 		});
 		const configPath = `/api/events/${event.id}/screens/${screen.id}/config/broadcast-graphics`;
 		const leasePath = `/api/events/${event.id}/screens/${screen.id}/graphics-authoring-lease`;

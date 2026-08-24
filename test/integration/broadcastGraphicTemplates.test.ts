@@ -681,12 +681,12 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('refuses to place a template on a Screen that is not in Broadcast Graphics mode', async () => {
-		const idle = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
+		const backgroundScreen = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
 			method: 'POST',
-			body: { name: 'Idle', slug: 'template-idle-screen', currentMode: 'idle' },
+			body: { name: 'Background', slug: 'template-background-screen', currentMode: 'background' },
 		});
 
-		const refused = await place(otherEventId, idle.id, { templateId }, authorCookie);
+		const refused = await place(otherEventId, backgroundScreen.id, { templateId }, authorCookie);
 
 		expect(refused.status).toBe(409);
 	});

@@ -17,7 +17,7 @@ describe('screens extended API', () => {
 			body: {
 				name: 'Extended Test Screen',
 				slug: 'integration-extended-screen',
-				currentMode: 'idle',
+				currentMode: 'background',
 			},
 		});
 		screenId = screen.id;

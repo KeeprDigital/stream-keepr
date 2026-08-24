@@ -93,7 +93,15 @@ The workflow that promotes a Match into a Feature Match Slot for production cont
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Idle, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Metagame, or Player History.
+A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Metagame, or Player History.
+
+**Background Screen**:
+A Screen Mode rendering an ordered stack of Background Layers, replacing the former Idle mode.
+_Avoid_: Idle screen, empty state
+
+**Background Layer**:
+One entry in a Background Screen's ordered stack — a colour, gradient, image, video, or Animation Effect, owning its own enabled state and opacity.
+_Avoid_: background type, media background (when meaning a layer)
 
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
@@ -612,7 +620,7 @@ _Avoid_: Panel area, background panel
 
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, referenced by name from Screen configuration and Template Packages, with its own per-effect configuration.
-Its hosts are the Feature Match Overlay Frame and the Idle background; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
+Its hosts are the Feature Match Overlay Frame and the Background Screen; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
 **Feature Match Layout Item**:

@@ -56,7 +56,7 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
  * Each mode declares its own display type, label, and icon.
  */
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
-	'idle': { label: 'Idle', icon: 'i-lucide-pause', displayType: 'overlay', description: 'Empty state' },
+	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background' },
 	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display' },
 	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view' },
 	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings' },

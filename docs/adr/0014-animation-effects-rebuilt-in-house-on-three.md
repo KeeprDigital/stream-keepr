@@ -14,4 +14,4 @@ The animated backgrounds behind the Feature Match Overlay Frame come from a vend
 - Until each port lands, the vocabulary is exactly the effects the in-house system ships (`caustics`, `fog` after the first slice): a current-shape config or a package capability naming a not-yet-ported effect is refused rather than approximated, and a pre-rebuild stored config resets — accepted alongside the settings reset below.
 - Existing saved frame-animation settings are reset, not migrated (accepted; small install base).
 - Synthetic mouse drift retires with the fork: new effects animate autonomously from elapsed time.
-- The Idle background becomes a second Animation Effect host (`animation` joins the background type union), so the renderer component must not assume the Feature Match Overlay.
+- The Idle background becomes a second Animation Effect host (`animation` joins the background type union), so the renderer component must not assume the Feature Match Overlay. _The union wording is superseded by ADR-0016: the second host is the Background Screen's layer stack, with the Idle mode itself renamed. The host-agnostic renderer rule stands._

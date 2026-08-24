@@ -4,7 +4,9 @@ import {
 	ANIMATION_EFFECT_VALUES,
 	animationEffectDefaultParams,
 	animationEffectParamFields,
+	animationEffectSelectionSchema,
 	featureMatchOverlayFrameAnimationConfigSchema,
+	parseAnimationEffectSelection,
 	storedFrameAnimationConfigSchema,
 } from '~~/shared/animationEffects';
 
@@ -213,6 +215,45 @@ describe('animationEffects catalogue', () => {
 			const outcome = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.safeParse({ mouseDriftEnabled: true });
 			expect(outcome.success).toBe(false);
 		}
+	});
+});
+
+describe('animationEffectSelectionSchema', () => {
+	it('accepts a sparse selection for every effect and leaves the params sparse', () => {
+		for (const effect of ANIMATION_EFFECT_VALUES) {
+			const outcome = animationEffectSelectionSchema.safeParse({ effect });
+			expect(outcome.success).toBe(true);
+			expect(outcome.data).toEqual({ effect });
+		}
+	});
+
+	it('validates params against the schema of the named effect, not any other', () => {
+		const outcome = animationEffectSelectionSchema.safeParse({
+			effect: 'fog',
+			params: { lightColor: '#7dd3fc' },
+		});
+		expect(outcome.success).toBe(false);
+	});
+
+	it('refuses an effect outside the closed vocabulary rather than approximating it', () => {
+		const outcome = animationEffectSelectionSchema.safeParse({ effect: 'not-an-effect' });
+		expect(outcome.success).toBe(false);
+	});
+
+	it('carries no host concerns: enabled and opacity belong to the host, not the selection', () => {
+		const outcome = animationEffectSelectionSchema.safeParse({
+			effect: 'fog',
+			enabled: true,
+			opacity: 0.5,
+		});
+		expect(outcome.success).toBe(false);
+	});
+
+	it('re-proves a stored selection: parsed through, or null for anything this build does not ship', () => {
+		expect(parseAnimationEffectSelection({ effect: 'fog', params: { speed: 2 } }))
+			.toMatchObject({ effect: 'fog', params: expect.objectContaining({ speed: 2, blurFactor: 0.55 }) });
+		expect(parseAnimationEffectSelection({ effect: 'not-an-effect' })).toBeNull();
+		expect(parseAnimationEffectSelection(undefined)).toBeNull();
 	});
 });
 
