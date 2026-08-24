@@ -74,13 +74,15 @@ void main() {
 	vec3 facet = mix(backgroundColor, shardColor, tint) * (0.85 + 0.3 * facing);
 
 	// Cracks: the facet boundary is where the two nearest points run close.
-	float crack = pow(smoothstep(0.10, 0.0, second - nearest), 2.0);
+	float crack = pow(1.0 - smoothstep(0.0, 0.10, second - nearest), 2.0);
 
 	// Glint: a band sweeps the pane, and a facet flashes only while its hashed
 	// orientation is near the band's cycling phase — single shards, not strobe.
+	// The phase distance wraps at 0/1 so every facet gets the same flash window.
 	float band = pow(max(sin(dot(p, normalize(vec2(0.83, 0.55))) * 0.5 - iTime * 0.45), 0.0), 24.0);
 	float orientation = hashShard(nearestCell, 6.0);
-	float gate = smoothstep(0.22, 0.02, abs(orientation - fract(iTime * 0.05)));
+	float phaseDistance = abs(orientation - fract(iTime * 0.05));
+	float gate = 1.0 - smoothstep(0.02, 0.22, min(phaseDistance, 1.0 - phaseDistance));
 	vec3 glint = mix(edgeColor, vec3(1.0), 0.4) * band * gate;
 
 	vec3 color = facet + (edgeColor * crack * 0.9 + glint * 0.5) * intensity;

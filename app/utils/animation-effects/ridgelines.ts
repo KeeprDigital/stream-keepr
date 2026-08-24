@@ -63,7 +63,7 @@ void main() {
 		float x = (uv.x + scroll) * frequency;
 
 		float height = base + amplitude * (profileRidge(x, float(i) + 1.0) - 0.5) * 2.0;
-		float coverage = smoothstep(height + aa, height - aa, uv.y);
+		float coverage = 1.0 - smoothstep(height - aa, height + aa, uv.y);
 		if (coverage <= 0.0)
 			continue;
 
@@ -73,7 +73,7 @@ void main() {
 		// The crest: a bright line at the profile's top edge with a soft glow
 		// falling off below it, both brighter on nearer ridges.
 		float below = height - uv.y;
-		float crestLine = smoothstep(0.012, 0.0, below);
+		float crestLine = 1.0 - smoothstep(0.0, 0.012, below);
 		float crestHalo = exp(-below * 22.0) * 0.5 * glow;
 		vec3 ridgeColor = fill + crestColor * (crestLine + crestHalo) * mix(0.4, 1.0, depth);
 

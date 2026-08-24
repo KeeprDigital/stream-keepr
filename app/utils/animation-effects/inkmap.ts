@@ -39,8 +39,12 @@ float noiseInk(vec2 p) {
 	);
 }
 
-float fbmInk(vec2 p) {
-	return 0.5 * noiseInk(p) + 0.3 * noiseInk(p * 2.13 + 7.7) + 0.2 * noiseInk(p * 4.7 + 13.1);
+// Each octave carries its own slowly orbiting time phase, at mutually prime
+// rates, so the field morphs internally instead of sliding as one sheet.
+float fbmInk(vec2 p, float t) {
+	return 0.5 * noiseInk(p + vec2(cos(t * 0.05), sin(t * 0.06)) * 0.5)
+		+ 0.3 * noiseInk(p * 2.13 + 7.7 + vec2(cos(t * 0.083), sin(t * 0.071)) * 0.7)
+		+ 0.2 * noiseInk(p * 4.7 + 13.1 + vec2(cos(t * 0.127), sin(t * 0.113)) * 0.9);
 }
 
 void main() {
@@ -49,8 +53,8 @@ void main() {
 	// The warp and the field's own offset orbit rather than translate, so the
 	// map morphs in place instead of scrolling past.
 	vec2 orbit = vec2(cos(iTime * 0.13), sin(iTime * 0.11)) * 0.8;
-	vec2 warp = vec2(fbmInk(p * 0.9 + orbit), fbmInk(p * 0.9 + orbit.yx + 5.2));
-	float field = fbmInk(p + 1.8 * warp + 0.3 * vec2(cos(iTime * 0.07), sin(iTime * 0.09)));
+	vec2 warp = vec2(fbmInk(p * 0.9 + orbit, iTime), fbmInk(p * 0.9 + orbit.yx + 5.2, iTime));
+	float field = fbmInk(p + 1.8 * warp + 0.3 * vec2(cos(iTime * 0.07), sin(iTime * 0.09)), iTime);
 
 	// More coverage, lower threshold, more ink.
 	float threshold = 0.75 - 0.45 * coverage;
@@ -70,7 +74,7 @@ void main() {
 			break;
 		float level = threshold - float(k) * 0.045;
 		float fade = 1.0 - float(k) / (contours + 1.0);
-		contourLine += smoothstep(0.006, 0.0, abs(field - level)) * fade;
+		contourLine += (1.0 - smoothstep(0.0, 0.006, abs(field - level))) * fade;
 	}
 	vec3 paper = backgroundColor + edgeColor * contourLine * 0.25;
 
