@@ -1,4 +1,4 @@
-# Live overlay show/hide rides feature-match session state, not graphics config
+# ADR-0015: Live overlay show/hide rides feature-match session state, not graphics config
 
 An operator revealing or hiding a player's sideboard on the Feature Match Overlay
 between games needs a sub-second, control-surface-driven toggle. The graphics
