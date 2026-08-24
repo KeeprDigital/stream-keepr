@@ -394,10 +394,12 @@ describe('meleeService', () => {
 
 	describe('fetchPlayers', () => {
 		it('returns all players across pages', async () => {
-			// PlayerName, PronounsDescription, Decklists are required by the Zod schema
+			// PlayerName, PronounsDescription, Decklists are required by the Zod schema.
+			// RecordsFiltered is Melee's per-page record count; RecordsTotal is the
+			// collection total (observed live against melee.gg, 2026-08).
 			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
-			const page1 = paginated([player(1)], { recordsFiltered: 2, hasMore: true });
-			const page2 = paginated([player(2)], { page: 2, recordsFiltered: 2 });
+			const page1 = paginated([player(1)], { recordsTotal: 2, hasMore: true });
+			const page2 = paginated([player(2)], { page: 2, recordsTotal: 2 });
 			mockFetch
 				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
 				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
@@ -456,7 +458,7 @@ describe('meleeService', () => {
 		it('rejects an empty intermediate page instead of accepting a partial snapshot', async () => {
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve(paginated([], { recordsFiltered: 1, hasMore: true })),
+				json: () => Promise.resolve(paginated([], { recordsTotal: 1, hasMore: true })),
 			});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
@@ -470,16 +472,60 @@ describe('meleeService', () => {
 			mockFetch
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(1)], { recordsFiltered: 2, hasMore: true })),
+					json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 2, hasMore: true })),
 				})
 				.mockResolvedValueOnce({
 					ok: true,
-					json: () => Promise.resolve(paginated([player(2)], { page: 2, recordsFiltered: 3, recordsTotal: 3 })),
+					json: () => Promise.resolve(paginated([player(2)], { page: 2, recordsTotal: 3 })),
 				});
 
 			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
 				category: 'schema_validation',
 				message: expect.stringContaining('record counts changed between pages'),
+			});
+		});
+
+		it('rejects a page whose declared record count does not match its content', async () => {
+			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			mockFetch.mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve(paginated([player(1)], { recordsFiltered: 2, recordsTotal: 2 })),
+			});
+
+			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
+				category: 'schema_validation',
+				message: expect.stringContaining('page record count did not match its content'),
+			});
+		});
+
+		it('rejects more pages declared after all records were received', async () => {
+			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			mockFetch.mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 1, hasMore: true })),
+			});
+
+			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
+				category: 'schema_validation',
+				message: expect.stringContaining('more pages were declared after all records were received'),
+			});
+		});
+
+		it('rejects a final page that does not contain every declared record', async () => {
+			const player = (id: number) => ({ TeamId: id, PlayerName: `Player ${id}`, PronounsDescription: null, Decklists: [] });
+			mockFetch
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(paginated([player(1)], { recordsTotal: 3, hasMore: true })),
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					json: () => Promise.resolve(paginated([player(2)], { page: 2, recordsTotal: 3 })),
+				});
+
+			await expect(meleeService(credentials).fetchPlayers()).rejects.toMatchObject({
+				category: 'schema_validation',
+				message: expect.stringContaining('the final page did not contain every declared record'),
 			});
 		});
 	});
@@ -497,6 +543,12 @@ describe('meleeService', () => {
 			expect(result).toHaveLength(1);
 			expect(mockFetch).toHaveBeenCalledWith(
 				expect.stringContaining('/standing/list/current/'),
+				expect.any(Object),
+			);
+			// Live standings must bypass Melee's response cache so a broadcast
+			// never shows stale pairings or records.
+			expect(mockFetch).toHaveBeenCalledWith(
+				expect.stringContaining('ignoreCache=true'),
 				expect.any(Object),
 			);
 		});
