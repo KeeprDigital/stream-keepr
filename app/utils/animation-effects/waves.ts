@@ -13,7 +13,9 @@ import { createSceneEffect } from './sceneEffect';
  * actually rendered on air. The fork eased the camera toward its base position
  * divided by zoom as the pointer centred; with the mouse pair retired, that
  * steady state simply is the camera position, which keeps zoom meaningful with
- * no pointer to chase.
+ * no pointer to chase. The fork's base cleared the canvas to `backgroundColor`;
+ * the plane leaves the frame's far corners uncovered at low zoom, so the scene
+ * background carries that here.
  */
 
 const GRID_COLUMNS = 100;
@@ -44,6 +46,7 @@ export function createWavesDelegate(): SceneEffectDelegate<WavesAnimationParams>
 
 		build: ({ three, scene, camera, params }) => {
 			current = params;
+			scene.background = new three.Color(params.backgroundColor);
 
 			const points: THREE.Vector3[] = [];
 			for (let column = 0; column <= GRID_COLUMNS; column++) {
@@ -102,8 +105,9 @@ export function createWavesDelegate(): SceneEffectDelegate<WavesAnimationParams>
 			frameCamera(camera, params.zoom);
 		},
 
-		applyParams: ({ camera, params }) => {
+		applyParams: ({ three, scene, camera, params }) => {
 			current = params;
+			scene.background = new three.Color(params.backgroundColor);
 			mesh.material.color.set(params.color);
 			mesh.material.shininess = params.shininess;
 			frameCamera(camera, params.zoom);

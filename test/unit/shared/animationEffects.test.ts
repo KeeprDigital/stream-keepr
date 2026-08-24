@@ -62,11 +62,13 @@ describe('animationEffects catalogue', () => {
 	});
 
 	it('ports waves under the defaults the pre-rebuild application shipped', () => {
-		// Only the params the waves renderer reads survive the port: the fork's
-		// editor also offered a background colour its mesh never referenced. The
-		// zoom default is the pre-rebuild application's waves-specific fallback.
+		// backgroundColor survives the port even though the mesh never reads it:
+		// the fork's base cleared the canvas to it, and the water plane leaves the
+		// frame's far corners uncovered at low zoom. The zoom default is the
+		// pre-rebuild application's waves-specific fallback.
 		expect(animationEffectDefaultParams('waves')).toEqual({
 			color: '#7c3aed',
+			backgroundColor: '#111111',
 			shininess: 30,
 			waveHeight: 20,
 			waveSpeed: 1,

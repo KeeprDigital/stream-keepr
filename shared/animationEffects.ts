@@ -122,13 +122,16 @@ export const haloAnimationParamsSchema = z.strictObject({
 
 /**
  * Waves: a lit, choppy water plane — the first mesh-backend port from the
- * retired fork, under its old name. Only the params the waves renderer reads
- * survive: the fork's editor also offered a background colour its mesh never
- * referenced. Defaults and ranges are the pre-rebuild application's, including
- * the waves-specific `zoom` fallback of 0.85 rather than the shared bag's 1.
+ * retired fork, under its old name. `backgroundColor` survives the port even
+ * though the mesh never reads it: the fork's base cleared the canvas to it,
+ * and the water plane leaves the frame's far corners uncovered at low zoom, so
+ * it is visible on air. Defaults and ranges are the pre-rebuild application's,
+ * including the waves-specific `zoom` fallback of 0.85 rather than the shared
+ * bag's 1.
  */
 export const wavesAnimationParamsSchema = z.strictObject({
 	color: colorParam('Wave color', '#7c3aed'),
+	backgroundColor: colorParam('Background color', '#111111'),
 	shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
 	waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
 	waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),

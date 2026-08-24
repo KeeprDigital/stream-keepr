@@ -1,3 +1,4 @@
+import type { WavesAnimationParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -11,7 +12,7 @@ import { createWavesDelegate } from '~/utils/animation-effects/waves';
  * rendered with rather than on a stub's call log.
  */
 
-function mountDelegate(overrides: Partial<ReturnType<typeof animationEffectDefaultParams<'waves'>>> = {}) {
+function mountDelegate(overrides: Partial<WavesAnimationParams> = {}) {
 	const params = { ...animationEffectDefaultParams('waves'), ...overrides };
 	const delegate = createWavesDelegate();
 	const scene = new THREE.Scene();
@@ -25,6 +26,12 @@ function wavesMesh(scene: THREE.Scene): THREE.Mesh {
 	const mesh = scene.children.find((child): child is THREE.Mesh => (child as THREE.Mesh).isMesh);
 	expect(mesh).toBeDefined();
 	return mesh!;
+}
+
+function sceneLight<Light extends THREE.Light>(scene: THREE.Scene, marker: 'isAmbientLight' | 'isPointLight' | 'isDirectionalLight'): Light {
+	const light = scene.children.find((child): child is Light => Boolean((child as unknown as Record<string, unknown>)[marker]));
+	expect(light).toBeDefined();
+	return light!;
 }
 
 describe('createWavesDelegate', () => {
@@ -77,14 +84,20 @@ describe('createWavesDelegate', () => {
 		expect(material.flatShading).toBe(true);
 		expect(material.side).toBe(THREE.DoubleSide);
 
-		const ambient = scene.children.find((child): child is THREE.AmbientLight => (child as THREE.AmbientLight).isAmbientLight);
-		expect(ambient?.intensity).toBe(0.25);
-		const point = scene.children.find((child): child is THREE.PointLight => (child as THREE.PointLight).isPointLight);
-		expect(point?.intensity).toBe(2.4);
-		expect(point?.position.toArray()).toEqual([-100, 250, -100]);
-		const directional = scene.children.find((child): child is THREE.DirectionalLight => (child as THREE.DirectionalLight).isDirectionalLight);
-		expect(directional?.intensity).toBe(2.2);
-		expect(directional?.position.toArray()).toEqual([260, 420, 180]);
+		expect(sceneLight<THREE.AmbientLight>(scene, 'isAmbientLight').intensity).toBe(0.25);
+		const point = sceneLight<THREE.PointLight>(scene, 'isPointLight');
+		expect(point.intensity).toBe(2.4);
+		expect(point.position.toArray()).toEqual([-100, 250, -100]);
+		const directional = sceneLight<THREE.DirectionalLight>(scene, 'isDirectionalLight');
+		expect(directional.intensity).toBe(2.2);
+		expect(directional.position.toArray()).toEqual([260, 420, 180]);
+	});
+
+	it('clears to the background colour the fork\'s base cleared to, where the plane leaves the frame', () => {
+		const { scene, delegate, context, params } = mountDelegate();
+		expect((scene.background as THREE.Color).getHexString()).toBe(params.backgroundColor.slice(1));
+		delegate.applyParams({ ...context, params: { ...params, backgroundColor: '#224466' } });
+		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 	});
 
 	it('lifts each vertex by a trochoid of at most waveHeight above its rest height', () => {
