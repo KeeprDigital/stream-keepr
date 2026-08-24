@@ -3,6 +3,7 @@ import { SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import {
 	CARD_ANIMATION_SPEED_SELECT_OPTIONS,
+	DECK_BOARD_VIEW_SELECT_OPTIONS,
 	DECK_CARD_SIZE_SELECT_OPTIONS,
 	FEATURE_MATCH_ORIENTATION_SELECT_OPTIONS,
 	GAME_SELECT_OPTIONS,
@@ -13,7 +14,7 @@ import {
 	RECORD_SEPARATOR_SELECT_OPTIONS,
 	SCREEN_COLOR_MODE_SELECT_OPTIONS,
 	SCREEN_MODE_SELECT_OPTIONS,
-	SIDEBOARD_LAYOUT_SELECT_OPTIONS,
+	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
 	VERTICAL_ALIGN_SELECT_OPTIONS,
 } from '~~/shared/utils/selectOptions';
 
@@ -71,9 +72,14 @@ describe('selectOptions', () => {
 		expect(values).toEqual(['small', 'medium', 'large']);
 	});
 
-	it('sIDEBOARD_LAYOUT_SELECT_OPTIONS has grid and stack', () => {
-		const values = SIDEBOARD_LAYOUT_SELECT_OPTIONS.map(o => o.value);
-		expect(values).toEqual(['grid', 'stack']);
+	it('dECK_BOARD_VIEW_SELECT_OPTIONS has grid, stack, and list', () => {
+		const values = DECK_BOARD_VIEW_SELECT_OPTIONS.map(o => o.value);
+		expect(values).toEqual(['grid', 'stack', 'list']);
+	});
+
+	it('sIDEBOARD_PLACEMENT_SELECT_OPTIONS has beside and below', () => {
+		const values = SIDEBOARD_PLACEMENT_SELECT_OPTIONS.map(o => o.value);
+		expect(values).toEqual(['beside', 'below']);
 	});
 
 	it('hORIZONTAL_ALIGN_SELECT_OPTIONS has left, center, right', () => {
@@ -98,7 +104,8 @@ describe('selectOptions', () => {
 			...DECK_CARD_SIZE_SELECT_OPTIONS,
 			...QUANTITY_POSITION_SELECT_OPTIONS,
 			...QUANTITY_SIZE_SELECT_OPTIONS,
-			...SIDEBOARD_LAYOUT_SELECT_OPTIONS,
+			...DECK_BOARD_VIEW_SELECT_OPTIONS,
+			...SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
 			...HORIZONTAL_ALIGN_SELECT_OPTIONS,
 			...VERTICAL_ALIGN_SELECT_OPTIONS,
 		];

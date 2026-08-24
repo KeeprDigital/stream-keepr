@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import type { QuantityPosition } from '~~/shared/types/enums';
-import type { ScreenConfig } from '~~/shared/types/screenConfig';
+import type { DeckCardSize, QuantityPosition } from '~~/shared/types/enums';
+import type { DeckBoardLayoutConfig, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { DeckListCardWithData } from '~/types/card/deckList';
+import { DEFAULT_DECK_CONFIG } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 
@@ -79,14 +81,66 @@ async function handleDeckAfterLeave() {
 	showDeckBody.value = hasDisplayedDeck.value;
 }
 
-const viewMode = computed(() => config.value.viewMode ?? 'grid');
-const gridColumns = computed(() => config.value.columns ?? 4);
-const listColumns = computed(() => config.value.listColumns ?? 2);
-const cardGap = computed(() => config.value.cardGap ?? 8);
-const showMainboard = computed(() => config.value.showMainboard !== false);
-const sideboardLayout = computed(() => config.value.sideboardLayout ?? 'stack');
-const showSideboard = computed(() => config.value.showSideboard !== false && sideboard.value.length > 0);
-const stackOverlap = computed(() => config.value.stackOverlap ?? 15);
+const board = computed(() => config.value.board ?? 'full');
+const sideboardPlacement = computed(() => config.value.sideboardPlacement ?? 'beside');
+const showMainboard = computed(() => board.value !== 'sideboard');
+const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
+
+// Stored board blocks are partial fragments; complete each from its default
+// block so a lone `{ columns: 6 }` patch keeps the rest of the layout.
+type ResolvedBoardLayout = Required<DeckBoardLayoutConfig>;
+const mainboardLayout = computed(() => ({
+	...DEFAULT_DECK_CONFIG.mainboard,
+	...config.value.mainboard,
+} as ResolvedBoardLayout));
+const sideboardLayout = computed(() => ({
+	...DEFAULT_DECK_CONFIG.sideboard,
+	...config.value.sideboard,
+} as ResolvedBoardLayout));
+
+// A vertical strip only reads beside a mainboard; every other stacked board
+// renders as a horizontal overlapping row (#478).
+const sideboardBeside = computed(() =>
+	board.value === 'full'
+	&& sideboardPlacement.value === 'beside'
+	&& showSideboard.value,
+);
+
+interface VisibleBoard {
+	key: 'mainboard' | 'sideboard';
+	label: string;
+	cards: DeckListCardWithData[];
+	layout: ResolvedBoardLayout;
+	stackVertical: boolean;
+	showLabel: boolean;
+}
+
+const visibleBoards = computed<VisibleBoard[]>(() => {
+	const boards: VisibleBoard[] = [];
+	if (showMainboard.value) {
+		boards.push({
+			key: 'mainboard',
+			label: 'Mainboard',
+			cards: mainboard.value,
+			layout: mainboardLayout.value,
+			stackVertical: false,
+			showLabel: mainboardLayout.value.view === 'list',
+		});
+	}
+	if (showSideboard.value) {
+		boards.push({
+			key: 'sideboard',
+			label: 'Sideboard',
+			cards: sideboard.value,
+			layout: sideboardLayout.value,
+			stackVertical: sideboardBeside.value,
+			showLabel: true,
+		});
+	}
+	return boards;
+});
+
+const besideActive = computed(() => sideboardBeside.value && showMainboard.value);
 const showHighlanderPoints = computed(() => config.value.showHighlanderPoints !== false);
 const showHighlanderTotal = computed(() =>
 	config.value.showHighlanderTotal !== false
@@ -119,31 +173,31 @@ const showHeader = computed(() =>
 );
 
 // Grid style with dynamic gap
-const gridStyle = computed(() => ({
-	gridTemplateColumns: `repeat(${gridColumns.value}, minmax(0, 1fr))`,
-	gap: `${cardGap.value}px`,
-}));
+function gridStyle(layout: ResolvedBoardLayout) {
+	return {
+		gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+		gap: `${layout.cardGap}px`,
+	};
+}
 
-const listGridStyle = computed(() => ({
-	gridTemplateColumns: `repeat(${listColumns.value}, minmax(0, 1fr))`,
-	columnGap: '1rem',
-	rowGap: '0.25rem',
-}));
+function listGridStyle(layout: ResolvedBoardLayout) {
+	return {
+		gridTemplateColumns: `repeat(${layout.listColumns}, minmax(0, 1fr))`,
+		columnGap: '1rem',
+		rowGap: '0.25rem',
+	};
+}
+
+const CARD_SIZE_CLASSES: Record<DeckCardSize, string> = {
+	small: 'w-24',
+	medium: 'w-36',
+	large: 'w-48',
+};
 
 // Card size - either dynamic or fixed class
-const cardSizeClass = computed(() => {
-	if (config.value.dynamicCardSize) {
-		return '';
-	}
-	switch (config.value.cardSize) {
-		case 'small':
-			return 'w-24';
-		case 'large':
-			return 'w-48';
-		default:
-			return 'w-36';
-	}
-});
+function gridCardSizeClass(layout: ResolvedBoardLayout) {
+	return layout.dynamicCardSize ? '' : CARD_SIZE_CLASSES[layout.cardSize];
+}
 
 // Quantity badge position styles
 const BADGE_POSITION_CLASSES: Record<QuantityPosition, string> = {
@@ -271,45 +325,74 @@ const highlanderPointedCardNoteStyle = computed(() => {
 });
 
 const showQuantities = computed(() => config.value.showQuantities ?? false);
-const isDynamicSize = computed(() => config.value.dynamicCardSize ?? false);
 
-// Card heights based on width (MTG card ratio is ~63:88)
-const cardHeightMap: Record<string, number> = {
-	small: 134, // w-24 = 96px → 96 * 88/63 ≈ 134px
-	medium: 201, // w-36 = 144px → 144 * 88/63 ≈ 201px
-	large: 268, // w-48 = 192px → 192 * 88/63 ≈ 268px
+const cardBadgeProps = computed(() => ({
+	showQuantity: showQuantities.value,
+	showHighlanderPoints: showHighlanderPoints.value,
+	quantityPositionClass: quantityPositionClass.value,
+	quantitySizeClass: quantitySizeClass.value,
+	quantityBadgeStyle: quantityBadgeStyle.value,
+	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
+	highlanderPointsSizeClass: highlanderPointBadgeClass.value,
+	highlanderPointsBadgeStyle: highlanderPointBadgeStyle.value,
+}));
+
+// Fixed card dimensions per size (MTG card ratio is ~63:88)
+const CARD_WIDTH_PX: Record<DeckCardSize, number> = {
+	small: 96, // w-24
+	medium: 144, // w-36
+	large: 192, // w-48
+};
+const CARD_HEIGHT_PX: Record<DeckCardSize, number> = {
+	small: 134, // 96 * 88/63 ≈ 134px
+	medium: 201, // 144 * 88/63 ≈ 201px
+	large: 268, // 192 * 88/63 ≈ 268px
 };
 
-// Get the estimated card height based on size setting
-const estimatedCardHeight = computed(() => {
-	const size = config.value.cardSize ?? 'medium';
-	return cardHeightMap[size] ?? 201;
-});
+// Vertical strip: each stacked card reveals stackOverlap % of its height.
+function stackColumnOffsetPx(layout: ResolvedBoardLayout) {
+	return Math.round(CARD_HEIGHT_PX[layout.cardSize] * (layout.stackOverlap / 100));
+}
 
-// Calculate the offset for each stacked card
-const stackOffsetPx = computed(() => {
-	const visiblePercent = stackOverlap.value / 100;
-	return Math.round(estimatedCardHeight.value * visiblePercent);
-});
+function stackColumnStyle(layout: ResolvedBoardLayout, cardCount: number) {
+	const height = cardCount === 0
+		? 0
+		: ((cardCount - 1) * stackColumnOffsetPx(layout)) + CARD_HEIGHT_PX[layout.cardSize];
+	return { height: `${height}px` };
+}
 
-// Get absolute position for stack card
-function getStackCardStyle(index: number) {
+function stackColumnCardStyle(layout: ResolvedBoardLayout, index: number) {
 	return {
 		position: 'absolute' as const,
-		top: `${index * stackOffsetPx.value}px`,
+		top: `${index * stackColumnOffsetPx(layout)}px`,
 		left: '0',
 		right: '0',
 	};
 }
 
-// Calculate total height of stack container
-const stackContainerHeight = computed(() => {
-	const cardCount = sideboard.value.length;
-	if (cardCount === 0)
-		return '0px';
-	const totalHeight = ((cardCount - 1) * stackOffsetPx.value) + estimatedCardHeight.value;
-	return `${totalHeight}px`;
-});
+// Horizontal row: each stacked card reveals stackOverlap % of its width.
+function stackRowOffsetPx(layout: ResolvedBoardLayout) {
+	return Math.round(CARD_WIDTH_PX[layout.cardSize] * (layout.stackOverlap / 100));
+}
+
+function stackRowStyle(layout: ResolvedBoardLayout, cardCount: number) {
+	const width = cardCount === 0
+		? 0
+		: ((cardCount - 1) * stackRowOffsetPx(layout)) + CARD_WIDTH_PX[layout.cardSize];
+	return {
+		width: `${width}px`,
+		height: `${CARD_HEIGHT_PX[layout.cardSize]}px`,
+	};
+}
+
+function stackRowCardStyle(layout: ResolvedBoardLayout, index: number) {
+	return {
+		position: 'absolute' as const,
+		left: `${index * stackRowOffsetPx(layout)}px`,
+		top: '0',
+		width: `${CARD_WIDTH_PX[layout.cardSize]}px`,
+	};
+}
 </script>
 
 <template>
@@ -399,196 +482,117 @@ const stackContainerHeight = computed(() => {
 						</div>
 					</div>
 
-					<!-- Grid View -->
-					<template v-if="viewMode === 'grid'">
-						<!-- Stack sideboard layout: mainboard left, sideboard stack right -->
-						<div v-if="sideboardLayout === 'stack' && showSideboard" class="deck-layout flex gap-6">
-							<!-- Mainboard -->
-							<div v-if="showMainboard" class="mainboard-section flex-1">
+					<!-- Boards: each visible board renders its own layout block -->
+					<div class="deck-layout flex gap-6" :class="besideActive ? 'flex-row' : 'flex-col'">
+						<div
+							v-for="b in visibleBoards"
+							:key="b.key"
+							:data-testid="`${b.key}-section`"
+							:class="[
+								b.key === 'mainboard' && besideActive ? 'flex-1' : '',
+								b.stackVertical ? 'flex flex-col' : '',
+							]"
+						>
+							<h3 v-if="b.showLabel" class="text-lg font-semibold mb-2" :style="primaryTextStyle">
+								{{ b.label }}
+							</h3>
+
+							<!-- Grid -->
+							<div
+								v-if="b.layout.view === 'grid'"
+								:data-testid="`${b.key}-grid`"
+								class="card-grid"
+								:class="{ 'dynamic-grid': b.layout.dynamicCardSize }"
+								:style="gridStyle(b.layout)"
+							>
+								<ScreenModesDeckCard
+									v-for="(card, index) in b.cards"
+									:key="`${b.key}-${index}`"
+									:card="card"
+									:size-class="gridCardSizeClass(b.layout)"
+									:dynamic-size="b.layout.dynamicCardSize"
+									v-bind="cardBadgeProps"
+								/>
+							</div>
+
+							<!-- Stack, beside a mainboard: vertical strip -->
+							<div
+								v-else-if="b.layout.view === 'stack' && b.stackVertical"
+								:data-testid="`${b.key}-stack-column`"
+								class="stack-container relative"
+								:class="CARD_SIZE_CLASSES[b.layout.cardSize]"
+								:style="stackColumnStyle(b.layout, b.cards.length)"
+							>
 								<div
-									class="card-grid"
-									:class="{ 'dynamic-grid': isDynamicSize }"
-									:style="gridStyle"
+									v-for="(card, index) in b.cards"
+									:key="`${b.key}-${index}`"
+									class="stack-card"
+									:style="stackColumnCardStyle(b.layout, index)"
 								>
 									<ScreenModesDeckCard
-										v-for="(card, index) in mainboard"
-										:key="`main-${index}`"
 										:card="card"
-										:size-class="cardSizeClass"
-										:show-quantity="showQuantities"
-										:show-highlander-points="showHighlanderPoints"
-										:quantity-position-class="quantityPositionClass"
-										:quantity-size-class="quantitySizeClass"
-										:quantity-badge-style="quantityBadgeStyle"
-										:highlander-points-position-class="highlanderPointsPositionClass"
-										:highlander-points-size-class="highlanderPointBadgeClass"
-										:highlander-points-badge-style="highlanderPointBadgeStyle"
-										:dynamic-size="isDynamicSize"
+										:size-class="CARD_SIZE_CLASSES[b.layout.cardSize]"
+										v-bind="cardBadgeProps"
 									/>
 								</div>
 							</div>
 
-							<!-- Sideboard (Stack Layout) - to the right -->
-							<div class="sideboard-stack-section flex flex-col">
-								<h3 v-if="showSideboard" class="text-lg font-semibold mb-2" :style="primaryTextStyle">
-									Sideboard
-								</h3>
+							<!-- Stack, full width: horizontal overlapping row -->
+							<div v-else-if="b.layout.view === 'stack'" class="flex justify-center">
 								<div
-									v-if="showSideboard"
-									class="stack-container relative"
-									:class="cardSizeClass || 'w-36'"
-									:style="{ height: stackContainerHeight }"
+									:data-testid="`${b.key}-stack-row`"
+									class="relative"
+									:style="stackRowStyle(b.layout, b.cards.length)"
 								>
 									<div
-										v-for="(card, index) in sideboard"
-										:key="`side-stack-${index}`"
+										v-for="(card, index) in b.cards"
+										:key="`${b.key}-${index}`"
 										class="stack-card"
-										:style="getStackCardStyle(index)"
+										:style="stackRowCardStyle(b.layout, index)"
 									>
 										<ScreenModesDeckCard
 											:card="card"
-											:size-class="cardSizeClass"
-											:show-quantity="showQuantities"
-											:show-highlander-points="showHighlanderPoints"
-											:quantity-position-class="quantityPositionClass"
-											:quantity-size-class="quantitySizeClass"
-											:quantity-badge-style="quantityBadgeStyle"
-											:highlander-points-position-class="highlanderPointsPositionClass"
-											:highlander-points-size-class="highlanderPointBadgeClass"
-											:highlander-points-badge-style="highlanderPointBadgeStyle"
+											:size-class="CARD_SIZE_CLASSES[b.layout.cardSize]"
+											v-bind="cardBadgeProps"
 										/>
 									</div>
 								</div>
 							</div>
-						</div>
 
-						<!-- Grid/hidden sideboard layout: vertical stacking -->
-						<div v-else class="deck-layout flex flex-col gap-6">
-							<!-- Mainboard -->
-							<div v-if="showMainboard" class="mainboard-section">
+							<!-- List -->
+							<div
+								v-else
+								:data-testid="`${b.key}-list`"
+								class="card-list"
+								:style="listGridStyle(b.layout)"
+							>
 								<div
-									class="card-grid"
-									:class="{ 'dynamic-grid': isDynamicSize }"
-									:style="gridStyle"
+									v-for="(card, index) in b.cards"
+									:key="`${b.key}-${index}`"
+									class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
 								>
-									<ScreenModesDeckCard
-										v-for="(card, index) in mainboard"
-										:key="`main-${index}`"
-										:card="card"
-										:size-class="cardSizeClass"
-										:show-quantity="showQuantities"
-										:show-highlander-points="showHighlanderPoints"
-										:quantity-position-class="quantityPositionClass"
-										:quantity-size-class="quantitySizeClass"
-										:quantity-badge-style="quantityBadgeStyle"
-										:highlander-points-position-class="highlanderPointsPositionClass"
-										:highlander-points-size-class="highlanderPointBadgeClass"
-										:highlander-points-badge-style="highlanderPointBadgeStyle"
-										:dynamic-size="isDynamicSize"
-									/>
-								</div>
-							</div>
-
-							<!-- Sideboard (Grid Layout) - below mainboard -->
-							<div v-if="showSideboard && sideboardLayout === 'grid'" class="sideboard-section">
-								<h3 class="text-lg font-semibold mb-2" :style="primaryTextStyle">
-									Sideboard
-								</h3>
-								<div
-									class="card-grid"
-									:class="{ 'dynamic-grid': isDynamicSize }"
-									:style="gridStyle"
-								>
-									<ScreenModesDeckCard
-										v-for="(card, index) in sideboard"
-										:key="`side-${index}`"
-										:card="card"
-										:size-class="cardSizeClass"
-										:show-quantity="showQuantities"
-										:show-highlander-points="showHighlanderPoints"
-										:quantity-position-class="quantityPositionClass"
-										:quantity-size-class="quantitySizeClass"
-										:quantity-badge-style="quantityBadgeStyle"
-										:highlander-points-position-class="highlanderPointsPositionClass"
-										:highlander-points-size-class="highlanderPointBadgeClass"
-										:highlander-points-badge-style="highlanderPointBadgeStyle"
-										:dynamic-size="isDynamicSize"
-									/>
+									<span class="quantity text-muted w-6 text-right" :style="secondaryTextStyle">
+										{{ card.quantity }}x
+									</span>
+									<span class="name flex-1" :style="primaryTextStyle">
+										{{ card.name }}
+									</span>
+									<span
+										v-if="showHighlanderPoints && card.highlanderPoints != null"
+										data-testid="highlander-list-badge"
+										class="rounded-md font-mono font-bold leading-none shadow-sm"
+										:class="highlanderPointBadgeClass"
+										:style="highlanderPointBadgeStyle"
+									>
+										{{ card.highlanderPoints }}
+									</span>
+									<span class="type text-muted text-sm" :style="secondaryTextStyle">
+										{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
+									</span>
 								</div>
 							</div>
 						</div>
-					</template>
-
-					<!-- List View -->
-					<template v-else>
-						<div class="deck-layout flex flex-col gap-6">
-							<!-- Mainboard List -->
-							<div v-if="showMainboard" class="mainboard-section">
-								<h3 class="text-lg font-semibold mb-2" :style="primaryTextStyle">
-									Mainboard
-								</h3>
-								<div data-testid="mainboard-list" class="card-list" :style="listGridStyle">
-									<div
-										v-for="(card, index) in mainboard"
-										:key="`main-${index}`"
-										class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
-									>
-										<span class="quantity text-muted w-6 text-right" :style="secondaryTextStyle">
-											{{ card.quantity }}x
-										</span>
-										<span class="name flex-1" :style="primaryTextStyle">
-											{{ card.name }}
-										</span>
-										<span
-											v-if="showHighlanderPoints && card.highlanderPoints != null"
-											data-testid="highlander-list-badge"
-											class="rounded-md font-mono font-bold leading-none shadow-sm"
-											:class="highlanderPointBadgeClass"
-											:style="highlanderPointBadgeStyle"
-										>
-											{{ card.highlanderPoints }}
-										</span>
-										<span class="type text-muted text-sm" :style="secondaryTextStyle">
-											{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
-										</span>
-									</div>
-								</div>
-							</div>
-
-							<!-- Sideboard List -->
-							<div v-if="showSideboard" class="sideboard-section">
-								<h3 class="text-lg font-semibold mb-2" :style="primaryTextStyle">
-									Sideboard
-								</h3>
-								<div data-testid="sideboard-list" class="card-list" :style="listGridStyle">
-									<div
-										v-for="(card, index) in sideboard"
-										:key="`side-${index}`"
-										class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
-									>
-										<span class="quantity text-muted w-6 text-right" :style="secondaryTextStyle">
-											{{ card.quantity }}x
-										</span>
-										<span class="name flex-1" :style="primaryTextStyle">
-											{{ card.name }}
-										</span>
-										<span
-											v-if="showHighlanderPoints && card.highlanderPoints != null"
-											data-testid="highlander-list-badge"
-											class="rounded-md font-mono font-bold leading-none shadow-sm"
-											:class="highlanderPointBadgeClass"
-											:style="highlanderPointBadgeStyle"
-										>
-											{{ card.highlanderPoints }}
-										</span>
-										<span class="type text-muted text-sm" :style="secondaryTextStyle">
-											{{ getCardTypeDisplayLabel(card.cardType, { nonbasicLandLabel: true }) }}
-										</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</template>
+					</div>
 				</div>
 			</transition>
 		</div>

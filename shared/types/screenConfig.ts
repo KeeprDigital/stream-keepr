@@ -1,5 +1,5 @@
 import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
-import type { CardAnimationSpeed, DeckCardSize, DeckViewMode, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardLayout, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
+import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
@@ -34,12 +34,32 @@ export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
 };
 
 // ─── Mode-specific configs ─────────────────────────────────────────────
-export interface DeckModeConfig {
-	playerId: number | null;
-	viewMode: DeckViewMode;
+
+/**
+ * One board's complete layout block. The Mainboard and Sideboard each carry
+ * their own (#478): which view renders the board, and the knobs each view
+ * reads — grid reads columns/gap/sizing, list reads listColumns, stack reads
+ * cardSize and stackOverlap.
+ */
+export interface DeckBoardLayoutConfig {
+	view?: DeckBoardView;
 	columns?: number;
 	listColumns?: number;
 	cardSize?: DeckCardSize;
+	dynamicCardSize?: boolean;
+	cardGap?: number;
+	/** Percentage of each stacked card left visible under the next one. */
+	stackOverlap?: number;
+}
+
+export interface DeckModeConfig {
+	playerId: number | null;
+	/** Which boards render (#477). "Both hidden" is impossible by construction. */
+	board?: BoardSelection;
+	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
+	sideboardPlacement?: SideboardPlacement;
+	mainboard?: DeckBoardLayoutConfig;
+	sideboard?: DeckBoardLayoutConfig;
 	showQuantities?: boolean;
 	showDeckName?: boolean;
 	showDeckColors?: boolean;
@@ -68,18 +88,6 @@ export interface DeckModeConfig {
 	quantitySize?: QuantitySize;
 	quantityTextColor?: string;
 	quantityBgColor?: string;
-
-	// Card sizing
-	dynamicCardSize?: boolean;
-	cardGap?: number;
-
-	// Sideboard options
-	showMainboard?: boolean;
-	showSideboard?: boolean;
-	sideboardLayout?: SideboardLayout;
-
-	// Stack layout settings
-	stackOverlap?: number;
 }
 
 export interface CardDisplayConfig {
@@ -557,12 +565,22 @@ export const DEFAULT_CARD_CONFIG: CardModeConfig = {
 	...DEFAULT_CARD_DISPLAY_CONFIG,
 };
 
-export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
-	playerId: null,
-	viewMode: 'grid',
-	cardSize: 'medium',
+export const DEFAULT_DECK_BOARD_LAYOUT: DeckBoardLayoutConfig = {
+	view: 'grid',
 	columns: 4,
 	listColumns: 2,
+	cardSize: 'medium',
+	dynamicCardSize: false,
+	cardGap: 8,
+	stackOverlap: 15,
+};
+
+export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
+	playerId: null,
+	board: 'full',
+	sideboardPlacement: 'beside',
+	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
+	sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' },
 	showQuantities: true,
 	showDeckName: true,
 	showDeckColors: true,
@@ -588,12 +606,6 @@ export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	quantitySize: 'medium',
 	quantityTextColor: '#ffffff',
 	quantityBgColor: '#7c3aed',
-	dynamicCardSize: false,
-	cardGap: 8,
-	showMainboard: true,
-	showSideboard: true,
-	sideboardLayout: 'stack',
-	stackOverlap: 15,
 };
 
 export const DEFAULT_STANDINGS_CONFIG: StandingsModeConfig = {

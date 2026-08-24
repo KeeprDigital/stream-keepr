@@ -196,12 +196,21 @@ describe('screenConfigSchema', () => {
 describe('deckModeConfigSchema', () => {
 	const validConfig = {
 		playerId: 1,
-		viewMode: 'grid' as const,
-		columns: 4,
-		listColumns: 2,
-		showMainboard: true,
-		showSideboard: true,
-		sideboardLayout: 'stack' as const,
+		board: 'full' as const,
+		sideboardPlacement: 'beside' as const,
+		mainboard: {
+			view: 'grid' as const,
+			columns: 4,
+			listColumns: 2,
+			cardSize: 'medium' as const,
+			dynamicCardSize: false,
+			cardGap: 8,
+			stackOverlap: 15,
+		},
+		sideboard: {
+			view: 'stack' as const,
+			stackOverlap: 35,
+		},
 	};
 
 	it('accepts valid deck mode config', () => {
@@ -214,14 +223,43 @@ describe('deckModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts list mode with list-specific controls', () => {
-		const result = deckModeConfigSchema.safeParse({
-			...validConfig,
-			viewMode: 'list',
-			listColumns: 3,
-			showSideboard: false,
-		});
+	it('accepts every board selection', () => {
+		for (const board of ['full', 'mainboard', 'sideboard'] as const) {
+			const result = deckModeConfigSchema.safeParse({ ...validConfig, board });
+			expect(result.success).toBe(true);
+		}
+	});
+
+	it('accepts a sideboard placed below the mainboard', () => {
+		const result = deckModeConfigSchema.safeParse({ ...validConfig, sideboardPlacement: 'below' });
 		expect(result.success).toBe(true);
+	});
+
+	it('rejects the removed board visibility booleans', () => {
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, showMainboard: true }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, showSideboard: false }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, sideboardLayout: 'stack' }).success).toBe(false);
+	});
+
+	it('rejects flat layout knobs outside a board block', () => {
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, viewMode: 'grid' }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, columns: 4 }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, stackOverlap: 15 }).success).toBe(false);
+	});
+
+	it('rejects unknown keys and bad values inside a board block', () => {
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			mainboard: { ...validConfig.mainboard, sideboardLayout: 'stack' },
+		}).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			sideboard: { view: 'carousel' },
+		}).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			mainboard: { ...validConfig.mainboard, columns: 0 },
+		}).success).toBe(false);
 	});
 });
 
