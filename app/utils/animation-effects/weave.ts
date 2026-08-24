@@ -57,8 +57,10 @@ void main() {
 	vec4 warp = threadAt(p.x, p.y, 3.7, halfWidth, iTime * 0.7, aaCell);
 	vec4 weft = threadAt(p.y, p.x, 9.1, halfWidth, iTime * 0.8, aaCell);
 
-	vec3 warpBase = warpColor * (0.35 + 0.65 * warp.y);
-	vec3 weftBase = weftColor * (0.35 + 0.65 * weft.y);
+	// Kept deliberately dim: the cloth is an ambient background, so the bands
+	// stay dark-majority with the brightness concentrated at the centrelines.
+	vec3 warpBase = warpColor * (0.12 + 0.45 * warp.y);
+	vec3 weftBase = weftColor * (0.12 + 0.45 * weft.y);
 
 	// The under-thread dips beneath the crossing: it darkens near the
 	// over-thread's centreline, which is what makes the grid read as woven.
