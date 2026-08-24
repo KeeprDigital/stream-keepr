@@ -565,7 +565,9 @@ export const DEFAULT_CARD_CONFIG: CardModeConfig = {
 	...DEFAULT_CARD_DISPLAY_CONFIG,
 };
 
-export const DEFAULT_DECK_BOARD_LAYOUT: DeckBoardLayoutConfig = {
+export type ResolvedDeckBoardLayout = Required<DeckBoardLayoutConfig>;
+
+export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedDeckBoardLayout = {
 	view: 'grid',
 	columns: 4,
 	listColumns: 2,
@@ -575,12 +577,39 @@ export const DEFAULT_DECK_BOARD_LAYOUT: DeckBoardLayoutConfig = {
 	stackOverlap: 15,
 };
 
+const DEFAULT_SIDEBOARD_LAYOUT: ResolvedDeckBoardLayout = {
+	...DEFAULT_DECK_BOARD_LAYOUT,
+	view: 'stack',
+};
+
+export interface ResolvedDeckBoards {
+	board: BoardSelection;
+	sideboardPlacement: SideboardPlacement;
+	mainboard: ResolvedDeckBoardLayout;
+	sideboard: ResolvedDeckBoardLayout;
+}
+
+/**
+ * Completes a Deck configuration's board selection and board blocks from their
+ * defaults. Stored blocks are partial fragments — a PATCH may have written a
+ * lone `{ columns: 6 }` — so every rendering and settings surface resolves
+ * through this rather than reading the fragments directly.
+ */
+export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
+	return {
+		board: config.board ?? 'full',
+		sideboardPlacement: config.sideboardPlacement ?? 'beside',
+		mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...config.mainboard },
+		sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT, ...config.sideboard },
+	};
+}
+
 export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	playerId: null,
 	board: 'full',
 	sideboardPlacement: 'beside',
 	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
-	sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' },
+	sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT },
 	showQuantities: true,
 	showDeckName: true,
 	showDeckColors: true,

@@ -236,6 +236,29 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('[data-testid="sideboard-grid"]').attributes('style')).toContain('repeat(6, minmax(0, 1fr))');
 	});
 
+	it('sizes beside boards proportionally to their column counts', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: { view: 'grid', columns: 4 },
+			sideboard: { view: 'grid', columns: 2 },
+		};
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow: 4');
+		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain('flex-grow: 2');
+	});
+
+	it('keeps a beside stacked sideboard content-sized while the mainboard flexes', async () => {
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow:');
+		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '').not.toContain('flex-grow:');
+	});
+
 	it('renders a stacked sideboard as a vertical strip beside the mainboard and a row below it', async () => {
 		sideboard.value = [
 			createCard({ name: 'Force of Will', compartment: 'sideboard' }),

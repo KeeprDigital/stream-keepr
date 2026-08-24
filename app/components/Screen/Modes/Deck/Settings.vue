@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, DeckBoardView, SideboardPlacement } from '~~/shared/types/enums';
-import type { DeckBoardLayoutConfig } from '~~/shared/types/screenConfig';
+import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { DEFAULT_DECK_CONFIG } from '~~/shared/types/screenConfig';
+import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import {
 	DECK_CARD_SIZE_SELECT_OPTIONS,
@@ -66,35 +66,24 @@ const boardViewTabs: TabsItem[] = [
 	{ label: 'List', value: 'list', icon: 'i-lucide-list' },
 ];
 
-const board = computed<BoardSelection>(() => config.value.board ?? 'full');
-
-// Stored board blocks are partial fragments; complete each from its default
-// block so the settings surface always shows and writes a whole block.
-type ResolvedBoardLayout = Required<DeckBoardLayoutConfig>;
-const mainboardLayout = computed(() => ({
-	...DEFAULT_DECK_CONFIG.mainboard,
-	...config.value.mainboard,
-} as ResolvedBoardLayout));
-const sideboardLayout = computed(() => ({
-	...DEFAULT_DECK_CONFIG.sideboard,
-	...config.value.sideboard,
-} as ResolvedBoardLayout));
+const resolvedBoards = computed(() => resolveDeckBoards(config.value));
+const board = computed<BoardSelection>(() => resolvedBoards.value.board);
 
 type BoardKey = 'mainboard' | 'sideboard';
 
 interface BoardSection {
 	key: BoardKey;
 	title: string;
-	layout: ResolvedBoardLayout;
+	layout: ResolvedDeckBoardLayout;
 }
 
 const boardSections = computed<BoardSection[]>(() => {
 	const sections: BoardSection[] = [];
 	if (board.value !== 'sideboard') {
-		sections.push({ key: 'mainboard', title: 'Mainboard', layout: mainboardLayout.value });
+		sections.push({ key: 'mainboard', title: 'Mainboard', layout: resolvedBoards.value.mainboard });
 	}
 	if (board.value !== 'mainboard') {
-		sections.push({ key: 'sideboard', title: 'Sideboard', layout: sideboardLayout.value });
+		sections.push({ key: 'sideboard', title: 'Sideboard', layout: resolvedBoards.value.sideboard });
 	}
 	return sections;
 });
@@ -102,16 +91,17 @@ const boardSections = computed<BoardSection[]>(() => {
 // The mode-config PATCH replaces a board block wholesale, so every knob change
 // writes the complete resolved block back.
 function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>) {
-	const current = key === 'mainboard' ? mainboardLayout.value : sideboardLayout.value;
-	updateConfig({ [key]: { ...current, ...patch } });
+	updateConfig({ [key]: { ...resolvedBoards.value[key], ...patch } });
 }
 
 // Empty-sideboard hint (#477/#478): the output renders nothing for an empty
 // sideboard by design, so the control surface is the place that says so.
 const deckCache = usePlayerDeckCache();
 const sideboardEmpty = ref(false);
+const sideboardLookup = createGuardedSequence();
 
 watch([() => config.value.playerId, () => playerStore.players], async ([playerId]) => {
+	const flight = sideboardLookup.begin();
 	sideboardEmpty.value = false;
 	if (!playerId) {
 		return;
@@ -124,7 +114,7 @@ watch([() => config.value.playerId, () => playerStore.players], async ([playerId
 
 	try {
 		const deck = await deckCache.fetchDeck(playerId, props.eventId, player.updatedAt);
-		if (config.value.playerId !== playerId) {
+		if (flight.stale) {
 			return;
 		}
 		sideboardEmpty.value = !!deck && !deck.cards.some(card => card.compartment === 'sideboard');
@@ -367,7 +357,7 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
-					:model-value="config.sideboardPlacement ?? 'beside'"
+					:model-value="resolvedBoards.sideboardPlacement"
 					:items="SIDEBOARD_PLACEMENT_SELECT_OPTIONS"
 					class="w-48"
 					@update:model-value="updateConfig({ sideboardPlacement: $event as SideboardPlacement })"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { DeckCardSize, QuantityPosition } from '~~/shared/types/enums';
-import type { DeckBoardLayoutConfig, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { ResolvedDeckBoardLayout, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { DEFAULT_DECK_CONFIG } from '~~/shared/types/screenConfig';
+import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 
@@ -81,28 +81,16 @@ async function handleDeckAfterLeave() {
 	showDeckBody.value = hasDisplayedDeck.value;
 }
 
-const board = computed(() => config.value.board ?? 'full');
-const sideboardPlacement = computed(() => config.value.sideboardPlacement ?? 'beside');
+const resolvedBoards = computed(() => resolveDeckBoards(config.value));
+const board = computed(() => resolvedBoards.value.board);
 const showMainboard = computed(() => board.value !== 'sideboard');
 const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
-
-// Stored board blocks are partial fragments; complete each from its default
-// block so a lone `{ columns: 6 }` patch keeps the rest of the layout.
-type ResolvedBoardLayout = Required<DeckBoardLayoutConfig>;
-const mainboardLayout = computed(() => ({
-	...DEFAULT_DECK_CONFIG.mainboard,
-	...config.value.mainboard,
-} as ResolvedBoardLayout));
-const sideboardLayout = computed(() => ({
-	...DEFAULT_DECK_CONFIG.sideboard,
-	...config.value.sideboard,
-} as ResolvedBoardLayout));
 
 // A vertical strip only reads beside a mainboard; every other stacked board
 // renders as a horizontal overlapping row (#478).
 const sideboardBeside = computed(() =>
 	board.value === 'full'
-	&& sideboardPlacement.value === 'beside'
+	&& resolvedBoards.value.sideboardPlacement === 'beside'
 	&& showSideboard.value,
 );
 
@@ -110,7 +98,7 @@ interface VisibleBoard {
 	key: 'mainboard' | 'sideboard';
 	label: string;
 	cards: DeckListCardWithData[];
-	layout: ResolvedBoardLayout;
+	layout: ResolvedDeckBoardLayout;
 	stackVertical: boolean;
 	showLabel: boolean;
 }
@@ -122,9 +110,9 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 			key: 'mainboard',
 			label: 'Mainboard',
 			cards: mainboard.value,
-			layout: mainboardLayout.value,
+			layout: resolvedBoards.value.mainboard,
 			stackVertical: false,
-			showLabel: mainboardLayout.value.view === 'list',
+			showLabel: resolvedBoards.value.mainboard.view === 'list',
 		});
 	}
 	if (showSideboard.value) {
@@ -132,7 +120,7 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 			key: 'sideboard',
 			label: 'Sideboard',
 			cards: sideboard.value,
-			layout: sideboardLayout.value,
+			layout: resolvedBoards.value.sideboard,
 			stackVertical: sideboardBeside.value,
 			showLabel: true,
 		});
@@ -141,6 +129,22 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 });
 
 const besideActive = computed(() => sideboardBeside.value && showMainboard.value);
+
+/**
+ * In the beside row each board's share of the width follows its column count,
+ * so a column reads about the same width on either side. A beside stacked
+ * sideboard stays content-sized — its strip has a fixed card width.
+ */
+function boardFlexStyle(section: VisibleBoard) {
+	if (!besideActive.value) {
+		return {};
+	}
+	if (section.key === 'sideboard' && section.layout.view === 'stack') {
+		return {};
+	}
+	const weight = section.layout.view === 'list' ? section.layout.listColumns : section.layout.columns;
+	return { flex: `${weight} 1 0%` };
+}
 const showHighlanderPoints = computed(() => config.value.showHighlanderPoints !== false);
 const showHighlanderTotal = computed(() =>
 	config.value.showHighlanderTotal !== false
@@ -173,14 +177,14 @@ const showHeader = computed(() =>
 );
 
 // Grid style with dynamic gap
-function gridStyle(layout: ResolvedBoardLayout) {
+function gridStyle(layout: ResolvedDeckBoardLayout) {
 	return {
 		gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
 		gap: `${layout.cardGap}px`,
 	};
 }
 
-function listGridStyle(layout: ResolvedBoardLayout) {
+function listGridStyle(layout: ResolvedDeckBoardLayout) {
 	return {
 		gridTemplateColumns: `repeat(${layout.listColumns}, minmax(0, 1fr))`,
 		columnGap: '1rem',
@@ -195,7 +199,7 @@ const CARD_SIZE_CLASSES: Record<DeckCardSize, string> = {
 };
 
 // Card size - either dynamic or fixed class
-function gridCardSizeClass(layout: ResolvedBoardLayout) {
+function gridCardSizeClass(layout: ResolvedDeckBoardLayout) {
 	return layout.dynamicCardSize ? '' : CARD_SIZE_CLASSES[layout.cardSize];
 }
 
@@ -350,18 +354,18 @@ const CARD_HEIGHT_PX: Record<DeckCardSize, number> = {
 };
 
 // Vertical strip: each stacked card reveals stackOverlap % of its height.
-function stackColumnOffsetPx(layout: ResolvedBoardLayout) {
+function stackColumnOffsetPx(layout: ResolvedDeckBoardLayout) {
 	return Math.round(CARD_HEIGHT_PX[layout.cardSize] * (layout.stackOverlap / 100));
 }
 
-function stackColumnStyle(layout: ResolvedBoardLayout, cardCount: number) {
+function stackColumnStyle(layout: ResolvedDeckBoardLayout, cardCount: number) {
 	const height = cardCount === 0
 		? 0
 		: ((cardCount - 1) * stackColumnOffsetPx(layout)) + CARD_HEIGHT_PX[layout.cardSize];
 	return { height: `${height}px` };
 }
 
-function stackColumnCardStyle(layout: ResolvedBoardLayout, index: number) {
+function stackColumnCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 	return {
 		position: 'absolute' as const,
 		top: `${index * stackColumnOffsetPx(layout)}px`,
@@ -371,11 +375,11 @@ function stackColumnCardStyle(layout: ResolvedBoardLayout, index: number) {
 }
 
 // Horizontal row: each stacked card reveals stackOverlap % of its width.
-function stackRowOffsetPx(layout: ResolvedBoardLayout) {
+function stackRowOffsetPx(layout: ResolvedDeckBoardLayout) {
 	return Math.round(CARD_WIDTH_PX[layout.cardSize] * (layout.stackOverlap / 100));
 }
 
-function stackRowStyle(layout: ResolvedBoardLayout, cardCount: number) {
+function stackRowStyle(layout: ResolvedDeckBoardLayout, cardCount: number) {
 	const width = cardCount === 0
 		? 0
 		: ((cardCount - 1) * stackRowOffsetPx(layout)) + CARD_WIDTH_PX[layout.cardSize];
@@ -385,7 +389,7 @@ function stackRowStyle(layout: ResolvedBoardLayout, cardCount: number) {
 	};
 }
 
-function stackRowCardStyle(layout: ResolvedBoardLayout, index: number) {
+function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 	return {
 		position: 'absolute' as const,
 		left: `${index * stackRowOffsetPx(layout)}px`,
@@ -485,74 +489,72 @@ function stackRowCardStyle(layout: ResolvedBoardLayout, index: number) {
 					<!-- Boards: each visible board renders its own layout block -->
 					<div class="deck-layout flex gap-6" :class="besideActive ? 'flex-row' : 'flex-col'">
 						<div
-							v-for="b in visibleBoards"
-							:key="b.key"
-							:data-testid="`${b.key}-section`"
-							:class="[
-								b.key === 'mainboard' && besideActive ? 'flex-1' : '',
-								b.stackVertical ? 'flex flex-col' : '',
-							]"
+							v-for="section in visibleBoards"
+							:key="section.key"
+							:data-testid="`${section.key}-section`"
+							:class="section.stackVertical ? 'flex flex-col' : ''"
+							:style="boardFlexStyle(section)"
 						>
-							<h3 v-if="b.showLabel" class="text-lg font-semibold mb-2" :style="primaryTextStyle">
-								{{ b.label }}
+							<h3 v-if="section.showLabel" class="text-lg font-semibold mb-2" :style="primaryTextStyle">
+								{{ section.label }}
 							</h3>
 
 							<!-- Grid -->
 							<div
-								v-if="b.layout.view === 'grid'"
-								:data-testid="`${b.key}-grid`"
+								v-if="section.layout.view === 'grid'"
+								:data-testid="`${section.key}-grid`"
 								class="card-grid"
-								:class="{ 'dynamic-grid': b.layout.dynamicCardSize }"
-								:style="gridStyle(b.layout)"
+								:class="{ 'dynamic-grid': section.layout.dynamicCardSize }"
+								:style="gridStyle(section.layout)"
 							>
 								<ScreenModesDeckCard
-									v-for="(card, index) in b.cards"
-									:key="`${b.key}-${index}`"
+									v-for="(card, index) in section.cards"
+									:key="`${section.key}-${index}`"
 									:card="card"
-									:size-class="gridCardSizeClass(b.layout)"
-									:dynamic-size="b.layout.dynamicCardSize"
+									:size-class="gridCardSizeClass(section.layout)"
+									:dynamic-size="section.layout.dynamicCardSize"
 									v-bind="cardBadgeProps"
 								/>
 							</div>
 
 							<!-- Stack, beside a mainboard: vertical strip -->
 							<div
-								v-else-if="b.layout.view === 'stack' && b.stackVertical"
-								:data-testid="`${b.key}-stack-column`"
+								v-else-if="section.layout.view === 'stack' && section.stackVertical"
+								:data-testid="`${section.key}-stack-column`"
 								class="stack-container relative"
-								:class="CARD_SIZE_CLASSES[b.layout.cardSize]"
-								:style="stackColumnStyle(b.layout, b.cards.length)"
+								:class="CARD_SIZE_CLASSES[section.layout.cardSize]"
+								:style="stackColumnStyle(section.layout, section.cards.length)"
 							>
 								<div
-									v-for="(card, index) in b.cards"
-									:key="`${b.key}-${index}`"
+									v-for="(card, index) in section.cards"
+									:key="`${section.key}-${index}`"
 									class="stack-card"
-									:style="stackColumnCardStyle(b.layout, index)"
+									:style="stackColumnCardStyle(section.layout, index)"
 								>
 									<ScreenModesDeckCard
 										:card="card"
-										:size-class="CARD_SIZE_CLASSES[b.layout.cardSize]"
+										:size-class="CARD_SIZE_CLASSES[section.layout.cardSize]"
 										v-bind="cardBadgeProps"
 									/>
 								</div>
 							</div>
 
 							<!-- Stack, full width: horizontal overlapping row -->
-							<div v-else-if="b.layout.view === 'stack'" class="flex justify-center">
+							<div v-else-if="section.layout.view === 'stack'" class="flex justify-center">
 								<div
-									:data-testid="`${b.key}-stack-row`"
+									:data-testid="`${section.key}-stack-row`"
 									class="relative"
-									:style="stackRowStyle(b.layout, b.cards.length)"
+									:style="stackRowStyle(section.layout, section.cards.length)"
 								>
 									<div
-										v-for="(card, index) in b.cards"
-										:key="`${b.key}-${index}`"
+										v-for="(card, index) in section.cards"
+										:key="`${section.key}-${index}`"
 										class="stack-card"
-										:style="stackRowCardStyle(b.layout, index)"
+										:style="stackRowCardStyle(section.layout, index)"
 									>
 										<ScreenModesDeckCard
 											:card="card"
-											:size-class="CARD_SIZE_CLASSES[b.layout.cardSize]"
+											:size-class="CARD_SIZE_CLASSES[section.layout.cardSize]"
 											v-bind="cardBadgeProps"
 										/>
 									</div>
@@ -562,13 +564,13 @@ function stackRowCardStyle(layout: ResolvedBoardLayout, index: number) {
 							<!-- List -->
 							<div
 								v-else
-								:data-testid="`${b.key}-list`"
+								:data-testid="`${section.key}-list`"
 								class="card-list"
-								:style="listGridStyle(b.layout)"
+								:style="listGridStyle(section.layout)"
 							>
 								<div
-									v-for="(card, index) in b.cards"
-									:key="`${b.key}-${index}`"
+									v-for="(card, index) in section.cards"
+									:key="`${section.key}-${index}`"
 									class="card-list-item flex items-center gap-2 py-1 px-2 rounded-lg"
 								>
 									<span class="quantity text-muted w-6 text-right" :style="secondaryTextStyle">

@@ -15,6 +15,7 @@ import {
 	DEFAULT_TOPCUT_CONFIG,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
+	resolveDeckBoards,
 } from '~~/shared/types/screenConfig';
 
 describe('getDefaultConfigForMode', () => {
@@ -99,6 +100,28 @@ describe('getDisplayDefaultsForMode', () => {
 			columns: DEFAULT_PLAYER_HISTORY_CONFIG.columns,
 			showHeader: DEFAULT_PLAYER_HISTORY_CONFIG.showHeader,
 		});
+	});
+});
+
+describe('resolveDeckBoards', () => {
+	it('resolves an empty config to the defaults', () => {
+		expect(resolveDeckBoards({})).toEqual({
+			board: 'full',
+			sideboardPlacement: 'beside',
+			mainboard: DEFAULT_DECK_CONFIG.mainboard,
+			sideboard: DEFAULT_DECK_CONFIG.sideboard,
+		});
+	});
+
+	it('completes a partial board block from its default block', () => {
+		const resolved = resolveDeckBoards({
+			board: 'sideboard',
+			sideboard: { columns: 6 },
+		});
+
+		expect(resolved.board).toBe('sideboard');
+		expect(resolved.sideboard).toEqual({ ...DEFAULT_DECK_CONFIG.sideboard, columns: 6 });
+		expect(resolved.mainboard).toEqual(DEFAULT_DECK_CONFIG.mainboard);
 	});
 });
 
