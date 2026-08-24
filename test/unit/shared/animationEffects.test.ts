@@ -24,7 +24,7 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
@@ -66,6 +66,19 @@ describe('animationEffects catalogue', () => {
 			coverage: 0.5,
 			contours: 4,
 			zoom: 1,
+			speed: 1,
+		});
+	});
+
+	it('ships shards under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('shards')).toEqual({
+			shardColor: '#312e81',
+			edgeColor: '#7dd3fc',
+			backgroundColor: '#111111',
+			size: 1,
+			intensity: 1,
 			speed: 1,
 		});
 	});

@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'waves', 'weave'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -204,6 +204,24 @@ export const ringsAnimationParamsSchema = z.strictObject({
 });
 
 /**
+ * Shards: a pane of shattered glass — slowly shifting Voronoi facets, each
+ * tinted a hashed shade between the background and the shard colour, crack
+ * lines glowing along every facet boundary, and an occasional glint sweeping
+ * across facets whose hashed orientation catches it. A new effect (no fork
+ * ancestry), so the params carry semantic names and the defaults are the
+ * recorded design's (#473). `size` scales the facets, `intensity` the crack
+ * glow and the glint together.
+ */
+export const shardsAnimationParamsSchema = z.strictObject({
+	shardColor: colorParam('Shard color', '#312e81'),
+	edgeColor: colorParam('Edge color', '#7dd3fc'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	size: numberParam('Shard size', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
+/**
  * Waves: a lit, choppy water plane — the first mesh-backend port from the
  * retired fork, under its old name. `backgroundColor` survives the port even
  * though the mesh never reads it: the fork's base cleared the canvas to it,
@@ -312,6 +330,7 @@ export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
 export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
+export type ShardsAnimationParams = z.output<typeof shardsAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
 export type WeaveAnimationParams = z.output<typeof weaveAnimationParamsSchema>;
 
@@ -328,6 +347,7 @@ export interface AnimationEffectParamsMap {
 	ridgelines: RidgelinesAnimationParams;
 	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
+	shards: ShardsAnimationParams;
 	waves: WavesAnimationParams;
 	weave: WeaveAnimationParams;
 }
@@ -345,6 +365,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	ridgelines: { label: 'Ridgelines', paramsSchema: ridgelinesAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
+	shards: { label: 'Shards', paramsSchema: shardsAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
 	weave: { label: 'Weave', paramsSchema: weaveAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
@@ -411,6 +432,7 @@ const selectionBranches = {
 	ridgelines: z.strictObject({ effect: z.literal('ridgelines'), params: ridgelinesAnimationParamsSchema.optional() }),
 	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
 	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
+	shards: z.strictObject({ effect: z.literal('shards'), params: shardsAnimationParamsSchema.optional() }),
 	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
 	weave: z.strictObject({ effect: z.literal('weave'), params: weaveAnimationParamsSchema.optional() }),
 } satisfies Record<AnimationEffectName, z.ZodObject>;
@@ -441,6 +463,7 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.ridgelines,
 	selectionBranches.rings,
 	selectionBranches.ripple,
+	selectionBranches.shards,
 	selectionBranches.waves,
 	selectionBranches.weave,
 ]);
@@ -489,6 +512,7 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.ridgelines.extend(frameAnimationShape),
 	selectionBranches.rings.extend(frameAnimationShape),
 	selectionBranches.ripple.extend(frameAnimationShape),
+	selectionBranches.shards.extend(frameAnimationShape),
 	selectionBranches.waves.extend(frameAnimationShape),
 	selectionBranches.weave.extend(frameAnimationShape),
 ]);

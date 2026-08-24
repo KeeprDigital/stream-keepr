@@ -23,6 +23,7 @@ const effectLoaders: {
 	ridgelines: () => import('./ridgelines'),
 	rings: () => import('./rings'),
 	ripple: () => import('./ripple'),
+	shards: () => import('./shards'),
 	waves: () => import('./waves'),
 	weave: () => import('./weave'),
 };
