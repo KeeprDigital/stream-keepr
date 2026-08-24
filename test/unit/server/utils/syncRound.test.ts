@@ -44,6 +44,7 @@ vi.mock('~~/server/services/meleeRoundSnapshot', () => ({
 }));
 
 const { syncMatchesFromMelee } = await import('~~/server/modules/melee-sync/roundMatches');
+const { MeleeTransportError } = await import('~~/server/services/meleeTransport');
 
 const testRounds = [
 	{ id: 10, phaseId: 1, externalId: '100', externalSource: 'melee', name: 'Round 1', roundNumber: 1, status: 'upcoming', lastSyncedAt: null, eventId: 1, createdAt: new Date(), updatedAt: new Date() },
@@ -166,6 +167,46 @@ describe('syncMatchesFromMelee', () => {
 			statusCode: 409,
 		});
 		expect(mockMapMeleeMatchesToDbRows).not.toHaveBeenCalled();
+		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
+	});
+
+	// Melee.gg returns 404 from the round match and standing list endpoints when
+	// a round exists but has not been paired ("round does not exist or has no
+	// standings" per the published API spec).
+	it('treats a Melee 404 for a never-synced Round as not ready', async () => {
+		const round = { ...testRounds[1], externalId: '200', externalSource: 'melee' as const, lastSyncedAt: null };
+		const notFound = new MeleeTransportError('Melee.gg API request failed with status 404', 'http', 404);
+		mockFetchMatchesByRound.mockRejectedValue(notFound);
+		mockFetchStandingsByRound.mockRejectedValue(notFound);
+
+		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({
+			code: 'MELEE_ROUND_NOT_READY',
+			statusCode: 409,
+		});
+		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('propagates a Melee 404 for a previously synced Round instead of wiping it', async () => {
+		const round = { ...testRounds[0], externalId: '100', externalSource: 'melee' as const, lastSyncedAt: new Date() };
+		const notFound = new MeleeTransportError('Melee.gg API request failed with status 404', 'http', 404);
+		mockFetchMatchesByRound.mockRejectedValue(notFound);
+		mockFetchStandingsByRound.mockRejectedValue(notFound);
+
+		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({
+			code: 'MELEE_UPSTREAM_FAILURE',
+		});
+		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('propagates non-404 Melee failures for a never-synced Round', async () => {
+		const round = { ...testRounds[1], externalId: '200', externalSource: 'melee' as const, lastSyncedAt: null };
+		mockFetchMatchesByRound.mockRejectedValue(
+			new MeleeTransportError('Melee.gg API request failed with status 503', 'http', 503),
+		);
+
+		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({
+			code: 'MELEE_UPSTREAM_FAILURE',
+		});
 		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
 	});
 

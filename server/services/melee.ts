@@ -76,7 +76,6 @@ export function meleeService(credentials: MeleeCredentials, options: MeleeServic
 		let page = 1;
 		let hasMore = true;
 		let accumulatedBytes = 0;
-		let expectedRecordsFiltered: number | null = null;
 		let expectedRecordsTotal: number | null = null;
 		const pageSchema = meleeApiResponseSchema(itemSchema);
 		const paginationError = (reason: string): never => {
@@ -87,28 +86,31 @@ export function meleeService(credentials: MeleeCredentials, options: MeleeServic
 		};
 
 		while (hasMore && page <= MAX_PAGES) {
-			const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}page=${page}&pageSize=${pageSize}`;
+			// ignoreCache bypasses Melee's response cache; without it, list
+			// responses may serve stale standings/pairings during a live event.
+			const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}page=${page}&pageSize=${pageSize}&ignoreCache=true`;
 			const response = await fetchWithAuth(url, pageSchema, { endpoint, page });
+			// Melee's RecordsFiltered is the record count of the current page, not
+			// the DataTables-style collection total; RecordsTotal carries the
+			// collection total (verified against melee.gg player and standings
+			// endpoints, 2026-08).
 			if (response.Page !== page)
 				paginationError('unexpected page number');
 			if (response.PageSize !== pageSize)
 				paginationError('unexpected page size');
+			if (response.RecordsFiltered !== response.Content.length)
+				paginationError('a page record count did not match its content');
 			if (response.RecordsFiltered > response.RecordsTotal)
 				paginationError('filtered record count exceeded total record count');
 
-			expectedRecordsFiltered ??= response.RecordsFiltered;
 			expectedRecordsTotal ??= response.RecordsTotal;
-			if (
-				response.RecordsFiltered !== expectedRecordsFiltered
-				|| response.RecordsTotal !== expectedRecordsTotal
-			) {
+			if (response.RecordsTotal !== expectedRecordsTotal)
 				paginationError('record counts changed between pages');
-			}
 			if (response.HasMore && response.Content.length === 0)
 				paginationError('an empty page claimed more records');
 
 			const nextItemCount = allItems.length + response.Content.length;
-			if (nextItemCount > response.RecordsFiltered)
+			if (nextItemCount > response.RecordsTotal)
 				paginationError('received more records than declared');
 			if (nextItemCount > maxCollectionItems) {
 				throw new MeleeTransportError(
@@ -125,9 +127,9 @@ export function meleeService(credentials: MeleeCredentials, options: MeleeServic
 			}
 			allItems.push(...response.Content);
 			hasMore = response.HasMore;
-			if (hasMore && allItems.length >= response.RecordsFiltered)
+			if (hasMore && allItems.length >= response.RecordsTotal)
 				paginationError('more pages were declared after all records were received');
-			if (!hasMore && allItems.length !== response.RecordsFiltered)
+			if (!hasMore && allItems.length !== response.RecordsTotal)
 				paginationError('the final page did not contain every declared record');
 			page++;
 		}
