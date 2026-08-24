@@ -24,8 +24,22 @@ const PRE_REBUILD_FLAT_BAG = {
 
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves']);
+		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves']);
 		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
+	});
+
+	it('ships ridgelines under its designed defaults', () => {
+		// A new effect (no fork ancestry): semantic param names, defaults from the
+		// recorded design spec on #473.
+		expect(animationEffectDefaultParams('ridgelines')).toEqual({
+			crestColor: '#06b6d4',
+			fillColor: '#1e1b4b',
+			backgroundColor: '#111111',
+			ridges: 7,
+			relief: 1,
+			glow: 1,
+			speed: 1,
+		});
 	});
 
 	it('ships ember under its designed defaults', () => {

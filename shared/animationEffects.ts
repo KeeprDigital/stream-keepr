@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'rings', 'ripple', 'waves'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'net', 'ridgelines', 'rings', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -238,6 +238,23 @@ export const emberAnimationParamsSchema = z.strictObject({
 	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 });
 
+/**
+ * Ridgelines: stacked mountain-ridge silhouettes receding into the frame, each
+ * a drifting 1D-noise profile with a glowing crest line — a joyplot horizon.
+ * A new effect (no fork ancestry), so the params carry semantic names and the
+ * defaults are the recorded design's (#473). `ridges` counts the silhouettes,
+ * `relief` scales every profile's amplitude, `glow` the crest-line halo.
+ */
+export const ridgelinesAnimationParamsSchema = z.strictObject({
+	crestColor: colorParam('Crest color', '#06b6d4'),
+	fillColor: colorParam('Ridge color', '#1e1b4b'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	ridges: numberParam('Ridge count', { min: 3, max: 12, step: 1, default: 7 }),
+	relief: numberParam('Relief', { min: 0.2, max: 2, step: 0.1, default: 1 }),
+	glow: numberParam('Crest glow', { min: 0, max: 2, step: 0.05, default: 1 }),
+	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -256,6 +273,7 @@ export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
 export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
+export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParamsSchema>;
 export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
 export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
@@ -269,6 +287,7 @@ export interface AnimationEffectParamsMap {
 	globe: GlobeAnimationParams;
 	halo: HaloAnimationParams;
 	net: NetAnimationParams;
+	ridgelines: RidgelinesAnimationParams;
 	rings: RingsAnimationParams;
 	ripple: RippleAnimationParams;
 	waves: WavesAnimationParams;
@@ -283,6 +302,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
 	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
+	ridgelines: { label: 'Ridgelines', paramsSchema: ridgelinesAnimationParamsSchema },
 	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
 	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
@@ -346,6 +366,7 @@ const selectionBranches = {
 	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
 	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
 	net: z.strictObject({ effect: z.literal('net'), params: netAnimationParamsSchema.optional() }),
+	ridgelines: z.strictObject({ effect: z.literal('ridgelines'), params: ridgelinesAnimationParamsSchema.optional() }),
 	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
 	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
 	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
@@ -373,6 +394,7 @@ export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
 	selectionBranches.globe,
 	selectionBranches.halo,
 	selectionBranches.net,
+	selectionBranches.ridgelines,
 	selectionBranches.rings,
 	selectionBranches.ripple,
 	selectionBranches.waves,
@@ -418,6 +440,7 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 	selectionBranches.globe.extend(frameAnimationShape),
 	selectionBranches.halo.extend(frameAnimationShape),
 	selectionBranches.net.extend(frameAnimationShape),
+	selectionBranches.ridgelines.extend(frameAnimationShape),
 	selectionBranches.rings.extend(frameAnimationShape),
 	selectionBranches.ripple.extend(frameAnimationShape),
 	selectionBranches.waves.extend(frameAnimationShape),

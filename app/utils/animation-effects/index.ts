@@ -19,6 +19,7 @@ const effectLoaders: {
 	globe: () => import('./globe'),
 	halo: () => import('./halo'),
 	net: () => import('./net'),
+	ridgelines: () => import('./ridgelines'),
 	rings: () => import('./rings'),
 	ripple: () => import('./ripple'),
 	waves: () => import('./waves'),
