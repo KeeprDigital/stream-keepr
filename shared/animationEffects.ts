@@ -22,7 +22,7 @@ import { z } from 'zod';
  * names as they land; until then the vocabulary is exactly what renders.
  */
 
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'fog', 'halo', 'ripple'] as const;
+export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'fog', 'halo', 'ripple', 'waves'] as const;
 
 export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
@@ -120,6 +120,24 @@ export const haloAnimationParamsSchema = z.strictObject({
 	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 });
 
+/**
+ * Waves: a lit, choppy water plane — the first mesh-backend port from the
+ * retired fork, under its old name. `backgroundColor` survives the port even
+ * though the mesh never reads it: the fork's base cleared the canvas to it,
+ * and the water plane leaves the frame's far corners uncovered at low zoom, so
+ * it is visible on air. Defaults and ranges are the pre-rebuild application's,
+ * including the waves-specific `zoom` fallback of 0.85 rather than the shared
+ * bag's 1.
+ */
+export const wavesAnimationParamsSchema = z.strictObject({
+	color: colorParam('Wave color', '#7c3aed'),
+	backgroundColor: colorParam('Background color', '#111111'),
+	shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
+	waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
+	waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 0.85 }),
+});
+
 /** Caustics: refracted-light interference drifting over a water colour. */
 export const causticsAnimationParamsSchema = z.strictObject({
 	lightColor: colorParam('Light color', '#7dd3fc'),
@@ -135,6 +153,7 @@ export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSch
 export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
 export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
 export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
+export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
 
 export interface AnimationEffectParamsMap {
 	caustics: CausticsAnimationParams;
@@ -142,6 +161,7 @@ export interface AnimationEffectParamsMap {
 	fog: FogAnimationParams;
 	halo: HaloAnimationParams;
 	ripple: RippleAnimationParams;
+	waves: WavesAnimationParams;
 }
 
 export const ANIMATION_EFFECT_CATALOGUE = {
@@ -150,6 +170,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
 	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
 	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
+	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
 } satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
 
 export function animationEffectDefaultParams<Effect extends AnimationEffectName>(
@@ -235,6 +256,11 @@ export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnio
 		...frameAnimationShape,
 		effect: z.literal('ripple'),
 		params: rippleAnimationParamsSchema.optional(),
+	}),
+	z.strictObject({
+		...frameAnimationShape,
+		effect: z.literal('waves'),
+		params: wavesAnimationParamsSchema.optional(),
 	}),
 ]);
 

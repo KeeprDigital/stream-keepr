@@ -16,6 +16,7 @@ const effectLoaders: {
 	fog: () => import('./fog'),
 	halo: () => import('./halo'),
 	ripple: () => import('./ripple'),
+	waves: () => import('./waves'),
 };
 
 export async function loadAnimationEffect<Effect extends AnimationEffectName>(
