@@ -356,7 +356,29 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const { archive } = await exportedPackage();
 		const declared = readTemplatePackageParts(archive).manifest.applicationCapabilities.filter(declaration => declaration.capability === 'graphic-item-definition').map(declaration => declaration.identity);
 
-		expect(declared).toEqual(expect.arrayContaining(['source', 'group', 'text', 'media', 'clock', 'player-life', 'game-wins']));
+		expect(declared).toEqual(expect.arrayContaining(['source', 'group', 'text', 'media', 'clock', 'player-life', 'game-wins', 'deck-list']));
+	});
+
+	/**
+	 * The newest context-gated Definition rides the same generic walk as the rest:
+	 * `templatePackageRequirements` reads the kind and its `configurationVersion`
+	 * off the Definition, so a Deck List Item is declared and version-pinned with
+	 * nothing deck-list-shaped anywhere in the packaging path. Pinned here so a
+	 * version bump on the Definition cannot ship without the declaration moving
+	 * with it. There is no `.skgraphic` twin for this: the Broadcast Graphics
+	 * palette withholds the kind, so no exporter here can write one into a
+	 * Broadcast Graphic document.
+	 */
+	it('declares the Deck List Definition at its configuration version, discovered from the composition', async () => {
+		const { archive } = await exportedPackage();
+		const declarations = readTemplatePackageParts(archive).manifest.applicationCapabilities;
+
+		expect(declarations).toContainEqual(expect.objectContaining({
+			capability: 'graphic-item-definition',
+			identity: 'deck-list',
+			configurationVersion: 1,
+			requiredBy: ['composition.items.sideboard.type'],
+		}));
 	});
 
 	/**

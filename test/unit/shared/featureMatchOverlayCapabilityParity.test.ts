@@ -118,6 +118,27 @@ describe('feature Match Overlay capability parity', () => {
 		}
 	});
 
+	it('row: the Deck List Item is offered to Feature Match Overlay alone, and no built-in preset places one', () => {
+		// The one row with no legacy construct behind it: the deck-list kind is a
+		// capability the sideboard work added (#485), recorded here because the two
+		// hosts diverge on it. Feature Match Overlay renders it in full — deck card
+		// data through the Feature Match context, the live sideboard reveal, and the
+		// per-item reveal animation trigger. Broadcast Graphics declares no
+		// feature-match context, so the palette withholds the Definition, and a host
+		// without the context supplies no deck data — an item there would render
+		// nothing (#481 sharpening ADR 0015: revealed-but-dataless is still
+		// dataless). There is deliberately no Broadcast Graphics data source at v1.
+		const featureMatchKinds = graphicItemDefinitionsForHost(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).map(definition => definition.kind);
+		const broadcastKinds = graphicItemDefinitionsForHost(BROADCAST_GRAPHICS_HOST_CONTRACT).map(definition => definition.kind);
+
+		expect(featureMatchKinds).toContain('deck-list');
+		expect(broadcastKinds).not.toContain('deck-list');
+
+		// No built-in preset carries a Deck List Item at v1 — a product default
+		// (an operator adds one where a broadcast wants it), not an omission.
+		expect(everyPresetItem().some(item => item.type === 'deck-list')).toBe(false);
+	});
+
 	it('row: widget-group becomes a Graphic Group carrying its arrangement and clipping', () => {
 		const groups = everyPresetItem().filter(item => item.type === 'group');
 
