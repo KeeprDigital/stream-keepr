@@ -200,15 +200,12 @@ describe('featureMatchOverlayDisplay', () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
-				items: [{
-					...getGraphicItemDefinition('deck-list').createDefault({
-						id: 'deck',
-						label: 'Deck',
-						canvasWidth: 1920,
-						canvasHeight: 1080,
-					}),
-					view: 'grid' as const,
-				}],
+				items: [Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+					id: 'deck',
+					label: 'Deck',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}), { view: 'grid' as const })],
 			};
 			mockConfig.value = config;
 			mockMatchState.value = {

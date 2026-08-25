@@ -121,11 +121,11 @@ export function featureMatchTokenValues(
 }
 
 /**
- * The per-side sideboard card data the host resolved client-side (#491), in the
+ * The per-side Sideboard card data the host resolved client-side (#491), in the
  * shape the shared render model reads — never the full MTG card type. `null` is
- * a side whose deck data did not resolve; `[]` is a genuinely empty sideboard.
+ * a side whose deck data did not resolve; `[]` is a genuinely empty Sideboard.
  */
-export interface FeatureMatchOverlayDeckData {
+export interface FeatureMatchOverlaySideboards {
 	player1: ReadonlyArray<GraphicsDeckListCard> | null;
 	player2: ReadonlyArray<GraphicsDeckListCard> | null;
 }
@@ -139,7 +139,7 @@ export interface FeatureMatchOverlayDeckData {
  */
 export function featureMatchGraphicsContext(
 	input: FeatureMatchOverlayHostStateInput,
-	deckData?: FeatureMatchOverlayDeckData | null,
+	sideboards?: FeatureMatchOverlaySideboards | null,
 ): GraphicsFeatureMatchContext {
 	return {
 		clockDisplayTime: input.displayTime,
@@ -149,7 +149,7 @@ export function featureMatchGraphicsContext(
 			// Resolved by the host's deck card data path (#491); absent deck data
 			// stays `null`, so a Deck List Graphic Item renders nothing rather than
 			// a placeholder sideboard.
-			sideboard: deckData?.player1 ?? null,
+			sideboard: sideboards?.player1 ?? null,
 			// Hidden by default (#490): absent state, and states persisted before
 			// the flag existed, both read as not yet revealed.
 			sideboardRevealed: input.matchState?.player1?.sideboardRevealed ?? false,
@@ -157,7 +157,7 @@ export function featureMatchGraphicsContext(
 		player2: {
 			lifeTotal: input.matchState?.player2?.lifeTotal ?? null,
 			gameWins: input.matchState?.player2?.gameWins ?? 0,
-			sideboard: deckData?.player2 ?? null,
+			sideboard: sideboards?.player2 ?? null,
 			sideboardRevealed: input.matchState?.player2?.sideboardRevealed ?? false,
 		},
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf

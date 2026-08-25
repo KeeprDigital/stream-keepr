@@ -1,7 +1,7 @@
 import type { Ref } from 'vue';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayDeckData } from '~/modules/feature-match-overlay/tokenValues';
+import type { FeatureMatchOverlaySideboards } from '~/modules/feature-match-overlay/tokenValues';
 import type { GraphicsDeckListCard } from '~/modules/graphics/renderModel';
 import type { FeatureMatch } from '~/types';
 
@@ -15,7 +15,7 @@ interface SideRequest {
 }
 
 interface SideboardSourceState {
-	sideboards: FeatureMatchOverlayDeckData;
+	sideboards: FeatureMatchOverlaySideboards;
 	/**
 	 * Per-side source identity: player, source-record freshness, and the deck the
 	 * fetch actually resolved. It is how a still-degraded rebuild can tell
@@ -76,7 +76,11 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
  * longer holds falls back to the cache's own ladder (selected → primary →
  * first). Whole-fetch failure is `null`, an empty sideboard is `[]`, and a card
  * without art carries `imageUrl: null` — three states the render model keeps
- * distinct.
+ * distinct. One deliberate narrowing of the failure rule: a load that throws
+ * once a rendering is already up keeps that rendering rather than nulling it — an
+ * output on program never blanks for a fetch error, the same stance the Deck
+ * Screen Mode takes — so `null` describes a side that never resolved, not one
+ * that failed most recently.
  */
 export function useFeatureMatchOverlaySideboardData(
 	config: Ref<FeatureMatchOverlayModeConfig>,
@@ -87,7 +91,7 @@ export function useFeatureMatchOverlaySideboardData(
 	const deckCache = usePlayerDeckCache();
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 
-	const sideboards = ref<FeatureMatchOverlayDeckData>({ player1: null, player2: null });
+	const sideboards = ref<FeatureMatchOverlaySideboards>({ player1: null, player2: null });
 	let displayed: SideboardSourceState = { sideboards: { player1: null, player2: null }, stamps: { player1: null, player2: null } };
 
 	const requests = computed<Record<PlayerSide, SideRequest | null>>(() => {
