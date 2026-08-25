@@ -53,6 +53,12 @@ The bounded, synchronized visual change between profiles in a Social Profile Rot
 **Deck List**:
 A Player's submitted cards for a game and Phase.
 
+**Broadcast Deck List**:
+An Event-scoped card list prepared by an operator solely for display on a Deck Screen. It has no Player, competition, or Metagame identity, and may carry an Archetype Label for its on-screen presentation.
+
+**Archetype Label**:
+Optional broadcast-only text and mana colours attached to a Broadcast Deck List and used as its secondary Deck Screen identity. It does not reference an Archetype or give the list Metagame identity.
+
 **Mainboard**:
 The starting portion of a Deck List — the cards a Player begins each game with.
 
