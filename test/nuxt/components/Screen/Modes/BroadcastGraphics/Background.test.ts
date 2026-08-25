@@ -32,7 +32,7 @@ async function toggleEnabled(wrapper: Awaited<ReturnType<typeof mountCard>>, nex
 }
 
 describe('screenModesBroadcastGraphicsBackground', () => {
-	it('starts a Screen with no background on the catalogue’s first effect, switched on', async () => {
+	it('starts a Screen with no background on the shipped default, switched on', async () => {
 		const wrapper = await mountCard();
 
 		expect(wrapper.find('[data-testid="broadcast-graphics-background-opacity"]').exists()).toBe(false);
@@ -44,7 +44,7 @@ describe('screenModesBroadcastGraphicsBackground', () => {
 
 	it('keeps the authored effect and its params when the background is switched off', async () => {
 		// Switching off is a display state, not a removal: an author toggling it back
-		// on gets the design they tuned, not the catalogue's starting point.
+		// on gets the design they tuned, not the shipped starting point.
 		const wrapper = await mountCard({
 			background: { enabled: true, effect: 'caustics', opacity: 0.4, params: { speed: 2 } },
 		});

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { AnimationEffectName, AnimationEffectParamsMap } from '~~/shared/animationEffects';
+import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
+import { animationEffectRenderPlan } from '~~/shared/animationEffects';
 import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
@@ -36,17 +37,11 @@ const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overla
  * Whether this is an authoring preview is decided upstream, where the preview
  * state lives.
  */
-const backgroundPlan = computed<{ effect: AnimationEffectName; params?: AnimationEffectParamsMap[AnimationEffectName]; opacity: number } | null>(() => {
+const backgroundPlan = computed<AnimationEffectRenderPlan & { opacity: number } | null>(() => {
 	const config = background.value;
 	if (!config || !config.enabled || resolvedOutput.value === 'key')
 		return null;
-	// The schema pairs each effect with its own params; the cast restates that
-	// pairing where the union loses it.
-	return {
-		effect: config.effect,
-		params: config.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
-		opacity: config.opacity,
-	};
+	return { ...animationEffectRenderPlan(config), opacity: config.opacity };
 });
 const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
 const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);

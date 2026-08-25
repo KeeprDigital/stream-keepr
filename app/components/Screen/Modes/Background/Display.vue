@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
-import type { AnimationEffectName, AnimationEffectParamsMap } from '~~/shared/animationEffects';
+import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { BackgroundLayer, ScreenMediaBackgroundConfig, ScreenMediaSource } from '~~/shared/types/screenConfig';
-import { parseAnimationEffectSelection } from '~~/shared/animationEffects';
+import { animationEffectRenderPlan, parseAnimationEffectSelection } from '~~/shared/animationEffects';
 
 const config = useScreenModeConfig('background');
 
@@ -46,10 +46,7 @@ interface BackgroundLayerView {
 	imageUrl?: string;
 	imageFit?: CSSProperties['objectFit'];
 	media?: ScreenMediaBackgroundConfig;
-	animation?: {
-		effect: AnimationEffectName;
-		params?: AnimationEffectParamsMap[AnimationEffectName];
-	};
+	animation?: AnimationEffectRenderPlan;
 }
 
 function layerView(layer: BackgroundLayer): BackgroundLayerView {
@@ -83,12 +80,8 @@ function layerView(layer: BackgroundLayer): BackgroundLayerView {
 			break;
 		case 'animation': {
 			const selection = parseAnimationEffectSelection(layer.animation);
-			if (selection) {
-				view.animation = {
-					effect: selection.effect,
-					params: selection.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
-				};
-			}
+			if (selection)
+				view.animation = animationEffectRenderPlan(selection);
 			break;
 		}
 	}

@@ -39,6 +39,10 @@ export const DEFAULT_FRAME_ANIMATION: FeatureMatchOverlayFrameAnimationConfig = 
  * What a Broadcast Graphics Screen's background starts as: the catalogue's fog,
  * fully opaque.
  *
+ * Off, because a Broadcast Graphics Screen's Overlay Output is transparent behind
+ * its graphics and turning that opaque is a decision an author makes, never one a
+ * default makes for them.
+ *
  * Opaque rather than the Frame's 0.45, because the two are different things. The
  * Frame's animation is decoration inside a graphic area that already has a colour
  * and an image behind it; a Screen's background is the picture, with only the

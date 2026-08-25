@@ -329,6 +329,18 @@ describe('animationEffectSelectionSchema', () => {
 	});
 });
 
+describe('animation effect host unions', () => {
+	it('covers the whole catalogue in every host union, in catalogue order', () => {
+		// The branch list each host extends is spelled out rather than mapped, because
+		// mapping collapses the discriminated union's per-effect params. This is what
+		// makes forgetting a new effect there a failing test rather than an effect that
+		// silently cannot be selected on one host.
+		for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema]) {
+			expect(schema.options.map(branch => branch.shape.effect.value)).toEqual([...ANIMATION_EFFECT_VALUES]);
+		}
+	});
+});
+
 describe('featureMatchOverlayFrameAnimationConfigSchema', () => {
 	it('accepts a sparse config for every effect and leaves the params sparse', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {

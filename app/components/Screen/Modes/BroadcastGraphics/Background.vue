@@ -32,14 +32,15 @@ const canAuthor = computed(() => props.writable === true);
 
 /**
  * The background this card edits: the stored one when this build can render it,
- * and the catalogue's starting point when it cannot.
+ * and the shipped default when it cannot.
  *
- * The stored value is used as authored rather than re-emitted from its parsed
- * form, so a sparse params bag stays sparse — every param defaults from its
- * effect's schema, and writing the completed bag back would pin today's defaults
- * into the document. A config naming an effect this build does not ship starts
- * over instead of being carried into the next write (the vocabulary refusal, in
- * the editor).
+ * The parse decides *which of the two*, and its result is then deliberately
+ * discarded in favour of the stored value as authored — because parsing fills
+ * every param from its effect's schema, and writing that completed bag back would
+ * pin today's defaults into the document. A sparse bag stays sparse; a config
+ * naming an effect this build does not ship starts over rather than being carried
+ * into the next write (the vocabulary refusal, in the editor, on the Frame's
+ * precedent).
  */
 const background = computed<BroadcastGraphicsBackgroundConfig>(() =>
 	parseBroadcastGraphicsBackgroundConfig(props.background)
@@ -53,7 +54,7 @@ function write(next: BroadcastGraphicsBackgroundConfig) {
 	emit('update:background', next);
 }
 
-function updateHostFields(updates: Partial<Pick<BroadcastGraphicsBackgroundConfig, 'enabled' | 'opacity'>>) {
+function updateEnabledOrOpacity(updates: Partial<Pick<BroadcastGraphicsBackgroundConfig, 'enabled' | 'opacity'>>) {
 	write({ ...background.value, ...updates });
 }
 
@@ -92,7 +93,7 @@ const selection = computed<AnimationEffectSelection>(() => ({
 			<ScreenSettingsToggle
 				label="Animated background"
 				:model-value="background.enabled"
-				@update:model-value="updateHostFields({ enabled: $event })"
+				@update:model-value="updateEnabledOrOpacity({ enabled: $event })"
 			/>
 
 			<template v-if="background.enabled">
@@ -104,7 +105,7 @@ const selection = computed<AnimationEffectSelection>(() => ({
 						:max="1"
 						size="sm"
 						class="w-full"
-						@update:model-value="updateHostFields({ opacity: Number($event) })"
+						@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"
 					/>
 				</UFormField>
 

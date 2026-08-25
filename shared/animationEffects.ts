@@ -485,16 +485,46 @@ export function parseAnimationEffectSelection(
 	return outcome.success ? outcome.data : null;
 }
 
+/** What a renderer mount takes: the effect to draw, and the params to draw it with. */
+export interface AnimationEffectRenderPlan {
+	effect: AnimationEffectName;
+	params?: AnimationEffectParamsMap[AnimationEffectName];
+}
+
+/**
+ * A parsed selection as the shared mount takes it, whatever host it came from —
+ * a Frame's animation, a Background Layer's, a Broadcast Graphics Background.
+ *
+ * It exists for the cast: the schema pairs each effect with its own params, and
+ * the union loses that pairing at the point a single component has to accept any
+ * of them. Restating it once here is what keeps three hosts from each carrying
+ * their own copy of the same assertion.
+ */
+export function animationEffectRenderPlan(
+	selection: z.output<typeof animationEffectSelectionSchema>,
+): AnimationEffectRenderPlan {
+	return {
+		effect: selection.effect,
+		params: selection.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
+	};
+}
+
 /**
  * Every selection branch extended with one host's own fields, in the order the
  * catalogue declares them.
  *
  * A host composes the shared selection rather than restating it, and it does so
- * across all fifteen branches — so the branch list is written once here and each
- * host names only what it adds. `.extend` keeps the branches strict, which is
- * what makes a stored config carrying fields no effect declares (the retired
+ * across every branch — so the branch list is written once here and each host
+ * names only what it adds. `.extend` keeps the branches strict, which is what
+ * makes a stored config carrying fields no effect declares (the retired
  * pre-rebuild flat bag, recognisable by its `mouseDrift*` fields) reset to
  * defaults rather than being half-read (the reset ADR-0014 accepts).
+ *
+ * Spelled out rather than mapped over `ANIMATION_EFFECT_VALUES`, because the
+ * discriminated union's type is what gives every consumer its per-effect params
+ * and a mapped list collapses it. That an effect added to the catalogue must be
+ * added here too is pinned by a test rather than by the compiler: "every host
+ * union covers the whole catalogue" in `test/unit/shared/animationEffects.test.ts`.
  */
 function animationEffectHostBranches<Shape extends z.ZodRawShape>(shape: Shape) {
 	return [
