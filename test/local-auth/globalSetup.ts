@@ -3,8 +3,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createTest, exposeContextToEnv, fetch } from '@nuxt/test-utils/e2e';
 import {
-	LOCAL_RUNTIME_ATTESTATION_NAME,
-	LOCAL_RUNTIME_ATTESTATION_VALUE,
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
 } from '../../shared/utils/localDeveloperAuth';
 import { prepareIntegrationD1 } from '../integration/integrationD1';
 import {
@@ -21,13 +21,13 @@ export async function setup() {
 	const previous = {
 		integration: process.env[INTEGRATION_MODE_ENV],
 		persistDir: process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV],
-		bypass: process.env.NUXT_LOCAL_AUTH_BYPASS,
-		attestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
+		bypass: process.env[LOCAL_AUTH_BYPASS_NAME],
 	};
 	process.env[INTEGRATION_MODE_ENV] = 'true';
 	process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV] = PERSIST_DIR;
-	process.env.NUXT_LOCAL_AUTH_BYPASS = 'true';
-	process.env[LOCAL_RUNTIME_ATTESTATION_NAME] = LOCAL_RUNTIME_ATTESTATION_VALUE;
+	// This suite is a launcher, and the only one in the test tree that asks for a
+	// bypassed server. Nothing it inherits can arm this: no file assigns the name.
+	process.env[LOCAL_AUTH_BYPASS_NAME] = LOCAL_AUTH_BYPASS_ENABLED_VALUE;
 
 	await resetIntegrationWranglerState(PERSIST_DIR);
 	await prepareIntegrationD1();
@@ -37,8 +37,7 @@ export async function setup() {
 		env: {
 			[INTEGRATION_MODE_ENV]: 'true',
 			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: PERSIST_DIR,
-			NUXT_LOCAL_AUTH_BYPASS: 'true',
-			[LOCAL_RUNTIME_ATTESTATION_NAME]: LOCAL_RUNTIME_ATTESTATION_VALUE,
+			[LOCAL_AUTH_BYPASS_NAME]: LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 			NUXT_BETTER_AUTH_SECRET: '',
 			NUXT_ADMIN_BOOTSTRAP_TOKEN: '',
 			NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
@@ -64,8 +63,7 @@ export async function setup() {
 		for (const [name, value] of [
 			[INTEGRATION_MODE_ENV, previous.integration],
 			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV, previous.persistDir],
-			['NUXT_LOCAL_AUTH_BYPASS', previous.bypass],
-			[LOCAL_RUNTIME_ATTESTATION_NAME, previous.attestation],
+			[LOCAL_AUTH_BYPASS_NAME, previous.bypass],
 		] as const) {
 			if (value === undefined)
 				delete process.env[name];

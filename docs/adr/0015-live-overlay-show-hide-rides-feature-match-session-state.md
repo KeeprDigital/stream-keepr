@@ -1,5 +1,12 @@
 # ADR-0015: Live overlay show/hide rides feature-match session state, not graphics config
 
+- **Status**: Accepted
+- **Date**: 2026-08-24
+- **Issue**: [#486](https://github.com/KeeprDigital/stream-keepr/issues/486) (recording it here), decided under spec [#485](https://github.com/KeeprDigital/stream-keepr/issues/485) / decisions [#479](https://github.com/KeeprDigital/stream-keepr/issues/479), [#480](https://github.com/KeeprDigital/stream-keepr/issues/480), [#481](https://github.com/KeeprDigital/stream-keepr/issues/481)
+- **Related**: `docs/feature-match-overlay-capability-parity.md` (the Deck List Graphic Item row, which is where the two hosts first diverge in behaviour)
+
+## Context
+
 An operator revealing or hiding a player's sideboard on the Feature Match Overlay
 between games needs a sub-second, control-surface-driven toggle. The graphics
 config path could express it today (write the item's `visible`), but it is

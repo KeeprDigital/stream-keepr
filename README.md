@@ -42,53 +42,59 @@ pnpm install
 pnpm dev
 ```
 
-By default, local development uses Better Auth exactly like a deployed
-installation. To work without creating an account or signing in, set this in the
-ignored `.env` file and restart the dev server:
+This uses Better Auth exactly like a deployed installation. To work without
+creating an account or signing in, start the bypassed launcher instead:
 
-```dotenv
-NUXT_LOCAL_AUTH_BYPASS=true
+```bash
+pnpm dev:bypass
 ```
 
-The value must be exactly `true`. It is only one of two enabling conditions:
-the supported `pnpm dev` and `pnpm preview` launchers also supply the separate
-`STREAM_KEEPR_LOCAL_RUNTIME=true` runtime attestation. Do not put that attestation
-in `.env` or Worker configuration; it is launcher-owned, non-secret evidence that
-this process was intentionally started for local use. The server does not infer it
-from `NODE_ENV`, a hostname, loopback addressing, or local bindings. A built Worker
-with only `NUXT_LOCAL_AUTH_BYPASS=true` therefore keeps normal Better Auth behavior.
+**The bypass lives in that command and nowhere else.** No file arms it — not
+`.env`, which does not carry the name, and not `.env.example`, which does not
+mention it. It is explicitly on when you type `dev:bypass`, and implicitly off in
+every other case: `pnpm dev`, `pnpm preview`, `pnpm build`, `pnpm test`,
+`pnpm verify`, CI, and every deployed installation. Nothing anywhere requires it
+to be set, and nothing refuses to run because it is.
 
-In bypass mode `NUXT_BETTER_AUTH_SECRET` and `NUXT_ADMIN_BOOTSTRAP_TOKEN` may
-remain blank. The app enters protected pages as the stable **Local Developer
+Under `pnpm dev:bypass`, `NUXT_BETTER_AUTH_SECRET` and `NUXT_ADMIN_BOOTSTRAP_TOKEN`
+may remain blank. The app enters protected pages as the stable **Local Developer
 User**, while each browser receives a distinct local Session so Graphics Authoring
 Leases still distinguish concurrent editors. The shell shows that identity and
 omits sign-out because the next request would create the same local identity again.
+Startup warns conspicuously that authentication is bypassed.
 
-This bypass does not cover the Graphics Administrator token, Screen Output
+The bypass does not cover the Graphics Administrator token, Screen Output
 capabilities, or any other configuration. In particular,
 `NUXT_GRAPHICS_ADMIN_TOKEN` is still required for Graphics Administrator routes.
-Remove the setting or set it to `false` to return to real sign-in.
+Run `pnpm dev` to return to real sign-in.
 
-Keep either bypassed launcher on loopback. Binding Nuxt or local workerd to
-`0.0.0.0` or another non-loopback address gives every machine that can reach it
+The server never infers any of this. It reads one name, compares it to the exact
+string `true`, and decides nothing from `NODE_ENV`, a hostname, loopback
+addressing, or which bindings a Worker has — none of those facts proves who can
+reach the process. `pnpm worker:dry-run` refuses to deploy generated Worker
+configuration that carries the name, and ADR-0017 records what is left.
+
+Keep a bypassed launcher on loopback. Binding Nuxt or local workerd to `0.0.0.0`
+or another non-loopback address gives every machine that can reach it
 unauthenticated access; local workerd is not inherently private merely because its
-bindings are local. Daily Nuxt startup prints the same warning conspicuously.
+bindings are local. `pnpm dev:local` binds beyond loopback and has no bypassed
+variant for exactly that reason.
 
 ## Testing
 
 Which script, when:
 
-| When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:local-auth:run`, `pnpm test:integration`      | Watch mode is available for the unit, Nuxt, and integration tiers; append `:run` for a single pass. The local-auth tier is one focused spawned-dev-server pass.                                                                                                                                              |
-| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt (both with coverage, gated by the thresholds in `vitest.shared.ts`) + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).    |
-| Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                                                                           |
-| Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, real Better Auth, bypass refusal without attestation, attested preview auth, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one. |
-| Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                                                                         |
-| Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`.                                                      |
-| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                                                                                 |
-| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                                                                         |
-| Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                                                                       |
+| When                                        | Command                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:local-auth:run`, `pnpm test:integration`      | Watch mode is available for the unit, Nuxt, and integration tiers; append `:run` for a single pass. The local-auth tier is one focused spawned-dev-server pass.                                                                                                                                                                                                             |
+| Before commit                               | `pnpm test`                                                                                  | Unit + Nuxt (both with coverage, gated by the thresholds in `vitest.shared.ts`) + local-auth + integration, then the three local browser gates (still images, silent video, fonts). Needs an installed Chrome/Chromium. Never run integration passes concurrently — serialise them (`docs/agents/parallel-rounds.md`).                                                      |
+| Before push / PR                            | `pnpm verify`                                                                                | CI's gates against the working tree, stopping at the first failure. See the pre-push gate in `AGENTS.md` for what the two Worker gates at its tail uniquely cover.                                                                                                                                                                                                          |
+| Checking an existing production build       | `pnpm worker:smoke`                                                                          | Starts `.output/server` through pinned Wrangler under local workerd and probes routing, real Better Auth, deny-by-default on the untouched artifact, the Local Developer Session on that same artifact once the bypass name is set, D1, generated configuration, local object storage, codec Wasm, and ranged delivery. It refuses a missing artifact and never builds one. |
+| Deploy day                                  | The seven `:deployed` gates, in the order under [Deploy day, in order](#deploy-day-in-order) | Each provisions real Events and assets against the deployed installation and deletes them on the way out. Stop at the first failure.                                                                                                                                                                                                                                        |
+| Touching still-image codecs or Wasm (#302)  | `pnpm test:ingestion:still-images`                                                           | Proves JPEG/WebP ingestion decodes on workerd, where runtime Wasm compilation is refused. Needs `pnpm preview` already running at `127.0.0.1:8787`; not part of `pnpm test` for that reason. `:deployed` targets `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`.                                                                                                                     |
+| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                           | Needs Docker (the validator is a Container).                                                                                                                                                                                                                                                                                                                                |
+| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                            | Runs the library face against a local worker; plain `test:browser:fonts` covers the synthetic faces.                                                                                                                                                                                                                                                                        |
+| Investigating VP9-alpha handling on Safari  | `pnpm test:browser:safari-vp9-alpha`                                                         | Needs the Safari automation setup in `docs/operations/graphics-staging-acceptance.md`.                                                                                                                                                                                                                                                                                      |
 
 CI (`.github/workflows/ci.yml`) runs the whole self-contained set on every PR
 — the same gates `pnpm verify` runs locally, split across two jobs. It does
@@ -165,13 +171,22 @@ pnpm preview
 ```
 
 The preview command applies migrations to an ignored local D1 store before
-starting the generated Worker; it never connects to a remote database. When
-`NUXT_LOCAL_AUTH_BYPASS=true`, the command deliberately disarms the flag for its
-production build (a plain armed `pnpm build` fails), stages the local `.env` only
-afterward, and passes the local-runtime attestation directly to `wrangler dev` with
-`--var`. Neither the attestation nor the bypass choice is written into generated
-production configuration. The previewed Worker enables the Local Developer Session
-only when it receives both exact runtime values.
+starting the generated Worker; it never connects to a remote database. It uses
+real Better Auth, like `pnpm dev`.
+
+For a previewed Worker that enters as the Local Developer User instead:
+
+```bash
+pnpm preview:bypass
+```
+
+That launcher sets the one name for the whole command, and the staging step adds
+it to `.output/server/.env` — the file wrangler resolves from its config — because
+wrangler passes no host environment to the Worker it starts. `.output` is
+gitignored and wiped by every `nuxt build`, and `pnpm deploy` builds before it
+uploads, so a bypassed preview leaves nothing a deploy could pick up. The name is
+never written into generated production configuration, and `pnpm worker:dry-run`
+fails if it ever appears there.
 
 Validate the generated artifact without deploying:
 
@@ -195,12 +210,20 @@ Verify the still-image compatibility profile in an installed Chrome or Chromium:
 pnpm test:browser:still-images
 ```
 
-Run the same representative browser gate against a deployed staging Worker:
+Run the same representative browser gate against a deployed staging Worker.
+`/api/**` denies by default, so a `:deployed` harness signs in as an existing
+operator before it provisions anything and stops at
+`harness-operator-unavailable` without one:
 
 ```bash
 STREAM_KEEPR_BROWSER_ACCEPTANCE_URL=https://stream.keepr.digital \
+	STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL=you@example.com \
+	STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD='<the password for that account>' \
 	pnpm test:browser:still-images:deployed
 ```
+
+`docs/operations/graphics-staging-acceptance.md` carries the full table of
+variables the harnesses read, and applies to every `:deployed` gate.
 
 Deploy production, including pending D1 migrations:
 
@@ -286,42 +309,30 @@ point or export identified above.
 
 ### Deploy day, in order
 
-The full procedure — including what each gate proves, the Safari automation
-setup, and the manual fault-injection steps — is
-`docs/operations/graphics-staging-acceptance.md`. The short form:
+**`docs/operations/graphics-staging-acceptance.md` is the procedure** — the
+pre-flight, the environment variables the harnesses read, the ordered gates and
+what each proves, the Safari automation setup, and the manual fault injection.
+Run deploy day from that document rather than from a summary here: two
+orderings of the same gates is one ordering that can silently drift out of step
+with the harnesses.
 
-1. **Pre-flight**: Docker running (the silent-video validator is a Container);
-   Worker secrets present (`pnpm exec wrangler secret list --name stream`); no
-   leftover `workerd` processes from local suites.
-2. **Deploy both Workers, validator first** so the service binding resolves:
+Its first steps are the deploy itself, repeated here because this is the deploy
+chapter. Both Workers, validator first, so the service binding resolves:
 
-   ```bash
-   pnpm deploy:validator
-   pnpm deploy
-   ```
+```bash
+pnpm deploy:validator
+pnpm deploy
+```
 
-   `pnpm deploy` ends in `deploy:verify` against `https://stream.keepr.digital`;
-   do not continue past a failure — see the rollback path above.
+`pnpm deploy` ends in `deploy:verify` against `https://stream.keepr.digital`; do
+not continue past a failure — see the rollback path above.
 
-3. **Run the deployed gates, in order, stopping at the first failure**:
-
-   ```bash
-   pnpm test:validator:silent-video:deployed
-   pnpm test:delivery:graphics:deployed
-   pnpm test:browser:still-images:deployed
-   pnpm test:browser:silent-video:deployed
-   pnpm test:browser:fonts:deployed
-   pnpm test:browser:safari-vp9-alpha:deployed
-   pnpm test:delivery:graphics:package:deployed
-   ```
-
-   Each provisions real Events and assets in the production installation and
-   deletes them on the way out; a harness that dies mid-run names the Event to
-   remove before rerunning.
-
-4. **Fault injection** (`docs/operations/graphics-staging-acceptance.md`,
-   step 8) is manual, breaks real delivery while armed, and is never run while
-   anything is on air.
+Two properties of the gates that follow are worth knowing before you start one.
+Each provisions real Events and assets in the production installation and
+deletes them on the way out, so a harness that dies mid-run names the Event to
+remove before rerunning. And the fault-injection step is manual and takes real
+delivery down for as long as a fault is armed — it is never run while anything
+is on air.
 
 Realtime stays within the Ably **Free** plan by decision (#189): validate
 against free-tier limits, and report — never work around — anything that would
@@ -425,6 +436,11 @@ The same page does the other three things an account needs over its life:
 - **Ban** — refuses future sign-ins _and_ ends every current session, because a
   ban that left somebody working for the rest of the week would not be one.
   Lifting it restores the password they already had.
+
+Give every account a name when you create it. A Graphics Authoring Lease names
+its holder from that name, so an account without one is named by nobody and the
+takeover notice falls back to "Another session holds…" — the surface being
+honest rather than the lease being broken.
 
 "Set password" is also there, for the operator locked out mid-show with an
 administrator beside them. Prefer a link: setting a password directly leaves you

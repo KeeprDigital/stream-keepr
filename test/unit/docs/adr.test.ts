@@ -29,7 +29,20 @@ const FILENAME_NUMBER = /^(\d{4})-[a-z0-9-]+\.md$/;
 /** `# ADR-0007: …` on the first line, which is the shape every record uses. */
 const HEADER_NUMBER = /^# ADR-(\d{4}):/;
 
-const filenames = readdirSync(adrDirectory).filter(name => name.endsWith('.md')).sort();
+/**
+ * The directory's index, which is not a record and holds no number.
+ *
+ * Named as a single exception rather than matched by a pattern: the whole point
+ * of the assertions below is that a file in here which is not `NNNN-slug.md` is
+ * a defect, so a loose exclusion would be the check quietly declining to run.
+ * Anything else that arrives without a number should fail until somebody decides
+ * what it is.
+ */
+const INDEX = 'README.md';
+
+const filenames = readdirSync(adrDirectory)
+	.filter(name => name.endsWith('.md') && name !== INDEX)
+	.sort();
 
 describe('the ADR sequence', () => {
 	it('has records to check at all', () => {

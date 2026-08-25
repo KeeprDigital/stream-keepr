@@ -20,9 +20,30 @@ test loop does not.
 A dev server or test run that dies to SIGKILL or SIGHUP strands its workerd
 process (miniflare's exit hooks cover only SIGINT/SIGTERM), leaving it holding
 memory and sqlite locks on `.wrangler` persist state. `pnpm dev`, `pnpm
-preview`, `pnpm worker:smoke`, and the integration suite reap these on start;
-`pnpm reap` sweeps them on demand — it kills only workerd whose parent is gone,
-so it is always safe to run. Stop dev servers with SIGTERM or SIGINT.
+preview`, their `:bypass` variants, `pnpm worker:smoke`, and the integration
+suite reap these on start; `pnpm reap` sweeps them on demand — it kills only
+workerd whose parent is gone, so it is always safe to run. Stop dev servers with
+SIGTERM or SIGINT.
+
+## Local authentication
+
+`pnpm dev:bypass` and `pnpm preview:bypass` enter as the Local Developer User;
+everything else uses real Better Auth. Those two launchers set
+`STREAM_KEEPR_LOCAL_AUTH_BYPASS=true` on the command line, and nothing else in
+this repository arms it.
+
+Two rules follow, and they are the whole of what an agent needs:
+
+- **Never write that name into a file** — not `.env`, `.env.example`,
+  `wrangler.jsonc`, a CI environment, or a Worker var. `pnpm worker:dry-run`
+  fails on generated configuration carrying it, and a deployed installation that
+  had it would serve the application unauthenticated.
+- **Nothing needs it set.** It is a precondition for no build, suite, or gate;
+  `pnpm verify` passes identically either way. A task that seems to require it
+  has been misread.
+
+The README's Development section is the developer-facing account of what the
+bypass does; ADR-0017 records why it is one launcher-owned name.
 
 ## Agent skills
 

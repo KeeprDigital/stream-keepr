@@ -1,5 +1,12 @@
 # ADR-0016: One polymorphic Background Screen replaces Idle
 
+- **Status**: Accepted
+- **Date**: 2026-08-24
+- **Issue**: [#473](https://github.com/KeeprDigital/stream-keepr/issues/473)
+- **Supersedes**: [ADR-0014](./0014-animation-effects-rebuilt-in-house-on-three.md)'s background-type-union wording only; its host-agnostic Animation Effect contract stands
+
+## Context
+
 The Idle Screen Mode carried a single optional video background and doubled as the "empty state", and ADR-0014 had pencilled it in as the second Animation Effect host by adding `animation` to a background type union. Design review found the mode itself the wrong shape: what a show wants behind everything else is a composition — a colour wash over an Animation Effect, a plate under a gradient — not a choice of exactly one background kind. We decided to rename the mode `background` and make its configuration an ordered layer stack (`layers: BackgroundLayer[]`, painter's order, operator-reorderable), with five layer types — colour, gradient, image, video, Animation Effect — each owning its own enabled state and opacity.
 
 ## Considered Options

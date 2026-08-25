@@ -31,6 +31,10 @@ import {
 	parseDotenv,
 	sentenceList,
 } from '../../build/localConfiguration.ts';
+import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
+} from '../../shared/utils/localDeveloperAuth.ts';
 import { AcceptanceFailure } from './evidence.mjs';
 
 /**
@@ -274,11 +278,25 @@ export function localConfigurationNotice(missing) {
  * stopped editing. Unconditional on there being anything to stage, because a
  * leftover arming a preview all by itself is the worse half of that.
  *
- * @param {{ source: string | null, existing: string | null, stale: boolean }} files
- *   `source` is the root `.env` body, `existing` the staged copy's, and `stale`
- *   whether a pre-#412 `.dev.vars` is still sitting beside the config.
+ * The staged body is the root file's plus one line when — and only when — the
+ * launcher chose a bypassed preview (#519). `pnpm preview:bypass` sets
+ * `STREAM_KEEPR_LOCAL_AUTH_BYPASS` in its own environment, and wrangler passes
+ * no host environment to the Worker it starts, so the choice has to arrive
+ * through the one file wrangler does read. Written here rather than as a
+ * `--var` on the preview command line because this step already owns what the
+ * previewed Worker's environment is, and a second mechanism for one name would
+ * be a second place to look when it is not there.
+ *
+ * That line is the only thing this ever adds, `.output` is gitignored and wiped
+ * by every `nuxt build`, and `pnpm deploy` builds before it uploads — so a
+ * bypassed preview cannot leave anything behind that a deploy could pick up.
+ *
+ * @param {{ source: string | null, existing: string | null, stale: boolean, bypassActive?: boolean }} files
+ *   `source` is the root `.env` body, `existing` the staged copy's, `stale`
+ *   whether a pre-#412 `.dev.vars` is still sitting beside the config, and
+ *   `bypassActive` whether this launcher asked for a bypassed preview.
  */
-export function previewStagingPlan({ source, existing, stale }) {
+export function previewStagingPlan({ source, existing, stale, bypassActive = false }) {
 	const lines = [];
 
 	if (stale) {
@@ -290,10 +308,15 @@ export function previewStagingPlan({ source, existing, stale }) {
 		);
 	}
 
-	if (source === null)
-		return { stage: false, removeStale: stale, lines };
+	if (source === null && !bypassActive)
+		return { stage: false, body: null, removeStale: stale, lines };
 
-	if (existing !== null && existing !== source) {
+	const base = source ?? '';
+	const body = bypassActive
+		? `${base.endsWith('\n') || base.length === 0 ? base : `${base}\n`}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`
+		: base;
+
+	if (existing !== null && existing !== body) {
 		lines.push(
 			`Replacing the existing ${RESOLVED_PREVIEW_ENV}, which differs from the .env it is `
 			+ 'staged from. The repository root copy is the source of truth; anything only in the staged '
@@ -306,7 +329,15 @@ export function previewStagingPlan({ source, existing, stale }) {
 		+ 'where wrangler resolves it from the config (#274, #412).',
 	);
 
-	return { stage: true, removeStale: stale, lines };
+	if (bypassActive) {
+		lines.push(
+			`Added ${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE} to ${RESOLVED_PREVIEW_ENV}: this `
+			+ 'preview was launched bypassed, so every request acts as the Local Developer User. Keep it on '
+			+ 'loopback.',
+		);
+	}
+
+	return { stage: true, body, removeStale: stale, lines };
 }
 
 /**

@@ -9,11 +9,10 @@ import { join } from 'node:path';
 import process from 'node:process';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
 	LOCAL_DEVELOPER_SESSION_COOKIE,
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_ID,
-	LOCAL_RUNTIME_ATTESTATION_NAME,
-	LOCAL_RUNTIME_ATTESTATION_VALUE,
 } from '../../shared/utils/localDeveloperAuth.ts';
 
 const PIXEL_PNG = Uint8Array.from(Buffer.from(
@@ -147,7 +146,7 @@ export async function runWorkerSmoke({
 		activeChild = undefined;
 		activeChildExit = undefined;
 
-		const startWorker = async ({ attested = false } = {}) => {
+		const startWorker = async () => {
 			const port = await availableLoopbackPort();
 			const arguments_ = [
 				'dev',
@@ -161,8 +160,6 @@ export async function runWorkerSmoke({
 				'--port',
 				String(port),
 			];
-			if (attested)
-				arguments_.push('--var', `${LOCAL_RUNTIME_ATTESTATION_NAME}:${LOCAL_RUNTIME_ATTESTATION_VALUE}`);
 			activeChild = spawnProcess(wranglerPath, arguments_, { ...childProcessOptions, detached: true });
 			captureChildOutput(activeChild, workerLog);
 			activeChildExit = childExit(activeChild, 'startup');
@@ -192,23 +189,18 @@ export async function runWorkerSmoke({
 		});
 		await stopWorker();
 
-		await writeFile(stagedEnvPath, `${generated.body}NUXT_LOCAL_AUTH_BYPASS=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`, {
+		// The same artifact, restarted with the one name a bypassed local launcher
+		// sets. Two runs of one bundle is the whole of what #519 left to prove here:
+		// the production artifact denies by default, and admits the Local Developer
+		// Session only where that name is present. It was three runs while
+		// activation took a second attestation, and the middle one — the bypass
+		// name alone, expecting 401 — is a state that no longer exists.
+		await writeFile(stagedEnvPath, `${generated.body}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`, {
 			mode: 0o600,
 		});
-		const unattestedOrigin = await startWorker();
-		await expectStatus({
-			probe: 'local-auth-unattested-refusal',
-			expected: 401,
-			origin: unattestedOrigin,
-			path: '/api/events',
-			fetchRequest,
-			signal: smokeSignal,
-		});
-		await stopWorker();
-
-		const attestedOrigin = await startWorker({ attested: true });
+		const bypassedOrigin = await startWorker();
 		await runLocalPreviewAuthProbes({
-			origin: attestedOrigin,
+			origin: bypassedOrigin,
 			fetchRequest,
 			signal: smokeSignal,
 		});
@@ -240,24 +232,24 @@ export async function runWorkerSmoke({
 
 async function runLocalPreviewAuthProbes({ origin, fetchRequest, signal }) {
 	const firstResponse = await expectStatus({
-		probe: 'local-auth-attested-session',
+		probe: 'local-auth-bypassed-session',
 		expected: 200,
 		origin,
 		path: '/api/auth/get-session',
 		fetchRequest,
 		signal,
 	});
-	const first = await responseJson(firstResponse, 'local-auth-attested-session');
+	const first = await responseJson(firstResponse, 'local-auth-bypassed-session');
 	const firstCookie = sessionCookie(firstResponse);
 	if (first?.user?.id !== LOCAL_DEVELOPER_USER_ID
 		|| typeof first?.session?.id !== 'string'
 		|| !first.session.id.startsWith(LOCAL_DEVELOPER_SESSION_ID_PREFIX)
 		|| !firstCookie.includes(`${LOCAL_DEVELOPER_SESSION_COOKIE}=`)) {
-		throwShapeFailure('local-auth-attested-session', 'Local Developer User and Session cookie');
+		throwShapeFailure('local-auth-bypassed-session', 'Local Developer User and Session cookie');
 	}
 
 	const repeatedResponse = await expectStatus({
-		probe: 'local-auth-attested-session-repeat',
+		probe: 'local-auth-bypassed-session-repeat',
 		expected: 200,
 		origin,
 		path: '/api/auth/get-session',
@@ -265,25 +257,25 @@ async function runLocalPreviewAuthProbes({ origin, fetchRequest, signal }) {
 		signal,
 		init: { headers: { cookie: firstCookie } },
 	});
-	const repeated = await responseJson(repeatedResponse, 'local-auth-attested-session-repeat');
+	const repeated = await responseJson(repeatedResponse, 'local-auth-bypassed-session-repeat');
 	const otherResponse = await expectStatus({
-		probe: 'local-auth-attested-other-browser',
+		probe: 'local-auth-bypassed-other-browser',
 		expected: 200,
 		origin,
 		path: '/api/auth/get-session',
 		fetchRequest,
 		signal,
 	});
-	const other = await responseJson(otherResponse, 'local-auth-attested-other-browser');
+	const other = await responseJson(otherResponse, 'local-auth-bypassed-other-browser');
 	if (repeated?.user?.id !== first.user.id
 		|| other?.user?.id !== first.user.id
 		|| repeated?.session?.id !== first.session.id
 		|| other?.session?.id === first.session.id) {
-		throwShapeFailure('local-auth-attested-session-semantics', 'stable User and one stable Session per browser');
+		throwShapeFailure('local-auth-bypassed-session-semantics', 'stable User and one stable Session per browser');
 	}
 
 	await expectStatus({
-		probe: 'local-auth-attested-api',
+		probe: 'local-auth-bypassed-api',
 		expected: 200,
 		origin,
 		path: '/api/events',

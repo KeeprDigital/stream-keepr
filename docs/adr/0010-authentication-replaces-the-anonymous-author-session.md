@@ -48,7 +48,7 @@ A dedicated route is active only while a dedicated Worker secret is set — the 
 
 - **Ensure semantics** — create-or-reset: a new email creates an admin account; an existing one gets the given password and admin role, via Better Auth's server-side admin API so rows are always Better Auth-shaped. Idempotent, no junk accounts on recovery.
 - One mechanism covers **install #1 and break-glass lockout** (no email sender exists, so lockout is otherwise unrecoverable without hand-editing D1, which would orphan `initiatedBy` and Evidence Ledger references).
-- **Curl-only operator ceremony**, documented in the README worker-secrets/deploy section: set secret → curl create admin → delete secret. Disarm is a documented operator step, no stored self-limiting state. Dev and preview arm the same route via `.dev.vars`, so the path is exercised constantly rather than once ever.
+- **Curl-only operator ceremony**, documented in the README worker-secrets/deploy section: set secret → curl create admin → delete secret. Disarm is a documented operator step, no stored self-limiting state. Dev and preview arm the same route from local configuration, so the path is exercised constantly rather than once ever. _(As designed this named `.dev.vars`; #412 removed that second file and `.env` is now the one that reaches both — the mechanism is unchanged.)_
 
 ### Cutover: drain-first, no migration code
 

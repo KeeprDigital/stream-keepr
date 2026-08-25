@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { assertWorkerConfigurationDoesNotAttestLocalRuntime } from '../build/localAuthDeployment.ts';
+import { assertWorkerConfigurationDoesNotArmLocalAuthBypass } from '../build/localAuthDeployment.ts';
 import { nativeScryptScan } from './assert-native-scrypt.mjs';
 import { runtimeWasmScan } from './assert-no-runtime-wasm.mjs';
 
@@ -46,7 +46,7 @@ const wrangler = fileURLToPath(new URL('../node_modules/.bin/wrangler', import.m
 
 try {
 	const configuration = JSON.parse(readFileSync(new URL(`../${CONFIG}`, import.meta.url), 'utf8'));
-	assertWorkerConfigurationDoesNotAttestLocalRuntime(configuration);
+	assertWorkerConfigurationDoesNotArmLocalAuthBypass(configuration);
 }
 catch (error) {
 	process.stderr.write(`worker:dry-run: unsafe or unreadable generated configuration — ${error.message}\n`);

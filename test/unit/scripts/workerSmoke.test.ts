@@ -12,8 +12,8 @@ import {
 	WorkerSmokeFailure,
 } from '../../../scripts/worker-smoke/runner.mjs';
 import {
-	LOCAL_RUNTIME_ATTESTATION_NAME,
-	LOCAL_RUNTIME_ATTESTATION_VALUE,
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
 } from '../../../shared/utils/localDeveloperAuth';
 
 describe('the built Worker smoke runner', () => {
@@ -285,19 +285,41 @@ describe('the built Worker smoke runner', () => {
 		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
 	});
 
-	it('attests only supported local launchers and keeps the preview build disarmed', async () => {
+	/**
+	 * #519: the launchers are the only place the bypass is named, so the launchers
+	 * are what this has to read.
+	 *
+	 * The scripts *are* the mechanism — there is no file to check, and a
+	 * `:bypass` suffix landing on the wrong one of these is the whole failure
+	 * mode. `dev:local` binds beyond loopback and deliberately has no bypassed
+	 * twin: unauthenticated on `0.0.0.0` is the one combination the README warns
+	 * about, and it should not be one keystroke away.
+	 */
+	it('names the bypass in the two bypass launchers and nowhere else', async () => {
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
 			scripts: Record<string, string>;
 		};
-		const attestationAssignment = `${LOCAL_RUNTIME_ATTESTATION_NAME}=${LOCAL_RUNTIME_ATTESTATION_VALUE}`;
-		const attestationBinding = `${LOCAL_RUNTIME_ATTESTATION_NAME}:${LOCAL_RUNTIME_ATTESTATION_VALUE}`;
+		const assignment = `${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}`;
 
-		expect(packageJson.scripts.dev).toContain(`${attestationAssignment} nuxt dev`);
-		expect(packageJson.scripts['dev:local']).toContain(`${attestationAssignment} nuxt dev`);
-		expect(packageJson.scripts.preview).toContain('NUXT_LOCAL_AUTH_BYPASS= pnpm build');
-		expect(packageJson.scripts.preview).toContain(`${attestationAssignment} node scripts/stage-preview-secrets.mjs`);
-		expect(packageJson.scripts.preview).toContain(`--var ${attestationBinding}`);
-		expect(packageJson.scripts.deploy).not.toContain(LOCAL_RUNTIME_ATTESTATION_NAME);
+		expect(packageJson.scripts['dev:bypass']).toContain(`${assignment} nuxt dev`);
+		expect(packageJson.scripts['preview:bypass']).toContain(`${assignment} pnpm preview`);
+		expect(packageJson.scripts['dev:local:bypass']).toBeUndefined();
+
+		for (const [name, script] of Object.entries(packageJson.scripts)) {
+			if (name.endsWith(':bypass'))
+				continue;
+			expect(script, `${name} must not arm the bypass`).not.toContain(LOCAL_AUTH_BYPASS_NAME);
+		}
+	});
+
+	it('keeps the bypass out of .env.example, which is the file it must never be in', async () => {
+		// The launchers are the whole mechanism, so the example file a developer
+		// copies must not offer the name at all — a blank assignment there reads as
+		// "set me", which is the confusion #519 removed.
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const example = await readFile(join(repositoryRoot, '.env.example'), 'utf8');
+
+		expect(example).not.toContain('LOCAL_AUTH_BYPASS');
 	});
 });

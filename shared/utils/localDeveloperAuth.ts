@@ -1,9 +1,17 @@
-/** The one value that opts a development server out of Better Auth. */
+/** The one value that opts a local runtime out of Better Auth. */
 export const LOCAL_AUTH_BYPASS_ENABLED_VALUE = 'true';
 
-/** The non-secret Worker binding that attests this runtime was started locally. */
-export const LOCAL_RUNTIME_ATTESTATION_NAME = 'STREAM_KEEPR_LOCAL_RUNTIME';
-export const LOCAL_RUNTIME_ATTESTATION_VALUE = 'true';
+/**
+ * The launcher-supplied name that opts a local runtime out of Better Auth.
+ *
+ * Deliberately **not** `NUXT_`-prefixed and deliberately absent from
+ * `.env.example`: no `runtimeConfig` key answers to it, so the prefix would
+ * advertise membership of the family `.env` exists to hold — which is the one
+ * file this name must never be in. Activation took a `.env` name and a second
+ * launcher-supplied attestation until #519; ADR-0017 records why it is one name
+ * now, and ADR-0013 what the pair was for.
+ */
+export const LOCAL_AUTH_BYPASS_NAME = 'STREAM_KEEPR_LOCAL_AUTH_BYPASS';
 
 /** The stable person that owns work while the development bypass is active. */
 export const LOCAL_DEVELOPER_USER_ID = 'local-developer-user';
@@ -26,25 +34,29 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  * Whether this process may supply the Local Developer Session.
  *
  * Exact string comparison is deliberate: environment variables arrive as
- * strings, and a misspelling must preserve the real authentication boundary.
- * The separate runtime attestation is supplied only by supported local launchers.
- * It is deliberately not inferred from Node mode, hostnames, addressing, or the
- * kind of bindings attached to a Worker: none of those facts proves who can reach
- * the process. A production-shaped Worker therefore stays closed when only the
- * developer's bypass choice leaks into its environment.
+ * strings, and a misspelling must preserve the real authentication boundary. It
+ * is deliberately not inferred from Node mode, hostnames, addressing, or the
+ * kind of bindings attached to a Worker: none of those facts proves who can
+ * reach the process, so none of them may open it.
  *
- * Setting BOTH values on a deployed Worker does activate the bypass, and no
- * runtime signal guards against it. That is ADR-0013's accepted residual:
- * editing Worker vars or secrets takes the same edit permission as deploying
- * code, so whoever can stage it can already ship an arbitrary Worker — and the
- * worker-smoke suite depends on exactly this activation to authenticate its
- * probes against the production artifact. The deploy-side guards remain the
- * defence against accidental activation.
+ * **Explicitly on, or implicitly off, and the name lives in exactly one place**
+ * (#519): the `pnpm dev:bypass` and `pnpm preview:bypass` scripts, which set it
+ * on the command line they launch. No file in this repository assigns it —
+ * `.env` does not carry it and `.env.example` does not name it — so no file can
+ * be copied, staged, or synced into a deployed installation in a state that
+ * opens this. That is a structural property rather than a policy, and it is what
+ * replaced the two-name scheme #460 and ADR-0013 were about: the second name
+ * existed to keep a leaked `.env` value inert, and a value that is never written
+ * to a file has nothing to leak.
+ *
+ * Setting this name on a deployed Worker does activate the bypass, and no
+ * runtime signal guards against it. That is ADR-0017's accepted residual,
+ * inherited from ADR-0013 on the same ground: editing Worker vars or secrets
+ * takes the same edit permission as deploying code, so whoever can stage it can
+ * already ship an arbitrary Worker — and the worker-smoke suite depends on
+ * exactly this activation to authenticate its probes against the production
+ * artifact.
  */
-export function localAuthBypassEnabled(context: {
-	bypassValue: unknown;
-	runtimeAttestation: unknown;
-}): boolean {
-	return context.bypassValue === LOCAL_AUTH_BYPASS_ENABLED_VALUE
-		&& context.runtimeAttestation === LOCAL_RUNTIME_ATTESTATION_VALUE;
+export function localAuthBypassEnabled(bypassValue: unknown): boolean {
+	return bypassValue === LOCAL_AUTH_BYPASS_ENABLED_VALUE;
 }

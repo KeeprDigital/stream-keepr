@@ -5,12 +5,12 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { getCookie, setCookie } from 'h3';
 import { db, schema } from 'hub:db';
 import {
+	LOCAL_AUTH_BYPASS_NAME,
 	LOCAL_DEVELOPER_SESSION_COOKIE,
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_EMAIL,
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
-	LOCAL_RUNTIME_ATTESTATION_NAME,
 	localAuthBypassEnabled,
 } from '~~/shared/utils/localDeveloperAuth';
 import { authStaticOptions } from './authOptions';
@@ -148,10 +148,7 @@ export type UserSession = Awaited<ReturnType<ServerAuth['api']['getSession']>>;
 
 /** Whether this request is allowed to substitute the Local Developer Session. */
 export function localAuthBypassIsActive(_event: H3Event): boolean {
-	return localAuthBypassEnabled({
-		bypassValue: process.env.NUXT_LOCAL_AUTH_BYPASS,
-		runtimeAttestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
-	});
+	return localAuthBypassEnabled(process.env[LOCAL_AUTH_BYPASS_NAME]);
 }
 
 const LOCAL_SESSION_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

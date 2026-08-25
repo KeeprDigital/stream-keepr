@@ -60,10 +60,10 @@
  * it; the same judgement #130 made about the dev-server warning.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import {
-	LOCAL_RUNTIME_ATTESTATION_NAME,
+	LOCAL_AUTH_BYPASS_NAME,
 	localAuthBypassEnabled,
 } from '../shared/utils/localDeveloperAuth.ts';
 import {
@@ -92,10 +92,14 @@ function read(path) {
 }
 
 const body = read(SOURCE);
+// The launcher's own environment is the only thing that can say so: `pnpm
+// preview:bypass` sets the name, `pnpm preview` does not, and no file assigns it.
+const bypassActive = localAuthBypassEnabled(process.env[LOCAL_AUTH_BYPASS_NAME]);
 const plan = previewStagingPlan({
 	source: body,
 	existing: read(RESOLVED),
 	stale: existsSync(STALE),
+	bypassActive,
 });
 
 // Acted on before the lines are printed, because every line the plan produces is
@@ -107,7 +111,10 @@ try {
 
 	if (plan.stage) {
 		mkdirSync(RESOLVED_DIRECTORY, { recursive: true });
-		copyFileSync(SOURCE, RESOLVED);
+		// Written rather than copied since #519: a bypassed preview stages the root
+		// file plus the one line that says so, and there is no root file to copy
+		// when that line is all there is.
+		writeFileSync(RESOLVED, plan.body, { mode: 0o600 });
 	}
 
 	for (const line of plan.lines)
@@ -125,11 +132,6 @@ catch (error) {
 // verbatim copy of `.env.example` — every name present and empty — is told
 // the same thing as a checkout with no file at all.
 const supplied = suppliedNames([process.env, body]);
-const missing = missingLocalAcceptanceNames(supplied, {
-	localAuthBypassActive: localAuthBypassEnabled({
-		bypassValue: supplied.NUXT_LOCAL_AUTH_BYPASS,
-		runtimeAttestation: process.env[LOCAL_RUNTIME_ATTESTATION_NAME],
-	}),
-});
+const missing = missingLocalAcceptanceNames(supplied, { localAuthBypassActive: bypassActive });
 if (missing.length > 0)
 	process.stderr.write(`${localConfigurationNotice(missing)}\n`);
