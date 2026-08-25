@@ -8,7 +8,7 @@ import type {
 	DbPlayerDeckUnresolvedCardInsert,
 } from '~~/server/db/schema';
 import type { MtgPlayerGameData } from '~~/shared/types/game';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import {
 	archetypes,
@@ -44,6 +44,34 @@ export interface MeleePlayerDeckReplacement {
 	snapshots: MeleePlayerDeckSnapshot[];
 }
 
+interface ReviewedMeleeDeckRow {
+	id: number;
+	externalId: string;
+	formatExternalId: string;
+}
+
+interface ComparableDeckCardRow {
+	deckId: number;
+	cardId: number;
+	quantity: number;
+	compartment: string;
+}
+
+interface ComparableUnresolvedDeckCardRow {
+	deckId: number;
+	entryType: string;
+	normalizedOriginalName: string;
+	normalizedSetCode: string;
+	quantity: number;
+	compartment: string | null;
+}
+
+interface ComparableDeckCompanionRow {
+	deckId: number;
+	companionCardId: number | null;
+	source: string;
+}
+
 export interface PlayerDeckSelection {
 	deckId?: number;
 	phaseId?: number;
@@ -66,6 +94,65 @@ function meleeDeckIdByExternalId(eventId: number): SQL {
 			and ${playerDecks.externalId} = json_extract(value, '$.externalId')
 			and ${playerDecks.externalSource} = 'melee'
 		limit 1)`;
+}
+
+function canonicalRows(rows: unknown[][]): string {
+	return JSON.stringify(rows.map(row => JSON.stringify(row)).sort());
+}
+
+/** Compare classification-relevant contents; source ordering and display metadata are not deck changes. */
+function submittedDeckContentsChanged(
+	existingDeck: ReviewedMeleeDeckRow,
+	snapshot: MeleePlayerDeckSnapshot,
+	existingCards: ComparableDeckCardRow[],
+	existingUnresolvedCards: ComparableUnresolvedDeckCardRow[],
+	existingCompanion: ComparableDeckCompanionRow | undefined,
+): boolean {
+	if (existingDeck.formatExternalId !== snapshot.deck.formatExternalId)
+		return true;
+
+	const persistedCards = canonicalRows(existingCards.map(card => [
+		card.cardId,
+		card.quantity,
+		card.compartment,
+	]));
+	const importedCards = canonicalRows(snapshot.cards.map(card => [
+		card.cardId,
+		card.quantity,
+		card.compartment,
+	]));
+	if (persistedCards !== importedCards)
+		return true;
+
+	const persistedUnresolvedCards = canonicalRows(existingUnresolvedCards.map(card => [
+		card.entryType,
+		card.normalizedOriginalName,
+		card.normalizedSetCode,
+		card.quantity,
+		card.compartment ?? null,
+	]));
+	const importedUnresolvedCards = canonicalRows(snapshot.unresolvedCards.map(card => [
+		card.entryType,
+		card.normalizedOriginalName,
+		card.normalizedSetCode,
+		card.quantity,
+		card.compartment ?? null,
+	]));
+	if (persistedUnresolvedCards !== importedUnresolvedCards)
+		return true;
+
+	switch (snapshot.importedCompanion.action) {
+		case 'preserve':
+			return false;
+		case 'clear':
+			return existingCompanion?.source === 'melee';
+		case 'set':
+			if (!existingCompanion)
+				return true;
+			if (existingCompanion.source !== 'melee')
+				return false;
+			return existingCompanion.companionCardId !== snapshot.importedCompanion.cardId;
+	}
 }
 
 export function playerDeckService() {
@@ -126,6 +213,7 @@ export function playerDeckService() {
 		const projections: Array<{
 			playerId: number;
 			gameData: DbPlayer['gameData'];
+			deckId: number | null;
 			archetypeId: number | null;
 			reviewedAt: Date | null;
 			archetypeName: string | null;
@@ -142,6 +230,7 @@ export function playerDeckService() {
 				.select({
 					playerId: players.id,
 					gameData: players.gameData,
+					deckId: playerDecks.id,
 					archetypeId: playerDecks.archetypeId,
 					reviewedAt: playerDecks.reviewedAt,
 					archetypeName: archetypes.name,
@@ -166,6 +255,78 @@ export function playerDeckService() {
 			throw new Error(`Player ${missing?.playerId ?? 'unknown'} was not found while persisting Melee decks`);
 		}
 
+		const snapshots = replacements.flatMap(replacement => replacement.snapshots);
+		const snapshotsByExternalId = new Map(snapshots.map(snapshot => [snapshot.deck.externalId, snapshot]));
+		const deckIdentityRows = snapshots.map(snapshot => ({ externalId: snapshot.deck.externalId }));
+		const reviewedDecks: ReviewedMeleeDeckRow[] = [];
+		for (const payload of chunkJsonRows(deckIdentityRows)) {
+			reviewedDecks.push(...await db
+				.select({
+					id: playerDecks.id,
+					externalId: playerDecks.externalId,
+					formatExternalId: playerDecks.formatExternalId,
+				})
+				.from(playerDecks)
+				.where(and(
+					eq(playerDecks.eventId, eventId),
+					eq(playerDecks.externalSource, 'melee'),
+					isNotNull(playerDecks.archetypeId),
+					isNotNull(playerDecks.reviewedAt),
+					sql`${playerDecks.externalId} in (select json_extract(value, '$.externalId') from json_each(${payload}))`,
+				)));
+		}
+
+		const reviewedDeckIds = reviewedDecks.map(deck => ({ deckId: deck.id }));
+		const existingCards: ComparableDeckCardRow[] = [];
+		const existingUnresolvedCards: ComparableUnresolvedDeckCardRow[] = [];
+		const existingCompanions: ComparableDeckCompanionRow[] = [];
+		for (const payload of chunkJsonRows(reviewedDeckIds)) {
+			existingCards.push(...await db
+				.select({
+					deckId: playerDeckCards.deckId,
+					cardId: playerDeckCards.cardId,
+					quantity: playerDeckCards.quantity,
+					compartment: playerDeckCards.compartment,
+				})
+				.from(playerDeckCards)
+				.where(sql`${playerDeckCards.deckId} in (select cast(json_extract(value, '$.deckId') as integer) from json_each(${payload}))`));
+			existingUnresolvedCards.push(...await db
+				.select({
+					deckId: playerDeckUnresolvedCards.deckId,
+					entryType: playerDeckUnresolvedCards.entryType,
+					normalizedOriginalName: playerDeckUnresolvedCards.normalizedOriginalName,
+					normalizedSetCode: playerDeckUnresolvedCards.normalizedSetCode,
+					quantity: playerDeckUnresolvedCards.quantity,
+					compartment: playerDeckUnresolvedCards.compartment,
+				})
+				.from(playerDeckUnresolvedCards)
+				.where(sql`${playerDeckUnresolvedCards.deckId} in (select cast(json_extract(value, '$.deckId') as integer) from json_each(${payload}))`));
+			existingCompanions.push(...await db
+				.select({
+					deckId: playerDeckCompanions.deckId,
+					companionCardId: playerDeckCompanions.companionCardId,
+					source: playerDeckCompanions.source,
+				})
+				.from(playerDeckCompanions)
+				.where(sql`${playerDeckCompanions.deckId} in (select cast(json_extract(value, '$.deckId') as integer) from json_each(${payload}))`));
+		}
+
+		const cardsByDeckId = Map.groupBy(existingCards, card => card.deckId);
+		const unresolvedCardsByDeckId = Map.groupBy(existingUnresolvedCards, card => card.deckId);
+		const companionByDeckId = new Map(existingCompanions.map(companion => [companion.deckId, companion]));
+		const changedReviewedDeckIds = new Set(reviewedDecks.flatMap((deck) => {
+			const snapshot = snapshotsByExternalId.get(deck.externalId);
+			return snapshot && submittedDeckContentsChanged(
+				deck,
+				snapshot,
+				cardsByDeckId.get(deck.id) ?? [],
+				unresolvedCardsByDeckId.get(deck.id) ?? [],
+				companionByDeckId.get(deck.id),
+			)
+				? [deck.id]
+				: [];
+		}));
+
 		const now = new Date();
 		const nowMs = now.getTime();
 		const queries: BatchItem<'sqlite'>[] = [];
@@ -180,9 +341,7 @@ export function playerDeckService() {
 				)));
 		}
 
-		const snapshots = replacements.flatMap(replacement => replacement.snapshots);
 		const deckRows = snapshots.map(snapshot => snapshot.deck);
-		const deckIdentityRows = deckRows.map(deck => ({ externalId: deck.externalId }));
 		for (const payload of chunkJsonRows(deckRows)) {
 			queries.push(db
 				.insert(playerDecks)
@@ -214,6 +373,15 @@ export function playerDeckService() {
 						updatedAt: now,
 					},
 				}));
+		}
+		for (const deckIds of chunkArray([...changedReviewedDeckIds], SAFE_INARRAY_SIZE)) {
+			queries.push(db
+				.update(playerDecks)
+				.set({ archetypeId: null, reviewedAt: null, updatedAt: now })
+				.where(and(
+					eq(playerDecks.eventId, eventId),
+					inArray(playerDecks.id, deckIds),
+				)));
 		}
 
 		for (const payload of chunkJsonRows(deckIdentityRows)) {
@@ -334,7 +502,8 @@ export function playerDeckService() {
 			const primary = replacement.snapshots.find(snapshot => snapshot.deck.isPrimary)
 				?? replacement.snapshots[0]
 				?? null;
-			const reviewed = primary != null && projection.reviewedAt != null && projection.archetypeName != null;
+			const reviewInvalidated = projection.deckId != null && changedReviewedDeckIds.has(projection.deckId);
+			const reviewed = primary != null && !reviewInvalidated && projection.reviewedAt != null && projection.archetypeName != null;
 			const gameData = primary
 				? {
 					...(projection.gameData?.type === 'mtg' ? projection.gameData : {}),
@@ -347,7 +516,7 @@ export function playerDeckService() {
 					: projection.gameData ?? null;
 			return {
 				playerId: replacement.playerId,
-				archetypeId: primary ? projection.archetypeId ?? null : null,
+				archetypeId: primary && !reviewInvalidated ? projection.archetypeId ?? null : null,
 				gameData,
 			};
 		});

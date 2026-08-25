@@ -707,7 +707,7 @@ export const playerDecks = sqliteTable('player_decks', {
 	colors: text('colors').notNull().default(''),
 	sortOrder: integer('sort_order').notNull().default(0),
 	isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
-	/** App-owned classification. Melee sync must never overwrite this field. */
+	/** App-owned classification. Melee sync preserves it unless the submitted deck contents change. */
 	archetypeId: integer('archetype_id').references(() => archetypes.id, { onDelete: 'set null' }),
 	/** Non-null once this specific submitted deck has been reviewed. */
 	reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),

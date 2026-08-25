@@ -115,4 +115,67 @@ describe('playerDeckService JSON bulk SQLite integration', () => {
 			customField: 'keep',
 		});
 	});
+
+	it('preserves an unchanged deck review but clears it when the submitted contents change', async () => {
+		const playerResult = await client.execute({
+			sql: 'insert into players (event_id, name, game_data) values (?, ?, ?)',
+			args: [1, 'Reviewed Player', JSON.stringify({ type: 'mtg', deckName: null, deckColors: null })],
+		});
+		const archetypeResult = await client.execute({
+			sql: 'insert into archetypes (event_id, name, colors) values (?, ?, ?)',
+			args: [1, 'Control', 'WU'],
+		});
+		const playerId = Number(playerResult.lastInsertRowid);
+		const archetypeId = Number(archetypeResult.lastInsertRowid);
+		const service = playerDeckService();
+		const replacement = (quantity: number, sortOrder = 0, companionCardId?: number) => [{ playerId, snapshots: [{
+			deck: {
+				eventId: 1,
+				playerId,
+				externalId: 'reviewed-deck',
+				formatExternalId: 'modern',
+				name: 'Imported Control',
+				colors: 'WU',
+				sortOrder: 0,
+				isPrimary: true,
+			},
+			cards: [{ cardId: 7, quantity, compartment: 'mainboard' as const, sortOrder }],
+			unresolvedCards: [],
+			importedCompanion: companionCardId == null
+				? { action: 'clear' as const }
+				: { action: 'set' as const, cardId: companionCardId },
+		}] }];
+
+		await service.replaceMeleeDecksForEvent(1, replacement(4, 9));
+		const [deck] = await service.listByPlayer(1, playerId);
+		expect(deck).toBeDefined();
+		await service.reviewDeck(1, playerId, deck!.id, archetypeId);
+
+		await service.replaceMeleeDecksForEvent(1, replacement(4));
+		const [unchangedDeck] = await service.listByPlayer(1, playerId);
+		expect(unchangedDeck).toMatchObject({ archetypeId, reviewedAt: expect.any(Date) });
+
+		await service.replaceMeleeDecksForEvent(1, replacement(3));
+		const [changedDeck] = await service.listByPlayer(1, playerId);
+		const changedPlayer = await client.execute({
+			sql: 'select archetype_id, game_data from players where id = ?',
+			args: [playerId],
+		});
+		expect(changedDeck).toMatchObject({ archetypeId: null, reviewedAt: null });
+		expect(changedPlayer.rows[0]!.archetype_id).toBeNull();
+		expect(JSON.parse(String(changedPlayer.rows[0]!.game_data))).toMatchObject({
+			deckName: 'Imported Control',
+			deckColors: 'WU',
+		});
+
+		await service.reviewDeck(1, playerId, changedDeck!.id, archetypeId);
+		await service.replaceMeleeDecksForEvent(1, replacement(3, 0, 8));
+		const [deckWithNewCompanion] = await service.listByPlayer(1, playerId);
+		expect(deckWithNewCompanion).toMatchObject({ archetypeId: null, reviewedAt: null });
+
+		await service.reviewDeck(1, playerId, deckWithNewCompanion!.id, archetypeId);
+		await service.replaceMeleeDecksForEvent(1, replacement(3, 4, 8));
+		const [deckWithUnchangedCompanion] = await service.listByPlayer(1, playerId);
+		expect(deckWithUnchangedCompanion).toMatchObject({ archetypeId, reviewedAt: expect.any(Date) });
+	});
 });
