@@ -6,7 +6,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, nextTick, ref } from 'vue';
+import { computed, defineComponent, nextTick, ref } from 'vue';
 import {
 	broadcastGraphicChannelContexts,
 	broadcastGraphicPhaseProjections,
@@ -350,11 +350,31 @@ function screenWithStack(graphics: BroadcastGraphicConfig[] = [], channels?: Gra
 	} as Screen;
 }
 
+/** A Screen whose Broadcast Graphics Background is authored as given. */
+function screenWithBackground(background: unknown, graphics: BroadcastGraphicConfig[] = []): Screen {
+	return {
+		id: 1,
+		slug: 'main',
+		screenConfig: { width: 1920, height: 1080 },
+		modeConfigs: { 'broadcast-graphics': { graphics, background } },
+	} as Screen;
+}
+
+const AnimationSurfaceStub = defineComponent({
+	props: {
+		effect: { type: String, required: true },
+		params: { type: Object, required: false, default: undefined },
+	},
+	template: '<div data-testid="animation-surface" />',
+});
+
 async function mountComponent() {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Display.vue';
 	const { default: Display } = await import(componentPath);
 
-	return mount(Display);
+	return mount(Display, {
+		global: { stubs: { ScreenAnimationEffectSurface: AnimationSurfaceStub } },
+	});
 }
 
 function pushPreviewState(graphics: BroadcastGraphicConfig[] = [lowerThird], animation?: unknown) {
@@ -2023,5 +2043,87 @@ describe('live playout animation in a Screen Output', () => {
 
 		expect(wrapper.findAll('[data-graphic-item-kind="text"] p').map(node => node.text())).toEqual(['Live: Before']);
 		expect(wrapper.find('[data-graphic-item-cross-transition="name-line"]').exists()).toBe(false);
+	});
+	describe('broadcast graphics background', () => {
+		const fogBackground = { enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } };
+
+		it('mounts the authored background on the shared surface, with its sparse params filled from the schema', async () => {
+			mockScreen.value = screenWithBackground(fogBackground);
+
+			const wrapper = await mountComponent();
+			const surface = wrapper.getComponent(AnimationSurfaceStub);
+
+			expect(surface.props('effect')).toBe('fog');
+			expect(surface.props('params')).toMatchObject({ speed: 2, blurFactor: 0.55 });
+		});
+
+		it('composes the background behind every Broadcast Graphic, at the authored opacity', async () => {
+			mockScreen.value = screenWithBackground(fogBackground, [lowerThird]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+			const backdrop = wrapper.get('[data-testid="broadcast-graphics-background"]');
+			const graphic = wrapper.get('[data-broadcast-graphic="lower-third"]').element;
+
+			expect(backdrop.attributes('style')).toContain('opacity: 0.4');
+			expect(backdrop.element.compareDocumentPosition(graphic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		});
+
+		it('renders the background in the Fill Output, which is the output it colours', async () => {
+			mockScreen.value = screenWithBackground(fogBackground);
+			mockOutputMode.value = 'fill';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(true);
+		});
+
+		it('renders no background in the Key Output, so the alpha matte keeps its identity', async () => {
+			// The Feature Match Overlay Frame's rule, verbatim: every painted element in a
+			// Key Output is pure white at its own alpha over black, and a shader field is
+			// neither.
+			mockScreen.value = screenWithBackground(fogBackground);
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
+		});
+
+		it('renders no background while it is switched off', async () => {
+			mockScreen.value = screenWithBackground({ ...fogBackground, enabled: false });
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
+		});
+
+		it('renders no background for an Animation Effect this build does not ship', async () => {
+			mockScreen.value = screenWithBackground({ enabled: true, effect: 'vanta-birds', opacity: 0.4 });
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
+		});
+
+		it('renders no background under an authoring preview, which keeps its own backdrop', async () => {
+			mockScreen.value = screenWithBackground(fogBackground);
+			mockIsPreview.value = true;
+
+			const wrapper = await mountComponent();
+			await pushPreviewState();
+
+			expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
+			expect(wrapper.find('[data-testid="animation-surface"]').exists()).toBe(false);
+		});
+
+		it('renders no backdrop element at all on a Screen with no background', async () => {
+			mockScreen.value = screenWithStack([lowerThird]);
+			mockOnAirGraphicIds.value = ['lower-third'];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('.graphics-compositor-canvas__backdrop').exists()).toBe(false);
+		});
 	});
 });

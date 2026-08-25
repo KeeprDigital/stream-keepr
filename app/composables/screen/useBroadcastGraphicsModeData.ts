@@ -2,6 +2,7 @@ import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjection
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import { parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
 import {
 	broadcastGraphicAnimationTimeline,
 	graphicAnimationTimelineAt,
@@ -86,6 +87,24 @@ export function useBroadcastGraphicsModeData() {
 	 * shows only what an acceptance produced.
 	 */
 	const isAuthoringPreview = computed(() => previewState.value !== null || !screen.value?.id);
+
+	/**
+	 * The Screen's Broadcast Graphics Background, re-proven rather than trusted: an
+	 * effect this build does not ship parses to `null` and the Screen renders none,
+	 * which is the vocabulary refusal applied at render time.
+	 *
+	 * Nothing under an authoring preview. The Edit workspace's preview composes the
+	 * working stack against the backdrop its own chooser sets — black, white, green,
+	 * or the transparency checkerboard — and an authored background painted over
+	 * that would answer a question the author did not ask. The Program monitor is
+	 * not a preview: it embeds the real Overlay Output, so it shows the background
+	 * the way every other output does.
+	 */
+	const background = computed(() => (
+		isAuthoringPreview.value
+			? null
+			: parseBroadcastGraphicsBackgroundConfig(storedConfig.value.background)
+	));
 
 	/**
 	 * The rendering each composed Broadcast Graphic draws, and the one an update phase
@@ -358,6 +377,7 @@ export function useBroadcastGraphicsModeData() {
 
 	return {
 		animationProjection,
+		background,
 		graphics,
 		onAirGraphicIds,
 		inputValues,

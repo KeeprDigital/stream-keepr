@@ -5,8 +5,10 @@ import {
 	animationEffectDefaultParams,
 	animationEffectParamFields,
 	animationEffectSelectionSchema,
+	broadcastGraphicsBackgroundConfigSchema,
 	featureMatchOverlayFrameAnimationConfigSchema,
 	parseAnimationEffectSelection,
+	parseBroadcastGraphicsBackgroundConfig,
 	storedFrameAnimationConfigSchema,
 } from '~~/shared/animationEffects';
 
@@ -387,5 +389,66 @@ describe('storedFrameAnimationConfigSchema', () => {
 			opacity: 0.5,
 		});
 		expect(outcome.success).toBe(false);
+	});
+});
+
+describe('broadcastGraphicsBackgroundConfigSchema', () => {
+	it('accepts a sparse config for every effect and leaves the params sparse', () => {
+		for (const effect of ANIMATION_EFFECT_VALUES) {
+			const outcome = broadcastGraphicsBackgroundConfigSchema.safeParse({
+				enabled: true,
+				effect,
+				opacity: 0.5,
+			});
+			expect(outcome.success).toBe(true);
+			expect(outcome.data).toEqual({ enabled: true, effect, opacity: 0.5 });
+		}
+	});
+
+	it('validates params against the schema of the named effect, not any other', () => {
+		const outcome = broadcastGraphicsBackgroundConfigSchema.safeParse({
+			enabled: true,
+			effect: 'fog',
+			opacity: 0.5,
+			params: { lightColor: '#7dd3fc' },
+		});
+		expect(outcome.success).toBe(false);
+	});
+
+	it('refuses an effect outside the closed vocabulary rather than approximating it', () => {
+		const outcome = broadcastGraphicsBackgroundConfigSchema.safeParse({
+			enabled: true,
+			effect: 'not-an-effect',
+			opacity: 0.5,
+		});
+		expect(outcome.success).toBe(false);
+	});
+
+	it('carries the host fields the Screen needs, and refuses one it does not declare', () => {
+		expect(broadcastGraphicsBackgroundConfigSchema.safeParse({ effect: 'fog', opacity: 0.5 }).success).toBe(false);
+		expect(broadcastGraphicsBackgroundConfigSchema.safeParse({ effect: 'fog', enabled: true }).success).toBe(false);
+		expect(broadcastGraphicsBackgroundConfigSchema.safeParse({
+			enabled: true,
+			effect: 'fog',
+			opacity: 0.5,
+			fit: 'cover',
+		}).success).toBe(false);
+	});
+
+	it('holds opacity to the same nought-to-one range every host reads it as', () => {
+		expect(broadcastGraphicsBackgroundConfigSchema.safeParse({ enabled: true, effect: 'fog', opacity: 1.5 }).success).toBe(false);
+		expect(broadcastGraphicsBackgroundConfigSchema.safeParse({ enabled: true, effect: 'fog', opacity: -0.1 }).success).toBe(false);
+	});
+
+	it('re-proves a stored background: parsed through with defaults filled, or null for anything this build does not ship', () => {
+		expect(parseBroadcastGraphicsBackgroundConfig({ enabled: true, effect: 'fog', opacity: 0.4, params: { speed: 2 } }))
+			.toMatchObject({
+				enabled: true,
+				effect: 'fog',
+				opacity: 0.4,
+				params: expect.objectContaining({ speed: 2, blurFactor: 0.55 }),
+			});
+		expect(parseBroadcastGraphicsBackgroundConfig({ enabled: true, effect: 'not-an-effect', opacity: 0.4 })).toBeNull();
+		expect(parseBroadcastGraphicsBackgroundConfig(undefined)).toBeNull();
 	});
 });
