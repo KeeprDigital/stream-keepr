@@ -9,6 +9,7 @@ import { playerService } from '~~/server/services/player';
 import { playerListService } from '~~/server/services/playerList';
 import { roundService } from '~~/server/services/round';
 import { talentService } from '~~/server/services/talent';
+import { ScreenDeckSourceConflictError } from '~~/server/utils/errors';
 
 function throwReferenceNotFound(message: string): never {
 	throw createError({ statusCode: 404, message });
@@ -159,7 +160,7 @@ export async function validateScreenModeConfigReferences(
 			else if (source?.type === 'broadcast') {
 				const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
 				if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
-					throwReferenceNotFound('Broadcast Deck List is not available for this Event');
+					throw new ScreenDeckSourceConflictError();
 			}
 			break;
 		}

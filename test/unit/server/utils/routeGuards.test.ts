@@ -142,8 +142,9 @@ describe('event-scoped reference validation', () => {
 		await expect(validateScreenModeConfigReferences(1, 'deck', {
 			deckSource: { type: 'broadcast', broadcastDeckListId: 8 },
 		})).rejects.toMatchObject({
-			statusCode: 404,
-			message: 'Broadcast Deck List is not available for this Event',
+			statusCode: 409,
+			code: 'SCREEN_DECK_SOURCE_CONFLICT',
+			message: 'The selected Deck source is no longer available',
 		});
 	});
 });
