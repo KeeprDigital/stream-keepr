@@ -18,6 +18,8 @@ const props = defineProps<{
 }>();
 
 const playerStore = usePlayerStore();
+const eventStore = useEventStore();
+const broadcastDeckListStore = useBroadcastDeckListStore();
 
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
@@ -27,10 +29,59 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 
 defineExpose({ resetConfig, saving });
 
-// Load players on mount
+const broadcastDeckListsEnabled = computed(() =>
+	eventStore.event?.game === 'mtg'
+	&& eventStore.event.broadcastDeckListsEnabled,
+);
+const sourceTab = ref<'player' | 'broadcast'>(
+	config.value.deckSource.type === 'broadcast' && broadcastDeckListsEnabled.value
+		? 'broadcast'
+		: 'player',
+);
+const sourceTabs: TabsItem[] = [
+	{ label: 'Player Deck', value: 'player', icon: 'i-lucide-user' },
+	{ label: 'Broadcast Deck List', value: 'broadcast', icon: 'i-lucide-radio' },
+];
+const selectedBroadcastDeckListId = computed(() => config.value.deckSource.type === 'broadcast'
+	? config.value.deckSource.broadcastDeckListId
+	: null);
+const broadcastDeckListOptions = computed(() => [
+	{ label: 'Select a Broadcast Deck List…', value: null },
+	...broadcastDeckListStore.summaries.map(list => ({ label: list.name, value: list.id })),
+]);
+const isBroadcastSource = computed(() => config.value.deckSource.type === 'broadcast');
+
+function selectBroadcastDeckList(listId: number | null) {
+	if (listId !== null)
+		updateConfig({ deckSource: { type: 'broadcast', broadcastDeckListId: listId } });
+}
+
+watch(() => config.value.deckSource.type, (source) => {
+	if (source === 'player' || broadcastDeckListsEnabled.value)
+		sourceTab.value = source;
+});
+
+watch(broadcastDeckListsEnabled, (enabled, wasEnabled) => {
+	if (!enabled) {
+		sourceTab.value = 'player';
+		return;
+	}
+	if (!wasEnabled) {
+		if (config.value.deckSource.type === 'broadcast')
+			sourceTab.value = 'broadcast';
+		void broadcastDeckListStore.loadCollection(props.eventId);
+	}
+});
+
+// Merely loading choices or opening a tab never changes the selected source.
 onMounted(async () => {
 	if (props.eventId) {
-		await playerStore.loadPlayersByEventId(props.eventId);
+		await Promise.allSettled([
+			playerStore.loadPlayersByEventId(props.eventId),
+			...(broadcastDeckListsEnabled.value
+				? [broadcastDeckListStore.loadCollection(props.eventId)]
+				: []),
+		]);
 	}
 });
 
@@ -127,16 +178,44 @@ watch([selectedPlayerId, () => playerStore.players], async ([playerId]) => {
 	}
 }, { immediate: true });
 
-const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sideboardEmpty.value);
+const emptyBoardHint = computed(() => {
+	const deckSource = config.value.deckSource;
+	if (deckSource.type === 'broadcast') {
+		const summary = broadcastDeckListStore.summaries.find(list => list.id === deckSource.broadcastDeckListId);
+		if (!summary)
+			return null;
+		const mainboardShown = board.value !== 'sideboard';
+		const sideboardShown = board.value !== 'mainboard';
+		if (mainboardShown && sideboardShown && summary.mainboardQuantity === 0 && summary.sideboardQuantity === 0)
+			return 'This Broadcast Deck List has no cards, so the output shows only its header.';
+		if (mainboardShown && summary.mainboardQuantity === 0)
+			return 'This Broadcast Deck List has no mainboard cards, so the output shows nothing for the mainboard.';
+		if (sideboardShown && summary.sideboardQuantity === 0)
+			return 'This Broadcast Deck List has no sideboard cards, so the output shows nothing for the sideboard.';
+		return null;
+	}
+	return board.value !== 'mainboard' && sideboardEmpty.value
+		? 'This player\'s deck has no sideboard cards, so the output shows nothing for the sideboard.'
+		: null;
+});
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard title="Deck Source">
+			<UTabs
+				v-if="broadcastDeckListsEnabled"
+				v-model="sourceTab"
+				:items="sourceTabs"
+				:content="false"
+			/>
+
 			<UFormField
+				v-if="!broadcastDeckListsEnabled || sourceTab === 'player'"
 				label="Player"
 				description="Select a player with a deck list to show."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
+				:class="{ 'mt-5': broadcastDeckListsEnabled }"
 			>
 				<USelect
 					:model-value="selectedPlayerId"
@@ -145,12 +224,30 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 					@update:model-value="updateConfig({ deckSource: { type: 'player', playerId: $event } })"
 				/>
 			</UFormField>
+
+			<div v-else class="mt-5 space-y-3">
+				<UFormField
+					label="Broadcast Deck List"
+					description="Choose a list prepared in Event Settings → Broadcast."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<USelect
+						:model-value="selectedBroadcastDeckListId"
+						:items="broadcastDeckListOptions"
+						class="w-96"
+						@update:model-value="selectBroadcastDeckList($event)"
+					/>
+				</UFormField>
+				<p v-if="broadcastDeckListStore.summaries.length === 0" class="text-xs text-muted">
+					No Broadcast Deck Lists are available. Create one in Event Settings → Broadcast.
+				</p>
+			</div>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
 				label="Show Deck Name"
-				description="Show player name and deck name header."
+				description="Show the source name and optional secondary label."
 				:model-value="config.showDeckName"
 				@update:model-value="updateConfig({ showDeckName: $event })"
 			/>
@@ -171,6 +268,7 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 			/>
 
 			<ScreenSettingsToggle
+				v-if="!isBroadcastSource"
 				label="Show Total Points"
 				description="Show the deck's total 7 Point Highlander points in the deck meta row."
 				:model-value="config.showHighlanderTotal"
@@ -181,7 +279,7 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 
 			<ScreenSettingsToggle
 				label="Show Deck Meta Pill"
-				description="Wrap companion, total points, and deck stats in a single pill."
+				description="Wrap available deck metadata in a single pill."
 				:model-value="config.showDeckMetaPill"
 				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
 			/>
@@ -255,7 +353,7 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 			</template>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Pointed Cards">
+		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
 			<ScreenSettingsToggle
 				label="Show Pointed Cards"
 				description="Show pointed card chips under the deck info."
@@ -346,11 +444,11 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 			</UFormField>
 
 			<p
-				v-if="showEmptySideboardHint"
+				v-if="emptyBoardHint"
 				data-testid="empty-sideboard-hint"
 				class="text-xs text-muted"
 			>
-				This player's deck has no sideboard cards, so the output shows nothing for the sideboard.
+				{{ emptyBoardHint }}
 			</p>
 
 			<UFormField
@@ -556,73 +654,75 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 				</UFormField>
 			</template>
 
-			<USeparator />
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Highlander Point Badges
-			</p>
-
-			<ScreenSettingsToggle
-				label="Show Point Badges"
-				description="Show 7 Point Highlander point badges on pointed cards."
-				:model-value="config.showHighlanderPoints"
-				@update:model-value="updateConfig({ showHighlanderPoints: $event })"
-			/>
-
-			<template v-if="config.showHighlanderPoints">
+			<template v-if="!isBroadcastSource">
 				<USeparator />
 
-				<UFormField
-					label="Badge Position"
-					description="Where the point badge appears on the card in grid mode."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.highlanderPointsPosition"
-						:items="QUANTITY_POSITION_SELECT_OPTIONS"
-						class="w-40"
-						@update:model-value="updateConfig({ highlanderPointsPosition: $event })"
-					/>
-				</UFormField>
+				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+					Highlander Point Badges
+				</p>
 
-				<UFormField
-					label="Badge Size"
-					description="Size of the Highlander point badge."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<USelect
-						:model-value="config.highlanderPointsSize"
-						:items="QUANTITY_SIZE_SELECT_OPTIONS"
-						class="w-32"
-						@update:model-value="updateConfig({ highlanderPointsSize: $event })"
-					/>
-				</UFormField>
+				<ScreenSettingsToggle
+					label="Show Point Badges"
+					description="Show 7 Point Highlander point badges on pointed cards."
+					:model-value="config.showHighlanderPoints"
+					@update:model-value="updateConfig({ showHighlanderPoints: $event })"
+				/>
 
-				<USeparator />
+				<template v-if="config.showHighlanderPoints">
+					<USeparator />
 
-				<UFormField
-					label="Text Color"
-					description="Color of the Highlander point number."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointsTextColor"
-						placeholder="#ffffff"
-						@update:model-value="updateConfig({ highlanderPointsTextColor: $event })"
-					/>
-				</UFormField>
+					<UFormField
+						label="Badge Position"
+						description="Where the point badge appears on the card in grid mode."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<USelect
+							:model-value="config.highlanderPointsPosition"
+							:items="QUANTITY_POSITION_SELECT_OPTIONS"
+							class="w-40"
+							@update:model-value="updateConfig({ highlanderPointsPosition: $event })"
+						/>
+					</UFormField>
 
-				<UFormField
-					label="Background Color"
-					description="Background color of the Highlander point badge."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UIColorPicker
-						:model-value="config.highlanderPointsBgColor"
-						placeholder="#7c3aed"
-						@update:model-value="updateConfig({ highlanderPointsBgColor: $event })"
-					/>
-				</UFormField>
+					<UFormField
+						label="Badge Size"
+						description="Size of the Highlander point badge."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<USelect
+							:model-value="config.highlanderPointsSize"
+							:items="QUANTITY_SIZE_SELECT_OPTIONS"
+							class="w-32"
+							@update:model-value="updateConfig({ highlanderPointsSize: $event })"
+						/>
+					</UFormField>
+
+					<USeparator />
+
+					<UFormField
+						label="Text Color"
+						description="Color of the Highlander point number."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UIColorPicker
+							:model-value="config.highlanderPointsTextColor"
+							placeholder="#ffffff"
+							@update:model-value="updateConfig({ highlanderPointsTextColor: $event })"
+						/>
+					</UFormField>
+
+					<UFormField
+						label="Background Color"
+						description="Background color of the Highlander point badge."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UIColorPicker
+							:model-value="config.highlanderPointsBgColor"
+							placeholder="#7c3aed"
+							@update:model-value="updateConfig({ highlanderPointsBgColor: $event })"
+						/>
+					</UFormField>
+				</template>
 			</template>
 		</ScreenSettingsCard>
 	</div>

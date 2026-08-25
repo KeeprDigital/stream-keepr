@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { effectScope } from 'vue';
+import { effectScope, reactive } from 'vue';
 
 const mockPlayerStore = {
 	getPlayerById: vi.fn(),
@@ -10,22 +10,42 @@ const mockPlayerStore = {
 const mockFetchDeck = vi.fn();
 const mockFetchScryfallCards = vi.fn();
 const mockBuildDeckListArrays = vi.fn();
+const mockGetSelectedBroadcastDeckList = vi.fn();
+const mockOnChannel = vi.fn<(
+	channel: string,
+	type: string,
+	handler: (message: { eventId: number; listId: number; revision: number }) => void,
+) => () => void>(() => vi.fn());
 
 const mockPlayerId = ref<number | null>(null);
+const mockBroadcastDeckListId = ref<number | null>(null);
 const mockEventId = ref<number | null>(1);
+const mockScreen = ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } });
+const mockAssetCapability = ref<string | null>('output-capability');
+const mockRealtime = reactive({
+	connectionState: 'connected',
+	onChannel: mockOnChannel,
+});
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerDeckCache', () => () => ({ fetchDeck: mockFetchDeck }));
+mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
+	getSelected: mockGetSelectedBroadcastDeckList,
+}));
+mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 const mockCardDataHealth = ref<'complete' | 'degraded'>('complete');
 
 mockNuxtImport('useScreenContext', () => () => ({
-	screen: ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } }),
+	screen: mockScreen,
 	eventId: computed(() => mockEventId.value),
 	interactive: ref(false),
+	assetCapability: mockAssetCapability,
 	cardDataHealth: mockCardDataHealth,
 }));
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
-	deckSource: { type: 'player' as const, playerId: mockPlayerId.value },
+	deckSource: mockBroadcastDeckListId.value === null
+		? { type: 'player' as const, playerId: mockPlayerId.value }
+		: { type: 'broadcast' as const, broadcastDeckListId: mockBroadcastDeckListId.value },
 })));
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: mockFetchScryfallCards,
@@ -107,6 +127,33 @@ function createEnrichedCard(name: string, imageUrl: string, overrides: Record<st
 	};
 }
 
+function createBroadcastList(revision: number, name: string, entries: Array<Record<string, unknown>> = []) {
+	return {
+		id: 23,
+		eventId: 1,
+		name,
+		archetypeLabel: null,
+		colors: null,
+		revision,
+		mainboardQuantity: entries
+			.filter(entry => entry.compartment === 'mainboard')
+			.reduce((total, entry) => total + Number(entry.quantity ?? 0), 0),
+		sideboardQuantity: entries
+			.filter(entry => entry.compartment === 'sideboard')
+			.reduce((total, entry) => total + Number(entry.quantity ?? 0), 0),
+		hasCompanion: entries.some(entry => entry.compartment === 'companion'),
+		sourceText: 'saved source',
+		entries,
+		createdAt: new Date(0),
+		updatedAt: new Date(revision * 1000),
+	};
+}
+
+function broadcastUpdateHandler() {
+	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'broadcastDeckList:updated');
+	return call?.[2] as ((message: { eventId: number; listId: number; revision: number }) => void) | undefined;
+}
+
 describe('useDeckModeData', () => {
 	// Each instance registers watchers on the shared mocked refs; a stopped scope
 	// keeps earlier tests' instances from reacting to later tests' ref writes.
@@ -122,9 +169,14 @@ describe('useDeckModeData', () => {
 		vi.clearAllMocks();
 		MockImage.loadedUrls = [];
 		mockPlayerId.value = null;
+		mockBroadcastDeckListId.value = null;
 		mockEventId.value = 1;
+		mockScreen.value = { id: 1, name: 'Test', modeConfigs: { deck: {} } };
+		mockAssetCapability.value = 'output-capability';
+		mockRealtime.connectionState = 'connected';
 		mockCardDataHealth.value = 'complete';
 		mockFetchDeck.mockResolvedValue(createDeckResponse([]));
+		mockGetSelectedBroadcastDeckList.mockResolvedValue(null);
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 	});
@@ -183,6 +235,181 @@ describe('useDeckModeData', () => {
 		expect(hasDisplayedDeck.value).toBe(true);
 		expect(displayedDeckVersion.value).toBe(1);
 		expect(MockImage.loadedUrls).toContain('https://img.test/counterspell.jpg');
+	});
+
+	it('projects the selected Broadcast Deck List through the source-independent display state', async () => {
+		mockGetSelectedBroadcastDeckList.mockResolvedValue({
+			id: 23,
+			eventId: 1,
+			name: 'Feature Table',
+			archetypeLabel: 'Jeskai Control',
+			colors: 'WUR',
+			revision: 4,
+			mainboardQuantity: 5,
+			sideboardQuantity: 2,
+			hasCompanion: true,
+			sourceText: 'saved source',
+			createdAt: new Date(0),
+			updatedAt: new Date(0),
+			entries: [
+				{ id: 1, listId: 23, compartment: 'mainboard', quantity: 4, sortOrder: 0, canonicalName: 'Lightning Bolt', scryfallId: 'printing-bolt', oracleId: 'oracle-bolt', setCode: 'lea', collectorNumber: '161', cardType: 'Instant', colors: 'R', manaCost: '{R}', manaValue: 1, deckCounterTypes: ['storm'] },
+				{ id: 2, listId: 23, compartment: 'mainboard', quantity: 1, sortOrder: 1, canonicalName: 'Birds of Paradise', scryfallId: 'printing-birds', oracleId: 'oracle-birds', setCode: 'lea', collectorNumber: '186', cardType: 'Creature — Bird', colors: 'G', manaCost: '{G}', manaValue: 1, deckCounterTypes: [] },
+				{ id: 3, listId: 23, compartment: 'sideboard', quantity: 2, sortOrder: 0, canonicalName: 'Surgical Extraction', scryfallId: 'printing-surgical', oracleId: 'oracle-surgical', setCode: 'nph', collectorNumber: '74', cardType: 'Instant', colors: 'B', manaCost: '{B/P}', manaValue: 1, deckCounterTypes: ['poison'] },
+				{ id: 4, listId: 23, compartment: 'companion', quantity: 1, sortOrder: 0, canonicalName: 'Lutri, the Spellchaser', scryfallId: 'printing-lutri', oracleId: 'oracle-lutri', setCode: 'iko', collectorNumber: '227', cardType: 'Legendary Creature — Elemental Otter', colors: 'UR', manaCost: '{1}{U/R}{U/R}', manaValue: 3, deckCounterTypes: ['energy'] },
+			],
+		});
+		mockBuildDeckListArrays.mockImplementation((cards: Array<Record<string, unknown>>) => ({
+			mainboard: cards.filter(card => card.compartment === 'mainboard').map(card => ({ ...card, mtgCard: null })),
+			sideboard: cards.filter(card => card.compartment === 'sideboard').map(card => ({ ...card, mtgCard: null })),
+		}));
+
+		mockBroadcastDeckListId.value = 23;
+		const result = mountDeckModeData();
+		await flushPromises();
+
+		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledWith(1, 1, 'output-capability');
+		expect(mockFetchScryfallCards).toHaveBeenCalledWith([
+			expect.objectContaining({ name: 'Lightning Bolt', scryfallId: 'printing-bolt' }),
+			expect.objectContaining({ name: 'Birds of Paradise', scryfallId: 'printing-birds' }),
+			expect.objectContaining({ name: 'Surgical Extraction', scryfallId: 'printing-surgical' }),
+			expect.objectContaining({ name: 'Lutri, the Spellchaser', scryfallId: 'printing-lutri' }),
+		]);
+		expect(result.playerName.value).toBe('Feature Table');
+		expect(result.deckName.value).toBe('Jeskai Control');
+		expect(result.deckColors.value).toBe('WUR');
+		expect(result.highlander.value).toBeNull();
+		expect(result.deckStats.value).toEqual([
+			{ type: 'Creatures', count: 1 },
+			{ type: 'Instants', count: 4 },
+		]);
+		expect(result.deckCounters.value.map(counter => counter.key)).toEqual(['poison', 'storm']);
+		expect(result.companion.value).toMatchObject({
+			cardId: 4,
+			name: 'Lutri, the Spellchaser',
+			scryfallId: 'printing-lutri',
+		});
+		expect(result.mainboard.value.map(card => card.name)).toEqual(['Lightning Bolt', 'Birds of Paradise']);
+		expect(result.sideboard.value.map(card => card.name)).toEqual(['Surgical Extraction']);
+	});
+
+	it('keeps the displayed Broadcast revision until an update notification fetches and stages its successor', async () => {
+		mockGetSelectedBroadcastDeckList
+			.mockResolvedValueOnce(createBroadcastList(1, 'Old revision'))
+			.mockResolvedValue(createBroadcastList(2, 'New revision'));
+		mockBroadcastDeckListId.value = 23;
+		const result = mountDeckModeData();
+		await flushPromises();
+
+		expect(result.playerName.value).toBe('Old revision');
+		const onUpdated = broadcastUpdateHandler();
+		expect(onUpdated).toBeTypeOf('function');
+		onUpdated!({ eventId: 1, listId: 23, revision: 2 });
+		await flushPromises();
+
+		expect(result.playerName.value).toBe('Old revision');
+		expect(result.pendingSwapVersion.value).toBe(1);
+		expect(result.error.value).toBeNull();
+
+		result.commitPendingDeck();
+		expect(result.playerName.value).toBe('New revision');
+	});
+
+	it('keeps and retries the old Broadcast revision when the canonical selected-list read fails', async () => {
+		vi.useFakeTimers();
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			mockGetSelectedBroadcastDeckList.mockResolvedValueOnce(createBroadcastList(1, 'On air'));
+			mockBroadcastDeckListId.value = 23;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockGetSelectedBroadcastDeckList.mockRejectedValueOnce(new Error('canonical read unavailable'));
+			broadcastUpdateHandler()!({ eventId: 1, listId: 23, revision: 2 });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.playerName.value).toBe('On air');
+			expect(result.pendingSwapVersion.value).toBe(0);
+
+			mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(2, 'Recovered revision'));
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.playerName.value).toBe('On air');
+			expect(result.pendingSwapVersion.value).toBe(1);
+		}
+		finally {
+			consoleError.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	it('stages a new canonical Broadcast revision with placeholders and does not re-stage unchanged degraded retries', async () => {
+		vi.useFakeTimers();
+		try {
+			const entry = {
+				id: 1,
+				listId: 23,
+				compartment: 'mainboard',
+				quantity: 4,
+				sortOrder: 0,
+				canonicalName: 'Lightning Bolt',
+				scryfallId: 'printing-bolt',
+				oracleId: 'oracle-bolt',
+				setCode: 'lea',
+				collectorNumber: '161',
+				cardType: 'Instant',
+				colors: 'R',
+				manaCost: '{R}',
+				manaValue: 1,
+				deckCounterTypes: [],
+			};
+			mockGetSelectedBroadcastDeckList
+				.mockResolvedValueOnce(createBroadcastList(1, 'First', [entry]))
+				.mockResolvedValue(createBroadcastList(2, 'Second', [entry]));
+			mockFetchScryfallCards
+				.mockResolvedValueOnce({ cards: new Map(), degraded: false })
+				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
+				.mockResolvedValue({ cards: new Map(), degraded: false });
+			mockBuildDeckListArrays.mockImplementation((cards: Array<Record<string, unknown>>) => ({
+				mainboard: cards.map(card => ({ ...card, mtgCard: null })),
+				sideboard: [],
+			}));
+
+			mockBroadcastDeckListId.value = 23;
+			const result = mountDeckModeData();
+			await vi.advanceTimersByTimeAsync(0);
+
+			broadcastUpdateHandler()!({ eventId: 1, listId: 23, revision: 2 });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(result.pendingSwapVersion.value).toBe(1);
+			expect(result.cardDataDegraded.value).toBe(true);
+			result.commitPendingDeck();
+			expect(result.playerName.value).toBe('Second');
+			expect(result.mainboard.value[0]?.mtgCard).toBeNull();
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.pendingSwapVersion.value).toBe(1);
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(result.cardDataDegraded.value).toBe(false);
+			expect(result.pendingSwapVersion.value).toBe(2);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('re-reads the selected Broadcast detail after reconnect', async () => {
+		mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(1, 'Feature Table'));
+		mockBroadcastDeckListId.value = 23;
+		mountDeckModeData();
+		await flushPromises();
+		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(1);
+
+		mockRealtime.connectionState = 'disconnected';
+		await nextTick();
+		mockRealtime.connectionState = 'connected';
+		await flushPromises();
+
+		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(2);
 	});
 
 	it('keeps the current deck visible until the pending deck is committed', async () => {

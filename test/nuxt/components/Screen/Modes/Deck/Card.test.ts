@@ -82,4 +82,13 @@ describe('screenDeckCard', () => {
 
 		expect(wrapper.get('nuxt-img-stub').attributes('loading')).toBe('eager');
 	});
+
+	it('keeps a named placeholder visible when card art is unavailable', async () => {
+		const wrapper = await mountComponent({
+			card: createCard({ name: 'Rest in Peace', mtgCard: null }),
+		});
+
+		expect(wrapper.find('nuxt-img-stub').exists()).toBe(false);
+		expect(wrapper.text()).toContain('Rest in Peace');
+	});
 });

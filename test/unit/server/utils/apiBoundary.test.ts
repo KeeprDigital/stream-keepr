@@ -188,6 +188,7 @@ describe('the public surface, counted against the routes on disk', () => {
 			// The Screen lookup by slug joined it on #397 — the bootstrap an output
 			// needs before it has anything to resolve, admitted by the same bearer
 			// (or, for the operator's `embed=preview` surfaces, by their session).
+			'server/api/screen-output/events/[id]/screens/[screenId]/broadcast-deck-list.get.ts',
 			'server/api/screen-output/events/[id]/screens/slug/[slug].get.ts',
 			'server/api/screen-output/screens/[screenId]/asset-capability-session.post.ts',
 			'server/api/screen-output/screens/[screenId]/assets/[assetId]/revisions/[revisionId]/content.get.ts',
