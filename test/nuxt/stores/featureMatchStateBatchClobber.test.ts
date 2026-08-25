@@ -101,8 +101,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 		store.$reset();
 		vi.clearAllMocks();
 		store.featureMatchStates.set(MATCH_ID, createMockFeatureMatchState({
-			player1: { lifeTotal: 20, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 		}));
 	});
 
@@ -136,8 +136,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 		// (player2 is still 20 server-side) — a whole-entry write anywhere on this path
 		// would revert player2's optimistic 15 back to 20.
 		const player1Confirmed = createMockFeatureMatchState({
-			player1: { lifeTotal: 17, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 17, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 		});
 		resolvePlayer1(commandResult(player1Confirmed, 4));
 		await flushPromises();
@@ -148,8 +148,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 
 		// Player2's flush now lands with the fully-agreed final state.
 		const player2Confirmed = createMockFeatureMatchState({
-			player1: { lifeTotal: 17, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 15, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 17, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
 		});
 		resolvePlayer2(commandResult(player2Confirmed, 5));
 		await flushPromises();
@@ -169,8 +169,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 		// edit (player1 still 20 server-side). It only owns `activePlayer` — a
 		// whole-state write here would revert the pending life edit.
 		const serverState = createMockFeatureMatchState({
-			player1: { lifeTotal: 20, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 			activePlayer: 'player2',
 		});
 		mockRepo.updateState.mockResolvedValue(commandResult(serverState, 4));
@@ -206,8 +206,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 
 	it('accumulates rapid life deltas into one flush with the merged payload', async () => {
 		const confirmed = createMockFeatureMatchState({
-			player1: { lifeTotal: 10, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 20, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 10, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
 		});
 		mockRepo.updatePlayerFeatureMatchState.mockResolvedValue(commandResult(confirmed, 4));
 
@@ -238,8 +238,8 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 		// A remote frame arrives reflecting server state that predates the tap
 		// (player1 still 20 there), but carries a real remote change to player2.
 		const remoteState = createMockFeatureMatchState({
-			player1: { lifeTotal: 20, gameWins: 0, counters: [] },
-			player2: { lifeTotal: 12, gameWins: 0, counters: [] },
+			player1: { lifeTotal: 20, gameWins: 0, counters: [], sideboardRevealed: false },
+			player2: { lifeTotal: 12, gameWins: 0, counters: [], sideboardRevealed: false },
 		});
 		await store.applyRemoteSessionEvent({
 			eventId: EVENT_ID,

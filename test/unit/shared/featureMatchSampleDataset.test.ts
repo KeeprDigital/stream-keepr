@@ -82,6 +82,7 @@ describe('the canonical Feature Match sample dataset', () => {
 					{ name: 'Burrenton Forge-Tender', quantity: 4, imageUrl: null },
 					{ name: 'Path to Exile', quantity: 2, imageUrl: null },
 				],
+				sideboardRevealed: true,
 			},
 			player2: {
 				lifeTotal: 4,
@@ -94,6 +95,7 @@ describe('the canonical Feature Match sample dataset', () => {
 					{ name: 'Cut Down', quantity: 3, imageUrl: null },
 					{ name: 'Disdainful Stroke', quantity: 3, imageUrl: null },
 				],
+				sideboardRevealed: true,
 			},
 			bestOf: 3,
 		});

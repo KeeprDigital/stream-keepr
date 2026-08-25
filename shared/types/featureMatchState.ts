@@ -12,6 +12,13 @@ export interface PlayerFeatureMatchState {
 	gameWins: number;
 	counters: CounterState[];
 	cardsKept?: number;
+	/**
+	 * Whether this player's sideboard is revealed on the live overlay. Match-scoped:
+	 * a game reset or game win must not touch it; only a match reset re-hides (#490).
+	 * Optional for the same reason `cardsKept` is: absent on states persisted
+	 * before the flag existed, which every reader treats as hidden.
+	 */
+	sideboardRevealed?: boolean;
 }
 
 // Clock state
@@ -55,6 +62,7 @@ export function createInitialPlayerFeatureMatchState(startingLife: number = DEFA
 		lifeTotal: startingLife,
 		gameWins: 0,
 		counters: [],
+		sideboardRevealed: false,
 	};
 }
 
@@ -112,6 +120,7 @@ export interface PlayerFeatureMatchStateUpdate {
 	lifeDelta?: number;
 	counters?: { type: string; value: number }[];
 	cardsKept?: number;
+	sideboardRevealed?: boolean;
 }
 
 export interface GameWinOptions {

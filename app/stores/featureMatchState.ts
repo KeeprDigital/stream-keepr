@@ -516,6 +516,27 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		);
 	}
 
+	/**
+	 * The match-level Show-sideboards toggle: one atomic save revealing or hiding
+	 * both players. The model stays per-player underneath (#490), so this decomposes
+	 * into a Batch of two SetSideboardRevealed commands at the client seam.
+	 */
+	function setSideboardRevealed(eventId: number, matchId: number, revealed: boolean) {
+		return optimistic.run(
+			`sideboards:${matchId}`,
+			matchId,
+			current => ({
+				...current,
+				player1: { ...current.player1, sideboardRevealed: revealed },
+				player2: { ...current.player2, sideboardRevealed: revealed },
+			}),
+			() => repo.updateState(eventId, matchId, {
+				player1: { sideboardRevealed: revealed },
+				player2: { sideboardRevealed: revealed },
+			}).then(cacheSessionOnly),
+		);
+	}
+
 	function setTurnNumber(eventId: number, matchId: number, turnNumber: number) {
 		return optimistic.run(
 			`turnNumber:${matchId}`,
@@ -779,6 +800,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		adjustLife,
 		setLife,
 		setCardsKept,
+		setSideboardRevealed,
 		setTurnNumber,
 		selectFirstPlayer,
 		changeFirstPlayer,

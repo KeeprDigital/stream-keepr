@@ -250,7 +250,7 @@ describe('useFeatureMatchStateStore', () => {
 		it('merges player sub-objects', async () => {
 			seedState();
 			const serverState = createMockFeatureMatchState({
-				player1: { lifeTotal: 15, gameWins: 0, counters: [] },
+				player1: { lifeTotal: 15, gameWins: 0, counters: [], sideboardRevealed: false },
 			});
 			mockRepo.updateState.mockResolvedValue(commandResult(serverState));
 

@@ -56,6 +56,15 @@ describe('feature match session extended behavior', () => {
 		expect(result.currentState.player2.cardsKept).toBe(6);
 
 		result = await harness.send({
+			commandId: commandId('set-sideboard-revealed'),
+			type: 'SetSideboardRevealed',
+			payload: { player: 'player2', revealed: true },
+			baseSequence: harness.session().sequence,
+		});
+		expect(result.currentState.player2.sideboardRevealed).toBe(true);
+		expect(result.currentState.player1.sideboardRevealed).toBe(false);
+
+		result = await harness.send({
 			commandId: commandId('swap-players'),
 			type: 'SwapPlayers',
 			payload: {},
