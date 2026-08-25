@@ -130,7 +130,7 @@ function orderedErrors(errors: readonly BroadcastDeckListImportError[]): Broadca
 }
 
 function quantityToken(sourceText: string): string | null {
-	const separatorIndex = sourceText.search(/\s/);
+	const separatorIndex = sourceText.indexOf(' ');
 	return separatorIndex < 0 ? null : sourceText.slice(0, separatorIndex);
 }
 
@@ -163,8 +163,10 @@ function parseCardRow(
 		return lineError(lineNumber, 'INVALID_QUANTITY', 'Quantity must be a whole number from 1 through 999', sourceText);
 	}
 	if (
-		/\s+(?:\*(?:CMDR|CMPN|F)\*|#.+|\[[^\]]+\]|\^\S.*|foil)$/i.test(cardText)
+		/\s+(?:\*[a-z]+(?::[^*]+)?\*|#.+|\[[^\]]+\]|\^\S.*|foil)$/i.test(cardText)
 		|| /\([a-z\d]{1,20}\)\s+\S+\s+\S+$/i.test(cardText)
+		|| /\([a-z\d]+:[^)]+\)$/i.test(cardText)
+		|| cardText.includes('`')
 	) {
 		return lineError(lineNumber, 'UNSUPPORTED_SYNTAX', 'Card decorations and inline categories are not supported', sourceText);
 	}

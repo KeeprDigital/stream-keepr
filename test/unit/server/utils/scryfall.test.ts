@@ -125,6 +125,19 @@ describe('fetchScryfallCardBySetAndCollector', () => {
 			expect.any(Object),
 		);
 	});
+
+	it('treats a response without collector identity as an upstream schema failure', async () => {
+		vi.mocked(fetch).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ id: 'broken-printing', name: 'Lightning Bolt', set: 'sld' }),
+		} as any);
+
+		await expect(fetchScryfallCardBySetAndCollector('sld', '101')).rejects.toMatchObject({
+			name: 'ScryfallRequestError',
+			code: 'SCRYFALL_UPSTREAM_FAILURE',
+			notFound: false,
+		});
+	});
 });
 
 // ──────────────── batchLookupScryfallIds ────────────────

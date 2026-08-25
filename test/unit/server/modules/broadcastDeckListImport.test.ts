@@ -134,6 +134,39 @@ describe('broadcast Deck List import', () => {
 		});
 	});
 
+	it('rejects every researched decoration family even when a resolver would accept the decorated name', async () => {
+		const result = await importBroadcastDeckList([
+			'1 Lightning Bolt *S*',
+			'1 Lightning Bolt *A*',
+			'1 Lightning Bolt *IT*',
+			'1 Lightning Bolt *F:pre*',
+			'1 Lightning Bolt `Burn`',
+			'1 Lightning Bolt (ATQ:1074)',
+		].join('\n'), resolvingAllCards());
+
+		expect(result.ok).toBe(false);
+		if (result.ok)
+			return;
+		expect(result.errors).toHaveLength(6);
+		expect(result.errors).toEqual([
+			expect.objectContaining({ lineNumber: 1, code: 'UNSUPPORTED_SYNTAX' }),
+			expect.objectContaining({ lineNumber: 2, code: 'UNSUPPORTED_SYNTAX' }),
+			expect.objectContaining({ lineNumber: 3, code: 'UNSUPPORTED_SYNTAX' }),
+			expect.objectContaining({ lineNumber: 4, code: 'UNSUPPORTED_SYNTAX' }),
+			expect.objectContaining({ lineNumber: 5, code: 'UNSUPPORTED_SYNTAX' }),
+			expect.objectContaining({ lineNumber: 6, code: 'UNSUPPORTED_SYNTAX' }),
+		]);
+	});
+
+	it('requires an ASCII space between quantity and card name', async () => {
+		const result = await importBroadcastDeckList('4\tLightning Bolt', resolvingAllCards());
+
+		expect(result).toEqual({
+			ok: false,
+			errors: [expect.objectContaining({ lineNumber: 1, code: 'INVALID_QUANTITY' })],
+		});
+	});
+
 	it('requires one quantity-one Companion row and reports every Companion error', async () => {
 		const result = await importBroadcastDeckList([
 			'1 Forest',
@@ -165,6 +198,32 @@ describe('broadcast Deck List import', () => {
 			errors: [expect.objectContaining({ code: 'TOO_MANY_LINES' })],
 		});
 		expect(resolver.resolve).not.toHaveBeenCalled();
+	});
+
+	it('accepts each exact safety boundary', async () => {
+		const sourceAtLimit = await importBroadcastDeckList(`1 ${'a'.repeat(65_534)}`, resolvingAllCards());
+		const linesAtLimit = await importBroadcastDeckList(
+			[...Array.from({ length: 499 }).fill(''), '1 Forest'].join('\n'),
+			resolvingAllCards(),
+		);
+		const rowsAtLimit = await importBroadcastDeckList(
+			Array.from({ length: 250 }, (_, index) => `1 Card ${index}`).join('\n'),
+			resolvingAllCards(),
+		);
+		const mergedAtLimit = await importBroadcastDeckList(
+			'600 Lightning Bolt (SLD) 1\n399 Lightning Bolt (SLD) 1',
+			resolvingAllCards(),
+		);
+
+		expect(sourceAtLimit.ok).toBe(true);
+		expect(linesAtLimit.ok).toBe(true);
+		expect(rowsAtLimit.ok).toBe(true);
+		expect(mergedAtLimit).toEqual({
+			ok: true,
+			document: expect.objectContaining({
+				mainboard: [expect.objectContaining({ quantity: 999 })],
+			}),
+		});
 	});
 
 	it('refuses more than 250 parsed card rows before card resolution', async () => {

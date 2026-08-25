@@ -306,6 +306,9 @@ export async function fetchScryfallCardBySetAndCollector(
 		SCRYFALL_CARD_BODY_LIMIT_BYTES,
 	);
 	const card = parseScryfallCard(raw, errorPrefix);
+	if (!('collector_number' in card) || typeof card.collector_number !== 'string') {
+		throw new ScryfallRequestError(`${errorPrefix}: invalid response schema`);
+	}
 	return mapScryfallCardData(card);
 }
 

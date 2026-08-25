@@ -116,4 +116,101 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		});
 		expect(failure.message).not.toContain('private upstream detail');
 	});
+
+	it('uses the real Scryfall boundary in batches of 75 without losing result order', async () => {
+		const fetchMock = vi.fn(async (_input: string, init: RequestInit) => {
+			const body = JSON.parse(init.body as string) as { identifiers: Array<{ name: string }> };
+			return {
+				ok: true,
+				json: () => Promise.resolve({
+					object: 'list',
+					not_found: [],
+					data: body.identifiers.map(identifier => ({
+						id: `${identifier.name}-printing`,
+						name: identifier.name,
+						set: 'dft',
+						collector_number: '1',
+					})),
+				}),
+			} as unknown as Response;
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		try {
+			const requests = Array.from({ length: 80 }, (_, index) => ({
+				name: `Card ${index}`,
+				setCode: null,
+				collectorNumber: null,
+			}));
+			const result = await createBroadcastDeckListScryfallResolver().resolve(requests);
+
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+			expect(result).toHaveLength(80);
+			expect(result[79]).toEqual(expect.objectContaining({
+				status: 'resolved',
+				card: expect.objectContaining({ canonicalName: 'Card 79', scryfallId: 'Card 79-printing' }),
+			}));
+		}
+		finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it('bounds exact collector lookups to four concurrent requests', async () => {
+		let active = 0;
+		let maximumActive = 0;
+		const lookupBySetAndCollector = vi.fn(async (setCode: string, collectorNumber: string) => {
+			active++;
+			maximumActive = Math.max(maximumActive, active);
+			await Promise.resolve();
+			active--;
+			return scryfallCard({
+				setCode,
+				collectorNumber,
+				id: `printing-${collectorNumber}`,
+			});
+		});
+		const resolver = createBroadcastDeckListScryfallResolver({
+			scryfall: {
+				lookupByName: vi.fn(async () => []),
+				lookupBySetAndCollector,
+			},
+		});
+
+		const result = await resolver.resolve(Array.from({ length: 9 }, (_, index) => ({
+			name: 'Lightning Bolt',
+			setCode: 'sld',
+			collectorNumber: String(index + 1),
+		})));
+
+		expect(result.every(resolution => resolution.status === 'resolved')).toBe(true);
+		expect(lookupBySetAndCollector).toHaveBeenCalledTimes(9);
+		expect(maximumActive).toBe(4);
+	});
+
+	it('maps collector not-found to unresolved but keeps collector outages retryable', async () => {
+		const request = [{ name: 'Lightning Bolt', setCode: 'sld', collectorNumber: '101' }];
+		const notFoundResolver = createBroadcastDeckListScryfallResolver({
+			scryfall: {
+				lookupByName: vi.fn(async () => []),
+				lookupBySetAndCollector: vi.fn(async () => {
+					throw new ScryfallRequestError('not found', { status: 404, notFound: true });
+				}),
+			},
+		});
+		const outageResolver = createBroadcastDeckListScryfallResolver({
+			scryfall: {
+				lookupByName: vi.fn(async () => []),
+				lookupBySetAndCollector: vi.fn(async () => {
+					throw new ScryfallRequestError('private outage', { status: 503, retryable: true });
+				}),
+			},
+		});
+
+		await expect(notFoundResolver.resolve(request)).resolves.toEqual([{ status: 'unresolved' }]);
+		await expect(outageResolver.resolve(request)).rejects.toMatchObject({
+			code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE',
+			retryable: true,
+		});
+	});
 });
