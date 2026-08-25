@@ -11,7 +11,7 @@ import {
 	broadcastDeckListService,
 } from '~~/server/services/broadcastDeckList';
 import { eventCardNameOverrideService } from '~~/server/services/eventCardNameOverride';
-import { BROADCAST_DECK_LIST_REVISION_CONFLICT } from '~~/shared/types/broadcastDeckList';
+import { BROADCAST_DECK_LIST_IN_USE, BROADCAST_DECK_LIST_REVISION_CONFLICT } from '~~/shared/types/broadcastDeckList';
 
 interface BaseWriteParams {
 	eventId: number;
@@ -46,6 +46,15 @@ function revisionConflictError(current: unknown) {
 
 function nameConflictError(error: BroadcastDeckListNameConflict) {
 	return createError({ statusCode: 409, message: error.message, data: { code: 'BROADCAST_DECK_LIST_NAME_CONFLICT' } });
+}
+
+function inUseError(screens: Array<{ id: number; name: string }>) {
+	const names = screens.map(screen => screen.name).join(', ');
+	return createError({
+		statusCode: 409,
+		message: `Broadcast Deck List is selected by ${screens.length === 1 ? 'Screen' : 'Screens'}: ${names}`,
+		data: { code: BROADCAST_DECK_LIST_IN_USE, screens },
+	});
 }
 
 export function broadcastDeckListWriteModule() {
@@ -140,6 +149,8 @@ export function broadcastDeckListWriteModule() {
 		const result = await lists.remove(listId, eventId, expectedRevision);
 		if (result.status === 'missing')
 			throw missingListError();
+		if (result.status === 'in-use')
+			throw inUseError(result.screens);
 		if (result.status === 'conflict')
 			throw revisionConflictError(result.current);
 

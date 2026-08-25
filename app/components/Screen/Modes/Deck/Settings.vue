@@ -99,8 +99,11 @@ function updateBoardLayout(key: BoardKey, patch: Partial<DeckBoardLayoutConfig>)
 const deckCache = usePlayerDeckCache();
 const sideboardEmpty = ref(false);
 const sideboardLookup = createGuardedSequence();
+const selectedPlayerId = computed(() => config.value.deckSource.type === 'player'
+	? config.value.deckSource.playerId
+	: null);
 
-watch([() => config.value.playerId, () => playerStore.players], async ([playerId]) => {
+watch([selectedPlayerId, () => playerStore.players], async ([playerId]) => {
 	const flight = sideboardLookup.begin();
 	sideboardEmpty.value = false;
 	if (!playerId) {
@@ -136,10 +139,10 @@ const showEmptySideboardHint = computed(() => board.value !== 'mainboard' && sid
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
-					:model-value="config.playerId"
+					:model-value="selectedPlayerId"
 					:items="playerOptions"
 					class="w-64"
-					@update:model-value="updateConfig({ playerId: $event })"
+					@update:model-value="updateConfig({ deckSource: { type: 'player', playerId: $event } })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

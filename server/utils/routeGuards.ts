@@ -1,6 +1,7 @@
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigsMap, ScreenModeConfig } from '~~/shared/types/screenConfig';
 import { archetypeService } from '~~/server/services/archetype';
+import { broadcastDeckListService } from '~~/server/services/broadcastDeckList';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { matchService } from '~~/server/services/match';
 import { phaseService } from '~~/server/services/phase';
@@ -8,6 +9,7 @@ import { playerService } from '~~/server/services/player';
 import { playerListService } from '~~/server/services/playerList';
 import { roundService } from '~~/server/services/round';
 import { talentService } from '~~/server/services/talent';
+import { ScreenDeckSourceConflictError } from '~~/server/utils/errors';
 
 function throwReferenceNotFound(message: string): never {
 	throw createError({ statusCode: 404, message });
@@ -128,6 +130,15 @@ function configReferenceValue(config: Partial<ScreenModeConfig> | Record<string,
 	return typeof value === 'number' || value === null ? value : undefined;
 }
 
+function deckSourceValue(config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined) {
+	if (!config || typeof config !== 'object')
+		return undefined;
+	const source = (config as Record<string, unknown>).deckSource;
+	if (!source || typeof source !== 'object')
+		return undefined;
+	return source as Record<string, unknown>;
+}
+
 export async function validateScreenModeConfigReferences(
 	eventId: number,
 	mode: ScreenMode,
@@ -141,7 +152,18 @@ export async function validateScreenModeConfigReferences(
 			await requireFeatureMatchSlotInEvent(eventId, slotId);
 			break;
 		}
-		case 'deck':
+		case 'deck': {
+			const source = deckSourceValue(config);
+			if (source?.type === 'player') {
+				await requirePlayersInEvent(eventId, [typeof source.playerId === 'number' ? source.playerId : null]);
+			}
+			else if (source?.type === 'broadcast') {
+				const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
+				if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
+					throw new ScreenDeckSourceConflictError();
+			}
+			break;
+		}
 		case 'player-history':
 			await requirePlayersInEvent(eventId, [configReferenceValue(config, 'playerId')]);
 			break;

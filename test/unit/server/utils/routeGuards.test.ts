@@ -11,6 +11,7 @@ import {
 
 // Mock services
 const mockArchetypeFindById = vi.fn();
+const mockBroadcastDeckListSourceIsSelectable = vi.fn();
 const mockFeatureMatchExists = vi.fn();
 const mockFeatureMatchFindById = vi.fn();
 const mockMatchExists = vi.fn();
@@ -23,6 +24,9 @@ const mockTalentFindById = vi.fn();
 
 vi.mock('~~/server/services/archetype', () => ({
 	archetypeService: () => ({ findById: mockArchetypeFindById }),
+}));
+vi.mock('~~/server/services/broadcastDeckList', () => ({
+	broadcastDeckListService: () => ({ sourceIsSelectable: mockBroadcastDeckListSourceIsSelectable }),
 }));
 vi.mock('~~/server/services/featureMatch', () => ({
 	featureMatchService: () => ({ exists: mockFeatureMatchExists, findById: mockFeatureMatchFindById }),
@@ -58,6 +62,7 @@ describe('event-scoped reference validation', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockArchetypeFindById.mockResolvedValue({ id: 9 });
+		mockBroadcastDeckListSourceIsSelectable.mockResolvedValue(true);
 		mockFeatureMatchExists.mockResolvedValue(true);
 		mockFeatureMatchFindById.mockResolvedValue({ id: 5 });
 		mockMatchExists.mockResolvedValue(true);
@@ -114,14 +119,32 @@ describe('event-scoped reference validation', () => {
 			roundId: 2,
 			playerListId: 7,
 		})).resolves.toBeUndefined();
-		await expect(validateScreenModeConfigReferences(1, 'deck', { playerId: 3 })).resolves.toBeUndefined();
+		await expect(validateScreenModeConfigReferences(1, 'deck', {
+			deckSource: { type: 'player', playerId: 3 },
+		})).resolves.toBeUndefined();
+		await expect(validateScreenModeConfigReferences(1, 'deck', {
+			deckSource: { type: 'broadcast', broadcastDeckListId: 8 },
+		})).resolves.toBeUndefined();
 		await expect(validateScreenModeConfigReferences(1, 'player-history', { playerId: 4 })).resolves.toBeUndefined();
 		await expect(validateScreenModeConfigReferences(1, 'feature-match', { featureMatchId: 5 })).resolves.toBeUndefined();
 
 		expect(mockRoundExists).toHaveBeenCalledWith(2, 1);
 		expect(mockPlayerListFindById).toHaveBeenCalledWith(7, 1);
 		expect(mockPlayerCountByIds).toHaveBeenCalledWith(1, [3]);
+		expect(mockBroadcastDeckListSourceIsSelectable).toHaveBeenCalledWith(8, 1);
 		expect(mockPlayerCountByIds).toHaveBeenCalledWith(1, [4]);
 		expect(mockFeatureMatchExists).toHaveBeenCalledWith(5, 1);
+	});
+
+	it('refuses a Broadcast source that is missing, belongs to another Event, or is disabled', async () => {
+		mockBroadcastDeckListSourceIsSelectable.mockResolvedValue(false);
+
+		await expect(validateScreenModeConfigReferences(1, 'deck', {
+			deckSource: { type: 'broadcast', broadcastDeckListId: 8 },
+		})).rejects.toMatchObject({
+			statusCode: 409,
+			code: 'SCREEN_DECK_SOURCE_CONFLICT',
+			message: 'The selected Deck source is no longer available',
+		});
 	});
 });

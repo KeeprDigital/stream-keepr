@@ -11,7 +11,7 @@ vi.mock('~~/shared/types/screenConfig', async (importOriginal) => {
 			if (mode === 'match')
 				return { matchId: null };
 			if (mode === 'deck')
-				return { playerId: null };
+				return { deckSource: { type: 'player', playerId: null } };
 			return {};
 		}),
 	};
@@ -72,30 +72,30 @@ describe('useScreenModeConfig', () => {
 
 		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
 
-		expect(config.value.playerId).toBeNull();
+		expect(config.value.deckSource).toEqual({ type: 'player', playerId: null });
 	});
 
 	it('merges stored config over defaults', () => {
 		const screen = ref(createMockScreen({
-			modeConfigs: { deck: { playerId: 5 } } as any,
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId: 5 } } } as any,
 		}) as any);
 		const ctx = { screen, eventId: computed(() => 1), interactive: ref(false), overlayContainer: ref<HTMLElement | null>(null) };
 
 		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
 
-		expect(config.value.playerId).toBe(5);
+		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 5 });
 	});
 
 	it('is reactive to screen modeConfig changes', async () => {
-		const screen = ref(createMockScreen({ modeConfigs: { deck: { playerId: 1 } } as any }) as any);
+		const screen = ref(createMockScreen({ modeConfigs: { deck: { deckSource: { type: 'player', playerId: 1 } } } as any }) as any);
 		const ctx = { screen, eventId: computed(() => 1), interactive: ref(false), overlayContainer: ref<HTMLElement | null>(null) };
 
 		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
-		expect(config.value.playerId).toBe(1);
+		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 1 });
 
-		screen.value = { ...screen.value, modeConfigs: { deck: { playerId: 99 } } };
+		screen.value = { ...screen.value, modeConfigs: { deck: { deckSource: { type: 'player', playerId: 99 } } } };
 		await nextTick();
 
-		expect(config.value.playerId).toBe(99);
+		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 99 });
 	});
 });

@@ -169,6 +169,22 @@ describe('broadcastDeckListWriteModule', () => {
 		});
 	});
 
+	it('returns every affected Screen in a stable in-use conflict', async () => {
+		const screens = [{ id: 3, name: 'Alpha' }, { id: 9, name: 'Studio' }];
+		mocks.service.remove.mockResolvedValueOnce({ status: 'in-use', current: item, screens });
+
+		await expect(broadcastDeckListWriteModule().deleteBroadcastDeckList({
+			eventId: 1,
+			listId: item.id,
+			expectedRevision: 1,
+		})).rejects.toMatchObject({
+			statusCode: 409,
+			message: 'Broadcast Deck List is selected by Screens: Alpha, Studio',
+			data: { code: 'BROADCAST_DECK_LIST_IN_USE', screens },
+		});
+		expect(mocks.publication.broadcastDeckListDeleted).not.toHaveBeenCalled();
+	});
+
 	it('returns stable name-conflict and missing-item failures without publishing', async () => {
 		mocks.service.update
 			.mockRejectedValueOnce(new mocks.NameConflict('duplicate'))

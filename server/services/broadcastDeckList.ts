@@ -1,6 +1,6 @@
 import type { BroadcastDeckListAggregate, BroadcastDeckListSummaryRow } from '~~/server/mappers/broadcastDeckList';
 import type { BroadcastDeckListCanonicalDocument } from '~~/server/modules/broadcast-deck-list-import';
-import type { BroadcastDeckListResponse, BroadcastDeckListSummaryResponse, CreateBroadcastDeckListInput, UpdateBroadcastDeckListInput } from '~~/shared/types/broadcastDeckList';
+import type { BroadcastDeckListAffectedScreen, BroadcastDeckListResponse, BroadcastDeckListSummaryResponse, CreateBroadcastDeckListInput, UpdateBroadcastDeckListInput } from '~~/shared/types/broadcastDeckList';
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastDeckListEntries, broadcastDeckLists, events } from '~~/server/db/schema';
@@ -22,6 +22,7 @@ export type BroadcastDeckListMutationResult
 export type BroadcastDeckListDeleteResult
 	= | { status: 'deleted' }
 		| { status: 'conflict'; current: BroadcastDeckListResponse }
+		| { status: 'in-use'; current: BroadcastDeckListResponse; screens: BroadcastDeckListAffectedScreen[] }
 		| { status: 'missing' };
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
@@ -243,6 +244,20 @@ export function broadcastDeckListService() {
 		return event?.game;
 	};
 
+	const sourceIsSelectable = async (id: number, eventId: number): Promise<boolean> => {
+		const [list] = await db
+			.select({ id: broadcastDeckLists.id })
+			.from(broadcastDeckLists)
+			.innerJoin(events, eq(events.id, broadcastDeckLists.eventId))
+			.where(and(
+				eq(broadcastDeckLists.id, id),
+				eq(broadcastDeckLists.eventId, eventId),
+				eq(events.broadcastDeckListsEnabled, true),
+			))
+			.limit(1);
+		return list !== undefined;
+	};
+
 	const create = async (
 		eventId: number,
 		input: Omit<CreateBroadcastDeckListInput, 'sourceText'>,
@@ -366,23 +381,43 @@ export function broadcastDeckListService() {
 
 	const remove = async (id: number, eventId: number, expectedRevision: number): Promise<BroadcastDeckListDeleteResult> => {
 		const client = db.$client;
-		const [snapshot, result] = await client.batch([
+		const [snapshot, affectedResult, result] = await client.batch([
 			detailSelectStatement(client, 'identity', id, eventId),
+			client.prepare(`
+				SELECT id, name
+				FROM screens
+				WHERE event_id = ?
+					AND json_extract(mode_configs, '$.deck.deckSource.type') = 'broadcast'
+					AND json_extract(mode_configs, '$.deck.deckSource.broadcastDeckListId') = ?
+				ORDER BY name COLLATE NOCASE, id
+			`).bind(eventId, id),
 			client.prepare(`
 				DELETE FROM broadcast_deck_lists
 				WHERE id = ? AND event_id = ? AND revision = ?
-			`).bind(id, eventId, expectedRevision),
+					AND NOT EXISTS (
+						SELECT 1 FROM screens
+						WHERE screens.event_id = ?
+							AND json_extract(screens.mode_configs, '$.deck.deckSource.type') = 'broadcast'
+							AND json_extract(screens.mode_configs, '$.deck.deckSource.broadcastDeckListId') = ?
+					)
+			`).bind(id, eventId, expectedRevision, eventId, id),
 		]);
 		if (result?.meta.changes === 1)
 			return { status: 'deleted' };
 		const current = mapStoredDetail(snapshot as D1Result<StoredDetailRow>);
-		return current ? { status: 'conflict', current } : { status: 'missing' };
+		if (!current)
+			return { status: 'missing' };
+		const affected = (affectedResult as D1Result<BroadcastDeckListAffectedScreen>).results;
+		return affected.length > 0
+			? { status: 'in-use', current, screens: affected }
+			: { status: 'conflict', current };
 	};
 
 	return {
 		findByEventId,
 		findById,
 		findEventGame,
+		sourceIsSelectable,
 		create,
 		update,
 		remove,
