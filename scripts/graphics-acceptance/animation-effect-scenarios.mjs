@@ -31,15 +31,25 @@
  *   the size below: far above the black frame this exists to catch, and far
  *   below the sparsest effect in the catalogue (the measured floor is ember's,
  *   which draws about five times that at its defaults).
- * - `minDarkFraction` — the ambient half of the same fact. Animation Effects sit
- *   behind broadcast graphics, so a frame that is mostly bright is a shader
- *   blowing out, not an effect (#473 caught exactly this in weave's first cut).
+ * - `maxBrightFraction` — the ambient half of the same fact. Animation Effects
+ *   sit behind broadcast graphics, so a frame that is mostly *bright* is a
+ *   shader blowing out, not an effect (#473 caught exactly this in weave's first
+ *   cut).
  * - `minChangedFraction` — pixels that differ between the two sampled frames.
  *   This is the check that a compiled, lit, *frozen* shader cannot pass.
+ *
+ * The first two ask different questions rather than dividing the frame in two,
+ * and it is worth being plain about that because the shorthand "lit pixels over
+ * a dark-majority frame" reads like a partition. "Lit" starts low, at the point
+ * a pixel stops being the backdrop; "bright" starts high, at the point a pixel
+ * would wash out a graphic in front of it. Everything between the two counts as
+ * lit and not bright, so a frame of even mid-tone — waves at its defaults is one
+ * — satisfies both floors honestly. What no frame can do is satisfy them while
+ * black, and what nothing washed out can do is satisfy the second.
  */
 export const ANIMATION_EFFECT_PROOF_FLOORS = Object.freeze({
 	minLitFraction: 0.01,
-	minDarkFraction: 0.5,
+	maxBrightFraction: 0.5,
 	minChangedFraction: 0.02,
 });
 
@@ -48,13 +58,14 @@ export const ANIMATION_EFFECT_PROOF_FLOORS = Object.freeze({
  *
  * Every Animation Effect is drawn over a dark backdrop — `#111111` is the
  * catalogue's default background, luminance 17 — so "lit" starts far enough
- * above that to be the effect rather than the backdrop, and "dark" is anything
- * below half-bright. "Changed" is a per-channel difference between the two
- * sampled frames big enough not to be dithering.
+ * above that to be the effect rather than the backdrop, and "bright" starts at
+ * half-bright, where a pixel begins to compete with the graphics in front of it.
+ * "Changed" is a per-channel difference between the two sampled frames big
+ * enough not to be dithering.
  */
 export const ANIMATION_EFFECT_PROOF_PIXELS = Object.freeze({
 	litLuminance: 40,
-	darkLuminance: 128,
+	brightLuminance: 128,
 	changedChannel: 6,
 });
 
@@ -80,14 +91,28 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  * that was nudged until the run went green.
  *
  * **Which end of a range an extreme takes.** Every scenario here has to clear
- * all three checks, so an extreme is taken at whichever end still draws
- * something. Several ends legitimately draw nothing, and they are named below
- * rather than left for a later reader to "fix" back in: fog at the bottom of its
- * Softness range is flat base colour by construction (the fbm's first octave is
- * that amplitude), and ripple at the top of its Rotation range swings its
- * orbiting lights clear of the frame for seconds at a time. Neither is a
- * rendering defect and neither can be asserted about; a scenario asserting that
- * an effect renders nothing would fail the day someone brightened it.
+ * all three checks, so an extreme is taken at whichever end still draws and
+ * still moves. That rules out a whole class of range ends, and the class is
+ * larger than the two cases that provoked it — a reader comparing this table
+ * against the schemas will find real ends that are absent on purpose:
+ *
+ * - **Every Speed minimum.** Twelve effects offer `speed` (or `waveSpeed`) down
+ *   to `0`, which stops the clock. The frame is correct and the animation check
+ *   cannot pass, by construction rather than by defect.
+ * - **Amplitudes that scale the whole image to nothing**, such as shards at
+ *   `intensity: 0`.
+ * - **Offsets that carry the effect out of frame**, such as halo at
+ *   `xOffset`/`yOffset` of ±1.
+ * - **Two measured cases**: fog at the bottom of its Softness range is flat base
+ *   colour by construction (the fbm's first octave is that amplitude), and
+ *   ripple at the top of its Rotation range swings its orbiting lights clear of
+ *   the frame for seconds at a time.
+ *
+ * None of these is a rendering defect, and none can be asserted about here: a
+ * scenario asserting that an effect renders nothing would fail the day someone
+ * brightened it. Proving what an effect does at those ends needs a per-scenario
+ * expectation this table deliberately does not have — the gate exists to catch
+ * black frames, and a floor of zero catches nothing.
  */
 export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	caustics: {
@@ -156,12 +181,12 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 				name: 'max-points',
 				params: { points: 30, maxDistance: 80 },
 				// Thirty points strung at the top of the connection range is a mesh
-				// that covers the frame — measured at 0.21 dark, and correctly so:
+				// that covers the frame — measured at 0.79 bright, and correctly so:
 				// the operator asked for every point joined to every other. What is
-				// left of the floor here catches a frame gone entirely white; the
+				// left of the ceiling here catches a frame gone entirely white; the
 				// ambient-backdrop question is asked of the settings a Screen would
 				// actually run, which is what `defaults` above measures.
-				floors: { minDarkFraction: 0.05 },
+				floors: { maxBrightFraction: 0.95 },
 			},
 			{ name: 'markers-off', params: { showDots: false } },
 		],
@@ -249,7 +274,7 @@ export const ANIMATION_EFFECT_PROOF_KNOWN_GOOD = 'fog';
  *   scenario: string,
  *   params: Record<string, string | number | boolean>,
  *   frameRate: number,
- *   floors: { minLitFraction: number, minDarkFraction: number, minChangedFraction: number },
+ *   floors: { minLitFraction: number, maxBrightFraction: number, minChangedFraction: number },
  * }[]} Every mount the run makes, with the floors that mount is judged against.
  */
 export function animationEffectProofScenarios() {

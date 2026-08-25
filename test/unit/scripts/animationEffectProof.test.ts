@@ -16,7 +16,7 @@ function measurement(overrides: Record<string, unknown> = {}) {
 		compileFailures: 0,
 		totalPixels: 1000,
 		litPixels: 500,
-		darkPixels: 800,
+		brightPixels: 200,
 		changedPixels: 300,
 		...overrides,
 	};
@@ -68,7 +68,7 @@ describe('the animation effect scenario table', () => {
 	it('gives every scenario the floors it is judged against', () => {
 		for (const scenario of animationEffectProofScenarios()) {
 			expect(scenario.floors.minLitFraction).toBeGreaterThan(0);
-			expect(scenario.floors.minDarkFraction).toBeGreaterThan(0);
+			expect(scenario.floors.maxBrightFraction).toBeLessThan(1);
 			expect(scenario.floors.minChangedFraction).toBeGreaterThan(0);
 		}
 	});
@@ -117,8 +117,13 @@ describe('judging an animation effect rendering proof', () => {
 	});
 
 	it('reports a frame too bright to sit behind broadcast graphics', () => {
-		expect(codes(withScenario('weave', 'defaults', { darkPixels: 100 })))
+		expect(codes(withScenario('weave', 'defaults', { brightPixels: 900 })))
 			.toContain('animation-effect-frame-washed-out');
+	});
+
+	it('lets a frame of even mid-tone pass both pixel checks, which is what they ask', () => {
+		expect(codes(withScenario('waves', 'defaults', { litPixels: 1000, brightPixels: 0 })))
+			.toEqual([]);
 	});
 
 	it('reports a lit frame that never moved', () => {
@@ -150,7 +155,10 @@ describe('judging an animation effect rendering proof', () => {
 			const report = healthyReport({ control: measurement({ compileFailures: 0, litPixels: 0, changedPixels: 0 }) });
 
 			expect(judgeAnimationEffectReport(report)).toEqual([
-				{ code: 'animation-effect-checks-not-biting', detail: { check: 'compile' } },
+				{
+					code: 'animation-effect-checks-not-biting',
+					detail: { check: 'animation-effect-shader-compile-failed' },
+				},
 			]);
 		});
 

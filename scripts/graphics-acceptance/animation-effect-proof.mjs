@@ -82,8 +82,8 @@ export async function bundleAnimationEffectPage() {
 
 /**
  * The page itself: a stage the effects mount into at the frame size they are
- * measured at, and the two elements the run reads — `#report` for the
- * measurements, `data-result` for "the measurements are finished".
+ * measured at, and the two things the run reads — `#report` for the
+ * measurements, `data-measurements` for "they are all there".
  *
  * The stage is laid out rather than hidden: the scene effects size their camera
  * from `host.clientWidth` at mount, so a display-less host would build every one
@@ -100,7 +100,6 @@ export function animationEffectProofPage() {
 </style>
 <body>
 	<div id="stage"></div>
-	<pre id="result"></pre>
 	<script type="application/json" id="report"></script>
 	<script src="${ANIMATION_EFFECT_PROOF_SCRIPT_PATH}"></script>
 </body>
@@ -108,7 +107,7 @@ export function animationEffectProofPage() {
 }
 
 /** The expression the run polls: the report, once the page says it is finished. */
-export const ANIMATION_EFFECT_PROOF_EXPRESSION = `document.body.dataset.result === 'ready'
+export const ANIMATION_EFFECT_PROOF_EXPRESSION = `document.body.dataset.measurements === 'complete'
 	? document.getElementById('report').textContent
 	: undefined`;
 
@@ -123,8 +122,8 @@ function measured(value) {
 
 /**
  * What one mounted scenario has to show for itself: it compiled, it drew, it
- * drew something dark enough to sit behind graphics, and it moved between the
- * two sampled frames.
+ * did not blow out the frame it has to sit behind graphics in, and it moved
+ * between the two sampled frames.
  *
  * The four are separate codes rather than one "did not render", because they
  * fail for different reasons and a reader who knows which one broke knows where
@@ -149,9 +148,9 @@ export function judgeAnimationEffectScenario(measurement, floors) {
 	if (lit < floors.minLitFraction)
 		failures.push({ code: 'animation-effect-frame-unlit', detail: { ...where, lit: measured(lit), floor: floors.minLitFraction } });
 
-	const dark = fraction(measurement.darkPixels, measurement.totalPixels);
-	if (dark < floors.minDarkFraction)
-		failures.push({ code: 'animation-effect-frame-washed-out', detail: { ...where, dark: measured(dark), floor: floors.minDarkFraction } });
+	const bright = fraction(measurement.brightPixels, measurement.totalPixels);
+	if (bright > floors.maxBrightFraction)
+		failures.push({ code: 'animation-effect-frame-washed-out', detail: { ...where, bright: measured(bright), ceiling: floors.maxBrightFraction } });
 
 	const changed = fraction(measurement.changedPixels, measurement.totalPixels);
 	if (changed < floors.minChangedFraction)
@@ -161,25 +160,34 @@ export function judgeAnimationEffectScenario(measurement, floors) {
 }
 
 /**
- * Which of the three checks the planted broken shader tripped.
+ * What the planted broken shader has to trip, named by the codes themselves so
+ * a `check=` on the way out is the code a reader can go and find.
  *
- * A run only means anything if a shader that cannot compile fails all three, so
+ * The washed-out check is not here: a shader that draws nothing cannot blow out
+ * a frame, so the control says nothing about it either way. It is proven by
+ * mutation instead (#499), which is the only honest way to bite a ceiling.
+ */
+const CONTROL_MUST_TRIP = Object.freeze([
+	'animation-effect-shader-compile-failed',
+	'animation-effect-frame-unlit',
+	'animation-effect-frame-static',
+]);
+
+/**
+ * Which of those checks the control actually tripped.
+ *
+ * A run only means anything if a shader that cannot compile fails every one, so
  * the control is judged by the same function as every real effect and its
- * failures are read as coverage rather than as defects.
+ * failures are read as coverage rather than as defects. A control that would not
+ * mount at all trips nothing by name, and proves nothing about the pixel checks:
+ * the browser refused it before any of them ran, so it is exactly as unproven as
+ * a control that passed.
  */
 function checksTheControlTripped(control) {
-	const failures = judgeAnimationEffectScenario(
+	return new Set(judgeAnimationEffectScenario(
 		{ ...control, effect: ANIMATION_EFFECT_PROOF_CONTROL.effect, scenario: ANIMATION_EFFECT_PROOF_CONTROL.scenario },
 		ANIMATION_EFFECT_PROOF_FLOORS,
-	).map(failure => failure.code);
-	// A control that would not mount at all trips nothing by name, and proves
-	// nothing about the pixel checks: the browser refused it before any of them
-	// ran, so it is exactly as unproven as a control that passed.
-	return {
-		compile: failures.includes('animation-effect-shader-compile-failed'),
-		lit: failures.includes('animation-effect-frame-unlit'),
-		animation: failures.includes('animation-effect-frame-static'),
-	};
+	).map(failure => failure.code));
 }
 
 /**
@@ -256,8 +264,8 @@ export function judgeAnimationEffectReport(report) {
 	// anything: a check the broken shader walked past is a check that would let a
 	// broken effect past too.
 	const tripped = checksTheControlTripped(report.control ?? { mounted: false });
-	for (const [check, bit] of Object.entries(tripped)) {
-		if (!bit)
+	for (const check of CONTROL_MUST_TRIP) {
+		if (!tripped.has(check))
 			failures.push({ code: 'animation-effect-checks-not-biting', detail: { check } });
 	}
 

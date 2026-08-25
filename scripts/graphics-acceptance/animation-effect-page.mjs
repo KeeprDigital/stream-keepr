@@ -16,9 +16,11 @@
  *   rather than inferred from a black frame. Nothing here reads console output:
  *   three logs a shader error and carries on, and a check that watched the log
  *   would be a check on three's logging.
- * - **lit and dark pixels** — read back through a 2D canvas immediately after
+ * - **lit and bright pixels** — read back through a 2D canvas immediately after
  *   the draw, which is the only moment a WebGL canvas without
- *   `preserveDrawingBuffer` still holds its frame.
+ *   `preserveDrawingBuffer` still holds its frame. Two counts at two different
+ *   luminances, answering "did it draw" and "did it blow out"; the floors they
+ *   are held to live with the scenario table.
  * - **changed pixels** — between two frames two seconds apart on the effect's own
  *   clock. A shader can compile and light the frame and still be frozen; this is
  *   the only check that notices.
@@ -36,7 +38,7 @@ import {
 } from './animation-effect-scenarios.mjs';
 
 const { width, height, seconds } = ANIMATION_EFFECT_PROOF_FRAME;
-const { litLuminance, darkLuminance, changedChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
+const { litLuminance, brightLuminance, changedChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
 
 /**
  * Count every shader that would not compile and every program that would not
@@ -104,15 +106,15 @@ function captureFrame(canvas) {
 
 function countFrame(pixels) {
 	let lit = 0;
-	let dark = 0;
+	let bright = 0;
 	for (let index = 0; index < pixels.length; index += 4) {
 		const luminance = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2];
 		if (luminance >= litLuminance)
 			lit += 1;
-		if (luminance < darkLuminance)
-			dark += 1;
+		if (luminance >= brightLuminance)
+			bright += 1;
 	}
-	return { lit, dark, total: pixels.length / 4 };
+	return { lit, bright, total: pixels.length / 4 };
 }
 
 function countChangedPixels(before, after) {
@@ -140,11 +142,12 @@ function countChangedPixels(before, after) {
 function renderSchedule(frameRate) {
 	if (!frameRate)
 		return seconds.map(elapsed => ({ elapsed, sampled: true }));
-	const step = 1 / frameRate;
-	const times = new Set(seconds);
-	for (let elapsed = step; elapsed < seconds[seconds.length - 1]; elapsed += step)
-		times.add(Number(elapsed.toFixed(6)));
-	return [...times]
+	const last = seconds[seconds.length - 1];
+	// Counted in frames rather than accumulated in seconds: a running `+= step`
+	// drifts, and every sampled time here is recognised by value.
+	const stepped = Array.from({ length: Math.ceil(last * frameRate) }, (_, frame) => (frame + 1) / frameRate);
+	const times = [...new Set([...seconds, ...stepped.filter(elapsed => elapsed < last)])];
+	return times
 		.sort((first, second) => first - second)
 		.map(elapsed => ({ elapsed, sampled: seconds.includes(elapsed) }));
 }
@@ -152,16 +155,16 @@ function renderSchedule(frameRate) {
 /**
  * Mount one scenario, draw its frames, and count the sampled ones.
  *
- * Both frames are held to the lit and dark floors, so the reported counts are
- * the worse of the two: an effect that renders its first frame and then goes
- * black is as broken as one that never rendered, and reporting an average would
- * hide it.
+ * Every sampled frame is held to the floors, so the reported counts are the
+ * worst of them — fewest lit, most bright. An effect that renders its first
+ * frame and then goes black is as broken as one that never rendered, and
+ * reporting an average would hide it.
  *
  * Everything the mount or the draw can throw is caught here. An effect that dies
  * is a measurement — no frames, so no lit pixels and no motion — and the run
  * carries on to the next one rather than losing the other fourteen.
  */
-async function measureScenario({ effect, scenario, frameRate, mount, compilation }) {
+function measureScenario({ effect, scenario, frameRate, mount, compilation }) {
 	const stage = document.getElementById('stage');
 	const mark = compilation.mark();
 	let instance;
@@ -201,7 +204,7 @@ async function measureScenario({ effect, scenario, frameRate, mount, compilation
 		frames: frames.length,
 		totalPixels: counted[0]?.total ?? width * height,
 		litPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.lit)) : 0,
-		darkPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.dark)) : 0,
+		brightPixels: counted.length > 0 ? Math.max(...counted.map(frame => frame.bright)) : 0,
 		// The least any sampled frame differs from the one before it, so every
 		// interval has to move rather than one lively pair carrying a dead one.
 		changedPixels: frames.length === seconds.length && frames.length > 1
@@ -216,7 +219,7 @@ async function measureEverything() {
 	for (const scenario of animationEffectProofScenarios()) {
 		const factory = await loadAnimationEffect(scenario.effect);
 		const params = { ...animationEffectDefaultParams(scenario.effect), ...scenario.params };
-		scenarios.push(await measureScenario({
+		scenarios.push(measureScenario({
 			effect: scenario.effect,
 			scenario: scenario.scenario,
 			frameRate: scenario.frameRate,
@@ -228,7 +231,7 @@ async function measureEverything() {
 	// The control goes through the same base, the same mount, and the same
 	// counting as everything above it — the only difference is a fragment shader
 	// that cannot compile.
-	const control = await measureScenario({
+	const control = measureScenario({
 		effect: ANIMATION_EFFECT_PROOF_CONTROL.effect,
 		scenario: ANIMATION_EFFECT_PROOF_CONTROL.scenario,
 		mount: stage => createShaderPlaneEffect({
@@ -243,12 +246,24 @@ async function measureEverything() {
 	return { catalogue: [...ANIMATION_EFFECT_VALUES], scenarios, control };
 }
 
+/**
+ * Publish the measurements, then say they are there.
+ *
+ * In that order, and through `data-measurements` rather than the family's
+ * `data-result`: a page in that contract publishes a *verdict* (`passed` /
+ * `failed`, with a code and a description), and this one deliberately has none
+ * to publish — reusing those names for "the numbers are ready" would put a word
+ * that means "this content is good" on a page whose whole design is that it does
+ * not decide.
+ */
 function publish(report) {
 	document.getElementById('report').textContent = JSON.stringify(report);
-	document.getElementById('result').textContent = report.pageFailed
-		? 'animation effect measurements incomplete'
-		: `animation effect measurements complete: ${report.scenarios.length} scenarios`;
-	document.body.dataset.result = 'ready';
+	document.body.dataset.measurements = 'complete';
+}
+
+/** A run that reached no effects, in the shape Node judges every run in. */
+function nothingMeasured(backend, pageFailed) {
+	return { backend, pageFailed, catalogue: [], scenarios: [], control: { mounted: false } };
 }
 
 async function run() {
@@ -256,7 +271,7 @@ async function run() {
 	try {
 		backend = detectBackend();
 		if (backend === 'unavailable')
-			publish({ backend, pageFailed: false, catalogue: [], scenarios: [], control: { mounted: false } });
+			publish(nothingMeasured(backend, false));
 		else
 			publish({ backend, pageFailed: false, ...await measureEverything() });
 	}
@@ -264,11 +279,11 @@ async function run() {
 		// Whatever went wrong is the page's own plumbing rather than an effect's —
 		// every effect failure is already caught per scenario. The run says so and
 		// proves nothing, which is what `pageFailed` means in Node.
-		publish({ backend, pageFailed: true, catalogue: [], scenarios: [], control: { mounted: false } });
+		publish(nothingMeasured(backend, true));
 	}
 }
 
 // Started rather than awaited: the bundle is an IIFE, which has no top-level
-// await, and the page's whole contract is that `data-result` appears when the
-// measurements do.
+// await, and the page's whole contract is that `data-measurements` appears when
+// the measurements do.
 void run();
