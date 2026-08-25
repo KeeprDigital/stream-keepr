@@ -21,6 +21,10 @@ describe('scryfallCardSchema', () => {
 		expect(scryfallCardSchema.parse(validCard)).toEqual(validCard);
 	});
 
+	it('preserves collector identity for exact-printing lookups', () => {
+		expect(scryfallCardSchema.parse({ ...validCard, collector_number: '101★' }).collector_number).toBe('101★');
+	});
+
 	it('passes through unknown fields (passthrough)', () => {
 		const result = scryfallCardSchema.parse({ ...validCard, oracle_text: 'Deal 3 damage.' });
 		expect(result).toHaveProperty('oracle_text', 'Deal 3 damage.');

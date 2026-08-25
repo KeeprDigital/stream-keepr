@@ -67,6 +67,7 @@ function buildOverrideResolution(
 			? {
 					name: card.name,
 					setCode: inputSetCode ?? '',
+					collectorNumber: null,
 					id: card.scryfallId,
 					oracleId: card.oracleId,
 					manaCost: card.manaCost,
