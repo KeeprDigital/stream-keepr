@@ -1,7 +1,7 @@
 import type { GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig, ScreenOutput } from '~~/shared/types/screenConfig';
-import type { GraphicMediaIncompatibilityCode, GraphicsCompositionRenderModel, GraphicsFeatureMatchContext } from '~/modules/graphics/renderModel';
+import type { GraphicMediaIncompatibilityCode, GraphicsAnimationProjection, GraphicsCompositionRenderModel, GraphicsFeatureMatchContext } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID, featureMatchLayoutStack } from '~~/shared/featureMatchLayoutComposition';
 import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
@@ -43,6 +43,14 @@ export interface FeatureMatchOverlayCompositorRenderModelInput {
 	tokenValues?: Readonly<Record<string, GraphicInputValue>>;
 	/** The live session state the Clock, Player Life, and Game Wins Items read. */
 	featureMatch?: GraphicsFeatureMatchContext;
+	/**
+	 * Per-item lifecycle projections, keyed by Graphic Item id — the per-item
+	 * phase trigger (#492), driven by the host watching the `sideboardRevealed`
+	 * edge. Keyed by item id alone because a Feature Match Overlay has exactly one
+	 * composition; the adapter nests the map under its stable id the same way it
+	 * nests the token values.
+	 */
+	itemAnimation?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>;
 	/** Editor-only item guides and selection highlighting. */
 	itemGuides?: boolean;
 	/** Editor-only advisory action-safe and title-safe guides. */
@@ -82,6 +90,9 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		textDeclarations: featureMatchTokenDeclarations(),
 		inputValues: input.tokenValues
 			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.tokenValues }
+			: undefined,
+		itemAnimation: input.itemAnimation
+			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.itemAnimation }
 			: undefined,
 		featureMatch: input.featureMatch,
 		itemGuides: input.itemGuides,

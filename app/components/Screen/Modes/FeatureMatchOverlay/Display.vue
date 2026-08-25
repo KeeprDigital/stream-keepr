@@ -9,6 +9,7 @@ import {
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
+import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
@@ -102,6 +103,26 @@ const hostState = computed(() => ({
 	displayTime: displayTime.value,
 }));
 
+/**
+ * Resolved once and shared between the compositor input and the reveal-edge
+ * watch below, so the flag a frame renders and the flag the trigger observed
+ * are always the same reading.
+ */
+const graphicsContext = computed(() => usesSampleDataset.value
+	? FEATURE_MATCH_SAMPLE_CONTEXT
+	: featureMatchGraphicsContext(hostState.value, sideboards.value));
+
+// The per-item reveal trigger (#492): a sideboardRevealed edge plays the Deck
+// List Graphic Items' authored enter/exit recipes through the compositor's
+// per-item animation input. The trigger watches only the live context: the
+// sample dataset is a constant, and crossing between it and the live context
+// is a data-source switch rather than an operator's reveal — the composable
+// treats an absent context as joining, so neither crossing plays motion.
+const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
+	config,
+	computed(() => usesSampleDataset.value ? undefined : graphicsContext.value),
+);
+
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
 	canvasWidth: canvasWidth.value,
@@ -113,9 +134,8 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	tokenValues: usesSampleDataset.value
 		? FEATURE_MATCH_SAMPLE_TOKEN_VALUES
 		: featureMatchTokenValues(hostState.value),
-	featureMatch: usesSampleDataset.value
-		? FEATURE_MATCH_SAMPLE_CONTEXT
-		: featureMatchGraphicsContext(hostState.value, sideboards.value),
+	featureMatch: graphicsContext.value,
+	itemAnimation: itemAnimation.value,
 	// Editor-only, and asked for only by an embedded preview. A live Screen Output
 	// never sets either flag, so no guide can reach one.
 	itemGuides: showPreviewGuides.value,

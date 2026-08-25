@@ -159,6 +159,66 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		}
 	});
 
+	it('plays a per-item projection against the one composition"s items (#492)', () => {
+		// The host adapter's `itemAnimation` is keyed by Graphic Item id alone —
+		// there is exactly one composition, so the adapter nests the map under its
+		// stable id the same way it nests the token values.
+		const withEnter = {
+			...item('text', 'name'),
+			animation: { enter: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
+		} as GraphicItemConfig;
+		const model = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'overlay',
+			layout: layout([withEnter]),
+			itemAnimation: { name: [{ phase: 'enter', elapsed: 200 }] },
+			...CANVAS,
+		});
+
+		// Halfway through a linear 400ms fade from zero.
+		expect(model.graphics[0]!.items[0]!.style.opacity).toBe(0.5);
+	});
+
+	it('keeps a hidden sideboard"s Deck List rendering while the host projects its exit', () => {
+		// The sideboardRevealed true→false edge: the host supplies the exit
+		// projection and the flag-hidden item keeps its cards until the authored
+		// motion has carried them off — then, with the projection dropped, the
+		// renders-nothing state takes over. The item is on air in both frames.
+		const deckListItem = {
+			...getGraphicItemDefinition('deck-list').createDefault({
+				id: 'side-1',
+				label: 'side-1',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			animation: { exit: { duration: 400, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
+		} as GraphicItemConfig;
+		const hidden = {
+			clockDisplayTime: '0:00',
+			player1: {
+				lifeTotal: null,
+				gameWins: 0,
+				sideboard: [{ name: 'Rest in Peace', quantity: 2, imageUrl: null }],
+				sideboardRevealed: false,
+			},
+			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: false },
+			bestOf: 3,
+		};
+		const at = (itemAnimation?: { 'side-1': [{ phase: 'exit'; elapsed: number }] }) =>
+			resolveFeatureMatchOverlayCompositorRenderModel({
+				output: 'overlay',
+				layout: layout([deckListItem]),
+				featureMatch: hidden,
+				itemAnimation,
+				...CANVAS,
+			}).graphics[0]!.items[0]!;
+
+		const leaving = at({ 'side-1': [{ phase: 'exit', elapsed: 200 }] });
+		expect(leaving.text).toContain('Rest in Peace');
+		expect(leaving.style.opacity).toBe(0.5);
+
+		expect(at().text).toBeUndefined();
+	});
+
 	it('guides every shared Graphic Item and marks the selected one, when asked', () => {
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',

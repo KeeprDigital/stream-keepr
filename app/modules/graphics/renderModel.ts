@@ -189,6 +189,29 @@ export interface GraphicsCompositionRenderModelInput {
 	 */
 	animation?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>;
 	/**
+	 * Per-item lifecycle projections, keyed by Broadcast Graphic id and then by
+	 * Graphic Item id — the per-item phase trigger (#492).
+	 *
+	 * `animation` above keys by Broadcast Graphic because phases are composition-
+	 * lifecycle-driven: a whole graphic enters, updates, or exits. This map is the
+	 * one other driver: a host playing a single item's authored `enter`/`exit`
+	 * recipes off a live-state edge — the Feature Match Overlay's sideboard reveal —
+	 * while the composition itself has no lifecycle phase in play at all. The item
+	 * stays on air throughout (ADR 0015): the trigger moves what the item paints,
+	 * it never takes the item off its Screen.
+	 *
+	 * A projected item resolves the same authored recipes through the same shared
+	 * projection arithmetic, composed after whatever composition-lifecycle motion is
+	 * in play, and with no stagger offset — a per-item trigger is that item's own
+	 * start, not a container ordering its children. An item absent from the map, an
+	 * absent map, and an empty list all render at the Graphic Resting State.
+	 *
+	 * The host that supplies a projection owns its clock: it is expected to drop an
+	 * entry once the recipe's own end has passed, exactly as the Live Session stops
+	 * projecting a settled phase.
+	 */
+	itemAnimation?: Readonly<Record<string, Readonly<Record<string, readonly GraphicsAnimationProjection[]>>>>;
+	/**
 	 * The accepted on-air Graphic Input values a Graphic Text Template renders,
 	 * keyed by Broadcast Graphic id.
 	 *
@@ -1562,15 +1585,19 @@ function deckListDescriptor(
 	scope: string,
 	item: DeckListGraphicItemConfig,
 	placement: CSSProperties,
-	featureMatch: GraphicsFeatureMatchContext | undefined,
+	inputs: GraphicItemContentContext,
 ): GraphicItemRenderDescriptor {
+	const featureMatch = inputs.featureMatch;
 	const base = { id: item.id, label: item.label, kind: 'deck-list' as const };
 	// Absent context (a Broadcast Graphics host) is treated as revealed: visibility
 	// there stays an authoring concern (ADR 0015). With context, the live flag
-	// ANDs with data presence and hidden renders nothing while staying on air.
+	// ANDs with data presence and hidden renders nothing while staying on air —
+	// except while a per-item exit projection is playing the hide (#492), which
+	// keeps the cards rendering until the authored motion has carried them off.
 	const revealed = featureMatch?.[item.playerSide].sideboardRevealed ?? true;
+	const exiting = inputs.itemExitInPlay?.has(item.id) ?? false;
 	const sideboard = featureMatch?.[item.playerSide].sideboard;
-	if (!revealed || !sideboard || sideboard.length === 0)
+	if ((!revealed && !exiting) || !sideboard || sideboard.length === 0)
 		return { ...base, style: { ...placement, overflow: 'hidden' } };
 
 	if (item.view === 'list') {
@@ -1833,6 +1860,15 @@ interface GraphicItemContentContext {
 	socialProfileValues?: SocialProfileProjectionValues;
 	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
+	/**
+	 * Items whose per-item `exit` projection is in play (#492). Content context
+	 * rather than motion, because an in-play exit changes *what renders*: a Deck
+	 * List whose live flag just hid it keeps rendering its cards while the exit
+	 * plays, and only then becomes the flag's renders-nothing state. Derived from
+	 * the same `itemAnimation` input as the motion, so every output flips on the
+	 * same frame.
+	 */
+	itemExitInPlay?: ReadonlySet<string>;
 }
 
 /** What a Clock or Player Life Graphic Item renders, given the host's session state. */
@@ -1864,7 +1900,7 @@ function childDescriptor(
 	if (child.type === 'social-network-icon')
 		return socialNetworkIconDescriptor(output, child, placement, inputs);
 	if (child.type === 'deck-list')
-		return deckListDescriptor(output, scope, child, placement, inputs.featureMatch);
+		return deckListDescriptor(output, scope, child, placement, inputs);
 
 	const surfaceStyle = resolveChildSurfaceStyle(group, child);
 
@@ -2196,7 +2232,7 @@ function paintedItemDescriptor(
 		return gameWinsDescriptor(output, scope, item, placement, item.surfaceStyle, inputs.featureMatch);
 
 	if (item.type === 'deck-list')
-		return deckListDescriptor(output, scope, item, placement, inputs.featureMatch);
+		return deckListDescriptor(output, scope, item, placement, inputs);
 
 	return {
 		id: item.id,
@@ -2402,19 +2438,54 @@ function graphicAnimationContext(
 	 * graphic — moving for an input change that draws nothing.
 	 */
 	crossTransition?: GraphicsUpdateCrossTransition | null,
+	/**
+	 * Per-item phase projections for this Broadcast Graphic (#492), composed after
+	 * the composition-lifecycle phases above.
+	 *
+	 * Appended rather than merged into `phases`: every motion array stays aligned
+	 * to the composition's own phase list, so the by-index split a cross-transition
+	 * makes (`enclosingMotion` / `crossingMotion`) keeps working — a per-item
+	 * projection has no phase entry at its index and therefore moves the pair, the
+	 * same place every non-update phase already goes. No stagger offset, because a
+	 * per-item trigger is that item's own start rather than a container ordering
+	 * its children.
+	 */
+	itemProjections?: Readonly<Record<string, readonly GraphicsAnimationProjection[]>>,
 ): {
 	graphicMotion: readonly GraphicAnimationOwnerValues[];
 	motionOf: GraphicsItemAnimationContext['motionOf'];
 	itemContext: (item: GraphicItemConfig) => GraphicsItemAnimationContext;
 } {
+	const withItemMotion = (
+		base: GraphicsItemAnimationContext['motionOf'],
+	): GraphicsItemAnimationContext['motionOf'] => {
+		if (!itemProjections)
+			return base;
+		return (owner, staggerOffsets, parent) => {
+			const projected = itemProjections[owner.id];
+			if (!projected || projected.length === 0)
+				return base(owner, staggerOffsets, parent);
+			const extra = projected.map(({ phase, elapsed }) => resolveGraphicAnimationValues({
+				recipe: owner.animation?.[phase],
+				phase,
+				elapsed,
+				rect: owner,
+				parent,
+			}));
+			const own = base(owner, staggerOffsets, parent);
+			return own.length === 0 ? extra : [...own, ...extra];
+		};
+	};
+
 	if (projections.length === 0) {
+		const motionOf = withItemMotion(() => RESTING);
 		const resting: GraphicsItemAnimationContext = {
 			phases: [],
 			staggerOffsets: {},
 			parent: canvas,
-			motionOf: () => RESTING,
+			motionOf,
 		};
-		return { graphicMotion: RESTING, motionOf: () => RESTING, itemContext: () => resting };
+		return { graphicMotion: RESTING, motionOf, itemContext: () => resting };
 	}
 
 	const phases = projections.map(projection => projection.phase);
@@ -2449,7 +2520,7 @@ function graphicAnimationContext(
 		return ownerId === null ? crossTransition.wholeGraphic : crossTransition.crossing.has(ownerId);
 	};
 
-	const motionOf: GraphicsItemAnimationContext['motionOf'] = (owner, staggerOffsets, parent) =>
+	const motionOf: GraphicsItemAnimationContext['motionOf'] = withItemMotion((owner, staggerOffsets, parent) =>
 		projections.map(({ phase, elapsed }) => animates(owner.id, phase)
 			? halfOf(resolveGraphicAnimationValues({
 					recipe: owner.animation?.[phase],
@@ -2459,7 +2530,7 @@ function graphicAnimationContext(
 					rect: owner,
 					parent,
 				}))
-			: {});
+			: {}));
 
 	return {
 		graphicMotion: projections.map(({ phase, elapsed }) => animates(null, phase)
@@ -2700,6 +2771,14 @@ export function resolveGraphicsCompositionRenderModel(
 			// Feature Match Overlay's tokens are not a graphic's Graphic Inputs plus
 			// extras, they are the whole vocabulary a template may name.
 			const declarations = input.textDeclarations ?? graphic.inputs ?? [];
+			const itemProjections = input.itemAnimation?.[graphic.id];
+			// Which items an in-play per-item exit is still drawing (#492). Undefined
+			// rather than an empty set when nothing projects, so the common frame
+			// allocates nothing new.
+			const itemExitInPlay = itemProjections
+				? new Set(Object.keys(itemProjections).filter(itemId =>
+						itemProjections[itemId]!.some(projection => projection.phase === 'exit')))
+				: undefined;
 			const inputs: GraphicItemContentContext = {
 				declarations,
 				values: resolvedInputValues(
@@ -2710,6 +2789,7 @@ export function resolveGraphicsCompositionRenderModel(
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
+				itemExitInPlay,
 			};
 			const canvas = { width: input.canvasWidth, height: input.canvasHeight };
 			const projections = input.animation?.[graphic.id] ?? [];
@@ -2741,6 +2821,7 @@ export function resolveGraphicsCompositionRenderModel(
 				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
 					?? input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
+				itemExitInPlay,
 			};
 			const crossTransition = outgoingValues !== undefined || outgoingSocialProfileValues !== undefined
 				? updateCrossTransition(graphic, inputs, outgoingInputs)
@@ -2753,9 +2834,10 @@ export function resolveGraphicsCompositionRenderModel(
 				canvas,
 				'incoming',
 				crossTransition,
+				itemProjections,
 			);
 			const outgoingHalf = crossTransition
-				? graphicAnimationContext(graphic, projections, canvas, 'outgoing', crossTransition)
+				? graphicAnimationContext(graphic, projections, canvas, 'outgoing', crossTransition, itemProjections)
 				: null;
 
 			// Two whole frames means the graphic's own motion splits: what moves each frame

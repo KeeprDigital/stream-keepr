@@ -3228,3 +3228,108 @@ describe('graphicsCompositionRenderModel Graphic Animation', () => {
 		});
 	});
 });
+
+describe('graphicsCompositionRenderModel per-item phase triggers', () => {
+	const LINEAR = { duration: 400, easing: 'linear' as const, delay: 0 };
+	const FADE_IN = { enter: { ...LINEAR, fade: { opacity: 0 } } };
+
+	it('plays an item"s authored enter recipe from a per-item projection, leaving its siblings still', () => {
+		// The projection names one Graphic Item rather than a Broadcast Graphic: this
+		// is the per-item phase trigger (#492), the mechanism a host uses to play one
+		// item's authored recipes off a live-state edge while the composition itself
+		// has no lifecycle phase in play at all.
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'overlay',
+			graphics: [graphic('a', [
+				shape('revealing', { animation: FADE_IN }),
+				shape('bystander', { animation: FADE_IN }),
+			])],
+			itemAnimation: { a: { revealing: [{ phase: 'enter', elapsed: 200 }] } },
+			...CANVAS,
+		});
+		const [revealing, bystander] = model.graphics[0]!.items;
+
+		// Halfway through a linear 400ms fade from zero.
+		expect(revealing!.style.opacity).toBe(0.5);
+		expect(bystander!.style.opacity).toBeUndefined();
+	});
+
+	it('keeps a flag-hidden Deck List rendering while its per-item exit plays', () => {
+		// The true→false edge plays the item's authored exit before the hidden
+		// renders-nothing state takes over. Without the in-play exit the flag alone
+		// decides, so the same composition with no projection renders nothing — and
+		// the item is on air in both frames (ADR 0015).
+		const hidden: GraphicsFeatureMatchContext = {
+			clockDisplayTime: '0:00',
+			player1: {
+				lifeTotal: null,
+				gameWins: 0,
+				sideboard: [{ name: 'Rest in Peace', quantity: 2, imageUrl: null }],
+				sideboardRevealed: false,
+			},
+			player2: { lifeTotal: null, gameWins: 0, sideboard: null, sideboardRevealed: false },
+			bestOf: 3,
+		};
+		const exitFade = deckList('side-1', { animation: { exit: { ...LINEAR, fade: { opacity: 0 } } } });
+		const at = (itemAnimation?: { layout: { 'side-1': [{ phase: 'exit'; elapsed: number }] } }) =>
+			resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('layout', [exitFade])],
+				featureMatch: hidden,
+				itemAnimation,
+				...CANVAS,
+			}).graphics[0]!.items[0]!;
+
+		const leaving = at({ layout: { 'side-1': [{ phase: 'exit', elapsed: 200 }] } });
+		expect(leaving.text).toContain('Rest in Peace');
+		expect(leaving.style.opacity).toBe(0.5);
+
+		// The host drops the settled projection; the flag then renders nothing.
+		expect(at().text).toBeUndefined();
+	});
+
+	it('reaches a Graphic Group child by its own id', () => {
+		// The reveal mechanism is per-item wherever the item lives: a Deck List
+		// authored inside a group plays its own recipes off the same trigger.
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'overlay',
+			graphics: [graphic('a', [group('cluster', [
+				shape('inner', { animation: FADE_IN }),
+			])])],
+			itemAnimation: { a: { inner: [{ phase: 'enter', elapsed: 200 }] } },
+			...CANVAS,
+		});
+		const inner = model.graphics[0]!.items[0]!.children![0]!;
+
+		expect(inner.style.opacity).toBe(0.5);
+	});
+
+	it('never renders an item its author hid, whatever is projected for it', () => {
+		// Authored `visible: false` short-circuits everything: no animation, no
+		// render. The live flag and its trigger cannot resurrect an item its author
+		// hid (ADR 0015).
+		const model = resolveGraphicsCompositionRenderModel({
+			output: 'overlay',
+			graphics: [graphic('a', [shape('hidden', { visible: false, animation: FADE_IN })])],
+			itemAnimation: { a: { hidden: [{ phase: 'enter', elapsed: 200 }] } },
+			...CANVAS,
+		});
+
+		expect(model.graphics[0]!.items).toEqual([]);
+	});
+
+	it('resolves a settled per-item enter to exactly the unanimated descriptor', () => {
+		// Past its recipe's end an enter projects the Graphic Resting State, so a
+		// host that is late dropping a settled trigger changes no frame — the same
+		// indistinguishability the composition-lifecycle phases guarantee.
+		const at = (itemAnimation?: Record<string, Record<string, [{ phase: 'enter'; elapsed: number }]>>) =>
+			resolveGraphicsCompositionRenderModel({
+				output: 'overlay',
+				graphics: [graphic('a', [shape('bar', { animation: FADE_IN })])],
+				itemAnimation,
+				...CANVAS,
+			}).graphics[0]!.items[0]!;
+
+		expect(at({ a: { bar: [{ phase: 'enter', elapsed: 4000 }] } })).toEqual(at());
+	});
+});

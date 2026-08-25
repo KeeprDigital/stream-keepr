@@ -219,6 +219,49 @@ describe('featureMatchOverlayDisplay', () => {
 			// The card the host's deck data path resolved reaches the composed item.
 			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(true);
 		});
+
+		it('plays a hidden Deck List"s authored exit before the renders-nothing state (#492)', async () => {
+			// The sideboardRevealed true→false edge: the host keeps the cards
+			// rendering while the item's own exit recipe plays, then hands it to the
+			// flag's renders-nothing state. The item is on air throughout (ADR 0015).
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+					id: 'deck',
+					label: 'Deck',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}), {
+					view: 'grid' as const,
+					animation: { exit: { duration: 30, easing: 'linear' as const, delay: 0, fade: { opacity: 0 } } },
+				})],
+			};
+			mockConfig.value = config;
+			mockMatchState.value = {
+				player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+			};
+			mockSideboards.value = { player1: [{ name: 'Duress', quantity: 2, imageUrl: null }], player2: null };
+
+			const wrapper = await mountComponent();
+			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(true);
+
+			mockMatchState.value = {
+				player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false },
+				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+			};
+			await nextTick();
+
+			// Still rendering: the exit is in play, not cut.
+			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(true);
+
+			// The recipe's end passes on the output's own animation-frame clock, the
+			// settled trigger drops, and the flag alone decides again.
+			await vi.waitFor(() => {
+				expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(false);
+			}, { timeout: 2000 });
+		});
 	});
 
 	describe('the editor preview guide layer', () => {
