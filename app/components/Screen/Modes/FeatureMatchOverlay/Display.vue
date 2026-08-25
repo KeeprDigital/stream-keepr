@@ -8,6 +8,7 @@ import {
 } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
+import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
@@ -33,6 +34,10 @@ const canvasHeight = computed(() => screen.value?.screenConfig?.height ?? 1080);
 const frameMaskId = `feature-match-overlay-frame-mask-${useId().replace(/[^\w-]/g, '')}`;
 const frameGlowFilterId = `feature-match-overlay-frame-glow-${useId().replace(/[^\w-]/g, '')}`;
 const { config, match, matchState, sourceMatch, round, phase, event, usesSampleDataset, loading, error } = useFeatureMatchOverlayModeData();
+// Real sideboard card data for the Deck List Graphic Items (#491), fetched
+// client-side while the composition authors one. A sample-dataset preview has
+// no Slot and so no player ids, which is what keeps it from fetching.
+const { sideboards } = useFeatureMatchOverlaySideboardData(config, match);
 const indexedGraphicAssetReferences = computed(() =>
 	featureMatchOverlayGraphicAssetReferences(config.value),
 );
@@ -110,7 +115,7 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 		: featureMatchTokenValues(hostState.value),
 	featureMatch: usesSampleDataset.value
 		? FEATURE_MATCH_SAMPLE_CONTEXT
-		: featureMatchGraphicsContext(hostState.value),
+		: featureMatchGraphicsContext(hostState.value, sideboards.value),
 	// Editor-only, and asked for only by an embedded preview. A live Screen Output
 	// never sets either flag, so no guide can reach one.
 	itemGuides: showPreviewGuides.value,

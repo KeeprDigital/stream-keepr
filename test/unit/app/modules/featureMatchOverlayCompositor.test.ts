@@ -248,9 +248,42 @@ describe('featureMatchGraphicsContext', () => {
 		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
 
 		expect(context.bestOf).toBe(5);
-		// `null` deck data until the deck card data path lands (#491).
+		// No resolved deck data supplied: `null`, never a placeholder sideboard.
 		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true });
 		expect(context.player2.sideboardRevealed).toBe(false);
+	});
+
+	it('joins resolved deck data into each side"s sideboard (#491)', () => {
+		// The host resolves sideboard cards client-side; the context carries them
+		// per side without the render model ever seeing the full MTG card type.
+		const deckData = {
+			player1: [{ name: 'Counterspell', quantity: 2, imageUrl: 'https://img.test/counterspell.jpg' }],
+			// `null` art is a card that resolved without an image: the placeholder
+			// rendering, not an absent sideboard.
+			player2: [{ name: 'Duress', quantity: 3, imageUrl: null }],
+		};
+		const context = featureMatchGraphicsContext({
+			featureMatch: null,
+			matchState: { player1: { lifeTotal: 12, gameWins: 2, sideboardRevealed: true }, player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: false } },
+			displayTime: '4:31',
+		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0], deckData);
+
+		expect(context.player1.sideboard).toEqual(deckData.player1);
+		expect(context.player2.sideboard).toEqual(deckData.player2);
+	});
+
+	it('keeps null and [] distinct per side: unresolved and genuinely empty', () => {
+		// Whole-fetch failure is `null`; a deck whose sideboard holds no cards is
+		// `[]`. A Deck List Graphic Item renders nothing for either, but a control
+		// surface can tell them apart.
+		const context = featureMatchGraphicsContext({
+			featureMatch: null,
+			matchState: null,
+			displayTime: '0:00',
+		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0], { player1: null, player2: [] });
+
+		expect(context.player1.sideboard).toBeNull();
+		expect(context.player2.sideboard).toEqual([]);
 	});
 
 	it('reports an absent life total as absent rather than as zero', () => {

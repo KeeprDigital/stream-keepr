@@ -47,11 +47,12 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 
 const mockUsesSampleDataset = ref(false);
+const mockMatchState = ref<Record<string, unknown> | null>(null);
 
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	config: computed(() => mockConfig.value),
 	match: ref(null),
-	matchState: ref(null),
+	matchState: mockMatchState,
 	sourceMatch: ref(null),
 	round: ref(null),
 	phase: ref(null),
@@ -63,6 +64,14 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 
 mockNuxtImport('useClockDisplay', () => () => ({
 	displayTime: computed(() => '12:34'),
+}));
+
+/** The per-side deck data the host's own fetch path resolved; a stub here so these tests stay about composition, not fetching. */
+const mockSideboards = ref<{ player1: Array<{ name: string; quantity: number; imageUrl: string | null }> | null; player2: Array<{ name: string; quantity: number; imageUrl: string | null }> | null }>({ player1: null, player2: null });
+
+mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
+	sideboards: computed(() => mockSideboards.value),
+	cardDataDegraded: ref(false),
 }));
 
 /** Which pinned revisions this output's resolver has been told it will be refused. */
@@ -185,6 +194,30 @@ describe('featureMatchOverlayDisplay', () => {
 			// The clock string comes from the host, so the composed item renders it
 			// without any Graphic Text Template having been authored.
 			expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('12:34');
+		});
+
+		it('feeds a Deck List Graphic Item from the host-resolved sideboard data (#491)', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+					id: 'deck',
+					label: 'Deck',
+					canvasWidth: 1920,
+					canvasHeight: 1080,
+				}), { view: 'grid' as const })],
+			};
+			mockConfig.value = config;
+			mockMatchState.value = {
+				player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+				player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+			};
+			mockSideboards.value = { player1: [{ name: 'Duress', quantity: 2, imageUrl: null }], player2: null };
+
+			const wrapper = await mountComponent();
+
+			// The card the host's deck data path resolved reaches the composed item.
+			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(true);
 		});
 	});
 
@@ -470,6 +503,8 @@ describe('featureMatchOverlayDisplay', () => {
 		mockUsesSampleDataset.value = false;
 		mockRefusedRevisions.value = [];
 		mockIsPreview.value = false;
+		mockMatchState.value = null;
+		mockSideboards.value = { player1: null, player2: null };
 	});
 
 	/**
