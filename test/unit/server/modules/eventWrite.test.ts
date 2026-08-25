@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockEvent } from '~~/test/helpers/fixtures';
 import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
+import { createMockEvent } from '~~/test/helpers/fixtures';
 
 const mockRequireTalentInEvent = vi.fn();
 const mockEventService = {

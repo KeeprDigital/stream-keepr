@@ -1,8 +1,8 @@
+import type { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 import { count, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 const harness = await createSqliteD1Harness();
@@ -29,11 +29,13 @@ let otherEventId: number;
 let playerId: number;
 let listId: number;
 
-const capability = (suffix: string) => ({
-	assetCapabilitySeed: `seed-${suffix}`,
-	assetCapabilityVersion: 1,
-	assetCapabilityDigest: `digest-${suffix}`,
-});
+function capability(suffix: string) {
+	return {
+		assetCapabilitySeed: `seed-${suffix}`,
+		assetCapabilityVersion: 1,
+		assetCapabilityDigest: `digest-${suffix}`,
+	};
+}
 const provideUnusedGraphicsAssets = () => ({ inspectGraphicAssetRevisions: vi.fn() });
 
 beforeAll(async () => {
@@ -56,7 +58,7 @@ beforeAll(async () => {
 
 afterAll(async () => await harness.close());
 
-describe('Deck source write invariants', () => {
+describe('deck source write invariants', () => {
 	it('rejects cross-Event Player and Broadcast references at generic Screen create', async () => {
 		const [otherPlayer] = await db.insert(schema.players).values({ eventId: otherEventId, name: 'Other Player' }).returning({ id: schema.players.id });
 		const [otherList] = await db.insert(schema.broadcastDeckLists).values({
@@ -214,14 +216,16 @@ describe('Deck source write invariants', () => {
 
 	it('refuses disable while any saved Deck config selects Broadcast, then preserves lists across a successful disable', async () => {
 		await expect(eventService().update(eventId, { broadcastDeckListsEnabled: false }))
-			.rejects.toEqual(expect.objectContaining<Partial<BroadcastDeckListsInUseError>>({
+			.rejects
+			.toEqual(expect.objectContaining<Partial<BroadcastDeckListsInUseError>>({
 				name: 'BroadcastDeckListsInUseError',
 				screens: [expect.objectContaining({ name: 'Alpha' }), expect.objectContaining({ name: 'Zulu' })],
 			}));
 
 		await db.update(schema.screens).set({ modeConfigs: null }).where(eq(schema.screens.eventId, eventId));
 		await expect(eventService().update(eventId, { broadcastDeckListsEnabled: false }))
-			.resolves.toMatchObject({ broadcastDeckListsEnabled: false });
+			.resolves
+			.toMatchObject({ broadcastDeckListsEnabled: false });
 		const [listCount] = await db.select({ value: count() }).from(schema.broadcastDeckLists).where(eq(schema.broadcastDeckLists.eventId, eventId));
 		expect(listCount?.value).toBeGreaterThan(0);
 	});
