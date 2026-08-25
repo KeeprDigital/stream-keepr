@@ -47,6 +47,7 @@ const editingRevision = ref<number | null>(null);
 const editorSaving = ref(false);
 const editorFailure = ref<PresentedFailure | null>(null);
 const releaseDetail = ref<null | (() => void)>(null);
+const editorLoads = createGuardedSequence();
 const draft = reactive({
 	name: '',
 	archetypeLabel: '',
@@ -140,8 +141,18 @@ async function toggleFeature(enabled: boolean) {
 	featureSaving.value = true;
 	featureFailure.value = null;
 	try {
-		await eventStore.updateEvent({ broadcastDeckListsEnabled: enabled });
-		featureEnabled.value = enabled;
+		const updated = await eventStore.updateEvent({ broadcastDeckListsEnabled: enabled });
+		if (!updated) {
+			featureEnabled.value = eventStore.event?.broadcastDeckListsEnabled ?? props.event.broadcastDeckListsEnabled;
+			featureFailure.value = {
+				message: eventStore.error ?? 'Failed to update Broadcast Deck Lists',
+				errors: [],
+				retryable: false,
+				screens: [],
+			};
+			return;
+		}
+		featureEnabled.value = updated.broadcastDeckListsEnabled;
 	}
 	catch (cause) {
 		featureFailure.value = presentFailure(cause, 'Failed to update Broadcast Deck Lists');
@@ -175,12 +186,14 @@ function releaseConsumedDetail() {
 }
 
 function startAdd() {
+	editorLoads.supersede();
 	releaseConsumedDetail();
 	resetDraft();
 	editorOpen.value = true;
 }
 
 async function startEdit(summary: BroadcastDeckListSummaryResponse) {
+	const flight = editorLoads.begin();
 	releaseConsumedDetail();
 	resetDraft();
 	editingListId.value = summary.id;
@@ -189,15 +202,20 @@ async function startEdit(summary: BroadcastDeckListSummaryResponse) {
 	releaseDetail.value = deckListStore.consumeDetail(props.event.id, summary.id);
 	try {
 		const detail = await deckListStore.loadDetail(props.event.id, summary.id);
+		if (flight.stale)
+			return;
 		if (detail)
 			applyDetail(detail);
 	}
 	catch (cause) {
+		if (flight.stale)
+			return;
 		editorFailure.value = presentFailure(cause, 'Failed to load Broadcast Deck List');
 	}
 }
 
 function closeEditor() {
+	editorLoads.supersede();
 	releaseConsumedDetail();
 	editorOpen.value = false;
 	resetDraft();
@@ -294,10 +312,11 @@ function closeDelete() {
 async function confirmDelete() {
 	if (!deleteTarget.value || deleteSaving.value)
 		return;
+	const expectedRevision = deleteFailure.value?.current?.revision ?? deleteTarget.value.revision;
 	deleteSaving.value = true;
 	deleteFailure.value = null;
 	try {
-		await deckListStore.removeList(props.event.id, deleteTarget.value.id, deleteTarget.value.revision);
+		await deckListStore.removeList(props.event.id, deleteTarget.value.id, expectedRevision);
 		closeDelete();
 	}
 	catch (cause) {
@@ -530,6 +549,9 @@ async function confirmDelete() {
 						title="Deck List was not deleted"
 						:description="deleteFailure.screens.length ? `${deleteFailure.message} (${deleteFailure.screens.map(screen => screen.name).join(', ')})` : deleteFailure.message"
 					/>
+					<p v-if="deleteFailure?.current" class="text-sm text-muted">
+						A newer revision {{ deleteFailure.current.revision }} is available. Retry to delete that authoritative revision.
+					</p>
 				</div>
 			</template>
 			<template #footer>
@@ -542,7 +564,7 @@ async function confirmDelete() {
 						@click="closeDelete"
 					/>
 					<UButton
-						label="Delete Deck List"
+						:label="deleteFailure?.current ? 'Retry Delete' : 'Delete Deck List'"
 						color="error"
 						:loading="deleteSaving"
 						:disabled="deleteSaving"

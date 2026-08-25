@@ -47,6 +47,7 @@ const store = reactive({
 });
 const eventStore = reactive({
 	event: null as Event | null,
+	error: null as string | null,
 	updateEvent: vi.fn(),
 });
 
@@ -136,6 +137,7 @@ describe('event Broadcast Deck List library', () => {
 		store.updateList.mockResolvedValue(detail({ revision: 2 }));
 		store.removeList.mockResolvedValue({ success: true });
 		eventStore.updateEvent.mockImplementation(async (updates: Partial<Event>) => {
+			eventStore.error = null;
 			eventStore.event = { ...eventStore.event!, ...updates };
 			return eventStore.event;
 		});
@@ -234,6 +236,20 @@ describe('event Broadcast Deck List library', () => {
 		}));
 	});
 
+	it('does not let a late edit load overwrite a newer add draft', async () => {
+		let resolveDetail!: (value: BroadcastDeckListResponse) => void;
+		store.loadDetail.mockReturnValueOnce(new Promise(resolve => resolveDetail = resolve));
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Edit Azorius').trigger('click');
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('New draft');
+
+		resolveDetail(detail({ name: 'Late authority' }));
+		await flushPromises();
+		expect(wrapper.get('[data-name="name"]').element).toHaveProperty('value', 'New draft');
+	});
+
 	it('presents provider outages as retryable instead of invalid text', async () => {
 		store.createList.mockRejectedValue(new Error('Card data provider is temporarily unavailable', {
 			cause: transportFailure({
@@ -279,19 +295,35 @@ describe('event Broadcast Deck List library', () => {
 		expect(wrapper.text()).toContain('Azorius');
 	});
 
-	it('surfaces affected Screens when disabling is refused and reflects remote collection updates once', async () => {
-		eventStore.updateEvent.mockRejectedValueOnce(new Error('Broadcast Deck Lists cannot be disabled while selected by Screen: Program', {
+	it('recovers a stale delete by retrying against the newer authoritative revision', async () => {
+		const current = detail({ revision: 2, name: 'Peer rename' });
+		store.removeList.mockRejectedValueOnce(new Error('Broadcast Deck List changed since it was loaded', {
 			cause: transportFailure({
 				status: 409,
 				body: {
-					message: 'Broadcast Deck Lists cannot be disabled while selected by Screen: Program',
-					data: {
-						code: 'BROADCAST_DECK_LISTS_IN_USE',
-						screens: [{ id: 8, name: 'Program' }],
-					},
+					message: 'Broadcast Deck List changed since it was loaded',
+					data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current },
 				},
 			}),
 		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Delete Azorius').trigger('click');
+		await button(wrapper, 'Delete Deck List').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('newer revision 2');
+		await button(wrapper, 'Retry Delete').trigger('click');
+		await flushPromises();
+		expect(store.removeList).toHaveBeenLastCalledWith(1, 11, 2);
+		expect(wrapper.find('[data-testid="modal"]').exists()).toBe(false);
+	});
+
+	it('surfaces affected Screens when disabling is refused and reflects remote collection updates once', async () => {
+		eventStore.updateEvent.mockImplementationOnce(async () => {
+			eventStore.error = 'Broadcast Deck Lists cannot be disabled while selected by Screen: Program';
+			return null;
+		});
 		const wrapper = await mountComponent(event({ broadcastDeckListsEnabled: true }));
 		await flushPromises();
 		await wrapper.get('[data-testid="feature-switch"]').trigger('click');
