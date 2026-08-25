@@ -86,9 +86,11 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  *
  * `floors` on an effect override the shared floors for every one of its
  * scenarios; `floors` on a scenario override both. Every override carries the
- * reason it is not the default, because a lowered floor is a weakened check and
- * the next reader has to be able to tell a measured exception from a threshold
- * that was nudged until the run went green.
+ * reason it is not the default, because a lowered floor — or a raised ceiling,
+ * which is the same loosening in the other direction, and is what the one
+ * override in this table is — is a weakened check, and the next reader has to be
+ * able to tell a measured exception from a threshold that was nudged until the
+ * run went green.
  *
  * **Which end of a range an extreme takes.** Every scenario here has to clear
  * all three checks, so an extreme is taken at whichever end still draws and
@@ -96,7 +98,7 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  * larger than the two cases that provoked it — a reader comparing this table
  * against the schemas will find real ends that are absent on purpose:
  *
- * - **Every Speed minimum.** Twelve effects offer `speed` (or `waveSpeed`) down
+ * - **Every Speed minimum.** Eleven effects offer `speed` (or `waveSpeed`) down
  *   to `0`, which stops the clock. The frame is correct and the animation check
  *   cannot pass, by construction rather than by defect.
  * - **Amplitudes that scale the whole image to nothing**, such as shards at
