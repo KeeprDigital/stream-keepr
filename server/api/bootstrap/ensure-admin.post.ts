@@ -12,8 +12,9 @@ import { ensureAdminSchema } from '~~/server/schemas/api/adminBootstrap';
  * deliberately. That is right for what it is for — install #1, and a lockout that
  * has lost every administrator — and wrong for everything else: since #399,
  * ordinary accounts come from `POST /api/admin/users`, which creates them with no
- * role and no password and answers with a Password Reset Link.
- * `docs/operations/identity-cutover.md` says which to reach for.
+ * role and no password and answers with a Password Reset Link. The README
+ * documents both ceremonies, under "The first admin account" and "Everybody
+ * else's account".
  *
  * **Not under `/api/admin/` or `/api/auth/`, deliberately.** Both prefixes
  * already mean something in the boundary ADR-0010 describes — `/api/admin/**`

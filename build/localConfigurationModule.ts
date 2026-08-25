@@ -1,7 +1,6 @@
 import process from 'node:process';
 import { defineNuxtModule, useLogger } from 'nuxt/kit';
 import {
-	assertLocalAuthBypassDisarmedForBuild,
 	localAuthBypassActive,
 	localAuthBypassLogLine,
 	localConfigurationLogLine,
@@ -25,8 +24,7 @@ import {
 export const localConfigurationModule = defineNuxtModule({
 	meta: { name: 'local-configuration' },
 	setup(_options, nuxt) {
-		const context = { dev: nuxt.options.dev, prepare: nuxt.options._prepare, env: process.env };
-		assertLocalAuthBypassDisarmedForBuild(context);
+		const context = { dev: nuxt.options.dev, env: process.env };
 		const bypassActive = localAuthBypassActive(context);
 		const logger = useLogger('local-configuration');
 		for (const line of [

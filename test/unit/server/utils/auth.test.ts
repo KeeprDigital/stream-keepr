@@ -2,12 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/localConfiguration';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
 	LOCAL_DEVELOPER_SESSION_COOKIE,
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
-	LOCAL_RUNTIME_ATTESTATION_NAME,
-	LOCAL_RUNTIME_ATTESTATION_VALUE,
 } from '~~/shared/utils/localDeveloperAuth';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
@@ -219,8 +218,7 @@ describe('the identities a request carries', () => {
 describe('the Local Developer Session', () => {
 	async function freshLocalAuth(cookie?: string) {
 		vi.resetModules();
-		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', LOCAL_AUTH_BYPASS_ENABLED_VALUE);
-		vi.stubEnv(LOCAL_RUNTIME_ATTESTATION_NAME, LOCAL_RUNTIME_ATTESTATION_VALUE);
+		vi.stubEnv(LOCAL_AUTH_BYPASS_NAME, LOCAL_AUTH_BYPASS_ENABLED_VALUE);
 		mockGetCookie.mockReset();
 		mockSetCookie.mockReset();
 		mockGetCookie.mockReturnValue(cookie);
@@ -268,10 +266,16 @@ describe('the Local Developer Session', () => {
 		expect(other?.user.id).toBe(first?.user.id);
 	});
 
-	it('cannot be activated through Nuxt runtime-config environment aliases', async () => {
+	/**
+	 * The one name is read from `process.env` directly, and nothing else opens
+	 * this — not a `runtimeConfig` key of the same meaning, and not a `NUXT_`
+	 * spelling of the name, which is the family `.env` supplies and therefore the
+	 * shape a checkout could arm by editing a file (#519, ADR-0017).
+	 */
+	it('cannot be activated through a runtimeConfig key or a NUXT_ spelling of the name', async () => {
 		vi.resetModules();
-		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', '');
-		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS_ACTIVE', 'true');
+		vi.stubEnv(LOCAL_AUTH_BYPASS_NAME, '');
+		vi.stubEnv(`NUXT_${LOCAL_AUTH_BYPASS_NAME}`, LOCAL_AUTH_BYPASS_ENABLED_VALUE);
 		mockUseRuntimeConfig.mockReturnValue({ localAuthBypassActive: true, betterAuthSecret: '' });
 		const auth = await import('~~/server/utils/auth');
 
@@ -279,19 +283,7 @@ describe('the Local Developer Session', () => {
 		await expect(auth.requestUserSession(requestEvent())).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
 	});
 
-	it('keeps a production-shaped Worker closed when only the bypass choice is present', async () => {
-		vi.resetModules();
-		vi.stubEnv('NODE_ENV', 'production');
-		vi.stubEnv('NUXT_LOCAL_AUTH_BYPASS', LOCAL_AUTH_BYPASS_ENABLED_VALUE);
-		vi.stubEnv(LOCAL_RUNTIME_ATTESTATION_NAME, '');
-		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: '' });
-		const auth = await import('~~/server/utils/auth');
-
-		expect(auth.localAuthBypassIsActive(requestEvent())).toBe(false);
-		await expect(auth.requestUserSession(requestEvent())).rejects.toThrow(/NUXT_BETTER_AUTH_SECRET/);
-	});
-
-	it('admits an explicitly attested production-shaped local Worker', async () => {
+	it('admits an explicitly bypassed production-shaped local Worker', async () => {
 		vi.stubEnv('NODE_ENV', 'production');
 		const auth = await freshLocalAuth();
 

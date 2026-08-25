@@ -28,8 +28,12 @@ prove that a Screen Output pinning VP9 alpha refuses it that revision's bytes.
 
 ## Before you start
 
-1. **Docker must be running.** The silent-video validator is a Container; the
-   validator harness and any silent-video ingestion need it.
+1. **Pre-flight.** Docker must be running — the silent-video validator is a
+   Container, and the validator harness and any silent-video ingestion need it.
+   Confirm the Worker's secrets are present
+   (`pnpm exec wrangler secret list --name stream`), and that no `workerd`
+   processes are left over from local suites (`pnpm reap` sweeps them and only
+   ever kills orphans).
 2. **Deploy the validator, then the application:**
 
    ```sh
@@ -367,8 +371,8 @@ then loads that published revision back through the delivery route that will
 serve it on air. The face is trashed on the way out, pass or fail.
 
 The harness stages that ingestion from Node and the browser reads it back, so
-the two have to be the same graphics author: an operation belongs to the session
-that created it and is a `404` to every other one (ADR-0003). The browser is
+the two have to be the same **User**: an operation belongs to the user who
+initiated it and is a `404` to every other one (ADR-0010). The browser is
 therefore handed the harness's own session cookie over CDP before it navigates.
 It used to be sent to the application first to pick up a session instead, which
 minted a second identity and made the gate unpassable — the symptom was

@@ -23,9 +23,8 @@
  */
 
 import {
-	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
 	LOCAL_DEVELOPER_USER_NAME,
-	LOCAL_RUNTIME_ATTESTATION_NAME,
 	localAuthBypassEnabled,
 } from '../shared/utils/localDeveloperAuth.ts';
 
@@ -37,9 +36,9 @@ const EXPORT_PREFIX = /^export\s+/;
  * that read them stop refusing, and the whole of what the #130 notice is asserting.
  * `missingLocalNuxtNames` removes the two account-setup names when the exact
  * development bypass is active. Acceptance harnesses keep the canonical list
- * complete because a flag in their own process cannot attest the installation
- * they target; the supported preview staging path passes the active decision
- * explicitly after verifying both local enabling values.
+ * complete because a flag in their own process says nothing about the
+ * installation they target; the supported preview staging path passes the active
+ * decision explicitly, from the launcher that made it.
  *
  * These are `.env.example`'s assignments minus everything in
  * `LOCALLY_OPTIONAL_NUXT_NAMES` below, which carries its own reasons per name.
@@ -55,8 +54,11 @@ const EXPORT_PREFIX = /^export\s+/;
  *
  * The example file it is pinned against changed on #412, and with it the size of
  * what this partition has to account for: `.dev.vars.example` assigned five names,
- * `.env.example` assigns eight. The three it gains are the Melee ones, and they are
- * optional — see below.
+ * `.env.example` assigns seven. The three it gained on that ticket are the Melee
+ * ones, and they are optional — see below. It assigned eight until #519 took the
+ * local-authentication choice out of the file altogether: that name is now set by
+ * the `pnpm dev:bypass` and `pnpm preview:bypass` launchers and assigned nowhere,
+ * so the partition no longer has a side for it.
  *
  * The last two arrived here on #396, which is the ticket the comment on
  * `LOCALLY_OPTIONAL_NUXT_NAMES` used to promise them to. Before it, a checkout
@@ -101,7 +103,6 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  */
 export const LOCALLY_OPTIONAL_NUXT_NAMES = [
 	'NUXT_ABLY_API_KEY',
-	'NUXT_LOCAL_AUTH_BYPASS',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
 	'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
@@ -270,37 +271,31 @@ export function announcesLocalConfiguration(context: {
 
 export interface LocalConfigurationContext {
 	dev: boolean;
-	/**
-	 * Whether this is a `nuxt prepare` run (`nuxt.options._prepare`): typegen
-	 * only, no promotable output. Optional so every other caller keeps the
-	 * refusal without naming the fact — an omitted flag is a build.
-	 */
-	prepare?: boolean;
 	env: Record<string, string | undefined>;
 }
 
 /**
- * Refuse to create promotable output while its local authentication choice is
- * armed. A `nuxt prepare` run is exempt: it emits only `.nuxt` typegen, and
- * refusing it broke `pnpm install`'s postinstall in every checkout whose `.env`
- * armed the flag for dev (#504) — the boundary this guards is deployment, not
- * type generation.
+ * Whether the explicit local-authentication switch is exactly active.
+ *
+ * A build reads this for nothing, which is the point of #519. There was an
+ * `assertLocalAuthBypassDisarmedForBuild` here that threw when the name was set
+ * and the run was not `dev` — a guard against a local choice reaching promotable
+ * output. It guarded nothing the output could carry: the generated
+ * `.output/server/wrangler.json` declares no `vars`, the bundle reads this name
+ * from the Worker environment at request time rather than inlining it, and
+ * `pnpm deploy` rebuilds `.output` before uploading, so a staged preview file
+ * cannot survive into a deploy. Meanwhile it cost every checkout that wanted a
+ * bypassed dev server its `pnpm verify`, which is this repository's mandated
+ * pre-push gate — #504 had already carved out `nuxt prepare` for the same
+ * reason, one launcher at a time.
+ *
+ * What replaced it is not a laxer guard but a stronger one, in the shape of the
+ * name itself: it is set by `pnpm dev:bypass` and `pnpm preview:bypass` and
+ * assigned in no file, so there is no armed state for a build to inherit or a
+ * refusal to catch. See `shared/utils/localDeveloperAuth.ts` and ADR-0017.
  */
-export function assertLocalAuthBypassDisarmedForBuild(context: LocalConfigurationContext): void {
-	if (!context.dev && context.prepare !== true && context.env.NUXT_LOCAL_AUTH_BYPASS === LOCAL_AUTH_BYPASS_ENABLED_VALUE) {
-		throw new Error(
-			'NUXT_LOCAL_AUTH_BYPASS=true cannot be used for a production build. '
-			+ 'Use pnpm preview for an explicitly attested local Worker, or remove the flag before building or deploying.',
-		);
-	}
-}
-
-/** Whether both explicit local-authentication switches are exactly active. */
 export function localAuthBypassActive(context: LocalConfigurationContext): boolean {
-	return localAuthBypassEnabled({
-		bypassValue: context.env.NUXT_LOCAL_AUTH_BYPASS,
-		runtimeAttestation: context.env[LOCAL_RUNTIME_ATTESTATION_NAME],
-	});
+	return localAuthBypassEnabled(context.env[LOCAL_AUTH_BYPASS_NAME]);
 }
 
 /** Reads a dotenv body — `.env`, or the copy of it staged for a previewed Worker. */

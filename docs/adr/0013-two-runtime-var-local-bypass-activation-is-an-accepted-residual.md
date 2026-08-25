@@ -1,8 +1,18 @@
 # ADR-0013: Two-runtime-var local bypass activation is an accepted residual
 
-- **Status**: Accepted
+- **Status**: Superseded by
+  [ADR-0017](./0017-the-local-auth-bypass-is-one-launcher-owned-name.md)
 - **Date**: 2026-08-23
 - **Issue**: [#460](https://github.com/KeeprDigital/stream-keepr/issues/460)
+
+> **Superseded on [#519](https://github.com/KeeprDigital/stream-keepr/issues/519).**
+> The two-value scheme this record is about no longer exists: activation is one
+> launcher-owned name, `STREAM_KEEPR_LOCAL_AUTH_BYPASS`, assigned in no file. The
+> residual below is carried forward unchanged and on the same ground — ADR-0017
+> states it against the single name. The build-time refusal named among the
+> deploy-side guards is removed there; the dry run's generated-configuration scan
+> is kept and retargeted. Read this record for the reasoning ADR-0017 inherits,
+> not for what the code does now.
 
 ## Context
 

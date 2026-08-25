@@ -23,6 +23,10 @@ import {
 	STALE_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from '../../../scripts/graphics-acceptance/local-configuration.mjs';
+import {
+	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
+	LOCAL_AUTH_BYPASS_NAME,
+} from '../../../shared/utils/localDeveloperAuth';
 
 const SIGNING_KEY = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY';
 const ADMIN_TOKEN = 'NUXT_GRAPHICS_ADMIN_TOKEN';
@@ -94,16 +98,16 @@ describe('which required names a local acceptance run needs', () => {
 		expect(localAcceptanceConfiguration({ deployed: true, env: {}, readSources: noFiles }).missing).toEqual([]);
 	});
 
-	it('does not treat the dev-only bypass as authentication for a preview acceptance run', () => {
-		expect(missingLocalAcceptanceNames({ NUXT_LOCAL_AUTH_BYPASS: 'true' }))
+	it('does not treat a bypass name in the environment as authentication for an acceptance run', () => {
+		// A harness is its own process and cannot see how the installation in front
+		// of it was started, so the name reaching *here* decides nothing. Only the
+		// staging path, which is the launcher, passes the decision in explicitly.
+		expect(missingLocalAcceptanceNames({ [LOCAL_AUTH_BYPASS_NAME]: LOCAL_AUTH_BYPASS_ENABLED_VALUE }))
 			.toEqual([SIGNING_KEY, AUTH_SECRET, BOOTSTRAP_TOKEN]);
 	});
 
-	it('lets the explicitly attested preview staging path omit its two Better Auth setup names', () => {
-		expect(missingLocalAcceptanceNames(
-			{ NUXT_LOCAL_AUTH_BYPASS: 'true' },
-			{ localAuthBypassActive: true },
-		)).toEqual([SIGNING_KEY]);
+	it('lets the bypassed preview staging path omit its two Better Auth setup names', () => {
+		expect(missingLocalAcceptanceNames({}, { localAuthBypassActive: true })).toEqual([SIGNING_KEY]);
 	});
 });
 
@@ -442,7 +446,39 @@ describe('staging .env for the preview', () => {
 
 	it('does nothing at all when there is no .env to stage', () => {
 		expect(previewStagingPlan({ source: null, existing: null, stale: false }))
-			.toEqual({ stage: false, removeStale: false, lines: [] });
+			.toEqual({ stage: false, body: null, removeStale: false, lines: [] });
+	});
+
+	/**
+	 * #519: `pnpm preview:bypass` sets the name in its own environment, and
+	 * wrangler passes no host environment to the Worker it starts — so the choice
+	 * reaches the previewed Worker through the one file wrangler does read, or not
+	 * at all.
+	 */
+	it('adds the bypass line for a bypassed preview, and says so', () => {
+		const plan = previewStagingPlan({ source, existing: null, stale: false, bypassActive: true });
+
+		expect(plan.body).toBe(`${source}${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`);
+		expect(plan.lines.at(-1)).toContain(LOCAL_AUTH_BYPASS_NAME);
+		expect(plan.lines.at(-1)).toContain('Local Developer User');
+		expect(plan.lines.at(-1)).toContain('loopback');
+	});
+
+	it('stages the bypass on its own when the checkout has no .env at all', () => {
+		// A fresh worktree previewing bypassed: nothing to sign in with and nothing
+		// that needs signing in. The old plan returned `stage: false` here, which
+		// would have left the choice with no way to reach the Worker.
+		const plan = previewStagingPlan({ source: null, existing: null, stale: false, bypassActive: true });
+
+		expect(plan.stage).toBe(true);
+		expect(plan.body).toBe(`${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}\n`);
+	});
+
+	it('adds nothing to an ordinary preview', () => {
+		const plan = previewStagingPlan({ source, existing: null, stale: false });
+
+		expect(plan.body).toBe(source);
+		expect(plan.lines.join(' ')).not.toContain(LOCAL_AUTH_BYPASS_NAME);
 	});
 
 	it('stages quietly when nothing is there yet', () => {

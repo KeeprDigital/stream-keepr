@@ -201,14 +201,14 @@ An account an administrator created for one person, holding the credential they 
 It is the installation's only durable identity and the one that owns work: a Graphics Ingestion Operation records the user as its initiator, idempotency keys are unique within the user, and the Evidence Ledger names the user as actor with the display name resolved when the ledger is read.
 Because ownership belongs to the person rather than to a browser, an operation survives the browser that started it and is resumed by signing in anywhere; the same idempotency key sent from a second browser continues the first operation instead of starting a second.
 There is no self-signup: an administrator creates the account, and a **Password Reset Link** is how its password is first set (ADR-0010).
-An explicitly bypassed local runtime supplies one synthetic **Local Developer User** as the development-only exception to the account, credential, and durability rules above. It has a stable identity but no directory row, owns work through the same User interface, and cannot exist in a deployed application; a production-shaped local preview requires a separate explicit local-runtime attestation.
+An explicitly bypassed local runtime supplies one synthetic **Local Developer User** as the development-only exception to the account, credential, and durability rules above. It has a stable identity but no directory row, owns work through the same User interface, and exists only where a bypassed launcher — `pnpm dev:bypass` or `pnpm preview:bypass` — asked for it by name; no file in the repository can ask (ADR-0017).
 _Avoid_: author, graphics author — those name a role a user may be acting in, not the identity; account is acceptable when the subject is the credential rather than the person.
 
 **Session**:
 One signed-in browser: server-side, revocable, and expiring seven days after its last day of use.
 It is what admits a request — the deny-by-default API boundary over `/api/**` requires one (ADR-0010, which supersedes ADR-0008's perimeter-trust stance) — and it is the granularity of a Graphics Authoring Lease, because one person signed in from two browsers is two concurrent editors and a lease held per user would let them overwrite each other in silence.
 A session never owns work; it says which browser is asking, and the takeover surface resolves it back to a user for display.
-While the development bypass is active, each browser receives a synthetic **Local Developer Session**. It is the development-only exception to server-side persistence, revocation, and expiry: an HTTP-only local cookie keeps its identity stable for that browser, a second browser receives another identity, and sign-out has no lasting meaning while every request is intentionally admitted. It retains the ordinary Session's request-admission and Graphics Authoring Lease semantics and cannot exist in a deployed application; a production-shaped local preview requires a separate explicit local-runtime attestation.
+While the development bypass is active, each browser receives a synthetic **Local Developer Session**. It is the development-only exception to server-side persistence, revocation, and expiry: an HTTP-only local cookie keeps its identity stable for that browser, a second browser receives another identity, and sign-out has no lasting meaning while every request is intentionally admitted. It retains the ordinary Session's request-admission and Graphics Authoring Lease semantics, and exists only where a bypassed launcher asked for it (ADR-0017).
 _Avoid_: Graphics Author Session — the anonymous self-issued identity this replaced, retired at ADR-0010's cutover; login, which names the act rather than the thing.
 
 **Password Reset Link**:
@@ -644,10 +644,6 @@ A host-owned Feature Match Overlay element that places an external video source,
 A Source Item is not a Graphic Item and is not interpreted by a Graphic Item Definition: it is host capability the Shared Graphics Foundation does not express, so it lives in the Feature Match Layout's own Source Item list rather than in the composition.
 _Avoid_: Source Region, camera box, Source Graphic Item
 
-**Widget Item**:
-_Legacy implementation term._ Use the specific Graphic Item kind.
-_Avoid_: Widget Item, Data Region
-
 **Feature Match Overlay Preset**:
 A built-in starting point that initializes a Feature Match Layout.
 _Avoid_: Template when referring to the whole layout preset.
@@ -705,30 +701,11 @@ _Avoid_: Auto-paging when naming the projection itself — auto-page remains the
 The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape, or when an operator manually selects a page mid-rotation.
 A Screen Output never writes it; a rendering that has not completed server-time sync shows the first page statically rather than projecting on an unknown clock.
 
-**Feature Match Overlay Widget**:
-A legacy name for a Graphic Item used by Feature Match Overlay.
+**Retired widget vocabulary**:
+_Legacy implementation terms, kept only so the old names still resolve to the current ones._ The widget, widget-group, and numeric z-index model was deleted when Feature Match Overlay moved onto the **Shared Graphics Foundation**; `docs/feature-match-overlay-capability-parity.md` is the mapping, and nothing in the code carries the model now.
+Widget Item, Feature Match Overlay Widget, Text Widget → the specific **Graphic Item** kind. Image Widget → **Media Graphic Item**. Widget Group → **Graphic Group**. Feature Match Overlay Widget Definition → **Graphic Item Definition**. Widget Preset → a **Feature Match Overlay Preset**, or an ordinary composition of Graphic Items.
 Clock, Player Life, and Game Wins are context-gated shared Graphic Item Definitions; text and media use the shared base Graphic Item kinds.
-_Avoid_: Widget, arbitrary element
-
-**Widget Group**:
-_Legacy implementation term._ Use Graphic Group.
-_Avoid_: Widget Group, Region, generic group
-
-**Feature Match Overlay Widget Definition**:
-_Legacy implementation term._ Use Graphic Item Definition.
-_Avoid_: Feature Match Overlay Widget Definition, widget metadata, widget registry
-
-**Widget Preset**:
-A saved starting shape for one Widget or a Widget Group, such as a player bar, match details strip, player status cluster, or event branding block.
-_Avoid_: Widget type when it is only a prearranged composition
-
-**Text Widget**:
-_Legacy implementation term._ Use Text Graphic Item.
-_Avoid_: Text Widget, Match Details Widget, Player Bar Widget when referring to tokenized text behavior
-
-**Image Widget**:
-_Legacy implementation term._ Use Media Graphic Item.
-_Avoid_: Image Widget
+_Avoid_: every name above, and Widget, Widget type, Data Region, Region, generic group, widget metadata, widget registry, arbitrary element, Match Details Widget, Player Bar Widget.
 
 **Clock Graphic Item**:
 A context-gated Graphic Item that renders the active Feature Match Session clock.

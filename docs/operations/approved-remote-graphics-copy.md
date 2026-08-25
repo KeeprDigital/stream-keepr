@@ -203,8 +203,8 @@ identity from before the cutover and reads as `anonymous era`.
 
 ## Reading the library
 
-The read surface is gated too, as of issue #172. Six routes require a Graphics
-Author Session and answer `401` without one: `GET /api/graphics-assets`,
+The read surface is gated too, as of issue #172. Six routes require a signed-in
+**Session** and answer `401` without one: `GET /api/graphics-assets`,
 `capacity`, an asset's `thumbnail`, `usage` and `retention`, and a Graphic Asset
 Revision's `status`. The last was not in #172's list: #55 created it and its
 sibling `revisions/:id/content` in one commit and guarded only that one, so a
