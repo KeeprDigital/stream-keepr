@@ -132,24 +132,23 @@ export function broadcastDeckListService() {
 	};
 
 	const findAggregateById = async (id: number, eventId: number): Promise<BroadcastDeckListAggregate | undefined> => {
-		const [list] = await db
-			.select()
+		const rows = await db
+			.select({ list: broadcastDeckLists, entry: broadcastDeckListEntries })
 			.from(broadcastDeckLists)
+			.leftJoin(broadcastDeckListEntries, eq(broadcastDeckListEntries.listId, broadcastDeckLists.id))
 			.where(and(eq(broadcastDeckLists.id, id), eq(broadcastDeckLists.eventId, eventId)))
-			.limit(1);
-		if (!list)
-			return undefined;
-
-		const entries = await db
-			.select()
-			.from(broadcastDeckListEntries)
-			.where(eq(broadcastDeckListEntries.listId, id))
 			.orderBy(
 				sql`case ${broadcastDeckListEntries.compartment} when 'mainboard' then 0 when 'sideboard' then 1 else 2 end`,
 				asc(broadcastDeckListEntries.sortOrder),
 				asc(broadcastDeckListEntries.id),
 			);
-		return { ...list, entries };
+		const [first] = rows;
+		if (!first)
+			return undefined;
+		return {
+			...first.list,
+			entries: rows.flatMap(row => row.entry ? [row.entry] : []),
+		};
 	};
 
 	const findById = async (id: number, eventId: number): Promise<BroadcastDeckListResponse | undefined> => {

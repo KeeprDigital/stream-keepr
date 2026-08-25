@@ -118,6 +118,23 @@ describe('broadcastDeckListService', () => {
 		expect(summaries[0]).not.toHaveProperty('entries');
 	});
 
+	it('reads list metadata and entries from one authoritative SQLite snapshot', async () => {
+		const service = broadcastDeckListService();
+		const created = await service.create(eventId, { name: 'Snapshot Read' }, document('Shock'));
+		const prepare = vi.spyOn(harness.database, 'prepare');
+
+		await expect(service.findById(created.id, eventId)).resolves.toMatchObject({
+			sourceText: document('Shock').sourceText,
+			entries: [expect.objectContaining({ canonicalName: 'Shock' }), expect.anything(), expect.anything()],
+		});
+
+		const reads = prepare.mock.calls.filter(([statement]) =>
+			String(statement).toLowerCase().startsWith('select'),
+		);
+		expect(reads).toHaveLength(1);
+		prepare.mockRestore();
+	});
+
 	it('enforces case-insensitive names per Event and orders collections by normalized name then id', async () => {
 		const service = broadcastDeckListService();
 		const [otherEvent] = await db.insert(schema.events)
