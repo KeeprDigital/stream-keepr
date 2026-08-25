@@ -8,6 +8,22 @@ export class StateConflictError extends Error {
 	}
 }
 
+export class ScreenDeckSourceConflictError extends Error {
+	statusCode = 409;
+	code = 'SCREEN_DECK_SOURCE_CONFLICT';
+	constructor() {
+		super('The selected Deck source is no longer available');
+		this.name = 'ScreenDeckSourceConflictError';
+	}
+}
+
+export class BroadcastDeckListsInUseError extends Error {
+	constructor(readonly screens: Array<{ id: number; name: string }>) {
+		super('Broadcast Deck Lists are selected by one or more Screens');
+		this.name = 'BroadcastDeckListsInUseError';
+	}
+}
+
 /**
  * Whether a failure is a lost concurrency race rather than a fault.
  *

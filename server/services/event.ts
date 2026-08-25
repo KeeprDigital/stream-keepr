@@ -1,11 +1,12 @@
 import type { SQL } from 'drizzle-orm';
 import type { DbEvent, DbEventInsert, DbEventTalent } from '~~/server/db/schema';
 import type { CreateEventInput, MeleeConfigInput, UpdateEventInput } from '~~/shared/api';
-import { and, eq, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
-import { eventCardNameOverrides, events, eventTalents, matches, phases, players } from '~~/server/db/schema';
+import { eventCardNameOverrides, events, eventTalents, matches, phases, players, screens } from '~~/server/db/schema';
 import { buildClearImportedMatchDataQueries } from '~~/server/services/featureMatch';
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';
+import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 import { getGameDefaults } from '~~/shared/config/games';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
@@ -132,14 +133,44 @@ export function eventService() {
 			&& data.pointsSystem !== (currentEvent as DbEvent).pointsSystem
 			&& data.pointsSystem !== null;
 
-		const [updatedEvent] = await db
+		const updateQuery = db
 			.update(events)
 			.set({
 				...data,
 				...(shouldResetDecklistSync ? { lastDecklistsSyncedAt: null } : {}),
 			})
-			.where(eq(events.id, id))
+			.where(and(
+				eq(events.id, id),
+				...(data.broadcastDeckListsEnabled === false
+					? [sql`NOT EXISTS (
+						SELECT 1 FROM ${screens}
+						WHERE ${screens.eventId} = ${id}
+							AND json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'broadcast'
+					)`]
+					: []),
+			))
 			.returning();
+
+		let updatedEvent: DbEvent | undefined;
+		if (data.broadcastDeckListsEnabled === false) {
+			const [updatedRows, affectedScreens] = await db.batch([
+				updateQuery,
+				db
+					.select({ id: screens.id, name: screens.name })
+					.from(screens)
+					.where(and(
+						eq(screens.eventId, id),
+						sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'broadcast'`,
+					))
+					.orderBy(sql`${screens.name} COLLATE NOCASE`, asc(screens.id)),
+			]);
+			[updatedEvent] = updatedRows;
+			if (!updatedEvent && affectedScreens.length > 0)
+				throw new BroadcastDeckListsInUseError(affectedScreens);
+		}
+		else {
+			[updatedEvent] = await updateQuery;
+		}
 
 		if (!updatedEvent) {
 			return undefined;

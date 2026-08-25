@@ -195,7 +195,7 @@ describe('screenConfigSchema', () => {
 
 describe('deckModeConfigSchema', () => {
 	const validConfig = {
-		playerId: 1,
+		deckSource: { type: 'player' as const, playerId: 1 },
 		board: 'full' as const,
 		sideboardPlacement: 'beside' as const,
 		mainboard: {
@@ -218,8 +218,41 @@ describe('deckModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts null playerId', () => {
-		const result = deckModeConfigSchema.safeParse({ ...validConfig, playerId: null });
+	it('accepts a Broadcast Deck List source', () => {
+		expect(deckModeConfigSchema.safeParse({
+			...validConfig,
+			deckSource: { type: 'broadcast', broadcastDeckListId: 42 },
+		}).success).toBe(true);
+	});
+
+	it('requires the canonical discriminated source and rejects the legacy key', () => {
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: undefined }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, playerId: 1 }).success).toBe(false);
+		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: { type: 'invalid', playerId: 1 } }).success).toBe(false);
+	});
+
+	it('normalizes the one legacy Deck PATCH boundary and removes playerId', () => {
+		const parsed = modeConfigPatchSchemaMap.deck.parse({ playerId: null, showDeckName: false });
+
+		expect(parsed).toEqual({
+			deckSource: { type: 'player', playerId: null },
+			showDeckName: false,
+		});
+		expect(parsed).not.toHaveProperty('playerId');
+	});
+
+	it('rejects a PATCH that carries both legacy and canonical bindings', () => {
+		expect(modeConfigPatchSchemaMap.deck.safeParse({
+			playerId: 1,
+			deckSource: { type: 'player', playerId: 2 },
+		}).success).toBe(false);
+	});
+
+	it('accepts a Player source with no selected Player', () => {
+		const result = deckModeConfigSchema.safeParse({
+			...validConfig,
+			deckSource: { type: 'player', playerId: null },
+		});
 		expect(result.success).toBe(true);
 	});
 

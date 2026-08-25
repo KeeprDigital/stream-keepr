@@ -337,9 +337,10 @@ export function useDeckModeData() {
 		}
 	}
 
-	// Watch for config changes (player ID)
+	// Player Deck loading remains the Player-source branch. Broadcast source
+	// rendering is supplied separately; selecting one must never retain a Player.
 	watch(
-		() => config.value.playerId,
+		() => config.value.deckSource.type === 'player' ? config.value.deckSource.playerId : null,
 		async (newPlayerId) => {
 			if (newPlayerId) {
 				await loadPlayerDeck(newPlayerId);

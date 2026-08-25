@@ -361,7 +361,16 @@ const deckBoardLayoutConfigSchema = z.object({
 }).strict();
 
 export const deckModeConfigSchema = z.object({
-	playerId: z.number().int().positive().nullable(),
+	deckSource: z.discriminatedUnion('type', [
+		z.object({
+			type: z.literal('player'),
+			playerId: z.number().int().positive().nullable(),
+		}).strict(),
+		z.object({
+			type: z.literal('broadcast'),
+			broadcastDeckListId: z.number().int().positive(),
+		}).strict(),
+	]),
 	board: boardSelectionSchema.optional(),
 	sideboardPlacement: sideboardPlacementSchema.optional(),
 	mainboard: deckBoardLayoutConfigSchema.optional(),
@@ -393,6 +402,23 @@ export const deckModeConfigSchema = z.object({
 	quantityTextColor: z.string().max(50).optional(),
 	quantityBgColor: z.string().max(50).optional(),
 }).strict();
+
+const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSchema)
+	.extend({
+		// The sole legacy boundary: old Deck settings clients PATCH `playerId`.
+		playerId: z.number().int().positive().nullable().optional(),
+	})
+	.superRefine((patch, context) => {
+		if (patch.playerId !== undefined && patch.deckSource !== undefined) {
+			context.addIssue({
+				code: 'custom',
+				message: 'playerId and deckSource cannot be sent together',
+			});
+		}
+	})
+	.transform(({ playerId, ...patch }) => playerId === undefined
+		? patch
+		: { ...patch, deckSource: { type: 'player' as const, playerId } });
 
 const standingsColumnConfigSchema = z.object({
 	key: z.enum(STANDINGS_COLUMN_KEY_VALUES),
@@ -1822,7 +1848,7 @@ export const modeConfigSchemaMap = {
 export const modeConfigPatchSchemaMap = {
 	'background': createModeConfigPatchSchema(backgroundModeConfigSchema),
 	'card': createModeConfigPatchSchema(cardModeConfigSchema),
-	'deck': createModeConfigPatchSchema(deckModeConfigSchema),
+	'deck': deckModeConfigPatchSchema,
 	'standings': createModeConfigPatchSchema(standingsModeConfigSchema),
 	'topCut': createModeConfigPatchSchema(topCutModeConfigSchema),
 	'feature-match': createModeConfigPatchSchema(matchModeConfigSchema),

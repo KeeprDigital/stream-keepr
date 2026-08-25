@@ -44,7 +44,9 @@ describe('useSendDeckToScreen', () => {
 
 		const result = await sendToScreen(42, mockScreenStore.screens[0] as any);
 		expect(result).toBe(true);
-		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { playerId: 42 });
+		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', {
+			deckSource: { type: 'player', playerId: 42 },
+		});
 	});
 
 	it('shows success toast on successful send', async () => {
@@ -72,7 +74,9 @@ describe('useSendDeckToScreen', () => {
 
 		const result = await sendToFirstDeckScreen(42);
 		expect(result).toBe(true);
-		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', { playerId: 42 });
+		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'deck', {
+			deckSource: { type: 'player', playerId: 42 },
+		});
 	});
 
 	it('createSendDeckItems returns empty for player without deckName in gameData', () => {

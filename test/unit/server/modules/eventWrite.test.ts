@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent } from '~~/test/helpers/fixtures';
+import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 
 const mockRequireTalentInEvent = vi.fn();
 const mockEventService = {
@@ -45,11 +46,8 @@ vi.mock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
 }));
 
-vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string }) => {
-	const error = new Error(input.message ?? input.statusMessage) as Error & { statusCode: number };
-	error.statusCode = input.statusCode;
-	return error;
-});
+vi.stubGlobal('createError', (input: { statusCode: number; message?: string; statusMessage?: string; data?: unknown }) =>
+	Object.assign(new Error(input.message ?? input.statusMessage), input));
 
 const { eventWriteModule } = await import('~~/server/modules/event-write');
 
@@ -76,6 +74,21 @@ describe('eventWriteModule', () => {
 				message: 'Broadcast Deck Lists can only be enabled for MTG Events',
 			});
 			expect(mockEventService.update).not.toHaveBeenCalled();
+		});
+
+		it('returns every affected Screen when disabling is refused', async () => {
+			const screens = [{ id: 2, name: 'Alpha' }, { id: 8, name: 'Stage' }];
+			mockEventService.update.mockRejectedValueOnce(new BroadcastDeckListsInUseError(screens));
+
+			await expect(eventWriteModule().updateEvent({
+				eventId: 1,
+				input: { broadcastDeckListsEnabled: false } as never,
+			})).rejects.toMatchObject({
+				statusCode: 409,
+				message: 'Broadcast Deck Lists cannot be disabled while selected by Screens: Alpha, Stage',
+				data: { code: 'BROADCAST_DECK_LISTS_IN_USE', screens },
+			});
+			expect(mockPublication.eventUpdated).not.toHaveBeenCalled();
 		});
 		it('validates both commentator talents before updating', async () => {
 			const input = { commentator1TalentId: 3, commentator2TalentId: 4 } as never;

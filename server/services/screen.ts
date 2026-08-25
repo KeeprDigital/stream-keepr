@@ -10,11 +10,20 @@ import {
 	deleteScreenWithGraphicAssetReferences,
 	updateScreenModeConfigWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
-import { StateConflictError } from '~~/server/utils/errors';
+import { ScreenDeckSourceConflictError, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
 export function screenService() {
+	function mapDeckSourceConflict(error: unknown): never {
+		let failure: unknown = error;
+		while (failure && typeof failure === 'object') {
+			if (String((failure as { message?: unknown }).message).includes('SCREEN_DECK_SOURCE_CONFLICT'))
+				throw new ScreenDeckSourceConflictError();
+			failure = (failure as { cause?: unknown }).cause;
+		}
+		throw error;
+	}
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {
 		return await db.query.screens.findFirst({
 			where: and(
@@ -50,14 +59,20 @@ export function screenService() {
 		data: CreateScreenInput,
 		capability: PersistedScreenOutputAssetCapability,
 	): Promise<DbScreen> => {
-		const [newScreen] = await db
-			.insert(screens)
-			.values({
-				...data,
-				eventId,
-				...capability,
-			})
-			.returning();
+		let newScreen: DbScreen | undefined;
+		try {
+			[newScreen] = await db
+				.insert(screens)
+				.values({
+					...data,
+					eventId,
+					...capability,
+				})
+				.returning();
+		}
+		catch (error) {
+			mapDeckSourceConflict(error);
+		}
 
 		if (!newScreen) {
 			throw new Error('Failed to create screen');
@@ -105,18 +120,24 @@ export function screenService() {
 		currentVersion: number,
 		companions: readonly BatchItem<'sqlite'>[] = [],
 	): Promise<DbScreen | undefined> => {
-		const [written] = await db.batch([
-			db
-				.update(screens)
-				.set({ ...data, stateVersion: currentVersion + 1 })
-				.where(and(
-					eq(screens.id, id),
-					eq(screens.eventId, eventId),
-					eq(screens.stateVersion, currentVersion),
-				))
-				.returning(),
-			...companions,
-		] as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+		let written;
+		try {
+			[written] = await db.batch([
+				db
+					.update(screens)
+					.set({ ...data, stateVersion: currentVersion + 1 })
+					.where(and(
+						eq(screens.id, id),
+						eq(screens.eventId, eventId),
+						eq(screens.stateVersion, currentVersion),
+					))
+					.returning(),
+				...companions,
+			] as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+		}
+		catch (error) {
+			mapDeckSourceConflict(error);
+		}
 		const [result] = written as DbScreen[];
 
 		if (result)
