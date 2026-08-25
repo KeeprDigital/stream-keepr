@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
+import { MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes } from '~~/shared/types/messages';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
 /** The storage ceiling a Screen's `modeConfigs` is bounded by, from the Screen schema. */
@@ -854,6 +854,51 @@ describe('event Data publication module', () => {
 			const screen = await publication.screenUpdated({ eventId: 1, entity: entity as any });
 
 			expect(screen.modeConfigs).toEqual(entity.modeConfigs);
+		});
+	});
+
+	describe('broadcast Deck List notifications', () => {
+		it('publishes only identity and revision while returning the authoritative document', async () => {
+			const publication = eventDataPublicationModule();
+			const entity = {
+				id: 11,
+				eventId: 1,
+				revision: 7,
+				sourceText: '1 Island\n'.repeat(8_000),
+				entries: Array.from({ length: 250 }, (_, id) => ({ id, canonicalName: 'Island' })),
+			};
+
+			const returned = await publication.broadcastDeckListUpdated({
+				eventId: 1,
+				entity: entity as any,
+				originConnectionId: 'origin-1',
+			});
+
+			expect(returned).toBe(entity);
+			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:updated', {
+				listId: entity.id,
+				revision: 7,
+			}, 'origin-1');
+			expect(realtimeMessageBytes(1, 'broadcastDeckList:updated', {
+				listId: entity.id,
+				revision: 7,
+			}, 'origin-1')).toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
+		});
+
+		it('announces create and delete with their settled lightweight shapes', async () => {
+			const publication = eventDataPublicationModule();
+			const entity = { id: 11, revision: 1 };
+
+			await publication.broadcastDeckListCreated({ eventId: 1, entity: entity as any });
+			await publication.broadcastDeckListDeleted({ eventId: 1, id: entity.id });
+
+			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:created', {
+				listId: entity.id,
+				revision: 1,
+			}, undefined);
+			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:deleted', {
+				listId: entity.id,
+			}, undefined);
 		});
 	});
 

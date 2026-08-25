@@ -41,6 +41,7 @@ export function resetAllEventStores() {
 	resetStore(useEventStore());
 	resetStore(useMetagameStore());
 	resetStore(useFeatureMatchAssignmentStore());
+	resetStore(useBroadcastDeckListStore());
 	resetStore(useFeatureMatchStateStore());
 	resetStore(useScreenStore());
 	resetStore(useCardStore());

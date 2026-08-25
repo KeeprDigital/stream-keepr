@@ -149,6 +149,7 @@ export interface EventListResponse {
 	featureMatchDefaultExtraTurnsLabel: string;
 	featureMatchDefaultMulliganTrackingEnabled: boolean;
 	standingsEnabled: boolean;
+	broadcastDeckListsEnabled: boolean;
 	lgsEnabled: boolean;
 	pronounsEnabled: boolean;
 	tableNumberEnabled: boolean;
@@ -185,6 +186,7 @@ export interface CreateEventInput {
 	featureMatchDefaultExtraTurnsLabel?: string;
 	featureMatchDefaultMulliganTrackingEnabled?: boolean;
 	standingsEnabled?: boolean;
+	broadcastDeckListsEnabled?: boolean;
 	lgsEnabled?: boolean;
 	pronounsEnabled?: boolean;
 	tableNumberEnabled?: boolean;

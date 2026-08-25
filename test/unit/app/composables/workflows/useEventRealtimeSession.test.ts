@@ -117,6 +117,12 @@ describe('useEventRealtimeSession', () => {
 		applyRemoteDeleted: vi.fn(),
 		reloadConsumedRounds: vi.fn(),
 	};
+	const broadcastDeckListStore = {
+		applyRemoteCreated: vi.fn(),
+		applyRemoteUpdated: vi.fn(),
+		applyRemoteDeleted: vi.fn(),
+		reloadAuthoritativeState: vi.fn(),
+	};
 	const useReconnectResync = vi.fn();
 	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
@@ -189,6 +195,7 @@ describe('useEventRealtimeSession', () => {
 		vi.stubGlobal('useFeatureMatchStore', () => featureMatchStore);
 		vi.stubGlobal('useFeatureMatchStateStore', () => featureMatchStateStore);
 		vi.stubGlobal('useFeatureMatchAssignmentStore', () => featureMatchAssignmentStore);
+		vi.stubGlobal('useBroadcastDeckListStore', () => broadcastDeckListStore);
 		vi.stubGlobal('useReconnectResync', useReconnectResync);
 		vi.stubGlobal('useBroadcastGraphicsLiveSessionStore', () => broadcastGraphicsLiveSessionStore);
 		vi.stubGlobal('useScreenStore', () => screenStore);
@@ -273,6 +280,9 @@ describe('useEventRealtimeSession', () => {
 			'featureMatchAssignment:created': featureMatchAssignmentStore.applyRemoteCreated,
 			'featureMatchAssignment:updated': featureMatchAssignmentStore.applyRemoteUpdated,
 			'featureMatchAssignment:deleted': featureMatchAssignmentStore.applyRemoteDeleted,
+			'broadcastDeckList:created': broadcastDeckListStore.applyRemoteCreated,
+			'broadcastDeckList:updated': broadcastDeckListStore.applyRemoteUpdated,
+			'broadcastDeckList:deleted': broadcastDeckListStore.applyRemoteDeleted,
 			'featureMatchSession:eventApplied': featureMatchStateStore.applyRemoteSessionEvent,
 			'broadcastGraphicsLiveSession:commandApplied': broadcastGraphicsLiveSessionStore.applyRemoteCommand,
 			'broadcastGraphicsLiveSession:epochEnded': broadcastGraphicsLiveSessionStore.applyEpochEnded,
@@ -380,13 +390,14 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
-	it('reloads every consumed Assignment Round through Reconnect Resync', async () => {
+	it('reloads every consumed Assignment Round and Broadcast Deck detail through Reconnect Resync', async () => {
 		await startSession();
 
 		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), realtime);
 		const [resync] = useReconnectResync.mock.calls[0]!;
 		resync();
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
+		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
 	});
 
 	it('resets event state and navigates home when the active event is deleted', async () => {

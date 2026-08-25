@@ -83,6 +83,14 @@ export function mapPublicNitroError(error: MappableNitroError): void {
 		hasMappedPublicServerMessage = true;
 		mappedOperationalError = true;
 	}
+	else if (cause && typeof cause === 'object' && 'code' in cause && (cause as { code: unknown }).code === 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE') {
+		error.statusCode = 503;
+		error.statusMessage = 'Service Unavailable';
+		error.message = 'Card data provider is temporarily unavailable. Try again later.';
+		error.data = { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true };
+		hasMappedPublicServerMessage = true;
+		mappedOperationalError = true;
+	}
 	else if (cause && typeof cause === 'object' && 'code' in cause && (cause as { code: unknown }).code === 'MELEE_UPSTREAM_FAILURE') {
 		const category = 'category' in cause ? (cause as { category: unknown }).category : null;
 		error.statusCode = category === 'timeout' ? 504 : 502;

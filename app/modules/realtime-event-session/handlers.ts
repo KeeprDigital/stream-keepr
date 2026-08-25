@@ -1,4 +1,5 @@
 import type { AcceptRealtimeMessage } from './types';
+import { createBroadcastDeckListRealtimeHandlers } from './broadcastDeckListHandlers';
 import { createBroadcastGraphicsRealtimeHandlers } from './broadcastGraphicsHandlers';
 import { createEventTalentRealtimeHandlers } from './eventTalentHandlers';
 import { createFeatureMatchRealtimeHandlers } from './featureMatchHandlers';
@@ -29,6 +30,7 @@ export function createEventRealtimeHandlers(options: EventRealtimeSessionHandler
 		...createFeatureMatchRealtimeHandlers(options),
 		...createScreenCardRealtimeHandlers(options),
 		...createBroadcastGraphicsRealtimeHandlers(options),
+		...createBroadcastDeckListRealtimeHandlers(options),
 		...createMeleeRealtimeHandlers(options),
 	};
 }
