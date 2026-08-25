@@ -91,12 +91,12 @@ interface ParsedCardRow extends BroadcastDeckListCardResolutionRequest {
 	quantity: number;
 }
 
-const HEADINGS: Record<string, BroadcastDeckListCompartment> = {
-	deck: 'mainboard',
-	mainboard: 'mainboard',
-	sideboard: 'sideboard',
-	companion: 'companion',
-};
+const HEADINGS = new Map<string, BroadcastDeckListCompartment>([
+	['deck', 'mainboard'],
+	['mainboard', 'mainboard'],
+	['sideboard', 'sideboard'],
+	['companion', 'companion'],
+]);
 
 const UNSUPPORTED_SECTIONS = new Set([
 	'about',
@@ -220,7 +220,7 @@ export async function importBroadcastDeckList(
 	const errors: BroadcastDeckListImportError[] = [];
 
 	for (const line of normalizedLines) {
-		const heading = HEADINGS[line.sourceText.toLowerCase()];
+		const heading = HEADINGS.get(line.sourceText.toLowerCase());
 		if (heading) {
 			compartment = heading;
 			continue;

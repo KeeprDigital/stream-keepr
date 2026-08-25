@@ -85,6 +85,24 @@ describe('broadcast Deck List import', () => {
 		}));
 	});
 
+	it('does not treat inherited object property names as headings', async () => {
+		const result = await importBroadcastDeckList([
+			'constructor',
+			'toString',
+			'__proto__',
+			'1 Forest',
+		].join('\n'), resolvingAllCards());
+
+		expect(result.ok).toBe(false);
+		if (result.ok)
+			return;
+		expect(result.errors).toEqual([
+			expect.objectContaining({ lineNumber: 1, code: 'INVALID_CARD_LINE' }),
+			expect.objectContaining({ lineNumber: 2, code: 'INVALID_CARD_LINE' }),
+			expect.objectContaining({ lineNumber: 3, code: 'INVALID_CARD_LINE' }),
+		]);
+	});
+
 	it('parses terminal set and collector printing hints without changing card names', async () => {
 		const resolver = resolvingAllCards();
 		const result = await importBroadcastDeckList([
