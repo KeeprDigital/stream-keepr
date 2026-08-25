@@ -369,6 +369,27 @@ describe('the production build auth boundary', () => {
 		})).toThrow(/NUXT_LOCAL_AUTH_BYPASS.*pnpm preview/u);
 	});
 
+	it('lets nuxt prepare run with the bypass armed: typegen is not promotable output', () => {
+		// `nuxt prepare` runs the same module setup with dev: false, but it
+		// produces only .nuxt typegen — nothing that can be deployed. Refusing it
+		// broke `pnpm install` in every checkout whose .env armed the flag (#504).
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: false,
+			prepare: true,
+			env: { NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE },
+		})).not.toThrow();
+	});
+
+	it('does not let the prepare fact default a build to promotable', () => {
+		// The flag must be an explicit true, so a caller that omits it — every
+		// pre-#504 call site shape — keeps the refusal.
+		expect(() => assertLocalAuthBypassDisarmedForBuild({
+			dev: false,
+			prepare: false,
+			env: { NUXT_LOCAL_AUTH_BYPASS: LOCAL_AUTH_BYPASS_ENABLED_VALUE },
+		})).toThrow(/production build/u);
+	});
+
 	it('does not let a runtime attestation make an armed production build promotable', () => {
 		expect(() => assertLocalAuthBypassDisarmedForBuild({
 			dev: false,

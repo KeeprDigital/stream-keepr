@@ -25,7 +25,7 @@ import {
 export const localConfigurationModule = defineNuxtModule({
 	meta: { name: 'local-configuration' },
 	setup(_options, nuxt) {
-		const context = { dev: nuxt.options.dev, env: process.env };
+		const context = { dev: nuxt.options.dev, prepare: nuxt.options._prepare, env: process.env };
 		assertLocalAuthBypassDisarmedForBuild(context);
 		const bypassActive = localAuthBypassActive(context);
 		const logger = useLogger('local-configuration');
