@@ -29,7 +29,7 @@
 		"db:migrate:local:built": "wrangler d1 migrations apply DB --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker",
 		"db:migrations:list:remote": "wrangler d1 migrations list DB --remote --config .output/server/wrangler.json",
 		"db:migrate:remote": "wrangler d1 migrations apply DB --remote --config .output/server/wrangler.json",
-		"test": "pnpm test:unit:coverage && pnpm test:nuxt:coverage && pnpm test:local-auth:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video && pnpm test:browser:fonts",
+		"test": "pnpm test:unit:coverage && pnpm test:nuxt:coverage && pnpm test:local-auth:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video && pnpm test:browser:fonts && pnpm test:browser:animation-effects",
 		"test:unit": "vitest",
 		"test:unit:run": "vitest run",
 		"test:unit:coverage": "vitest run --coverage",
@@ -55,7 +55,8 @@
 		"test:delivery:graphics": "node scripts/run-graphics-delivery-acceptance.mjs",
 		"test:delivery:graphics:deployed": "node scripts/run-graphics-delivery-acceptance.mjs --deployed",
 		"test:validator:silent-video": "node scripts/run-silent-video-validator-acceptance.mjs",
-		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed"
+		"test:validator:silent-video:deployed": "node scripts/run-silent-video-validator-acceptance.mjs --deployed",
+		"test:browser:animation-effects": "node scripts/run-animation-effect-rendering-acceptance.mjs"
 	},
 	"dependencies": {
 		"@jsquash/jpeg": "1.6.0",
@@ -103,6 +104,7 @@
 		"@vitest/ui": "4.1.10",
 		"@vue/test-utils": "2.4.11",
 		"drizzle-kit": "0.31.10",
+		"esbuild": "0.28.2",
 		"eslint": "10.8.1",
 		"eslint-plugin-drizzle": "0.2.3",
 		"eslint-plugin-format": "2.0.1",

@@ -11,6 +11,7 @@ vi.mock('../../../scripts/graphics-acceptance/harness.mjs', () => ({
  * and never uses the harness, so it has no call site to make inert.
  */
 const SCRIPTS = [
+	['run-animation-effect-rendering-acceptance', 'animation-effect-v1'],
 	['run-font-browser-acceptance', 'static-font-v1'],
 	['run-graphics-delivery-acceptance', 'graphics-delivery-v1'],
 	['run-graphics-package-acceptance', 'graphics-package-v1'],

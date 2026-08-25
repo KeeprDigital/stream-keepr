@@ -101,6 +101,29 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// path that never touches Wasm.
 	'still-image-ingestion-refused',
 	'still-image-ingestion-facts-unexpected',
+	// Animation Effect rendering (#499). A shader that compiles and renders black
+	// is invisible to every other suite — nothing else in the repository ever
+	// rasterises one — so these are the only codes in the registry that describe
+	// what a Screen Output would actually have shown.
+	'animation-effect-webgl-unavailable',
+	'animation-effect-bundle-failed',
+	'animation-effect-page-failed',
+	// An effect the catalogue ships that the scenario table does not mount, or
+	// the reverse: either way a shader nobody is proving.
+	'animation-effect-catalogue-uncovered',
+	'animation-effect-scenario-missing',
+	'animation-effect-mount-failed',
+	'animation-effect-shader-compile-failed',
+	'animation-effect-frame-unlit',
+	'animation-effect-frame-washed-out',
+	'animation-effect-frame-static',
+	// The known-good effect failed, so read the block below it as evidence about
+	// the run — driver, flags, readback — before reading it as fifteen defects.
+	'animation-effect-known-good-control-failed',
+	// The planted broken shader walked past one of the checks, which makes the
+	// whole run worthless: a check that cannot catch a shader that does not
+	// compile cannot catch one that renders black either.
+	'animation-effect-checks-not-biting',
 	// Harness plumbing.
 	'harness-precondition-unmet',
 	'harness-installation-unreachable',
