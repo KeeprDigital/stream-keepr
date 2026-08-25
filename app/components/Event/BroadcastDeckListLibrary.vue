@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FormError } from '@nuxt/ui';
 import type {
 	BroadcastDeckListImportFailureDetail,
 	BroadcastDeckListResponse,
@@ -32,6 +33,8 @@ interface PresentedFailure {
 
 const COLORS = ['W', 'U', 'B', 'R', 'G'] as const;
 type DeckColor = typeof COLORS[number];
+const COLOR_OPTIONS: Array<{ label: DeckColor; value: DeckColor }> = COLORS.map(color => ({ label: color, value: color }));
+const EDITOR_FORM_ID = 'broadcast-deck-list-editor-form';
 
 const deckListStore = useBroadcastDeckListStore();
 const eventStore = useEventStore();
@@ -48,6 +51,7 @@ const editorSaving = ref(false);
 const editorFailure = ref<PresentedFailure | null>(null);
 const releaseDetail = ref<null | (() => void)>(null);
 const editorLoads = createGuardedSequence();
+const editorActions = createGuardedSequence();
 const draft = reactive({
 	name: '',
 	archetypeLabel: '',
@@ -81,7 +85,11 @@ watch(() => props.event.id, async (eventId) => {
 });
 
 onMounted(() => loadCollection(props.event.id));
-onBeforeUnmount(() => releaseConsumedDetail());
+onBeforeUnmount(() => {
+	editorLoads.supersede();
+	editorActions.supersede();
+	releaseConsumedDetail();
+});
 
 function failureRecord(value: unknown): Record<string, unknown> | null {
 	return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
@@ -90,7 +98,6 @@ function failureRecord(value: unknown): Record<string, unknown> | null {
 function presentFailure(cause: unknown, fallback: string): PresentedFailure {
 	let cursor: unknown = cause;
 	let body: FailureBody | null = null;
-	let message = cause instanceof Error ? cause.message : fallback;
 	const visited = new Set<unknown>();
 
 	while (cursor && !visited.has(cursor)) {
@@ -100,17 +107,16 @@ function presentFailure(cause: unknown, fallback: string): PresentedFailure {
 			break;
 		const data = failureRecord(record.data);
 		if (data && (typeof data.message === 'string' || failureRecord(data.data))) {
-			body = data as FailureBody;
+			if (!isSanitizedFailure(cursor))
+				body = data as FailureBody;
 			break;
 		}
 		cursor = record.cause;
 	}
 
-	if (body?.message)
-		message = body.message;
 	const details = body?.data;
 	return {
-		message,
+		message: reportedMessage(cause, fallback),
 		code: details?.code,
 		errors: Array.isArray(details?.errors) ? details.errors : [],
 		current: details?.current,
@@ -187,6 +193,8 @@ function releaseConsumedDetail() {
 
 function startAdd() {
 	editorLoads.supersede();
+	editorActions.supersede();
+	editorSaving.value = false;
 	releaseConsumedDetail();
 	resetDraft();
 	editorOpen.value = true;
@@ -194,6 +202,8 @@ function startAdd() {
 
 async function startEdit(summary: BroadcastDeckListSummaryResponse) {
 	const flight = editorLoads.begin();
+	editorActions.supersede();
+	editorSaving.value = false;
 	releaseConsumedDetail();
 	resetDraft();
 	editingListId.value = summary.id;
@@ -216,42 +226,37 @@ async function startEdit(summary: BroadcastDeckListSummaryResponse) {
 
 function closeEditor() {
 	editorLoads.supersede();
+	editorActions.supersede();
+	editorSaving.value = false;
 	releaseConsumedDetail();
 	editorOpen.value = false;
 	resetDraft();
 }
 
-function toggleColor(color: DeckColor, selected: boolean) {
-	draft.colors = selected
-		? COLORS.filter(value => value === color || draft.colors.includes(value))
-		: draft.colors.filter(value => value !== color);
-}
-
-function validateDraft() {
-	const errors: BroadcastDeckListImportFailureDetail[] = [];
-	if (!draft.name.trim())
-		errors.push({ code: 'NAME_REQUIRED', message: 'Name is required' });
-	if (!draft.sourceText.trim())
-		errors.push({ code: 'SOURCE_REQUIRED', message: 'Deck List text is required' });
+function validateDraft(state: Partial<typeof draft>): FormError[] {
+	const errors: FormError[] = [];
+	if (!state.name?.trim())
+		errors.push({ name: 'name', message: 'Name is required' });
+	if (!state.sourceText?.trim())
+		errors.push({ name: 'sourceText', message: 'Deck List text is required' });
 	return errors;
 }
 
-async function saveEditor(expectedRevision = editingRevision.value) {
+async function submitEditor() {
+	const authorityRevision = editorFailure.value?.current?.revision;
+	await saveEditor(authorityRevision ?? editingRevision.value);
+}
+
+async function saveEditor(expectedRevision: number | null) {
 	if (editorSaving.value)
 		return;
-	const validationErrors = validateDraft();
-	if (validationErrors.length) {
-		editorFailure.value = {
-			message: 'Complete the required Deck List fields',
-			errors: validationErrors,
-			retryable: false,
-			screens: [],
-		};
-		return;
-	}
 
+	editorLoads.supersede();
+	const flight = editorActions.begin();
 	editorSaving.value = true;
 	editorFailure.value = null;
+	const eventId = props.event.id;
+	const listId = editingListId.value;
 	const input = {
 		name: draft.name.trim(),
 		archetypeLabel: draft.archetypeLabel.trim() || null,
@@ -260,42 +265,54 @@ async function saveEditor(expectedRevision = editingRevision.value) {
 	};
 
 	try {
-		if (editingListId.value !== null && expectedRevision !== null) {
-			await deckListStore.updateList(props.event.id, editingListId.value, {
+		if (listId !== null && expectedRevision !== null) {
+			await deckListStore.updateList(eventId, listId, {
 				...input,
 				expectedRevision,
 			});
 		}
 		else {
-			await deckListStore.createList(props.event.id, input);
+			await deckListStore.createList(eventId, input);
 		}
+		if (flight.stale)
+			return;
 		closeEditor();
 	}
 	catch (cause) {
+		if (flight.stale)
+			return;
 		editorFailure.value = presentFailure(cause, 'Failed to save Broadcast Deck List');
 	}
 	finally {
-		editorSaving.value = false;
+		if (flight.current)
+			editorSaving.value = false;
 	}
-}
-
-async function retrySave() {
-	const authorityRevision = editorFailure.value?.current?.revision;
-	await saveEditor(authorityRevision ?? editingRevision.value);
 }
 
 async function reloadLatest() {
 	if (editingListId.value === null)
 		return;
+	editorLoads.supersede();
+	const flight = editorActions.begin();
+	const listId = editingListId.value;
+	editorSaving.value = true;
 	try {
-		const latest = await deckListStore.loadDetail(props.event.id, editingListId.value);
+		const latest = await deckListStore.loadDetail(props.event.id, listId);
+		if (flight.stale)
+			return;
 		if (latest) {
 			applyDetail(latest);
 			editorFailure.value = null;
 		}
 	}
 	catch (cause) {
+		if (flight.stale)
+			return;
 		editorFailure.value = presentFailure(cause, 'Failed to load the latest Broadcast Deck List');
+	}
+	finally {
+		if (flight.current)
+			editorSaving.value = false;
 	}
 }
 
@@ -336,7 +353,7 @@ async function confirmDelete() {
 					Broadcast Deck Lists
 				</h2>
 				<p class="text-sm text-muted">
-					Manage the MTG Deck List library available to Broadcast Screens.
+					Manage the MTG Deck List library available to Deck Screens.
 				</p>
 			</div>
 			<div class="flex items-center gap-3">
@@ -356,6 +373,8 @@ async function confirmDelete() {
 			variant="soft"
 			title="Broadcast Deck Lists were not changed"
 			:description="featureFailure.message"
+			role="alert"
+			aria-live="polite"
 		/>
 		<UAlert
 			v-if="collectionFailure"
@@ -363,6 +382,8 @@ async function confirmDelete() {
 			variant="soft"
 			title="Deck List library could not be loaded"
 			:description="collectionFailure"
+			role="alert"
+			aria-live="polite"
 		/>
 
 		<UCard>
@@ -440,7 +461,13 @@ async function confirmDelete() {
 			:close="{ onClick: closeEditor }"
 		>
 			<template #body>
-				<UForm :state="draft" class="flex flex-col gap-4" @submit="saveEditor()">
+				<UForm
+					:id="EDITOR_FORM_ID"
+					:state="draft"
+					:validate="validateDraft"
+					class="flex flex-col gap-4"
+					@submit="submitEditor"
+				>
 					<UFormField label="Name" name="name" required>
 						<UInput
 							v-model="draft.name"
@@ -452,17 +479,13 @@ async function confirmDelete() {
 					<UFormField label="Archetype label" name="archetypeLabel" hint="Optional">
 						<UInput v-model="draft.archetypeLabel" name="archetypeLabel" class="w-full" />
 					</UFormField>
-					<UFormField label="Colors" name="colors" hint="Optional, manually classified">
-						<div class="flex flex-wrap gap-3">
-							<UCheckbox
-								v-for="color in COLORS"
-								:key="color"
-								:model-value="draft.colors.includes(color)"
-								:label="color"
-								@update:model-value="selected => toggleColor(color, selected === true)"
-							/>
-						</div>
-					</UFormField>
+					<UCheckboxGroup
+						v-model="draft.colors"
+						name="colors"
+						legend="Colors (optional, manually classified)"
+						:items="COLOR_OPTIONS"
+						orientation="horizontal"
+					/>
 					<UFormField label="Deck List text" name="sourceText" required>
 						<UTextarea
 							v-model="draft.sourceText"
@@ -478,6 +501,8 @@ async function confirmDelete() {
 						color="error"
 						variant="soft"
 						:description="editorFailure.message"
+						role="alert"
+						aria-live="polite"
 					>
 						<template #title>
 							<span v-if="editorFailure.current">
@@ -518,14 +543,17 @@ async function confirmDelete() {
 						label="Retry Save"
 						color="warning"
 						variant="outline"
+						type="submit"
+						:form="EDITOR_FORM_ID"
 						:loading="editorSaving"
-						@click="retrySave"
 					/>
 					<UButton
+						v-else
 						:label="editorSaveLabel"
+						type="submit"
+						:form="EDITOR_FORM_ID"
 						:loading="editorSaving"
 						:disabled="editorSaving"
-						@click="saveEditor()"
 					/>
 				</div>
 			</template>
@@ -548,6 +576,8 @@ async function confirmDelete() {
 						variant="soft"
 						title="Deck List was not deleted"
 						:description="deleteFailure.screens.length ? `${deleteFailure.message} (${deleteFailure.screens.map(screen => screen.name).join(', ')})` : deleteFailure.message"
+						role="alert"
+						aria-live="polite"
 					/>
 					<p v-if="deleteFailure?.current" class="text-sm text-muted">
 						A newer revision {{ deleteFailure.current.revision }} is available. Retry to delete that authoritative revision.

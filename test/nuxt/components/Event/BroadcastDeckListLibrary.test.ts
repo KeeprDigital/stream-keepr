@@ -59,9 +59,11 @@ const UButtonStub = defineComponent({
 		label: { type: String, required: false },
 		disabled: { type: Boolean, required: false },
 		loading: { type: Boolean, required: false },
+		type: { type: String, required: false },
+		form: { type: String, required: false },
 	},
 	emits: ['click'],
-	template: '<button type="button" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
+	template: '<button :type="type || \'button\'" :form="form" :data-label="label" :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot>{{ label }}</slot></button>',
 });
 const UInputStub = defineComponent({
 	props: { modelValue: { type: String, required: false }, name: { type: String, required: false } },
@@ -78,15 +80,23 @@ const USwitchStub = defineComponent({
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="feature-switch" :data-value="String(modelValue)" :disabled="disabled" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
-const UCheckboxStub = defineComponent({
-	props: { modelValue: { type: Boolean, required: false }, label: { type: String, required: false } },
+const UCheckboxGroupStub = defineComponent({
+	props: {
+		modelValue: { type: Array, default: () => [] },
+		items: { type: Array, default: () => [] },
+		legend: { type: String, required: false },
+		name: { type: String, required: false },
+	},
 	emits: ['update:modelValue'],
-	template: '<button type="button" :data-color="label" :data-value="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
+	template: '<fieldset :data-name="name"><legend>{{ legend }}</legend><button v-for="item in items" :key="item.value" type="button" :data-color="item.value" :data-value="String(modelValue.includes(item.value))" @click="$emit(\'update:modelValue\', modelValue.includes(item.value) ? modelValue.filter(value => value !== item.value) : [...modelValue, item.value])">{{ item.label }}</button></fieldset>',
 });
 const UModalStub = defineComponent({
-	props: { open: { type: Boolean, required: false } },
+	props: {
+		open: { type: Boolean, required: false },
+		close: { type: Object as () => { onClick?: () => void }, required: false },
+	},
 	emits: ['update:open'],
-	template: '<div v-if="open" data-testid="modal"><slot name="body" /><slot name="footer" :close="() => $emit(\'update:open\', false)" /></div>',
+	template: '<div v-if="open" data-testid="modal"><button v-if="close?.onClick" type="button" data-testid="modal-close" @click="close.onClick()">Close</button><slot name="body" /><slot name="footer" :close="() => $emit(\'update:open\', false)" /></div>',
 });
 const UAlertStub = defineComponent({
 	props: {
@@ -95,6 +105,22 @@ const UAlertStub = defineComponent({
 	},
 	template: '<div><slot name="title">{{ title }}</slot><slot name="description">{{ description }}</slot><slot /></div>',
 });
+const UFormStub = defineComponent({
+	props: {
+		id: { type: String, required: false },
+		state: { type: Object, required: false },
+		validate: { type: Function, required: false },
+	},
+	emits: ['submit'],
+	template: '<form :id="id" @submit.prevent="$emit(\'submit\')"><slot /></form>',
+});
+const UFormFieldStub = defineComponent({
+	props: {
+		name: { type: String, required: false },
+		label: { type: String, required: false },
+	},
+	template: '<div :data-field="name"><span>{{ label }}</span><slot /></div>',
+});
 const passthrough = defineComponent({ template: '<div><slot name="header" /><slot /><slot name="body" /><slot name="footer" /></div>' });
 
 const stubs = {
@@ -102,11 +128,11 @@ const stubs = {
 	UInput: UInputStub,
 	UTextarea: UTextareaStub,
 	USwitch: USwitchStub,
-	UCheckbox: UCheckboxStub,
+	UCheckboxGroup: UCheckboxGroupStub,
 	UModal: UModalStub,
 	UCard: passthrough,
-	UForm: passthrough,
-	UFormField: passthrough,
+	UForm: UFormStub,
+	UFormField: UFormFieldStub,
 	UAlert: UAlertStub,
 	UBadge: passthrough,
 	UIcon: true,
@@ -124,6 +150,10 @@ async function mountComponent(value: Event = event()) {
 
 function button(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
 	return wrapper.get(`[data-label="${label}"]`);
+}
+
+async function submitEditor(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+	await wrapper.get('#broadcast-deck-list-editor-form').trigger('submit');
 }
 
 describe('event Broadcast Deck List library', () => {
@@ -165,12 +195,24 @@ describe('event Broadcast Deck List library', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 		await button(wrapper, 'Add Deck List').trigger('click');
+		expect(button(wrapper, 'Save Deck List').attributes()).toMatchObject({
+			type: 'submit',
+			form: 'broadcast-deck-list-editor-form',
+		});
+		expect(wrapper.find('[data-field="name"]').exists()).toBe(true);
+		expect(wrapper.find('[data-field="sourceText"]').exists()).toBe(true);
+		expect(wrapper.get('fieldset').text()).toContain('Colors (optional, manually classified)');
+		const validate = wrapper.getComponent(UFormStub).props('validate') as (state: object) => Array<{ name: string; message: string }>;
+		expect(validate({})).toEqual([
+			{ name: 'name', message: 'Name is required' },
+			{ name: 'sourceText', message: 'Deck List text is required' },
+		]);
 		await wrapper.get('[data-name="name"]').setValue('  Burn  ');
 		await wrapper.get('[data-name="archetypeLabel"]').setValue('   ');
 		await wrapper.get('[data-name="sourceText"]').setValue('4 Lightning Bolt');
 
-		await button(wrapper, 'Save Deck List').trigger('click');
-		await button(wrapper, 'Save Deck List').trigger('click');
+		await submitEditor(wrapper);
+		await submitEditor(wrapper);
 		expect(store.createList).toHaveBeenCalledOnce();
 		expect(store.createList).toHaveBeenCalledWith(1, {
 			name: 'Burn',
@@ -182,6 +224,20 @@ describe('event Broadcast Deck List library', () => {
 		resolveCreate(first);
 		await flushPromises();
 		expect(wrapper.find('[data-name="sourceText"]').exists()).toBe(false);
+	});
+
+	it('saves only the manually selected WUBRG colors', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('Color test');
+		await wrapper.get('[data-name="sourceText"]').setValue('1 Island');
+		await wrapper.get('[data-color="W"]').trigger('click');
+		await wrapper.get('[data-color="U"]').trigger('click');
+		await submitEditor(wrapper);
+		await flushPromises();
+
+		expect(store.createList).toHaveBeenCalledWith(1, expect.objectContaining({ colors: 'WU' }));
 	});
 
 	it('shows every line error with its physical line and offending text while retaining the draft', async () => {
@@ -201,11 +257,12 @@ describe('event Broadcast Deck List library', () => {
 		await button(wrapper, 'Add Deck List').trigger('click');
 		await wrapper.get('[data-name="name"]').setValue('Draft');
 		await wrapper.get('[data-name="sourceText"]').setValue('Deck\nIsland\nSideboard\n1 Nope');
-		await button(wrapper, 'Save Deck List').trigger('click');
+		await submitEditor(wrapper);
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('Line 2: Expected a quantity — Island');
 		expect(wrapper.text()).toContain('Line 4: Could not resolve card — 1 Nope');
+		expect(wrapper.get('[role="alert"]').attributes('aria-live')).toBe('polite');
 		expect(wrapper.get('[data-name="sourceText"]').element).toHaveProperty('value', 'Deck\nIsland\nSideboard\n1 Nope');
 	});
 
@@ -222,13 +279,13 @@ describe('event Broadcast Deck List library', () => {
 		await button(wrapper, 'Edit Azorius').trigger('click');
 		await flushPromises();
 		await wrapper.get('[data-name="name"]').setValue('My draft');
-		await button(wrapper, 'Save Changes').trigger('click');
+		await submitEditor(wrapper);
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('newer revision 2');
 		expect(wrapper.get('[data-name="name"]').element).toHaveProperty('value', 'My draft');
 		store.updateList.mockResolvedValueOnce(detail({ revision: 3, name: 'My draft' }));
-		await button(wrapper, 'Retry Save').trigger('click');
+		await submitEditor(wrapper);
 		await flushPromises();
 		expect(store.updateList).toHaveBeenLastCalledWith(1, 11, expect.objectContaining({
 			expectedRevision: 2,
@@ -250,6 +307,51 @@ describe('event Broadcast Deck List library', () => {
 		expect(wrapper.get('[data-name="name"]').element).toHaveProperty('value', 'New draft');
 	});
 
+	it('does not let a completed save close a newer editor surface', async () => {
+		let resolveCreate!: (value: BroadcastDeckListResponse) => void;
+		store.createList.mockReturnValueOnce(new Promise(resolve => resolveCreate = resolve));
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('Old save');
+		await wrapper.get('[data-name="sourceText"]').setValue('1 Island');
+		await submitEditor(wrapper);
+		await wrapper.get('[data-testid="modal-close"]').trigger('click');
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('New surface');
+
+		resolveCreate(first);
+		await flushPromises();
+		expect(wrapper.get('[data-name="name"]').element).toHaveProperty('value', 'New surface');
+	});
+
+	it('does not let a late reload overwrite a newer editor surface', async () => {
+		const current = detail({ revision: 2, name: 'Peer name' });
+		store.updateList.mockRejectedValueOnce(new Error('Broadcast Deck List changed since it was loaded', {
+			cause: transportFailure({
+				status: 409,
+				body: { message: 'Broadcast Deck List changed since it was loaded', data: { code: 'BROADCAST_DECK_LIST_REVISION_CONFLICT', current } },
+			}),
+		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Edit Azorius').trigger('click');
+		await flushPromises();
+		await submitEditor(wrapper);
+		await flushPromises();
+
+		let resolveReload!: (value: BroadcastDeckListResponse) => void;
+		store.loadDetail.mockReturnValueOnce(new Promise(resolve => resolveReload = resolve));
+		await button(wrapper, 'Reload Latest').trigger('click');
+		await wrapper.get('[data-testid="modal-close"]').trigger('click');
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('New surface');
+
+		resolveReload(current);
+		await flushPromises();
+		expect(wrapper.get('[data-name="name"]').element).toHaveProperty('value', 'New surface');
+	});
+
 	it('presents provider outages as retryable instead of invalid text', async () => {
 		store.createList.mockRejectedValue(new Error('Card data provider is temporarily unavailable', {
 			cause: transportFailure({
@@ -262,12 +364,37 @@ describe('event Broadcast Deck List library', () => {
 		await button(wrapper, 'Add Deck List').trigger('click');
 		await wrapper.get('[data-name="name"]').setValue('Retry me');
 		await wrapper.get('[data-name="sourceText"]').setValue('1 Island');
-		await button(wrapper, 'Save Deck List').trigger('click');
+		await submitEditor(wrapper);
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('Card data provider is temporarily unavailable');
 		expect(wrapper.find('[data-label="Retry Save"]').exists()).toBe(true);
 		expect(wrapper.text()).not.toContain('invalid text');
+	});
+
+	it('does not quote or act on a sanitized server failure body', async () => {
+		store.createList.mockRejectedValue(transportFailure({
+			status: 500,
+			body: {
+				message: 'Internal Server Error',
+				data: {
+					code: 'BROADCAST_DECK_LIST_INVALID',
+					retryable: true,
+					errors: [{ code: 'LEAKED_DETAIL', message: 'Leaked detail' }],
+				},
+			},
+		}));
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await button(wrapper, 'Add Deck List').trigger('click');
+		await wrapper.get('[data-name="name"]').setValue('Failure');
+		await wrapper.get('[data-name="sourceText"]').setValue('1 Island');
+		await submitEditor(wrapper);
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('[POST] "/api/…": 500 Internal Server Error');
+		expect(wrapper.text()).not.toContain('Leaked detail');
+		expect(wrapper.find('[data-label="Retry Save"]').exists()).toBe(false);
 	});
 
 	it('confirms deletion and surfaces affected Screen names without removing the list', async () => {
