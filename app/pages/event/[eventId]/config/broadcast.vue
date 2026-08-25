@@ -52,6 +52,7 @@ async function handleSaveTalents(newTalents: { id?: number; name: string; social
 <template>
 	<div class="flex flex-col gap-6">
 		<EventConfigBroadcastSettings :event="event" :loading="loading" @submit="handleSubmit" />
+		<EventBroadcastDeckListLibrary :event="event" />
 
 		<h2 class="text-xl font-semibold">
 			Talents
