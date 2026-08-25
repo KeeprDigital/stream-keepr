@@ -135,6 +135,32 @@ describe('broadcastDeckListService', () => {
 		prepare.mockRestore();
 	});
 
+	it('returns the created revision snapshot when a peer writes immediately after its batch', async () => {
+		const service = broadcastDeckListService();
+		const [createEvent] = await db.insert(schema.events)
+			.values({ name: 'Create Response Event', game: 'mtg', featureMatchOrientation: 'horizontal' })
+			.returning({ id: schema.events.id });
+		const originalBatch = harness.database.batch.bind(harness.database);
+		let intercept = true;
+		const batch = vi.spyOn(harness.database, 'batch').mockImplementation(async (statements) => {
+			const results = await originalBatch(statements);
+			if (intercept) {
+				intercept = false;
+				const id = Number(results[0]?.meta.last_row_id);
+				await db.update(schema.broadcastDeckLists)
+					.set({ name: 'Peer revision', normalizedName: 'peer revision', revision: 2 })
+					.where(eq(schema.broadcastDeckLists.id, id));
+			}
+			return results;
+		});
+
+		const created = await service.create(createEvent!.id, { name: 'Created revision' }, document('Consider'));
+
+		expect(created).toMatchObject({ name: 'Created revision', revision: 1 });
+		expect(await service.findById(created.id, createEvent!.id)).toMatchObject({ name: 'Peer revision', revision: 2 });
+		batch.mockRestore();
+	});
+
 	it('enforces case-insensitive names per Event and orders collections by normalized name then id', async () => {
 		const service = broadcastDeckListService();
 		const [otherEvent] = await db.insert(schema.events)
@@ -204,6 +230,35 @@ describe('broadcastDeckListService', () => {
 		expect(outcomes.filter(outcome => outcome.status === 'updated')).toHaveLength(1);
 		expect(outcomes.filter(outcome => outcome.status === 'conflict')).toHaveLength(1);
 		expect((await service.findById(created.id, raceEvent!.id))?.revision).toBe(2);
+	});
+
+	it('returns the accepted revision snapshot when a peer writes immediately after its CAS batch', async () => {
+		const service = broadcastDeckListService();
+		const [raceEvent] = await db.insert(schema.events)
+			.values({ name: 'Response Snapshot Event', game: 'mtg', featureMatchOrientation: 'horizontal' })
+			.returning({ id: schema.events.id });
+		const created = await service.create(raceEvent!.id, { name: 'Response Race' }, document('Opt'));
+		const originalBatch = harness.database.batch.bind(harness.database);
+		let intercept = true;
+		const batch = vi.spyOn(harness.database, 'batch').mockImplementation(async (statements) => {
+			const results = await originalBatch(statements);
+			if (intercept) {
+				intercept = false;
+				await db.update(schema.broadcastDeckLists)
+					.set({ name: 'Peer revision', normalizedName: 'peer revision', revision: 3 })
+					.where(eq(schema.broadcastDeckLists.id, created.id));
+			}
+			return results;
+		});
+
+		const accepted = await service.update(created.id, raceEvent!.id, {
+			expectedRevision: 1,
+			name: 'Accepted revision',
+		});
+
+		expect(accepted).toMatchObject({ status: 'updated', item: { name: 'Accepted revision', revision: 2 } });
+		expect(await service.findById(created.id, raceEvent!.id)).toMatchObject({ name: 'Peer revision', revision: 3 });
+		batch.mockRestore();
 	});
 
 	it('scopes reads and revisioned deletes to the Event and cascades entries', async () => {

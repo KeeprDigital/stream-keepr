@@ -4,6 +4,8 @@ import type {
 	CreateBroadcastDeckListInput,
 	UpdateBroadcastDeckListInput,
 } from '~/types';
+import type { Flight } from '~/utils/guardedSequence';
+import { normalizeBroadcastDeckListName } from '~~/shared/utils/broadcastDeckList';
 
 interface BroadcastDeckListChangedMessage {
 	eventId: number;
@@ -17,17 +19,22 @@ interface BroadcastDeckListDeletedMessage {
 }
 
 interface PendingUpdate {
-	token: symbol;
+	flight: Flight;
 	kind: 'update';
 	summaryFields: ReadonlySet<keyof BroadcastDeckListSummaryResponse>;
 	detailFields: ReadonlySet<keyof BroadcastDeckListResponse>;
 	remoteInvalidated: boolean;
+	authoritySummary?: BroadcastDeckListSummaryResponse | null;
+	authorityDetail?: BroadcastDeckListResponse | null;
 }
 
 interface PendingDelete {
-	token: symbol;
+	flight: Flight;
 	kind: 'delete';
 	remoteInvalidated: boolean;
+	refreshDetail: boolean;
+	authoritySummary?: BroadcastDeckListSummaryResponse | null;
+	authorityDetail?: BroadcastDeckListResponse | null;
 }
 
 type PendingMutation = PendingUpdate | PendingDelete;
@@ -39,8 +46,8 @@ function asSummary(detail: BroadcastDeckListResponse): BroadcastDeckListSummaryR
 
 function sortSummaries(summaries: BroadcastDeckListSummaryResponse[]) {
 	return [...summaries].sort((left, right) => {
-		const leftName = left.name.normalize('NFKC').toLocaleLowerCase('en-US');
-		const rightName = right.name.normalize('NFKC').toLocaleLowerCase('en-US');
+		const leftName = normalizeBroadcastDeckListName(left.name);
+		const rightName = normalizeBroadcastDeckListName(right.name);
 		const byName = leftName < rightName ? -1 : leftName > rightName ? 1 : 0;
 		return byName || left.id - right.id;
 	});
@@ -57,6 +64,7 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 	const error = ref<string | null>(null);
 	const collectionLoads = createGuardedSequence();
 	const detailLoads = createKeyedGuardedSequence<number>();
+	const mutationFlights = createKeyedGuardedSequence<number>();
 	const pendingMutations = new Map<number, PendingMutation>();
 
 	function replaceDetail(listId: number, detail: BroadcastDeckListResponse | null) {
@@ -90,6 +98,9 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 	}
 
 	function mergeCollectionFromAuthority(authority: BroadcastDeckListSummaryResponse[]) {
+		const authorityById = new Map(authority.map(item => [item.id, item]));
+		for (const [listId, pending] of pendingMutations)
+			pending.authoritySummary = authorityById.get(listId) ?? null;
 		const merged = authority.flatMap((item) => {
 			const next = mergeSummaryFromAuthority(item);
 			return next ? [next] : [];
@@ -107,6 +118,8 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 
 	function mergeDetailFromAuthority(listId: number, authority: BroadcastDeckListResponse | null) {
 		const pending = pendingMutations.get(listId);
+		if (pending)
+			pending.authorityDetail = authority;
 		if (pending?.kind === 'delete')
 			return null;
 		const local = detailById(listId);
@@ -143,10 +156,10 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			replaceDetail(listId, null);
 	}
 
-	async function reloadListAuthority(eventId: number, listId: number) {
+	async function reloadListAuthority(eventId: number, listId: number, forceDetail = false) {
 		await Promise.allSettled([
 			loadCollection(eventId),
-			...(consumedDetailIds.value.has(listId) || details.value.has(listId)
+			...(forceDetail || consumedDetailIds.value.has(listId) || details.value.has(listId)
 				? [loadDetail(eventId, listId)]
 				: []),
 		]);
@@ -155,6 +168,7 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 	function resetState(eventId: number | null) {
 		collectionLoads.supersede();
 		detailLoads.supersedeAll();
+		mutationFlights.supersedeAll();
 		summaries.value = [];
 		details.value = new Map();
 		consumedDetailIds.value = new Set();
@@ -255,6 +269,12 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 			return created;
 		collectionLoads.supersede();
 		detailLoads.supersede(created.id);
+		const currentSummary = summaries.value.find(item => item.id === created.id);
+		if (currentSummary && currentSummary.revision > created.revision) {
+			if ((detailById(created.id)?.revision ?? 0) < currentSummary.revision)
+				replaceDetail(created.id, null);
+			return created;
+		}
 		summaries.value = sortSummaries([
 			...summaries.value.filter(item => item.id !== created.id),
 			asSummary(created),
@@ -280,8 +300,8 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		};
 		const summaryFields = new Set(Object.keys(sharedPatch) as (keyof BroadcastDeckListSummaryResponse)[]);
 		const detailFields = new Set(Object.keys(detailPatch) as (keyof BroadcastDeckListResponse)[]);
-		const token = Symbol('broadcast-deck-list-update');
-		const pending: PendingUpdate = { token, kind: 'update', summaryFields, detailFields, remoteInvalidated: false };
+		const flight = mutationFlights.begin(listId);
+		const pending: PendingUpdate = { flight, kind: 'update', summaryFields, detailFields, remoteInvalidated: false };
 		collectionLoads.supersede();
 		detailLoads.supersede(listId);
 		pendingMutations.set(listId, pending);
@@ -296,31 +316,58 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		try {
 			error.value = null;
 			const updated = await withFailureSentence(() => repo.update(eventId, listId, input));
-			if (currentEventId.value === eventId && pendingMutations.get(listId)?.token === token) {
+			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
 				const shouldRefetch = pending.remoteInvalidated;
 				pendingMutations.delete(listId);
-				replaceDetail(listId, updated);
-				summaries.value = sortSummaries([
-					...summaries.value.filter(item => item.id !== listId),
-					asSummary(updated),
-				]);
+				const acceptedSummary = asSummary(updated);
+				const authoritySummary = pending.authoritySummary;
+				const authoritySummaryWins = authoritySummary === null
+					|| (authoritySummary !== undefined && authoritySummary.revision > updated.revision);
+				const summaryToStore = authoritySummaryWins ? authoritySummary : acceptedSummary;
+				summaries.value = summaryToStore
+					? sortSummaries([...summaries.value.filter(item => item.id !== listId), summaryToStore])
+					: summaries.value.filter(item => item.id !== listId);
+				const authorityDetail = pending.authorityDetail;
+				const detailToStore = authoritySummary === null || authorityDetail === null
+					? null
+					: authorityDetail !== undefined && authorityDetail.revision > updated.revision
+						? authorityDetail
+						: authoritySummary !== undefined && authoritySummary.revision > updated.revision
+							? null
+							: updated;
+				replaceDetail(listId, detailToStore);
 				if (shouldRefetch)
 					await reloadListAuthority(eventId, listId);
+				if (flight.current)
+					mutationFlights.supersede(listId);
 			}
 			return updated;
 		}
 		catch (cause) {
 			const failureSentence = cause instanceof Error ? cause.message : 'Failed to update Broadcast Deck List';
-			if (currentEventId.value === eventId && pendingMutations.get(listId)?.token === token) {
+			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
 				pendingMutations.delete(listId);
-				restoreDetailFields(listId, previousDetail, detailFields);
-				restoreSummaryFields(listId, previousSummary, summaryFields);
+				if (pending.authorityDetail !== undefined)
+					replaceDetail(listId, pending.authorityDetail);
+				else
+					restoreDetailFields(listId, previousDetail, detailFields);
+				if (pending.authoritySummary !== undefined) {
+					summaries.value = pending.authoritySummary
+						? sortSummaries([...summaries.value.filter(item => item.id !== listId), pending.authoritySummary])
+						: summaries.value.filter(item => item.id !== listId);
+				}
+				else {
+					restoreSummaryFields(listId, previousSummary, summaryFields);
+				}
 				await reloadListAuthority(eventId, listId);
-				error.value = failureSentence;
+				if (flight.current && currentEventId.value === eventId) {
+					error.value = failureSentence;
+					mutationFlights.supersede(listId);
+				}
 			}
 			throw cause;
 		}
@@ -330,8 +377,13 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		ensureEvent(eventId);
 		const previousDetail = detailById(listId);
 		const previousSummary = summaries.value.find(item => item.id === listId) ?? null;
-		const token = Symbol('broadcast-deck-list-delete');
-		const pending: PendingDelete = { token, kind: 'delete', remoteInvalidated: false };
+		const flight = mutationFlights.begin(listId);
+		const pending: PendingDelete = {
+			flight,
+			kind: 'delete',
+			remoteInvalidated: false,
+			refreshDetail: previousDetail !== null || consumedDetailIds.value.has(listId),
+		};
 		collectionLoads.supersede();
 		detailLoads.supersede(listId);
 		pendingMutations.set(listId, pending);
@@ -340,28 +392,41 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		try {
 			error.value = null;
 			const result = await withFailureSentence(() => repo.remove(eventId, listId, expectedRevision));
-			if (currentEventId.value === eventId && pendingMutations.get(listId)?.token === token) {
+			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
 				const shouldRefetch = pending.remoteInvalidated;
 				pendingMutations.delete(listId);
 				if (shouldRefetch)
-					await reloadListAuthority(eventId, listId);
+					await reloadListAuthority(eventId, listId, pending.refreshDetail);
+				if (flight.current)
+					mutationFlights.supersede(listId);
 			}
 			return result;
 		}
 		catch (cause) {
 			const failureSentence = cause instanceof Error ? cause.message : 'Failed to delete Broadcast Deck List';
-			if (currentEventId.value === eventId && pendingMutations.get(listId)?.token === token) {
+			if (flight.current && currentEventId.value === eventId && pendingMutations.get(listId) === pending) {
 				collectionLoads.supersede();
 				detailLoads.supersede(listId);
 				pendingMutations.delete(listId);
-				if (previousSummary)
+				if (pending.authoritySummary !== undefined) {
+					summaries.value = pending.authoritySummary
+						? sortSummaries([...summaries.value.filter(item => item.id !== listId), pending.authoritySummary])
+						: summaries.value.filter(item => item.id !== listId);
+				}
+				else if (previousSummary) {
 					summaries.value = sortSummaries([...summaries.value, previousSummary]);
-				if (previousDetail)
+				}
+				if (pending.authorityDetail !== undefined)
+					replaceDetail(listId, pending.authorityDetail);
+				else if (previousDetail)
 					replaceDetail(listId, previousDetail);
-				await reloadListAuthority(eventId, listId);
-				error.value = failureSentence;
+				await reloadListAuthority(eventId, listId, pending.refreshDetail);
+				if (flight.current && currentEventId.value === eventId) {
+					error.value = failureSentence;
+					mutationFlights.supersede(listId);
+				}
 			}
 			throw cause;
 		}
@@ -379,7 +444,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		const pending = pendingMutations.get(message.listId);
 		if (pending)
 			pending.remoteInvalidated = true;
-		await reloadListAuthority(message.eventId, message.listId);
+		await reloadListAuthority(
+			message.eventId,
+			message.listId,
+			pending?.kind === 'delete' && pending.refreshDetail,
+		);
 	}
 
 	async function applyRemoteDeleted(message: BroadcastDeckListDeletedMessage) {
@@ -388,7 +457,11 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 		const pending = pendingMutations.get(message.listId);
 		if (pending)
 			pending.remoteInvalidated = true;
-		await reloadListAuthority(message.eventId, message.listId);
+		await reloadListAuthority(
+			message.eventId,
+			message.listId,
+			pending?.kind === 'delete' && pending.refreshDetail,
+		);
 	}
 
 	function $reset() {

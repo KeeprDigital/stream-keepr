@@ -137,11 +137,55 @@ describe('useBroadcastDeckListStore', () => {
 		mockRepo.list.mockResolvedValue([summary(peer)]);
 		mockRepo.getById.mockResolvedValue(peer);
 		await store.applyRemoteUpdated({ eventId: 1, listId: original.id, revision: 2 });
+		mockRepo.list.mockRejectedValueOnce(new Error('follow-up collection unavailable'));
+		mockRepo.getById.mockRejectedValueOnce(new Error('follow-up detail unavailable'));
 		localRequest.reject(new Error('revision conflict'));
 
 		await expect(update).rejects.toThrow('revision conflict');
 		expect(store.summaries).toEqual([summary(peer)]);
 		expect(store.detailById(original.id)).toEqual(peer);
+	});
+
+	it('does not let a delayed accepted response overwrite a newer peer revision', async () => {
+		const original = detail();
+		mockRepo.list.mockResolvedValue([summary(original)]);
+		mockRepo.getById.mockResolvedValue(original);
+		await store.loadCollection(1);
+		await store.loadDetail(1, original.id);
+		const localRequest = deferred<BroadcastDeckListResponse>();
+		mockRepo.update.mockReturnValue(localRequest.promise);
+
+		const update = store.updateList(1, original.id, { expectedRevision: 1, name: 'Local edit' });
+		const peer = detail({ name: 'Peer after accepted edit', revision: 3 });
+		mockRepo.list.mockResolvedValue([summary(peer)]);
+		mockRepo.getById.mockResolvedValue(peer);
+		await store.applyRemoteUpdated({ eventId: 1, listId: original.id, revision: 3 });
+		mockRepo.list.mockRejectedValueOnce(new Error('follow-up collection unavailable'));
+		mockRepo.getById.mockRejectedValueOnce(new Error('follow-up detail unavailable'));
+		localRequest.resolve(detail({ name: 'Local edit', revision: 2 }));
+
+		await update;
+		expect(store.summaries).toEqual([summary(peer)]);
+		expect(store.detailById(original.id)).toEqual(peer);
+	});
+
+	it('invalidates an accepted detail when only a newer peer summary was fetched', async () => {
+		const original = detail();
+		mockRepo.list.mockResolvedValue([summary(original)]);
+		await store.loadCollection(1);
+		const localRequest = deferred<BroadcastDeckListResponse>();
+		mockRepo.update.mockReturnValue(localRequest.promise);
+
+		const update = store.updateList(1, original.id, { expectedRevision: 1, name: 'Local edit' });
+		const peer = detail({ name: 'Peer after accepted edit', revision: 3 });
+		mockRepo.list.mockResolvedValue([summary(peer)]);
+		await store.applyRemoteUpdated({ eventId: 1, listId: original.id, revision: 3 });
+		mockRepo.list.mockRejectedValueOnce(new Error('follow-up collection unavailable'));
+		localRequest.resolve(detail({ name: 'Local edit', revision: 2 }));
+
+		await update;
+		expect(store.summaries).toEqual([summary(peer)]);
+		expect(store.detailById(original.id)).toBeNull();
 	});
 
 	it('rolls back an optimistic delete when the server refuses it', async () => {
@@ -174,11 +218,36 @@ describe('useBroadcastDeckListStore', () => {
 		mockRepo.list.mockResolvedValue([summary(peer)]);
 		mockRepo.getById.mockResolvedValue(peer);
 		await store.applyRemoteUpdated({ eventId: 1, listId: original.id, revision: 2 });
+		mockRepo.list.mockRejectedValueOnce(new Error('follow-up collection unavailable'));
+		mockRepo.getById.mockRejectedValueOnce(new Error('follow-up detail unavailable'));
 		localRequest.reject(new Error('revision conflict'));
 
 		await expect(remove).rejects.toThrow('revision conflict');
 		expect(store.summaries).toEqual([summary(peer)]);
 		expect(store.detailById(original.id)).toEqual(peer);
+	});
+
+	it('does not report an old Event mutation failure after reset during conflict resync', async () => {
+		const original = detail();
+		mockRepo.list.mockResolvedValue([summary(original)]);
+		mockRepo.getById.mockResolvedValue(original);
+		await store.loadCollection(1);
+		await store.loadDetail(1, original.id);
+		mockRepo.update.mockRejectedValue(new Error('revision conflict'));
+		const resyncCollection = deferred<BroadcastDeckListSummaryResponse[]>();
+		const resyncDetail = deferred<BroadcastDeckListResponse | null>();
+		mockRepo.list.mockReturnValueOnce(resyncCollection.promise);
+		mockRepo.getById.mockReturnValueOnce(resyncDetail.promise);
+
+		const update = store.updateList(1, original.id, { expectedRevision: 1, name: 'Local edit' });
+		await vi.waitFor(() => expect(mockRepo.list).toHaveBeenCalledTimes(2));
+		store.$reset();
+		resyncCollection.resolve([summary(original)]);
+		resyncDetail.resolve(original);
+
+		await expect(update).rejects.toThrow('revision conflict');
+		expect(store.currentEventId).toBeNull();
+		expect(store.error).toBeNull();
 	});
 
 	it('does not cache a create response after the active Event changes', async () => {
@@ -195,6 +264,23 @@ describe('useBroadcastDeckListStore', () => {
 		expect(store.currentEventId).toBe(2);
 		expect(store.summaries).toEqual([]);
 		expect(store.details).toEqual(new Map());
+	});
+
+	it('does not let a delayed create response overwrite a peer edit already fetched from authority', async () => {
+		mockRepo.list.mockResolvedValue([]);
+		await store.loadCollection(1);
+		const request = deferred<BroadcastDeckListResponse>();
+		mockRepo.create.mockReturnValue(request.promise);
+		const create = store.createList(1, { name: 'Created revision', sourceText: '60 Island' });
+		const peer = detail({ name: 'Peer revision', revision: 2 });
+		mockRepo.list.mockResolvedValue([summary(peer)]);
+
+		await store.applyRemoteUpdated({ eventId: 1, listId: peer.id, revision: 2 });
+		request.resolve(detail({ name: 'Created revision', revision: 1 }));
+		await create;
+
+		expect(store.summaries).toEqual([summary(peer)]);
+		expect(store.detailById(peer.id)).toBeNull();
 	});
 
 	it('discards collection and detail reads superseded by an authoritative mutation response', async () => {

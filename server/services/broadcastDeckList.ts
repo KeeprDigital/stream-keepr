@@ -5,6 +5,7 @@ import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { db } from 'hub:db';
 import { broadcastDeckListEntries, broadcastDeckLists, events } from '~~/server/db/schema';
 import { mapBroadcastDeckListDetail, mapBroadcastDeckListSummary } from '~~/server/mappers/broadcastDeckList';
+import { cleanBroadcastDeckListName, normalizeBroadcastDeckListName } from '~~/shared/utils/broadcastDeckList';
 
 export class BroadcastDeckListNameConflict extends Error {
 	constructor() {
@@ -24,14 +25,6 @@ export type BroadcastDeckListDeleteResult
 		| { status: 'missing' };
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
-
-export function cleanBroadcastDeckListName(name: string): string {
-	return name.trim().replace(/\s+/g, ' ');
-}
-
-export function normalizeBroadcastDeckListName(name: string): string {
-	return cleanBroadcastDeckListName(name).normalize('NFKC').toLocaleLowerCase('en-US');
-}
 
 function normalizeColors(colors: string | null | undefined): string | null | undefined {
 	if (colors === undefined)
@@ -113,6 +106,95 @@ function isListNameConflict(error: unknown): boolean {
 		&& message.includes('broadcast_deck_lists.normalized_name');
 }
 
+interface StoredDetailRow {
+	id: number;
+	eventId: number;
+	name: string;
+	normalizedName: string;
+	sourceText: string;
+	archetypeLabel: string | null;
+	colors: string | null;
+	revision: number;
+	operationVersion: string | null;
+	createdAt: number;
+	updatedAt: number;
+	entries: string;
+}
+
+function detailSelectStatement(
+	client: typeof db.$client,
+	where: 'identity' | 'operation',
+	first: number,
+	second: number | string,
+) {
+	const condition = where === 'identity'
+		? 'lists.id = ? AND lists.event_id = ?'
+		: 'lists.event_id = ? AND lists.operation_version = ?';
+	return client.prepare(`
+		SELECT
+			lists.id AS id,
+			lists.event_id AS eventId,
+			lists.name AS name,
+			lists.normalized_name AS normalizedName,
+			lists.source_text AS sourceText,
+			lists.archetype_label AS archetypeLabel,
+			lists.colors AS colors,
+			lists.revision AS revision,
+			lists.operation_version AS operationVersion,
+			lists.created_at AS createdAt,
+			lists.updated_at AS updatedAt,
+			coalesce((
+				SELECT json_group_array(json(ordered.entry))
+				FROM (
+					SELECT json_object(
+						'id', entries.id,
+						'listId', entries.list_id,
+						'compartment', entries.compartment,
+						'quantity', entries.quantity,
+						'sortOrder', entries.sort_order,
+						'canonicalName', entries.canonical_name,
+						'scryfallId', entries.scryfall_id,
+						'oracleId', entries.oracle_id,
+						'setCode', entries.set_code,
+						'collectorNumber', entries.collector_number,
+						'cardType', entries.card_type,
+						'colors', entries.colors,
+						'manaCost', entries.mana_cost,
+						'manaValue', entries.mana_value,
+						'deckCounterTypes', json(entries.deck_counter_types),
+						'createdAt', entries.created_at,
+						'updatedAt', entries.updated_at
+					) AS entry
+					FROM broadcast_deck_list_entries AS entries
+					WHERE entries.list_id = lists.id
+					ORDER BY
+						case entries.compartment when 'mainboard' then 0 when 'sideboard' then 1 else 2 end,
+						entries.sort_order,
+						entries.id
+				) AS ordered
+			), '[]') AS entries
+		FROM broadcast_deck_lists AS lists
+		WHERE ${condition}
+	`).bind(first, second);
+}
+
+function mapStoredDetail(result: D1Result<StoredDetailRow>): BroadcastDeckListResponse | undefined {
+	const [row] = result.results;
+	if (!row)
+		return undefined;
+	const entries = (JSON.parse(row.entries) as Array<Record<string, unknown>>).map(entry => ({
+		...entry,
+		createdAt: new Date(Number(entry.createdAt)),
+		updatedAt: new Date(Number(entry.updatedAt)),
+	})) as BroadcastDeckListAggregate['entries'];
+	return mapBroadcastDeckListDetail({
+		...row,
+		createdAt: new Date(Number(row.createdAt)),
+		updatedAt: new Date(Number(row.updatedAt)),
+		entries,
+	});
+}
+
 export function broadcastDeckListService() {
 	const findByEventId = async (eventId: number): Promise<BroadcastDeckListSummaryResponse[]> => {
 		const rows = await db
@@ -168,14 +250,15 @@ export function broadcastDeckListService() {
 	): Promise<BroadcastDeckListResponse> => {
 		const name = cleanBroadcastDeckListName(input.name);
 		const now = Date.now();
+		const operationVersion = crypto.randomUUID();
 		const client = db.$client;
 		try {
 			const results = await client.batch([
 				client.prepare(`
 					INSERT INTO broadcast_deck_lists (
 						event_id, name, normalized_name, source_text,
-						archetype_label, colors, revision, created_at, updated_at
-					) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+						archetype_label, colors, revision, operation_version, created_at, updated_at
+					) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
 				`).bind(
 					eventId,
 					name,
@@ -183,17 +266,21 @@ export function broadcastDeckListService() {
 					document.sourceText,
 					normalizedLabel(input.archetypeLabel) ?? null,
 					normalizeColors(input.colors) ?? null,
+					operationVersion,
 					now,
 					now,
 				),
 				entryInsertStatement(client, null, document),
+				detailSelectStatement(client, 'operation', eventId, operationVersion),
 			]);
 			const id = Number(results[0]?.meta.last_row_id);
 			if (!Number.isSafeInteger(id) || id <= 0)
 				throw new Error('Broadcast Deck List identity was not returned');
-			const created = await findById(id, eventId);
+			const created = mapStoredDetail(results[2] as D1Result<StoredDetailRow>);
 			if (!created)
 				throw new Error('Broadcast Deck List was not stored');
+			if (created.id !== id)
+				throw new Error('Broadcast Deck List identity changed during storage');
 			return created;
 		}
 		catch (error) {
@@ -253,6 +340,7 @@ export function broadcastDeckListService() {
 				entryInsertStatement(client, id, document, { operationVersion: operationVersion! }),
 			);
 		}
+		statements.push(detailSelectStatement(client, 'identity', id, eventId));
 
 		let results;
 		try {
@@ -264,25 +352,30 @@ export function broadcastDeckListService() {
 			throw error;
 		}
 
+		const stored = mapStoredDetail(results.at(-1) as D1Result<StoredDetailRow>);
 		if (results[0]?.meta.changes !== 1) {
-			const current = await findById(id, eventId);
+			const current = stored;
 			return current ? { status: 'conflict', current } : { status: 'missing' };
 		}
 
-		const updated = await findById(id, eventId);
+		const updated = stored;
 		if (!updated)
 			throw new Error('Broadcast Deck List disappeared after update');
 		return { status: 'updated', item: updated };
 	};
 
 	const remove = async (id: number, eventId: number, expectedRevision: number): Promise<BroadcastDeckListDeleteResult> => {
-		const result = await db.$client.prepare(`
-			DELETE FROM broadcast_deck_lists
-			WHERE id = ? AND event_id = ? AND revision = ?
-		`).bind(id, eventId, expectedRevision).run();
-		if (result.meta.changes === 1)
+		const client = db.$client;
+		const [snapshot, result] = await client.batch([
+			detailSelectStatement(client, 'identity', id, eventId),
+			client.prepare(`
+				DELETE FROM broadcast_deck_lists
+				WHERE id = ? AND event_id = ? AND revision = ?
+			`).bind(id, eventId, expectedRevision),
+		]);
+		if (result?.meta.changes === 1)
 			return { status: 'deleted' };
-		const current = await findById(id, eventId);
+		const current = mapStoredDetail(snapshot as D1Result<StoredDetailRow>);
 		return current ? { status: 'conflict', current } : { status: 'missing' };
 	};
 
