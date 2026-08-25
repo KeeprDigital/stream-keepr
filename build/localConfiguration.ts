@@ -270,12 +270,24 @@ export function announcesLocalConfiguration(context: {
 
 export interface LocalConfigurationContext {
 	dev: boolean;
+	/**
+	 * Whether this is a `nuxt prepare` run (`nuxt.options._prepare`): typegen
+	 * only, no promotable output. Optional so every other caller keeps the
+	 * refusal without naming the fact — an omitted flag is a build.
+	 */
+	prepare?: boolean;
 	env: Record<string, string | undefined>;
 }
 
-/** Refuse to create promotable output while its local authentication choice is armed. */
+/**
+ * Refuse to create promotable output while its local authentication choice is
+ * armed. A `nuxt prepare` run is exempt: it emits only `.nuxt` typegen, and
+ * refusing it broke `pnpm install`'s postinstall in every checkout whose `.env`
+ * armed the flag for dev (#504) — the boundary this guards is deployment, not
+ * type generation.
+ */
 export function assertLocalAuthBypassDisarmedForBuild(context: LocalConfigurationContext): void {
-	if (!context.dev && context.env.NUXT_LOCAL_AUTH_BYPASS === LOCAL_AUTH_BYPASS_ENABLED_VALUE) {
+	if (!context.dev && context.prepare !== true && context.env.NUXT_LOCAL_AUTH_BYPASS === LOCAL_AUTH_BYPASS_ENABLED_VALUE) {
 		throw new Error(
 			'NUXT_LOCAL_AUTH_BYPASS=true cannot be used for a production build. '
 			+ 'Use pnpm preview for an explicitly attested local Worker, or remove the flag before building or deploying.',
