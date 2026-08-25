@@ -523,8 +523,9 @@ export function animationEffectRenderPlan(
  * Spelled out rather than mapped over `ANIMATION_EFFECT_VALUES`, because the
  * discriminated union's type is what gives every consumer its per-effect params
  * and a mapped list collapses it. That an effect added to the catalogue must be
- * added here too is pinned by a test rather than by the compiler: "every host
- * union covers the whole catalogue" in `test/unit/shared/animationEffects.test.ts`.
+ * added here too is pinned by a test rather than by the compiler: "covers the
+ * whole catalogue in every host union, in catalogue order", in
+ * `test/unit/shared/animationEffects.test.ts`.
  */
 function animationEffectHostBranches<Shape extends z.ZodRawShape>(shape: Shape) {
 	return [
