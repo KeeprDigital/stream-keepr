@@ -25,6 +25,11 @@ mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: mockFetchScryfallCards,
 	buildDeckListArrays: mockBuildDeckListArrays,
 }));
+const reconnectResyncCallbacks: Array<() => void> = [];
+mockNuxtImport('useReconnectResync', () => (resync: () => void) => {
+	reconnectResyncCallbacks.push(resync);
+	return { disconnected: ref(false) };
+});
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref(null),
 	eventId: computed(() => mockEventId.value),
@@ -113,6 +118,7 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		reconnectResyncCallbacks.length = 0;
 		mockEventId.value = 1;
 		mockCardDataHealth.value = 'complete';
 		mockPlayerStore.players = [];
@@ -382,6 +388,30 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it('re-reads the roster on reconnect while a side is authored, and only then', async () => {
+		// Nothing arrives late after a suspended connection (#307): the missed
+		// `player:updated` is gone, so coming back re-reads the roster. A replaced
+		// record rolls `updatedAt` and the ordinary watch refetches the deck.
+		mockPlayerStore.players = [rosterPlayer(5)];
+		mockPlayerStore.isLoaded = true;
+		config.value = overlayConfig([deckListItem('player1')]);
+		match.value = slotMatch();
+
+		mountSideboardData();
+		await flushPromises();
+		expect(reconnectResyncCallbacks).toHaveLength(1);
+
+		reconnectResyncCallbacks[0]!();
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+
+		// No authored item, no fetch — reconnects included.
+		mockPlayerStore.loadPlayersByEventId.mockClear();
+		config.value = overlayConfig([]);
+		await flushPromises();
+		reconnectResyncCallbacks[0]!();
+		expect(mockPlayerStore.loadPlayersByEventId).not.toHaveBeenCalled();
 	});
 
 	it('clears a standing degraded report on teardown', async () => {

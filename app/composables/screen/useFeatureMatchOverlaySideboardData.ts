@@ -243,6 +243,21 @@ export function useFeatureMatchOverlaySideboardData(
 		{ immediate: true },
 	);
 
+	/**
+	 * The deck path's half of the Reconnect Resync rule (#307): a `player:updated`
+	 * published while this client was suspended is simply gone, so coming back
+	 * re-reads the roster. A record the reload replaces rolls `updatedAt`, which
+	 * the watch below keys on; an unchanged roster refetches nothing.
+	 */
+	useReconnectResync(() => {
+		const evtId = eventId.value;
+		const current = requests.value;
+		if (!evtId || (!current.player1 && !current.player2))
+			return;
+
+		void playerStore.loadPlayersByEventId(evtId);
+	});
+
 	onScopeDispose(() => {
 		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
