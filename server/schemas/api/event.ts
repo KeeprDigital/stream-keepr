@@ -50,7 +50,11 @@ export const createEventSchema = createInsertSchema(events)
 		game: z.enum(GAME_VALUES),
 		featureMatchOrientation: z.enum(FEATURE_MATCH_ORIENTATION_VALUES).optional(),
 	})
-	.strict();
+	.strict()
+	.refine(
+		input => input.broadcastDeckListsEnabled !== true || input.game === 'mtg',
+		{ message: 'Broadcast Deck Lists can only be enabled for MTG Events', path: ['broadcastDeckListsEnabled'] },
+	);
 
 // UPDATE — all fields optional for partial updates
 export const updateEventSchema = createUpdateSchema(events)

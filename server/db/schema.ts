@@ -120,6 +120,7 @@ export const events = sqliteTable('events', {
 	featureMatchDefaultMulliganTrackingEnabled: integer('feature_match_default_mulligan_tracking_enabled', { mode: 'boolean' }).notNull().default(false),
 
 	standingsEnabled: integer('standings_enabled', { mode: 'boolean' }).notNull().default(true),
+	broadcastDeckListsEnabled: integer('broadcast_deck_lists_enabled', { mode: 'boolean' }).notNull().default(false),
 	lgsEnabled: integer('lgs_enabled', { mode: 'boolean' }).notNull().default(false),
 	pronounsEnabled: integer('pronouns_enabled', { mode: 'boolean' }).notNull().default(true),
 	tableNumberEnabled: integer('table_number_enabled', { mode: 'boolean' }).notNull().default(false),
@@ -275,6 +276,49 @@ export const playerListMembers = sqliteTable('player_list_members', {
 	uniqueIndex('player_list_members_unique').on(table.listId, table.playerId),
 	index('player_list_members_list_id_idx').on(table.listId),
 	index('player_list_members_player_id_idx').on(table.playerId),
+]);
+
+export const broadcastDeckLists = sqliteTable('broadcast_deck_lists', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	eventId: integer('event_id').references(() => events.id, { onDelete: 'cascade' }).notNull(),
+	name: text('name').notNull(),
+	normalizedName: text('normalized_name').notNull(),
+	sourceText: text('source_text').notNull(),
+	archetypeLabel: text('archetype_label'),
+	colors: text('colors'),
+	revision: integer('revision').notNull().default(1),
+	/**
+	 * Internal transaction stamp. A source replacement first advances the list
+	 * with a revision compare-and-swap, then every entry statement is guarded by
+	 * this stamp so a failed compare-and-swap makes the whole D1 batch a no-op.
+	 */
+	operationVersion: text('operation_version'),
+	...timestamps,
+}, table => [
+	index('broadcast_deck_lists_event_id_idx').on(table.eventId),
+	uniqueIndex('broadcast_deck_lists_event_name_idx').on(table.eventId, table.normalizedName),
+]);
+
+export const broadcastDeckListEntries = sqliteTable('broadcast_deck_list_entries', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	listId: integer('list_id').references(() => broadcastDeckLists.id, { onDelete: 'cascade' }).notNull(),
+	compartment: text('compartment', { enum: ['mainboard', 'sideboard', 'companion'] }).notNull(),
+	quantity: integer('quantity').notNull(),
+	sortOrder: integer('sort_order').notNull(),
+	canonicalName: text('canonical_name').notNull(),
+	scryfallId: text('scryfall_id').notNull(),
+	oracleId: text('oracle_id'),
+	setCode: text('set_code').notNull(),
+	collectorNumber: text('collector_number'),
+	cardType: text('card_type'),
+	colors: text('colors'),
+	manaCost: text('mana_cost'),
+	manaValue: real('mana_value'),
+	deckCounterTypes: text('deck_counter_types', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+	...timestamps,
+}, table => [
+	index('broadcast_deck_list_entries_list_id_idx').on(table.listId),
+	uniqueIndex('broadcast_deck_list_entries_order_idx').on(table.listId, table.compartment, table.sortOrder),
 ]);
 
 export const playerRoundStandings = sqliteTable('player_round_standings', {
@@ -854,6 +898,7 @@ export const eventsRelations = relations(events, ({ many }) => ({
 	rounds: many(rounds, { relationName: 'eventRounds' }),
 	matches: many(matches),
 	playerLists: many(playerLists),
+	broadcastDeckLists: many(broadcastDeckLists),
 	featureMatches: many(featureMatches),
 	featureMatchAssignments: many(featureMatchAssignments),
 	featureMatchSessions: many(featureMatchSessions),
@@ -955,6 +1000,21 @@ export const playerListsRelations = relations(playerLists, ({ one, many }) => ({
 export const playerListMembersRelations = relations(playerListMembers, ({ one }) => ({
 	list: one(playerLists, { fields: [playerListMembers.listId], references: [playerLists.id] }),
 	player: one(players, { fields: [playerListMembers.playerId], references: [players.id] }),
+}));
+
+export const broadcastDeckListsRelations = relations(broadcastDeckLists, ({ one, many }) => ({
+	event: one(events, {
+		fields: [broadcastDeckLists.eventId],
+		references: [events.id],
+	}),
+	entries: many(broadcastDeckListEntries),
+}));
+
+export const broadcastDeckListEntriesRelations = relations(broadcastDeckListEntries, ({ one }) => ({
+	list: one(broadcastDeckLists, {
+		fields: [broadcastDeckListEntries.listId],
+		references: [broadcastDeckLists.id],
+	}),
 }));
 
 export const featureMatchesRelations = relations(featureMatches, ({ one, many }) => ({
@@ -1171,6 +1231,10 @@ export type DbPlayerList = typeof playerLists.$inferSelect;
 export type DbPlayerListInsert = typeof playerLists.$inferInsert;
 export type DbPlayerListMember = typeof playerListMembers.$inferSelect;
 export type DbPlayerListMemberInsert = typeof playerListMembers.$inferInsert;
+export type DbBroadcastDeckList = typeof broadcastDeckLists.$inferSelect;
+export type DbBroadcastDeckListInsert = typeof broadcastDeckLists.$inferInsert;
+export type DbBroadcastDeckListEntry = typeof broadcastDeckListEntries.$inferSelect;
+export type DbBroadcastDeckListEntryInsert = typeof broadcastDeckListEntries.$inferInsert;
 export type DbPlayerRoundStandings = typeof playerRoundStandings.$inferSelect;
 export type DbPlayerRoundStandingsInsert = typeof playerRoundStandings.$inferInsert;
 export type DbCard = typeof cards.$inferSelect;

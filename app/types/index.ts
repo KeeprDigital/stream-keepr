@@ -3,11 +3,11 @@ export * from './player';
 export * from './realtime';
 export * from './screen';
 
+export type { FeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+
 export type Archetype = import('~~/shared/api').ArchetypeResponse & {
 	keyCards: import('~~/shared/types/metagame').CardResponse[];
 };
-
-export type { FeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
 
 export type {
 	CreateArchetypeInput,
@@ -48,3 +48,12 @@ export type {
 	UpdateScreenInput,
 	UpdateTalentInput,
 } from '~~/shared/api';
+
+export type {
+	BroadcastDeckListEntryResponse,
+	BroadcastDeckListResponse,
+	BroadcastDeckListSummaryResponse,
+	CreateBroadcastDeckListInput,
+	DeleteBroadcastDeckListInput,
+	UpdateBroadcastDeckListInput,
+} from '~~/shared/types/broadcastDeckList';

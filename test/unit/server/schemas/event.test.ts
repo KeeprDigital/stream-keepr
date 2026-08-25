@@ -46,6 +46,11 @@ describe('createEventSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('allows Broadcast Deck Lists only for MTG Events', () => {
+		expect(createEventSchema.safeParse({ ...validInput, broadcastDeckListsEnabled: true }).success).toBe(true);
+		expect(createEventSchema.safeParse({ name: 'One Piece', game: 'op', broadcastDeckListsEnabled: true }).success).toBe(false);
+	});
+
 	it('does not accept creation-time commentator references', () => {
 		const result = createEventSchema.safeParse({
 			...validInput,

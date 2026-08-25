@@ -204,6 +204,13 @@
       "when": 1787560914540,
       "tag": "0028_background_replaces_idle",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1787658913164,
+      "tag": "0029_bouncy_vampiro",
+      "breakpoints": true
     }
   ]
 }

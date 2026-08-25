@@ -23,6 +23,22 @@ export function eventWriteModule() {
 	const events = eventService();
 
 	async function updateEvent({ eventId, input, originConnectionId }: UpdateEventParams): Promise<EventResponse> {
+		if (input.broadcastDeckListsEnabled === true) {
+			const current = await events.findById(eventId);
+			if (!current) {
+				throw createError({
+					statusCode: 404,
+					message: 'Event not found',
+				});
+			}
+			if (current.game !== 'mtg') {
+				throw createError({
+					statusCode: 400,
+					message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+				});
+			}
+		}
+
 		await Promise.all([
 			requireTalentInEvent(eventId, input.commentator1TalentId),
 			requireTalentInEvent(eventId, input.commentator2TalentId),

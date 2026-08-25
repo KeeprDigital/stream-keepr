@@ -1,5 +1,6 @@
 import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbFeatureMatchAssignment, DbMatch, DbPhase, DbPlayer, DbPlayerDeck, DbPlayerList, DbRound, DbScreen } from '~~/server/db/schema';
 import type { ArchetypeKeyCard } from '~~/server/services/archetypeCard';
+import type { BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckList';
 import type { MessagePayload, MessageType } from '~~/shared/types/messages';
 import { mapArchetypeToResponse } from '~~/server/mappers/archetype';
 import { mapEventToResponse } from '~~/server/mappers/event';
@@ -182,6 +183,26 @@ function mapArchetypeKeyCardPublication(archetypeId: number, card: ArchetypeKeyC
 }
 
 export function eventDataPublicationModule() {
+	async function broadcastDeckListCreated({ eventId, entity, originConnectionId }: EntityPublicationInput<BroadcastDeckListResponse>) {
+		await publishMessage(eventId, 'broadcastDeckList:created', {
+			listId: entity.id,
+			revision: entity.revision,
+		}, originConnectionId);
+		return entity;
+	}
+
+	async function broadcastDeckListUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<BroadcastDeckListResponse>) {
+		await publishMessage(eventId, 'broadcastDeckList:updated', {
+			listId: entity.id,
+			revision: entity.revision,
+		}, originConnectionId);
+		return entity;
+	}
+
+	async function broadcastDeckListDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
+		await publishMessage(eventId, 'broadcastDeckList:deleted', { listId: id }, originConnectionId);
+	}
+
 	async function archetypeCreated({ eventId, entity, originConnectionId, keyCards = [] }: ArchetypePublicationInput) {
 		const archetype = {
 			...mapArchetypeToResponse(entity),
@@ -462,6 +483,9 @@ export function eventDataPublicationModule() {
 	}
 
 	return {
+		broadcastDeckListCreated,
+		broadcastDeckListUpdated,
+		broadcastDeckListDeleted,
 		archetypeCreated,
 		archetypeUpdated,
 		archetypeDeleted,

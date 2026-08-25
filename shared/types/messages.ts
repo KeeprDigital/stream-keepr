@@ -7,6 +7,7 @@ import type {
 	RoundResponse,
 	TalentResponse,
 } from '../api';
+import type { BroadcastDeckListSummaryResponse } from './broadcastDeckList';
 import type {
 	BroadcastGraphicsCommandAppliedPayload,
 	BroadcastGraphicsEpochEndedPayload,
@@ -254,6 +255,22 @@ export interface MessageDefinitions {
 		playerIds: number[];
 		action: 'added' | 'removed' | 'reordered';
 		memberCount: number;
+	};
+
+	// Broadcast Deck List management. The saved document remains API-only;
+	// realtime carries identity and revision so peers refetch authority.
+	'broadcastDeckList:created': {
+		listId: BroadcastDeckListSummaryResponse['id'];
+		revision: number;
+	};
+
+	'broadcastDeckList:updated': {
+		listId: BroadcastDeckListSummaryResponse['id'];
+		revision: number;
+	};
+
+	'broadcastDeckList:deleted': {
+		listId: BroadcastDeckListSummaryResponse['id'];
 	};
 
 	// Archetype management

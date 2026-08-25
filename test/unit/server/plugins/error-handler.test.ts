@@ -20,6 +20,24 @@ import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusa
 import { scanSourceForRefusals, typeScriptFilesUnder } from '~~/test/helpers/routeRefusalScan';
 
 describe('error-handler mapping logic', () => {
+	it('maps Broadcast Deck provider outages to a stable retryable API failure', () => {
+		const error: MappableNitroError = {
+			statusCode: 500,
+			message: 'Something went wrong',
+			cause: { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true },
+		};
+
+		mapPublicNitroError(error);
+
+		expect(error).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'Card data provider is temporarily unavailable. Try again later.',
+			data: { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true },
+			unhandled: false,
+		});
+	});
+
 	describe('log path safety', () => {
 		it('redacts Screen Output asset delivery identities and query parameters', () => {
 			expect(safeErrorLogPath(
@@ -695,6 +713,11 @@ describe('error-handler mapping logic', () => {
 				sentence: 'Card data provider is temporarily unavailable. Existing deck data was preserved; retry the sync.',
 			},
 			{
+				family: 'a Broadcast Deck List card provider outage',
+				cause: { code: 'BROADCAST_DECK_LIST_CARD_PROVIDER_UNAVAILABLE', retryable: true },
+				sentence: 'Card data provider is temporarily unavailable. Try again later.',
+			},
+			{
 				family: 'a Melee request that timed out',
 				cause: { code: 'MELEE_UPSTREAM_FAILURE', category: 'timeout' },
 				sentence: 'Melee.gg is temporarily unavailable. Try again later.',
@@ -753,8 +776,8 @@ describe('error-handler mapping logic', () => {
 		 * family comes out non-500", which is the whole reason the status mark can be
 		 * trusted.
 		 */
-		it('is ten families wide', () => {
-			expect(preserved).toHaveLength(10);
+		it('is eleven families wide', () => {
+			expect(preserved).toHaveLength(11);
 		});
 	});
 

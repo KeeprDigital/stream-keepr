@@ -3,6 +3,7 @@ import { createMockEvent } from '~~/test/helpers/fixtures';
 
 const mockRequireTalentInEvent = vi.fn();
 const mockEventService = {
+	findById: vi.fn(),
 	update: vi.fn(),
 	remove: vi.fn(),
 };
@@ -56,6 +57,7 @@ describe('eventWriteModule', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockEventService.update.mockResolvedValue(createMockEvent({ id: 1, numFeatureMatches: 2 }));
+		mockEventService.findById.mockResolvedValue(createMockEvent({ id: 1, game: 'mtg' }));
 		mockEventService.remove.mockResolvedValue(true);
 		mockScreenService.findIdsByEventId.mockResolvedValue([{ id: 10 }, { id: 11 }]);
 		mockPublication.eventUpdated.mockResolvedValue({ id: 1, name: 'Updated Event' });
@@ -63,6 +65,18 @@ describe('eventWriteModule', () => {
 	});
 
 	describe('updateEvent', () => {
+		it('refuses to enable Broadcast Deck Lists for a non-MTG Event', async () => {
+			mockEventService.findById.mockResolvedValue(createMockEvent({ id: 1, game: 'op' }));
+
+			await expect(eventWriteModule().updateEvent({
+				eventId: 1,
+				input: { broadcastDeckListsEnabled: true } as never,
+			})).rejects.toMatchObject({
+				statusCode: 400,
+				message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+			});
+			expect(mockEventService.update).not.toHaveBeenCalled();
+		});
 		it('validates both commentator talents before updating', async () => {
 			const input = { commentator1TalentId: 3, commentator2TalentId: 4 } as never;
 
