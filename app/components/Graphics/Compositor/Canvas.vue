@@ -33,6 +33,21 @@ const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output
 		:class="`graphics-compositor-canvas--${render.output}`"
 		:style="render.canvasStyle"
 	>
+		<!--
+			What a host paints behind the composition, filling the canvas and beneath
+			every Broadcast Graphic — a Broadcast Graphics Screen's animated
+			background is the first (#495).
+
+			Inside this element rather than behind it, because a `screen-output`
+			canvas paints the Screen Output's own backdrop (black for the Fill and Key
+			Outputs), and anything drawn behind the element is behind that black. The
+			positioning is this component's, since it owns the box; what is drawn, at
+			what opacity, and in which outputs at all stay the host's.
+		-->
+		<div v-if="$slots.backdrop" class="graphics-compositor-canvas__backdrop">
+			<slot name="backdrop" />
+		</div>
+
 		<template v-for="graphic in render.graphics" :key="graphic.id">
 			<!--
 				A Broadcast Graphic in two lifecycle phases at once needs two elements: the
@@ -104,5 +119,12 @@ const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output
 .graphics-compositor-canvas__graphic {
 	position: absolute;
 	inset: 0;
+}
+
+.graphics-compositor-canvas__backdrop {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
 }
 </style>

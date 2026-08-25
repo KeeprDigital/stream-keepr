@@ -165,6 +165,11 @@ _Avoid_: Generic overlay editor
 **Broadcast Graphics Screen**:
 A Screen in Broadcast Graphics mode whose output composes an ordered stack of concurrently visible Broadcast Graphics.
 
+**Broadcast Graphics Background**:
+The one Animation Effect a Broadcast Graphics Screen composes its stack over, with its own enabled state and opacity.
+It renders in the Overlay and Fill Outputs and never in the Key Output, which stays an alpha matte. A Screen with none is transparent behind its graphics in the Overlay Output.
+_Avoid_: Screen background, backdrop graphic, background layer (which is a Background Screen's)
+
 **Broadcast Graphics Live Session**:
 The continuous playout epoch of a Broadcast Graphics Screen. It survives reloads, disconnections, and restarts, but ends when the Screen changes away from Broadcast Graphics mode or its live state is explicitly reset.
 Commands from an ended Broadcast Graphics Live Session can never affect a later one.
@@ -626,7 +631,7 @@ _Avoid_: Panel area, background panel
 
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, referenced by name from Screen configuration and Template Packages, with its own per-effect configuration.
-Its hosts are the Feature Match Overlay Frame and the Background Screen; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
+Its hosts are the Feature Match Overlay Frame, the Background Screen, and a Broadcast Graphics Screen's Broadcast Graphics Background; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
 **Feature Match Layout Item**:

@@ -219,6 +219,9 @@ function mapScryfallCardData(card: ScryfallCard.Any): ScryfallCardData {
 	return {
 		name: card.name,
 		setCode: card.set,
+		collectorNumber: 'collector_number' in card && typeof card.collector_number === 'string'
+			? card.collector_number
+			: null,
 		id: card.id,
 		oracleId: extractOracleId(card),
 		manaCost: extractManaCost(card),
@@ -236,6 +239,7 @@ function mapScryfallCardData(card: ScryfallCard.Any): ScryfallCardData {
 export interface ScryfallCardData {
 	name: string;
 	setCode: string;
+	collectorNumber: string | null;
 	id: string;
 	oracleId: string | null;
 	manaCost: string | null;
@@ -287,6 +291,24 @@ export async function fetchScryfallCardByName(params: {
 		SCRYFALL_CARD_BODY_LIMIT_BYTES,
 	);
 	const card = parseScryfallCard(raw, errorPrefix);
+	return mapScryfallCardData(card);
+}
+
+export async function fetchScryfallCardBySetAndCollector(
+	setCode: string,
+	collectorNumber: string,
+): Promise<ScryfallCardData> {
+	const errorPrefix = 'Scryfall exact printing lookup failed';
+	const raw = await fetchScryfallJson(
+		`${SCRYFALL_API_URL}/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`,
+		{ headers: SCRYFALL_HEADERS },
+		errorPrefix,
+		SCRYFALL_CARD_BODY_LIMIT_BYTES,
+	);
+	const card = parseScryfallCard(raw, errorPrefix);
+	if (!('collector_number' in card) || typeof card.collector_number !== 'string') {
+		throw new ScryfallRequestError(`${errorPrefix}: invalid response schema`);
+	}
 	return mapScryfallCardData(card);
 }
 

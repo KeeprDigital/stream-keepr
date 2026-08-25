@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { AnimationEffectName, AnimationEffectParamsMap, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { AnimationEffectRenderPlan, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import { parseFrameAnimationConfig } from '~~/shared/animationEffects';
+import { animationEffectRenderPlan, parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import ScreenAnimationEffectSurface from '~/components/Screen/AnimationEffectSurface.vue';
 
 const props = defineProps<{
@@ -12,27 +12,15 @@ const props = defineProps<{
 	output: FeatureMatchOverlayOutput;
 }>();
 
-interface RenderPlan {
-	effect: AnimationEffectName;
-	params?: AnimationEffectParamsMap[AnimationEffectName];
-}
-
 /** A pre-rebuild or unknown-effect config parses to nothing and renders nothing. */
 const parsedAnimation = computed(() => parseFrameAnimationConfig(props.animation));
 
 const isVisible = computed(() => props.output !== 'key' && parsedAnimation.value?.enabled === true);
 const hostStyle = computed(() => ({ opacity: parsedAnimation.value?.opacity ?? 0 }));
 
-const renderPlan = computed<RenderPlan | null>(() => {
+const renderPlan = computed<AnimationEffectRenderPlan | null>(() => {
 	const config = parsedAnimation.value;
-	if (!config)
-		return null;
-	// The schema pairs each effect with its own params; the cast restates that
-	// pairing where the union loses it.
-	return {
-		effect: config.effect,
-		params: config.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
-	};
+	return config ? animationEffectRenderPlan(config) : null;
 });
 </script>
 

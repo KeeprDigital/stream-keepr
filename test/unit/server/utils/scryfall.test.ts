@@ -4,6 +4,7 @@ import {
 	batchLookupScryfallIds,
 	fetchScryfallCardById,
 	fetchScryfallCardByName,
+	fetchScryfallCardBySetAndCollector,
 	getCardDataFromMap,
 } from '~~/server/utils/scryfall';
 
@@ -66,6 +67,7 @@ function cardData(overrides: Partial<ScryfallCardData> = {}): ScryfallCardData {
 	return {
 		name: 'Lightning Bolt',
 		setCode: 'm21',
+		collectorNumber: '1',
 		id: 'abc',
 		oracleId: null,
 		manaCost: '{R}',
@@ -93,6 +95,48 @@ describe('getCardDataFromMap', () => {
 		map.set('shock', shock);
 		const result = getCardDataFromMap(map, 'Shock', null);
 		expect(result).toEqual(shock);
+	});
+});
+
+describe('fetchScryfallCardBySetAndCollector', () => {
+	it('looks up one exact printing and preserves its collector identity', async () => {
+		vi.mocked(fetch).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({
+				id: 'exact-printing',
+				name: 'Lightning Bolt',
+				set: 'sld',
+				collector_number: '101★',
+				oracle_id: 'oracle-bolt',
+				mana_cost: '{R}',
+				cmc: 1,
+				color_identity: ['R'],
+				type_line: 'Instant',
+			}),
+		} as any);
+
+		await expect(fetchScryfallCardBySetAndCollector('SLD', '101★')).resolves.toMatchObject({
+			id: 'exact-printing',
+			setCode: 'sld',
+			collectorNumber: '101★',
+		});
+		expect(fetch).toHaveBeenCalledWith(
+			'https://api.scryfall.com/cards/SLD/101%E2%98%85',
+			expect.any(Object),
+		);
+	});
+
+	it('treats a response without collector identity as an upstream schema failure', async () => {
+		vi.mocked(fetch).mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ id: 'broken-printing', name: 'Lightning Bolt', set: 'sld' }),
+		} as any);
+
+		await expect(fetchScryfallCardBySetAndCollector('sld', '101')).rejects.toMatchObject({
+			name: 'ScryfallRequestError',
+			code: 'SCRYFALL_UPSTREAM_FAILURE',
+			notFound: false,
+		});
 	});
 });
 

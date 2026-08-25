@@ -33,6 +33,8 @@ export const scryfallCardSchema = z.object({
 	name: z.string().min(1).max(500),
 	/** Three-letter set code */
 	set: z.string().min(1).max(20),
+	/** Printing identity within the set. */
+	collector_number: z.string().min(1).max(100).nullable().optional(),
 	/** Mana cost string e.g. "{1}{W}{W}" — null for lands / colorless permanents */
 	mana_cost: z.string().max(500).nullable().optional(),
 	/** Converted mana cost — null for tokens and emblems that have no mana value */
