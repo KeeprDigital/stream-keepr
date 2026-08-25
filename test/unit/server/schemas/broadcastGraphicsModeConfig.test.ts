@@ -851,6 +851,49 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
 	});
 
+	it('accepts a Broadcast Graphics background naming an Animation Effect this build ships', () => {
+		const config = {
+			graphics: [],
+			background: { enabled: true, effect: 'fog' as const, opacity: 0.6, params: { speed: 2 } },
+		};
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('refuses a background naming an Animation Effect outside the closed vocabulary', () => {
+		// The vocabulary refusal, at the write path: an effect this installation does
+		// not implement is a capability it lacks, not a value it can approximate.
+		const config = { graphics: [], background: { enabled: true, effect: 'vanta-birds', opacity: 0.6 } };
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(false);
+	});
+
+	it('refuses a background carrying params the named effect does not declare', () => {
+		const config = {
+			graphics: [],
+			background: { enabled: true, effect: 'fog' as const, opacity: 0.6, params: { lightColor: '#7dd3fc' } },
+		};
+
+		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(false);
+	});
+
+	it('accepts a Screen with no background at all, which is what every Screen ships as', () => {
+		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [] }).success).toBe(true);
+	});
+
+	it('carries the background through the mode-configuration patch path', () => {
+		// The path the editor writes through rebuilds each mode from its field schemas,
+		// so a background that only validates in the whole-config schema never reaches it.
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			background: { enabled: true, effect: 'caustics', opacity: 0.35 },
+		});
+
+		expect(patch.success).toBe(true);
+		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			background: { enabled: true, effect: 'vanta-birds', opacity: 0.35 },
+		}).success).toBe(false);
+	});
+
 	it('carries Graphic Channels through the mode-configuration patch path', () => {
 		// The path the editors write through rebuilds each mode from its field schemas,
 		// so a field that only validates in the whole-config schema never reaches it.

@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
+import { animationEffectRenderPlan } from '~~/shared/animationEffects';
 import { getScreenModeGraphicsCanvas } from '~~/shared/screenModes';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
@@ -9,6 +11,7 @@ import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphic
 const { outputMode, previewGuides, previewSafeAreas, screen } = useScreenContext();
 const {
 	animationProjection,
+	background,
 	graphics,
 	onAirGraphicIds,
 	inputValues,
@@ -23,6 +26,23 @@ const {
 } = useBroadcastGraphicsModeData();
 
 const resolvedOutput = computed<ScreenOutput>(() => outputMode?.value ?? 'overlay');
+
+/**
+ * The Broadcast Graphics Background this output paints behind its stack, or
+ * nothing.
+ *
+ * Never in the Key Output: that output is an alpha matte, in which every painted
+ * element is pure white at its own alpha over black, and an Animation Effect is
+ * neither — the rule the Feature Match Overlay Frame's animation already follows.
+ * Whether this is an authoring preview is decided upstream, where the preview
+ * state lives.
+ */
+const backgroundPlan = computed<AnimationEffectRenderPlan & { opacity: number } | null>(() => {
+	const config = background.value;
+	if (!config || !config.enabled || resolvedOutput.value === 'key')
+		return null;
+	return { ...animationEffectRenderPlan(config), opacity: config.opacity };
+});
 const canvasDefaults = getScreenModeGraphicsCanvas('broadcast-graphics');
 const canvasWidth = computed(() => screen?.value?.screenConfig?.width ?? canvasDefaults.width);
 const canvasHeight = computed(() => screen?.value?.screenConfig?.height ?? canvasDefaults.height);
@@ -95,5 +115,27 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 		:data-font-error="fontsFailed.toString()"
 		:render="renderModel"
 		@select="publishSelection"
-	/>
+	>
+		<template v-if="backgroundPlan" #backdrop>
+			<div
+				class="broadcast-graphics__background"
+				data-testid="broadcast-graphics-background"
+				:style="{ opacity: backgroundPlan.opacity }"
+			>
+				<ScreenAnimationEffectSurface
+					:effect="backgroundPlan.effect"
+					:params="backgroundPlan.params"
+					:width="canvasWidth"
+					:height="canvasHeight"
+				/>
+			</div>
+		</template>
+	</GraphicsCompositorCanvas>
 </template>
+
+<style scoped>
+.broadcast-graphics__background {
+	position: absolute;
+	inset: 0;
+}
+</style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraphicsAuthoringLease';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -24,6 +25,8 @@ const props = defineProps<{
 	graphics: readonly BroadcastGraphicConfig[];
 	/** The Screen's Graphic Channels: its optional playout lanes. */
 	channels: readonly GraphicChannelConfig[];
+	/** The Screen's Broadcast Graphics Background, or none authored. */
+	background?: BroadcastGraphicsBackgroundConfig;
 	selectedTarget: GraphicsSelectionTarget;
 	selectedGraphicId: string | null;
 	canvasWidth: number;
@@ -64,6 +67,8 @@ const emit = defineEmits<{
 	 * lane and releasing its members must never be two.
 	 */
 	'update:channels': [next: { channels?: GraphicChannelConfig[]; graphics?: BroadcastGraphicConfig[] }];
+	/** The Screen's one background: its effect, its params, and whether it shows. */
+	'update:background': [background: BroadcastGraphicsBackgroundConfig];
 	'update:selectedTarget': [target: GraphicsSelectionTarget];
 	'takeOver': [];
 	/** Re-send the failed save's still-held updates. */
@@ -301,6 +306,18 @@ const leaseNotice = computed(() => {
 					:channels="channels"
 					:writable="canAuthor"
 					@update:channels="emit('update:channels', $event)"
+				/>
+
+				<!--
+					The background sits beside the stack for the same reason the channels do:
+					it is a Screen-level decision about the show, and changes nothing about
+					any design or about Graphic Layer Order.
+				-->
+				<ScreenModesBroadcastGraphicsBackground
+					class="mt-4 block"
+					:background="background"
+					:writable="canAuthor"
+					@update:background="emit('update:background', $event)"
 				/>
 
 				<!--

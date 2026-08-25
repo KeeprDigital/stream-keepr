@@ -485,37 +485,120 @@ export function parseAnimationEffectSelection(
 	return outcome.success ? outcome.data : null;
 }
 
-const frameAnimationShape = {
+/** What a renderer mount takes: the effect to draw, and the params to draw it with. */
+export interface AnimationEffectRenderPlan {
+	effect: AnimationEffectName;
+	params?: AnimationEffectParamsMap[AnimationEffectName];
+}
+
+/**
+ * A parsed selection as the shared mount takes it, whatever host it came from —
+ * a Frame's animation, a Background Layer's, a Broadcast Graphics Background.
+ *
+ * It exists for the cast: the schema pairs each effect with its own params, and
+ * the union loses that pairing at the point a single component has to accept any
+ * of them. Restating it once here is what keeps three hosts from each carrying
+ * their own copy of the same assertion.
+ */
+export function animationEffectRenderPlan(
+	selection: z.output<typeof animationEffectSelectionSchema>,
+): AnimationEffectRenderPlan {
+	return {
+		effect: selection.effect,
+		params: selection.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
+	};
+}
+
+/**
+ * Every selection branch extended with one host's own fields, in the order the
+ * catalogue declares them.
+ *
+ * A host composes the shared selection rather than restating it, and it does so
+ * across every branch — so the branch list is written once here and each host
+ * names only what it adds. `.extend` keeps the branches strict, which is what
+ * makes a stored config carrying fields no effect declares (the retired
+ * pre-rebuild flat bag, recognisable by its `mouseDrift*` fields) reset to
+ * defaults rather than being half-read (the reset ADR-0014 accepts).
+ *
+ * Spelled out rather than mapped over `ANIMATION_EFFECT_VALUES`, because the
+ * discriminated union's type is what gives every consumer its per-effect params
+ * and a mapped list collapses it. That an effect added to the catalogue must be
+ * added here too is pinned by a test rather than by the compiler: "covers the
+ * whole catalogue in every host union, in catalogue order", in
+ * `test/unit/shared/animationEffects.test.ts`.
+ */
+function animationEffectHostBranches<Shape extends z.ZodRawShape>(shape: Shape) {
+	return [
+		selectionBranches.caustics.extend(shape),
+		selectionBranches.cells.extend(shape),
+		selectionBranches.dots.extend(shape),
+		selectionBranches.ember.extend(shape),
+		selectionBranches.fog.extend(shape),
+		selectionBranches.globe.extend(shape),
+		selectionBranches.halo.extend(shape),
+		selectionBranches.inkmap.extend(shape),
+		selectionBranches.net.extend(shape),
+		selectionBranches.ridgelines.extend(shape),
+		selectionBranches.rings.extend(shape),
+		selectionBranches.ripple.extend(shape),
+		selectionBranches.shards.extend(shape),
+		selectionBranches.waves.extend(shape),
+		selectionBranches.weave.extend(shape),
+	] as const;
+}
+
+/**
+ * What both of the hosts that wrap a selection currently add: whether the effect
+ * shows at all, and at what opacity.
+ *
+ * Shared because they coincide, not because a host is required to want them: the
+ * builder above is generic precisely so a host needing something else passes its
+ * own shape, and a host that grows a field of its own stops sharing this one.
+ */
+const enabledAndOpacityShape = {
 	enabled: z.boolean(),
 	opacity: z.number().min(0).max(1),
 };
 
 /**
  * The Feature Match Overlay Frame's animation configuration: the shared effect
- * selection plus the Frame's own `enabled` and `opacity`. Each branch is the
- * selection branch extended, so the Frame can never accept a selection the
- * shared schema would refuse — `.extend` keeps the branches strict, which is
- * what makes a stored pre-rebuild flat-bag config (recognisable by its retired
- * `mouseDrift*` fields) reset to defaults rather than being half-read (the
- * reset ADR-0014 accepts).
+ * selection plus the Frame's own `enabled` and `opacity`.
  */
-export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnion('effect', [
-	selectionBranches.caustics.extend(frameAnimationShape),
-	selectionBranches.cells.extend(frameAnimationShape),
-	selectionBranches.dots.extend(frameAnimationShape),
-	selectionBranches.ember.extend(frameAnimationShape),
-	selectionBranches.fog.extend(frameAnimationShape),
-	selectionBranches.globe.extend(frameAnimationShape),
-	selectionBranches.halo.extend(frameAnimationShape),
-	selectionBranches.inkmap.extend(frameAnimationShape),
-	selectionBranches.net.extend(frameAnimationShape),
-	selectionBranches.ridgelines.extend(frameAnimationShape),
-	selectionBranches.rings.extend(frameAnimationShape),
-	selectionBranches.ripple.extend(frameAnimationShape),
-	selectionBranches.shards.extend(frameAnimationShape),
-	selectionBranches.waves.extend(frameAnimationShape),
-	selectionBranches.weave.extend(frameAnimationShape),
-]);
+export const featureMatchOverlayFrameAnimationConfigSchema = z.discriminatedUnion(
+	'effect',
+	animationEffectHostBranches(enabledAndOpacityShape),
+);
+
+/**
+ * A Broadcast Graphics Screen's background: the shared effect selection plus the
+ * Screen's own `enabled` and `opacity`.
+ *
+ * The third Animation Effect host (#495), and the one that adds the least: the
+ * canvas, the stack order, and playout are already the Screen's, so a background
+ * is one selection, shown or not, at an opacity. Colour, gradient, image and
+ * video backdrops are a Background Screen's ordered stack behind this Screen's
+ * output, not a second copy of that stack here.
+ */
+export const broadcastGraphicsBackgroundConfigSchema = z.discriminatedUnion(
+	'effect',
+	animationEffectHostBranches(enabledAndOpacityShape),
+);
+
+/** The stored/authored shape: params sparse, defaults implied. */
+export type BroadcastGraphicsBackgroundConfig = z.input<typeof broadcastGraphicsBackgroundConfigSchema>;
+
+/**
+ * A stored Broadcast Graphics background re-proven rather than trusted: the
+ * parsed config, or `null` for one naming an effect this build does not ship —
+ * the vocabulary refusal, applied at render time. Callers treat `null` as no
+ * background (renderer) or start over from defaults (editor).
+ */
+export function parseBroadcastGraphicsBackgroundConfig(
+	value: unknown,
+): z.output<typeof broadcastGraphicsBackgroundConfigSchema> | null {
+	const outcome = broadcastGraphicsBackgroundConfigSchema.safeParse(value);
+	return outcome.success ? outcome.data : null;
+}
 
 /**
  * The stored/authored shape: params sparse, defaults implied. Renderers parse it

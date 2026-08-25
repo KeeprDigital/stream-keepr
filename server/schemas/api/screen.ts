@@ -8,7 +8,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
-import { animationEffectSelectionSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { animationEffectSelectionSchema, broadcastGraphicsBackgroundConfigSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
@@ -1733,6 +1733,11 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 			'Graphic Channel ids must be unique within one Broadcast Graphics Screen',
 		)
 		.optional(),
+	// The Screen's Broadcast Graphics Background: one Animation Effect the stack
+	// composes over, shown or not, at an opacity. The schema is the catalogue's,
+	// so an effect this build does not ship is refused here rather than stored and
+	// silently rendering nothing — the same vocabulary refusal the Frame applies.
+	background: broadcastGraphicsBackgroundConfigSchema.optional(),
 }).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 /**

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { BroadcastGraphicsWorkspace, BroadcastGraphicsWorkspaceLocation } from '~/modules/broadcast-graphics/workspace';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
@@ -63,6 +64,9 @@ const graphics = computed<readonly BroadcastGraphicConfig[]>(() => config.value.
 
 /** The Screen's Graphic Channels: its optional playout lanes and their Handoff Policies. */
 const channels = computed<readonly GraphicChannelConfig[]>(() => config.value.channels ?? []);
+
+/** The Screen's Broadcast Graphics Background, or none authored. */
+const background = computed<BroadcastGraphicsBackgroundConfig | undefined>(() => config.value.background);
 
 const workspace = computed(() => resolveBroadcastGraphicsWorkspace(route.query[BROADCAST_GRAPHICS_WORKSPACE_QUERY_KEY]));
 
@@ -165,6 +169,13 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 		return;
 	updateConfig(next);
 }
+
+/** The Screen's Broadcast Graphics Background, through the same lease-gated funnel. */
+function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
+	if (!editLease.writable.value)
+		return;
+	updateConfig({ background: next });
+}
 </script>
 
 <template>
@@ -243,6 +254,7 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 				:screen="screen"
 				:graphics="graphics"
 				:channels="channels"
+				:background="background"
 				:selected-target="selectedTarget"
 				:selected-graphic-id="selectedGraphicId"
 				:canvas-width="canvasWidth"
@@ -256,6 +268,7 @@ function updateChannels(next: { channels?: GraphicChannelConfig[]; graphics?: Br
 				:save-error="saveError"
 				@update:graphics="updateGraphics"
 				@update:channels="updateChannels"
+				@update:background="updateBackground"
 				@update:selected-target="setSelectedTarget"
 				@take-over="editLease.takeOver"
 				@retry-save="retry"

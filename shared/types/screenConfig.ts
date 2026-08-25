@@ -1,17 +1,18 @@
-import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
-import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
 
 /**
- * A Screen's media background and a Feature Match Overlay Frame's animation take
- * their starting values from their own module, so the Feature Match Overlay
- * Presets can build a Frame without importing this one back. They are re-exported
- * here because this is where every other mode default lives.
+ * A Screen's media background, a Feature Match Overlay Frame's animation, and a
+ * Broadcast Graphics Background take their starting values from their own module,
+ * so the Feature Match Overlay Presets can build a Frame without importing this
+ * one back. They are re-exported here because this is where every other mode
+ * default lives.
  */
-export { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG };
+export { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG };
 export { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG };
 
 // ─── Screen-level config (applies to all modes) ───────────────────────
@@ -399,6 +400,14 @@ export type BackgroundLayer
 export { ANIMATION_EFFECT_VALUES as FEATURE_MATCH_OVERLAY_FRAME_ANIMATION_EFFECT_VALUES } from '../animationEffects';
 export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as FeatureMatchOverlayFrameAnimationEffect } from '../animationEffects';
 
+/**
+ * A Broadcast Graphics Screen's background, for the same reason and on the same
+ * terms as the Frame's animation above: the Animation Effect catalogue owns the
+ * vocabulary and each effect's params, and Screen configuration re-exports the
+ * host's config type so it keeps one import.
+ */
+export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
+
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
 
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
@@ -497,6 +506,12 @@ export interface BroadcastGraphicsModeConfig {
 	graphics: BroadcastGraphicConfig[];
 	/** Absent declares no Graphic Channels, so every graphic runs concurrently. */
 	channels?: GraphicChannelConfig[];
+	/**
+	 * The Screen's Broadcast Graphics Background: one Animation Effect the stack
+	 * composes over. Absent is no background, which is what every Screen ships as
+	 * and what keeps an Overlay Output transparent behind its graphics.
+	 */
+	background?: BroadcastGraphicsBackgroundConfig;
 }
 
 export interface MetagameModeConfig {
