@@ -5,7 +5,7 @@ import Ably from 'ably';
 import { describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch, anonymousFetch, fetch } from './client';
-import { INTEGRATION_ABLY_API_KEY } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 import { queryIntegrationD1 } from './integrationD1';
 
 const initialSource = '1 Integration Bolt (it1) 1';
@@ -48,8 +48,8 @@ function bearer(capability: string): HeadersInit {
 	return { authorization: `Bearer ${capability}` };
 }
 
-describe('broadcast Deck List merged-result acceptance', () => {
-	it('proves the complete resource, Screen source, authority, guard, security, and cascade workflow', async () => {
+describe('the Broadcast Deck List merged-result acceptance', () => {
+	it('proves the complete resource, Deck Source, authority, guard, security, and cascade workflow', async () => {
 		let eventId: number | undefined;
 		let otherEventId: number | undefined;
 		let realtime: Ably.Realtime | undefined;
@@ -278,14 +278,19 @@ describe('broadcast Deck List merged-result acceptance', () => {
 			expect(wrongCapabilityRead.status).toBe(404);
 			expect(capabilitySelect.status).toBe(401);
 
-			realtime = new Ably.Realtime(INTEGRATION_ABLY_API_KEY);
-			const channel = realtime.channels.get(eventRealtimeChannel(eventId));
-			let resolveUpdate!: (message: InboundMessage) => void;
-			const updateNotice = new Promise<InboundMessage>((resolve) => {
-				resolveUpdate = resolve;
-			});
-			const listener = (message: InboundMessage) => resolveUpdate(message);
-			await channel.subscribe('broadcastDeckList:updated', listener);
+			let updateNotice: Promise<InboundMessage> | undefined;
+			let unsubscribeUpdateNotice: (() => void) | undefined;
+			if (integrationRealtimeConfigured) {
+				realtime = new Ably.Realtime(INTEGRATION_ABLY_API_KEY);
+				const channel = realtime.channels.get(eventRealtimeChannel(eventId));
+				let resolveUpdate!: (message: InboundMessage) => void;
+				updateNotice = new Promise<InboundMessage>((resolve) => {
+					resolveUpdate = resolve;
+				});
+				const listener = (message: InboundMessage) => resolveUpdate(message);
+				await channel.subscribe('broadcastDeckList:updated', listener);
+				unsubscribeUpdateNotice = () => channel.unsubscribe(listener);
+			}
 
 			const updateRequest = $fetch<BroadcastDeckListResponse>(
 				`/api/events/${eventId}/broadcast-deck-lists/${created.id}`,
@@ -296,21 +301,23 @@ describe('broadcast Deck List merged-result acceptance', () => {
 			);
 			const concurrentOutputRead = $fetch<BroadcastDeckListResponse>(outputPath);
 			const [updated, duringUpdate] = await Promise.all([updateRequest, concurrentOutputRead]);
-			const notice = await Promise.race([
-				updateNotice,
-				new Promise<never>((_resolve, reject) => {
-					setTimeout(() => reject(new Error('Timed out waiting for Broadcast Deck List update notification')), 10_000);
-				}),
-			]);
-			channel.unsubscribe(listener);
-
 			expect(updated).toMatchObject({ revision: 3, name: 'Feature Table Updated', sourceText: newerSource });
 			expect([2, 3]).toContain(duringUpdate.revision);
 			expect(duringUpdate.entries.length).toBeGreaterThan(0);
-			expect(notice.name).toBe('broadcastDeckList:updated');
-			expect(notice.data).toMatchObject({ eventId, listId: created.id, revision: 3 });
-			expect(notice.data).not.toHaveProperty('sourceText');
-			expect(notice.data).not.toHaveProperty('entries');
+
+			if (updateNotice) {
+				const notice = await Promise.race([
+					updateNotice,
+					new Promise<never>((_resolve, reject) => {
+						setTimeout(() => reject(new Error('Timed out waiting for Broadcast Deck List update notification')), 10_000);
+					}),
+				]);
+				unsubscribeUpdateNotice?.();
+				expect(notice.name).toBe('broadcastDeckList:updated');
+				expect(notice.data).toMatchObject({ eventId, listId: created.id, revision: 3 });
+				expect(notice.data).not.toHaveProperty('sourceText');
+				expect(notice.data).not.toHaveProperty('entries');
+			}
 
 			const collection = await $fetch<{ broadcastDeckLists: Array<{ id: number; revision: number; name: string }> }>(
 				`/api/events/${eventId}/broadcast-deck-lists`,
