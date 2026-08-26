@@ -10,8 +10,8 @@ const { screen } = useScreenContext();
 
 const {
 	config,
-	playerName,
-	deckName,
+	primaryHeader,
+	secondaryHeader,
 	deckColors,
 	companion,
 	highlander,
@@ -83,7 +83,7 @@ async function handleDeckAfterLeave() {
 
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));
 const board = computed(() => resolvedBoards.value.board);
-const showMainboard = computed(() => board.value !== 'sideboard');
+const showMainboard = computed(() => board.value !== 'sideboard' && mainboard.value.length > 0);
 const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
 
 // A vertical strip only reads beside a mainboard; every other stacked board
@@ -91,6 +91,7 @@ const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.va
 const sideboardBeside = computed(() =>
 	board.value === 'full'
 	&& resolvedBoards.value.sideboardPlacement === 'beside'
+	&& showMainboard.value
 	&& showSideboard.value,
 );
 
@@ -415,10 +416,10 @@ function stackRowCardStyle(layout: ResolvedDeckBoardLayout, index: number) {
 						>
 							<template v-if="config.showDeckName">
 								<h2 class="text-xl font-bold" :style="primaryTextStyle">
-									{{ playerName }}
+									{{ primaryHeader }}
 								</h2>
-								<p v-if="deckName" class="text-muted" :style="secondaryTextStyle">
-									{{ deckName }}
+								<p v-if="secondaryHeader" class="text-muted" :style="secondaryTextStyle">
+									{{ secondaryHeader }}
 								</p>
 							</template>
 

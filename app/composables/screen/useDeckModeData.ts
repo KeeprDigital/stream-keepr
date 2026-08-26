@@ -15,8 +15,7 @@ import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
 interface DeckDisplayState {
 	version: number;
-	sourceType: DeckSource['type'];
-	sourceKey: string;
+	source: LoadedDeckSource;
 	/**
 	 * The source's authoritative revision: a Player's update timestamp or a
 	 * Broadcast Deck List revision. It is how a still-degraded
@@ -24,8 +23,8 @@ interface DeckDisplayState {
 	 * "the deck itself changed mid-outage, swap it in" (#465 review).
 	 */
 	sourceRevision: number | null;
-	playerName: string;
-	deckName: string;
+	primaryHeader: string;
+	secondaryHeader: string;
 	deckColors: string;
 	companion: DeckCompanion | null;
 	highlander: HighlanderDeckSummary | null;
@@ -33,6 +32,18 @@ interface DeckDisplayState {
 	deckStats: Array<{ type: string; count: number }>;
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
+}
+
+type LoadedDeckSource
+	= { type: 'player'; playerId: number }
+		| { type: 'broadcast'; broadcastDeckListId: number };
+
+function loadedDeckSourcesMatch(left: LoadedDeckSource | undefined, right: LoadedDeckSource): boolean {
+	if (!left)
+		return false;
+	return right.type === 'player'
+		? left.type === 'player' && left.playerId === right.playerId
+		: left.type === 'broadcast' && left.broadcastDeckListId === right.broadcastDeckListId;
 }
 
 function computeDeckStats(cards: Array<{ quantity: number; compartment: string; cardType: string | null }>): Array<{ type: string; count: number }> {
@@ -95,43 +106,47 @@ function deckSourceStamp(updatedAt: Date | string | null | undefined): number | 
 	return updatedAt == null ? null : new Date(updatedAt).getTime();
 }
 
-function preloadDeckImage(url: string): Promise<void> {
+function preloadDeckImage(url: string): Promise<boolean> {
 	return new Promise((resolve) => {
 		const image = new Image();
 		let settled = false;
 
-		const finish = () => {
+		const finish = (loaded: boolean) => {
 			if (settled) {
 				return;
 			}
 			settled = true;
-			resolve();
+			resolve(loaded);
 		};
 
 		image.onload = () => {
 			if (typeof image.decode === 'function') {
-				image.decode().catch(() => {}).finally(finish);
+				image.decode().then(() => finish(true), () => finish(false));
 				return;
 			}
-			finish();
+			finish(true);
 		};
 
-		image.onerror = finish;
+		image.onerror = () => finish(false);
 		image.src = url;
 
 		if (image.complete) {
-			if (typeof image.decode === 'function') {
-				image.decode().catch(() => {}).finally(finish);
+			if ('naturalWidth' in image && image.naturalWidth === 0) {
+				finish(false);
 				return;
 			}
-			finish();
+			if (typeof image.decode === 'function') {
+				image.decode().then(() => finish(true), () => finish(false));
+				return;
+			}
+			finish(true);
 		}
 	});
 }
 
-async function preloadDeckImages(cards: DeckListCardWithData[]) {
+async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean> {
 	if (!import.meta.client) {
-		return;
+		return false;
 	}
 
 	const imageUrls = [...new Set(
@@ -139,8 +154,18 @@ async function preloadDeckImages(cards: DeckListCardWithData[]) {
 			.map(card => card.mtgCard?.imageData?.front?.normal)
 			.filter((url): url is string => !!url),
 	)];
+	const results = await Promise.all(imageUrls.map(async url => [url, await preloadDeckImage(url)] as const));
+	const failedUrls = new Set(results.filter(([, loaded]) => !loaded).map(([url]) => url));
+	if (failedUrls.size === 0)
+		return false;
 
-	await Promise.allSettled(imageUrls.map(preloadDeckImage));
+	for (const card of cards) {
+		const url = card.mtgCard?.imageData?.front?.normal;
+		if (url && failedUrls.has(url))
+			card.mtgCard = null;
+	}
+
+	return true;
 }
 
 export function useDeckModeData() {
@@ -176,9 +201,11 @@ export function useDeckModeData() {
 		},
 		// Identity is what is on program: a rebuild of the same source whose
 		// authoritative revision has not changed carries nothing new.
-		isUnchanged: next =>
-			displayedDeck.value?.sourceKey === next.sourceKey
-			&& displayedDeck.value.sourceRevision === next.sourceRevision,
+		isUnchanged: (next) => {
+			const current = displayedDeck.value;
+			return loadedDeckSourcesMatch(current?.source, next.source)
+				&& current?.sourceRevision === next.sourceRevision;
+		},
 		report: (degraded) => {
 			if (cardDataHealth) {
 				cardDataHealth.value = degraded ? 'degraded' : 'complete';
@@ -186,8 +213,8 @@ export function useDeckModeData() {
 		},
 	});
 
-	const playerName = computed(() => displayedDeck.value?.playerName ?? '');
-	const deckName = computed(() => displayedDeck.value?.deckName ?? '');
+	const primaryHeader = computed(() => displayedDeck.value?.primaryHeader ?? '');
+	const secondaryHeader = computed(() => displayedDeck.value?.secondaryHeader ?? '');
 	const deckColors = computed(() => displayedDeck.value?.deckColors ?? '');
 	const companion = computed(() => displayedDeck.value?.companion ?? null);
 	const highlander = computed(() => displayedDeck.value?.highlander ?? null);
@@ -195,7 +222,6 @@ export function useDeckModeData() {
 	const deckStats = computed(() => displayedDeck.value?.deckStats ?? []);
 	const mainboard = computed(() => displayedDeck.value?.mainboard ?? []);
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
-	const sourceType = computed(() => displayedDeck.value?.sourceType ?? null);
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
 
@@ -246,11 +272,10 @@ export function useDeckModeData() {
 	}
 
 	interface DeckDisplayInput {
-		sourceType: DeckSource['type'];
-		sourceKey: string;
+		source: LoadedDeckSource;
 		sourceRevision: number | null;
-		playerName: string;
-		deckName: string;
+		primaryHeader: string;
+		secondaryHeader: string;
 		deckColors: string;
 		cards: Array<{
 			name: string;
@@ -274,16 +299,15 @@ export function useDeckModeData() {
 			input.cards.flatMap(card => card.deckCounterTypes ?? []),
 			getCounterTypeConfigs('mtg'),
 		);
-		await preloadDeckImages([...arrays.mainboard, ...arrays.sideboard]);
+		const artDegraded = await preloadDeckImages([...arrays.mainboard, ...arrays.sideboard]);
 
 		return {
 			deck: {
 				version: ++deckVersion,
-				sourceType: input.sourceType,
-				sourceKey: input.sourceKey,
+				source: input.source,
 				sourceRevision: input.sourceRevision,
-				playerName: input.playerName,
-				deckName: input.deckName,
+				primaryHeader: input.primaryHeader,
+				secondaryHeader: input.secondaryHeader,
 				deckColors: input.deckColors,
 				companion: input.companion,
 				highlander: input.highlander,
@@ -292,7 +316,7 @@ export function useDeckModeData() {
 				mainboard: arrays.mainboard,
 				sideboard: arrays.sideboard,
 			},
-			degraded,
+			degraded: degraded || artDegraded,
 		};
 	}
 
@@ -308,11 +332,10 @@ export function useDeckModeData() {
 			highlanderPoints: c.highlanderPoints,
 		}));
 		return {
-			sourceType: 'player',
-			sourceKey: `player:${player.id}`,
+			source: { type: 'player', playerId: player.id },
 			sourceRevision: deckSourceStamp(player.updatedAt),
-			playerName: player.name,
-			deckName: deckResponse.name,
+			primaryHeader: player.name,
+			secondaryHeader: deckResponse.name,
 			deckColors: deckResponse.colors,
 			cards,
 			companion: deckResponse.companion ?? null,
@@ -347,11 +370,10 @@ export function useDeckModeData() {
 			: null;
 
 		return {
-			sourceType: 'broadcast',
-			sourceKey: `broadcast:${list.id}`,
+			source: { type: 'broadcast', broadcastDeckListId: list.id },
 			sourceRevision: list.revision,
-			playerName: list.name,
-			deckName: list.archetypeLabel ?? '',
+			primaryHeader: list.name,
+			secondaryHeader: list.archetypeLabel ?? '',
 			deckColors: list.colors ?? '',
 			cards,
 			companion,
@@ -469,22 +491,23 @@ export function useDeckModeData() {
 		}
 	}
 
-	function reloadSelectedSource() {
-		const source = config.value.deckSource;
+	function loadSelectedSource(source: DeckSource): Promise<void> | undefined {
 		if (source.type === 'broadcast')
 			return loadBroadcastDeck();
 		if (source.playerId !== null)
 			return loadPlayerDeck(source.playerId);
 	}
 
+	function reloadSelectedSource() {
+		return loadSelectedSource(config.value.deckSource);
+	}
+
 	watch(
 		() => config.value.deckSource,
 		async (source) => {
-			if (source.type === 'broadcast') {
-				await loadBroadcastDeck();
-			}
-			else if (source.playerId !== null) {
-				await loadPlayerDeck(source.playerId);
+			const load = loadSelectedSource(source);
+			if (load) {
+				await load;
 			}
 			else {
 				clearCanonicalRetry();
@@ -528,9 +551,8 @@ export function useDeckModeData() {
 
 	return {
 		config,
-		sourceType,
-		playerName,
-		deckName,
+		primaryHeader,
+		secondaryHeader,
 		deckColors,
 		companion,
 		highlander,

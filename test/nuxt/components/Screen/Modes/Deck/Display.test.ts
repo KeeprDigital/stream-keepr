@@ -25,8 +25,8 @@ const commitPendingDeck = vi.fn();
 
 mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => mutableConfig),
-	playerName: primaryName,
-	deckName: secondaryName,
+	primaryHeader: primaryName,
+	secondaryHeader: secondaryName,
 	deckColors,
 	companion,
 	highlander,
@@ -305,6 +305,17 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(false);
 		expect(wrapper.get('[data-testid="sideboard-stack-row"]').findAll('[data-testid="deck-card"]')).toHaveLength(2);
+	});
+
+	it('does not reserve an empty Mainboard section beside a populated Sideboard', async () => {
+		mainboard.value = [];
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="sideboard-stack-row"]').findAll('[data-testid="deck-card"]')).toHaveLength(1);
 	});
 
 	it('renders no cards at board: sideboard when the sideboard is empty', async () => {
