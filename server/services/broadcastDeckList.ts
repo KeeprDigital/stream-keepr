@@ -400,9 +400,10 @@ export function broadcastDeckListService() {
 							AND json_extract(screens.mode_configs, '$.deck.deckSource.type') = 'broadcast'
 							AND json_extract(screens.mode_configs, '$.deck.deckSource.broadcastDeckListId') = ?
 					)
+				RETURNING id
 			`).bind(id, eventId, expectedRevision, eventId, id),
 		]);
-		if (result?.meta.changes === 1)
+		if ((result as D1Result<{ id: number }> | undefined)?.results.length === 1)
 			return { status: 'deleted' };
 		const current = mapStoredDetail(snapshot as D1Result<StoredDetailRow>);
 		if (!current)

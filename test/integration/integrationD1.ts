@@ -93,3 +93,14 @@ export async function executeIntegrationD1(command: string) {
 		await database.batch(statements);
 	});
 }
+
+/** Read controlled acceptance evidence from the isolated integration database. */
+export async function queryIntegrationD1<T>(
+	query: string,
+	bindings: readonly (string | number | null)[] = [],
+): Promise<T[]> {
+	return await useIntegrationD1(async (database) => {
+		const statement = database.prepare(query).bind(...bindings);
+		return (await statement.all<T>()).results;
+	});
+}

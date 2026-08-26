@@ -14,7 +14,14 @@ import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis';
 import { getIntegrationWranglerPersistDir, INTEGRATION_MODE_ENV, INTEGRATION_WRANGLER_PERSIST_DIR_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
-const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
+const mockScryfallImport = fileURLToPath(new URL('./mock-scryfall.mjs', import.meta.url));
+const nodeOptions = [
+	process.env.NODE_OPTIONS,
+	'--import',
+	disableFsWatchImport,
+	'--import',
+	mockScryfallImport,
+].filter(Boolean).join(' ');
 
 /**
  * The invented secrets and the suite's operator, re-exported because this file is
