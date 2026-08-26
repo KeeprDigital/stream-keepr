@@ -637,6 +637,11 @@ A named, autonomously animating background renderer that ships with Stream Keepr
 Its hosts are the Feature Match Overlay Frame, the Background Screen, and a Broadcast Graphics Screen's Broadcast Graphics Background; the effect vocabulary is closed, so a config or package naming an effect an installation does not implement is refused rather than approximated.
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
+**Animation Effect Preset**:
+A user-created, installation-scoped, named reusable Animation Effect selection: one effect and its per-effect parameters, with no host-owned enabled state, opacity, layer identity, or Screen identity.
+Applying one copies its selection into the receiving host as an independent value; the host keeps no preset identity or update link, and a Template Package remains self-contained rather than referencing the preset.
+_Avoid_: Animation Effect Template, linked effect style
+
 **Feature Match Layout Item**:
 A Graphic Item placed in a Feature Match Layout.
 Feature Match Layouts use the shared Graphic Item hierarchy rather than a separate Layout Item or Widget hierarchy.

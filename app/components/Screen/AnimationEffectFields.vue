@@ -72,6 +72,11 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 
 <template>
 	<div class="space-y-3">
+		<ScreenAnimationEffectPresetLibrary
+			:selection="selection"
+			@apply="emit('update:selection', $event)"
+		/>
+
 		<UFormField label="Effect">
 			<USelect
 				:model-value="selection.effect"

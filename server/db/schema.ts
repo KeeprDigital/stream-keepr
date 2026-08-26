@@ -1,4 +1,5 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
@@ -633,6 +634,23 @@ export const featureMatchLayoutTemplates = sqliteTable('feature_match_layout_tem
 ]);
 
 /**
+ * The installation's library of named, host-neutral Animation Effect selections.
+ *
+ * Applying one copies `selection` into a host. No Screen or Event references this
+ * row, so deleting or revising a preset cannot change anything already on air.
+ */
+export const animationEffectPresets = sqliteTable('animation_effect_presets', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	revision: integer('revision').notNull().default(1),
+	selection: text('selection', { mode: 'json' }).$type<AnimationEffectSelection>().notNull(),
+
+	...timestamps,
+}, table => [
+	index('animation_effect_presets_name_idx').on(table.name),
+]);
+
+/**
  * The installation's library of reusable Graphic Style Sets.
  *
  * Installation-scoped for the same reason the Broadcast Graphic Template library is:
@@ -1219,6 +1237,8 @@ export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$infer
 export type DbBroadcastGraphicTemplateInsert = typeof broadcastGraphicTemplates.$inferInsert;
 export type DbFeatureMatchLayoutTemplate = typeof featureMatchLayoutTemplates.$inferSelect;
 export type DbFeatureMatchLayoutTemplateInsert = typeof featureMatchLayoutTemplates.$inferInsert;
+export type DbAnimationEffectPreset = typeof animationEffectPresets.$inferSelect;
+export type DbAnimationEffectPresetInsert = typeof animationEffectPresets.$inferInsert;
 export type DbGraphicStyleSet = typeof graphicStyleSets.$inferSelect;
 export type DbGraphicStyleSetInsert = typeof graphicStyleSets.$inferInsert;
 export type DbLiveStateCommandReceipt = typeof liveStateCommandReceipts.$inferSelect;

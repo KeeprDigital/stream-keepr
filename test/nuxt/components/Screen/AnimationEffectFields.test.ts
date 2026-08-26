@@ -59,6 +59,7 @@ async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi
 		},
 		global: {
 			stubs: {
+				ScreenAnimationEffectPresetLibrary: true,
 				UFormField: UFormFieldStub,
 				UIColorPicker: UIColorPickerStub,
 				UInputNumber: UInputNumberStub,
