@@ -106,6 +106,7 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// rasterises one — so these are the only codes in the registry that describe
 	// what a Screen Output would actually have shown.
 	'animation-effect-webgl-unavailable',
+	'animation-effect-backend-unexpected',
 	'animation-effect-bundle-failed',
 	'animation-effect-page-failed',
 	// An effect the catalogue ships that the scenario table does not mount, or

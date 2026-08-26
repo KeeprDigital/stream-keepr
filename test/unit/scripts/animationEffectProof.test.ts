@@ -16,7 +16,7 @@ function measurement(overrides: Record<string, unknown> = {}) {
 		compileFailures: 0,
 		totalPixels: 1000,
 		litPixels: 500,
-		brightPixels: 200,
+		darkPixels: 800,
 		changedPixels: 300,
 		...overrides,
 	};
@@ -65,10 +65,21 @@ describe('the animation effect scenario table', () => {
 		}
 	});
 
+	it('carries the inkmap and shards range ends proven in the catalogue build', () => {
+		const scenarios = animationEffectProofScenarios();
+		const params = (effect: string, scenario: string) =>
+			scenarios.find(entry => entry.effect === effect && entry.scenario === scenario)?.params;
+
+		expect(params('inkmap', 'min-zoom')).toEqual({ zoom: 0.5 });
+		expect(params('inkmap', 'max-zoom')).toEqual({ zoom: 3 });
+		expect(params('shards', 'min-intensity')).toEqual({ intensity: 0.5 });
+		expect(params('shards', 'max-intensity')).toEqual({ intensity: 2 });
+	});
+
 	it('gives every scenario the floors it is judged against', () => {
 		for (const scenario of animationEffectProofScenarios()) {
 			expect(scenario.floors.minLitFraction).toBeGreaterThan(0);
-			expect(scenario.floors.maxBrightFraction).toBeLessThan(1);
+			expect(scenario.floors.minDarkFraction).toBeGreaterThan(0);
 			expect(scenario.floors.minChangedFraction).toBeGreaterThan(0);
 		}
 	});
@@ -81,6 +92,10 @@ describe('judging an animation effect rendering proof', () => {
 
 	it('refuses a run with no WebGL, and judges nothing else from it', () => {
 		expect(codes(healthyReport({ backend: 'unavailable' }))).toEqual(['animation-effect-webgl-unavailable']);
+	});
+
+	it('refuses a WebGL backend other than SwiftShader', () => {
+		expect(codes(healthyReport({ backend: 'hardware' }))).toEqual(['animation-effect-backend-unexpected']);
 	});
 
 	it('reports a page that never finished measuring', () => {
@@ -117,12 +132,12 @@ describe('judging an animation effect rendering proof', () => {
 	});
 
 	it('reports a frame too bright to sit behind broadcast graphics', () => {
-		expect(codes(withScenario('weave', 'defaults', { brightPixels: 900 })))
+		expect(codes(withScenario('weave', 'defaults', { darkPixels: 100 })))
 			.toContain('animation-effect-frame-washed-out');
 	});
 
-	it('lets a frame of even mid-tone pass both pixel checks, which is what they ask', () => {
-		expect(codes(withScenario('waves', 'defaults', { litPixels: 1000, brightPixels: 0 })))
+	it('lets lit pixels belong to the dark-majority count at mid-tone luminance', () => {
+		expect(codes(withScenario('waves', 'defaults', { litPixels: 1000, darkPixels: 1000 })))
 			.toEqual([]);
 	});
 

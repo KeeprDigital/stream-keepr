@@ -31,25 +31,22 @@
  *   the size below: far above the black frame this exists to catch, and far
  *   below the sparsest effect in the catalogue (the measured floor is ember's,
  *   which draws about five times that at its defaults).
- * - `maxBrightFraction` — the ambient half of the same fact. Animation Effects
- *   sit behind broadcast graphics, so a frame that is mostly *bright* is a
- *   shader blowing out, not an effect (#473 caught exactly this in weave's first
- *   cut).
+ * - `minDarkFraction` — the ambient half of the same fact. Animation Effects
+ *   sit behind broadcast graphics, so most of the frame must stay below
+ *   half-bright (#473 caught exactly this in weave's first cut).
  * - `minChangedFraction` — pixels that differ between the two sampled frames.
  *   This is the check that a compiled, lit, *frozen* shader cannot pass.
  *
- * The first two ask different questions rather than dividing the frame in two,
- * and it is worth being plain about that because the shorthand "lit pixels over
- * a dark-majority frame" reads like a partition. "Lit" starts low, at the point
- * a pixel stops being the backdrop; "bright" starts high, at the point a pixel
- * would wash out a graphic in front of it. Everything between the two counts as
- * lit and not bright, so a frame of even mid-tone — waves at its defaults is one
- * — satisfies both floors honestly. What no frame can do is satisfy them while
- * black, and what nothing washed out can do is satisfy the second.
+ * The first two ask different questions and their thresholds overlap on
+ * purpose. "Lit" starts low, where a pixel stops being the backdrop; "dark"
+ * ends at half-bright, where a pixel begins to compete with graphics in front
+ * of it. A mid-tone pixel can therefore prove the effect drew while still
+ * belonging to the dark-majority frame. A black frame cannot clear the lit
+ * floor, and a washed-out frame cannot clear the dark floor.
  */
 export const ANIMATION_EFFECT_PROOF_FLOORS = Object.freeze({
 	minLitFraction: 0.01,
-	maxBrightFraction: 0.5,
+	minDarkFraction: 0.5,
 	minChangedFraction: 0.02,
 });
 
@@ -58,14 +55,14 @@ export const ANIMATION_EFFECT_PROOF_FLOORS = Object.freeze({
  *
  * Every Animation Effect is drawn over a dark backdrop — `#111111` is the
  * catalogue's default background, luminance 17 — so "lit" starts far enough
- * above that to be the effect rather than the backdrop, and "bright" starts at
+ * above that to be the effect rather than the backdrop, and "dark" ends at
  * half-bright, where a pixel begins to compete with the graphics in front of it.
  * "Changed" is a per-channel difference between the two sampled frames big
  * enough not to be dithering.
  */
 export const ANIMATION_EFFECT_PROOF_PIXELS = Object.freeze({
 	litLuminance: 40,
-	brightLuminance: 128,
+	darkLuminance: 128,
 	changedChannel: 6,
 });
 
@@ -86,11 +83,9 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  *
  * `floors` on an effect override the shared floors for every one of its
  * scenarios; `floors` on a scenario override both. Every override carries the
- * reason it is not the default, because a lowered floor — or a raised ceiling,
- * which is the same loosening in the other direction, and is what the one
- * override in this table is — is a weakened check, and the next reader has to be
- * able to tell a measured exception from a threshold that was nudged until the
- * run went green.
+ * reason it is not the default, because a lowered floor is a weakened check,
+ * and the next reader has to be able to tell a measured exception from a
+ * threshold that was nudged until the run went green.
  *
  * **Which end of a range an extreme takes.** Every scenario here has to clear
  * all three checks, so an extreme is taken at whichever end still draws and
@@ -175,6 +170,8 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		extremes: [
 			{ name: 'low-coverage', params: { coverage: 0.2, contours: 8 } },
 			{ name: 'high-coverage', params: { coverage: 0.8, contours: 0 } },
+			{ name: 'min-zoom', params: { zoom: 0.5 } },
+			{ name: 'max-zoom', params: { zoom: 3 } },
 		],
 	},
 	net: {
@@ -183,12 +180,12 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 				name: 'max-points',
 				params: { points: 30, maxDistance: 80 },
 				// Thirty points strung at the top of the connection range is a mesh
-				// that covers the frame — measured at 0.79 bright, and correctly so:
-				// the operator asked for every point joined to every other. What is
-				// left of the ceiling here catches a frame gone entirely white; the
-				// ambient-backdrop question is asked of the settings a Screen would
+				// that covers the frame — measured at only 0.21 dark, and correctly so:
+				// the operator asked for every point joined to every other. The lowered
+				// floor still catches a frame gone entirely white. The ambient-backdrop
+				// question is asked of the settings a Screen would
 				// actually run, which is what `defaults` above measures.
-				floors: { maxBrightFraction: 0.95 },
+				floors: { minDarkFraction: 0.05 },
 			},
 			{ name: 'markers-off', params: { showDots: false } },
 		],
@@ -215,6 +212,8 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		extremes: [
 			{ name: 'min-size', params: { size: 0.5, intensity: 2 } },
 			{ name: 'max-size', params: { size: 3 } },
+			{ name: 'min-intensity', params: { intensity: 0.5 } },
+			{ name: 'max-intensity', params: { intensity: 2 } },
 		],
 	},
 	waves: {
@@ -276,7 +275,7 @@ export const ANIMATION_EFFECT_PROOF_KNOWN_GOOD = 'fog';
  *   scenario: string,
  *   params: Record<string, string | number | boolean>,
  *   frameRate: number,
- *   floors: { minLitFraction: number, maxBrightFraction: number, minChangedFraction: number },
+ *   floors: { minLitFraction: number, minDarkFraction: number, minChangedFraction: number },
  * }[]} Every mount the run makes, with the floors that mount is judged against.
  */
 export function animationEffectProofScenarios() {

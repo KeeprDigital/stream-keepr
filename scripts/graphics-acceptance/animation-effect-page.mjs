@@ -16,10 +16,10 @@
  *   rather than inferred from a black frame. Nothing here reads console output:
  *   three logs a shader error and carries on, and a check that watched the log
  *   would be a check on three's logging.
- * - **lit and bright pixels** — read back through a 2D canvas immediately after
+ * - **lit and dark pixels** — read back through a 2D canvas immediately after
  *   the draw, which is the only moment a WebGL canvas without
  *   `preserveDrawingBuffer` still holds its frame. Two counts at two different
- *   luminances, answering "did it draw" and "did it blow out"; the floors they
+ *   luminances, answering "did it draw" and "did the frame stay dark-majority"; the floors they
  *   are held to live with the scenario table.
  * - **changed pixels** — between two frames two seconds apart on the effect's own
  *   clock. A shader can compile and light the frame and still be frozen; this is
@@ -38,7 +38,7 @@ import {
 } from './animation-effect-scenarios.mjs';
 
 const { width, height, seconds } = ANIMATION_EFFECT_PROOF_FRAME;
-const { litLuminance, brightLuminance, changedChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
+const { litLuminance, darkLuminance, changedChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
 
 /**
  * Count every shader that would not compile and every program that would not
@@ -106,15 +106,15 @@ function captureFrame(canvas) {
 
 function countFrame(pixels) {
 	let lit = 0;
-	let bright = 0;
+	let dark = 0;
 	for (let index = 0; index < pixels.length; index += 4) {
 		const luminance = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2];
 		if (luminance >= litLuminance)
 			lit += 1;
-		if (luminance >= brightLuminance)
-			bright += 1;
+		if (luminance < darkLuminance)
+			dark += 1;
 	}
-	return { lit, bright, total: pixels.length / 4 };
+	return { lit, dark, total: pixels.length / 4 };
 }
 
 function countChangedPixels(before, after) {
@@ -156,7 +156,7 @@ function renderSchedule(frameRate) {
  * Mount one scenario, draw its frames, and count the sampled ones.
  *
  * Every sampled frame is held to the floors, so the reported counts are the
- * worst of them — fewest lit, most bright. An effect that renders its first
+ * worst of them — fewest lit and fewest dark. An effect that renders its first
  * frame and then goes black is as broken as one that never rendered, and
  * reporting an average would hide it.
  *
@@ -204,7 +204,7 @@ function measureScenario({ effect, scenario, frameRate, mount, compilation }) {
 		frames: frames.length,
 		totalPixels: counted[0]?.total ?? width * height,
 		litPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.lit)) : 0,
-		brightPixels: counted.length > 0 ? Math.max(...counted.map(frame => frame.bright)) : 0,
+		darkPixels: counted.length > 0 ? Math.min(...counted.map(frame => frame.dark)) : 0,
 		// The least any sampled frame differs from the one before it, so every
 		// interval has to move rather than one lively pair carrying a dead one.
 		changedPixels: frames.length === seconds.length && frames.length > 1

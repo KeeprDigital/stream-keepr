@@ -148,9 +148,9 @@ export function judgeAnimationEffectScenario(measurement, floors) {
 	if (lit < floors.minLitFraction)
 		failures.push({ code: 'animation-effect-frame-unlit', detail: { ...where, lit: measured(lit), floor: floors.minLitFraction } });
 
-	const bright = fraction(measurement.brightPixels, measurement.totalPixels);
-	if (bright > floors.maxBrightFraction)
-		failures.push({ code: 'animation-effect-frame-washed-out', detail: { ...where, bright: measured(bright), ceiling: floors.maxBrightFraction } });
+	const dark = fraction(measurement.darkPixels, measurement.totalPixels);
+	if (dark < floors.minDarkFraction)
+		failures.push({ code: 'animation-effect-frame-washed-out', detail: { ...where, dark: measured(dark), floor: floors.minDarkFraction } });
 
 	const changed = fraction(measurement.changedPixels, measurement.totalPixels);
 	if (changed < floors.minChangedFraction)
@@ -163,9 +163,9 @@ export function judgeAnimationEffectScenario(measurement, floors) {
  * What the planted broken shader has to trip, named by the codes themselves so
  * a `check=` on the way out is the code a reader can go and find.
  *
- * The washed-out check is not here: a shader that draws nothing cannot blow out
- * a frame, so the control says nothing about it either way. It is proven by
- * mutation instead (#499), which is the only honest way to bite a ceiling.
+ * The washed-out check is not here: a shader that draws nothing leaves the
+ * whole frame dark, so the control says nothing about that check either way. It
+ * is proven by mutation instead (#499), which is the only honest way to bite it.
  */
 const CONTROL_MUST_TRIP = Object.freeze([
 	'animation-effect-shader-compile-failed',
@@ -212,6 +212,8 @@ function checksTheControlTripped(control) {
 export function judgeAnimationEffectReport(report) {
 	if (report.backend === 'unavailable')
 		return [{ code: 'animation-effect-webgl-unavailable' }];
+	if (report.backend !== 'swiftshader')
+		return [{ code: 'animation-effect-backend-unexpected', detail: { backend: report.backend } }];
 
 	const failures = [];
 	if (report.pageFailed)
