@@ -5,7 +5,9 @@ import { cardService } from '~~/server/services/card';
 import { eventService } from '~~/server/services/event';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
+import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 import { requireTalentInEvent } from '~~/server/utils/routeGuards';
+import { BROADCAST_DECK_LISTS_IN_USE } from '~~/shared/types/broadcastDeckList';
 
 interface UpdateEventParams {
 	eventId: number;
@@ -44,7 +46,21 @@ export function eventWriteModule() {
 			requireTalentInEvent(eventId, input.commentator2TalentId),
 		]);
 
-		const updatedEvent = await events.update(eventId, input);
+		let updatedEvent;
+		try {
+			updatedEvent = await events.update(eventId, input);
+		}
+		catch (error) {
+			if (error instanceof BroadcastDeckListsInUseError) {
+				const names = error.screens.map(screen => screen.name).join(', ');
+				throw createError({
+					statusCode: 409,
+					message: `Broadcast Deck Lists cannot be disabled while selected by ${error.screens.length === 1 ? 'Screen' : 'Screens'}: ${names}`,
+					data: { code: BROADCAST_DECK_LISTS_IN_USE, screens: error.screens },
+				});
+			}
+			throw error;
+		}
 
 		if (!updatedEvent) {
 			throw createError({

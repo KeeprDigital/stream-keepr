@@ -15,6 +15,7 @@ import {
 	DEFAULT_TOPCUT_CONFIG,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
+	mergeScreenModeConfig,
 	resolveDeckBoards,
 } from '~~/shared/types/screenConfig';
 
@@ -82,7 +83,7 @@ describe('getDisplayDefaultsForMode', () => {
 			mainboard: DEFAULT_DECK_CONFIG.mainboard,
 			sideboard: DEFAULT_DECK_CONFIG.sideboard,
 		});
-		expect('playerId' in getDisplayDefaultsForMode('deck')).toBe(false);
+		expect('deckSource' in getDisplayDefaultsForMode('deck')).toBe(false);
 
 		expect(getDisplayDefaultsForMode('feature-match')).toMatchObject({
 			showNames: DEFAULT_FEATURE_MATCH_CONFIG.showNames,
@@ -100,6 +101,18 @@ describe('getDisplayDefaultsForMode', () => {
 			columns: DEFAULT_PLAYER_HISTORY_CONFIG.columns,
 			showHeader: DEFAULT_PLAYER_HISTORY_CONFIG.showHeader,
 		});
+	});
+
+	it('preserves the complete Broadcast source while resetting Deck display settings', () => {
+		const source = { type: 'broadcast' as const, broadcastDeckListId: 73 };
+		const reset = mergeScreenModeConfig(
+			{ deck: { ...DEFAULT_DECK_CONFIG, deckSource: source, showDeckName: false } },
+			'deck',
+			getDisplayDefaultsForMode('deck'),
+		);
+
+		expect(reset.deck?.deckSource).toEqual(source);
+		expect(reset.deck?.showDeckName).toBe(DEFAULT_DECK_CONFIG.showDeckName);
 	});
 });
 
@@ -141,8 +154,8 @@ describe('default config constants', () => {
 		expect(DEFAULT_CARD_CONFIG.featureMatchId).toBeNull();
 	});
 
-	it('default deck config has null playerId', () => {
-		expect(DEFAULT_DECK_CONFIG.playerId).toBeNull();
+	it('default deck config selects no Player', () => {
+		expect(DEFAULT_DECK_CONFIG.deckSource).toEqual({ type: 'player', playerId: null });
 	});
 
 	it('default deck config shows the full deck with per-board layout blocks', () => {

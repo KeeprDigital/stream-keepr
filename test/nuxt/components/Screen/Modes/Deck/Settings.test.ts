@@ -97,7 +97,7 @@ const UInputNumberStub = defineComponent({
 
 function defaultDeckConfig(): Record<string, any> {
 	return {
-		playerId: 1,
+		deckSource: { type: 'player', playerId: 1 },
 		board: 'full',
 		sideboardPlacement: 'beside',
 		mainboard: { view: 'grid', columns: 4, listColumns: 2, cardSize: 'medium', dynamicCardSize: false, cardGap: 8, stackOverlap: 15 },

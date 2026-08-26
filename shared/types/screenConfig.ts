@@ -53,8 +53,12 @@ export interface DeckBoardLayoutConfig {
 	stackOverlap?: number;
 }
 
+export type DeckSource
+	= | { type: 'player'; playerId: number | null }
+		| { type: 'broadcast'; broadcastDeckListId: number };
+
 export interface DeckModeConfig {
-	playerId: number | null;
+	deckSource: DeckSource;
 	/** Which boards render (#477). "Both hidden" is impossible by construction. */
 	board?: BoardSelection;
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
@@ -620,7 +624,7 @@ export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeck
 }
 
 export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
-	playerId: null,
+	deckSource: { type: 'player', playerId: null },
 	board: 'full',
 	sideboardPlacement: 'beside',
 	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
@@ -806,7 +810,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	// Broadcast Graphics stack: a display reset must not empty it.
 	'background': ['layers'],
 	'card': ['featureMatchId'],
-	'deck': ['playerId'],
+	'deck': ['deckSource'],
 	'topCut': [],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],

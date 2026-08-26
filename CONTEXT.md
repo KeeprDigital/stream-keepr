@@ -56,6 +56,9 @@ A Player's submitted cards for a game and Phase.
 **Broadcast Deck List**:
 An Event-scoped card list prepared by an operator solely for display on a Deck Screen. It has no Player, competition, or Metagame identity, and may carry an Archetype Label for its on-screen presentation.
 
+**Deck Source**:
+The required data binding of a Deck Screen: either one Event-scoped Player (or no selected Player) or one Event-scoped Broadcast Deck List.
+
 **Archetype Label**:
 Optional broadcast-only text and mana colours attached to a Broadcast Deck List and used as its secondary Deck Screen identity. It does not reference an Archetype or give the list Metagame identity.
 
@@ -735,6 +738,10 @@ A context-gated Graphic Item that renders one Player's game-win indicators.
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**
 - While a **Feature Match Slot** has an active **Feature Match Session**, its identity binding fields resolve from the session's source snapshot and its live binding fields resolve from the session's current state
 - A **Screen** has exactly one current **Screen Mode**
+- A Deck **Screen Mode** has exactly one **Deck Source**
+- A Player **Deck Source** selects either no Player or one Player from the Screen's **Event**
+- A Broadcast **Deck Source** selects one **Broadcast Deck List** from the Screen's **Event** and is available only while Broadcast Deck Lists are enabled for that Event
+- A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the complete **Event** remains the cascade exception
 - A **Broadcast Graphics Screen** is a **Screen** in Broadcast Graphics mode
 - A **Broadcast Graphics Screen** has at most one active **Broadcast Graphics Live Session**
 - A **Broadcast Graphics Screen** renders an ordered stack of zero or more **Broadcast Graphics**

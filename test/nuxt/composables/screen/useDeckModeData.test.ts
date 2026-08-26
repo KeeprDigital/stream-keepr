@@ -24,7 +24,9 @@ mockNuxtImport('useScreenContext', () => () => ({
 	interactive: ref(false),
 	cardDataHealth: mockCardDataHealth,
 }));
-mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({ playerId: mockPlayerId.value })));
+mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
+	deckSource: { type: 'player' as const, playerId: mockPlayerId.value },
+})));
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: mockFetchScryfallCards,
 	buildDeckListArrays: mockBuildDeckListArrays,

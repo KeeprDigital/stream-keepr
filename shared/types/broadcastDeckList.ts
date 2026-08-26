@@ -63,9 +63,16 @@ export interface DeleteBroadcastDeckListInput {
 	expectedRevision: number;
 }
 
+export interface BroadcastDeckListAffectedScreen {
+	id: number;
+	name: string;
+}
+
 export interface BroadcastDeckListValidationFailure {
 	code: 'BROADCAST_DECK_LIST_INVALID';
 	errors: BroadcastDeckListImportFailureDetail[];
 }
 
 export const BROADCAST_DECK_LIST_REVISION_CONFLICT = 'BROADCAST_DECK_LIST_REVISION_CONFLICT';
+export const BROADCAST_DECK_LIST_IN_USE = 'BROADCAST_DECK_LIST_IN_USE';
+export const BROADCAST_DECK_LISTS_IN_USE = 'BROADCAST_DECK_LISTS_IN_USE';

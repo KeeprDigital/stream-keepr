@@ -31,7 +31,7 @@ export function useSendDeckToScreen() {
 
 		const sent = await runRequest(async () => {
 			await screenStore.updateModeConfig(eventId, screen.id, 'deck', {
-				playerId,
+				deckSource: { type: 'player', playerId },
 			});
 
 			return true;
