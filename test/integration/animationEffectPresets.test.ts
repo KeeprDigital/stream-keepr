@@ -106,12 +106,22 @@ describe('the installation Animation Effect Preset library', () => {
 				body: { document },
 			});
 			ids.push(imported.id);
+			const importedAgain = await $fetch<AnimationEffectPresetResponse>(`${library}/imports`, {
+				method: 'POST',
+				body: { document },
+			});
+			ids.push(importedAgain.id);
 			expect(imported).toMatchObject({
 				name,
 				revision: 1,
 				selection: created.selection,
 			});
-			expect(imported.id).not.toBe(created.id);
+			expect(importedAgain).toMatchObject({
+				name,
+				revision: 1,
+				selection: created.selection,
+			});
+			expect(new Set([created.id, imported.id, importedAgain.id]).size).toBe(3);
 		}
 		finally {
 			await Promise.all(ids.map(id => $fetch(`${library}/${id}`, { method: 'DELETE' })));
@@ -147,10 +157,15 @@ describe('the installation Animation Effect Preset library', () => {
 	});
 
 	it('requires authentication for the entire preset surface', async () => {
+		const presetId = randomUUID();
 		for (const [path, method] of [
 			[library, 'GET'],
 			[library, 'POST'],
 			[`${library}/imports`, 'POST'],
+			[`${library}/${presetId}`, 'GET'],
+			[`${library}/${presetId}`, 'PATCH'],
+			[`${library}/${presetId}`, 'DELETE'],
+			[`${library}/${presetId}/export`, 'GET'],
 		] as const) {
 			const response = await anonymousFetch(path, {
 				method,

@@ -36,7 +36,10 @@ async function mountLibrary(selection = { effect: 'caustics' as const, params: {
 		global: {
 			stubs: {
 				UButton: UButtonStub,
-				UAlert: { template: '<div><slot /></div>' },
+				UAlert: {
+					props: ['description'],
+					template: '<div data-testid="preset-alert">{{ description }}</div>',
+				},
 			},
 		},
 	});
@@ -91,5 +94,31 @@ describe('animation Effect Preset library editor', () => {
 
 		expect(repository.importDocument).toHaveBeenCalledWith('portable preset');
 		expect(repository.list).toHaveBeenCalledTimes(2);
+	});
+
+	it('confirms deletion before removing and refreshing the selected library entry', async () => {
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="animation-effect-preset-delete"]').trigger('click');
+		expect(repository.remove).not.toHaveBeenCalled();
+		await wrapper.get('[data-testid="animation-effect-preset-delete-confirm"]').trigger('click');
+		await flushPromises();
+
+		expect(repository.remove).toHaveBeenCalledWith(preset.id);
+		expect(repository.list).toHaveBeenCalledTimes(2);
+	});
+
+	it('shows a failed action without applying or mutating the visible library', async () => {
+		repository.create.mockRejectedValueOnce(new Error('Preset service unavailable'));
+		const wrapper = await mountLibrary();
+		await wrapper.get('[data-testid="animation-effect-preset-name"]').setValue('Will fail');
+
+		await wrapper.get('[data-testid="animation-effect-preset-save"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="preset-alert"]').text()).toBe('Preset service unavailable');
+		expect(wrapper.emitted('apply')).toBeUndefined();
+		expect(wrapper.get('[data-testid="animation-effect-preset-select"]').element.value).toBe(preset.id);
+		expect(repository.list).toHaveBeenCalledTimes(1);
 	});
 });
