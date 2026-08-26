@@ -1,12 +1,9 @@
 import { z } from 'zod';
 import { mapScreenToResponse } from '~~/server/mappers/screen';
-import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
 import { screenSlugSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
-import { optionalUserSession } from '~~/server/utils/auth';
 import { getEventId } from '~~/server/utils/eventId';
-import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
-import { secretTokensMatch } from '~~/server/utils/secretTokenComparison';
+import { canReadScreenOutput } from '~~/server/utils/screenOutputAuthorization';
 
 /**
  * `GET /api/screen-output/events/:id/screens/slug/:slug` — the Screen a Screen
@@ -79,21 +76,7 @@ export default defineEventHandler(async (event) => {
 	if (!screen)
 		screenNotFound();
 
-	const capability = bearerScreenOutputCapability(getRequestHeader(event, 'authorization'));
-	if (capability) {
-		// Compared in-process rather than through `authorizeCapability`, which asks
-		// D1 the same question this row already answers: the digest arrived with the
-		// Screen. `secretTokensMatch` because the comparison is still against a
-		// presented secret, and an early-returning `===` on two digests times how
-		// much of one the caller already has.
-		const presentedDigest = await screenOutputAssetCapabilityDigest(capability);
-		if (await secretTokensMatch(presentedDigest, screen.assetCapabilityDigest))
-			return mapScreenToResponse(screen);
-	}
-
-	// No capability, or one for a different Screen. An operator's own surfaces reach
-	// this route with a session instead, and get the same answer.
-	if (await optionalUserSession(event))
+	if (await canReadScreenOutput(event, screen))
 		return mapScreenToResponse(screen);
 
 	screenNotFound();

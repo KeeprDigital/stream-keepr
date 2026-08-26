@@ -2,7 +2,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, reactive, ref } from 'vue';
 
 const mockPlayerStore = {
 	players: [
@@ -20,8 +20,20 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 });
 
 const mockFetchDeck = vi.fn();
+const mockLoadBroadcastDeckLists = vi.fn();
+const mockEventStore = reactive({
+	event: { id: 1, game: 'mtg', broadcastDeckListsEnabled: true },
+});
+const mockBroadcastDeckListStore = reactive({
+	summaries: [
+		{ id: 23, name: 'Feature Table', mainboardQuantity: 60, sideboardQuantity: 15 },
+	],
+	loadCollection: mockLoadBroadcastDeckLists,
+});
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+mockNuxtImport('useEventStore', () => () => mockEventStore);
+mockNuxtImport('useBroadcastDeckListStore', () => () => mockBroadcastDeckListStore);
 mockNuxtImport('usePlayerDeckCache', () => () => ({
 	fetchDeck: mockFetchDeck,
 }));
@@ -84,7 +96,17 @@ const USelectStub = defineComponent({
 		modelValue: { type: [String, Number, Boolean, Object], required: false },
 		items: { type: Array, required: false },
 	},
-	template: '<div data-testid="u-select">{{ (items || []).map(item => item.label).join("|") }}</div>',
+	emits: ['update:modelValue'],
+	template: '<div data-testid="u-select"><button v-for="item in (items || [])" :key="String(item.value)" type="button" :data-value="String(item.value)" @click="$emit(\'update:modelValue\', item.value)">{{ item.label }}</button></div>',
+});
+
+const UTabsStub = defineComponent({
+	props: {
+		modelValue: { type: String, required: false },
+		items: { type: Array, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<div data-testid="source-tabs"><button v-for="item in (items || [])" :key="item.value" type="button" :data-value="item.value" @click="$emit(\'update:modelValue\', item.value)">{{ item.label }}</button></div>',
 });
 
 const UInputNumberStub = defineComponent({
@@ -124,6 +146,7 @@ async function mountComponent() {
 				UFormField: UFormFieldStub,
 				UISegmentedTabs: UISegmentedTabsStub,
 				USelect: USelectStub,
+				UTabs: UTabsStub,
 				UInputNumber: UInputNumberStub,
 				UIColorPicker: true,
 				USeparator: true,
@@ -144,6 +167,10 @@ function sectionTitles(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 describe('screenDeckSettings', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockEventStore.event = { id: 1, game: 'mtg', broadcastDeckListsEnabled: true };
+		mockBroadcastDeckListStore.summaries = [
+			{ id: 23, name: 'Feature Table', mainboardQuantity: 60, sideboardQuantity: 15 },
+		];
 		mockConfig.value = defaultDeckConfig();
 		mockFetchDeck.mockResolvedValue({
 			cards: [
@@ -164,6 +191,75 @@ describe('screenDeckSettings', () => {
 		await tabs[2]!.trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ board: 'sideboard' });
+	});
+
+	it('shows source tabs only while Broadcast Deck Lists are enabled', async () => {
+		let wrapper = await mountComponent();
+		await flushPromises();
+		expect(wrapper.get('[data-testid="source-tabs"]').text()).toContain('Player Deck');
+		expect(wrapper.get('[data-testid="source-tabs"]').text()).toContain('Broadcast Deck List');
+
+		mockEventStore.event = { id: 1, game: 'mtg', broadcastDeckListsEnabled: false };
+		wrapper = await mountComponent();
+		await flushPromises();
+		expect(wrapper.find('[data-testid="source-tabs"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain('Broadcast Deck List');
+	});
+
+	it('keeps tab navigation local and saves only deckSource after an explicit Broadcast selection', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="source-tabs"] [data-value="broadcast"]').trigger('click');
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
+		expect(mockConfig.value.deckSource).toEqual({ type: 'player', playerId: 1 });
+
+		const field = wrapper.get('[data-testid="form-field"][data-label="Broadcast Deck List"]');
+		await field.get('[data-value="23"]').trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({
+			deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+		});
+		expect(mockConfig.value.board).toBe('full');
+		expect(mockConfig.value.sideboardPlacement).toBe('beside');
+		expect(mockConfig.value.showDeckName).toBe(true);
+	});
+
+	it('does not change or blank the source when the Broadcast tab has no lists', async () => {
+		mockBroadcastDeckListStore.summaries = [];
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="source-tabs"] [data-value="broadcast"]').trigger('click');
+
+		expect(wrapper.text()).toContain('No Broadcast Deck Lists are available');
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
+		expect(mockConfig.value.deckSource).toEqual({ type: 'player', playerId: 1 });
+	});
+
+	it('hides Highlander-only controls for a selected Broadcast source without clearing their values', async () => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+			showHighlanderTotal: true,
+			showHighlanderPointedCards: true,
+			showHighlanderPoints: true,
+		};
+		let wrapper = await mountComponent();
+		await flushPromises();
+		expect(wrapper.text()).not.toContain('Show Total Points');
+		expect(sectionTitles(wrapper)).not.toContain('Pointed Cards');
+		expect(wrapper.text()).not.toContain('Highlander Point Badges');
+		expect(mockConfig.value.showHighlanderTotal).toBe(true);
+		expect(mockConfig.value.showHighlanderPointedCards).toBe(true);
+		expect(mockConfig.value.showHighlanderPoints).toBe(true);
+
+		mockConfig.value = { ...mockConfig.value, deckSource: { type: 'player', playerId: 1 } };
+		wrapper = await mountComponent();
+		await flushPromises();
+		expect(wrapper.text()).toContain('Show Total Points');
+		expect(sectionTitles(wrapper)).toContain('Pointed Cards');
+		expect(wrapper.text()).toContain('Highlander Point Badges');
 	});
 
 	it('shows a layout section per visible board only', async () => {
@@ -243,5 +339,21 @@ describe('screenDeckSettings', () => {
 		await flushPromises();
 
 		expect(wrapper.find('[data-testid="empty-sideboard-hint"]').exists()).toBe(false);
+	});
+
+	it('describes empty selected Broadcast boards without blanking the header', async () => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+		};
+		mockBroadcastDeckListStore.summaries = [
+			{ id: 23, name: 'Feature Table', mainboardQuantity: 0, sideboardQuantity: 15 },
+		];
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="empty-sideboard-hint"]').text()).toContain('no mainboard cards');
+		expect(mockUpdateConfig).not.toHaveBeenCalled();
 	});
 });

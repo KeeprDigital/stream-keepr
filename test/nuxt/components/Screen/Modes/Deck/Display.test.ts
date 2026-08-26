@@ -1,3 +1,4 @@
+import type { CounterTypeConfig } from '~~/shared/types/game';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -12,20 +13,25 @@ const mainboard = ref<DeckListCardWithData[]>([]);
 const sideboard = ref<DeckListCardWithData[]>([]);
 const companion = ref<{ name: string } | null>(null);
 const deckStats = ref<Array<{ type: string; count: number }>>([]);
+const deckCounters = ref<CounterTypeConfig[]>([]);
 const highlander = ref<HighlanderDeckSummary | null>(null);
 const tokenCards = ref<DeckListCardWithData[]>([]);
+const primaryName = ref('Alice');
+const secondaryName = ref('Mono Blue');
+const deckColors = ref('U');
 const displayedDeckVersion = ref(1);
 const pendingSwapVersion = ref(0);
 const commitPendingDeck = vi.fn();
 
 mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => mutableConfig),
-	playerName: ref('Alice'),
-	deckName: ref('Mono Blue'),
-	deckColors: ref('U'),
+	primaryHeader: primaryName,
+	secondaryHeader: secondaryName,
+	deckColors,
 	companion,
 	highlander,
 	tokenCards,
+	deckCounters,
 	deckStats,
 	mainboard,
 	sideboard,
@@ -54,7 +60,8 @@ const ScreenModeBaseStub = defineComponent({
 });
 
 const ManaColorDisplayStub = defineComponent({
-	template: '<div data-testid="mana-colors" />',
+	props: { colors: { type: String, required: false } },
+	template: '<div data-testid="mana-colors" :data-colors="colors" />',
 });
 
 const DeckCardStub = defineComponent({
@@ -150,8 +157,12 @@ describe('screenDeckDisplay', () => {
 		sideboard.value = [];
 		companion.value = { name: 'Lurrus of the Dream-Den' };
 		deckStats.value = [{ type: 'Instants', count: 12 }];
+		deckCounters.value = [];
 		highlander.value = createHighlanderSummary();
 		tokenCards.value = [];
+		primaryName.value = 'Alice';
+		secondaryName.value = 'Mono Blue';
+		deckColors.value = 'U';
 	});
 
 	it('renders a styled deck meta pill below the top deck info row', async () => {
@@ -296,6 +307,17 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('[data-testid="sideboard-stack-row"]').findAll('[data-testid="deck-card"]')).toHaveLength(2);
 	});
 
+	it('does not reserve an empty Mainboard section beside a populated Sideboard', async () => {
+		mainboard.value = [];
+		sideboard.value = [createCard({ name: 'Force of Will', compartment: 'sideboard' })];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="sideboard-stack-column"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="sideboard-stack-row"]').findAll('[data-testid="deck-card"]')).toHaveLength(1);
+	});
+
 	it('renders no cards at board: sideboard when the sideboard is empty', async () => {
 		mutableConfig = {
 			...mutableConfig,
@@ -307,6 +329,40 @@ describe('screenDeckDisplay', () => {
 
 		expect(wrapper.find('[data-testid="deck-card"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="sideboard-section"]').exists()).toBe(false);
+	});
+
+	it('renders a Broadcast Deck List with source-neutral header and metadata while suppressing Highlander UI', async () => {
+		mutableConfig = {
+			...mutableConfig,
+			deckSource: { type: 'broadcast', broadcastDeckListId: 7 },
+			board: 'sideboard',
+		};
+		primaryName.value = 'Sunday Finals Control';
+		secondaryName.value = 'Azorius Control';
+		deckColors.value = 'WU';
+		mainboard.value = [];
+		sideboard.value = [createCard({
+			name: 'Rest in Peace',
+			compartment: 'sideboard',
+			highlanderPoints: null,
+		})];
+		companion.value = { name: 'Kaheera, the Orphanguard' };
+		deckStats.value = [{ type: 'Creatures', count: 0 }];
+		deckCounters.value = [{ key: 'energy', label: 'Energy', icon: 'i-lucide-zap' }];
+		highlander.value = null;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.get('h2').text()).toBe('Sunday Finals Control');
+		expect(wrapper.get('.deck-header p').text()).toBe('Azorius Control');
+		expect(wrapper.get('[data-testid="mana-colors"]').attributes('data-colors')).toBe('WU');
+		expect(wrapper.text()).toContain('Kaheera, the Orphanguard');
+		expect(wrapper.text()).toContain('Energy');
+		expect(wrapper.text()).toContain('Creatures');
+		expect(wrapper.get('[data-testid="sideboard-section"]').findAll('[data-testid="deck-card"]')).toHaveLength(1);
+		expect(wrapper.find('[data-testid="mainboard-section"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="highlander-total-inline"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="highlander-pointed-cards"]').exists()).toBe(false);
 	});
 
 	it('does not render token metadata on the Deck display', async () => {
