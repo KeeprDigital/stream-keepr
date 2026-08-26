@@ -118,7 +118,8 @@ describe('animation Effect Preset library editor', () => {
 
 		expect(wrapper.get('[data-testid="preset-alert"]').text()).toBe('Preset service unavailable');
 		expect(wrapper.emitted('apply')).toBeUndefined();
-		expect(wrapper.get('[data-testid="animation-effect-preset-select"]').element.value).toBe(preset.id);
+		const select = wrapper.get('[data-testid="animation-effect-preset-select"]').element as unknown as HTMLSelectElement;
+		expect(select.value).toBe(preset.id);
 		expect(repository.list).toHaveBeenCalledTimes(1);
 	});
 });
