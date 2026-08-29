@@ -13,6 +13,7 @@ import type {
 	MetagameSummaryResponse,
 	TokenRequirementsResponse,
 } from '~~/shared/types/metagame';
+import type { CardTypeBucket } from '~~/shared/utils/metagame';
 
 export interface MetagameScopeInput {
 	scope: MetagameScope;
@@ -31,6 +32,8 @@ export interface MetagameCardBreakdownOptions {
 	archetypeId?: number;
 	/** Legacy Screen config filter name; preserved while Screen config stores names instead of ids. */
 	archetype?: string;
+	/** Card-type buckets to drop server-side, before the limit applies. */
+	excludeTypes?: CardTypeBucket[];
 }
 
 export interface MetagameArchetypeDetailOptions {
@@ -69,6 +72,7 @@ function buildCardBreakdownQuery(
 		...(options.board ? { board: options.board } : {}),
 		...(options.archetypeId != null ? { archetypeId: options.archetypeId } : {}),
 		...(archetype ? { archetype } : {}),
+		...(options.excludeTypes?.length ? { excludeTypes: options.excludeTypes.join(',') } : {}),
 	};
 }
 

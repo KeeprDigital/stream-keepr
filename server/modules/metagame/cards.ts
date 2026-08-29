@@ -1,7 +1,8 @@
 import type { BoardSelection } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import { computeBoardScopedCardMetrics } from '~~/server/services/metagameMetrics';
-import { isMetagameAnalysisCard } from '~~/shared/utils/metagame';
+import { getCardTypeBucket, isMetagameAnalysisCard } from '~~/shared/utils/metagame';
 
 export interface AggregatedMetagameCardRow {
 	cardId: number;
@@ -21,6 +22,22 @@ export interface AggregatedMetagameCardRow {
 
 export function isEligibleMetagameCard(cardType: string | null): boolean {
 	return isMetagameAnalysisCard(cardType);
+}
+
+/**
+ * Predicate over an excluded-bucket list. An empty/absent list excludes
+ * nothing; buckets use the shared front-face classification, so a filtered
+ * breakdown matches the client-side bucket toggles exactly.
+ */
+export function createCardTypeBucketFilter(
+	excludeTypes: readonly CardTypeBucket[] | undefined,
+): (cardType: string | null) => boolean {
+	if (!excludeTypes || excludeTypes.length === 0) {
+		return () => true;
+	}
+
+	const excluded = new Set<CardTypeBucket>(excludeTypes);
+	return cardType => !excluded.has(getCardTypeBucket(cardType));
 }
 
 export function toCardBreakdownEntry(

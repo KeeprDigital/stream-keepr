@@ -1,5 +1,6 @@
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
-import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, VerticalAlign } from './enums';
+import type { CardTypeBucket } from '../utils/metagame';
+import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
@@ -555,8 +556,49 @@ export interface MetagameModeConfig {
 	animateEntries: boolean;
 }
 
+/**
+ * The Top Cards Screen: a ranked grid of the most played cards in the event's
+ * metagame, rendered as card images the way the Deck Screen renders a deck.
+ * Scoping reuses the Metagame vocabulary; `excludedCardTypes` is applied
+ * server-side before `limit`, so a filtered top N still fills N slots.
+ */
+export interface TopCardsModeConfig {
+	// Scoping (same vocabulary as the Metagame mode)
+	scope: MetagameScope;
+	topN: number;
+	playerListId?: number;
+	archetypeFilter?: string;
+
+	// Data selection & filtering
+	board: BoardSelection;
+	sortBy: MetagameCardSortBy;
+	limit: number;
+	excludedCardTypes: CardTypeBucket[];
+
+	// Grid layout
+	columns: number;
+	cardSize: DeckCardSize;
+	dynamicCardSize: boolean;
+	cardGap: number;
+
+	// Header
+	showHeader: boolean;
+	headerText?: string;
+
+	// Card labels & badges
+	showCardNames: boolean;
+	showRankBadges: boolean;
+	rankBadgeTextColor?: string;
+	rankBadgeBgColor?: string;
+	/** Which metric the stat badge shows; 'none' hides the badge. */
+	statBadge: TopCardsStat;
+	statBadgeSize?: QuantitySize;
+	statBadgeTextColor?: string;
+	statBadgeBgColor?: string;
+}
+
 // Union type for all mode configs
-export type ScreenModeConfig = DeckModeConfig | CardModeConfig | BackgroundModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | PlayerHistoryModeConfig;
+export type ScreenModeConfig = DeckModeConfig | CardModeConfig | BackgroundModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | TopCardsModeConfig | PlayerHistoryModeConfig;
 
 /**
  * The Background Screen's configuration: an ordered stack of Background Layers,
@@ -766,6 +808,33 @@ export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	animateEntries: true,
 };
 
+export const DEFAULT_TOP_CARDS_CONFIG: TopCardsModeConfig = {
+	scope: 'all',
+	topN: 8,
+	playerListId: undefined,
+	archetypeFilter: undefined,
+	board: 'mainboard',
+	sortBy: 'inclusionRate',
+	limit: 10,
+	// Nonbasic lands read as noise in a "most played" ranking; basics never
+	// reach the breakdown at all.
+	excludedCardTypes: ['Land'],
+	columns: 5,
+	cardSize: 'medium',
+	dynamicCardSize: true,
+	cardGap: 12,
+	showHeader: true,
+	headerText: undefined,
+	showCardNames: true,
+	showRankBadges: true,
+	rankBadgeTextColor: '#ffffff',
+	rankBadgeBgColor: '#7c3aed',
+	statBadge: 'inclusionRate',
+	statBadgeSize: 'medium',
+	statBadgeTextColor: '#111827',
+	statBadgeBgColor: '#ffffff',
+};
+
 // Canonical default config map for all screen modes.
 export const DEFAULT_MODE_CONFIGS = {
 	'background': DEFAULT_BACKGROUND_CONFIG,
@@ -777,6 +846,7 @@ export const DEFAULT_MODE_CONFIGS = {
 	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
 	'metagame': DEFAULT_METAGAME_CONFIG,
+	'top-cards': DEFAULT_TOP_CARDS_CONFIG,
 	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };
 
@@ -817,6 +887,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'broadcast-graphics': ['graphics'],
 	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
 	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter'],
+	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
 } as const satisfies ModeResetPreservedKeysMap;
 

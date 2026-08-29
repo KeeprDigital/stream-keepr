@@ -12,6 +12,7 @@ import {
 	screenConfigSchema,
 	screenParamsSchema,
 	standingsModeConfigSchema,
+	topCardsModeConfigSchema,
 	updateScreenSchema,
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
@@ -734,6 +735,52 @@ describe('metagameModeConfigSchema', () => {
 	it('accepts valid metagame config with column arrays', () => {
 		const result = metagameModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
+	});
+});
+
+// ──────────────── topCardsModeConfigSchema ────────────────
+
+describe('topCardsModeConfigSchema', () => {
+	const validConfig = {
+		scope: 'all' as const,
+		topN: 8,
+		board: 'mainboard' as const,
+		sortBy: 'inclusionRate' as const,
+		limit: 10,
+		excludedCardTypes: ['Land'],
+		columns: 5,
+		cardSize: 'medium' as const,
+		dynamicCardSize: true,
+		cardGap: 12,
+		showHeader: true,
+		showCardNames: true,
+		showRankBadges: true,
+		statBadge: 'inclusionRate' as const,
+		statBadgeSize: 'medium' as const,
+	};
+
+	it('accepts a valid top cards config', () => {
+		expect(topCardsModeConfigSchema.safeParse(validConfig).success).toBe(true);
+	});
+
+	it('accepts an empty excluded-types list', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, excludedCardTypes: [] }).success).toBe(true);
+	});
+
+	it('rejects an unknown excluded card type', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, excludedCardTypes: ['Tribal'] }).success).toBe(false);
+	});
+
+	it('rejects a limit above the grid cap', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, limit: 61 }).success).toBe(false);
+	});
+
+	it('rejects the stat badge showing an unknown metric', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, statBadge: 'winRate' }).success).toBe(false);
+	});
+
+	it('is strict about unknown keys', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, pageSize: 10 }).success).toBe(false);
 	});
 });
 

@@ -42,6 +42,7 @@ import {
 	SIDEBOARD_PLACEMENT_VALUES,
 	STANDINGS_COLUMN_KEY_VALUES,
 	STANDINGS_VIEW_MODE_VALUES,
+	TOP_CARDS_STAT_VALUES,
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
@@ -110,6 +111,7 @@ import {
 	FEATURE_MATCH_SOURCE_ROLE_VALUES,
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
+import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
@@ -1831,6 +1833,31 @@ export const metagameModeConfigSchema = z.object({
 	animateEntries: z.boolean(),
 }).strict();
 
+export const topCardsModeConfigSchema = z.object({
+	scope: z.enum(METAGAME_SCOPE_VALUES),
+	topN: z.number().int().min(1).max(500),
+	playerListId: z.number().int().positive().optional(),
+	archetypeFilter: z.string().max(200).optional(),
+	board: z.enum(BOARD_SELECTION_VALUES),
+	sortBy: z.enum(METAGAME_CARD_SORT_BY_VALUES),
+	limit: z.number().int().min(1).max(60),
+	excludedCardTypes: z.array(z.enum(CARD_TYPE_BUCKET_ORDER)).max(CARD_TYPE_BUCKET_ORDER.length),
+	columns: z.number().int().min(1).max(12),
+	cardSize: deckCardSizeSchema,
+	dynamicCardSize: z.boolean(),
+	cardGap: z.number().int().min(0).max(100),
+	showHeader: z.boolean(),
+	headerText: z.string().max(200).optional(),
+	showCardNames: z.boolean(),
+	showRankBadges: z.boolean(),
+	rankBadgeTextColor: optionalCssColorSchema,
+	rankBadgeBgColor: optionalCssColorSchema,
+	statBadge: z.enum(TOP_CARDS_STAT_VALUES),
+	statBadgeSize: quantitySizeSchema.optional(),
+	statBadgeTextColor: optionalCssColorSchema,
+	statBadgeBgColor: optionalCssColorSchema,
+}).strict();
+
 // Map of mode name to its config schema
 export const modeConfigSchemaMap = {
 	'background': backgroundModeConfigSchema,
@@ -1842,6 +1869,7 @@ export const modeConfigSchemaMap = {
 	'feature-match-overlay': featureMatchOverlayModeConfigSchema,
 	'broadcast-graphics': broadcastGraphicsModeConfigSchema,
 	'metagame': metagameModeConfigSchema,
+	'top-cards': topCardsModeConfigSchema,
 	'player-history': playerHistoryModeConfigSchema,
 } as const;
 
@@ -1855,6 +1883,7 @@ export const modeConfigPatchSchemaMap = {
 	'feature-match-overlay': createModeConfigPatchSchema(featureMatchOverlayModeConfigSchema),
 	'broadcast-graphics': createModeConfigPatchSchema(broadcastGraphicsModeConfigSchema),
 	'metagame': createModeConfigPatchSchema(metagameModeConfigSchema),
+	'top-cards': createModeConfigPatchSchema(topCardsModeConfigSchema),
 	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
 } as const;
 

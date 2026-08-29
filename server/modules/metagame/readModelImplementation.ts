@@ -16,13 +16,14 @@ import type {
 	TokenSourceCardEntry,
 } from '~~/shared/types/metagame';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
+import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from 'hub:db';
 import { archetypeCards, archetypes, cards, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
 import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
 import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype } from '~~/server/modules/metagame/archetypes';
-import { compareCardBreakdownEntries, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
+import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
 import { resolveMetagameScope } from '~~/server/modules/metagame/scopeModel';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
 import { buildMetagameFacts } from '~~/server/services/metagameFacts';
@@ -156,6 +157,7 @@ export function createMetagameReadModelImplementation() {
 		totalDecks: number,
 		sortBy: 'inclusionRate' | 'avgCopies' | 'totalCopies' = 'inclusionRate',
 		limit: number = 50,
+		excludeTypes?: CardTypeBucket[],
 	): Promise<CardBreakdownResponse> {
 		const scope = metagameScope.scope;
 		const board = metagameScope.deckUniverse.board;
@@ -191,9 +193,10 @@ export function createMetagameReadModelImplementation() {
 			))
 			.groupBy(playerDeckCards.cardId, cards.name, cards.cardType, cards.scryfallId, cards.colors, cards.cmc, cards.manaCost);
 
+		const includesCardType = createCardTypeBucketFilter(excludeTypes);
 		const entries: CardBreakdownEntry[] = aggRows
 			.map(row => toCardBreakdownEntry(row, totalDecks, board))
-			.filter(entry => entry.totalCopies > 0 && isEligibleMetagameCard(entry.cardType));
+			.filter(entry => entry.totalCopies > 0 && isEligibleMetagameCard(entry.cardType) && includesCardType(entry.cardType));
 
 		entries.sort((a, b) => compareCardBreakdownEntries(sortBy, a, b));
 
@@ -210,6 +213,7 @@ export function createMetagameReadModelImplementation() {
 		archetypeId?: number,
 		board: BoardSelection = 'full',
 		archetypeName?: string,
+		excludeTypes?: CardTypeBucket[],
 	): Promise<CardBreakdownResponse> {
 		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, archetype: archetypeName, board });
 		if (metagameScope.resolvedArchetypeId === null) {
@@ -218,7 +222,7 @@ export function createMetagameReadModelImplementation() {
 
 		const totalDecks = await metagameScope.deckUniverse.countDecks();
 
-		return computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit);
+		return computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit, excludeTypes);
 	}
 
 	// ── Summary dashboard ──────────────────────────────────────────

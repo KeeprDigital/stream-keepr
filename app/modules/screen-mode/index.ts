@@ -33,6 +33,8 @@ const ScreenModesBroadcastGraphicsDisplay = defineAsyncComponent(() => import('~
 const ScreenModesBroadcastGraphicsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/BroadcastGraphics/Settings.vue'));
 const ScreenModesMetagameDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Metagame/Display.vue'));
 const ScreenModesMetagameSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Metagame/Settings.vue'));
+const ScreenModesTopCardsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCards/Display.vue'));
+const ScreenModesTopCardsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCards/Settings.vue'));
 const ScreenModesPlayerHistoryDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Display.vue'));
 const ScreenModesPlayerHistorySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Settings.vue'));
 
@@ -70,6 +72,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'feature-match-overlay': { displayComponent: ScreenModesFeatureMatchOverlayDisplay, settingsComponent: ScreenModesFeatureMatchOverlaySettings },
 	'broadcast-graphics': { displayComponent: ScreenModesBroadcastGraphicsDisplay, settingsComponent: ScreenModesBroadcastGraphicsSettings },
 	'metagame': { displayComponent: ScreenModesMetagameDisplay, settingsComponent: ScreenModesMetagameSettings },
+	'top-cards': { displayComponent: ScreenModesTopCardsDisplay, settingsComponent: ScreenModesTopCardsSettings },
 	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 

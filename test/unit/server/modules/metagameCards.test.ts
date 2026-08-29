@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareCardBreakdownEntries, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
+import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
 
 const row = {
 	cardId: 1,
@@ -42,5 +42,36 @@ describe('metagame card rules', () => {
 
 		expect(compareCardBreakdownEntries('inclusionRate', low, high)).toBeGreaterThan(0);
 		expect(compareCardBreakdownEntries('totalCopies', low, high)).toBeGreaterThan(0);
+	});
+});
+
+describe('createCardTypeBucketFilter', () => {
+	it('excludes nothing when no buckets are given', () => {
+		expect(createCardTypeBucketFilter(undefined)('Instant')).toBe(true);
+		expect(createCardTypeBucketFilter([])('Land — Island')).toBe(true);
+	});
+
+	it('drops cards whose front-face bucket is excluded', () => {
+		const filter = createCardTypeBucketFilter(['Land', 'Creature']);
+
+		expect(filter('Legendary Creature — Human Wizard')).toBe(false);
+		expect(filter('Land — Urza’s Saga')).toBe(false);
+		expect(filter('Instant')).toBe(true);
+	});
+
+	it('buckets by the front face of a double-faced card', () => {
+		const filter = createCardTypeBucketFilter(['Land']);
+
+		// Front face is a Sorcery, back face a Land — the front face decides.
+		expect(filter('Sorcery // Land')).toBe(true);
+		expect(filter('Land // Creature')).toBe(false);
+	});
+
+	it('maps unmatched types to the Other bucket', () => {
+		const filter = createCardTypeBucketFilter(['Other']);
+
+		expect(filter('Conspiracy')).toBe(false);
+		expect(filter(null)).toBe(false);
+		expect(filter('Artifact')).toBe(true);
 	});
 });

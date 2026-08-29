@@ -146,6 +146,30 @@ describe('metagameCardsQuerySchema', () => {
 		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' });
 		expect(result.success).toBe(false);
 	});
+
+	it('parses comma-separated excludeTypes into card-type buckets', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: 'Land,Other' });
+		expect(result.success).toBe(true);
+		if (result.success)
+			expect(result.data.excludeTypes).toEqual(['Land', 'Other']);
+	});
+
+	it('leaves excludeTypes undefined when omitted', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all' });
+		expect(result.success).toBe(true);
+		if (result.success)
+			expect(result.data.excludeTypes).toBeUndefined();
+	});
+
+	it('rejects excludeTypes containing an unknown bucket', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: 'Land,Tribal' });
+		expect(result.success).toBe(false);
+	});
+
+	it('rejects an empty excludeTypes value', () => {
+		const result = metagameCardsQuerySchema.safeParse({ scope: 'all', excludeTypes: '' });
+		expect(result.success).toBe(false);
+	});
 });
 
 // ──────────────── metagameParamsSchema ────────────────

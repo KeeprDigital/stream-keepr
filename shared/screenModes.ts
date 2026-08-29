@@ -86,6 +86,7 @@ export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
 		},
 	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown' },
+	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid' },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history' },
 } as const;
 
