@@ -1,5 +1,6 @@
-import type { MetagameScope } from '~~/shared/types/enums';
+import type { MetagameConversionMetric, MetagameScope } from '~~/shared/types/enums';
 import type { MetagameSummaryResponse } from '~~/shared/types/metagame';
+import type { MetagameConversionInput } from '~/modules/metagame/client';
 import { buildMetagameScopeQuery, useMetagameClient } from '~/modules/metagame/client';
 
 export const useMetagameStore = defineStore('metagame', () => {
@@ -8,7 +9,12 @@ export const useMetagameStore = defineStore('metagame', () => {
 	// ── Scope state (shared across all metagame views) ──
 	const scope = ref<MetagameScope>('all');
 	const topN = ref<number>(8);
+	const minPoints = ref<number>(9);
 	const playerListId = ref<number | undefined>(undefined);
+
+	// ── Conversion target (shared across archetype views) ──
+	const conversionMetric = ref<MetagameConversionMetric>('topN');
+	const conversionThreshold = ref<number>(8);
 
 	// ── Cached data ──
 	const summaryData = ref<MetagameSummaryResponse | null>(null);
@@ -39,12 +45,19 @@ export const useMetagameStore = defineStore('metagame', () => {
 		return buildMetagameScopeQuery({
 			scope: scope.value,
 			topN: topN.value,
+			minPoints: minPoints.value,
 			playerListId: playerListId.value,
 		});
 	}
 
 	/** Reactive scope query params — use as fetch query for any metagame endpoint */
 	const scopeQuery = computed(() => buildScopeQuery());
+
+	/** Reactive conversion target — spread into archetype breakdown/detail options */
+	const conversionQuery = computed<MetagameConversionInput>(() => ({
+		conversionMetric: conversionMetric.value,
+		conversionThreshold: conversionThreshold.value,
+	}));
 
 	function applyRemoteInvalidated() {
 		summaryData.value = null;
@@ -83,7 +96,10 @@ export const useMetagameStore = defineStore('metagame', () => {
 		activeLoads.clear();
 		scope.value = 'all';
 		topN.value = 8;
+		minPoints.value = 9;
 		playerListId.value = undefined;
+		conversionMetric.value = 'topN';
+		conversionThreshold.value = 8;
 		applyRemoteInvalidated();
 		loading.value = false;
 		error.value = null;
@@ -93,8 +109,14 @@ export const useMetagameStore = defineStore('metagame', () => {
 		// Scope
 		scope,
 		topN,
+		minPoints,
 		playerListId,
 		scopeQuery,
+
+		// Conversion target
+		conversionMetric,
+		conversionThreshold,
+		conversionQuery,
 
 		// Data
 		summaryData,

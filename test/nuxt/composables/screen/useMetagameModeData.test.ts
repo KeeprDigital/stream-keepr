@@ -1,3 +1,4 @@
+import type { MetagameScope } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,8 +18,9 @@ const mockPlayerStore = {
 
 const defaultConfig = {
 	viewMode: 'archetype' as 'archetype' | 'cards',
-	scope: 'all' as const,
+	scope: 'all' as MetagameScope,
 	topN: 8,
+	minPoints: 9,
 	playerListId: undefined,
 	archetypeFilter: undefined as string | undefined,
 	sortBy: 'metaShare' as const,
@@ -107,6 +109,30 @@ describe('useMetagameModeData', () => {
 		const { headerText } = useMetagameModeData();
 
 		expect(headerText.value).toBe('Full Field Metagame');
+	});
+
+	it('generates header text for archetype view with minPoints scope', () => {
+		mutableConfig.scope = 'minPoints';
+		mutableConfig.minPoints = 12;
+
+		const { headerText } = useMetagameModeData();
+
+		expect(headerText.value).toBe('12+ Points Metagame');
+	});
+
+	it('fetchData sends minPoints in the query when scope is minPoints', async () => {
+		mutableConfig.scope = 'minPoints';
+		mutableConfig.minPoints = 12;
+
+		const { fetchData } = useMetagameModeData();
+		await fetchData();
+
+		expect(mockFetch).toHaveBeenLastCalledWith(
+			expect.stringContaining('/metagame/archetypes'),
+			{
+				query: expect.objectContaining({ scope: 'minPoints', minPoints: 12 }),
+			},
+		);
 	});
 
 	it('isEmpty is true when entries are empty and not loading', async () => {

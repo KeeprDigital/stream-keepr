@@ -11,6 +11,7 @@ function makeArchetype(overrides?: Partial<ArchetypeBreakdownEntry>): ArchetypeB
 		metaShare: 24,
 		winRate: 62.5,
 		avgPosition: 3.5,
+		conversionRate: null,
 		keyCards: [],
 		...overrides,
 	};

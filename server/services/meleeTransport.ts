@@ -54,6 +54,7 @@ interface MeleeTransportLogEntry {
 	failureCategory?: MeleeFailureCategory;
 	retryDelayMs?: number;
 	retryDelaySource?: 'exponential_backoff' | 'retry_after';
+	validationIssues?: string[];
 }
 
 interface MeleeTransportLogger {
@@ -236,7 +237,7 @@ export function createMeleeTransport(
 		outcome: MeleeTransportLogEntry['outcome'],
 		details: Pick<
 			MeleeTransportLogEntry,
-			'failureCategory' | 'retryDelayMs' | 'retryDelaySource'
+			'failureCategory' | 'retryDelayMs' | 'retryDelaySource' | 'validationIssues'
 		> = {},
 	): MeleeTransportLogEntry => ({
 		service: 'melee',
@@ -451,11 +452,19 @@ export function createMeleeTransport(
 
 			const parsed = schema.safeParse(raw);
 			if (!parsed.success) {
+				const validationIssues = [...new Set(parsed.error.issues.map((issue) => {
+					const path = issue.path
+						.map(segment => typeof segment === 'number' ? '[]' : String(segment))
+						.join('.')
+						.replaceAll('.[]', '[]');
+					return `${issue.code}:${path || '<root>'}`;
+				}))].slice(0, 10);
 				log('error', logEntry(context, requestStartedAt, attempt, status, 'failure', {
 					failureCategory: 'schema_validation',
+					validationIssues,
 				}));
-				// Zod issues can contain rejected upstream values. Keep the durable sync
-				// error and HTTP response limited to the safe, low-cardinality endpoint.
+				// Only issue codes and normalized field paths are logged. Zod messages
+				// and rejected values can contain upstream player data and must not escape.
 				throw new MeleeTransportError(
 					`Melee.gg API response failed schema validation for ${context.endpoint}`,
 					'schema_validation',

@@ -229,6 +229,56 @@ describe('metagame API', () => {
 			expect(data.totalPlayers).toBe(2);
 		});
 
+		it('respects scope=minPoints', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?scope=minPoints&minPoints=12`)) as any;
+			// Players with at least 12 points: p1 (15), p2 (12)
+			expect(data.scope).toBe('minPoints');
+			expect(data.totalPlayers).toBe(2);
+		});
+
+		it('returns null conversion rates without a conversion target', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
+			expect(data.entries[0].conversionRate).toBeNull();
+		});
+
+		it('computes conversion rate against a topN target', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=topN&conversionThreshold=2`)) as any;
+
+			// Mono Red: p1 (position 1) converted, p3 (position 3) not → 50%
+			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
+			expect(monoRed.conversionRate).toBe(50);
+
+			// Azorius: p2 (position 2) converted → 100%
+			const azorius = data.entries.find((e: any) => e.name === 'Azorius Control');
+			expect(azorius.conversionRate).toBe(100);
+		});
+
+		it('computes conversion rate against a minPoints target', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=minPoints&conversionThreshold=12`)) as any;
+
+			// Mono Red: p1 (15 points) converted, p3 (9 points) not → 50%
+			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
+			expect(monoRed.conversionRate).toBe(50);
+		});
+
+		it('rejects a conversion metric without a threshold', async () => {
+			await expect(
+				$fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=topN`),
+			).rejects.toMatchObject({ statusCode: 400 });
+		});
+
+		it('rolls archetypes beyond limit into an Other row', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?limit=1`)) as any;
+
+			expect(data.entries).toHaveLength(2);
+			expect(data.entries[0].name).toBe('Mono Red');
+
+			const other = data.entries[1];
+			expect(other.id).toBe(-1);
+			expect(other.name).toBe('Other');
+			expect(other.count).toBe(1);
+		});
+
 		it('returns keyCards array for each archetype', async () => {
 			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
 			expect(data.entries[0]).toHaveProperty('keyCards');
@@ -288,6 +338,21 @@ describe('metagame API', () => {
 			expect(data.players).toHaveLength(2);
 			expect(data.keyCards).toBeInstanceOf(Array);
 			expect(data.cardBreakdown).toBeInstanceOf(Array);
+		});
+
+		it('computes conversion against the requested target', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}?conversionMetric=topN&conversionThreshold=2`)) as any;
+
+			// Mono Red: p1 (position 1) converted, p3 (position 3) not
+			expect(data.convertedCount).toBe(1);
+			expect(data.conversionRate).toBe(50);
+		});
+
+		it('returns null conversion stats without a conversion target', async () => {
+			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`)) as any;
+
+			expect(data.convertedCount).toBeNull();
+			expect(data.conversionRate).toBeNull();
 		});
 
 		it('supports large archetype populations without failing', async () => {

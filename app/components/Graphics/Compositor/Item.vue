@@ -333,7 +333,30 @@ watch(
 				:key="index"
 				:style="segment.style"
 				:data-graphic-input-key="segment.inputKey"
-			>{{ segment.text }}</span>
+				:aria-label="segment.manaColors ? segment.text : undefined"
+			>
+				<span
+					v-if="segment.manaColors?.monochrome"
+					class="graphics-compositor-item__mana-colors-key"
+					data-mana-colors-key
+					aria-hidden="true"
+				>
+					<span
+						v-for="symbol in segment.manaColors.symbolCount"
+						:key="symbol"
+						class="graphics-compositor-item__mana-color-key-symbol"
+					/>
+				</span>
+				<MtgManaColorDisplay
+					v-else-if="segment.manaColors"
+					:colors="segment.manaColors.colors"
+					size="lg"
+					cost
+					data-mana-colors
+					aria-hidden="true"
+				/>
+				<template v-else>{{ segment.text }}</template>
+			</span>
 		</p>
 
 		<!--
@@ -545,6 +568,22 @@ watch(
 	display: block;
 	overflow: visible;
 	pointer-events: none;
+}
+
+.graphics-compositor-item__mana-colors-key {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.1em;
+	vertical-align: middle;
+}
+
+.graphics-compositor-item__mana-color-key-symbol {
+	display: inline-block;
+	width: 1.15em;
+	height: 1.15em;
+	flex: 0 0 auto;
+	border-radius: 9999px;
+	background: #fff;
 }
 
 /*

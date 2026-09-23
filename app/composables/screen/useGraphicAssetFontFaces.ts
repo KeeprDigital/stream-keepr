@@ -4,7 +4,7 @@ import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetR
 import { graphicAssetFontFaceFamily } from '~~/shared/modules/graphics/typography';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
-interface FontSource {
+export interface GraphicAssetFontSource {
 	family: string;
 	url: string;
 }
@@ -54,11 +54,11 @@ export function useGraphicAssetFontFaces(
 			document.fonts.delete(face);
 	}
 
-	function familyKey(entries: readonly FontSource[]) {
+	function familyKey(entries: readonly GraphicAssetFontSource[]) {
 		return entries.map(({ family }) => family).sort().join('\0');
 	}
 
-	function sourceKey(entries: readonly FontSource[]) {
+	function sourceKey(entries: readonly GraphicAssetFontSource[]) {
 		return entries.map(({ family, url }) => `${family}\0${url}`).sort().join('');
 	}
 
@@ -67,7 +67,7 @@ export function useGraphicAssetFontFaces(
 	 * pinning one revision are one `FontFace`, and registering it twice would leave
 	 * the second copy in `document.fonts` after the first is discarded.
 	 */
-	const sources = computed<FontSource[]>(() => {
+	const sources = computed<GraphicAssetFontSource[]>(() => {
 		const byFamily = new Map(toValue(references)
 			.filter(item => item.kind === 'font')
 			.map(({ reference }) => {
@@ -189,5 +189,8 @@ export function useGraphicAssetFontFaces(
 	return {
 		fontsReady: readonly(fontsReady),
 		fontsFailed: readonly(fontsFailed),
+		// The PNG exporter must carry the same exact revision bytes into its
+		// detached SVG; a document-registered external face taints its canvas.
+		fontSources: sources,
 	};
 }

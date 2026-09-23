@@ -6,6 +6,7 @@ import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
 } from '~~/shared/featureMatchSampleDataset';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
@@ -57,10 +58,12 @@ const {
 	graphicAssetReferences,
 );
 
-// Typography naming a library font paints in the family this registers, so the
-// output stays hidden until every one of them is loaded rather than flashing a
-// fallback typeface on air.
-const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
+// Typography naming a library font paints in the family this registers. Keep the
+// output hidden while a load is still in flight so it cannot flash a fallback
+// typeface, but reveal it after a terminal failure: a standalone URL without its
+// asset capability must not make the Frame, Sources, and every unrelated Graphic
+// Item disappear just because the exact font bytes are unavailable.
+const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
@@ -109,7 +112,12 @@ const hostState = computed(() => ({
  * are always the same reading.
  */
 const graphicsContext = computed(() => usesSampleDataset.value
-	? FEATURE_MATCH_SAMPLE_CONTEXT
+	? {
+			...FEATURE_MATCH_SAMPLE_CONTEXT,
+			// The sample supplies awkward player values, not a pretend Match Format.
+			// Its win indicators follow the Event being authored.
+			bestOf: toFeatureMatchDefaults(event.value).bestOf,
+		}
 	: featureMatchGraphicsContext(hostState.value, sideboards.value));
 
 // The per-item reveal trigger (#492): a sideboardRevealed edge plays the Deck
@@ -308,10 +316,11 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="{ ...canvasStyle, visibility: fontsReady ? undefined : 'hidden' }"
+		:style="{ ...canvasStyle, visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
 		:data-export-ready="(!loading && !error && !videoCompatibilityBlocked && fontsReady && !fontsFailed).toString()"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
+		:data-export-font-sources="JSON.stringify(fontSources)"
 	>
 		<svg
 			class="frame-layer"
@@ -374,7 +383,7 @@ onBeforeUnmount(() => {
 				:media="config.layout.frame.mediaBackground"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
-				:mask-id="frameMaskId"
+				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
 				:output="resolvedOutput"
 			/>
 			<image
@@ -406,7 +415,7 @@ onBeforeUnmount(() => {
 				:animation="config.layout.frame.animation"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
-				:mask-id="frameMaskId"
+				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
 				:output="resolvedOutput"
 			/>
 			<g
@@ -446,12 +455,29 @@ onBeforeUnmount(() => {
 			</g>
 		</svg>
 
-		<div
-			v-for="source in sourceItems"
-			:key="source.item.id"
-			:data-graphic-item-id="source.item.id"
-			:style="source.style"
-		/>
+		<template v-for="source in sourceItems" :key="source.item.id">
+			<!--
+				The glow is derived from a border-only copy beneath the Source Item, so a
+				drop shadow follows its per-corner radii and enabled sides exactly. Keeping
+				it separate also stops a painted source background from creating a second,
+				rectangular halo of its own.
+			-->
+			<div
+				v-if="source.glowContainerStyle && source.glowStyle"
+				class="feature-match-overlay__source-glow-container"
+				:style="source.glowContainerStyle"
+				aria-hidden="true"
+			>
+				<div
+					class="feature-match-overlay__source-glow"
+					:style="source.glowStyle"
+				/>
+			</div>
+			<div
+				:data-graphic-item-id="source.item.id"
+				:style="source.style"
+			/>
+		</template>
 
 		<!--
 			The Feature Match Layout's shared item tree, above the Frame and the Source

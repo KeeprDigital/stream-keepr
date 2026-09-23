@@ -13,6 +13,7 @@ import { playerListMembers, playerLists, players } from '~~/server/db/schema';
 export type PlayerScope
 	= | { kind: 'all'; eventId: number }
 		| { kind: 'topN'; eventId: number; topN: number }
+		| { kind: 'minPoints'; eventId: number; minPoints: number }
 		| { kind: 'playerList'; eventId: number; playerListId: number };
 
 function playerListPlayerIdsSubquery(scope: Extract<PlayerScope, { kind: 'playerList' }>) {
@@ -35,6 +36,14 @@ export function playerScopeWhere(scope: PlayerScope): SQL {
 				eq(players.isActive, true),
 				isNotNull(players.position),
 				sql`${players.position} <= ${scope.topN}`,
+			)!;
+
+		case 'minPoints':
+			return and(
+				eq(players.eventId, scope.eventId),
+				eq(players.isActive, true),
+				isNotNull(players.points),
+				sql`${players.points} >= ${scope.minPoints}`,
 			)!;
 
 		case 'playerList':
@@ -71,12 +80,16 @@ export function getPlayerScope(
 	scope: MetagameScope,
 	topN?: number,
 	playerListId?: number,
+	minPoints?: number,
 ): PlayerScope {
 	if (scope === 'playerList' && playerListId)
 		return { kind: 'playerList', playerListId, eventId };
 
 	if (scope === 'topN' && topN)
 		return { kind: 'topN', topN, eventId };
+
+	if (scope === 'minPoints' && minPoints != null)
+		return { kind: 'minPoints', minPoints, eventId };
 
 	return { kind: 'all', eventId };
 }

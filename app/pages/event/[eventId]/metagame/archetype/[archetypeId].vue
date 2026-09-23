@@ -86,6 +86,10 @@ async function setActiveSection(section: string | number) {
 }
 
 // ── Stat strip ──
+const conversionLabel = computed(() => metagameStore.conversionMetric === 'topN'
+	? `Top ${metagameStore.conversionThreshold}`
+	: `${metagameStore.conversionThreshold}+ pts`);
+
 const stats = computed(() => {
 	if (!detail.value)
 		return [];
@@ -94,6 +98,12 @@ const stats = computed(() => {
 		{ label: 'Meta Share', value: detail.value.metaShare != null ? `${detail.value.metaShare}%` : null },
 		{ label: 'Win Rate', value: detail.value.winRate != null ? `${detail.value.winRate}%` : null },
 		{ label: 'Avg Place', value: detail.value.avgPosition },
+		{
+			label: `Conversion (${conversionLabel.value})`,
+			value: detail.value.conversionRate != null && detail.value.convertedCount != null
+				? `${detail.value.conversionRate}% (${detail.value.convertedCount}/${detail.value.playerCount})`
+				: null,
+		},
 	];
 });
 
@@ -106,7 +116,7 @@ async function fetchDetail() {
 			eventStore.eventId!,
 			archetypeId.value,
 			metagameStore.scopeQuery,
-			{ board: archetypeCardBoardFilter.value },
+			{ board: archetypeCardBoardFilter.value, ...metagameStore.conversionQuery },
 		),
 		{
 			latestKey: 'detail',
@@ -136,7 +146,10 @@ watch(
 		() => archetypeId.value,
 		() => metagameStore.scope,
 		() => metagameStore.topN,
+		() => metagameStore.minPoints,
 		() => metagameStore.playerListId,
+		() => metagameStore.conversionMetric,
+		() => metagameStore.conversionThreshold,
 		() => archetypeCardBoardFilter.value,
 		() => metagameStore.invalidationVersion,
 	],

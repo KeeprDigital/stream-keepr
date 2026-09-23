@@ -109,7 +109,8 @@ A Screen Mode rendering an ordered stack of Background Layers, replacing the for
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in a Background Screen's ordered stack — a colour, gradient, image, video, or Animation Effect, owning its own enabled state and opacity.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect, owning its own enabled state and opacity.
+The Background Screen's configuration is such a stack, and every plain overlay mode (Card, Deck, Standings, Top Cut, Metagame, Player History) carries its own optional stack painted behind that mode's content; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Metagame**:
@@ -117,6 +118,10 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
+
+**Conversion Rate**:
+The percentage of an Archetype's Players in the current Metagame scope that reached a conversion target — a Top N placement or a minimum match-point total. The target is a numerator condition evaluated inside the scope; it never narrows the scope itself.
+_Avoid_: top-cut rate, cash rate, qualification rate
 
 **Realtime Event Session**:
 The client-side subscription for Event messages.
@@ -171,7 +176,7 @@ A Screen in Broadcast Graphics mode whose output composes an ordered stack of co
 **Broadcast Graphics Background**:
 The one Animation Effect a Broadcast Graphics Screen composes its stack over, with its own enabled state and opacity.
 It renders in the Overlay and Fill Outputs and never in the Key Output, which stays an alpha matte. A Screen with none is transparent behind its graphics in the Overlay Output.
-_Avoid_: Screen background, backdrop graphic, background layer (which is a Background Screen's)
+_Avoid_: Screen background, backdrop graphic, background layer (a Background Layer stack is what the plain overlay modes carry; a graphics host composes over this instead)
 
 **Broadcast Graphics Live Session**:
 The continuous playout epoch of a Broadcast Graphics Screen. It survives reloads, disconnections, and restarts, but ends when the Screen changes away from Broadcast Graphics mode or its live state is explicitly reset.

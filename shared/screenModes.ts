@@ -95,6 +95,31 @@ export function getDisplayType(mode: ScreenMode): DisplayType {
 	return SCREEN_MODES[mode].displayType;
 }
 
+/**
+ * The Screen Modes that carry their own optional `backgroundLayers` stack,
+ * painted behind the mode's content by the Screen renderer host.
+ *
+ * The rule behind the list: every plain overlay mode qualifies. Control
+ * screens are operator surfaces, not program output; the Background Screen is
+ * itself the stack; and the graphics hosts (Feature Match Overlay, Broadcast
+ * Graphics) own their backgrounds and rely on transparent Overlay/Key
+ * Outputs, so a host-painted layer behind them would break keying.
+ */
+export const BACKGROUND_LAYERS_CAPABLE_MODES = [
+	'card',
+	'deck',
+	'standings',
+	'topCut',
+	'metagame',
+	'player-history',
+] as const satisfies readonly ScreenMode[];
+
+export type BackgroundLayersCapableMode = typeof BACKGROUND_LAYERS_CAPABLE_MODES[number];
+
+export function screenModeSupportsBackgroundLayers(mode: ScreenMode): mode is BackgroundLayersCapableMode {
+	return (BACKGROUND_LAYERS_CAPABLE_MODES as readonly ScreenMode[]).includes(mode);
+}
+
 /** Derive which generic Container controls apply to a Screen Mode. */
 export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {
 	return {

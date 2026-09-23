@@ -3,12 +3,13 @@ import type { AnimationEffectRenderPlan, FeatureMatchOverlayFrameAnimationConfig
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan, parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import ScreenAnimationEffectSurface from '~/components/Screen/AnimationEffectSurface.vue';
+import { featureMatchOverlayFrameContentMaskStyle } from '~/modules/feature-match-overlay/renderModel';
 
 const props = defineProps<{
 	animation?: FeatureMatchOverlayFrameAnimationConfig;
 	canvasWidth: number;
 	canvasHeight: number;
-	maskId: string;
+	cutoutPaths: readonly string[];
 	output: FeatureMatchOverlayOutput;
 }>();
 
@@ -16,7 +17,14 @@ const props = defineProps<{
 const parsedAnimation = computed(() => parseFrameAnimationConfig(props.animation));
 
 const isVisible = computed(() => props.output !== 'key' && parsedAnimation.value?.enabled === true);
-const hostStyle = computed(() => ({ opacity: parsedAnimation.value?.opacity ?? 0 }));
+const hostStyle = computed(() => ({
+	...featureMatchOverlayFrameContentMaskStyle(
+		props.canvasWidth,
+		props.canvasHeight,
+		props.cutoutPaths,
+	),
+	opacity: parsedAnimation.value?.opacity ?? 0,
+}));
 
 const renderPlan = computed<AnimationEffectRenderPlan | null>(() => {
 	const config = parsedAnimation.value;
@@ -31,7 +39,6 @@ const renderPlan = computed<AnimationEffectRenderPlan | null>(() => {
 		y="0"
 		:width="canvasWidth"
 		:height="canvasHeight"
-		:mask="`url(#${maskId})`"
 	>
 		<div
 			xmlns="http://www.w3.org/1999/xhtml"

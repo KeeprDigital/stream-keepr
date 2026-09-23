@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayGlowPosition, FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
@@ -22,6 +22,12 @@ const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
 const emit = defineEmits<{
 	update: [updates: Partial<FeatureMatchSourceFramingStyle>];
 }>();
+
+const GLOW_POSITION_OPTIONS = [
+	{ label: 'Both', value: 'both' },
+	{ label: 'Inside', value: 'inside' },
+	{ label: 'Outside', value: 'outside' },
+] satisfies Array<{ label: string; value: FeatureMatchOverlayGlowPosition }>;
 
 const style = computed(() => props.framingStyle ?? {});
 
@@ -95,7 +101,7 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 			@update="(field, value) => update({ [field]: value })"
 		/>
 
-		<div class="grid gap-3 md:grid-cols-3">
+		<div class="grid gap-3 md:grid-cols-4">
 			<UFormField label="Glow colour">
 				<UInput
 					type="color"
@@ -123,6 +129,16 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 					size="sm"
 					class="w-full"
 					@update:model-value="update({ glowOpacity: $event ?? 0 })"
+				/>
+			</UFormField>
+			<UFormField label="Glow position">
+				<USelect
+					:model-value="style.glowPosition ?? 'both'"
+					:items="GLOW_POSITION_OPTIONS"
+					value-key="value"
+					size="sm"
+					class="w-full"
+					@update:model-value="update({ glowPosition: $event as FeatureMatchOverlayGlowPosition })"
 				/>
 			</UFormField>
 		</div>

@@ -1152,6 +1152,7 @@ describe('graphicsCompositionRenderModel', () => {
 			const rendered = contextItem(gameWins('wins-1'));
 			const [won, pending] = rendered.winBoxes!;
 
+			expect(won!.style).toMatchObject({ width: '22px', height: '22px' });
 			expect(won!.surface.fill.color).toBe('#22c55e');
 			// The unwon box is an outline: its fill is fully transparent rather than absent,
 			// so both boxes paint the same path and differ only in what fills it.

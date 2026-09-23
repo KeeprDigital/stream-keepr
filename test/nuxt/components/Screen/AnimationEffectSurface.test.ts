@@ -94,6 +94,47 @@ describe('screenAnimationEffectSurface', () => {
 		expect(newInstance.dispose).toHaveBeenCalledOnce();
 	});
 
+	it('sizes the renderer after mount even when the ResizeObserver reports the host size while the effect is still loading', async () => {
+		const load = deferred<unknown>();
+		const instance = effectInstance();
+		const factory = vi.fn(() => instance);
+		animationMocks.loadAnimationEffect.mockReturnValue(load.promise);
+
+		const resizeDeliveries: Array<() => void> = [];
+		class StubResizeObserver {
+			constructor(callback: () => void) {
+				resizeDeliveries.push(callback);
+			}
+
+			observe = vi.fn();
+			disconnect = vi.fn();
+		}
+		vi.stubGlobal('ResizeObserver', StubResizeObserver);
+
+		try {
+			// No width/height: the surface follows its own element, via the observer.
+			const wrapper = await mountSurface({ effect: 'fog' });
+			const host = wrapper.element as HTMLElement;
+			Object.defineProperty(host, 'clientWidth', { value: 1920, configurable: true });
+			Object.defineProperty(host, 'clientHeight', { value: 1080, configurable: true });
+
+			// The observer's mandatory initial delivery lands while the effect
+			// module import is still in flight — before any instance exists.
+			resizeDeliveries.forEach(deliver => deliver());
+
+			load.resolve(factory);
+			await flushPromises();
+
+			expect(instance.resize).toHaveBeenCalledWith(1920, 1080);
+
+			wrapper.unmount();
+			expect(instance.dispose).toHaveBeenCalledOnce();
+		}
+		finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it('disposes the old renderer when the effect changes, and mounts the new one', async () => {
 		const fogInstance = effectInstance();
 		const causticsInstance = effectInstance();

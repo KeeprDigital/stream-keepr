@@ -40,7 +40,7 @@ async function mountFrameAnimation(props: Record<string, unknown>) {
 		props: {
 			canvasWidth: 1920,
 			canvasHeight: 1080,
-			maskId: 'frame-mask',
+			cutoutPaths: ['M 100 100 H 500 V 300 H 100 Z'],
 			output: 'fill',
 			...props,
 		} as never,
@@ -49,6 +49,21 @@ async function mountFrameAnimation(props: Record<string, unknown>) {
 
 describe('featureMatchOverlayFrameAnimation', () => {
 	afterEach(() => vi.clearAllMocks());
+
+	it('masks the composited canvas itself instead of its SVG foreignObject ancestor', async () => {
+		animationMocks.loadAnimationEffect.mockResolvedValue(() => effectInstance());
+
+		const wrapper = await mountFrameAnimation({ animation: animation('fog') });
+		await flushPromises();
+
+		expect(wrapper.get('foreignObject').attributes('mask')).toBeUndefined();
+		const style = (wrapper.get('.frame-animation').element as HTMLElement).style;
+		expect(style.maskImage).toContain('data:image/svg+xml');
+		expect(decodeURIComponent(style.maskImage)).toContain('fill-rule="evenodd"');
+		expect(decodeURIComponent(style.maskImage)).toContain('M 100 100 H 500 V 300 H 100 Z');
+
+		wrapper.unmount();
+	});
 
 	it('discards an asynchronously loaded effect when a newer effect wins the race', async () => {
 		const oldLoad = deferred<unknown>();

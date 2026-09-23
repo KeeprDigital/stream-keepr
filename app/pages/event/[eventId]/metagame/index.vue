@@ -28,7 +28,7 @@ async function fetchArchetypes() {
 		() => metagameClient.loadArchetypeBreakdown(
 			eventStore.eventId!,
 			metagameStore.scopeQuery,
-			{ sortBy: archetypeSortBy.value },
+			{ sortBy: archetypeSortBy.value, ...metagameStore.conversionQuery },
 		),
 		{
 			latestKey: 'archetypes',

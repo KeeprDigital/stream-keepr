@@ -9,6 +9,7 @@ import { countScopedPlayers, getPlayerScope, playerScopeWhere } from './scope';
 export interface MetagameScopeQuery {
 	scope: MetagameScope;
 	topN?: number;
+	minPoints?: number;
 	playerListId?: number;
 	archetypeId?: number;
 	archetype?: string;
@@ -51,7 +52,7 @@ async function resolveArchetypeFilterId(eventId: number, archetypeId?: number, a
 }
 
 export async function resolveMetagameScope(eventId: number, query: MetagameScopeQuery): Promise<MetagameScopeModel> {
-	const playerScope = getPlayerScope(eventId, query.scope, query.topN, query.playerListId);
+	const playerScope = getPlayerScope(eventId, query.scope, query.topN, query.playerListId, query.minPoints);
 	const playerWhere = playerScopeWhere(playerScope);
 	const resolvedArchetypeId = await resolveArchetypeFilterId(eventId, query.archetypeId, query.archetype);
 	const playerFilters: SQL[] = [playerWhere];

@@ -46,9 +46,11 @@ export function useMetagameModeData() {
 
 		const prefix = config.value.scope === 'topN'
 			? `Top ${config.value.topN}`
-			: config.value.scope === 'playerList'
-				? 'List'
-				: 'Full Field';
+			: config.value.scope === 'minPoints'
+				? `${config.value.minPoints}+ Points`
+				: config.value.scope === 'playerList'
+					? 'List'
+					: 'Full Field';
 
 		switch (config.value.viewMode) {
 			case 'cards':
@@ -111,6 +113,7 @@ export function useMetagameModeData() {
 		return buildMetagameScopeQuery({
 			scope: config.value.scope,
 			topN: config.value.topN,
+			minPoints: config.value.minPoints,
 			playerListId: config.value.playerListId,
 		});
 	}
@@ -142,7 +145,10 @@ export function useMetagameModeData() {
 				default:
 					return {
 						...current,
-						archetypeData: await metagameClient.loadArchetypeBreakdown(evtId, scopeQuery, { sortBy: config.value.sortBy }),
+						archetypeData: await metagameClient.loadArchetypeBreakdown(evtId, scopeQuery, {
+							sortBy: config.value.sortBy,
+							limit: config.value.archetypeLimit ?? undefined,
+						}),
 					};
 			}
 		}, 'Failed to load metagame data');
@@ -164,11 +170,13 @@ export function useMetagameModeData() {
 			config.value.viewMode,
 			config.value.scope,
 			config.value.topN,
+			config.value.minPoints,
 			config.value.playerListId,
 			config.value.archetypeFilter,
 			config.value.sortBy,
 			config.value.cardSortBy,
 			config.value.limit,
+			config.value.archetypeLimit,
 		],
 		() => fetchData(),
 		{ immediate: true },

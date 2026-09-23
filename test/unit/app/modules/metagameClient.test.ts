@@ -16,6 +16,9 @@ describe('metagame client module', () => {
 	it('builds scope query parameters for all supported scopes', () => {
 		expect(buildMetagameScopeQuery({ scope: 'all', topN: 16, playerListId: 5 })).toEqual({ scope: 'all' });
 		expect(buildMetagameScopeQuery({ scope: 'topN', topN: 16 })).toEqual({ scope: 'topN', topN: 16 });
+		expect(buildMetagameScopeQuery({ scope: 'minPoints', minPoints: 9 })).toEqual({ scope: 'minPoints', minPoints: 9 });
+		expect(buildMetagameScopeQuery({ scope: 'minPoints' })).toEqual({ scope: 'minPoints' });
+		expect(buildMetagameScopeQuery({ scope: 'all', minPoints: 9 })).toEqual({ scope: 'all' });
 		expect(buildMetagameScopeQuery({ scope: 'playerList', playerListId: 5 })).toEqual({ scope: 'playerList', playerListId: 5 });
 		expect(buildMetagameScopeQuery({ scope: 'playerList' })).toEqual({ scope: 'playerList' });
 	});
@@ -32,6 +35,28 @@ describe('metagame client module', () => {
 	it('fetches archetype breakdown with sort defaults', async () => {
 		const client = useMetagameClient();
 		await client.loadArchetypeBreakdown(1, { scope: 'all' });
+
+		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/metagame/archetypes', {
+			query: { scope: 'all', sortBy: 'metaShare' },
+		});
+	});
+
+	it('sends the conversion target with archetype breakdown and detail queries', async () => {
+		const client = useMetagameClient();
+		await client.loadArchetypeBreakdown(1, { scope: 'all' }, { conversionMetric: 'topN', conversionThreshold: 8 });
+		await client.loadArchetypeDetail(1, 2, { scope: 'all' }, { conversionMetric: 'minPoints', conversionThreshold: 12 });
+
+		expect(mockFetch).toHaveBeenNthCalledWith(1, '/api/events/1/metagame/archetypes', {
+			query: { scope: 'all', sortBy: 'metaShare', conversionMetric: 'topN', conversionThreshold: 8 },
+		});
+		expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/events/1/metagame/archetypes/2', {
+			query: { scope: 'all', conversionMetric: 'minPoints', conversionThreshold: 12 },
+		});
+	});
+
+	it('omits half-specified conversion targets', async () => {
+		const client = useMetagameClient();
+		await client.loadArchetypeBreakdown(1, { scope: 'all' }, { conversionMetric: 'topN' });
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/metagame/archetypes', {
 			query: { scope: 'all', sortBy: 'metaShare' },

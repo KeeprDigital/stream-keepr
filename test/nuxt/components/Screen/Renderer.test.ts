@@ -42,11 +42,24 @@ const DisplayStub = defineComponent({
 	template: '<div data-testid="display-stub" />',
 });
 
+const BackgroundLayerStackStub = defineComponent({
+	props: {
+		layers: { type: Array, required: true },
+	},
+	template: '<div data-testid="mode-background-stack" :data-layer-count="layers.length" />',
+});
+
 async function mountComponent() {
 	const componentPath = '../../../../app/components/Screen/Renderer.vue';
 	const { default: Renderer } = await import(componentPath);
 
-	return mount(Renderer);
+	return mount(Renderer, {
+		global: {
+			stubs: {
+				ScreenBackgroundLayerStack: BackgroundLayerStackStub,
+			},
+		},
+	});
 }
 
 describe('screenRenderer', () => {
@@ -190,6 +203,54 @@ describe('screenRenderer', () => {
 		expect(renderer.attributes('style')).toContain('height: 1080px;');
 		expect(renderer.attributes('style')).toContain('padding: 0px;');
 		expect(renderer.attributes('style')).not.toContain('background: #111111;');
+	});
+
+	it('paints a capable mode\'s own background layers behind its display', async () => {
+		screen.value = createMockScreen({
+			currentMode: 'card',
+			modeConfigs: {
+				card: {
+					backgroundLayers: [
+						{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 },
+					],
+				},
+			},
+		}) as any;
+
+		const wrapper = await mountComponent();
+		const renderer = wrapper.get('.screen-renderer');
+		const stack = wrapper.get('[data-testid="mode-background-stack"]');
+
+		expect(stack.attributes('data-layer-count')).toBe('1');
+		// The stack precedes the display in the container, and the container
+		// isolates so the negative-z stack cannot escape beneath its background.
+		expect(renderer.element.firstElementChild).toBe(stack.element);
+		expect(renderer.attributes('style')).toContain('position: relative;');
+		expect(renderer.attributes('style')).toContain('isolation: isolate;');
+	});
+
+	it('renders no host stack when the mode has no background layers', async () => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="mode-background-stack"]').exists()).toBe(false);
+		expect(wrapper.get('.screen-renderer').attributes('style')).not.toContain('isolation');
+	});
+
+	it('renders no host stack for the Background Screen — its display owns its layers', async () => {
+		screen.value = createMockScreen({
+			currentMode: 'background',
+			modeConfigs: {
+				background: {
+					layers: [
+						{ id: 'wash', type: 'color', color: '#101010', enabled: true, opacity: 1 },
+					],
+				},
+			},
+		}) as any;
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="mode-background-stack"]').exists()).toBe(false);
 	});
 
 	it('leaves an embedded preview transparent so its host controls the backdrop', async () => {

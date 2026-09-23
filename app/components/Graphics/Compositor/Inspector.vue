@@ -200,6 +200,10 @@ const OVERFLOW_POLICY_OPTIONS = [
 const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
 const TEXT_TRANSFORM_OPTIONS = GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value }));
 const FONT_STYLE_OPTIONS = GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value }));
+const PLACEHOLDER_FONT_STYLE_OPTIONS = [
+	{ label: 'Same as base', value: 'base' },
+	...FONT_STYLE_OPTIONS,
+];
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
 const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
@@ -998,6 +1002,18 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 	applyToSelectedGraphic((graphic, itemId) =>
 		patchGraphicPlaceholderStyle(graphic, itemId, inputKey, patch),
 	);
+}
+
+function updatePlaceholderFontStyle(
+	inputKey: string,
+	fontStyle: string,
+) {
+	if (fontStyle !== 'base' && fontStyle !== 'normal' && fontStyle !== 'italic')
+		return;
+
+	updatePlaceholderStyle(inputKey, {
+		fontStyle: fontStyle === 'base' ? undefined : fontStyle,
+	});
 }
 
 /**
@@ -1997,6 +2013,16 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							class="w-full"
 							data-testid="graphic-placeholder-style-weight"
 							@update:model-value="updatePlaceholderStyle(inputKey, { fontWeight: $event ?? undefined })"
+						/>
+					</UFormField>
+					<UFormField label="Style" size="xs" class="col-span-2">
+						<USelect
+							:model-value="placeholderStyleFor(inputKey).fontStyle ?? 'base'"
+							:items="PLACEHOLDER_FONT_STYLE_OPTIONS"
+							value-key="value"
+							class="w-full"
+							:data-testid="`graphic-placeholder-style-font-style-${inputKey}`"
+							@update:model-value="updatePlaceholderFontStyle(inputKey, $event)"
 						/>
 					</UFormField>
 					<UFormField label="Colour" size="xs" class="col-span-2">

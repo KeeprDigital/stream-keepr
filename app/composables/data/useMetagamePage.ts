@@ -44,7 +44,10 @@ export function useMetagamePage(
 		[
 			() => metagameStore.scope,
 			() => metagameStore.topN,
+			() => metagameStore.minPoints,
 			() => metagameStore.playerListId,
+			() => metagameStore.conversionMetric,
+			() => metagameStore.conversionThreshold,
 			...(options.extraScopeWatchSources ?? []),
 		],
 		() => fetchPageData(),

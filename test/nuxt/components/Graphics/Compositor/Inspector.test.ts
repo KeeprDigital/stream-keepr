@@ -1111,6 +1111,35 @@ describe('graphicsCompositorInspector', () => {
 			)).toEqual(['player1Name']);
 		});
 
+		it('styles a player name independently from the player record', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([{
+					...textItem,
+					text: '{player1Name}\n{player1Record}',
+				} as GraphicItemConfig]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+			});
+			const nameStyle = selectField(
+				wrapper,
+				'graphic-placeholder-style-font-style-player1Name',
+			);
+			const recordStyle = selectField(
+				wrapper,
+				'graphic-placeholder-style-font-style-player1Record',
+			);
+
+			expect(nameStyle?.attributes('value')).toBe('base');
+			expect(recordStyle?.attributes('value')).toBe('base');
+			nameStyle?.vm.$emit('update:modelValue', 'italic');
+			await nextTick();
+
+			const styled = itemOf(emittedGraphics(wrapper));
+			expect(styled?.type === 'text' ? styled.placeholderStyles : undefined).toEqual({
+				player1Name: { fontStyle: 'italic' },
+			});
+		});
+
 		it('offers no Graphic Placeholder Style for a key this host does not supply', async () => {
 			// `{name}` is a legacy Feature Match token, and the shared catalogue moved the
 			// side into the key. Nothing resolves it, so styling it would style something

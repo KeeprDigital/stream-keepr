@@ -247,17 +247,24 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	});
 
 	async function captureDownload() {
-		if (!shouldDownload.value || !screenStore.activeScreen || !overlayContainer.value)
+		if (!shouldDownload.value || !screenStore.activeScreen)
 			return;
 
+		// `loading = false` makes the ScreenRenderer eligible to mount, but its
+		// template ref is not assigned until Vue flushes that render. Checking the
+		// container before this tick silently abandoned captures opened with
+		// `download=1`: the temporary tab rendered the page and then did nothing.
 		await nextTick();
+		const container = overlayContainer.value;
+		if (!container)
+			return;
 
-		const width = screenStore.activeScreen.screenConfig?.width ?? overlayContainer.value.offsetWidth;
-		const height = screenStore.activeScreen.screenConfig?.height ?? overlayContainer.value.offsetHeight;
+		const width = screenStore.activeScreen.screenConfig?.width ?? container.offsetWidth;
+		const height = screenStore.activeScreen.screenConfig?.height ?? container.offsetHeight;
 		const output = outputMode.value;
 
 		try {
-			await exportAdapter.exportElementPng(overlayContainer.value, {
+			await exportAdapter.exportElementPng(container, {
 				width,
 				height,
 				filename: exportAdapter.buildFilename({

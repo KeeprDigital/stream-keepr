@@ -37,6 +37,7 @@ function makeEntry(overrides: Partial<ArchetypeBreakdownEntry> = {}): ArchetypeB
 		metaShare: 37.5,
 		winRate: 55.2,
 		avgPosition: 3.2,
+		conversionRate: null,
 		keyCards: [],
 		...overrides,
 	};

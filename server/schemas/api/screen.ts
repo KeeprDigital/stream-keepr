@@ -152,6 +152,15 @@ export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 
 export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
 
 function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
+	// Strip defaults before wrapping: zod 4 applies a `.default()` even through
+	// `.optional()`, so a defaulted field left absent from a patch would come out
+	// of `.parse()` carrying its default — and a `null` default is then read by
+	// the merge as the "delete this key" sentinel, wiping the stored value on
+	// every unrelated edit (metagame `archetypeLimit`/`minPoints`).
+	if (schema instanceof z.ZodDefault) {
+		return createModeConfigPatchFieldSchema(schema.removeDefault());
+	}
+
 	if (schema instanceof z.ZodOptional) {
 		const inner = schema.unwrap();
 		if (inner instanceof z.ZodNullable) {
@@ -321,23 +330,29 @@ const backgroundLayerSchema = z.discriminatedUnion('type', [
  */
 const MAX_BACKGROUND_LAYERS = 20;
 
+/**
+ * One ordered Background Layer stack — the Background Screen's `layers` and
+ * every plain overlay mode's own `backgroundLayers` validate identically.
+ *
+ * Painter's order: first layer is the bottom of the stack. Both rules live on
+ * this array field rather than on the mode object, because a field-level rule
+ * survives the PATCH-schema derivation and an object-level one cannot reach
+ * that path (see `assertNoUnenforceableModeConfigRules`, #85).
+ *
+ * At most one animation layer per stack: each is its own WebGL context, an OBS
+ * browser source is memory-tight, and only one mode renders at a time, so the
+ * per-stack rule keeps the per-Screen invariant. Liftable if a show needs two.
+ */
+const backgroundLayerStackSchema = z.array(backgroundLayerSchema)
+	.max(MAX_BACKGROUND_LAYERS)
+	.refine(
+		layers => layers.filter(layer => layer.type === 'animation').length <= 1,
+		'A Background Layer stack carries at most one animation layer',
+	);
+
 // Per-mode config schemas
 export const backgroundModeConfigSchema = z.object({
-	/**
-	 * Painter's order: first layer is the bottom of the stack. Both rules live on
-	 * this array field rather than on the mode object, because a field-level rule
-	 * survives the PATCH-schema derivation and an object-level one cannot reach
-	 * that path (see `assertNoUnenforceableModeConfigRules`, #85).
-	 *
-	 * At most one animation layer per Screen: each is its own WebGL context, and
-	 * an OBS browser source is memory-tight. Liftable if a show ever needs two.
-	 */
-	layers: z.array(backgroundLayerSchema)
-		.max(MAX_BACKGROUND_LAYERS)
-		.refine(
-			layers => layers.filter(layer => layer.type === 'animation').length <= 1,
-			'A Background Screen carries at most one animation layer',
-		),
+	layers: backgroundLayerStackSchema,
 }).strict() satisfies z.ZodType<BackgroundModeConfig>;
 
 export const cardDisplayConfigSchema = z.object({
@@ -348,6 +363,7 @@ export const cardDisplayConfigSchema = z.object({
 
 export const cardModeConfigSchema = cardDisplayConfigSchema.extend({
 	featureMatchId: z.number().int().positive().nullable().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 // One board's layout block. Both boards share the shape; visibility is the
@@ -403,6 +419,7 @@ export const deckModeConfigSchema = z.object({
 	quantitySize: quantitySizeSchema.optional(),
 	quantityTextColor: z.string().max(50).optional(),
 	quantityBgColor: z.string().max(50).optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSchema)
@@ -474,10 +491,12 @@ export const standingsModeConfigSchema = z.object({
 	rotationAnchor: z.number().int().nonnegative().optional(),
 
 	animateEntries: z.boolean(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const topCutModeConfigSchema = z.object({
 	bracketSize: z.number().int().positive().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const matchModeConfigSchema = z.object({
@@ -510,6 +529,7 @@ export const playerHistoryModeConfigSchema = z.object({
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 	currentPage: z.number().int().min(1).optional(),
 	rotationAnchor: z.number().int().nonnegative().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
@@ -553,6 +573,7 @@ const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchem
 	glowColor: optionalCssColorSchema,
 	glowSize: nonNegativePixelSchema.optional(),
 	glowOpacity: opacitySchema.optional(),
+	glowPosition: z.enum(['both', 'inside', 'outside']).optional(),
 }).strict();
 
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
@@ -1815,6 +1836,7 @@ export const metagameModeConfigSchema = z.object({
 	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),
 	scope: z.enum(METAGAME_SCOPE_VALUES),
 	topN: z.number().int().min(1).max(500),
+	minPoints: z.number().int().min(0).max(999).default(9),
 	playerListId: z.number().int().positive().optional(),
 	archetypeFilter: z.string().max(200).optional(),
 	sortBy: z.enum(METAGAME_SORT_BY_VALUES),
@@ -1822,6 +1844,7 @@ export const metagameModeConfigSchema = z.object({
 	archetypeColumns: z.array(metagameArchetypeColumnConfigSchema).min(1).max(10),
 	cardColumns: z.array(metagameCardColumnConfigSchema).min(1).max(12),
 	limit: z.number().int().min(1).max(500),
+	archetypeLimit: z.number().int().min(1).max(500).nullable().default(null),
 	maxTableWidth: z.number().int().min(1).nullable().optional(),
 	pageSize: z.number().int().min(1).max(100),
 	autoPageEnabled: z.boolean(),
@@ -1831,6 +1854,7 @@ export const metagameModeConfigSchema = z.object({
 	showHeader: z.boolean(),
 	headerText: z.string().max(200).optional(),
 	animateEntries: z.boolean(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const topCardsModeConfigSchema = z.object({

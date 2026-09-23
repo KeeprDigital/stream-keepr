@@ -10,6 +10,7 @@
 		"dev": "node scripts/reap-workerd.mjs && nuxt dev",
 		"dev:bypass": "node scripts/reap-workerd.mjs && STREAM_KEEPR_LOCAL_AUTH_BYPASS=true nuxt dev",
 		"dev:local": "node scripts/reap-workerd.mjs && nuxt dev --host 0.0.0.0",
+		"dev:local:bypass": "node scripts/reap-workerd.mjs && STREAM_KEEPR_LOCAL_AUTH_BYPASS=true nuxt dev --host 0.0.0.0",
 		"reap": "node scripts/reap-workerd.mjs",
 		"typecheck": "nuxt typecheck && pnpm typecheck:test",
 		"typecheck:test": "vue-tsc --noEmit -p tsconfig.test.json",

@@ -45,6 +45,7 @@ const defaultConfig = {
 	viewMode: 'archetype' as const,
 	scope: 'all' as const,
 	topN: 8,
+	minPoints: 9,
 	playerListId: undefined,
 	archetypeFilter: undefined,
 	sortBy: 'metaShare' as const,
@@ -151,6 +152,7 @@ const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
 	},
+	emits: ['update:modelValue'],
 	template: '<div data-testid="u-input-number">{{ modelValue }}</div>',
 });
 
@@ -213,6 +215,36 @@ describe('screenMetagameSettings', () => {
 				{ key: 'colors', visible: true },
 			],
 		});
+	});
+
+	it('offers the Minimum Points player scope', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const scopeSelect = wrapper.findAll('[data-testid="u-select"]')
+			.find(select => select.text().includes('All Players'));
+
+		expect(scopeSelect).toBeDefined();
+		expect(scopeSelect!.text()).toContain('Minimum Points');
+	});
+
+	it('shows a minimum points input for the minPoints scope and persists changes', async () => {
+		mockConfig.value = { ...structuredClone(defaultConfig), scope: 'minPoints', minPoints: 9 };
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const minPointsField = wrapper.findAll('[data-testid="form-field"]')
+			.find(field => field.text().includes('Minimum points'));
+		expect(minPointsField).toBeDefined();
+
+		const input = minPointsField!.getComponent(UInputNumberStub);
+		expect(input.props('modelValue')).toBe(9);
+
+		input.vm.$emit('update:modelValue', 12);
+		await nextTick();
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ minPoints: 12, currentPage: 1 });
 	});
 
 	it('persists reordered columns for the active table', async () => {

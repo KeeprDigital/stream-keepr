@@ -435,16 +435,24 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
 	});
 
-	it('accepts per-side border visibility on a Source Item, which the host layer kept', () => {
+	it('accepts per-side border visibility and glow positioning on a Source Item', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.sources[0]!.framingStyle = {
 			borderVisible: true,
 			borderColor: '#ffffff',
 			borderWidth: 3,
 			borderLeftVisible: false,
+			glowPosition: 'outside',
 		};
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('rejects an unknown Source Item glow position', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		config.layout.sources[0].framingStyle = { glowPosition: 'centre' };
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
 	it('rejects widget-era typography on a Source Item surface style', () => {
@@ -611,6 +619,28 @@ describe('modeConfigPatchSchemaMap', () => {
 
 		expect(result.success).toBe(true);
 	});
+
+	it('does not inject defaulted fields into a patch that omits them', () => {
+		// zod 4 applies `.default()` even through `.optional()`; an injected
+		// `archetypeLimit: null` is the delete sentinel, so every unrelated edit
+		// wiped the stored value ("Top archetypes" reset to All).
+		const parsed = modeConfigPatchSchemaMap.metagame.parse({ sortBy: 'count' });
+
+		expect(parsed).toEqual({ sortBy: 'count' });
+		expect(Object.hasOwn(parsed, 'archetypeLimit')).toBe(false);
+		expect(Object.hasOwn(parsed, 'minPoints')).toBe(false);
+	});
+
+	it('still accepts explicit values and the null sentinel for defaulted fields', () => {
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeLimit: 8 }))
+			.toEqual({ archetypeLimit: 8 });
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeLimit: null }))
+			.toEqual({ archetypeLimit: null });
+		expect(modeConfigPatchSchemaMap.metagame.parse({ minPoints: 12 }))
+			.toEqual({ minPoints: 12 });
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ archetypeLimit: 0 }).success)
+			.toBe(false);
+	});
 });
 
 // ──────────────── matchModeConfigSchema ────────────────
@@ -735,6 +765,27 @@ describe('metagameModeConfigSchema', () => {
 	it('accepts valid metagame config with column arrays', () => {
 		const result = metagameModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
+	});
+
+	it('defaults minPoints and archetypeLimit for stored configs predating them', () => {
+		const result = metagameModeConfigSchema.safeParse(validConfig);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.minPoints).toBe(9);
+			expect(result.data.archetypeLimit).toBeNull();
+		}
+	});
+
+	it('accepts the minPoints scope with explicit minPoints', () => {
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, scope: 'minPoints', minPoints: 12 });
+		expect(result.success).toBe(true);
+		if (result.success)
+			expect(result.data.minPoints).toBe(12);
+	});
+
+	it('rejects a negative or fractional minPoints', () => {
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: -1 }).success).toBe(false);
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 1.5 }).success).toBe(false);
 	});
 });
 

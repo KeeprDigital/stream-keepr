@@ -24,7 +24,7 @@ const imageUrisSchema = z
 export const cardInputSchema = z.object({
 	id: z.string().min(1).max(100),
 	name: z.string().min(1).max(200),
-	set: z.string().min(1).max(20),
+	set: z.string().min(1).max(200),
 	layout: z.string().min(1).max(50) as z.ZodType<ScryfallCardFields.Core.All['layout']>,
 	imageData: z.object({
 		front: imageUrisSchema.nullable() as z.ZodType<ScryfallImageUris | null>,

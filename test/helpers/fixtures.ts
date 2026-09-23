@@ -167,6 +167,8 @@ export function createMockArchetypeDetailResponse(overrides?: Partial<ArchetypeD
 		metaShare: 25,
 		winRate: 66.7,
 		avgPosition: 3,
+		convertedCount: null,
+		conversionRate: null,
 		cardBreakdown: [
 			{
 				id: 1,

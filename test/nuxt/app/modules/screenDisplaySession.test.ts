@@ -1,7 +1,7 @@
 import type { ScreenDisplaySession } from '~/modules/screen/displaySession';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h, nextTick, reactive } from 'vue';
+import { defineComponent, h, nextTick, reactive, watch } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { useScreenDisplaySession } from '~/modules/screen/displaySession';
 
@@ -409,6 +409,28 @@ describe('useScreenDisplaySession', () => {
 				filename: 'file-main-fill-1920x1080.png',
 				backgroundColor: '#000000',
 			},
+		);
+	});
+
+	it('waits for the renderer container to mount before starting a download', async () => {
+		const container = sizedElement(1280, 720);
+		const harness = createHarness({
+			query: { download: '1', output: 'key' },
+			setupSession: (session) => {
+				watch(session.loading, (loading) => {
+					if (!loading)
+						session.screenContext.overlayContainer.value = container;
+				}, { flush: 'post' });
+			},
+		});
+		await flushPromises();
+
+		expect(harness.exportElementPng).toHaveBeenCalledWith(
+			container,
+			expect.objectContaining({
+				backgroundColor: '#000000',
+				filename: expect.stringContaining('file-main-key-'),
+			}),
 		);
 	});
 
