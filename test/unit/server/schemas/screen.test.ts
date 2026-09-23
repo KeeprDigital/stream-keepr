@@ -611,6 +611,28 @@ describe('modeConfigPatchSchemaMap', () => {
 
 		expect(result.success).toBe(true);
 	});
+
+	it('does not inject defaulted fields into a patch that omits them', () => {
+		// zod 4 applies `.default()` even through `.optional()`; an injected
+		// `archetypeLimit: null` is the delete sentinel, so every unrelated edit
+		// wiped the stored value ("Top archetypes" reset to All).
+		const parsed = modeConfigPatchSchemaMap.metagame.parse({ sortBy: 'count' });
+
+		expect(parsed).toEqual({ sortBy: 'count' });
+		expect(Object.hasOwn(parsed, 'archetypeLimit')).toBe(false);
+		expect(Object.hasOwn(parsed, 'minPoints')).toBe(false);
+	});
+
+	it('still accepts explicit values and the null sentinel for defaulted fields', () => {
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeLimit: 8 }))
+			.toEqual({ archetypeLimit: 8 });
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeLimit: null }))
+			.toEqual({ archetypeLimit: null });
+		expect(modeConfigPatchSchemaMap.metagame.parse({ minPoints: 12 }))
+			.toEqual({ minPoints: 12 });
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ archetypeLimit: 0 }).success)
+			.toBe(false);
+	});
 });
 
 // ──────────────── matchModeConfigSchema ────────────────

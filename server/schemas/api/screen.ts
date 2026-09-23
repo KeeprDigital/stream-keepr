@@ -152,6 +152,15 @@ export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 
 export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
 
 function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
+	// Strip defaults before wrapping: zod 4 applies a `.default()` even through
+	// `.optional()`, so a defaulted field left absent from a patch would come out
+	// of `.parse()` carrying its default — and a `null` default is then read by
+	// the merge as the "delete this key" sentinel, wiping the stored value on
+	// every unrelated edit (metagame `archetypeLimit`/`minPoints`).
+	if (schema instanceof z.ZodDefault) {
+		return createModeConfigPatchFieldSchema(schema.removeDefault());
+	}
+
 	if (schema instanceof z.ZodOptional) {
 		const inner = schema.unwrap();
 		if (inner instanceof z.ZodNullable) {
