@@ -5,11 +5,14 @@ import { transportFailure } from '~~/test/helpers/transportFailure';
 
 // ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
-const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn().mockResolvedValue({ data: [] }) }));
+const { mockFetch, mockGetServerTime } = vi.hoisted(() => ({
+	mockFetch: vi.fn().mockResolvedValue({ data: [] }),
+	mockGetServerTime: vi.fn(() => Date.now()),
+}));
 mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('useServerTime', () => () => ({
-	getServerTime: () => Date.now(),
+	getServerTime: mockGetServerTime,
 }));
 
 // ── Mock Dependencies ──
@@ -364,6 +367,23 @@ describe('useCardStore', () => {
 
 			expect(store.previewCard).toBeNull();
 			expect(store.showCardControls).toBe(false);
+		});
+
+		it('rounds the synchronized clock when starting a card timeout', async () => {
+			store.activeScreenId = 5;
+			store.previewCard = createMockMtgCard();
+			mockEventStoreState.event = { id: 1, cardTimeout: 5 };
+			mockGetServerTime.mockReturnValueOnce(1_700_000_000_000.5);
+			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
+
+			await store.controlPreviewCard('show');
+
+			expect(mockCardRepo.saveScreenCard).toHaveBeenCalledWith(1, 5, expect.objectContaining({
+				timeoutData: {
+					timeoutDuration: 5_000,
+					timeoutStartTimestamp: 1_700_000_000_001,
+				},
+			}));
 		});
 	});
 

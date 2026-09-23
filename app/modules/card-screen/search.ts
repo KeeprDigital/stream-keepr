@@ -208,7 +208,7 @@ export function useCardSearchRuntime(state: CardSearchRuntimeState) {
 				if (timeoutSeconds) {
 					cardData.timeoutData = {
 						timeoutDuration: timeoutSeconds * 1000,
-						timeoutStartTimestamp: getServerTime(),
+						timeoutStartTimestamp: Math.round(getServerTime()),
 					};
 				}
 				await state.saveActiveCard(cardData);
