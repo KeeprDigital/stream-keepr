@@ -14,7 +14,7 @@
  * leaves a DNS-rebinding window between our lookup and the runtime's own.
  * Hostname-literal, denied-suffix, scheme, credential, redirect-count and
  * byte-limit rules are enforced exactly; the resolved-address rule is enforced
- * best-effort against that window. See `docs/operations/approved-remote-graphics-copy.md`.
+ * best-effort against that window. See README.md → Remote HTTPS copy.
  */
 
 export const GRAPHICS_REMOTE_COPY_MAXIMUM_REDIRECTS = 3;

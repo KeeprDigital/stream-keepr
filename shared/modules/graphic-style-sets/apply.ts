@@ -337,7 +337,7 @@ export function graphicStyleChangeKey(itemId: string | null, slot: GraphicStyleS
  * overrides at all. Editing a pinned property does not: it re-pins it at the new value.
  *
  * The decision, the two alternatives rejected with it, and why no population needs it
- * are in `docs/adr/0006-over-broad-graphic-style-set-override-pins-are-not-migrated.md`
+ * are in `DECISIONS.md` (ADR-0006)
  * (#167, recorded under #199, amended under #229). Nothing here may acquire a notion
  * of *when* an override was written — that is the discredited heuristic wearing a
  * different name.

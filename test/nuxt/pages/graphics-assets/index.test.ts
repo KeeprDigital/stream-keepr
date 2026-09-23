@@ -1305,10 +1305,8 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * naming as one rather than dressed up as a restatement.
 	 *
 	 * What this repository has decided about userinfo is that it is refused, not
-	 * that it is unprintable. `docs/operations/approved-remote-graphics-copy.md`:
-	 * "no embedded credentials — a URL carrying userinfo is rejected, and no
-	 * cookie, authorization header, reusable cloud credential, or interactive
-	 * authentication is ever supplied"; enforced by `validateDestination` in
+	 * that it is unprintable (README.md → Remote HTTPS copy: "no userinfo");
+	 * enforced by `validateDestination` in
 	 * `server/modules/graphics-asset-library/remote-source.ts`, which answers
 	 * `remote-source-credentials-present` at the initial URL and again after every
 	 * redirect. Non-display is decided somewhere else and about different parts of

@@ -477,7 +477,7 @@ const CMAP_MACINTOSH_PLATFORM = 1;
  * rejects that is not written out here; see `reportWithBrowserDecodeEvidence`,
  * which will not publish a font without it. Why the gate sits there rather than in
  * more rules like this one is recorded in
- * `docs/adr/0005-static-font-v1-server-checks-are-a-floor-and-the-browser-is-the-gate.md`.
+ * `DECISIONS.md` (ADR-0005).
  */
 function validateCmapSubtables(font: ParsedFont) {
 	for (const subtable of font.cmap?.tables ?? []) {

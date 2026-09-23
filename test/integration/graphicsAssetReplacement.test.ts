@@ -172,8 +172,8 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		// awaits a real Ably REST publish before it answers.
 		// This is one of the two `$fetch` calls here with no explicit response type,
 		// so `step`'s type parameter would be inferred through Nitro's route table —
-		// which overflows the checker with TS2321, catalogued in
-		// docs/agents/parallel-rounds.md as surfacing about two at a time. Annotating
+		// which overflows the checker with TS2321, which surfaces about two at a
+		// time. Annotating
 		// the callback settles the type before it reaches the generic.
 		await step('pin the original revision to the Screen', async (): Promise<void> => {
 			await $fetch(

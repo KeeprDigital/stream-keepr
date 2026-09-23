@@ -197,8 +197,8 @@ export const fetch: typeof unauthenticatedFetch = async (path, options) => {
  *
  * Nitro types `$fetch` against every route in the application, and instantiating
  * that machinery inside a wrapper exhausts TypeScript's depth budget: `vue-tsc`
- * answers TS2321 "Excessive stack depth", the family
- * `docs/agents/parallel-rounds.md` records as revealing one error at a time.
+ * answers TS2321 "Excessive stack depth", a family that reveals only one or two
+ * errors at a time.
  * Measured rather than guessed at: seven errors with the call passed through a
  * generic helper, six with it inlined, nil with the callee narrowed here.
  *

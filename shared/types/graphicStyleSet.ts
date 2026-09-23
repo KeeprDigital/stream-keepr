@@ -110,7 +110,7 @@ export interface TypographyGraphicStyleEntryValue {
 	 * An application font, never a Graphics Asset Library one. A Graphic Item's own
 	 * typography takes either; a preset that travels in a `.skstyle` with no asset
 	 * envelope takes only the arm that needs no bytes. See
-	 * `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+	 * `DECISIONS.md` (ADR-0001).
 	 */
 	font: GraphicApplicationFontSelection;
 	fontSize: number;

@@ -104,7 +104,7 @@ export type GraphicFontSelection
  * It exists because one consumer genuinely cannot take the other arm: a Graphic
  * Style Set travels as a `.skstyle` package with no asset envelope, so a Style Set
  * that named a library font would be a Style Set that could not be transferred.
- * See `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+ * See `DECISIONS.md` (ADR-0001).
  */
 export type GraphicApplicationFontSelection = Extract<GraphicFontSelection, { kind: 'application' }>;
 

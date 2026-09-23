@@ -491,8 +491,9 @@ export interface FeatureMatchSourceItemConfig extends FeatureMatchOverlayRect {
  *
  * There is no fourth field. The legacy widget, widget-group, and numeric z-index
  * model is gone, and nothing converts one: the database is wiped before ship and
- * capability is verified by `docs/feature-match-overlay-capability-parity.md`
- * instead of by a migration.
+ * capability is verified by
+ * `test/unit/shared/featureMatchOverlayCapabilityParity.test.ts` instead of by a
+ * migration.
  */
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;

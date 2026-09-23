@@ -276,7 +276,7 @@ describe('the notice, read as prose', () => {
 			+ 'empty values. Fix: copy .env in from the checkout you branched from, or fill in .env.example — '
 			+ '`pnpm preview` stages .env into .output/server/, which is where wrangler resolves it from the '
 			+ 'config. A --deployed run reads no local file and is unaffected. '
-			+ 'See docs/agents/parallel-rounds.md.',
+			+ 'See README.md → Local configuration.',
 		);
 	});
 
@@ -385,7 +385,7 @@ describe('the notice, read as prose', () => {
 	});
 
 	/**
-	 * The instruction has to be the one `docs/agents/parallel-rounds.md` gives,
+	 * The instruction has to be the one README.md → Local configuration gives,
 	 * spelled out rather than gestured at, and it must not be satisfiable by the
 	 * example files' own names — `.env.example` is not `.env`.
 	 */

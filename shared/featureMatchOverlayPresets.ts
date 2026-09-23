@@ -33,7 +33,8 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
  * A preset initialises a whole Feature Match Layout: the host-owned Frame and
  * Source Items, and the shared Graphic Item tree. Nothing is carried over from a
  * legacy widget list, because there is none — the database is wiped before ship
- * and `docs/feature-match-overlay-capability-parity.md` replaces migration.
+ * and `test/unit/shared/featureMatchOverlayCapabilityParity.test.ts` replaces
+ * migration.
  *
  * These three are that checklist's evidence, and `left-stacked-player-cams` is
  * also the default Feature Match Overlay configuration. Between them they
