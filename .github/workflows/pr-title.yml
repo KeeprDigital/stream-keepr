@@ -3,14 +3,15 @@
 # not a Conventional Commit drops the PR from the changelog and the version
 # bump without anyone noticing, so it is caught here instead.
 #
-# No checkout and no install: this reads one string. It runs when a title can
-# have changed — never on pushes — and skips edits that leave the title alone.
+# No checkout and no install: this reads one string, in seconds. It runs on
+# pushes too, because it is a required status check and GitHub evaluates those
+# against the PR's newest commit; it skips edits that leave the title alone.
 
 name: PR title
 
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, synchronize]
 
 permissions: {}
 
