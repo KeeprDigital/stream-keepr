@@ -58,10 +58,12 @@ const {
 	graphicAssetReferences,
 );
 
-// Typography naming a library font paints in the family this registers, so the
-// output stays hidden until every one of them is loaded rather than flashing a
-// fallback typeface on air.
-const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
+// Typography naming a library font paints in the family this registers. Keep the
+// output hidden while a load is still in flight so it cannot flash a fallback
+// typeface, but reveal it after a terminal failure: a standalone URL without its
+// asset capability must not make the Frame, Sources, and every unrelated Graphic
+// Item disappear just because the exact font bytes are unavailable.
+const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
@@ -314,10 +316,11 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="{ ...canvasStyle, visibility: fontsReady ? undefined : 'hidden' }"
+		:style="{ ...canvasStyle, visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
 		:data-export-ready="(!loading && !error && !videoCompatibilityBlocked && fontsReady && !fontsFailed).toString()"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
+		:data-export-font-sources="JSON.stringify(fontSources)"
 	>
 		<svg
 			class="frame-layer"

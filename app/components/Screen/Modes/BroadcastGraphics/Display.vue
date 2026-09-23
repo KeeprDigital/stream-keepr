@@ -73,7 +73,7 @@ const { contentUrl, contentRefusal, contentUrlsSettled } = useScreenGraphicAsset
 // Typography naming a library font paints in the family this registers, so the
 // canvas stays hidden until every one of them is loaded rather than flashing a
 // fallback typeface on air.
-const { fontsReady, fontsFailed } = useGraphicAssetFontFaces(
+const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	contentUrl,
 	contentUrlsSettled,
@@ -113,6 +113,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 		:style="{ visibility: fontsReady ? undefined : 'hidden' }"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
+		:data-export-font-sources="JSON.stringify(fontSources)"
 		:render="renderModel"
 		@select="publishSelection"
 	>

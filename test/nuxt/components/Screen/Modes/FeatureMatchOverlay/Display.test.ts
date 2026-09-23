@@ -979,12 +979,12 @@ describe('featureMatchOverlayDisplay', () => {
 			});
 		});
 
-		it('reports a font that cannot load rather than painting a fallback', async () => {
+		it('reports a font that cannot load without leaving the entire output blank', async () => {
 			// The failure is distinguishable from still-loading, and it withholds
 			// export-readiness: an output that will never paint the authored typeface is
-			// not a frame anyone should capture. It is never a fallback face — a Missing
-			// Graphic Asset Reference is an integrity failure, and quietly painting
-			// something else would hide it exactly when it matters.
+			// not a frame anyone should capture. The canvas is nevertheless revealed
+			// after the attempt fails, because a standalone URL without asset access
+			// must not also erase the Frame, Sources, and unrelated Graphic Items.
 			vi.stubGlobal('FontFace', class {
 				constructor(public family: string, public source: string) {}
 				async load(): Promise<never> {
@@ -1000,7 +1000,8 @@ describe('featureMatchOverlayDisplay', () => {
 			const overlay = wrapper.get('.feature-match-overlay');
 			expect(overlay.attributes('data-font-ready')).toBe('false');
 			expect(overlay.attributes('data-export-ready')).toBe('false');
-			expect((overlay.element as HTMLElement).style.visibility).toBe('hidden');
+			expect((overlay.element as HTMLElement).style.visibility).toBe('');
+			expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Text');
 			// Every face this attempt added is taken back off the document, so a retry
 			// does not accumulate a second registration of the same family.
 			expect(document.fonts.delete as ReturnType<typeof vi.fn>).toHaveBeenCalled();
