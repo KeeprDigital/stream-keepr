@@ -209,7 +209,7 @@ An account an administrator created for one person, holding the credential they 
 It is the installation's only durable identity and the one that owns work: a Graphics Ingestion Operation records the user as its initiator, idempotency keys are unique within the user, and the Evidence Ledger names the user as actor with the display name resolved when the ledger is read.
 Because ownership belongs to the person rather than to a browser, an operation survives the browser that started it and is resumed by signing in anywhere; the same idempotency key sent from a second browser continues the first operation instead of starting a second.
 There is no self-signup: an administrator creates the account, and a **Password Reset Link** is how its password is first set (ADR-0010).
-An explicitly bypassed local runtime supplies one synthetic **Local Developer User** as the development-only exception to the account, credential, and durability rules above. It has a stable identity but no directory row, owns work through the same User interface, and exists only where a bypassed launcher — `pnpm dev:bypass` or `pnpm preview:bypass` — asked for it by name; no file in the repository can ask (ADR-0017).
+An explicitly bypassed local runtime supplies one synthetic **Local Developer User** as the development-only exception to the account, credential, and durability rules above. It has a stable identity but no directory row, owns work through the same User interface, and exists only where a bypassed launcher asked for it by name; no file in the repository can ask (ADR-0017).
 _Avoid_: author, graphics author — those name a role a user may be acting in, not the identity; account is acceptable when the subject is the credential rather than the person.
 
 **Session**:

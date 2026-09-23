@@ -290,12 +290,12 @@ describe('the built Worker smoke runner', () => {
 	 * are what this has to read.
 	 *
 	 * The scripts *are* the mechanism — there is no file to check, and a
-	 * `:bypass` suffix landing on the wrong one of these is the whole failure
-	 * mode. `dev:local` binds beyond loopback and deliberately has no bypassed
-	 * twin: unauthenticated on `0.0.0.0` is the one combination the README warns
-	 * about, and it should not be one keystroke away.
+	 * `:bypass` suffix is the one mark that says a launcher arms it. Each
+	 * bypassed launcher is its unbypassed twin plus the assignment, so the suffix
+	 * never changes where a launcher binds: `dev:local:bypass` is on `0.0.0.0`
+	 * because `dev:local` is, which is the exposure ADR-0018 accepts.
 	 */
-	it('names the bypass in the two bypass launchers and nowhere else', async () => {
+	it('names the bypass in the :bypass launchers and nowhere else', async () => {
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
 			scripts: Record<string, string>;
@@ -304,7 +304,7 @@ describe('the built Worker smoke runner', () => {
 
 		expect(packageJson.scripts['dev:bypass']).toContain(`${assignment} nuxt dev`);
 		expect(packageJson.scripts['preview:bypass']).toContain(`${assignment} pnpm preview`);
-		expect(packageJson.scripts['dev:local:bypass']).toBeUndefined();
+		expect(packageJson.scripts['dev:local:bypass']).toContain(`${assignment} nuxt dev --host 0.0.0.0`);
 
 		for (const [name, script] of Object.entries(packageJson.scripts)) {
 			if (name.endsWith(':bypass'))

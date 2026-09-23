@@ -40,14 +40,17 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  * reach the process, so none of them may open it.
  *
  * **Explicitly on, or implicitly off, and the name lives in exactly one place**
- * (#519): the `pnpm dev:bypass` and `pnpm preview:bypass` scripts, which set it
- * on the command line they launch. No file in this repository assigns it —
+ * (#519): the `package.json` scripts ending in `:bypass`, which set it on the
+ * command line they launch. No file in this repository assigns it —
  * `.env` does not carry it and `.env.example` does not name it — so no file can
  * be copied, staged, or synced into a deployed installation in a state that
  * opens this. That is a structural property rather than a policy, and it is what
  * replaced the two-name scheme #460 and ADR-0013 were about: the second name
  * existed to keep a leaked `.env` value inert, and a value that is never written
  * to a file has nothing to leak.
+ *
+ * One launcher, `dev:local:bypass`, serves the bypass beyond loopback on purpose,
+ * for testing from another device; ADR-0018 records that exposure.
  *
  * Setting this name on a deployed Worker does activate the bypass, and no
  * runtime signal guards against it. That is ADR-0017's accepted residual,

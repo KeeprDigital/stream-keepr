@@ -203,7 +203,7 @@ describe('which names a local checkout has to be given', () => {
 	});
 
 	it('keeps the local-authentication choice out of the partition entirely', () => {
-		// It is set by the `pnpm dev:bypass` and `pnpm preview:bypass` launchers and
+		// It is set by the `:bypass` launchers in `package.json` and
 		// assigned in no file, so neither side of a partition over `.env.example`
 		// has a place for it (#519, ADR-0017).
 		for (const name of [...LOCALLY_REQUIRED_NUXT_NAMES, ...LOCALLY_OPTIONAL_NUXT_NAMES])

@@ -7,7 +7,7 @@ import { LOCAL_AUTH_BYPASS_NAME } from '../shared/utils/localDeveloperAuth.ts';
  * The one guard #519 kept, and the only one it had reason to. This reads what a
  * deploy is about to upload rather than the environment a command was run in, so
  * it cannot refuse a build, a test, or a bypassed local launcher —
- * `pnpm dev:bypass` sets the name in a process, not in this file, and
+ * the `dev:` bypass launchers set the name in a process, not in this file, and
  * `pnpm preview:bypass` stages it into `.output/server/.env`, which is not
  * Wrangler configuration and is not uploaded. What it catches is the accident
  * the name being launcher-owned makes rare rather than impossible: the name

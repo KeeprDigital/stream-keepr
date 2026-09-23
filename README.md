@@ -43,20 +43,25 @@ pnpm dev
 ```
 
 This uses Better Auth exactly like a deployed installation. To work without
-creating an account or signing in, start the bypassed launcher instead:
+creating an account or signing in, start a bypassed launcher instead:
 
-```bash
-pnpm dev:bypass
-```
+| Launcher                | Serves                 | Auth                 |
+| ----------------------- | ---------------------- | -------------------- |
+| `pnpm dev`              | loopback               | Better Auth          |
+| `pnpm dev:bypass`       | loopback               | Local Developer User |
+| `pnpm dev:local`        | the LAN (`0.0.0.0`)    | Better Auth          |
+| `pnpm dev:local:bypass` | the LAN (`0.0.0.0`)    | Local Developer User |
+| `pnpm preview`          | loopback, built Worker | Better Auth          |
+| `pnpm preview:bypass`   | loopback, built Worker | Local Developer User |
 
-**The bypass lives in that command and nowhere else.** No file arms it — not
-`.env`, which does not carry the name, and not `.env.example`, which does not
-mention it. It is explicitly on when you type `dev:bypass`, and implicitly off in
-every other case: `pnpm dev`, `pnpm preview`, `pnpm build`, `pnpm test`,
-`pnpm verify`, CI, and every deployed installation. Nothing anywhere requires it
-to be set, and nothing refuses to run because it is.
+**The bypass lives in the `:bypass` commands and nowhere else.** No file arms it
+— not `.env`, which does not carry the name, and not `.env.example`, which does
+not mention it. It is explicitly on when you type a `:bypass` launcher, and
+implicitly off in every other case: the unsuffixed launchers, `pnpm build`,
+`pnpm test`, `pnpm verify`, CI, and every deployed installation. Nothing anywhere
+requires it to be set, and nothing refuses to run because it is.
 
-Under `pnpm dev:bypass`, `NUXT_BETTER_AUTH_SECRET` and `NUXT_ADMIN_BOOTSTRAP_TOKEN`
+Under a `:bypass` launcher, `NUXT_BETTER_AUTH_SECRET` and `NUXT_ADMIN_BOOTSTRAP_TOKEN`
 may remain blank. The app enters protected pages as the stable **Local Developer
 User**, while each browser receives a distinct local Session so Graphics Authoring
 Leases still distinguish concurrent editors. The shell shows that identity and
@@ -74,11 +79,14 @@ addressing, or which bindings a Worker has — none of those facts proves who ca
 reach the process. `pnpm worker:dry-run` refuses to deploy generated Worker
 configuration that carries the name, and ADR-0017 records what is left.
 
-Keep a bypassed launcher on loopback. Binding Nuxt or local workerd to `0.0.0.0`
-or another non-loopback address gives every machine that can reach it
-unauthenticated access; local workerd is not inherently private merely because its
-bindings are local. `pnpm dev:local` binds beyond loopback and has no bypassed
-variant for exactly that reason.
+**`pnpm dev:local:bypass` gives every machine that can reach this one
+unauthenticated access.** It exists for testing from another device — a phone,
+a tablet, the broadcast machine — where sign-in cannot work, because Better Auth
+admits only the hostnames in `AUTH_ALLOWED_HOSTS` and a LAN address is not one of
+them. Run it only on a network you trust, and stop it when you are done. Every
+other bypassed launcher stays on loopback; binding one elsewhere by hand carries
+the same exposure, because local workerd is not inherently private merely because
+its bindings are local. ADR-0018 records the trade.
 
 ## Testing
 

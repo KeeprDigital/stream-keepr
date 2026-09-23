@@ -30,7 +30,8 @@ contradiction rather than silently overriding it.
 | 0014 | [Animation Effects are rebuilt in-house on three.js](./0014-animation-effects-rebuilt-in-house-on-three.md) — except its background-hosting wording, superseded by 0016        |
 | 0015 | [Live overlay show/hide rides feature-match session state, not graphics config](./0015-live-overlay-show-hide-rides-feature-match-session-state.md)                            |
 | 0016 | [One polymorphic Background Screen replaces Idle](./0016-one-polymorphic-background-screen-replaces-idle.md)                                                                   |
-| 0017 | [The local auth bypass is one launcher-owned name](./0017-the-local-auth-bypass-is-one-launcher-owned-name.md)                                                                 |
+| 0017 | [The local auth bypass is one launcher-owned name](./0017-the-local-auth-bypass-is-one-launcher-owned-name.md) — its launcher list amended by 0018                             |
+| 0018 | [A LAN bypassed launcher is an accepted local exposure](./0018-a-lan-bypassed-launcher-is-an-accepted-local-exposure.md)                                                       |
 
 ## Superseded
 

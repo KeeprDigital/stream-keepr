@@ -57,7 +57,7 @@ const EXPORT_PREFIX = /^export\s+/;
  * `.env.example` assigns seven. The three it gained on that ticket are the Melee
  * ones, and they are optional — see below. It assigned eight until #519 took the
  * local-authentication choice out of the file altogether: that name is now set by
- * the `pnpm dev:bypass` and `pnpm preview:bypass` launchers and assigned nowhere,
+ * the `:bypass` launchers in `package.json` and assigned nowhere,
  * so the partition no longer has a side for it.
  *
  * The last two arrived here on #396, which is the ticket the comment on
@@ -290,7 +290,7 @@ export interface LocalConfigurationContext {
  * reason, one launcher at a time.
  *
  * What replaced it is not a laxer guard but a stronger one, in the shape of the
- * name itself: it is set by `pnpm dev:bypass` and `pnpm preview:bypass` and
+ * name itself: it is set by the `:bypass` launchers in `package.json` and
  * assigned in no file, so there is no armed state for a build to inherit or a
  * refusal to catch. See `shared/utils/localDeveloperAuth.ts` and ADR-0017.
  */

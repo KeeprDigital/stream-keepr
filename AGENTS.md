@@ -27,15 +27,16 @@ SIGTERM or SIGINT.
 
 ## Local authentication
 
-`pnpm dev:bypass` and `pnpm preview:bypass` enter as the Local Developer User;
-everything else uses real Better Auth. Those two launchers set
+The `package.json` scripts ending in `:bypass` enter as the Local Developer
+User; everything else uses real Better Auth. Those launchers set
 `STREAM_KEEPR_LOCAL_AUTH_BYPASS=true` on the command line, and nothing else in
 this repository arms it.
 
 Two rules follow, and they are the whole of what an agent needs:
 
-- **Never write that name into a file** — not `.env`, `.env.example`,
-  `wrangler.jsonc`, a CI environment, or a Worker var. `pnpm worker:dry-run`
+- **The `:bypass` scripts are the only place that name is written** — never
+  `.env`, `.env.example`, `wrangler.jsonc`, a CI environment, or a Worker var.
+  `pnpm worker:dry-run`
   fails on generated configuration carrying it, and a deployed installation that
   had it would serve the application unauthenticated.
 - **Nothing needs it set.** It is a precondition for no build, suite, or gate;
@@ -43,7 +44,8 @@ Two rules follow, and they are the whole of what an agent needs:
   has been misread.
 
 The README's Development section is the developer-facing account of what the
-bypass does; ADR-0017 records why it is one launcher-owned name.
+bypass does; ADR-0017 records why it is one launcher-owned name, and ADR-0018
+why `dev:local:bypass` serves it to the LAN.
 
 ## Agent skills
 

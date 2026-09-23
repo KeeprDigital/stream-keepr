@@ -16,8 +16,8 @@ describe('the Local Developer Session opt-in', () => {
 	});
 
 	it('is named outside the NUXT_ family, so no .env name can reach it', () => {
-		// The name is the guard (#519): it is set by `pnpm dev:bypass` and
-		// `pnpm preview:bypass` on the command line and assigned in no file, and it
+		// The name is the guard (#519): it is set by the `:bypass` launchers
+		// on the command line and assigned in no file, and it
 		// is deliberately not a `NUXT_` name — nothing in `.env`, and no
 		// runtimeConfig key, answers to it.
 		expect(LOCAL_AUTH_BYPASS_NAME).toBe('STREAM_KEEPR_LOCAL_AUTH_BYPASS');

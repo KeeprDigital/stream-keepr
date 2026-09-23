@@ -4,6 +4,7 @@
 - **Date**: 2026-08-25
 - **Issue**: [#519](https://github.com/KeeprDigital/stream-keepr/issues/519)
 - **Supersedes**: [ADR-0013](./0013-two-runtime-var-local-bypass-activation-is-an-accepted-residual.md)
+- **Amended**: by [ADR-0018](./0018-a-lan-bypassed-launcher-is-an-accepted-local-exposure.md), which adds `pnpm dev:local:bypass`
 
 ## Context
 
