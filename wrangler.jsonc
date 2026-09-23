@@ -45,6 +45,19 @@
 			"service": "stream-silent-video-validator"
 		}
 	],
+	"env": {
+		"staging": {
+			"name": "stream-staging",
+			"routes": [{ "pattern": "staging.stream.keepr.digital", "custom_domain": true }],
+			"d1_databases": [{ "binding": "DB", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_table": "_hub_migrations", "migrations_dir": "../../server/db/migrations/sqlite" }],
+			"kv_namespaces": [{ "binding": "KV", "id": "00000000000000000000000000000000" }],
+			"r2_buckets": [
+				{ "binding": "GRAPHICS_ASSET_STAGING", "bucket_name": "stream-staging-graphics-asset-staging" },
+				{ "binding": "GRAPHICS_ASSET_CANONICAL", "bucket_name": "stream-staging-graphics-asset-canonical" }
+			],
+			"services": [{ "binding": "SILENT_VIDEO_PLAYBACK_VALIDATOR", "service": "stream-silent-video-validator-staging" }]
+		}
+	},
 	"observability": {
 		"enabled": true,
 		"logs": {
