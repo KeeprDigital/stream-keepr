@@ -18,6 +18,7 @@ import {
 	MAX_STATIC_FONT_INGESTION_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { randomUuid } from '~~/shared/utils/uuid';
 import { verifyStaticFontBrowserLoad } from '~/utils/verifyStaticFontBrowserLoad';
 import { verifyStillImageBrowserDecode } from '~/utils/verifyStillImageBrowserDecode';
 
@@ -310,7 +311,7 @@ function selectedInitiation(
 		return pending;
 	}
 	const initiation: PendingInitiation = {
-		idempotencyKey: crypto.randomUUID(),
+		idempotencyKey: randomUuid(),
 		name,
 		defaultEventId: eventStore.eventId ?? undefined,
 		duplicateContentPolicy,
@@ -544,7 +545,7 @@ async function replaceAsset(asset: GraphicAsset) {
 			file,
 			`/api/graphics-assets/${asset.id}/replacement-operations`,
 			{
-				idempotencyKey: crypto.randomUUID(),
+				idempotencyKey: randomUuid(),
 				sourceFileName: file.name,
 				declaredMime: file.type || undefined,
 				browserDecodeEvidence,
@@ -710,7 +711,7 @@ async function copyRemoteGraphicAssetSource() {
 			{
 				method: 'POST',
 				body: {
-					idempotencyKey: crypto.randomUUID(),
+					idempotencyKey: randomUuid(),
 					name: remoteProposedName.value.trim(),
 					source: 'remote-copy',
 					sourceFileName: remoteSourceFileName.value,
