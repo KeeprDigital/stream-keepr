@@ -22,6 +22,7 @@ shellEmulator: true
 # eslint-disable-next-line pnpm/yaml-enforce-settings
 trustPolicy: off
 patchedDependencies:
+  '@nuxthub/core@0.10.8': patches/@nuxthub__core@0.10.8.patch
   '@scryfall/api-types@1.0.0-alpha.4': patches/@scryfall__api-types@1.0.0-alpha.4.patch
 allowBuilds:
   '@parcel/watcher': true
