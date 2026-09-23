@@ -6,7 +6,7 @@
  * `nuxt dev` warn when the required `NUXT_` names are unusable. Neither reaches
  * here: an acceptance harness is its own `node` process, started separately
  * from whatever installation it points at, so it inherits neither notice. A
- * fresh worktree running `pnpm test:delivery:graphics` therefore got 503s from
+ * fresh worktree running `pnpm accept graphics-delivery` therefore got 503s from
  * capability minting and, in the ticket's words, never reached anything to
  * assert — with no named cause anywhere in the transcript (#274).
  *

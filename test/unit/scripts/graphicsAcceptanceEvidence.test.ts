@@ -197,7 +197,7 @@ describe('a harness printing evidence it cannot format', () => {
 	});
 
 	/**
-	 * The ticket's own reproduction: `pnpm test:delivery:graphics:deployed` with
+	 * The ticket's own reproduction: `pnpm accept graphics-delivery --deployed` with
 	 * no URL set. Both halves have to hold for this to pass — the reason has to
 	 * survive the opacity rule, and the reporting has to survive a reason that
 	 * does not.

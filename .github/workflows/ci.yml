@@ -70,7 +70,7 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
 
-  # Every suite `pnpm test` runs appears below as its own `pnpm <script>` step
+  # Every gate `pnpm test` runs (verify.mjs --tests) appears below as its own step
   # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
   # jobs so the longest one, not the sum, sets the wall time.
   checks:
@@ -108,7 +108,7 @@ jobs:
       # Each shard starts its own servers over its own databases, so the halves
       # share nothing. Realtime tests self-skip: no Ably key is configured in CI
       # by decision; realtime coverage runs locally (#189).
-      - run: pnpm test:integration:run --shard=${{ matrix.shard }}/2
+      - run: pnpm test:integration --run --shard=${{ matrix.shard }}/2
 
   server-and-browser:
     name: Local-auth suite and browser gates
@@ -119,11 +119,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: pnpm test:local-auth:run
-      - run: pnpm test:browser:still-images
-      - run: pnpm test:browser:silent-video
-      - run: pnpm test:browser:fonts
-      - run: pnpm test:browser:animation-effects
+      - run: pnpm test:local-auth
+      - run: pnpm accept still-images
+      - run: pnpm accept silent-video
+      - run: pnpm accept fonts
+      - run: pnpm accept animation-effects
 
   worker-guard:
     name: Build, wrangler dry run, and Worker smoke

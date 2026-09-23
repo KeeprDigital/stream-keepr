@@ -18,8 +18,10 @@
  *   the build runs beside the cheap stage instead, so that little else competes
  *   with the servers, and only its short Worker tail overlaps them.
  *
- * Usage: node scripts/verify.mjs [--quick]
+ * Usage: node scripts/verify.mjs [--quick | --tests]
  *   --quick  the first stage only: lint, typecheck, unit and Nuxt suites.
+ *   --tests  every test suite and local acceptance gate, without lint,
+ *            typecheck, or the build; this is `pnpm test`.
  */
 
 import { spawn } from 'node:child_process';
@@ -45,12 +47,12 @@ export const GATES = {
 	'test:unit:coverage': { command: ['run', 'test:unit:coverage'], after: ['prepare'] },
 	'test:nuxt:coverage': { command: ['run', 'test:nuxt:coverage'], after: ['test:unit:coverage'] },
 
-	'test:integration:run': { command: ['run', 'test:integration:run'], after: FIRST_STAGE },
-	'test:local-auth:run': { command: ['run', 'test:local-auth:run'], after: FIRST_STAGE },
-	'test:browser:still-images': { command: ['run', 'test:browser:still-images'], after: FIRST_STAGE },
-	'test:browser:silent-video': { command: ['run', 'test:browser:silent-video'], after: ['test:browser:still-images'] },
-	'test:browser:fonts': { command: ['run', 'test:browser:fonts'], after: ['test:browser:silent-video'] },
-	'test:browser:animation-effects': { command: ['run', 'test:browser:animation-effects'], after: ['test:browser:fonts'] },
+	'test:integration': { command: ['run', 'test:integration', '--run'], after: FIRST_STAGE },
+	'test:local-auth': { command: ['run', 'test:local-auth'], after: FIRST_STAGE },
+	'accept:still-images': { command: ['run', 'accept', 'still-images'], after: FIRST_STAGE },
+	'accept:silent-video': { command: ['run', 'accept', 'silent-video'], after: ['accept:still-images'] },
+	'accept:fonts': { command: ['run', 'accept', 'fonts'], after: ['accept:silent-video'] },
+	'accept:animation-effects': { command: ['run', 'accept', 'animation-effects'], after: ['accept:fonts'] },
 	'build': {
 		command: ['run', 'build'],
 		after: ['prepare'],
@@ -66,11 +68,21 @@ function seconds(ms) {
 	return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function selectGates(quick) {
-	if (!quick)
-		return GATES;
-	const wanted = new Set(['prepare', ...FIRST_STAGE]);
-	return Object.fromEntries(Object.entries(GATES).filter(([name]) => wanted.has(name)));
+/** Gates that are not test suites; `--tests` leaves them out. */
+const NOT_TESTS = new Set(['lint', 'typecheck:app', 'typecheck:test', 'build', 'worker:dry-run', 'worker:smoke']);
+
+/**
+ * The gates a mode runs. A dependency outside the selection counts as met, so
+ * `--tests` starts the server-backed stage once the unit and Nuxt suites pass.
+ */
+export function selectGates(argv) {
+	if (argv.includes('--quick')) {
+		const wanted = new Set(['prepare', ...FIRST_STAGE]);
+		return Object.fromEntries(Object.entries(GATES).filter(([name]) => wanted.has(name)));
+	}
+	if (argv.includes('--tests'))
+		return Object.fromEntries(Object.entries(GATES).filter(([name]) => !NOT_TESTS.has(name)));
+	return GATES;
 }
 
 /** Signal a gate's whole process group: pnpm, vitest, and whatever they spawned. */
@@ -84,7 +96,7 @@ function signalGroup(child, signal) {
 }
 
 export async function main(argv = process.argv) {
-	const gates = selectGates(argv.includes('--quick'));
+	const gates = selectGates(argv);
 	await mkdir(logDirectory, { recursive: true });
 
 	const started = Date.now();

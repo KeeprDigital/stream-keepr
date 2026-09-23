@@ -6,10 +6,10 @@
 # production-env build, D1 migration, Worker promotion, health verify.
 # Everything after promotion stays with the operator:
 #
-#   - The seven `:deployed` acceptance gates run locally, in order, stopping
-#     at the first failure. Two of them cannot run on a hosted runner at all
-#     (Safari VP9-alpha needs real Safari; the validator pre-flight needs
-#     your Docker).
+#   - The seven deployed acceptance gates run locally, in order, stopping
+#     at the first failure (`pnpm accept deployed`). Two of them cannot run
+#     on a hosted runner at all (Safari VP9-alpha needs real Safari; the
+#     validator pre-flight needs your Docker).
 #   - "Nothing on air" is a condition only a person can verify before
 #     triggering this.
 #

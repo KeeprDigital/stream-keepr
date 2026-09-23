@@ -290,31 +290,34 @@ describe('the built Worker smoke runner', () => {
 		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
 	});
 
-	it('runs every suite `pnpm test` runs as a verify gate', async () => {
+	it('runs `pnpm test` as the test gates of verify\'s graph', async () => {
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
 			scripts: Record<string, string>;
 		};
-		const { GATES } = await import('../../../scripts/verify.mjs');
-		const suites = packageJson.scripts.test!.split('&&').map(step => step.trim().replace(/^pnpm /u, ''));
+		const { selectGates } = await import('../../../scripts/verify.mjs');
+		const suites = Object.keys(selectGates(['--tests']));
 
-		expect(suites.length).toBeGreaterThan(4);
-		expect(suites.filter(suite => !(suite in GATES))).toEqual([]);
+		// One list of suites: `pnpm test` is verify's graph, not a second chain.
+		expect(packageJson.scripts.test).toBe('node scripts/verify.mjs --tests');
+		expect(suites).toEqual(expect.arrayContaining(['test:unit:coverage', 'test:integration', 'accept:still-images']));
+		expect(suites).not.toContain('lint');
+		expect(suites).not.toContain('build');
 	});
 
-	it('runs every suite `pnpm test` runs as a CI step', async () => {
-		// CI splits the suites across parallel jobs rather than calling `pnpm test`,
-		// so a suite added there must be added to ci.yml too.
+	it('runs every gate `pnpm test` runs as a CI step', async () => {
+		// CI splits the gates across parallel jobs rather than calling `pnpm test`,
+		// so a gate added to verify must be added to ci.yml too.
 		const repositoryRoot = join(import.meta.dirname, '../../..');
-		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
-			scripts: Record<string, string>;
-		};
 		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
-		const steps = new Set([...ci.matchAll(/run: pnpm (\S+)/gu)].map(match => match[1]));
-		const suites = packageJson.scripts.test!.split('&&').map(step => step.trim().replace(/^pnpm /u, ''));
+		const steps = [...ci.matchAll(/run: (pnpm .+)$/gmu)].map(match => match[1]!);
+		const { selectGates } = await import('../../../scripts/verify.mjs');
+		const commands = Object.entries(selectGates(['--tests']))
+			.filter(([name]) => name !== 'prepare')
+			.map(([, gate]) => `pnpm ${gate.command.slice(1).join(' ')}`);
 
-		expect(suites.length).toBeGreaterThan(4);
-		expect(suites.filter(suite => !steps.has(suite))).toEqual([]);
+		expect(commands.length).toBeGreaterThan(4);
+		expect(commands.filter(command => !steps.some(step => step === command || step.startsWith(`${command} `)))).toEqual([]);
 	});
 
 	/**
