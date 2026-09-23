@@ -59,7 +59,6 @@ export default defineNuxtConfig({
 		// longer needs to be: it populated the environment later modules read their
 		// runtimeConfig from until #412 deleted the file it read.
 		localConfigurationModule,
-		'@nuxthub/core',
 		'@nuxt/eslint',
 		'@nuxt/fonts',
 		'@nuxt/ui',
@@ -91,21 +90,6 @@ export default defineNuxtConfig({
 		'~/assets/css/main.css',
 	],
 
-	hub: {
-		...(isIntegration ? { dir: `${integrationWranglerPersistDir}/hub` } : {}),
-		db: {
-			dialect: 'sqlite',
-			driver: 'd1',
-			connection: {
-				databaseId,
-			},
-		},
-		kv: {
-			driver: 'cloudflare-kv-binding',
-			namespaceId: kvNamespaceId,
-		},
-	},
-
 	eslint: {
 		config: {
 			standalone: false,
@@ -124,6 +108,10 @@ export default defineNuxtConfig({
 
 	nitro: {
 		preset: 'cloudflare_module',
+		alias: {
+			'hub:db': fileURLToPath(new URL('./server/hub-shim/db.ts', import.meta.url)),
+			'hub:kv': fileURLToPath(new URL('./server/hub-shim/kv.ts', import.meta.url)),
+		},
 		// Nitro's own Wasm support (unwasm). The `cloudflare_module` preset
 		// configures it as `{ lazy: false, esmImport: true }`, so a `.wasm?module`
 		// import becomes a real ESM import of an emitted `.wasm` asset and the

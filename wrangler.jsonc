@@ -11,6 +11,17 @@
 	"routes": [
 		{ "pattern": "stream.keepr.digital", "custom_domain": true }
 	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_id": "26830437-975a-4378-a135-acfc01ea89ae",
+			"migrations_table": "_hub_migrations",
+			"migrations_dir": "../../server/db/migrations/sqlite"
+		}
+	],
+	"kv_namespaces": [
+		{ "binding": "KV", "id": "a15cf281b12d43e4b5479baf8b69b587" }
+	],
 	"r2_buckets": [
 		{
 			"binding": "GRAPHICS_ASSET_STAGING",
