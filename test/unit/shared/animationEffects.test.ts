@@ -116,8 +116,16 @@ describe('animationEffects catalogue', () => {
 			amplitudeFactor: 1,
 			ringFactor: 1,
 			rotationFactor: 1,
+			centerX: 0,
+			centerY: 0,
+			frequency: 1,
 			speed: 0.6,
 		});
+		expect(animationEffectParamFields('ripple')).toEqual(expect.arrayContaining([
+			expect.objectContaining({ key: 'centerX', label: 'Center X', min: -1, max: 1 }),
+			expect.objectContaining({ key: 'centerY', label: 'Center Y', min: -1, max: 1 }),
+			expect.objectContaining({ key: 'frequency', label: 'Ripple frequency', min: 0, max: 4 }),
+		]));
 	});
 
 	it('ports halo under the defaults the pre-rebuild application shipped', () => {

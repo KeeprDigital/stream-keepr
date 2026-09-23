@@ -5,9 +5,8 @@ import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
  * Ripple: rings of orbiting lights accumulating over a background colour,
- * ported from the retired Vanta fork under its old name. The shader is
- * unchanged apart from dropping the mouse pair and `blurFactor`, which it
- * declared and never read.
+ * ported from the retired Vanta fork under its old name. The unused mouse and
+ * blur uniforms are gone; centre and pulse frequency are authored controls.
  */
 const RIPPLE_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
@@ -19,25 +18,30 @@ uniform vec3 backgroundColor;
 uniform float amplitudeFactor;
 uniform float ringFactor;
 uniform float rotationFactor;
+uniform float centerX;
+uniform float centerY;
+uniform float frequency;
 
 float size = 0.002;
 
 void main( void ) {
 	vec2 view = ( gl_FragCoord.xy - iResolution / 2.0 ) / ( iResolution.y / 2.0);
-	float time = - iTime + length(view)*8. - 7.0;
+	vec2 centerOffset = vec2(centerX * iResolution.x / iResolution.y, centerY);
+	float time = - iTime + length(view - centerOffset)*8. - 7.0;
+	float rippleTime = time * frequency;
 	vec4 color = vec4(0);
 	vec2 center = vec2(0);
 	float accumMix = 0.0;
 	float rotationVelocity = 2.0;
 	for( int j = 0; j < 20; j++ ) {
 		for( int i = 0; i < 20; i++ ) {
-			float amplitude = ( cos( time / 10.0 ) + sin(  time /5.0 ) );
+			float amplitude = ( cos( rippleTime / 10.0 ) + sin( rippleTime / 5.0 ) );
 
 			amplitude = amplitude * amplitudeFactor;
 
 			float angle =   sin( float(j) * time * 0.05 * ringFactor) * rotationVelocity + 2.0 * 3.14 * float(i) / 20.0;
-			center.x = cos( 7.0 * float(j) / 20.0 * 2.0 * 3.14 ) + sin( time / 4.0) * rotationFactor;
-			center.y = sin( 3.0 * float(j) / 20.0 * 2.0 * 3.14 )+ cos( time / 8.0) * rotationFactor;
+			center.x = centerOffset.x + cos( 7.0 * float(j) / 20.0 * 2.0 * 3.14 ) + sin( time / 4.0) * rotationFactor;
+			center.y = centerOffset.y + sin( 3.0 * float(j) / 20.0 * 2.0 * 3.14 )+ cos( time / 8.0) * rotationFactor;
 			vec2 light = center + amplitude * vec2( cos( angle ), sin( angle ));
 			float l = size / length( view - light );
 			accumMix += l * 0.5;
@@ -65,6 +69,9 @@ export default function createRippleEffect(
 			amplitudeFactor: current.amplitudeFactor,
 			ringFactor: current.ringFactor,
 			rotationFactor: current.rotationFactor,
+			centerX: current.centerX,
+			centerY: current.centerY,
+			frequency: current.frequency,
 		}),
 		timeScale: current => current.speed,
 	}, params);

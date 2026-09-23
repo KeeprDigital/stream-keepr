@@ -110,6 +110,9 @@ export const rippleAnimationParamsSchema = z.strictObject({
 	amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
 	ringFactor: numberParam('Ripple scale', { min: 0, max: 12, step: 0.1, default: 1 }),
 	rotationFactor: numberParam('Rotation', { min: 0, max: 4, step: 0.1, default: 1 }),
+	centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
+	centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),
+	frequency: numberParam('Ripple frequency', { min: 0, max: 4, step: 0.1, default: 1 }),
 	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
 });
 
