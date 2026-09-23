@@ -233,8 +233,8 @@ non-interactive "yes" instead of asking before applying to the local store.
 The schema is `server/db/schema.ts` plus `server/db/schema/*.ts`
 (`drizzle.config.ts`); migrations live in `server/db/migrations/sqlite`. Server
 code queries through `db` from `~~/server/db`. Wrangler records applied
-migrations in `_hub_migrations`, a name kept from NuxtHub that production's
-history depends on (ADR-0019).
+migrations in `_hub_migrations`; production's history is in that table, so the
+name must not change.
 
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the
@@ -293,7 +293,7 @@ declares the scopes it needs.
 
 Nitro generates the deployable config at `.output/server/wrangler.json` from
 `wrangler.jsonc`, which declares every binding (D1, KV, R2, service) with its
-production ID, plus routes, cron and observability (ADR-0019). Deploys use the
+production ID, plus routes, cron and observability. Deploys use the
 repo-pinned Wrangler.
 
 There is no separate staging environment: **production is the staging gate.**
@@ -565,8 +565,8 @@ A failed pass is logged and swallowed; the next run resumes from durable state.
 **A deploy without the cron silently stops automatic reclamation**; the backlog
 then shows in the retention view.
 
-Scheduled triggers, object-store listing, Workflows, and Containers use
-Cloudflare directly. That provider knowledge stays confined: all authoritative
+Scheduled triggers, object-store listing, Workflows, and Containers are
+Cloudflare-specific. That provider knowledge stays confined: all authoritative
 state stays in D1, all byte access goes through the Graphics Object Store
 interface, and module tests run without Cloudflare.
 

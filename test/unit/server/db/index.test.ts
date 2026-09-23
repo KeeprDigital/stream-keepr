@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The Drizzle client over the Worker's D1 binding (#528). It replaced NuxtHub's
- * generated database module, so it keeps that module's contract: the binding is
- * looked up on first use rather than at import, and a missing one fails at the use.
+ * The Drizzle client over the Worker's D1 binding. The binding is looked up on
+ * first use rather than at import, and a missing one fails at the use.
  */
 
 /** Enough of a D1 binding for Drizzle to wrap; nothing here runs a query. */

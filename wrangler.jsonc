@@ -2,7 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	// Nitro builds .output/server/wrangler.json from this file, adding the Worker
 	// entrypoint, assets, and name. Every deployed binding and its production ID
-	// is declared here and nowhere else (ADR-0019). Wrangler resolves path fields
+	// is declared here and nowhere else. Wrangler resolves path fields
 	// relative to the generated file, so `migrations_dir` climbs back out of
 	// .output/server.
 	"compatibility_date": "2026-07-16",
@@ -18,9 +18,9 @@
 		{
 			"binding": "DB",
 			"database_id": "26830437-975a-4378-a135-acfc01ea89ae",
-			// Production D1 records its applied migrations here, from when NuxtHub
-			// applied them. Under Wrangler's default table every migration would
-			// replay from 0000 and fail mid-deploy (ADR-0019).
+			// Production D1 records its applied migrations in this table. Under
+			// any other name every migration would replay from 0000 and fail
+			// mid-deploy.
 			"migrations_table": "_hub_migrations",
 			"migrations_dir": "../../server/db/migrations/sqlite"
 		}
