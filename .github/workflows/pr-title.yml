@@ -4,8 +4,10 @@
 # bump without anyone noticing, so it is caught here instead.
 #
 # No checkout and no install: this reads one string, in seconds. It runs on
-# pushes too, because it is a required status check and GitHub evaluates those
-# against the PR's newest commit; it skips edits that leave the title alone.
+# every push and every edit, because it is a required status check: GitHub
+# evaluates those against the PR's newest commit, the latest run wins, and a
+# skipped job counts as passing. Skipping body-only edits let an edit after a
+# failing run turn the check green without the title ever changing.
 
 name: PR title
 
@@ -18,7 +20,6 @@ permissions: {}
 jobs:
   conventional:
     name: Conventional Commit title
-    if: ${{ github.event.action != 'edited' || github.event.changes.title }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
