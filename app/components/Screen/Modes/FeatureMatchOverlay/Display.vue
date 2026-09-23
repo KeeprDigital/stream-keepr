@@ -446,12 +446,29 @@ onBeforeUnmount(() => {
 			</g>
 		</svg>
 
-		<div
-			v-for="source in sourceItems"
-			:key="source.item.id"
-			:data-graphic-item-id="source.item.id"
-			:style="source.style"
-		/>
+		<template v-for="source in sourceItems" :key="source.item.id">
+			<!--
+				The glow is derived from a border-only copy beneath the Source Item, so a
+				drop shadow follows its per-corner radii and enabled sides exactly. Keeping
+				it separate also stops a painted source background from creating a second,
+				rectangular halo of its own.
+			-->
+			<div
+				v-if="source.glowContainerStyle && source.glowStyle"
+				class="feature-match-overlay__source-glow-container"
+				:style="source.glowContainerStyle"
+				aria-hidden="true"
+			>
+				<div
+					class="feature-match-overlay__source-glow"
+					:style="source.glowStyle"
+				/>
+			</div>
+			<div
+				:data-graphic-item-id="source.item.id"
+				:style="source.style"
+			/>
+		</template>
 
 		<!--
 			The Feature Match Layout's shared item tree, above the Frame and the Source

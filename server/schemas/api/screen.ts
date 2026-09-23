@@ -573,6 +573,7 @@ const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchem
 	glowColor: optionalCssColorSchema,
 	glowSize: nonNegativePixelSchema.optional(),
 	glowOpacity: opacitySchema.optional(),
+	glowPosition: z.enum(['both', 'inside', 'outside']).optional(),
 }).strict();
 
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({

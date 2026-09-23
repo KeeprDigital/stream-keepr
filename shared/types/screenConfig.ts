@@ -278,6 +278,8 @@ export interface FeatureMatchOverlayBorderSides {
 	borderLeftVisible?: boolean;
 }
 
+export type FeatureMatchOverlayGlowPosition = 'both' | 'inside' | 'outside';
+
 /**
  * The surface treatment of a host-owned Feature Match Overlay element.
  *
@@ -311,6 +313,8 @@ export interface FeatureMatchSourceFramingStyle extends FeatureMatchOverlayBorde
 	glowColor?: string;
 	glowSize?: number;
 	glowOpacity?: number;
+	/** Which side of the Source Item border receives the glow. Absent means both. */
+	glowPosition?: FeatureMatchOverlayGlowPosition;
 }
 
 export interface ScreenMediaBackgroundConfig {

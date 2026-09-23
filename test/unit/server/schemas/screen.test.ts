@@ -435,16 +435,24 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
 	});
 
-	it('accepts per-side border visibility on a Source Item, which the host layer kept', () => {
+	it('accepts per-side border visibility and glow positioning on a Source Item', () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.sources[0]!.framingStyle = {
 			borderVisible: true,
 			borderColor: '#ffffff',
 			borderWidth: 3,
 			borderLeftVisible: false,
+			glowPosition: 'outside',
 		};
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(true);
+	});
+
+	it('rejects an unknown Source Item glow position', () => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		config.layout.sources[0].framingStyle = { glowPosition: 'centre' };
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
 	it('rejects widget-era typography on a Source Item surface style', () => {

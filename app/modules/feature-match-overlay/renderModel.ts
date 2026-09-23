@@ -13,6 +13,7 @@ import {
 	featureMatchOverlayBorderRadiusCss,
 	featureMatchOverlayBorderSideEnabled,
 	featureMatchOverlaySourceCutoutRect,
+	resolveFeatureMatchOverlayCornerRadii,
 	roundedRectPath,
 } from '~/utils/featureMatchOverlayGeometry';
 
@@ -46,6 +47,8 @@ export interface FeatureMatchOverlayFrameRenderModel {
 export interface FeatureMatchOverlaySourceItemRenderModel {
 	item: FeatureMatchSourceItemConfig;
 	style: CSSProperties;
+	glowContainerStyle?: CSSProperties;
+	glowStyle?: CSSProperties;
 	cutoutPath: string | null;
 }
 
@@ -141,7 +144,48 @@ function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMat
 	return colorWithOpacity(output, color, opacity);
 }
 
-function cssGlowShadow(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
+function sourceGlowMaskStyle(
+	item: FeatureMatchSourceItemConfig,
+	extent: number,
+	position: 'inside' | 'outside',
+): CSSProperties {
+	const width = Math.max(0, item.width);
+	const height = Math.max(0, item.height);
+	const maskWidth = width + (extent * 2);
+	const maskHeight = height + (extent * 2);
+	const innerPath = roundedRectPath({
+		x: extent,
+		y: extent,
+		width,
+		height,
+		radii: resolveFeatureMatchOverlayCornerRadii(item.framingStyle ?? {}),
+	});
+	const path = position === 'inside'
+		? innerPath
+		: `M 0 0 H ${maskWidth} V ${maskHeight} H 0 Z ${innerPath}`;
+	const svg = [
+		'<svg xmlns="http://www.w3.org/2000/svg"',
+		` viewBox="0 0 ${maskWidth} ${maskHeight}" preserveAspectRatio="none">`,
+		`<path d="${path}" fill="white" fill-rule="evenodd"/>`,
+		'</svg>',
+	].join('');
+	const maskImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+
+	return {
+		maskImage,
+		maskRepeat: 'no-repeat',
+		maskSize: '100% 100%',
+		WebkitMaskImage: maskImage,
+		WebkitMaskRepeat: 'no-repeat',
+		WebkitMaskSize: '100% 100%',
+	};
+}
+
+function sourceGlowStyles(
+	output: FeatureMatchOverlayOutput,
+	item: FeatureMatchSourceItemConfig,
+): Pick<FeatureMatchOverlaySourceItemRenderModel, 'glowContainerStyle' | 'glowStyle'> | undefined {
+	const style = item.framingStyle;
 	const size = Math.max(0, style?.glowSize ?? 0);
 	if (output === 'key' || size <= 0 || !style?.borderVisible)
 		return undefined;
@@ -151,18 +195,44 @@ function cssGlowShadow(output: FeatureMatchOverlayOutput, style: FeatureMatchSou
 		return undefined;
 
 	const color = colorWithOpacity(output, style.glowColor ?? style.borderColor ?? '#ffffff', style.glowOpacity ?? 0.75);
-	const insetSize = Math.max(1, Math.round(size / 2));
-	if (visibleSides.length === FEATURE_MATCH_OVERLAY_BORDER_SIDES.length)
-		return `0 0 ${size}px ${color}, inset 0 0 ${insetSize}px ${color}`;
-
-	const sideShadows: Record<FeatureMatchOverlayBorderSide, string> = {
-		Top: `0 -${size}px ${size}px -${size}px ${color}`,
-		Right: `${size}px 0 ${size}px -${size}px ${color}`,
-		Bottom: `0 ${size}px ${size}px -${size}px ${color}`,
-		Left: `-${size}px 0 ${size}px -${size}px ${color}`,
+	const glowBorder = {
+		...style,
+		// CSS drop-shadow includes its source in the filtered result. The real
+		// Source Item covers this duplicate border, but rounded-edge antialiasing
+		// can leave subpixels visible. Matching the authored border colour keeps
+		// those edge pixels identical while the filter still paints the glow colour.
+		borderColor: style.borderColor ?? '#ffffff',
 	};
-
-	return visibleSides.map(side => sideShadows[side]).join(', ');
+	// A CSS drop-shadow extends beyond the element it filters. Give that result a
+	// larger local canvas so the mask can retain either half without clipping its
+	// soft tail. Three blur radii cover Chromium's rendered filter region.
+	const extent = Math.max(1, Math.ceil(size * 3));
+	const position = style.glowPosition ?? 'both';
+	return {
+		glowContainerStyle: {
+			position: 'absolute',
+			left: `${item.x - extent}px`,
+			top: `${item.y - extent}px`,
+			width: `${Math.max(0, item.width) + (extent * 2)}px`,
+			height: `${Math.max(0, item.height) + (extent * 2)}px`,
+			overflow: 'hidden',
+			pointerEvents: 'none',
+			...(position === 'both' ? {} : sourceGlowMaskStyle(item, extent, position)),
+		},
+		glowStyle: {
+			position: 'absolute',
+			left: `${extent}px`,
+			top: `${extent}px`,
+			width: `${Math.max(0, item.width)}px`,
+			height: `${Math.max(0, item.height)}px`,
+			boxSizing: 'border-box',
+			background: 'transparent',
+			...cssBorderStyle(output, glowBorder),
+			borderRadius: featureMatchOverlayBorderRadiusCss(style),
+			filter: `drop-shadow(0 0 ${size}px ${color})`,
+			pointerEvents: 'none',
+		},
+	};
 }
 
 function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
@@ -204,7 +274,6 @@ function sourceItemStyle(output: FeatureMatchOverlayOutput, item: FeatureMatchSo
 		background: cssBackgroundStyle(output, item.framingStyle),
 		...cssBorderStyle(output, item.framingStyle),
 		borderRadius: featureMatchOverlayBorderRadiusCss(item.framingStyle ?? {}),
-		boxShadow: cssGlowShadow(output, item.framingStyle),
 		overflow: 'hidden',
 		pointerEvents: 'none',
 	};
@@ -216,13 +285,17 @@ export function resolveFeatureMatchOverlayRenderModel(
 	const { output, config } = input;
 	const sourceItems = config.layout.sources
 		.filter(item => item.visible)
-		.map(item => ({
-			item,
-			style: sourceItemStyle(output, item),
-			cutoutPath: item.frameCutout
-				? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null
-				: null,
-		}));
+		.map((item) => {
+			const glow = sourceGlowStyles(output, item);
+			return {
+				item,
+				style: sourceItemStyle(output, item),
+				...glow,
+				cutoutPath: item.frameCutout
+					? roundedRectPath(featureMatchOverlaySourceCutoutRect(item)) || null
+					: null,
+			};
+		});
 
 	return {
 		output,
