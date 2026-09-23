@@ -1423,7 +1423,15 @@ function gameWinsDescriptor(
 		},
 		winBoxes: states.map((won, index) => ({
 			won,
-			style: { ...size, flex: '0 0 auto', position: 'relative' },
+			// Vue does not add CSS units to numeric style bindings. Unitless width
+			// and height declarations are discarded by the browser, collapsing every
+			// win box to zero size even though its SVG and match state are present.
+			style: {
+				width: `${size.width}px`,
+				height: `${size.height}px`,
+				flex: '0 0 auto',
+				position: 'relative',
+			},
 			surface: paintedSurface(
 				output,
 				`${scope}-box-${index}`,
