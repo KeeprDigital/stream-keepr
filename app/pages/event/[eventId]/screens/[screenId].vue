@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { ScreenColorMode } from '~~/shared/types/enums';
 import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
+import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SCREEN_COLOR_MODE_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useScreenConfigUpdate } from '~/composables/screen/useScreenConfigUpdate';
 import { getScreenModeConfigurationPolicy, getScreenModeLabel, getScreenModeSelectOptions, getScreenModeSettingsComponent } from '~/modules/screen-mode';
@@ -61,6 +63,12 @@ const modeSettingsComponent = computed(() => {
 	return getScreenModeSettingsComponent(mode);
 });
 
+// The current mode, when it carries its own Background Layers stack.
+const backgroundLayersMode = computed<BackgroundLayersCapableMode | null>(() => {
+	const mode = screen.value?.currentMode;
+	return mode && screenModeSupportsBackgroundLayers(mode) ? mode : null;
+});
+
 // Screen-level config (container settings: background, width, height)
 const {
 	screenConfig,
@@ -80,8 +88,14 @@ const showResetConfirm = ref(false);
 const showCapabilityRotationConfirm = ref(false);
 const rotatingCapability = ref(false);
 
-// Centralized saving indicator — true when either container or mode config is saving
-const isSaving = computed(() => screenConfigSaving.value || modeControlsRef.value?.saving === true);
+const backgroundLayersControlsRef = ref<{ saving?: boolean } | null>(null);
+
+// Centralized saving indicator — true when container, mode, or background-layer config is saving
+const isSaving = computed(() =>
+	screenConfigSaving.value
+	|| modeControlsRef.value?.saving === true
+	|| backgroundLayersControlsRef.value?.saving === true,
+);
 
 function confirmResetAll() {
 	resetScreenConfig(screenModeConfigurationPolicy.value?.resetScreenConfigDefaults);
@@ -689,6 +703,16 @@ async function sendCommand(command: ScreenCommand) {
 						/>
 					</UFormField>
 				</ScreenSettingsCard>
+
+				<!-- Background Layers (modes that carry their own stack) -->
+				<ScreenModeBackgroundLayersSettings
+					v-if="backgroundLayersMode"
+					:key="backgroundLayersMode"
+					ref="backgroundLayersControlsRef"
+					:screen="screen"
+					:event-id="eventId"
+					:mode="backgroundLayersMode"
+				/>
 
 				<!-- Mode-specific Settings -->
 				<component

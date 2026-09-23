@@ -60,6 +60,7 @@ export type DeckSource
 
 export interface DeckModeConfig {
 	deckSource: DeckSource;
+	backgroundLayers?: BackgroundLayer[];
 	/** Which boards render (#477). "Both hidden" is impossible by construction. */
 	board?: BoardSelection;
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
@@ -108,6 +109,7 @@ export interface CardDisplayConfig {
 export interface CardModeConfig extends CardDisplayConfig {
 	// Optional feature match binding (for decklist convenience, not required)
 	featureMatchId?: number | null;
+	backgroundLayers?: BackgroundLayer[];
 }
 
 export interface StandingsColumnConfig {
@@ -131,6 +133,8 @@ export interface PlayerHistoryColumnConfig {
 }
 
 export interface StandingsModeConfig {
+	backgroundLayers?: BackgroundLayer[];
+
 	// View mode
 	viewMode: StandingsViewMode;
 
@@ -177,6 +181,7 @@ export interface StandingsModeConfig {
 export interface TopCutModeConfig {
 	// Placeholder for top cut mode config
 	bracketSize?: number;
+	backgroundLayers?: BackgroundLayer[];
 }
 
 export interface FeatureMatchModeConfig {
@@ -208,6 +213,7 @@ export interface FeatureMatchModeConfig {
 
 export interface PlayerHistoryModeConfig {
 	playerId: number | null;
+	backgroundLayers?: BackgroundLayer[];
 	columns: PlayerHistoryColumnConfig[];
 	showHeader: boolean;
 	headerText?: string;
@@ -380,8 +386,14 @@ export interface AnimationBackgroundLayer extends BackgroundLayerBase {
 }
 
 /**
- * One entry in a Background Screen's ordered stack. Painter's order: the first
+ * One entry in an ordered Background Layer stack. Painter's order: the first
  * layer is the bottom of the stack.
+ *
+ * The Background Screen's configuration is such a stack; every plain overlay
+ * mode (see `screenModeSupportsBackgroundLayers`) also carries an optional
+ * `backgroundLayers` stack of its own, painted behind that mode's content. The
+ * graphics hosts stay out — they own their backgrounds and their Overlay/Key
+ * Outputs depend on staying transparent.
  */
 export type BackgroundLayer
 	= | ColorBackgroundLayer
@@ -520,6 +532,8 @@ export interface BroadcastGraphicsModeConfig {
 }
 
 export interface MetagameModeConfig {
+	backgroundLayers?: BackgroundLayer[];
+
 	// View selection
 	viewMode: MetagameViewMode;
 
@@ -876,19 +890,20 @@ type ModeResetPreservedKeysMap = {
 };
 
 const MODE_RESET_PRESERVED_KEYS = {
-	// The layer stack is authored content with no recovery path, like the
-	// Broadcast Graphics stack: a display reset must not empty it.
+	// A layer stack is authored content with no recovery path, like the
+	// Broadcast Graphics stack: a display reset must not empty it. The same
+	// holds for every mode's own `backgroundLayers` stack.
 	'background': ['layers'],
-	'card': ['featureMatchId'],
-	'deck': ['deckSource'],
-	'topCut': [],
+	'card': ['featureMatchId', 'backgroundLayers'],
+	'deck': ['deckSource', 'backgroundLayers'],
+	'topCut': ['backgroundLayers'],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': ['graphics'],
-	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
-	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter'],
+	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId', 'backgroundLayers'],
+	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter', 'backgroundLayers'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
-	'player-history': ['playerId'],
+	'player-history': ['playerId', 'backgroundLayers'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode

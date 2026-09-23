@@ -64,7 +64,7 @@ describe('screenModesBackgroundDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('.background-screen').exists()).toBe(true);
-		expect(wrapper.findAll('.background-screen__layer')).toHaveLength(0);
+		expect(wrapper.findAll('.background-layer-stack__layer')).toHaveLength(0);
 	});
 
 	it('renders enabled layers in painter’s order, first at the bottom', async () => {
@@ -76,7 +76,7 @@ describe('screenModesBackgroundDisplay', () => {
 		};
 
 		const wrapper = await mountComponent();
-		const rendered = wrapper.findAll('.background-screen__layer');
+		const rendered = wrapper.findAll('.background-layer-stack__layer');
 
 		expect(rendered).toHaveLength(2);
 		expect(rendered[0]!.attributes('data-layer-id')).toBe('base');
@@ -93,7 +93,7 @@ describe('screenModesBackgroundDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('.background-screen__layer')).toHaveLength(1);
+		expect(wrapper.findAll('.background-layer-stack__layer')).toHaveLength(1);
 		expect(wrapper.find('[data-layer-id="base"]').exists()).toBe(false);
 	});
 
@@ -132,7 +132,7 @@ describe('screenModesBackgroundDisplay', () => {
 		};
 
 		const wrapper = await mountComponent();
-		const images = wrapper.findAll('.background-screen__layer img');
+		const images = wrapper.findAll('.background-layer-stack__layer img');
 
 		expect(images).toHaveLength(2);
 		expect(images[0]!.attributes('src')).toBe('/plates/one.png');

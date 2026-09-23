@@ -314,6 +314,31 @@ describe('parseModeConfigPatchResult', () => {
 	});
 });
 
+describe('per-mode background layers', () => {
+	const colorLayer = (id: string) => ({ id, type: 'color' as const, color: '#101010', enabled: true, opacity: 1 });
+	const animationLayer = (id: string) => ({ id, type: 'animation' as const, animation: { effect: 'fog' as const }, enabled: true, opacity: 1 });
+
+	it('accepts a background layer stack on every capable mode\'s patch path', () => {
+		for (const mode of ['card', 'deck', 'standings', 'topCut', 'metagame', 'player-history'] as const) {
+			expect(modeConfigPatchSchemaMap[mode].safeParse({
+				backgroundLayers: [colorLayer('base'), animationLayer('fx')],
+			}).success).toBe(true);
+		}
+	});
+
+	it('holds the one-animation-layer rule on the patch path, like the Background Screen\'s own stack', () => {
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({
+			backgroundLayers: [animationLayer('one'), animationLayer('two')],
+		}).success).toBe(false);
+	});
+
+	it('refuses a background layer stack on a graphics host, which owns its background', () => {
+		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			backgroundLayers: [colorLayer('base')],
+		}).success).toBe(false);
+	});
+});
+
 describe('object-level rules cannot be silently unenforced', () => {
 	it('still derives a patch schema that enforces every field bound', () => {
 		// The division of labour the fix relies on: fields here, whole-object rules in

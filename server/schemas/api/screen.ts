@@ -321,23 +321,29 @@ const backgroundLayerSchema = z.discriminatedUnion('type', [
  */
 const MAX_BACKGROUND_LAYERS = 20;
 
+/**
+ * One ordered Background Layer stack — the Background Screen's `layers` and
+ * every plain overlay mode's own `backgroundLayers` validate identically.
+ *
+ * Painter's order: first layer is the bottom of the stack. Both rules live on
+ * this array field rather than on the mode object, because a field-level rule
+ * survives the PATCH-schema derivation and an object-level one cannot reach
+ * that path (see `assertNoUnenforceableModeConfigRules`, #85).
+ *
+ * At most one animation layer per stack: each is its own WebGL context, an OBS
+ * browser source is memory-tight, and only one mode renders at a time, so the
+ * per-stack rule keeps the per-Screen invariant. Liftable if a show needs two.
+ */
+const backgroundLayerStackSchema = z.array(backgroundLayerSchema)
+	.max(MAX_BACKGROUND_LAYERS)
+	.refine(
+		layers => layers.filter(layer => layer.type === 'animation').length <= 1,
+		'A Background Layer stack carries at most one animation layer',
+	);
+
 // Per-mode config schemas
 export const backgroundModeConfigSchema = z.object({
-	/**
-	 * Painter's order: first layer is the bottom of the stack. Both rules live on
-	 * this array field rather than on the mode object, because a field-level rule
-	 * survives the PATCH-schema derivation and an object-level one cannot reach
-	 * that path (see `assertNoUnenforceableModeConfigRules`, #85).
-	 *
-	 * At most one animation layer per Screen: each is its own WebGL context, and
-	 * an OBS browser source is memory-tight. Liftable if a show ever needs two.
-	 */
-	layers: z.array(backgroundLayerSchema)
-		.max(MAX_BACKGROUND_LAYERS)
-		.refine(
-			layers => layers.filter(layer => layer.type === 'animation').length <= 1,
-			'A Background Screen carries at most one animation layer',
-		),
+	layers: backgroundLayerStackSchema,
 }).strict() satisfies z.ZodType<BackgroundModeConfig>;
 
 export const cardDisplayConfigSchema = z.object({
@@ -348,6 +354,7 @@ export const cardDisplayConfigSchema = z.object({
 
 export const cardModeConfigSchema = cardDisplayConfigSchema.extend({
 	featureMatchId: z.number().int().positive().nullable().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 // One board's layout block. Both boards share the shape; visibility is the
@@ -403,6 +410,7 @@ export const deckModeConfigSchema = z.object({
 	quantitySize: quantitySizeSchema.optional(),
 	quantityTextColor: z.string().max(50).optional(),
 	quantityBgColor: z.string().max(50).optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSchema)
@@ -474,10 +482,12 @@ export const standingsModeConfigSchema = z.object({
 	rotationAnchor: z.number().int().nonnegative().optional(),
 
 	animateEntries: z.boolean(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const topCutModeConfigSchema = z.object({
 	bracketSize: z.number().int().positive().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const matchModeConfigSchema = z.object({
@@ -510,6 +520,7 @@ export const playerHistoryModeConfigSchema = z.object({
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 	currentPage: z.number().int().min(1).optional(),
 	rotationAnchor: z.number().int().nonnegative().optional(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
@@ -1831,6 +1842,7 @@ export const metagameModeConfigSchema = z.object({
 	showHeader: z.boolean(),
 	headerText: z.string().max(200).optional(),
 	animateEntries: z.boolean(),
+	backgroundLayers: backgroundLayerStackSchema.optional(),
 }).strict();
 
 export const topCardsModeConfigSchema = z.object({
