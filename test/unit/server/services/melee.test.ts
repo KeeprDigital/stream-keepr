@@ -248,7 +248,13 @@ describe('meleeService', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(mockLogger.error).toHaveBeenLastCalledWith(expect.objectContaining({
 				failureCategory: 'schema_validation',
+				validationIssues: expect.arrayContaining([
+					'invalid_type:ID',
+					'invalid_type:Game',
+				]),
 			}));
+			expect(JSON.stringify(mockLogger.error.mock.lastCall)).not.toContain('not-a-number');
+			expect(JSON.stringify(mockLogger.error.mock.lastCall)).not.toContain('Invalid');
 		});
 
 		it('rejects invalid UTF-8 response bytes as a parse failure', async () => {
