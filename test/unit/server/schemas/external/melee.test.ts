@@ -23,9 +23,13 @@ describe('meleeDecklistRecordSchema', () => {
 		expect(result).toHaveProperty('extraField', 'ignored');
 	});
 
-	it('accepts quantity at boundary values 0 and 100', () => {
+	it('accepts nonnegative quantities above ordinary deck sizes', () => {
 		expect(meleeDecklistRecordSchema.parse({ ...validRecord, q: 0 }).q).toBe(0);
-		expect(meleeDecklistRecordSchema.parse({ ...validRecord, q: 100 }).q).toBe(100);
+		expect(meleeDecklistRecordSchema.parse({ ...validRecord, q: 250 }).q).toBe(250);
+	});
+
+	it('rejects quantities large enough to corrupt aggregate statistics', () => {
+		expect(meleeDecklistRecordSchema.safeParse({ ...validRecord, q: 1_000_001 }).success).toBe(false);
 	});
 
 	it('accepts null set code', () => {
@@ -51,9 +55,15 @@ describe('meleePlayerSchema', () => {
 		expect(meleePlayerSchema.parse({ ...validPlayer, PronounsDescription: null }).PronounsDescription).toBeNull();
 	});
 
-	it('accepts an optional integer tournament status', () => {
+	it('accepts nullable or omitted optional player metadata', () => {
+		expect(meleePlayerSchema.parse({
+			TeamId: validPlayer.TeamId,
+			PlayerName: validPlayer.PlayerName,
+		}).PronounsDescription).toBeUndefined();
 		expect(meleePlayerSchema.parse({ ...validPlayer, Status: 7 }).Status).toBe(7);
+		expect(meleePlayerSchema.parse({ ...validPlayer, Status: null }).Status).toBeNull();
 		expect(meleePlayerSchema.parse(validPlayer).Status).toBeUndefined();
+		expect(meleePlayerSchema.parse({ ...validPlayer, Decklists: null }).Decklists).toBeUndefined();
 	});
 
 	it('passes through unknown fields', () => {

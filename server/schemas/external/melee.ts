@@ -34,8 +34,12 @@ export const meleeDecklistRecordSchema = z.object({
 	n: z.string().max(200),
 	/** Set code */
 	s: z.string().max(10).nullable(),
-	/** Quantity — clamped 0–100 to prevent stats corruption */
-	q: z.number().int().min(0).max(100),
+	/**
+	 * Quantity can legitimately exceed 100 for large decks and basic lands.
+	 * The high safety ceiling still keeps aggregate deck statistics within a
+	 * safe numeric range for the bounded 500-record deck list.
+	 */
+	q: z.number().int().min(0).max(1_000_000),
 	/** Compartment code: 0 = mainboard, 99 = sideboard */
 	c: z.number().int(),
 	/** Card type line */
@@ -63,11 +67,12 @@ export const meleePlayerDecklistSchema = z.object({
 export const meleePlayerSchema = z.object({
 	TeamId: z.number().int(),
 	PlayerName: z.string().max(200),
-	PronounsDescription: z.string().max(200).nullable(),
+	/** Melee omits this field for some registrations and returns null for others. */
+	PronounsDescription: z.string().max(200).nullish(),
 	/** Raw Melee tournament-player status. Numeric meanings are not publicly stable. */
-	Status: z.number().int().optional(),
-	/** Absent when a player has not yet submitted a decklist */
-	Decklists: z.array(meleePlayerDecklistSchema).max(20).optional(),
+	Status: z.number().int().nullish(),
+	/** Absent or null when a player has not yet submitted a decklist. */
+	Decklists: z.array(meleePlayerDecklistSchema).max(20).nullish().transform(decklists => decklists ?? undefined),
 }).passthrough();
 
 /** Standing as returned from GET /api/standing/list/ */
