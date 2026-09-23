@@ -7,8 +7,16 @@ Run `pnpm verify` before pushing: it applies CI's gates to the working tree and
 stops at the first failure. Its tail (`worker:dry-run`, `worker:smoke`) is the
 only local check that the Worker bundle runs on workerd, so any change touching
 dependencies, bundling, `nuxt.config.ts`, or server code needs it; `pnpm test`
-does not cover it. Commit `pnpm-lock.yaml` with any `package.json` change that
-affects dependency resolution.
+does not cover it. Iterate with `pnpm verify:quick` (lint, typecheck, unit and
+Nuxt suites); finish with `pnpm verify`. Commit `pnpm-lock.yaml` with any
+`package.json` change that affects dependency resolution.
+
+## Landing on main
+
+Every change reaches `main` as a squash-merged PR whose title is a Conventional
+Commit (`fix(scope): summary`); release-please reads that one commit, and CI
+runs only on PRs. Open the PR from your branch and leave `main` itself to the
+merge button. Why: README.md § Releases.
 
 ## Local auth bypass
 

@@ -1,74 +1,48 @@
-import type { NuxtConfig } from '@nuxt/schema';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { createTest, exposeContextToEnv, fetch } from '@nuxt/test-utils/e2e';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_AUTH_BYPASS_NAME,
 } from '../../shared/utils/localDeveloperAuth';
 import { prepareIntegrationD1 } from '../integration/integrationD1';
-import {
-	INTEGRATION_MODE_ENV,
-	INTEGRATION_WRANGLER_PERSIST_DIR_ENV,
-	resetIntegrationWranglerState,
-} from '../integration/state';
+import { freePorts, startIntegrationServer, testContextFor } from '../integration/servers';
+import { INTEGRATION_MODE_ENV, resetIntegrationWranglerState } from '../integration/state';
 
 const PERSIST_DIR = '.wrangler/state/local-auth-integration';
 const disableFsWatchImport = fileURLToPath(new URL('../integration/disable-fs-watch.mjs', import.meta.url));
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 
 export async function setup() {
-	const previous = {
-		integration: process.env[INTEGRATION_MODE_ENV],
-		persistDir: process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV],
-		bypass: process.env[LOCAL_AUTH_BYPASS_NAME],
-	};
-	process.env[INTEGRATION_MODE_ENV] = 'true';
-	process.env[INTEGRATION_WRANGLER_PERSIST_DIR_ENV] = PERSIST_DIR;
-	// This suite is a launcher, and the only one in the test tree that asks for a
-	// bypassed server. Nothing it inherits can arm this: no file assigns the name.
-	process.env[LOCAL_AUTH_BYPASS_NAME] = LOCAL_AUTH_BYPASS_ENABLED_VALUE;
-
 	await resetIntegrationWranglerState(PERSIST_DIR);
-	await prepareIntegrationD1();
+	await prepareIntegrationD1(PERSIST_DIR);
 
-	const hooks = createTest({
-		dev: true,
+	// This suite is a launcher, and the only one in the test tree that asks for a
+	// bypassed server. Nothing it inherits can arm this: no file assigns the name,
+	// and it reaches the server child alone, never this process.
+	const [port] = await freePorts(1);
+	const server = await startIntegrationServer({
+		persistDir: PERSIST_DIR,
+		port: port!,
 		env: {
 			[INTEGRATION_MODE_ENV]: 'true',
-			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: PERSIST_DIR,
 			[LOCAL_AUTH_BYPASS_NAME]: LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 			NUXT_BETTER_AUTH_SECRET: '',
 			NUXT_ADMIN_BOOTSTRAP_TOKEN: '',
 			NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
 			NODE_OPTIONS: nodeOptions,
 		},
-		nuxtConfig: {
-			nitro: { cloudflare: { dev: { persistDir: PERSIST_DIR } } },
-			watchers: { chokidar: { usePolling: true, interval: 1000 } },
-			typescript: { typeCheck: false },
-			vite: { server: { hmr: false, watch: null as unknown as undefined } },
-		} as NuxtConfig,
 	});
+	process.env.NUXT_TEST_CONTEXT = testContextFor(server);
 
-	await hooks.beforeAll();
-	exposeContextToEnv();
-	const ready = await fetch('/api/events');
-	if (!ready.ok)
-		throw new Error(`Local auth test server readiness failed with ${ready.status}: ${await ready.text()}`);
+	const ready = await fetch(new URL('/api/events', server.url));
+	if (!ready.ok) {
+		const detail = await ready.text();
+		await server.stop();
+		throw new Error(`Local auth test server readiness failed with ${ready.status}: ${detail}`);
+	}
 
 	return async () => {
-		await hooks.afterAll();
+		await server.stop();
 		await resetIntegrationWranglerState(PERSIST_DIR);
-		for (const [name, value] of [
-			[INTEGRATION_MODE_ENV, previous.integration],
-			[INTEGRATION_WRANGLER_PERSIST_DIR_ENV, previous.persistDir],
-			[LOCAL_AUTH_BYPASS_NAME, previous.bypass],
-		] as const) {
-			if (value === undefined)
-				delete process.env[name];
-			else
-				process.env[name] = value;
-		}
 	};
 }

@@ -142,7 +142,9 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | ------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth:run` | Watch mode; append `:run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                         |
 | Before commit                               | `pnpm test`                                                                             | Unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. Needs Chrome/Chromium.                   |
-| Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, stopping at the first failure: typecheck, lint, test, build, `worker:dry-run`, `worker:smoke`.                                                                                  |
+| Tests your branch touches                   | `pnpm test:changed`                                                                     | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                     |
+| Quick check while developing                | `pnpm verify:quick`                                                                     | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                  |
+| Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.         |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                     | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build. |
 | Touching still-image codecs or Wasm         | `pnpm test:ingestion:still-images`                                                      | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                |
 | Touching an Animation Effect shader         | `pnpm test:browser:animation-effects`                                                   | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, and motion. Local only.                                                          |
@@ -157,8 +159,37 @@ requests. Together they catch bundles that pass on Node and break on workerd
 (#302). Run it whenever a change touches dependencies, bundling,
 `nuxt.config.ts`, or server code.
 
-CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on every PR,
-split across two jobs. It skips docs-only PRs and does not re-run on merge.
+How `pnpm verify` runs:
+
+- **Cheap gates first.** `nuxt prepare`, then lint, typecheck, and the unit and
+  Nuxt suites; the build runs beside them. The server-backed suites and browser
+  gates start only once those pass, so a lint or type error arrives in seconds.
+- **Each gate logs to `node_modules/.cache/verify/<gate>.log`.** The terminal
+  shows one line per gate and the tail of the first failure.
+- **Lint and typecheck are cached** (`node_modules/.cache/eslint/`,
+  `node_modules/.cache/tsc/`), so an unchanged tree lints and typechecks in
+  seconds. The ESLint cache is per file, so a type-aware rule can miss a finding
+  in an unchanged file that a changed file's types caused; CI starts cold and
+  catches it. Delete the cache directory to reproduce CI exactly.
+- **Only `nuxt prepare` writes `.nuxt`.** The root tsconfig extends it, so every
+  other gate reads it; the Nuxt suite, the servers and `verify`'s build each use
+  their own build directory. Keep it that way when adding a gate. Dev servers
+  started together also need their own Vite cache (`nuxt.config.ts` gives each
+  one), or they rewrite each other's optimised dependencies.
+- **Tried and rejected** (measured on a 10-core machine, September 2026):
+  integration test files in parallel against one server (they assert
+  library-wide state); `--no-isolate` for the Nuxt suite (about 4× faster, but
+  83 files fail on leaked state); Vitest's `experimental.fsModuleCache` (no gain
+  on the unit suite, breaks the Nuxt suite on a warm cache); `pool: 'threads'`
+  (no gain); ESLint `--concurrency` and `projectService` (slower, and
+  `projectService` exhausts the heap).
+
+CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs,
+split across parallel jobs (checks, two integration shards, local-auth and
+browser gates, Worker build) so the longest job sets the wall time. It skips draft PRs (marking one ready runs it), PRs that
+change only docs or other workflows, and the Worker build when only tests or
+docs changed; it does not re-run on merge, and a newer push cancels the older
+run. `pnpm verify` is the gate before that.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
 decision (#189). The suites in the table above that need a running preview,
 Docker, Safari, or a real store stay local. Other vitest modes work directly,
@@ -170,6 +201,12 @@ Gotchas:
   machine, make every result meaningless. A cascade of `ECONNREFUSED` or
   "session cookie was not issued" with zero assertion failures means a
   `workerd` backend died, not that the code broke.
+- **The integration suite runs several servers.** One `nuxt dev` per vitest
+  worker, each over its own database under `.wrangler/state/integration-<n>`, so
+  test files run in parallel but never two against one database. The default is
+  a third of the CPU cores, at most four; set `STREAM_KEEPR_INTEGRATION_SERVERS`
+  to change it (`1` is the old serial run). Each server's output is kept in
+  `node_modules/.cache/integration-servers/`.
 - **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
   timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
   Re-run the single file, then the suite with `--no-file-parallelism`, before
@@ -212,9 +249,34 @@ conventional commits: `fix:` → patch, `feat:` → minor, `feat!:` or
 Release, bumps `package.json`, and updates `CHANGELOG.md`. `main` is trunk;
 there is no `develop` branch.
 
+How a change reaches `main`, and why:
+
+- **Every change lands as a squash-merged PR.** The repository allows only
+  squash merges, with the PR title as the commit title, so each PR is one
+  conventional commit and one changelog line. Merge commits bring every branch
+  commit along, and a branch merged both locally and by its PR listed each
+  change twice (Release PR #400). Never push or merge to `main` directly: that
+  also skips CI, which runs only on PRs.
+- **PR titles are Conventional Commits**, checked by
+  `.github/workflows/pr-title.yml`. A title that is not one would drop the PR
+  from the changelog and the version bump.
+- **The `main` ruleset enforces it**: a PR is required, squash is the only
+  merge method, history stays linear, force-pushes and deletion are refused,
+  and `CI passed` plus `Conventional Commit title` must be green. The **release
+  tags** ruleset makes `v*` tags immutable. Repository admins can bypass both.
+  `CI passed` is one summary job that always reports, so CI can skip what a
+  change cannot affect without leaving a required check waiting. The
+  `production` tag is unprotected: the Deploy workflow force-moves it, and
+  GitHub refuses the Actions app as a ruleset bypass actor.
+- **Release PRs do not trigger CI** (default-token limitation), so they never
+  get the required checks; an admin merges them with the ruleset bypass. They
+  change only the version and changelog. Run the workflow by hand
+  (`gh workflow run release-please.yml`) to refresh the Release PR without a
+  push. A GitHub App token for release-please would remove the bypass.
+
 Requires Settings → Actions → General → **Allow GitHub Actions to create and
-approve pull requests**. Release PRs do not trigger CI (default-token
-limitation); wire a PAT before adding required status checks to `main`.
+approve pull requests**. The default workflow token is read-only; each workflow
+declares the scopes it needs.
 
 ## Deploy
 
@@ -259,8 +321,9 @@ what `pnpm deploy` runs, but ships a **released tag**, never `main`'s HEAD:
   git tag, which each successful deploy moves. `always` and `never` override.
 
 It needs the `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, D1:Edit, plus
-Containers when deploying the validator) and `CLOUDFLARE_ACCOUNT_ID` repository
-secrets. The acceptance gates and the "nothing on air" check stay with the
+Containers when deploying the validator) and `CLOUDFLARE_ACCOUNT_ID` secrets on
+the `production` environment, which deploys only from `main`: a workflow on any
+other branch cannot read them. The acceptance gates and the "nothing on air" check stay with the
 operator.
 
 ### Deploy day

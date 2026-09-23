@@ -16,7 +16,10 @@ interface IntegrationBindings {
 	DB: D1Database;
 }
 
-async function useIntegrationD1<T>(callback: (database: D1Database) => Promise<T>) {
+async function useIntegrationD1<T>(
+	callback: (database: D1Database) => Promise<T>,
+	persistDir = resolveIntegrationWranglerPersistDir(),
+) {
 	// Use the same config conversion as Nitro's Cloudflare development proxy.
 	// The Wrangler migration CLI resolves binding-only databases by binding name,
 	// while getPlatformProxy resolves them by database_name; using the proxy here
@@ -24,7 +27,7 @@ async function useIntegrationD1<T>(callback: (database: D1Database) => Promise<T
 	const proxy = await getPlatformProxy<IntegrationBindings>({
 		configPath: wranglerConfig,
 		envFiles: [],
-		persist: { path: resolveIntegrationWranglerPersistDir() },
+		persist: { path: persistDir },
 		remoteBindings: false,
 	});
 
@@ -43,7 +46,7 @@ async function getMigrationFiles() {
 }
 
 /** Apply every checked-in migration before the Nuxt test server can open D1. */
-export async function prepareIntegrationD1() {
+export async function prepareIntegrationD1(persistDir?: string) {
 	const expectedMigrations = await getMigrationFiles();
 	if (expectedMigrations.length === 0)
 		throw new Error('Integration D1 migration chain is empty');
@@ -81,7 +84,7 @@ export async function prepareIntegrationD1() {
 		if (missingMigrations.length > 0) {
 			throw new Error(`Integration D1 migration chain is incomplete; missing: ${missingMigrations.join(', ')}`);
 		}
-	});
+	}, persistDir === undefined ? undefined : resolveIntegrationWranglerPersistDir(process.cwd(), persistDir));
 }
 
 /** Execute controlled fixture SQL against the isolated integration database. */

@@ -137,9 +137,11 @@ async function launch(candidate, extraArgs) {
 	], { stdio: ['ignore', 'ignore', 'pipe'] });
 	const endpoint = await new Promise((resolve, reject) => {
 		let errorOutput = '';
+		// Startup only, not an assertion: a cold Chrome on a 2-core CI runner that
+		// is also serving `nuxt dev` has overrun 15s.
 		const timeout = setTimeout(
 			() => reject(new Error('Chrome DevTools endpoint timed out.')),
-			15_000,
+			30_000,
 		);
 		child.stderr.setEncoding('utf8').on('data', (chunk) => {
 			errorOutput += chunk;

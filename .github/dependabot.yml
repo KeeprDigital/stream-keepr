@@ -1,0 +1,28 @@
+# Keeps the SHA-pinned actions current: the repository requires every action
+# to be pinned to a full commit SHA, and a pin nobody updates goes stale. One
+# grouped PR a month, titled as a Conventional Commit (`ci: …`) so it passes
+# pr-title.yml and lands in the changelog's hidden CI section.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*]
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+
+  # Security updates only: `open-pull-requests-limit: 0` turns version updates
+  # off without affecting security PRs, and this entry is what gives those PRs
+  # a Conventional Commit title (`fix(deps): bump …`) instead of `Bump …`.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: fix
+      include: scope

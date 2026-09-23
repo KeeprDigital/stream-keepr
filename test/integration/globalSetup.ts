@@ -1,8 +1,16 @@
+import type { IntegrationServer, IntegrationServerAddress } from './servers';
+import process from 'node:process';
 import { main as reapStrandedWorkerd } from '../../scripts/reap-workerd.mjs';
-import { createTest, exposeContextToEnv, fetch } from './client';
-import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationRealtimeConfigured, integrationSetupOptions } from './helpers';
+import { signInAsOperator } from './client';
+import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationRealtimeConfigured, integrationServerEnv } from './helpers';
 import { prepareIntegrationD1 } from './integrationD1';
-import { announceIntegrationMode, resetIntegrationWranglerState } from './state';
+import { freePorts, INTEGRATION_SERVER_LIST_ENV, startIntegrationServer } from './servers';
+import {
+	announceIntegrationMode,
+	integrationServerCount,
+	integrationServerPersistDir,
+	resetIntegrationWranglerState,
+} from './state';
 import './disable-fs-watch.mjs';
 
 /**
@@ -14,13 +22,11 @@ import './disable-fs-watch.mjs';
  * operator exists and its session is accepted. Both facts are worth failing here
  * for. Without the second, a broken sign-in would surface as every test in the
  * run answering 401, with nothing naming the cause.
- *
- * The `fetch` imported here is the suite's own signed-in client (`./client.ts`),
- * so the sign-in it performs on first use happens here — before any test file
- * runs, where a failure names itself.
  */
-async function assertIntegrationServerReady() {
-	const response = await fetch('/api/events');
+async function assertIntegrationServerReady(server: IntegrationServer) {
+	const request = (path: string, init?: RequestInit) => fetch(new URL(path, server.url), init);
+	const cookie = await signInAsOperator(request, server.url);
+	const response = await request('/api/events', { headers: { cookie } });
 	if (!response.ok) {
 		const detail = await response.text();
 		throw new Error(
@@ -29,12 +35,45 @@ async function assertIntegrationServerReady() {
 	}
 }
 
+async function startReadyServer(persistDir: string, port: number): Promise<IntegrationServer> {
+	await resetIntegrationWranglerState(persistDir);
+	await prepareIntegrationD1(persistDir);
+	const server = await startIntegrationServer({ persistDir, env: integrationServerEnv, port });
+	try {
+		await assertIntegrationServerReady(server);
+	}
+	catch (error) {
+		await server.stop();
+		throw error;
+	}
+	return server;
+}
+
+/**
+ * Start one server per test worker, each over its own database.
+ *
+ * Test files share library-wide state, so a server serves one file at a time;
+ * `selectServer.ts` pins each worker to the server matching its pool id.
+ */
+async function startIntegrationServers(): Promise<IntegrationServer[]> {
+	const persistDirs = Array.from(
+		{ length: integrationServerCount() },
+		(_, index) => integrationServerPersistDir(index + 1),
+	);
+	const ports = await freePorts(persistDirs.length);
+	const started = await Promise.allSettled(persistDirs.map((persistDir, index) => startReadyServer(persistDir, ports[index]!)));
+	const servers = started.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+	const failed = started.find(result => result.status === 'rejected');
+	if (failed) {
+		await Promise.all(servers.map(server => server.stop()));
+		throw failed.reason;
+	}
+	return servers;
+}
+
 export async function setup() {
-	// First, and before `createTest`: `loadFixture()` runs `loadNuxt()` in *this*
-	// process, against the repository root, and `integrationSetupOptions.env`
-	// reaches only the server child. Without this, config-time readers here see an
-	// environment with no sign that a suite is running, and the child inherits
-	// whatever they wrote.
+	// First: the servers inherit this process's environment, and anything here
+	// that reads the environment must see the same answer they do.
 	announceIntegrationMode();
 
 	// Say this once, before anything runs, so a reader meets the reason for the
@@ -46,16 +85,12 @@ export async function setup() {
 	// persist directories; sweep them before touching that state.
 	await reapStrandedWorkerd();
 
-	await resetIntegrationWranglerState();
-	await prepareIntegrationD1();
-
-	const hooks = createTest(integrationSetupOptions);
-	await hooks.beforeAll();
-	exposeContextToEnv();
-	await assertIntegrationServerReady();
+	const servers = await startIntegrationServers();
+	const addresses: IntegrationServerAddress[] = servers.map(({ url, persistDir }) => ({ url, persistDir }));
+	process.env[INTEGRATION_SERVER_LIST_ENV] = JSON.stringify(addresses);
 
 	return async () => {
-		await hooks.afterAll();
-		await resetIntegrationWranglerState();
+		await Promise.all(servers.map(server => server.stop()));
+		await Promise.all(servers.map(server => resetIntegrationWranglerState(server.persistDir)));
 	};
 }

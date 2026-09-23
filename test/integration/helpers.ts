@@ -1,4 +1,3 @@
-import type { NuxtConfig } from '@nuxt/schema';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +10,7 @@ import {
 	INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
 } from './environment';
 import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis';
-import { getIntegrationWranglerPersistDir, INTEGRATION_MODE_ENV, INTEGRATION_WRANGLER_PERSIST_DIR_ENV } from './state';
+import { INTEGRATION_MODE_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
 const mockScryfallImport = fileURLToPath(new URL('./mock-scryfall.mjs', import.meta.url));
@@ -153,37 +152,18 @@ export const integrationRealtimeConfigured = INTEGRATION_ABLY_API_KEY !== '';
  */
 
 /**
- * Shared setup options for all integration tests.
- * - dev: true — avoids cloudflare_module build
- * - STREAM_KEEPR_INTEGRATION tells nuxt.config.ts to use isolated Wrangler D1 state
- * - Disables Vite file watchers to prevent EMFILE (too many open files)
+ * The environment every integration server starts with (`./servers.ts` adds its
+ * persist directory and address). `STREAM_KEEPR_INTEGRATION` is what makes
+ * `nuxt.config.ts` isolate the server's state and turn off watchers, HMR, and the
+ * type checker; the rest are the secrets the suite invents for itself.
  */
-export const integrationSetupOptions = {
-	dev: true,
-	env: {
-		[INTEGRATION_MODE_ENV]: 'true',
-		[INTEGRATION_WRANGLER_PERSIST_DIR_ENV]: getIntegrationWranglerPersistDir(),
-		NUXT_GRAPHICS_ADMIN_TOKEN: INTEGRATION_GRAPHICS_ADMIN_TOKEN,
-		NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
-		NUXT_BETTER_AUTH_SECRET: INTEGRATION_BETTER_AUTH_SECRET,
-		NUXT_ADMIN_BOOTSTRAP_TOKEN: INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
-		NODE_OPTIONS: nodeOptions,
-	},
-	nuxtConfig: {
-		nitro: {
-			cloudflare: {
-				dev: { persistDir: getIntegrationWranglerPersistDir() },
-			},
-		},
-		watchers: {
-			chokidar: {
-				usePolling: true,
-				interval: 1000,
-			},
-		},
-		typescript: { typeCheck: false },
-		vite: { server: { hmr: false, watch: null as unknown as undefined } },
-	} as NuxtConfig,
+export const integrationServerEnv: Record<string, string> = {
+	[INTEGRATION_MODE_ENV]: 'true',
+	NUXT_GRAPHICS_ADMIN_TOKEN: INTEGRATION_GRAPHICS_ADMIN_TOKEN,
+	NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
+	NUXT_BETTER_AUTH_SECRET: INTEGRATION_BETTER_AUTH_SECRET,
+	NUXT_ADMIN_BOOTSTRAP_TOKEN: INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
+	NODE_OPTIONS: nodeOptions,
 };
 
 /**

@@ -81,8 +81,17 @@ export function operatorSessionCookie(): Promise<string> {
 	return sessionCookie;
 }
 
-async function signInAsOperator(): Promise<string> {
-	const ensured = await unauthenticatedFetch('/api/bootstrap/ensure-admin', {
+/**
+ * Create the operator if needed and sign it in, returning its session cookie.
+ *
+ * Takes the transport so `globalSetup` can sign in to each server it starts
+ * before any test context exists; test files use the defaults.
+ */
+export async function signInAsOperator(
+	request: (path: string, init?: RequestInit) => Promise<Response> = unauthenticatedFetch,
+	origin: string = url('/'),
+): Promise<string> {
+	const ensured = await request('/api/bootstrap/ensure-admin', {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json',
@@ -102,7 +111,7 @@ async function signInAsOperator(): Promise<string> {
 		);
 	}
 
-	const signIn = await unauthenticatedFetch('/api/auth/sign-in/email', {
+	const signIn = await request('/api/auth/sign-in/email', {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json',
@@ -113,7 +122,7 @@ async function signInAsOperator(): Promise<string> {
 			// refused. Found by running the fan-out probe against `pnpm preview`;
 			// sent here too so the suite's own client asks the way a browser does
 			// rather than the way only the dev server tolerates.
-			'origin': url('/'),
+			origin,
 		},
 		body: JSON.stringify({
 			email: INTEGRATION_OPERATOR_EMAIL,

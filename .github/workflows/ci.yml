@@ -6,23 +6,33 @@
 # only: they provision real Events in production and spend Ably free-plan
 # quota (#189).
 #
-# PR-only by decision: no push-to-main trigger. Merges land squarely from
-# CI-green PRs, and deploys ship released tags whose PR run was green —
-# re-running the same gates on the merge commit doubled Actions spend for
-# no added signal. Docs-only PRs are skipped for the same reason; safe while
-# main has no required status checks (see release-please.yml).
+# When it runs, and why no more often:
+#
+#   - PRs only, never on push to main. main's ruleset admits only squash
+#     merges of PRs whose `CI passed` was green, and deploys ship released
+#     tags, so re-running the same gates on the merge commit adds no signal.
+#   - Not on draft PRs. `pnpm verify` is the gate while a branch is in
+#     progress; marking the PR ready for review runs CI.
+#   - Only the jobs a change can affect: none for docs or other workflows, no
+#     Worker build for tests alone (the `scope` job decides).
+#   - A newer push cancels the run it supersedes.
+#
+# `CI passed` is the one required status check. It always reports, whatever
+# was skipped, so a docs-only PR is never left waiting on a check that cannot
+# arrive; a workflow-level `paths-ignore` would do exactly that.
 
 name: CI
 
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 # Node's default ~2GB old-space cap is too small on hosted runners for the
 # Nuxt/Vite build, whole-repo eslint, and vue-tsc alike.
@@ -30,43 +40,102 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  tests:
-    name: Lint, typecheck, and test gates
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
+  scope:
+    name: Decide what the change can affect
+    if: ${{ !github.event.pull_request.draft }}
+    # Pinned rather than `ubuntu-latest`, so an image change (Chrome, system
+    # libraries the browser gates depend on) is a reviewed edit, not a surprise.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      bundle: ${{ steps.scope.outputs.bundle }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Lint and typecheck lead so the cheap gates fail fast; they share this
-      # job to save a third checkout + install per run.
+          # The merge commit and its first parent, the base: enough to diff.
+          fetch-depth: 2
+      - id: scope
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          printf '%s\n' "$changed"
+          # Docs, editor settings, and workflows other than this one.
+          outside_code='\.md$|^\.vscode/|^\.github/dependabot\.yml$|^\.github/workflows/(deploy|pr-title|release-please)\.yml$'
+          # Anything that is not a test or outside the code cannot change the
+          # uploaded Worker bundle.
+          outside_bundle="^test/|$outside_code"
+          if grep -qvE "$outside_code" <<< "$changed"; then code=true; else code=false; fi
+          if grep -qvE "$outside_bundle" <<< "$changed"; then bundle=true; else bundle=false; fi
+          echo "code=$code bundle=$bundle"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+
+  # Every suite `pnpm test` runs appears below as its own `pnpm <script>` step
+  # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
+  # jobs so the longest one, not the sum, sets the wall time.
+  checks:
+    name: Lint, typecheck, unit and Nuxt suites
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Cheap gates first so they fail fast. Neither cache is restored: a cold
+      # run is the backstop for what the local per-file ESLint cache can miss
+      # (README § Testing).
       - run: pnpm lint
       - run: pnpm typecheck
-      # One runner, sequential tiers: integration suites must never run
-      # concurrently (README § Testing). Realtime integration tests self-skip here — no
-      # Ably key is configured in CI by decision; realtime coverage runs
-      # locally (#189). The unit and nuxt tiers run with --coverage, so the
-      # thresholds in vitest.shared.ts fail this step when coverage drops
-      # below them (#469); the overhead measurement lives with those
-      # thresholds.
-      - run: pnpm test
+      # With --coverage, so the thresholds in vitest.shared.ts fail these steps
+      # when coverage drops below them (#469).
+      - run: pnpm test:unit:coverage
+      - run: pnpm test:nuxt:coverage
 
-  worker-guard:
-    name: Build, wrangler dry run, and Worker smoke
-    runs-on: ubuntu-latest
+  integration:
+    name: Integration suite (${{ matrix.shard }}/2)
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Each shard starts its own servers over its own databases, so the halves
+      # share nothing. Realtime tests self-skip: no Ably key is configured in CI
+      # by decision; realtime coverage runs locally (#189).
+      - run: pnpm test:integration:run --shard=${{ matrix.shard }}/2
+
+  server-and-browser:
+    name: Local-auth suite and browser gates
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
+      - run: pnpm test:local-auth:run
+      - run: pnpm test:browser:still-images
+      - run: pnpm test:browser:silent-video
+      - run: pnpm test:browser:fonts
+      - run: pnpm test:browser:animation-effects
+
+  worker-guard:
+    name: Build, wrangler dry run, and Worker smoke
+    needs: scope
+    # A PR touching only tests or docs cannot change the uploaded bundle, so
+    # building it again would prove what main already proved.
+    if: needs.scope.outputs.bundle == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
       # The #302 class of failure: green on Node, broken on workerd. The dry
       # run asserts the bundle wrangler would upload compiles no Wasm from
       # bytes, so it belongs on every PR — not just deploy day.
@@ -75,3 +144,24 @@ jobs:
       # Starts that same artifact under production-shaped local workerd and
       # sends the small runtime/bindings/auth/streaming probe set through it.
       - run: pnpm worker:smoke
+
+  passed:
+    name: CI passed
+    needs: [scope, checks, integration, server-and-browser, worker-guard]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      # Skipped is fine: `scope` decided the job had nothing to prove. Failed or
+      # cancelled is not. A draft PR skips everything and passes here, which is
+      # harmless: a draft cannot be merged, and marking it ready runs CI again.
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::A CI job ended $result."; exit 1 ;;
+            esac
+          done

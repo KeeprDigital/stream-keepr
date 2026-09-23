@@ -88,11 +88,15 @@ describe('a dev server with the Local Developer Session enabled', () => {
 	it('enters a protected page through the real browser gate without seeing login', async () => {
 		const observed = await observeChromiumValue({
 			url: url('/admin/graphics-assets'),
+			timeoutMs: 40_000,
 			expression: `(() => {
 				const body = document.body?.innerText ?? '';
 				globalThis.__localAuthProbeStarted ??= Date.now();
+				// The window only bounds the wait: a cold \`nuxt dev\` client load takes
+				// longer than 5s while \`pnpm verify\` runs other suites beside this one,
+				// and a login page still fails the assertion below.
 				if (!body.includes('Graphics Asset Library Operations')
-					&& Date.now() - globalThis.__localAuthProbeStarted < 5000)
+					&& Date.now() - globalThis.__localAuthProbeStarted < 25000)
 					return undefined;
 				return {
 					pathname: location.pathname,

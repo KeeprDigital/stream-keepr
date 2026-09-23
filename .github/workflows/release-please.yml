@@ -3,6 +3,13 @@
 # is the formal release act — it tags vX.Y.Z, publishes a GitHub Release
 # with the changelog section, and bumps package.json's version.
 #
+# Only conventional commits count, which is why PRs are squash-merged with
+# the PR title as the commit title and pr-title.yml checks it: a merge commit
+# brings every branch commit along, and a branch merged twice (locally and by
+# its PR) lists each change twice.
+#
+# `workflow_dispatch` refreshes the Release PR without a push to main.
+#
 # Needs the repo setting Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests" enabled, or
 # the action cannot open its PR. Known limitation: PRs created by the
@@ -15,6 +22,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,7 +34,7 @@ concurrency:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
