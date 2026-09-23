@@ -56,13 +56,21 @@ onMounted(async () => {
 					<UNavigationMenu highlight :items="tabs" />
 				</template>
 				<template #right>
+					<MetagameConversionControl
+						:conversion-metric="metagameStore.conversionMetric"
+						:conversion-threshold="metagameStore.conversionThreshold"
+						@update:conversion-metric="metagameStore.conversionMetric = $event"
+						@update:conversion-threshold="metagameStore.conversionThreshold = $event"
+					/>
 					<MetagameScopeControl
 						:scope="metagameStore.scope"
 						:top-n="metagameStore.topN"
+						:min-points="metagameStore.minPoints"
 						:player-list-id="metagameStore.playerListId"
 						:player-lists="playerListStore.lists"
 						@update:scope="metagameStore.scope = $event"
 						@update:top-n="metagameStore.topN = $event"
+						@update:min-points="metagameStore.minPoints = $event"
 						@update:player-list-id="metagameStore.playerListId = $event"
 					/>
 				</template>

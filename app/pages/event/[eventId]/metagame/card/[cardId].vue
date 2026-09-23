@@ -78,6 +78,7 @@ watch(
 		() => cardId.value,
 		() => metagameStore.scope,
 		() => metagameStore.topN,
+		() => metagameStore.minPoints,
 		() => metagameStore.playerListId,
 		() => metagameStore.invalidationVersion,
 	],

@@ -8,6 +8,7 @@ import type { HighlanderDeckSummary } from './highlander';
 export interface MetagameQueryParams {
 	scope: MetagameScope;
 	topN?: number;
+	minPoints?: number;
 	playerListId?: number;
 }
 
@@ -59,7 +60,7 @@ export type MetagameFact = MetagameSimpleFact | MetagameCardSplitFact;
 
 /** Single row in the archetype breakdown table */
 export interface ArchetypeBreakdownEntry {
-	/** Archetype DB id */
+	/** Archetype DB id, or a reserved negative id for an aggregate row. */
 	id: number;
 	name: string;
 	colors: string | null;
@@ -67,6 +68,8 @@ export interface ArchetypeBreakdownEntry {
 	metaShare: number;
 	winRate: number | null;
 	avgPosition: number | null;
+	/** % of this archetype's players that reached the conversion target; null when no target was requested. */
+	conversionRate: number | null;
 	/** Curated key cards for display */
 	keyCards: CardResponse[];
 }
@@ -166,6 +169,10 @@ export interface ArchetypeDetailResponse {
 	metaShare: number;
 	winRate: number | null;
 	avgPosition: number | null;
+	/** Players in this archetype that reached the conversion target; null when no target was requested. */
+	convertedCount: number | null;
+	/** % of this archetype's players that reached the conversion target; null when no target was requested. */
+	conversionRate: number | null;
 	cardBreakdown: CardBreakdownEntry[];
 	players: ArchetypePlayerEntry[];
 }

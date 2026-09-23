@@ -106,6 +106,20 @@ describe('useMetagameStore', () => {
 		});
 	});
 
+	// ── conversionQuery computed ──
+
+	describe('conversionQuery', () => {
+		it('defaults to a Top 8 conversion target', () => {
+			expect(store.conversionQuery).toEqual({ conversionMetric: 'topN', conversionThreshold: 8 });
+		});
+
+		it('is reactive: follows metric and threshold changes', () => {
+			store.conversionMetric = 'minPoints';
+			store.conversionThreshold = 12;
+			expect(store.conversionQuery).toEqual({ conversionMetric: 'minPoints', conversionThreshold: 12 });
+		});
+	});
+
 	// ── buildScopeQuery (inspected via loadSummary) ──
 
 	describe('buildScopeQuery', () => {
@@ -252,6 +266,8 @@ describe('useMetagameStore', () => {
 			store.scope = 'topN';
 			store.topN = 16;
 			store.playerListId = 5;
+			store.conversionMetric = 'minPoints';
+			store.conversionThreshold = 12;
 			store.summaryData = makeSummaryData();
 			store.loading = true;
 			store.error = 'some error';
@@ -262,6 +278,8 @@ describe('useMetagameStore', () => {
 			expect(store.scope).toBe('all');
 			expect(store.topN).toBe(8);
 			expect(store.playerListId).toBeUndefined();
+			expect(store.conversionMetric).toBe('topN');
+			expect(store.conversionThreshold).toBe(8);
 			expect(store.summaryData).toBeNull();
 			expect(store.loading).toBe(false);
 			expect(store.error).toBeNull();

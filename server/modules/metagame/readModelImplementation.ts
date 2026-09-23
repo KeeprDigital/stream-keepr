@@ -1,5 +1,6 @@
+import type { ArchetypeConversionTarget } from '~~/server/modules/metagame/archetypes';
 import type { MetagameScopeModel } from '~~/server/modules/metagame/scopeModel';
-import type { BoardSelection, MetagameScope } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameConversionMetric, MetagameScope } from '~~/shared/types/enums';
 import type {
 	ArchetypeBreakdownResponse,
 	ArchetypeDetailResponse,
@@ -22,7 +23,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from 'hub:db';
 import { archetypeCards, archetypes, cards, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
 import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
-import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype } from '~~/server/modules/metagame/archetypes';
+import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype, isConvertedPlayer, limitArchetypeBreakdownEntries } from '~~/server/modules/metagame/archetypes';
 import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
 import { resolveMetagameScope } from '~~/server/modules/metagame/scopeModel';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
@@ -55,6 +56,10 @@ function mapCardRow(row: {
 	};
 }
 
+function resolveConversionTarget(metric?: MetagameConversionMetric, threshold?: number): ArchetypeConversionTarget | undefined {
+	return metric != null && threshold != null ? { metric, threshold } : undefined;
+}
+
 function tokenKey(token: DeckTokenRequirement): string {
 	return token.name.trim().toLowerCase();
 }
@@ -78,7 +83,9 @@ export function createMetagameReadModelImplementation() {
 		eventId: number,
 		metagameScope: MetagameScopeModel,
 		totalPlayers: number,
-		sortBy: 'count' | 'winRate' | 'metaShare' = 'metaShare',
+		sortBy: 'count' | 'winRate' | 'metaShare' | 'conversionRate' = 'metaShare',
+		limit?: number,
+		conversionTarget?: ArchetypeConversionTarget,
 	): Promise<ArchetypeBreakdownResponse> {
 		const scope = metagameScope.scope;
 
@@ -107,7 +114,7 @@ export function createMetagameReadModelImplementation() {
 			return { entries: [], totalPlayers, classifiedPlayers: 0, scope };
 		}
 
-		const groups = groupClassifiedPlayersByArchetype(classifiedRows);
+		const groups = groupClassifiedPlayersByArchetype(classifiedRows, conversionTarget);
 
 		// Fetch only the archetypes that have classified players
 		const archetypeIds = [...groups.keys()];
@@ -124,23 +131,28 @@ export function createMetagameReadModelImplementation() {
 			[...keyCardRowsByArchetypeId.entries()].map(([archetypeId, keyCards]) => [archetypeId, keyCards.map(mapCardRow)]),
 		);
 
-		const entries = buildArchetypeBreakdownEntries(groups, archetypeRows, classifiedPlayers, keyCardsByArchetypeId);
+		const entries = buildArchetypeBreakdownEntries(groups, archetypeRows, classifiedPlayers, keyCardsByArchetypeId, conversionTarget);
 		entries.sort((a, b) => compareArchetypeBreakdownEntries(sortBy, a, b));
+		const limitedEntries = limitArchetypeBreakdownEntries(entries, groups, classifiedPlayers, limit, conversionTarget);
 
-		return { entries, totalPlayers, classifiedPlayers, scope };
+		return { entries: limitedEntries, totalPlayers, classifiedPlayers, scope };
 	}
 
 	async function getArchetypeBreakdown(
 		eventId: number,
 		scope: MetagameScope,
-		sortBy: 'count' | 'winRate' | 'metaShare' = 'metaShare',
+		sortBy: 'count' | 'winRate' | 'metaShare' | 'conversionRate' = 'metaShare',
 		topN?: number,
 		playerListId?: number,
+		limit?: number,
+		minPoints?: number,
+		conversionMetric?: MetagameConversionMetric,
+		conversionThreshold?: number,
 	): Promise<ArchetypeBreakdownResponse> {
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, minPoints });
 		const totalPlayers = await metagameScope.countPlayers();
 
-		return computeArchetypeBreakdown(eventId, metagameScope, totalPlayers, sortBy);
+		return computeArchetypeBreakdown(eventId, metagameScope, totalPlayers, sortBy, limit, resolveConversionTarget(conversionMetric, conversionThreshold));
 	}
 
 	// ── Card breakdown ─────────────────────────────────────────────
@@ -214,8 +226,9 @@ export function createMetagameReadModelImplementation() {
 		board: BoardSelection = 'full',
 		archetypeName?: string,
 		excludeTypes?: CardTypeBucket[],
+		minPoints?: number,
 	): Promise<CardBreakdownResponse> {
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, archetype: archetypeName, board });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, archetype: archetypeName, board, minPoints });
 		if (metagameScope.resolvedArchetypeId === null) {
 			return { entries: [], totalDecks: 0, scope };
 		}
@@ -232,11 +245,12 @@ export function createMetagameReadModelImplementation() {
 		scope: MetagameScope,
 		topN?: number,
 		playerListId?: number,
+		minPoints?: number,
 	): Promise<MetagameSummaryResponse> {
 		// Resolve scope and player/deck counts ONCE and thread them through the
 		// archetype/card breakdown computations below, instead of letting each
 		// independently re-resolve the same scope and re-count players/decks.
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, minPoints });
 		const totalPlayers = await metagameScope.countPlayers();
 
 		const totalArchetypesRow = await db
@@ -280,8 +294,9 @@ export function createMetagameReadModelImplementation() {
 		scope: MetagameScope,
 		topN?: number,
 		playerListId?: number,
+		minPoints?: number,
 	): Promise<TokenRequirementsResponse> {
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, minPoints });
 		const totalDecks = await metagameScope.deckUniverse.countDecks();
 
 		if (totalDecks === 0) {
@@ -366,6 +381,9 @@ export function createMetagameReadModelImplementation() {
 		topN?: number,
 		playerListId?: number,
 		board: BoardSelection = 'full',
+		minPoints?: number,
+		conversionMetric?: MetagameConversionMetric,
+		conversionThreshold?: number,
 	): Promise<ArchetypeDetailResponse | null> {
 		const arch = await db.query.archetypes.findFirst({
 			where: and(eq(archetypes.id, archetypeId), eq(archetypes.eventId, eventId)),
@@ -374,7 +392,7 @@ export function createMetagameReadModelImplementation() {
 		if (!arch)
 			return null;
 
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, board });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, archetypeId, board, minPoints });
 
 		// Players in this archetype (within scope)
 		const archPlayerRows = await db
@@ -409,6 +427,10 @@ export function createMetagameReadModelImplementation() {
 		const totalWins = archPlayerRows.reduce((s, p) => s + (p.wins ?? 0), 0);
 		const totalLosses = archPlayerRows.reduce((s, p) => s + (p.losses ?? 0), 0);
 		const withPosition = archPlayerRows.filter(p => p.position != null);
+		const conversionTarget = resolveConversionTarget(conversionMetric, conversionThreshold);
+		const convertedCount = conversionTarget
+			? archPlayerRows.filter(p => isConvertedPlayer(p, conversionTarget)).length
+			: null;
 
 		// Key cards
 		const keyCardRows = await archetypeCardService().getKeyCards(archetypeId);
@@ -452,6 +474,10 @@ export function createMetagameReadModelImplementation() {
 			avgPosition: withPosition.length > 0
 				? Math.round((withPosition.reduce((s, p) => s + (p.position ?? 0), 0) / withPosition.length) * 10) / 10
 				: null,
+			convertedCount,
+			conversionRate: convertedCount != null && playerCount > 0
+				? Math.round((convertedCount / playerCount) * 10000) / 100
+				: null,
 			cardBreakdown: cardBreakdown.entries,
 			players: archPlayers,
 		};
@@ -465,12 +491,13 @@ export function createMetagameReadModelImplementation() {
 		scope: MetagameScope,
 		topN?: number,
 		playerListId?: number,
+		minPoints?: number,
 	): Promise<CardDetailResponse | null> {
 		const card = await db.query.cards.findFirst({ where: eq(cards.id, cardId) });
 		if (!card)
 			return null;
 
-		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId });
+		const metagameScope = await resolveMetagameScope(eventId, { scope, topN, playerListId, minPoints });
 
 		// Decks containing this card — join players for scope filtering
 		const deckRows = await db

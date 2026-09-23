@@ -24,7 +24,7 @@ const emit = defineEmits<{
 
 const overlay = useOverlay();
 
-const SORTABLE_FIELDS = new Set<MetagameSortBy>(['count', 'winRate', 'metaShare']);
+const SORTABLE_FIELDS = new Set<MetagameSortBy>(['count', 'winRate', 'metaShare', 'conversionRate']);
 
 const sorting = ref([{ id: props.sortBy, desc: true }]);
 
@@ -45,6 +45,7 @@ const columns: TableColumn<ArchetypeBreakdownEntry>[] = [
 	{ accessorKey: 'metaShare', header: createSortableHeader('Share'), enableSorting: true },
 	{ accessorKey: 'winRate', header: createSortableHeader('Win Rate'), enableSorting: true },
 	{ accessorKey: 'avgPosition', header: createSortableHeader('Avg Place'), enableSorting: true },
+	{ accessorKey: 'conversionRate', header: createSortableHeader('Conversion'), enableSorting: true },
 	{ id: 'actions', header: '', enableSorting: false },
 ];
 
@@ -133,6 +134,9 @@ async function openKeyCardsEdit(archetypeId: number) {
 			</template>
 			<template #avgPosition-cell="{ row }">
 				<span class="tabular-nums">{{ row.original.avgPosition ?? '-' }}</span>
+			</template>
+			<template #conversionRate-cell="{ row }">
+				<span class="tabular-nums">{{ formatPercent(row.original.conversionRate) }}</span>
 			</template>
 			<template #actions-cell="{ row }">
 				<UButton

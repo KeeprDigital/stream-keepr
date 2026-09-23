@@ -54,6 +54,7 @@ const scopeOptions = computed(() => {
 	const options = [
 		{ label: 'All Players', value: 'all' },
 		{ label: 'Top N', value: 'topN' },
+		{ label: 'Minimum Points', value: 'minPoints' },
 	];
 
 	if (playerListStore.lists.length > 0) {
@@ -139,21 +140,35 @@ function updateMaxTableWidth(value: number | null | undefined) {
 	updateConfig({ maxTableWidth: value ?? null });
 }
 
+function updateArchetypeLimit(value: number | null | undefined) {
+	updateConfig({ archetypeLimit: value == null ? null : Number(value), currentPage: 1 });
+}
+
 const estimatedRowCount = computed(() => {
 	if (config.value.viewMode === 'cards') {
 		return config.value.limit;
 	}
 
+	let scopedPlayerCount: number;
 	if (config.value.scope === 'topN') {
-		return config.value.topN;
+		scopedPlayerCount = config.value.topN;
 	}
-
-	if (config.value.scope === 'playerList') {
+	else if (config.value.scope === 'minPoints') {
+		scopedPlayerCount = playerStore.players
+			.filter(player => player.points != null && player.points >= config.value.minPoints)
+			.length;
+	}
+	else if (config.value.scope === 'playerList') {
 		const list = playerListStore.lists.find(item => item.id === config.value.playerListId);
-		return list?.memberCount ?? 0;
+		scopedPlayerCount = list?.memberCount ?? 0;
+	}
+	else {
+		scopedPlayerCount = playerStore.players.length;
 	}
 
-	return playerStore.players.length;
+	return config.value.archetypeLimit == null
+		? scopedPlayerCount
+		: Math.min(scopedPlayerCount, config.value.archetypeLimit + 1);
 });
 
 const totalPages = computed(() =>
@@ -214,6 +229,21 @@ const {
 				/>
 			</UFormField>
 
+			<UFormField
+				v-if="config.scope === 'minPoints'"
+				label="Minimum points"
+				description="Include players with at least this many match points."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.minPoints"
+					:min="0"
+					:max="999"
+					class="w-32"
+					@update:model-value="updateConfig({ minPoints: Number($event), currentPage: 1 })"
+				/>
+			</UFormField>
+
 			<template v-if="config.scope === 'playerList'">
 				<template v-if="playerListStore.lists.length > 0">
 					<UFormField
@@ -234,19 +264,35 @@ const {
 				</div>
 			</template>
 
-			<UFormField
-				v-if="config.viewMode === 'archetype'"
-				label="Sort archetypes by"
-				description="Order archetypes using this metric."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.sortBy"
-					:items="sortByOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
-				/>
-			</UFormField>
+			<template v-if="config.viewMode === 'archetype'">
+				<UFormField
+					label="Sort archetypes by"
+					description="Order archetypes using this metric."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<USelect
+						:model-value="config.sortBy"
+						:items="sortByOptions"
+						class="w-48"
+						@update:model-value="updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
+					/>
+				</UFormField>
+
+				<UFormField
+					label="Top archetypes"
+					description="Show the top archetypes and group the remainder as Other. Leave empty to show all."
+					class="flex max-sm:flex-col justify-between items-start gap-4"
+				>
+					<UInputNumber
+						:model-value="config.archetypeLimit"
+						placeholder="All"
+						:min="1"
+						:max="500"
+						class="w-32"
+						@update:model-value="updateArchetypeLimit($event)"
+					/>
+				</UFormField>
+			</template>
 
 			<template v-else>
 				<UFormField

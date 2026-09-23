@@ -736,6 +736,27 @@ describe('metagameModeConfigSchema', () => {
 		const result = metagameModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
 	});
+
+	it('defaults minPoints and archetypeLimit for stored configs predating them', () => {
+		const result = metagameModeConfigSchema.safeParse(validConfig);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.minPoints).toBe(9);
+			expect(result.data.archetypeLimit).toBeNull();
+		}
+	});
+
+	it('accepts the minPoints scope with explicit minPoints', () => {
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, scope: 'minPoints', minPoints: 12 });
+		expect(result.success).toBe(true);
+		if (result.success)
+			expect(result.data.minPoints).toBe(12);
+	});
+
+	it('rejects a negative or fractional minPoints', () => {
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: -1 }).success).toBe(false);
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 1.5 }).success).toBe(false);
+	});
 });
 
 // ──────────────── topCardsModeConfigSchema ────────────────

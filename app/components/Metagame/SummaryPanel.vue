@@ -16,6 +16,9 @@ const scopeLabel = computed(() => {
 	if (metagameStore.scope === 'topN')
 		return `Top ${metagameStore.topN}`;
 
+	if (metagameStore.scope === 'minPoints')
+		return `${metagameStore.minPoints}+ Points`;
+
 	if (metagameStore.scope === 'playerList' && metagameStore.playerListId != null) {
 		const list = playerListStore.lists.find(entry => entry.id === metagameStore.playerListId);
 		return list ? `Player List: ${list.name}` : `Player List #${metagameStore.playerListId}`;

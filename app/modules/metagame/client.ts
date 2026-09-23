@@ -1,6 +1,7 @@
 import type {
 	BoardSelection,
 	MetagameCardSortBy,
+	MetagameConversionMetric,
 	MetagameScope,
 	MetagameSortBy,
 } from '~~/shared/types/enums';
@@ -18,11 +19,19 @@ import type { CardTypeBucket } from '~~/shared/utils/metagame';
 export interface MetagameScopeInput {
 	scope: MetagameScope;
 	topN?: number;
+	minPoints?: number;
 	playerListId?: number;
 }
 
-export interface MetagameArchetypeBreakdownOptions {
+/** Conversion target: how far a player must have made it to count as converted. */
+export interface MetagameConversionInput {
+	conversionMetric?: MetagameConversionMetric;
+	conversionThreshold?: number;
+}
+
+export interface MetagameArchetypeBreakdownOptions extends MetagameConversionInput {
 	sortBy?: MetagameSortBy;
+	limit?: number;
 }
 
 export interface MetagameCardBreakdownOptions {
@@ -36,7 +45,7 @@ export interface MetagameCardBreakdownOptions {
 	excludeTypes?: CardTypeBucket[];
 }
 
-export interface MetagameArchetypeDetailOptions {
+export interface MetagameArchetypeDetailOptions extends MetagameConversionInput {
 	board?: BoardSelection;
 }
 
@@ -44,9 +53,21 @@ export function buildMetagameScopeQuery(input: MetagameScopeInput): MetagameQuer
 	const query: MetagameQueryParams = { scope: input.scope };
 	if (input.scope === 'topN')
 		query.topN = input.topN;
+	if (input.scope === 'minPoints' && input.minPoints != null)
+		query.minPoints = input.minPoints;
 	if (input.scope === 'playerList' && input.playerListId != null)
 		query.playerListId = input.playerListId;
 	return query;
+}
+
+function buildConversionQuery(options: MetagameConversionInput) {
+	if (options.conversionMetric == null || options.conversionThreshold == null)
+		return {};
+
+	return {
+		conversionMetric: options.conversionMetric,
+		conversionThreshold: options.conversionThreshold,
+	};
 }
 
 function buildArchetypeBreakdownQuery(
@@ -56,6 +77,8 @@ function buildArchetypeBreakdownQuery(
 	return {
 		...buildMetagameScopeQuery(scope),
 		sortBy: options.sortBy ?? 'metaShare',
+		...(options.limit != null ? { limit: options.limit } : {}),
+		...buildConversionQuery(options),
 	};
 }
 
@@ -83,6 +106,7 @@ function buildArchetypeDetailQuery(
 	return {
 		...buildMetagameScopeQuery(scope),
 		...(options.board ? { board: options.board } : {}),
+		...buildConversionQuery(options),
 	};
 }
 

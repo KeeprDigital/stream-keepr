@@ -1,4 +1,4 @@
-import type { BoardSelection, MetagameCardSortBy, MetagameScope, MetagameSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, MetagameCardSortBy, MetagameConversionMetric, MetagameScope, MetagameSortBy } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import { createMetagameReadModelImplementation } from './readModelImplementation';
 
@@ -7,11 +7,15 @@ export type { MetagameDeckUniverse, MetagameScopeModel } from './scopeModel';
 export interface MetagameScopeQuery {
 	scope: MetagameScope;
 	topN?: number;
+	minPoints?: number;
 	playerListId?: number;
 }
 
 export interface MetagameArchetypeBreakdownQuery extends MetagameScopeQuery {
 	sortBy?: MetagameSortBy;
+	limit?: number;
+	conversionMetric?: MetagameConversionMetric;
+	conversionThreshold?: number;
 }
 
 export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
@@ -26,6 +30,8 @@ export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
 export interface MetagameArchetypeDetailQuery extends MetagameScopeQuery {
 	archetypeId: number;
 	board?: BoardSelection;
+	conversionMetric?: MetagameConversionMetric;
+	conversionThreshold?: number;
 }
 
 export interface MetagameCardDetailQuery extends MetagameScopeQuery {
@@ -47,10 +53,10 @@ export function metagameReadModel() {
 
 	return {
 		getSummary(eventId: number, query: MetagameScopeQuery) {
-			return implementation.getSummary(eventId, query.scope, query.topN, query.playerListId);
+			return implementation.getSummary(eventId, query.scope, query.topN, query.playerListId, query.minPoints);
 		},
 		getArchetypeBreakdown(eventId: number, query: MetagameArchetypeBreakdownQuery) {
-			return implementation.getArchetypeBreakdown(eventId, query.scope, query.sortBy, query.topN, query.playerListId);
+			return implementation.getArchetypeBreakdown(eventId, query.scope, query.sortBy, query.topN, query.playerListId, query.limit, query.minPoints, query.conversionMetric, query.conversionThreshold);
 		},
 		getCardBreakdown(eventId: number, query: MetagameCardBreakdownQuery) {
 			return implementation.getCardBreakdown(
@@ -64,6 +70,7 @@ export function metagameReadModel() {
 				query.board,
 				query.archetype,
 				query.excludeTypes,
+				query.minPoints,
 			);
 		},
 		getArchetypeDetail(eventId: number, query: MetagameArchetypeDetailQuery) {
@@ -74,13 +81,16 @@ export function metagameReadModel() {
 				query.topN,
 				query.playerListId,
 				query.board,
+				query.minPoints,
+				query.conversionMetric,
+				query.conversionThreshold,
 			);
 		},
 		getCardDetail(eventId: number, query: MetagameCardDetailQuery) {
-			return implementation.getCardDetail(eventId, query.cardId, query.scope, query.topN, query.playerListId);
+			return implementation.getCardDetail(eventId, query.cardId, query.scope, query.topN, query.playerListId, query.minPoints);
 		},
 		getTokenRequirements(eventId: number, query: MetagameTokenRequirementsQuery) {
-			return implementation.getTokenRequirements(eventId, query.scope, query.topN, query.playerListId);
+			return implementation.getTokenRequirements(eventId, query.scope, query.topN, query.playerListId, query.minPoints);
 		},
 	};
 }

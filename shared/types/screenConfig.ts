@@ -540,6 +540,7 @@ export interface MetagameModeConfig {
 	// Scoping
 	scope: MetagameScope;
 	topN: number;
+	minPoints: number;
 	playerListId?: number;
 	archetypeFilter?: string;
 
@@ -553,6 +554,7 @@ export interface MetagameModeConfig {
 
 	// Display limits
 	limit: number;
+	archetypeLimit?: number | null;
 	maxTableWidth?: number | null;
 
 	// Pagination
@@ -789,6 +791,7 @@ export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 	viewMode: 'archetype',
 	scope: 'all',
 	topN: 8,
+	minPoints: 9,
 	playerListId: undefined,
 	archetypeFilter: undefined,
 	sortBy: 'metaShare',
@@ -813,6 +816,7 @@ export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
 		{ key: 'sideboardCount', visible: true },
 	],
 	limit: 50,
+	archetypeLimit: null,
 	maxTableWidth: undefined,
 	pageSize: 10,
 	autoPageEnabled: false,
@@ -901,7 +905,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': ['graphics'],
 	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId', 'backgroundLayers'],
-	'metagame': ['viewMode', 'scope', 'topN', 'playerListId', 'archetypeFilter', 'backgroundLayers'],
+	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter', 'backgroundLayers'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId', 'backgroundLayers'],
 } as const satisfies ModeResetPreservedKeysMap;
