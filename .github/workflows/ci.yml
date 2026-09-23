@@ -6,23 +6,38 @@
 # only: they provision real Events in production and spend Ably free-plan
 # quota (#189).
 #
-# PR-only by decision: no push-to-main trigger. Merges land squarely from
-# CI-green PRs, and deploys ship released tags whose PR run was green —
-# re-running the same gates on the merge commit doubled Actions spend for
-# no added signal. Docs-only PRs are skipped for the same reason; safe while
-# main has no required status checks (see release-please.yml).
+# When it runs, and why no more often:
+#
+#   - PRs only, never on push to main. Every change reaches main as a squash
+#     merge of a PR whose run was green (AGENTS.md), and deploys ship released
+#     tags, so re-running the same gates on the merge commit doubled Actions
+#     spend for no added signal.
+#   - Not on draft PRs. `pnpm verify` is the gate while a branch is in
+#     progress; marking the PR ready for review runs CI.
+#   - Not when a PR changes only docs or workflows that are not this one.
+#   - A newer push cancels the run it supersedes.
+#
+# Safe while main has no required status checks, which a private repository on
+# the Free plan cannot have (see README.md § Releases).
 
 name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
-      - 'docs/**'
+      - '.vscode/**'
+      - .github/workflows/deploy.yml
+      - .github/workflows/pr-title.yml
+      - .github/workflows/release-please.yml
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 # Node's default ~2GB old-space cap is too small on hosted runners for the
 # Nuxt/Vite build, whole-repo eslint, and vue-tsc alike.
@@ -32,7 +47,10 @@ env:
 jobs:
   tests:
     name: Lint, typecheck, and test gates
-    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+    # Pinned rather than `ubuntu-latest`, so an image change (Chrome, system
+    # libraries the browser gates depend on) is a reviewed edit, not a surprise.
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,35 +61,56 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Lint and typecheck lead so the cheap gates fail fast; they share this
-      # job to save a third checkout + install per run.
+      # job to save a third checkout + install per run. Neither cache is
+      # restored here: a cold run is the backstop for what the local per-file
+      # ESLint cache can miss (README § Testing).
       - run: pnpm lint
       - run: pnpm typecheck
-      # One runner, sequential tiers: integration suites must never run
-      # concurrently (README § Testing). Realtime integration tests self-skip here — no
-      # Ably key is configured in CI by decision; realtime coverage runs
-      # locally (#189). The unit and nuxt tiers run with --coverage, so the
-      # thresholds in vitest.shared.ts fail this step when coverage drops
-      # below them (#469); the overhead measurement lives with those
-      # thresholds.
+      # Realtime integration tests self-skip here — no Ably key is configured in
+      # CI by decision; realtime coverage runs locally (#189). The unit and nuxt
+      # tiers run with --coverage, so the thresholds in vitest.shared.ts fail
+      # this step when coverage drops below them (#469). The integration suite
+      # sizes its server count to the runner (test/integration/state.ts).
       - run: pnpm test
 
   worker-guard:
     name: Build, wrangler dry run, and Worker smoke
-    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # The merge commit and its first parent, the base: enough to diff.
+          fetch-depth: 2
+      # A PR touching only tests or docs cannot change the uploaded bundle, so
+      # building it again would prove what main already proved.
+      - name: Decide whether the Worker bundle can have changed
+        id: scope
+        run: |
+          if git diff --name-only HEAD^1 HEAD | grep -qvE '^(test/|\.vscode/)|\.md$'; then
+            echo "bundle=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only tests or docs changed; the Worker bundle is the base branch's."
+            echo "bundle=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.scope.outputs.bundle == 'true'
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - if: steps.scope.outputs.bundle == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - if: steps.scope.outputs.bundle == 'true'
+        run: pnpm install --frozen-lockfile
       # The #302 class of failure: green on Node, broken on workerd. The dry
       # run asserts the bundle wrangler would upload compiles no Wasm from
       # bytes, so it belongs on every PR — not just deploy day.
-      - run: pnpm build
-      - run: pnpm worker:dry-run
+      - if: steps.scope.outputs.bundle == 'true'
+        run: pnpm build
+      - if: steps.scope.outputs.bundle == 'true'
+        run: pnpm worker:dry-run
       # Starts that same artifact under production-shaped local workerd and
       # sends the small runtime/bindings/auth/streaming probe set through it.
-      - run: pnpm worker:smoke
+      - if: steps.scope.outputs.bundle == 'true'
+        run: pnpm worker:smoke

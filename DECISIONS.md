@@ -486,3 +486,21 @@ Measured on a 10-core machine: the chain took about 14½ minutes, and the integr
 - **`vitest --shard` across processes** — no load balancing between shards, and concurrent `createTest` boots raced on `.nuxt` and `.data`.
 - **`--no-isolate` for the Nuxt suite** — about 4× faster, but 83 files fail on leaked state.
 - **ESLint `--concurrency` or `projectService`** — each worker rebuilds the type-aware program (slower), and `projectService` exhausted the heap.
+
+## ADR-0020: Changes land as squash-merged PRs with Conventional Commit titles
+
+Accepted · 2026-09-23
+
+### Decision
+
+**`main` takes changes only as squash merges of PRs, with the PR title as the commit title and a Conventional Commit PR title** (`.github/workflows/pr-title.yml` checks it). The repository allows no merge commits or rebase merges. CI runs on ready-for-review PRs, not on drafts, pushes to `main`, or PRs changing only docs or other workflows.
+
+### Why
+
+release-please builds the changelog and version from the commits on `main`. Branches were landing through merge commits, some twice (merged locally, then again by their PR), so Release PR #400 listed several changes two and three times; commits pushed straight to `main` also skipped CI, which runs only on PRs. One PR, one conventional commit, one changelog line.
+
+### Consequences
+
+- Nothing enforces it server-side: branch protection and rulesets need GitHub Team or a public repository. AGENTS.md and README § Releases carry it as a convention.
+- The default workflow token is read-only; each workflow declares its own write scopes.
+- A branch's individual commits no longer reach `main`; the PR body is the squash commit's message.

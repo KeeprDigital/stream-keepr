@@ -174,8 +174,11 @@ How `pnpm verify` runs:
   other gate reads it; the Nuxt suite, the servers and `verify`'s build each use
   their own build directory. Keep it that way when adding a gate.
 
-CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on every PR,
-split across two jobs. It skips docs-only PRs and does not re-run on merge.
+CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs,
+split across two jobs. It skips draft PRs (marking one ready runs it), PRs that
+change only docs or other workflows, and the Worker build when only tests or
+docs changed; it does not re-run on merge, and a newer push cancels the older
+run. `pnpm verify` is the gate before that.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
 decision (#189). The suites in the table above that need a running preview,
 Docker, Safari, or a real store stay local. Other vitest modes work directly,
@@ -235,9 +238,27 @@ conventional commits: `fix:` → patch, `feat:` → minor, `feat!:` or
 Release, bumps `package.json`, and updates `CHANGELOG.md`. `main` is trunk;
 there is no `develop` branch.
 
+How a change reaches `main`, and why:
+
+- **Every change lands as a squash-merged PR.** The repository allows only
+  squash merges, with the PR title as the commit title, so each PR is one
+  conventional commit and one changelog line. Merge commits bring every branch
+  commit along, and a branch merged both locally and by its PR listed each
+  change twice (Release PR #400). Never push or merge to `main` directly: that
+  also skips CI, which runs only on PRs.
+- **PR titles are Conventional Commits**, checked by
+  `.github/workflows/pr-title.yml`. A title that is not one would drop the PR
+  from the changelog and the version bump.
+- **Nothing enforces this server-side.** Branch protection and rulesets need
+  GitHub Team, or a public repository; until then these are conventions.
+- **Release PRs do not trigger CI** (default-token limitation), and need none:
+  they change only the version and changelog. Wire a PAT before adding required
+  status checks. Run the workflow by hand (`gh workflow run release-please.yml`)
+  to refresh the Release PR without a push.
+
 Requires Settings → Actions → General → **Allow GitHub Actions to create and
-approve pull requests**. Release PRs do not trigger CI (default-token
-limitation); wire a PAT before adding required status checks to `main`.
+approve pull requests**. The default workflow token is read-only; each workflow
+declares the scopes it needs.
 
 ## Deploy
 
