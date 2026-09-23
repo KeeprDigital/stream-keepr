@@ -6,15 +6,14 @@ import withNuxt from './.nuxt/eslint.config.mjs';
 
 export default withNuxt(
 	antfu({
-		// A git worktree of this repository is a complete second copy of it. Left
-		// unignored, `eslint .` from the repository root lints every one of them and
-		// exhausts the heap — agents routinely create several under
-		// `.claude/worktrees/` (#212).
-		// `worker-configuration.d.ts` is emitted by `wrangler types`; anything lint
-		// changes there is overwritten by the next generation (#239).
-		// `docs/superpowers/` is local skill output that lands untracked inside the
-		// tracked docs tree; whoever holds it otherwise gets a red root lint (#254).
-		ignores: ['**/migrations', '.claude/worktrees/**', '.worktrees/**', 'AGENTS.md', 'CLAUDE.md', 'docs/superpowers/**', 'worker-configuration.d.ts', 'app/utils/animation-effects/*.ts', 'app/utils/animation-effects/base.ts', 'app/utils/animation-effects/shaderBase.ts', 'app/utils/animation-effects/helpers.ts'],
+		ignores: [
+			'**/migrations',
+			'.claude/worktrees/**',
+			'.worktrees/**',
+			'AGENTS.md',
+			'CLAUDE.md',
+			'worker-configuration.d.ts',
+		],
 		typescript: true,
 		vue: true,
 		formatters: {

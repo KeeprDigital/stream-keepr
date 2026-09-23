@@ -28,12 +28,6 @@ coverage
 .env
 .env.*
 !.env.example
-# Nothing reads .dev.vars since #412 — .env is the one local configuration file.
-# Still ignored because a checkout older than that ticket may hold one full of
-# real secrets, and un-ignoring it puts those one `git add -A` away from a commit.
-.dev.vars
-.dev.vars.*
 
-# Parallel-round worktrees (complete checkouts inside the repo)
 .claude/worktrees/
 .worktrees/
