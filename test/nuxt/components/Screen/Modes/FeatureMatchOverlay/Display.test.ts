@@ -48,6 +48,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 
 const mockUsesSampleDataset = ref(false);
 const mockMatchState = ref<Record<string, unknown> | null>(null);
+const mockEvent = ref<Record<string, unknown> | null>(null);
 
 mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	config: computed(() => mockConfig.value),
@@ -56,7 +57,7 @@ mockNuxtImport('useFeatureMatchOverlayModeData', () => () => ({
 	sourceMatch: ref(null),
 	round: ref(null),
 	phase: ref(null),
-	event: ref(null),
+	event: mockEvent,
 	usesSampleDataset: computed(() => mockUsesSampleDataset.value),
 	loading: mockLoading,
 	error: mockError,
@@ -194,6 +195,34 @@ describe('featureMatchOverlayDisplay', () => {
 			// The clock string comes from the host, so the composed item renders it
 			// without any Graphic Text Template having been authored.
 			expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('12:34');
+		});
+
+		it('draws preset Game Wins Items from the Event Match Format and reconfigures their display', async () => {
+			mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			mockUsesSampleDataset.value = true;
+			mockEvent.value = { featureMatchDefaultBestOf: 5 };
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('[data-graphic-item-kind="game-wins"]')).toHaveLength(2);
+			expect(wrapper.findAll('[data-game-win="won"]')).toHaveLength(2);
+			// Best-of-five takes three wins, so each sampled player has one won box
+			// and two pending boxes.
+			expect(wrapper.findAll('[data-game-win="pending"]')).toHaveLength(4);
+			expect((wrapper.get('[data-game-win="won"]').element as HTMLElement).style.width).toBe('22px');
+			expect((wrapper.get('[data-game-win="won"]').element as HTMLElement).style.height).toBe('22px');
+
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			for (const item of config.layout.composition.items) {
+				if (item.type === 'game-wins')
+					item.displayMode = 'number';
+			}
+			mockConfig.value = config;
+			await nextTick();
+
+			const scores = wrapper.findAll('[data-graphic-item-kind="game-wins"]');
+			expect(scores.map(score => score.text())).toEqual(['1', '1']);
+			expect(wrapper.find('[data-game-win]').exists()).toBe(false);
 		});
 
 		it('feeds a Deck List Graphic Item from the host-resolved sideboard data (#491)', async () => {
@@ -547,6 +576,7 @@ describe('featureMatchOverlayDisplay', () => {
 		mockRefusedRevisions.value = [];
 		mockIsPreview.value = false;
 		mockMatchState.value = null;
+		mockEvent.value = null;
 		mockSideboards.value = { player1: null, player2: null };
 	});
 

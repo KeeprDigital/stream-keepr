@@ -303,6 +303,22 @@ describe('featureMatchTokenValues', () => {
 		expect(values.player2Record).toBe('3-2-1');
 	});
 
+	it('places formatted positions in the record tokens when position mode is selected', () => {
+		const values = featureMatchTokenValues({
+			...HOST_STATE,
+			event: { ...HOST_STATE.event, displayPositionFormat: 'ordinal' },
+			featureMatch: {
+				...HOST_STATE.featureMatch,
+				playerDisplayMode: 'position',
+				player1Data: { ...HOST_STATE.featureMatch?.player1Data, position: 1 },
+				player2Data: { ...HOST_STATE.featureMatch?.player2Data, position: 12 },
+			},
+		} as unknown as Parameters<typeof featureMatchTokenValues>[0]);
+
+		expect(values.player1Record).toBe('1st');
+		expect(values.player2Record).toBe('12th');
+	});
+
 	it('leaves an absent record empty rather than reporting nothing as 0-0', () => {
 		const values = featureMatchTokenValues({
 			...HOST_STATE,
@@ -339,6 +355,17 @@ describe('featureMatchGraphicsContext', () => {
 		// No resolved deck data supplied: `null`, never a placeholder sideboard.
 		expect(context.player1).toEqual({ lifeTotal: 12, gameWins: 2, sideboard: null, sideboardRevealed: true });
 		expect(context.player2.sideboardRevealed).toBe(false);
+	});
+
+	it('uses the Event Match Format when no Feature Match Slot is bound', () => {
+		const context = featureMatchGraphicsContext({
+			event: { featureMatchDefaultBestOf: 5 },
+			featureMatch: null,
+			matchState: null,
+			displayTime: '4:31',
+		} as unknown as Parameters<typeof featureMatchGraphicsContext>[0]);
+
+		expect(context.bestOf).toBe(5);
 	});
 
 	it('joins resolved deck data into each side"s sideboard (#491)', () => {

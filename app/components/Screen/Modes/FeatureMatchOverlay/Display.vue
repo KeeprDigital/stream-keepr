@@ -6,6 +6,7 @@ import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
 } from '~~/shared/featureMatchSampleDataset';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
@@ -109,7 +110,12 @@ const hostState = computed(() => ({
  * are always the same reading.
  */
 const graphicsContext = computed(() => usesSampleDataset.value
-	? FEATURE_MATCH_SAMPLE_CONTEXT
+	? {
+			...FEATURE_MATCH_SAMPLE_CONTEXT,
+			// The sample supplies awkward player values, not a pretend Match Format.
+			// Its win indicators follow the Event being authored.
+			bestOf: toFeatureMatchDefaults(event.value).bestOf,
+		}
 	: featureMatchGraphicsContext(hostState.value, sideboards.value));
 
 // The per-item reveal trigger (#492): a sideboardRevealed edge plays the Deck

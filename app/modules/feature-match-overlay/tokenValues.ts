@@ -3,6 +3,8 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicsDeckListCard, GraphicsFeatureMatchContext } from '~/modules/graphics/renderModel';
 import type { Event, FeatureMatch, Match, Phase, Round } from '~/types';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
 
@@ -30,7 +32,7 @@ import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureM
  */
 
 export interface FeatureMatchOverlayHostStateInput {
-	event: Pick<Event, 'name' | 'game' | 'displayRecordSeparator' | 'displayHideZeroDraws'> | null | undefined;
+	event: Pick<Event, 'name' | 'game' | 'displayRecordSeparator' | 'displayHideZeroDraws' | 'displayPositionFormat' | 'featureMatchDefaultBestOf'> | null | undefined;
 	featureMatch: FeatureMatch | null | undefined;
 	matchState: FeatureMatchState | null | undefined;
 	sourceMatch: Pick<Match, 'tableNumber'> | null | undefined;
@@ -48,13 +50,27 @@ function playerData(input: FeatureMatchOverlayHostStateInput, side: PlayerSide) 
 }
 
 /**
- * A Player's record, formatted the way this Event displays one.
+ * A Player's record slot, formatted in the mode selected for this Feature Match.
  *
- * An absent record renders empty rather than `0-0`: a Player with no results yet
- * and a Player who has lost nothing look identical otherwise.
+ * Position mode deliberately replaces the record token so existing Layouts switch
+ * between a score and a standing without needing a second authored Text Item. The
+ * active Session's mode wins because its source snapshot is the on-air contract.
  */
 function record(input: FeatureMatchOverlayHostStateInput, side: PlayerSide): string {
 	const data = playerData(input, side);
+	const displayMode = input.featureMatch?.activeSession?.sourceSnapshot.playerDisplayMode
+		?? input.featureMatch?.playerDisplayMode
+		?? 'score';
+	if (displayMode === 'position') {
+		if (data?.position == null)
+			return '';
+		return input.event?.displayPositionFormat === 'ordinal'
+			? formatOrdinal(data.position)
+			: String(data.position);
+	}
+
+	// An absent record renders empty rather than `0-0`: a Player with no results
+	// yet and a Player who has lost nothing look identical otherwise.
 	if (data?.wins == null && data?.losses == null && data?.draws == null)
 		return '';
 
@@ -135,7 +151,9 @@ export interface FeatureMatchOverlaySideboards {
  *
  * `bestOf` prefers the active Feature Match Session's own source snapshot over the
  * Slot's current value, so a Match promoted into the Slot mid-session cannot change
- * how many win boxes the session in progress draws.
+ * how many win boxes the session in progress draws. With no Slot, the Event's Match
+ * Format still determines the empty indicators rather than an unrelated hard-coded
+ * best-of-three.
  */
 export function featureMatchGraphicsContext(
 	input: FeatureMatchOverlayHostStateInput,
@@ -162,6 +180,6 @@ export function featureMatchGraphicsContext(
 		},
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf
 			?? input.featureMatch?.bestOf
-			?? 3,
+			?? toFeatureMatchDefaults(input.event).bestOf,
 	};
 }
