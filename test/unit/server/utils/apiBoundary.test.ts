@@ -1,6 +1,6 @@
 import { relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	apiPathRequiresSession,
 	SESSION_EXEMPT_API_PATHS,
@@ -251,9 +251,18 @@ describe('the public surface, counted against the routes on disk', () => {
  * route reaches it, not that it spells it out.
  */
 describe('the admin surface, which answers to its own credential', () => {
-	it.each(adminRouteFiles)('%s reaches the Graphics Administrator guard', (file) => {
-		const scan = scanRouteRefusals(fileURLToPath(new URL(`../../../../${file}`, import.meta.url)));
+	const reached = new Map<string, readonly string[]>();
 
-		expect(scan.files).toContain('server/modules/graphics-administrator.ts');
+	// Walking every admin route's import graph parses most of `server/`, and the
+	// first walk pays for all of it before the module cache helps the rest. Done
+	// here, under a budget sized for the whole walk, no single case below carries
+	// that cost into its own timeout while `pnpm verify` builds beside it.
+	beforeAll(() => {
+		for (const file of adminRouteFiles)
+			reached.set(file, scanRouteRefusals(fileURLToPath(new URL(`../../../../${file}`, import.meta.url))).files);
+	}, 30_000);
+
+	it.each(adminRouteFiles)('%s reaches the Graphics Administrator guard', (file) => {
+		expect(reached.get(file)).toContain('server/modules/graphics-administrator.ts');
 	});
 });
