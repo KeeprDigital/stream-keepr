@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const client = createClient({ url: 'file::memory:' });
 const sqliteDb = drizzle(client);
 
-vi.doMock('hub:db', () => ({ db: sqliteDb }));
+vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
 
 const { playerDeckService } = await import('~~/server/services/playerDeck');
 

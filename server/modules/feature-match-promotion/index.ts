@@ -1,6 +1,6 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { FeatureMatchNoteDiscardConfirmation, FeatureMatchPromotionResponse } from '~~/shared/api';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';

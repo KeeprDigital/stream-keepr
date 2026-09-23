@@ -39,7 +39,7 @@ vi.mock('drizzle-orm', () => ({
 	sql: vi.fn(() => ({})),
 }));
 
-vi.mock('hub:db', () => ({
+vi.mock('~~/server/db', () => ({
 	db: {
 		batch: mockBatch,
 		query: {

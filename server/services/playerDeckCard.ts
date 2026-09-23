@@ -2,7 +2,7 @@ import type { PlayerDeckSelection } from '~~/server/services/playerDeck';
 import type { PointsSystem } from '~~/shared/types/enums';
 import type { PlayerDeckCardEntry, PlayerDeckCollectionResponse, PlayerDeckResponse } from '~~/shared/types/metagame';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { cards, phases, playerDeckCards } from '~~/server/db/schema';
 import { resolvePlayerDeckDetails } from '~~/server/mappers/playerDeck';
 import { archetypeService } from '~~/server/services/archetype';

@@ -351,7 +351,7 @@ const GENERATED_DIRECTORY = dirname(NUXT_TSCONFIG);
  *
  * **The map is not liftable wholesale, and that is the point of the filter.** The 43
  * keys Nuxt generates include this repository's roots *and* every dependency it resolves
- * for the type-checker — `h3`, `ofetch`, `nitropack`, `consola`, `hub:kv` — plus Nuxt's
+ * for the type-checker — `h3`, `ofetch`, `nitropack`, `consola` — plus Nuxt's
  * own virtual modules, which resolve *inside* the repository, under `.nuxt/`. Taking the
  * lot would have walked the scan straight into `node_modules` and undone the deliberate
  * exclusion below: a refusal raised inside `h3` is not one this repository can list or
@@ -430,7 +430,7 @@ function resolveModule(specifier: string, fromFile: string): { file: string } | 
 	else if (specifier.startsWith('.'))
 		base = resolve(dirname(fromFile), specifier);
 	else
-		// A bare or virtual specifier (`h3`, `ably`, `hub:db`, `#imports`) is not the
+		// A bare or virtual specifier (`h3`, `ably`, `drizzle-orm`, `#imports`) is not the
 		// route's own code. A refusal from a dependency is not one this repository can
 		// list or rename.
 		return undefined;

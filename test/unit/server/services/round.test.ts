@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockRound } from '~~/test/helpers/fixtures';
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	rounds: {
 		id: 'rounds.id',

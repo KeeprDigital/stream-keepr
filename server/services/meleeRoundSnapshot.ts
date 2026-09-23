@@ -2,7 +2,7 @@ import type { DbMatch } from '~~/server/db/schema';
 import type { MatchUpsertInput } from '~~/server/services/match';
 import type { RoundStandingInput } from '~~/server/services/playerRoundStandings';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { matches, playerRoundStandings } from '~~/server/db/schema';
 import { buildDeleteStaleMatchesByRoundQuery } from '~~/server/services/match';
 import { buildMarkRoundSyncedQuery } from '~~/server/services/round';

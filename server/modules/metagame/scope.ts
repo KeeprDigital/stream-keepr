@@ -1,7 +1,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { MetagameScope } from '~~/shared/types/enums';
 import { and, count, eq, inArray, isNotNull, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
 
 /**

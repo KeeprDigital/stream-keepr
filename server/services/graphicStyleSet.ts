@@ -2,7 +2,7 @@ import type { DbBroadcastGraphicTemplate, DbGraphicStyleSet } from '~~/server/db
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { asc, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { broadcastGraphicTemplates, graphicStyleSets } from '~~/server/db/schema';
 
 /**

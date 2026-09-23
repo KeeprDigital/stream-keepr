@@ -8,11 +8,9 @@ type GraphicsBindings = Parameters<typeof graphicsAssetLibraryForBindings>[0];
 
 /**
  * Runs the Graphics Asset Library retention path on the Worker's scheduled
- * trigger. NuxtHub exposes no public scheduled-trigger interface at
- * `@nuxthub/core` 0.10.8, so this uses the Cloudflare scheduled capability
- * directly under the approved exception in #28. Every deadline it enforces is
- * evaluated inside the library, so a missed or delayed run only ever retains
- * state for longer.
+ * trigger, using the Cloudflare scheduled capability directly. Every deadline
+ * it enforces is evaluated inside the library, so a missed or delayed run only
+ * ever retains state for longer.
  */
 export default defineNitroPlugin((nitroApp) => {
 	nitroApp.hooks.hook('cloudflare:scheduled', async ({ controller, env }) => {

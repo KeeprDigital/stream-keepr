@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	playerDeckUnresolvedCards: {
 		id: 'player_deck_unresolved_cards.id',

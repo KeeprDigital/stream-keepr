@@ -1,7 +1,10 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	// Nitro and NuxtHub add the Worker entrypoint, assets, name, D1, and KV
-	// bindings to .output/server/wrangler.json. Keep each binding in one source.
+	// Nitro builds .output/server/wrangler.json from this file, adding the Worker
+	// entrypoint, assets, and name. Every deployed binding and its production ID
+	// is declared here and nowhere else (ADR-0019). Wrangler resolves path fields
+	// relative to the generated file, so `migrations_dir` climbs back out of
+	// .output/server.
 	"compatibility_date": "2026-07-16",
 	"compatibility_flags": ["nodejs_compat", "no_nodejs_compat_v2"],
 	// The production hostname. The keepr.digital zone lives on the same
@@ -10,6 +13,20 @@
 	// left the repo unable to name its own installation (#189).
 	"routes": [
 		{ "pattern": "stream.keepr.digital", "custom_domain": true }
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_id": "26830437-975a-4378-a135-acfc01ea89ae",
+			// Production D1 records its applied migrations here, from when NuxtHub
+			// applied them. Under Wrangler's default table every migration would
+			// replay from 0000 and fail mid-deploy (ADR-0019).
+			"migrations_table": "_hub_migrations",
+			"migrations_dir": "../../server/db/migrations/sqlite"
+		}
+	],
+	"kv_namespaces": [
+		{ "binding": "KV", "id": "a15cf281b12d43e4b5479baf8b69b587" }
 	],
 	"r2_buckets": [
 		{

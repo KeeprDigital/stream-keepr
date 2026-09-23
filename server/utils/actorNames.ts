@@ -1,6 +1,6 @@
 import type { GraphicsActorNaming } from '~~/shared/types/graphicsAsset';
 import { eq, inArray } from 'drizzle-orm';
-import { db, schema } from 'hub:db';
+import { db, schema } from '~~/server/db';
 import {
 	isLocalDeveloperSessionId,
 	isLocalDeveloperUserId,

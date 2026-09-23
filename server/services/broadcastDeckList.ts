@@ -2,7 +2,7 @@ import type { BroadcastDeckListAggregate, BroadcastDeckListSummaryRow } from '~~
 import type { BroadcastDeckListCanonicalDocument } from '~~/server/modules/broadcast-deck-list-import';
 import type { BroadcastDeckListAffectedScreen, BroadcastDeckListResponse, BroadcastDeckListSummaryResponse, CreateBroadcastDeckListInput, UpdateBroadcastDeckListInput } from '~~/shared/types/broadcastDeckList';
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { broadcastDeckListEntries, broadcastDeckLists, events } from '~~/server/db/schema';
 import { mapBroadcastDeckListDetail, mapBroadcastDeckListSummary } from '~~/server/mappers/broadcastDeckList';
 import { cleanBroadcastDeckListName, normalizeBroadcastDeckListName } from '~~/shared/utils/broadcastDeckList';

@@ -1,9 +1,9 @@
 /**
- * Reusable mock for `hub:db`.
+ * Reusable mock for `~~/server/db`.
  *
  * Usage in test files:
  *   import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock'
- *   vi.mock('hub:db', () => ({ db: mockDb }))
+ *   vi.mock('~~/server/db', () => ({ db: mockDb }))
  *
  * Then in beforeEach:
  *   resetDbMocks()

@@ -3,7 +3,7 @@ import type { DbPlayer, DbPlayerInsert } from '~~/server/db/schema';
 import type { CreatePlayerInput, UpdatePlayerInput } from '~~/shared/api';
 
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';

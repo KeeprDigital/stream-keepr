@@ -14,8 +14,13 @@ const mockUpdate = vi.fn(() => ({ set: mockSet }));
 
 const mockPublishMessage = vi.fn();
 
-vi.mock('hub:kv', () => ({ kv: mockKv }));
-vi.mock('hub:db', () => ({
+// Nitro's auto-imported storage. Only the `kv` mount (the KV binding) answers
+// with `mockKv`, so a card written through any other mount misses every
+// assertion on its key.
+vi.stubGlobal('useStorage', vi.fn((base?: string) => base === 'kv'
+	? mockKv
+	: { get: vi.fn(), set: vi.fn(), del: vi.fn() }));
+vi.mock('~~/server/db', () => ({
 	db: {
 		update: mockUpdate,
 		query: { screens: { findFirst: mockFindFirst } },

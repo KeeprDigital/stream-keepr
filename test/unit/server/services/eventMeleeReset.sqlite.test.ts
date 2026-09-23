@@ -7,7 +7,7 @@ const client = createClient({ url: 'file::memory:' });
 const sqliteDb = drizzle(client, { schema });
 const protectMeleeClientSecret = vi.fn(async (secret: string) => `encrypted:${secret}`);
 
-vi.doMock('hub:db', () => ({ db: sqliteDb }));
+vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
 vi.doMock('~~/server/services/meleeCredentials', () => ({ protectMeleeClientSecret }));
 
 const { eventService } = await import('~~/server/services/event');

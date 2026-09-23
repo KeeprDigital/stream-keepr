@@ -459,3 +459,34 @@ Better Auth admits only the hostnames in `AUTH_ALLOWED_HOSTS` — the production
 
 - **Add LAN hostnames to `AUTH_ALLOWED_HOSTS` and sign in for real** — a LAN address or `.local` name is per-machine, so it becomes a production-allowlist wildcard or a per-developer edit to committed code, and cross-host sign-in over plain http is its own cookie problem — all to buy a boundary on a network the developer already trusts.
 - **Forward `--host` through `dev:bypass`** — fewer scripts, but LAN exposure becomes an unnamed flag instead of a launcher the README and test can point at.
+
+## ADR-0019: Bindings live in `wrangler.jsonc`; Drizzle over D1 without NuxtHub
+
+Accepted · 2026-09-23 · [#528](https://github.com/KeeprDigital/stream-keepr/issues/528)
+
+### Decision
+
+**NuxtHub is gone. `wrangler.jsonc` declares every deployed binding — D1, KV, R2 and the service binding — and Nitro's `cloudflare_module` preset turns it into `.output/server/wrangler.json`.** `wrangler.dev.jsonc` stays the dev bindings' source.
+
+- **Database:** `server/db/index.ts` exports `db`, a Drizzle client over the `DB` binding looked up on first use, and `schema`. `drizzle-kit` generates migrations (`drizzle.config.ts`); Wrangler applies them, locally in the `dev` launchers and remotely in `pnpm deploy`.
+- **KV:** Nitro's `kv` storage mount (`cloudflare-kv-binding` over `KV`), reached with `useStorage('kv')`. Keys at the binding are unchanged.
+- **Migrations table stays `_hub_migrations`** in both Wrangler configs. `migrations_dir` is `../../server/db/migrations/sqlite` in `wrangler.jsonc`, because Nitro copies path fields verbatim and Wrangler resolves them against the generated file in `.output/server/`.
+
+### Why
+
+NuxtHub has been unmaintained since its v0.10.8 release, with security updates unmerged and open bugs this repo patched around. Nitro and Wrangler already did nearly all of its work. NuxtHub also flattened `env.<CLOUDFLARE_ENV>` into the top level at build time and dropped every other `env` block, so one build could target only one environment; without it, one build keeps its `env` blocks and `wrangler deploy --env <name>` chooses (#525).
+
+Production D1 records applied migrations in `_hub_migrations`. Under Wrangler's default table, `db:migrate:remote` would replay from `0000` and fail mid-deploy.
+
+### Consequences
+
+- The generated `wrangler.json` matches the NuxtHub build in every key except `migrations_dir`.
+- `CLOUDFLARE_ENV` is no longer read; `pnpm deploy` does not set it.
+- Drizzle Studio is no longer in Nuxt DevTools; `drizzle-kit studio` against the local D1 sqlite file is the fallback.
+- Renaming the migrations table needs a migration of its own (copy the rows, then switch the config), never a config edit alone.
+- The NuxtHub integration guardrail in #28 (NuxtHub by default, direct Cloudflare only as an exception) no longer applies. Direct Cloudflare integration is the norm, and it still stays behind the Graphics Asset Library's internal adapters.
+
+### Rejected alternatives
+
+- **Keep NuxtHub pinned and patched** — every upstream fix becomes a local patch, and it still blocks #525.
+- **Adopt Wrangler's default migrations table** — see _Why_.

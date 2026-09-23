@@ -17,7 +17,7 @@ vi.stubGlobal('getValidatedRouterParams', mockGetValidatedRouterParams);
 vi.stubGlobal('createError', (input: { statusCode?: number; statusMessage?: string; message?: string }) =>
 	Object.assign(new Error(input.message ?? input.statusMessage), input));
 
-vi.mock('hub:db', () => ({
+vi.mock('~~/server/db', () => ({
 	db: { batch: mockDbBatch },
 }));
 

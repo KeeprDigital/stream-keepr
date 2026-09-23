@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 
 vi.stubGlobal('createError', (opts: any) => {
 	const err = new Error(opts.message) as any;

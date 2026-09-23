@@ -1,7 +1,7 @@
 import type { DbPlayerList } from '~~/server/db/schema';
 import type { CreatePlayerListInput, UpdatePlayerListInput } from '~~/shared/api';
 import { and, asc, eq, getTableColumns, inArray, max, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
 import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
 

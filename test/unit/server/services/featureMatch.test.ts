@@ -22,7 +22,7 @@ const featureMatchStateServiceMocks = vi.hoisted(() => ({
 	}),
 }));
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	events: { id: 'events.id' },
 	matches: { id: 'matches.id', eventId: 'matches.eventId' },

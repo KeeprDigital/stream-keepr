@@ -69,7 +69,7 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 // Realtime notification is not what this file is about, and a Live Session command
 // publishes one on every acceptance.
 vi.doMock('~~/server/utils/ably', () => ({

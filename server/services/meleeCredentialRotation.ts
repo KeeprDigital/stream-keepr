@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { events } from '~~/server/db/schema';
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';
 

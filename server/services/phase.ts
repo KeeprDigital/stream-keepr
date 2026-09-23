@@ -1,7 +1,7 @@
 import type { DbPhase, ExternalSource } from '~~/server/db/schema';
 import type { CreatePhaseInput, UpdatePhaseInput } from '~~/shared/api';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { phases } from '~~/server/db/schema';
 import { pickManualWritable } from '~~/server/utils/provenance';
 

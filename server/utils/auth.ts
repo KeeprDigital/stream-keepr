@@ -3,7 +3,7 @@ import process from 'node:process';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { getCookie, setCookie } from 'h3';
-import { db, schema } from 'hub:db';
+import { db, schema } from '~~/server/db';
 import {
 	LOCAL_AUTH_BYPASS_NAME,
 	LOCAL_DEVELOPER_SESSION_COOKIE,

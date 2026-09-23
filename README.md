@@ -24,8 +24,8 @@ operating Stream Keepr. The other docs:
 ## Stack and layout
 
 Nuxt 4 SPA (`ssr: false`), Vue 3, Pinia, Nuxt UI, Tailwind; Nitro on Cloudflare
-Workers via NuxtHub; D1 (SQLite) with Drizzle; R2 for graphics bytes; Ably for
-realtime; Better Auth for accounts.
+Workers (`cloudflare_module` preset); D1 (SQLite) with Drizzle; R2 for graphics
+bytes; Ably for realtime; Better Auth for accounts.
 
 ```text
 app/        Frontend: pages, components, stores, composables
@@ -98,9 +98,11 @@ reads no file; there these are Worker secrets (see [Worker secrets](#worker-secr
 | `pnpm preview`          | loopback, built Worker | Better Auth          |
 | `pnpm preview:bypass`   | loopback, built Worker | Local Developer User |
 
+The `dev` launchers first apply pending migrations to the local D1 store Nitro
+serves from (`.wrangler/state/v3`, bindings from `wrangler.dev.jsonc`).
 `pnpm preview` builds, applies migrations to an ignored local D1 store under
 `.wrangler/state/built-worker`, and runs the generated Worker under local
-workerd. It never touches a remote database.
+workerd. Neither touches a remote database.
 
 Stop dev servers with Ctrl-C (SIGINT) or SIGTERM. A server killed with SIGKILL
 or SIGHUP strands its `workerd` process, which then holds memory and sqlite
@@ -221,9 +223,18 @@ Gotchas:
 ## Database
 
 ```bash
-pnpm db:generate  # generate a migration from schema changes
-pnpm db:migrate   # apply migrations
+pnpm db:generate  # drizzle-kit: generate a migration from schema changes
+pnpm db:migrate   # apply migrations to the local dev D1 (the dev launchers do this too)
 ```
+
+`db:migrate` reads stdin from `/dev/null`, so Wrangler takes its
+non-interactive "yes" instead of asking before applying to the local store.
+
+The schema is `server/db/schema.ts` plus `server/db/schema/*.ts`
+(`drizzle.config.ts`); migrations live in `server/db/migrations/sqlite`. Server
+code queries through `db` from `~~/server/db`. Wrangler records applied
+migrations in `_hub_migrations`, a name kept from NuxtHub that production's
+history depends on (ADR-0019).
 
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the
@@ -280,10 +291,10 @@ declares the scopes it needs.
 
 ## Deploy
 
-NuxtHub generates the deployable config at `.output/server/wrangler.json`.
-`wrangler.jsonc` holds shared runtime policy (routes, R2, cron, service binding,
-observability); D1 and KV bindings and their production IDs come from
-`nuxt.config.ts`. Deploys use the repo-pinned Wrangler.
+Nitro generates the deployable config at `.output/server/wrangler.json` from
+`wrangler.jsonc`, which declares every binding (D1, KV, R2, service) with its
+production ID, plus routes, cron and observability (ADR-0019). Deploys use the
+repo-pinned Wrangler.
 
 There is no separate staging environment: **production is the staging gate.**
 The production hostname is `https://stream.keepr.digital`, attached as a
@@ -291,9 +302,7 @@ The production hostname is `https://stream.keepr.digital`, attached as a
 
 `pnpm deploy` runs, in order and stopping at the first failure:
 
-1. `CLOUDFLARE_ENV=production pnpm build`. The variable reaches only the build.
-   NuxtHub uses it to pick an `env.<name>` block, and none exists today; it is
-   kept so named environments work if added.
+1. `pnpm build`.
 2. `pnpm worker:dry-run`: bundles what Wrangler would upload into
    `.output/wrangler-dry-run/` and fails if it contains
    `new WebAssembly.Module(`, which a deployed Worker refuses (every JPEG/WebP
@@ -340,7 +349,7 @@ mid-run names the Event it left behind; delete it before rerunning.
    exists:
 
    ```bash
-   CLOUDFLARE_ENV=production pnpm build
+   pnpm build
    pnpm db:migrations:list:remote
    ```
 
@@ -556,11 +565,10 @@ A failed pass is logged and swallowed; the next run resumes from durable state.
 **A deploy without the cron silently stops automatic reclamation**; the backlog
 then shows in the retention view.
 
-NuxtHub (pinned `@nuxthub/core` 0.10.8) has no API for scheduled triggers,
-object-store listing, Workflows, or Containers, so these use Cloudflare directly.
-The exceptions are confined: all authoritative state stays in D1, all byte
-access goes through the Graphics Object Store interface, and module tests run
-without Cloudflare. Reassess when upgrading `@nuxthub/core`.
+Scheduled triggers, object-store listing, Workflows, and Containers use
+Cloudflare directly. That provider knowledge stays confined: all authoritative
+state stays in D1, all byte access goes through the Graphics Object Store
+interface, and module tests run without Cloudflare.
 
 ### Retention
 

@@ -14,7 +14,7 @@ function isEventApplied(call: unknown[]): boolean {
 	return call[1] === 'featureMatchSession:eventApplied';
 }
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,

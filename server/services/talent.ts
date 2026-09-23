@@ -2,7 +2,7 @@ import type { DbEventTalent } from '~~/server/db/schema';
 import type { CreateTalentInput, UpdateTalentInput } from '~~/shared/api';
 import type { SocialProfiles } from '~~/shared/socialProfiles';
 import { and, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { eventTalents } from '~~/server/db/schema';
 
 export function talentService() {

@@ -52,7 +52,7 @@ const db = drizzle(harness.database, { schema });
 
 afterAll(async () => await harness.dispose());
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { updateScreenModeConfigWithGraphicAssetReferences } = await import(
 	'~~/server/modules/screen-graphic-asset-references',

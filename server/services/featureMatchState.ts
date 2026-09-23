@@ -13,7 +13,7 @@ import type {
 } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
 import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
 import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';

@@ -10,7 +10,7 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; da
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { broadcastDeckListService } = await import('~~/server/services/broadcastDeckList');
 

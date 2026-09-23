@@ -21,7 +21,7 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { playerService } = await import('~~/server/services/player');
 const { playerListService } = await import('~~/server/services/playerList');
