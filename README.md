@@ -138,20 +138,21 @@ Binding any other bypassed launcher off loopback carries the same exposure
 
 ## Testing
 
-| When                                        | Command                                                                                 | Notes                                                                                                                                                                                                           |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth:run` | Watch mode; append `:run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                         |
-| Before commit                               | `pnpm test`                                                                             | Unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. Needs Chrome/Chromium.                   |
-| Tests your branch touches                   | `pnpm test:changed`                                                                     | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                     |
-| Quick check while developing                | `pnpm verify:quick`                                                                     | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                  |
-| Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.         |
-| Checking an existing build                  | `pnpm worker:smoke`                                                                     | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build. |
-| Touching still-image codecs or Wasm         | `pnpm test:ingestion:still-images`                                                      | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                |
-| Touching an Animation Effect shader         | `pnpm test:browser:animation-effects`                                                   | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, and motion. Local only.                                                          |
-| Touching the silent-video validator         | `pnpm test:validator:silent-video`                                                      | Needs Docker.                                                                                                                                                                                                   |
-| Touching font delivery against a real store | `pnpm test:browser:fonts:library`                                                       | Library face against local `pnpm preview`; plain `test:browser:fonts` covers synthetic faces.                                                                                                                   |
-| Investigating VP9 alpha on Safari           | `pnpm test:browser:safari-vp9-alpha`                                                    | Needs [Safari automation](#safari-automation).                                                                                                                                                                  |
-| Deploy day                                  | The seven `:deployed` gates                                                             | See [Deploy day](#deploy-day).                                                                                                                                                                                  |
+| When                                        | Command                                                                             | Notes                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth` | Watch mode; pass `--run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                                                                                               |
+| Before commit                               | `pnpm test`                                                                         | Every test gate of `pnpm verify` (`verify.mjs --tests`): unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. No lint, typecheck, or build. Needs Chrome/Chromium. |
+| Tests your branch touches                   | `pnpm test:changed`                                                                 | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                                                                                          |
+| Quick check while developing                | `pnpm verify:quick`                                                                 | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                                                                                       |
+| Before push                                 | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.                                                                              |
+| Checking an existing build                  | `pnpm worker:smoke`                                                                 | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build.                                                                      |
+| Listing acceptance harnesses                | `pnpm accept`                                                                       | Every harness, what it proves, what it needs, and its flags. Run one with `pnpm accept <name> [flags]`.                                                                                                                                                                              |
+| Touching still-image codecs or Wasm         | `pnpm accept still-image-ingestion`                                                 | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                                                                                     |
+| Touching an Animation Effect shader         | `pnpm accept animation-effects`                                                     | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, and motion. Local only.                                                                                                                               |
+| Touching the silent-video validator         | `pnpm accept silent-video-validator`                                                | Needs Docker.                                                                                                                                                                                                                                                                        |
+| Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                         |
+| Investigating VP9 alpha on Safari           | `pnpm accept safari-vp9-alpha`                                                      | Needs [Safari automation](#safari-automation).                                                                                                                                                                                                                                       |
+| Deploy day                                  | `pnpm accept deployed`                                                              | The seven deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                     |
 
 `pnpm verify` exists for its tail. `worker:dry-run` checks the upload bundle
 statically; `worker:smoke` runs it under local workerd with production-shaped
@@ -365,23 +366,24 @@ mid-run names the Event it left behind; delete it before rerunning.
    | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL`    | An existing operator account. `/api/**` denies by default, so gates must sign in. |
    | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD` | That account's password.                                                          |
 
-   A `:deployed` harness refuses to start without a URL rather than guessing.
+   A `--deployed` harness refuses to start without a URL rather than guessing.
    Without the operator pair it stops with `harness-operator-unavailable`.
    Setting `NUXT_ADMIN_BOOTSTRAP_TOKEN` in the shell also works if that secret is
    armed on the installation for the run.
 
-5. **Run the gates.** Stop at the first failure.
+5. **Run the gates.** `pnpm accept deployed` runs steps 1–7 in order and
+   stops at the first failure; run one alone with `pnpm accept <name> --deployed`.
 
-   | #   | Command                                        | Proves                                                                                                    |
-   | --- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-   | 1   | `pnpm test:validator:silent-video:deployed`    | The validator Workflow and Container accept H.264 MP4, VP9 WebM, and VP9-alpha WebM with correct posters. |
-   | 2   | `pnpm test:delivery:graphics:deployed`         | Full and ranged delivery, ETags, caching, authorization, revocation, CORS/CSP, failure outcomes.          |
-   | 3   | `pnpm test:browser:still-images:deployed`      | PNG, JPEG, and WebP decode in an OBS-like output.                                                         |
-   | 4   | `pnpm test:browser:silent-video:deployed`      | MP4 and WebM play and seek; VP9 alpha keeps transparency on Chromium.                                     |
-   | 5   | `pnpm test:browser:fonts:deployed`             | A library font revision is delivered, loads, and renders its glyphs.                                      |
-   | 6   | `pnpm test:browser:safari-vp9-alpha:deployed`  | A Screen Output refuses Safari a VP9-alpha revision (409) while its session still opens.                  |
-   | 7   | `pnpm test:delivery:graphics:package:deployed` | Template Package publication is atomic and its retry is idempotent.                                       |
-   | 8   | [Fault injection](#fault-injection)            | Unavailable content, integrity failure, D1 outage, R2 outage with a warm cache.                           |
+   | #   | Harness                             | Proves                                                                                                    |
+   | --- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+   | 1   | `silent-video-validator`            | The validator Workflow and Container accept H.264 MP4, VP9 WebM, and VP9-alpha WebM with correct posters. |
+   | 2   | `graphics-delivery`                 | Full and ranged delivery, ETags, caching, authorization, revocation, CORS/CSP, failure outcomes.          |
+   | 3   | `still-images`                      | PNG, JPEG, and WebP decode in an OBS-like output.                                                         |
+   | 4   | `silent-video`                      | MP4 and WebM play and seek; VP9 alpha keeps transparency on Chromium.                                     |
+   | 5   | `fonts`                             | A library font revision is delivered, loads, and renders its glyphs.                                      |
+   | 6   | `safari-vp9-alpha`                  | A Screen Output refuses Safari a VP9-alpha revision (409) while its session still opens.                  |
+   | 7   | `graphics-package`                  | Template Package publication is atomic and its retry is idempotent.                                       |
+   | 8   | [Fault injection](#fault-injection) | Unavailable content, integrity failure, D1 outage, R2 outage with a warm cache.                           |
 
 Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the
@@ -402,9 +404,9 @@ Takes real delivery down while a fault is armed. **Never run it while anything
 is on air.** Each procedure: arm, break one thing, run the fault mode, restore.
 
 ```bash
-pnpm test:delivery:graphics:deployed --arm ~/.sk-armed.json
+pnpm accept graphics-delivery --deployed --arm ~/.sk-armed.json
 # break something (table below)
-pnpm test:delivery:graphics:deployed --fault <name> --scenario ~/.sk-armed.json
+pnpm accept graphics-delivery --deployed --fault <name> --scenario ~/.sk-armed.json
 # restore
 ```
 
@@ -430,7 +432,7 @@ means something deployed; locally it reports `delivery-cache-not-observable`.
 Gate 6 drives Safari through `safaridriver`: run `sudo safaridriver --enable`
 once and tick **Develop → Allow Remote Automation**. Without automation the
 harness reports `acceptance deferred path=manual-check-required`, and a
-`:deployed` run refuses to defer unless given `--allow-manual`. A manual check
+`--deployed` run refuses to defer unless given `--allow-manual`. A manual check
 records only the browser fact, so gate 6 stays outstanding until an automated
 run passes.
 
