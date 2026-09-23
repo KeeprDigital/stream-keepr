@@ -33,6 +33,47 @@ async function mountItem(render: GraphicItemRenderDescriptor) {
 	return mount(Item, { props: { render } });
 }
 
+describe('graphicsCompositorItem MTG mana colours', () => {
+	function textDescriptor(
+		manaColors: NonNullable<NonNullable<GraphicItemRenderDescriptor['textSegments']>[number]['manaColors']>,
+	): GraphicItemRenderDescriptor {
+		return {
+			id: 'deck',
+			label: 'Deck',
+			kind: 'text',
+			style: { position: 'absolute' },
+			textStyle: { fontSize: '28px' },
+			text: manaColors.colors,
+			textSegments: [{ text: manaColors.colors, inputKey: 'player1DeckColors', manaColors }],
+		};
+	}
+
+	it('renders colour identity through the Mana icon component', async () => {
+		const wrapper = await mountItem(textDescriptor({
+			colors: 'WU',
+			symbolCount: 2,
+			monochrome: false,
+		}));
+
+		const colors = wrapper.get('[data-mana-colors]');
+		expect(colors.findAll('.mana-symbol')).toHaveLength(2);
+		expect(colors.find('.ms-w').exists()).toBe(true);
+		expect(colors.find('.ms-u').exists()).toBe(true);
+		expect(wrapper.text()).not.toContain('WU');
+	});
+
+	it('renders the Key Output as one white coverage circle per pip', async () => {
+		const wrapper = await mountItem(textDescriptor({
+			colors: 'WUG',
+			symbolCount: 3,
+			monochrome: true,
+		}));
+
+		expect(wrapper.find('[data-mana-colors]').exists()).toBe(false);
+		expect(wrapper.get('[data-mana-colors-key]').findAll('span')).toHaveLength(3);
+	});
+});
+
 /**
  * The `<p>` is re-keyed to restart the CSS animation, so a *new element* is the
  * evidence that the animation ran — the class alone is present either way.

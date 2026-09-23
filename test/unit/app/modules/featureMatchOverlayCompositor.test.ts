@@ -78,6 +78,34 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		expect(model.graphics[0]!.items[0]!.text).toBe('Alice');
 	});
 
+	it('marks only Deck Colours token runs for MTG mana-pip rendering', () => {
+		const text = {
+			...item('text', 'deck'),
+			text: '{player1DeckColors} {player1Deck}',
+		} as GraphicItemConfig;
+		const overlay = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'overlay',
+			layout: layout([text]),
+			tokenValues: { player1DeckColors: 'WU', player1Deck: 'Control' },
+			...CANVAS,
+		}).graphics[0]!.items[0]!;
+		const key = resolveFeatureMatchOverlayCompositorRenderModel({
+			output: 'key',
+			layout: layout([text]),
+			tokenValues: { player1DeckColors: 'WU', player1Deck: 'Control' },
+			...CANVAS,
+		}).graphics[0]!.items[0]!;
+
+		expect(overlay.text).toBe('WU Control');
+		expect(overlay.textSegments?.[0]?.manaColors).toEqual({
+			colors: 'WU',
+			symbolCount: 2,
+			monochrome: false,
+		});
+		expect(overlay.textSegments?.[2]?.manaColors).toBeUndefined();
+		expect(key.textSegments?.[0]?.manaColors?.monochrome).toBe(true);
+	});
+
 	it('renders the context-gated Items from the supplied session state', () => {
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',

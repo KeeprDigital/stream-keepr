@@ -1,4 +1,7 @@
-import type { GraphicsHostToken } from './modules/graphics/hostContract';
+import type {
+	GraphicsHostToken,
+	GraphicsHostTokenPresentation,
+} from './modules/graphics/hostContract';
 import type { GraphicInputDeclaration, TextGraphicInputDeclaration } from './types/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from './types/graphics';
 
@@ -30,10 +33,11 @@ import { MAX_GRAPHIC_TEXT_LENGTH } from './types/graphics';
  *
  * - `{spacer}` was layout expressed inside a string. A Graphic Group's gap,
  *   padding, and justification express it structurally instead.
- * - `{deckColors}` rendered colour pips rather than its own value. Its value is a
- *   colour string such as `WU`, which is what a Text Graphic Item renders; pips
- *   are a painted surface rather than text, so they are a Graphic Item's business
- *   rather than a placeholder's.
+ * - `{deckColors}` rendered colour pips rather than its own value. Its replacement
+ *   remains a text token with a colour string such as `WU`, but the catalogue marks
+ *   that run for the compositor's application-owned MTG mana-colour presentation.
+ *   The mark belongs to the host token rather than the string: an ordinary Graphic
+ *   Input whose value happens to be `WU` must remain ordinary text.
  * - Legacy rendering trimmed separators around a token that resolved empty, so
  *   `{player1DeckColors} {player1Deck}` lost its leading space. The shared Graphic
  *   Text Template substitutes and nothing else, by design — it is a substitution
@@ -54,11 +58,15 @@ export type FeatureMatchToken = GraphicsHostToken;
  * and a token added to one side only would be one an author can place on one player
  * and not the other.
  */
-const PLAYER_TOKENS = [
+const PLAYER_TOKENS: readonly {
+	suffix: string;
+	label: string;
+	presentation?: GraphicsHostTokenPresentation;
+}[] = [
 	{ suffix: 'Name', label: 'Name' },
 	{ suffix: 'Record', label: 'Record' },
 	{ suffix: 'Deck', label: 'Deck' },
-	{ suffix: 'DeckColors', label: 'Deck Colours' },
+	{ suffix: 'DeckColors', label: 'Deck Colours', presentation: 'mtg-mana-colors' },
 	{ suffix: 'Pronouns', label: 'Pronouns' },
 	{ suffix: 'Lgs', label: 'Local Game Store' },
 ] as const;
@@ -76,6 +84,7 @@ function playerTokens(side: 1 | 2): FeatureMatchToken[] {
 	return PLAYER_TOKENS.map(token => ({
 		key: `player${side}${token.suffix}`,
 		label: `Player ${side} ${token.label}`,
+		...(token.presentation ? { presentation: token.presentation } : {}),
 	}));
 }
 
@@ -116,6 +125,14 @@ export function featureMatchTokenDeclarations(): TextGraphicInputDeclaration[] {
 		default: '',
 		maxLength: MAX_GRAPHIC_TEXT_LENGTH,
 	}));
+}
+
+/** Visual treatments the Feature Match host asks the shared compositor to paint. */
+export function featureMatchTokenPresentations(): Readonly<Record<string, GraphicsHostTokenPresentation>> {
+	return Object.fromEntries(
+		FEATURE_MATCH_TOKEN_CATALOGUE.flatMap(token =>
+			token.presentation ? [[token.key, token.presentation] as const] : []),
+	);
 }
 
 /** Type-level proof that a token declaration is an ordinary Graphic Input declaration. */

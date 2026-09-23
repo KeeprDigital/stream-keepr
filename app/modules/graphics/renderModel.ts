@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'vue';
 import type { SocialProfilePresentationProjection } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { GraphicsHostTokenPresentation } from '~~/shared/modules/graphics/hostContract';
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
@@ -266,6 +267,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 */
 	textDeclarations?: readonly GraphicInputDeclaration[];
 	/**
+	 * Application-owned visual treatments for host token runs, keyed by token.
+	 * Ordinary Graphic Inputs omit this map and always remain text.
+	 */
+	textTokenPresentations?: Readonly<Record<string, GraphicsHostTokenPresentation>>;
+	/**
 	 * The live Feature Match state the context-gated Graphic Items read. Only a host
 	 * declaring the Feature Match context supplies one, and only its Screens can
 	 * carry an item that reads it.
@@ -394,6 +400,12 @@ export interface GraphicTextRenderSegment {
 	text: string;
 	inputKey?: string;
 	style?: CSSProperties;
+	/** MTG colour identity painted as mana pips while `text` remains measurable. */
+	manaColors?: {
+		colors: string;
+		symbolCount: number;
+		monochrome: boolean;
+	};
 }
 
 /** One painted Graphic Surface Style: a Shape Geometry path, a fill, an outline. */
@@ -1288,13 +1300,29 @@ function textDescriptor(
 		inputs.values,
 		inputs.socialProfileValues,
 	)
-		.map(segment => ({
-			text: segment.text,
-			inputKey: segment.inputKey,
-			style: segment.inputKey === undefined
+		.map((segment) => {
+			const presentation = segment.inputKey === undefined
 				? undefined
-				: placeholderStyle(output, item.placeholderStyles?.[segment.inputKey]),
-		}));
+				: inputs.textTokenPresentations?.[segment.inputKey];
+			const symbolCount = presentation === 'mtg-mana-colors'
+				? [...segment.text.toUpperCase()].filter(color => 'WUBRGC'.includes(color)).length
+				: 0;
+			const manaColors = presentation === 'mtg-mana-colors' && symbolCount > 0
+				? {
+						colors: segment.text,
+						symbolCount,
+						monochrome: output === 'key',
+					}
+				: undefined;
+			return {
+				text: segment.text,
+				inputKey: segment.inputKey,
+				style: segment.inputKey === undefined
+					? undefined
+					: placeholderStyle(output, item.placeholderStyles?.[segment.inputKey]),
+				...(manaColors ? { manaColors } : {}),
+			};
+		});
 
 	return {
 		id: item.id,
@@ -1865,6 +1893,7 @@ function socialNetworkIconDescriptor(
 interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
+	textTokenPresentations?: Readonly<Record<string, GraphicsHostTokenPresentation>>;
 	socialProfileValues?: SocialProfileProjectionValues;
 	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
@@ -2794,6 +2823,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				textTokenPresentations: input.textTokenPresentations,
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
@@ -2825,6 +2855,7 @@ export function resolveGraphicsCompositionRenderModel(
 					outgoingValues ?? input.inputValues?.[graphic.id],
 					input.substituteAuthoredDefaults ?? false,
 				),
+				textTokenPresentations: input.textTokenPresentations,
 				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
 					?? input.socialProfilePresentations?.[graphic.id],

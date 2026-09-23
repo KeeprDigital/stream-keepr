@@ -3,6 +3,7 @@ import {
 	FEATURE_MATCH_TOKEN_CATALOGUE,
 	FEATURE_MATCH_TOKEN_KEYS,
 	featureMatchTokenDeclarations,
+	featureMatchTokenPresentations,
 	isFeatureMatchTokenKey,
 } from '~~/shared/featureMatchTokenCatalogue';
 import { graphicTextTemplateInputKeys, renderGraphicTextTemplate } from '~~/shared/modules/graphics';
@@ -48,6 +49,13 @@ describe('featureMatchTokenCatalogue', () => {
 		expect(FEATURE_MATCH_TOKEN_CATALOGUE.every(token => token.label.length > 0)).toBe(true);
 		expect(FEATURE_MATCH_TOKEN_CATALOGUE.find(token => token.key === 'player2Lgs')?.label)
 			.toBe('Player 2 Local Game Store');
+	});
+
+	it('marks only player Deck Colours for MTG mana-pip presentation', () => {
+		expect(featureMatchTokenPresentations()).toEqual({
+			player1DeckColors: 'mtg-mana-colors',
+			player2DeckColors: 'mtg-mana-colors',
+		});
 	});
 
 	it('resolves a token through the shared Graphic Text Template mechanism', () => {

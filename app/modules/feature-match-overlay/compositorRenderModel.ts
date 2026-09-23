@@ -4,7 +4,10 @@ import type { FeatureMatchLayoutConfig, ScreenOutput } from '~~/shared/types/scr
 import type { GraphicMediaIncompatibilityCode, GraphicsAnimationProjection, GraphicsCompositionRenderModel, GraphicsFeatureMatchContext } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID, featureMatchLayoutStack } from '~~/shared/featureMatchLayoutComposition';
-import { featureMatchTokenDeclarations } from '~~/shared/featureMatchTokenCatalogue';
+import {
+	featureMatchTokenDeclarations,
+	featureMatchTokenPresentations,
+} from '~~/shared/featureMatchTokenCatalogue';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
 /**
@@ -88,6 +91,7 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		canvasRole: 'layer',
 		// Deliberately no `visibleGraphicIds`: the one composition is always composed.
 		textDeclarations: featureMatchTokenDeclarations(),
+		textTokenPresentations: featureMatchTokenPresentations(),
 		inputValues: input.tokenValues
 			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.tokenValues }
 			: undefined,

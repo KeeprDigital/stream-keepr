@@ -63,11 +63,22 @@ export type GraphicsContextKind = 'event' | 'feature-match';
  */
 export type GraphicsHostComposition = 'stack' | 'single';
 
+/** A host-owned visual treatment for one otherwise textual placeholder value. */
+export type GraphicsHostTokenPresentation = 'mtg-mana-colors';
+
 /** One host-supplied placeholder a Graphic Text Template may name. */
 export interface GraphicsHostToken {
 	/** The stable key a `{token}` placeholder and a Graphic Placeholder Style name. */
 	key: string;
 	label: string;
+	/**
+	 * An optional application-owned presentation for this token's value.
+	 *
+	 * The value remains text for template substitution, measurement, and authoring;
+	 * the compositor only replaces that run's paint. This keeps a visual token from
+	 * turning every ordinary Graphic Input with the same value into special markup.
+	 */
+	presentation?: GraphicsHostTokenPresentation;
 }
 
 /**
