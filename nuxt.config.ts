@@ -32,6 +32,16 @@ const workerName = 'stream';
 export default defineNuxtConfig({
 	ssr: false,
 
+	// Nothing but `nuxt prepare` may rewrite `.nuxt` while other gates run:
+	// the root tsconfig extends it, so every Vite and TypeScript consumer reads it.
+	// An integration server keeps its build and NuxtHub directories inside its own
+	// Wrangler state, so the suite can run several servers from one checkout
+	// (`test/integration/state.ts`); `pnpm verify` builds into a directory of its
+	// own (`scripts/verify.mjs`).
+	...(isIntegration
+		? { buildDir: `${integrationWranglerPersistDir}/nuxt` }
+		: process.env.STREAM_KEEPR_BUILD_DIR ? { buildDir: process.env.STREAM_KEEPR_BUILD_DIR } : {}),
+
 	runtimeConfig: {
 		ablyApiKey: '',
 		adminBootstrapToken: '',
@@ -82,6 +92,7 @@ export default defineNuxtConfig({
 	],
 
 	hub: {
+		...(isIntegration ? { dir: `${integrationWranglerPersistDir}/hub` } : {}),
 		db: {
 			dialect: 'sqlite',
 			driver: 'd1',
@@ -233,7 +244,9 @@ export default defineNuxtConfig({
 	},
 
 	vite: {
-		...(isIntegration ? { server: { hmr: false, watch: null } } : {}),
+		// Each integration server optimises dependencies into its own cache: they
+		// start together, and one shared cache is rewritten under the others' pages.
+		...(isIntegration ? { server: { hmr: false, watch: null }, cacheDir: `${integrationWranglerPersistDir}/vite` } : {}),
 		optimizeDeps: {
 			include: [
 				'ably',

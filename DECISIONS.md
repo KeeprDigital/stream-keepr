@@ -459,3 +459,30 @@ Better Auth admits only the hostnames in `AUTH_ALLOWED_HOSTS` — the production
 
 - **Add LAN hostnames to `AUTH_ALLOWED_HOSTS` and sign in for real** — a LAN address or `.local` name is per-machine, so it becomes a production-allowlist wildcard or a per-developer edit to committed code, and cross-host sign-in over plain http is its own cookie problem — all to buy a boundary on a network the developer already trusts.
 - **Forward `--host` through `dev:bypass`** — fewer scripts, but LAN exposure becomes an unnamed flag instead of a launcher the README and test can point at.
+
+## ADR-0019: `pnpm verify` is a gate graph, and the integration suite runs one server per worker
+
+Accepted · 2026-09-23
+
+### Decision
+
+**`pnpm verify` runs every gate it ran before, as a dependency graph (`scripts/verify.mjs`) rather than a chain.** `nuxt prepare` first; lint, typecheck, the unit and Nuxt suites and the build next; the server-backed suites, browser gates and the Worker tail once the cheap gates pass. The first failure stops the rest. **The integration suite starts one `nuxt dev` per vitest worker**, each over its own Wrangler state, build, NuxtHub and Vite directories, and pins each worker to one server by `VITEST_POOL_ID`, so files run in parallel but never two against one database.
+
+### Why
+
+Measured on a 10-core machine: the chain took about 14½ minutes, and the integration suite alone was 410s of it, serial because its files share library-wide state (capacity, retention, reconciliation). Isolating databases is the only way to parallelise it; four servers ran it in 102s. The graph brings the whole of `verify` to about four minutes, and lint and type errors arrive within the first half-minute.
+
+### Consequences
+
+- **Only `nuxt prepare` may write `.nuxt`.** The root tsconfig extends `.nuxt/tsconfig.json`, so every Vite and TypeScript consumer reads it; a gate that rewrote it mid-run broke the others. The Nuxt suite, each server, and `verify`'s build (`STREAM_KEEPR_BUILD_DIR`) write their own.
+- **Servers sharing one Vite dep-optimizer cache break each other's pages** when they start together; `nuxt.config.ts` gives each its own.
+- The integration servers are launched by `test/integration/servers.ts`, not `@nuxt/test-utils`' `createTest`: in dev mode `createTest` loaded and built Nuxt in the setup process before `nuxi _dev` did it all again, and its context is a singleton that cannot start two servers.
+- "Run integration suites one at a time" still holds across invocations: the suite already uses the machine.
+- ESLint and `vue-tsc` caches make an unchanged tree cheap. The per-file ESLint cache can miss a type-aware finding in an unchanged file; CI starts cold and is the backstop.
+
+### Rejected alternatives
+
+- **Test files in parallel against one server** — files assert library-wide state and would interfere.
+- **`vitest --shard` across processes** — no load balancing between shards, and concurrent `createTest` boots raced on `.nuxt` and `.data`.
+- **`--no-isolate` for the Nuxt suite** — about 4× faster, but 83 files fail on leaked state.
+- **ESLint `--concurrency` or `projectService`** — each worker rebuilds the type-aware program (slower), and `projectService` exhausted the heap.

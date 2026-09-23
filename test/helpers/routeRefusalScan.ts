@@ -442,6 +442,59 @@ function resolveModule(specifier: string, fromFile: string): { file: string } | 
 	return { unfollowed: specifier };
 }
 
+interface ScannedModule {
+	text: string;
+	refusals: ScannedRefusal[];
+	/** Each value import, resolved to a file or reported as one the scan cannot follow. */
+	imports: ({ file: string } | { unfollowed: string })[];
+}
+
+/**
+ * One parse per file per process. The admin-surface guard alone walks the same
+ * shared modules once per route, and re-parsing them dominated the unit suite's
+ * run. Keyed on the file's text as well as its path, so a fixture rewritten in
+ * place is parsed again.
+ */
+const scannedModules = new Map<string, ScannedModule>();
+
+function scanModule(file: string): ScannedModule {
+	const text = readFileSync(file, 'utf8');
+	const cached = scannedModules.get(file);
+	if (cached?.text === text)
+		return cached;
+
+	const label = relative(REPOSITORY_ROOT, file);
+	const imports: ScannedModule['imports'] = [];
+	const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
+	function follow(node: ts.Node, specifier: ts.Expression | undefined) {
+		const site = `${label}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+		if (specifier === undefined || !ts.isStringLiteral(specifier)) {
+			imports.push({ unfollowed: `${site}: ${excerpt(node)}` });
+			return;
+		}
+		const resolved = resolveModule(specifier.text, file);
+		if (resolved === undefined)
+			return;
+		imports.push('file' in resolved ? { file: resolved.file } : { unfollowed: `${site}: ${resolved.unfollowed}` });
+	}
+
+	function visit(node: ts.Node) {
+		// `export { x } from './y'` re-exports values as surely as an import brings them.
+		if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly !== true)
+			follow(node, node.moduleSpecifier);
+		else if (ts.isExportDeclaration(node) && !node.isTypeOnly && node.moduleSpecifier !== undefined)
+			follow(node, node.moduleSpecifier);
+		else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
+			follow(node, node.arguments[0]);
+		node.forEachChild(visit);
+	}
+	visit(source);
+
+	const scanned = { text, refusals: scanSourceForRefusals(label, text), imports };
+	scannedModules.set(file, scanned);
+	return scanned;
+}
+
 /**
  * Every refusal reachable from a route through its first-party imports.
  *
@@ -483,40 +536,14 @@ export function scanRouteRefusals(entryFile: string, middlewareFiles: readonly s
 				continue;
 			visited.add(file);
 
-			const label = relative(REPOSITORY_ROOT, file);
-			const text = readFileSync(file, 'utf8');
-			refusals.push(...scanSourceForRefusals(label, text));
-
-			const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
-			function follow(node: ts.Node, specifier: ts.Expression | undefined) {
-				const site = `${label}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-				if (specifier === undefined || !ts.isStringLiteral(specifier)) {
-					unfollowedImports.push(`${site}: ${excerpt(node)}`);
-					return;
-				}
-				const resolved = resolveModule(specifier.text, file);
-				if (resolved === undefined)
-					return;
-				if (!('file' in resolved)) {
-					unfollowedImports.push(`${site}: ${resolved.unfollowed}`);
-					return;
-				}
-				if (viaMiddleware && isDomainLayer(resolved.file))
-					return;
-				queue.push(resolved.file);
+			const scanned = scanModule(file);
+			refusals.push(...scanned.refusals);
+			for (const edge of scanned.imports) {
+				if ('unfollowed' in edge)
+					unfollowedImports.push(edge.unfollowed);
+				else if (!(viaMiddleware && isDomainLayer(edge.file)))
+					queue.push(edge.file);
 			}
-
-			function visit(node: ts.Node) {
-				// `export { x } from './y'` re-exports values as surely as an import brings them.
-				if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly !== true)
-					follow(node, node.moduleSpecifier);
-				else if (ts.isExportDeclaration(node) && !node.isTypeOnly && node.moduleSpecifier !== undefined)
-					follow(node, node.moduleSpecifier);
-				else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
-					follow(node, node.arguments[0]);
-				node.forEachChild(visit);
-			}
-			visit(source);
 		}
 	}
 

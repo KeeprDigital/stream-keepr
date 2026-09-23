@@ -272,17 +272,33 @@ describe('the built Worker smoke runner', () => {
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
 			scripts: Record<string, string>;
 		};
-		const verify = packageJson.scripts.verify!;
 		expect(packageJson.scripts['worker:smoke']).toMatch(/node scripts\/worker-smoke\.mjs$/u);
 		expect(packageJson.scripts['worker:smoke']).not.toContain('build');
-		expect(verify.indexOf('pnpm build')).toBeLessThan(verify.indexOf('pnpm worker:dry-run'));
-		expect(verify.indexOf('pnpm worker:dry-run')).toBeLessThan(verify.indexOf('pnpm worker:smoke'));
+
+		// `pnpm verify` is a gate graph (`scripts/verify.mjs`), not a command chain.
+		expect(packageJson.scripts.verify).toBe('node scripts/verify.mjs');
+		const { GATES } = await import('../../../scripts/verify.mjs');
+		expect(GATES['worker:dry-run']!.after).toEqual(['build']);
+		expect(GATES['worker:smoke']!.after).toEqual(['worker:dry-run']);
+		expect(Object.values(GATES).filter(gate => gate.command.includes('build'))).toHaveLength(1);
 
 		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
 		const workerGuard = ci.slice(ci.indexOf('  worker-guard:'));
 		expect(workerGuard.indexOf('pnpm build')).toBeLessThan(workerGuard.indexOf('pnpm worker:dry-run'));
 		expect(workerGuard.indexOf('pnpm worker:dry-run')).toBeLessThan(workerGuard.indexOf('pnpm worker:smoke'));
 		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
+	});
+
+	it('runs every suite `pnpm test` runs as a verify gate', async () => {
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		const { GATES } = await import('../../../scripts/verify.mjs');
+		const suites = packageJson.scripts.test!.split('&&').map(step => step.trim().replace(/^pnpm /u, ''));
+
+		expect(suites.length).toBeGreaterThan(4);
+		expect(suites.filter(suite => !(suite in GATES))).toEqual([]);
 	});
 
 	/**

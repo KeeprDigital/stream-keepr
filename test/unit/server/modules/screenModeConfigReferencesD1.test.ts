@@ -1,3 +1,4 @@
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { MiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -266,43 +267,48 @@ beforeEach(async () => {
 		canonicalMime: 'font/woff2',
 	} as never);
 
+	// One D1 batch rather than ~190 awaited inserts: each insert is a round trip to
+	// Miniflare, and seeding them one by one was most of this file's run time.
+	const seeds: BatchItem<'sqlite'>[] = [];
+
 	// The fonts the maximal stack's typography names. One revision each: a font is
 	// pinned exactly as media is, and nothing here re-picks one.
 	for (let index = 0; index < FONT_ASSET_COUNT; index++) {
-		await db.insert(graphicAssets).values({
+		seeds.push(db.insert(graphicAssets).values({
 			id: fontAssetId(index),
 			name: `Font ${index}`,
 			kind: 'font',
-		} as never);
-		await db.insert(graphicAssetRevisions).values({
+		} as never));
+		seeds.push(db.insert(graphicAssetRevisions).values({
 			id: fontRevisionId(index),
 			assetId: fontAssetId(index),
 			revisionNumber: 1,
 			contentDigest: FONT_CONTENT_DIGEST,
 			compatibilityProfile: 'static-font-v1',
 			technicalFacts: {},
-		} as never);
+		} as never));
 	}
 
 	// Two revisions per asset, so a test can move a reference from one to another
 	// exactly as an author re-picking content does.
 	for (let index = 0; index < LARGE_REFERENCE_COUNT; index++) {
-		await db.insert(graphicAssets).values({
+		seeds.push(db.insert(graphicAssets).values({
 			id: assetId(index),
 			name: `Asset ${index}`,
 			kind: 'image',
-		} as never);
+		} as never));
 		for (const generation of [1, 2]) {
-			await db.insert(graphicAssetRevisions).values({
+			seeds.push(db.insert(graphicAssetRevisions).values({
 				id: revisionId(index, generation),
 				assetId: assetId(index),
 				revisionNumber: generation,
 				contentDigest: CONTENT_DIGEST,
 				compatibilityProfile: 'still-image-v1',
 				technicalFacts: {},
-			} as never);
+			} as never));
 		}
 	}
+	await db.batch(seeds as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 });
 
 describe('an authored Screen Mode configuration carrying many Graphic Asset References', () => {

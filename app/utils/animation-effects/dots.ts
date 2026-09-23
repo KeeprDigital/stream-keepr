@@ -144,7 +144,7 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 			for (let index = 0; index < position.count; index++) {
 				const phase = DRIFT_PHASE_Z * position.getZ(index) + DRIFT_PHASE_X * position.getX(index);
 				position.setY(index, restHeights[index]!
-					+ DRIFT_AMPLITUDE * (Math.cos(phase) - Math.cos(phase + DRIFT_RATE * elapsedSeconds)));
+				+ DRIFT_AMPLITUDE * (Math.cos(phase) - Math.cos(phase + DRIFT_RATE * elapsedSeconds)));
 			}
 			position.needsUpdate = true;
 

@@ -8,7 +8,7 @@ import type {
 } from '~~/shared/types/graphicStyleSet';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { $fetch, fetch, operatorSessionCookie } from './client';
+import { $fetch, fetch, operatorSessionCookie, throughOneTransportFailure } from './client';
 
 /**
  * Graphic Style Sets through the real API.
@@ -105,6 +105,14 @@ function textItem(id: string, typography: object, styleRefs?: object) {
 	};
 }
 
+/**
+ * Through `throughOneTransportFailure` because of this file's own 413 rows: the
+ * server refuses an oversized body while it is still arriving and closes that
+ * connection, and the next request to reuse the pooled socket dies with
+ * ECONNRESET before reaching a handler (see `transportRetry.ts`). Observed on the
+ * first request after them when `pnpm verify` loads the machine. The bodies are
+ * strings, so a retry resends them whole.
+ */
 async function request(
 	path: string,
 	options: { method?: string; body?: unknown; cookie?: string } = {},
@@ -115,11 +123,11 @@ async function request(
 	if (options.body !== undefined)
 		headers['content-type'] = 'application/json';
 
-	const response = await fetch(path, {
+	const response = await throughOneTransportFailure(() => fetch(path, {
 		method: options.method ?? 'GET',
 		headers,
 		body: options.body === undefined ? undefined : JSON.stringify(options.body),
-	});
+	}));
 	const text = await response.text();
 	return { status: response.status, data: text ? JSON.parse(text) : null };
 }

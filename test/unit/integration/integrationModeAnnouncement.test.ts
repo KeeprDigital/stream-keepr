@@ -8,32 +8,22 @@ import { announceIntegrationMode, INTEGRATION_MODE_ENV } from '~~/test/integrati
  * That the integration suite's own process knows it is the integration suite,
  * before anything can read otherwise.
  *
- * `integrationSetupOptions.env` looks like it settles this and does not.
- * `@nuxt/test-utils` spreads that object into the server child it spawns
- * (`startServer(ctx.options.env)`) and nowhere else, while `loadFixture()` calls
- * `loadNuxt({ cwd: rootDir, dev: true, … })` in the *globalSetup* process first —
- * with `rootDir` resolving through `process.cwd()` to the repository root, where
- * a developer's real `.env` sits. So a config-time reader in the parent sees no
- * suite, acts as it would for an ordinary `pnpm dev`, and the server child
- * inherits the result: `{ ...process.env, ...options.env }` overrides only the
- * two names the suite happened to pin.
- *
- * That is isolation by the coincidence of which names somebody thought to list —
- * the shape #197 and #222 were about, and the shape the first two attempts at
- * #233's gate had. `build/localConfiguration.ts` staying silent under the flag is
- * correct and was never the problem; the flag simply was not set where it had to
- * be read.
+ * The servers the suite starts inherit this process's environment
+ * (`test/integration/servers.ts`), and a config-time reader in this process
+ * (`build/localConfiguration.ts`, `integrationRealtimeConfigured`) must reach
+ * the same answer they do. When `@nuxt/test-utils` started the server, its
+ * `loadFixture()` ran `loadNuxt()` here against a developer's real `.env` with
+ * no sign that a suite was running — the shape #197, #222 and #233 were about.
  *
  * `globalSetup.ts` is not reachable from this suite, so a call sitting in it is a
  * convention. The scan below is what makes it a rule: the announcement must
- * happen, inside `setup`, before `createTest` — because `createTest`'s
- * `beforeAll` is what reaches `loadFixture`.
+ * happen, inside `setup`, before the servers start.
  */
 
 const globalSetupPath = fileURLToPath(new URL('../../integration/globalSetup.ts', import.meta.url));
 
 const ANNOUNCEMENT = 'announceIntegrationMode';
-const FIXTURE_ENTRY_POINT = 'createTest';
+const FIXTURE_ENTRY_POINT = 'startIntegrationServers';
 
 function calledFunctionName(node: ts.Node): string | undefined {
 	const call = ts.isAwaitExpression(node) ? node.expression : node;
@@ -79,7 +69,7 @@ describe('the integration suite announcing itself to its own process', () => {
 		expect(env[INTEGRATION_MODE_ENV]).toBe('true');
 	});
 
-	it('is announced by globalSetup before the fixture is ever loaded', () => {
+	it('is announced by globalSetup before any server starts', () => {
 		const source = ts.createSourceFile(
 			globalSetupPath,
 			readFileSync(globalSetupPath, 'utf8'),
@@ -93,8 +83,8 @@ describe('the integration suite announcing itself to its own process', () => {
 
 		expect(announced, `globalSetup.setup() must call ${ANNOUNCEMENT}()`).toBeGreaterThanOrEqual(0);
 		expect(loaded, `globalSetup.setup() must still call ${FIXTURE_ENTRY_POINT}()`).toBeGreaterThanOrEqual(0);
-		// Order, not mere presence. Announcing after `createTest` announces it to a
-		// process that has already loaded the config, which is no announcement.
+		// Order, not mere presence. Announcing after the servers start announces it
+		// to children that have already loaded the config, which is no announcement.
 		expect(announced).toBeLessThan(loaded);
 	});
 });

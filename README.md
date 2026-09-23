@@ -142,7 +142,8 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | ------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth:run` | Watch mode; append `:run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                         |
 | Before commit                               | `pnpm test`                                                                             | Unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. Needs Chrome/Chromium.                   |
-| Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, stopping at the first failure: typecheck, lint, test, build, `worker:dry-run`, `worker:smoke`.                                                                                  |
+| Quick check while developing                | `pnpm verify:quick`                                                                     | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                  |
+| Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.         |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                     | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build. |
 | Touching still-image codecs or Wasm         | `pnpm test:ingestion:still-images`                                                      | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                |
 | Touching an Animation Effect shader         | `pnpm test:browser:animation-effects`                                                   | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, and motion. Local only.                                                          |
@@ -157,6 +158,22 @@ requests. Together they catch bundles that pass on Node and break on workerd
 (#302). Run it whenever a change touches dependencies, bundling,
 `nuxt.config.ts`, or server code.
 
+How `pnpm verify` runs:
+
+- **Cheap gates first.** `nuxt prepare`, then lint, typecheck, and the unit and
+  Nuxt suites; the build runs beside them. The server-backed suites and browser
+  gates start only once those pass, so a lint or type error arrives in seconds.
+- **Each gate logs to `node_modules/.cache/verify/<gate>.log`.** The terminal
+  shows one line per gate and the tail of the first failure.
+- **Lint and typecheck are cached** (`node_modules/.cache/eslint/`,
+  `node_modules/.cache/tsc/`), so an unchanged tree lints and typechecks in
+  seconds. The ESLint cache is per file, so a type-aware rule can miss a finding
+  in an unchanged file that a changed file's types caused; CI starts cold and
+  catches it. Delete the cache directory to reproduce CI exactly.
+- **Only `nuxt prepare` writes `.nuxt`.** The root tsconfig extends it, so every
+  other gate reads it; the Nuxt suite, the servers and `verify`'s build each use
+  their own build directory. Keep it that way when adding a gate.
+
 CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on every PR,
 split across two jobs. It skips docs-only PRs and does not re-run on merge.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
@@ -170,6 +187,12 @@ Gotchas:
   machine, make every result meaningless. A cascade of `ECONNREFUSED` or
   "session cookie was not issued" with zero assertion failures means a
   `workerd` backend died, not that the code broke.
+- **The integration suite runs several servers.** One `nuxt dev` per vitest
+  worker, each over its own database under `.wrangler/state/integration-<n>`, so
+  test files run in parallel but never two against one database. The default is
+  a third of the CPU cores, at most four; set `STREAM_KEEPR_INTEGRATION_SERVERS`
+  to change it (`1` is the old serial run). Each server's output is kept in
+  `node_modules/.cache/integration-servers/`.
 - **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
   timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
   Re-run the single file, then the suite with `--no-file-parallelism`, before
