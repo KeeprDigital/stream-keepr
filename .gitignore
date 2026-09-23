@@ -38,3 +38,6 @@ coverage
 .claude/worktrees/
 .worktrees/
 
+
+.claude/worktrees/metagame-min-points/.data
+.claude/worktrees/top-cards-screen/.data
