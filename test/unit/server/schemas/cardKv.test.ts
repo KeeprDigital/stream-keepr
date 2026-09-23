@@ -18,6 +18,13 @@ describe('cardInputSchema persistence bounds', () => {
 		expect(cardInputSchema.safeParse(validCard()).success).toBe(true);
 	});
 
+	it('accepts a full Scryfall set name longer than a set code', () => {
+		expect(cardInputSchema.safeParse({
+			...validCard(),
+			set: 'Secret Lair Drop Series',
+		}).success).toBe(true);
+	});
+
 	it('rejects unbounded image URI maps', () => {
 		const front = Object.fromEntries(Array.from({ length: 21 }, (_, index) => [
 			`variant-${index}`,
