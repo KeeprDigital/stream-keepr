@@ -173,7 +173,16 @@ How `pnpm verify` runs:
   catches it. Delete the cache directory to reproduce CI exactly.
 - **Only `nuxt prepare` writes `.nuxt`.** The root tsconfig extends it, so every
   other gate reads it; the Nuxt suite, the servers and `verify`'s build each use
-  their own build directory. Keep it that way when adding a gate.
+  their own build directory. Keep it that way when adding a gate. Dev servers
+  started together also need their own Vite cache (`nuxt.config.ts` gives each
+  one), or they rewrite each other's optimised dependencies.
+- **Tried and rejected** (measured on a 10-core machine, September 2026):
+  integration test files in parallel against one server (they assert
+  library-wide state); `--no-isolate` for the Nuxt suite (about 4× faster, but
+  83 files fail on leaked state); Vitest's `experimental.fsModuleCache` (no gain
+  on the unit suite, breaks the Nuxt suite on a warm cache); `pool: 'threads'`
+  (no gain); ESLint `--concurrency` and `projectService` (slower, and
+  `projectService` exhausts the heap).
 
 CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs,
 split across parallel jobs (checks, two integration shards, local-auth and
@@ -255,6 +264,10 @@ How a change reaches `main`, and why:
   merge method, history stays linear, force-pushes and deletion are refused,
   and `CI passed` plus `Conventional Commit title` must be green. The **release
   tags** ruleset makes `v*` tags immutable. Repository admins can bypass both.
+  `CI passed` is one summary job that always reports, so CI can skip what a
+  change cannot affect without leaving a required check waiting. The
+  `production` tag is unprotected: the Deploy workflow force-moves it, and
+  GitHub refuses the Actions app as a ruleset bypass actor.
 - **Release PRs do not trigger CI** (default-token limitation), so they never
   get the required checks; an admin merges them with the ruleset bypass. They
   change only the version and changelog. Run the workflow by hand
