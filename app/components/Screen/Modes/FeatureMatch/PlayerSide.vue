@@ -251,6 +251,8 @@ function handleLifeSet(value: number) {
 		grid-row: 2;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
+		row-gap: clamp(0.25rem, 0.8vh, 0.625rem);
+		column-gap: 0.75rem;
 		align-items: center;
 		justify-items: center;
 		width: 100%;
@@ -270,6 +272,7 @@ function handleLifeSet(value: number) {
 
 		.meta-record {
 			font-size: 1.125rem;
+			line-height: 1.25;
 			font-variant-numeric: tabular-nums;
 			white-space: nowrap;
 		}
@@ -281,12 +284,13 @@ function handleLifeSet(value: number) {
 			text-overflow: ellipsis;
 			white-space: nowrap;
 			max-width: min(100%, 30rem);
+			line-height: 1.25;
 		}
 
 		.meta-pronouns {
 			grid-column: 1 / -1;
 			font-size: 1.125rem;
-			line-height: 1.1;
+			line-height: 1.25;
 		}
 	}
 
@@ -352,7 +356,7 @@ function handleLifeSet(value: number) {
 	}
 
 	.player-counters {
-		grid-row: 4 / span 2;
+		grid-row: 4;
 		width: 100%;
 		display: flex;
 		align-items: center;

@@ -108,6 +108,7 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 		<div
 			v-if="match && matchState"
 			class="match-layout"
+			:class="{ 'match-layout--with-counters': config.showCounters }"
 		>
 			<header class="match-header">
 				<span v-if="gameLabel" class="game-label">
@@ -186,12 +187,16 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 .match-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem) minmax(12rem, 18rem) minmax(0, 1fr);
-	grid-template-rows: min-content min-content min-content minmax(0, 2.5fr) minmax(0, 0.9fr) minmax(0, 1.5fr);
+	grid-template-rows: min-content min-content min-content minmax(0, 1fr);
 	column-gap: 1.25rem;
 	row-gap: 0.5rem;
 	height: 100%;
 	width: 100%;
 	min-height: 0;
+
+	&.match-layout--with-counters {
+		grid-template-rows: min-content min-content min-content minmax(0, 2.5fr) minmax(0, 2.4fr);
+	}
 
 	.match-header {
 		grid-row: 1;
