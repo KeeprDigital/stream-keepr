@@ -90,18 +90,16 @@ const gridStyle = computed(() => ({
 	gridTemplateColumns: gridTemplateColumns.value,
 }));
 
-const tableRef = useTemplateRef<HTMLElement>('tableRef');
-const { height: tableHeight } = useElementSize(tableRef);
-const pageInsetY = computed(() => screenConfig.value.paddingY ?? 0);
+const rowsRef = useTemplateRef<HTMLElement>('rowsRef');
+const { height: rowsHeight } = useElementSize(rowsRef);
 
 const rowLayoutStyle = computed(() => {
 	const rowCount = Math.max(config.value.pageSize ?? pageData.value.length ?? 1, 1);
 	const baseRowHeight = 44;
-	const columnHeaderHeight = 38;
-	const availableHeight = tableHeight.value > 0
-		? tableHeight.value - columnHeaderHeight
+	const availableHeight = rowsHeight.value > 0
+		? rowsHeight.value
 		: rowCount * baseRowHeight;
-	const usableHeight = Math.max(availableHeight - pageInsetY.value, rowCount * 24);
+	const usableHeight = Math.max(availableHeight, rowCount * 24);
 	const rowHeight = usableHeight / rowCount;
 	const primaryFontSize = Math.max(14, 14 + ((rowHeight - 36) * 0.16));
 	const secondaryFontSize = Math.max(12, primaryFontSize * 0.84);
@@ -211,7 +209,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 					</h2>
 				</div>
 
-				<div ref="tableRef" class="metagame-table broadcast-table-surface">
+				<div class="metagame-table broadcast-table-surface">
 					<div class="metagame-header-row broadcast-table-header-row metagame-grid" :style="gridStyle" data-testid="metagame-header-row">
 						<div
 							v-for="column in activeColumns"
@@ -225,6 +223,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 
 					<TransitionGroup
 						v-if="config.animateEntries"
+						ref="rowsRef"
 						name="metagame-row"
 						tag="div"
 						class="metagame-rows"
@@ -273,7 +272,12 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 						</div>
 					</TransitionGroup>
 
-					<div v-else class="metagame-rows" :style="rowLayoutStyle">
+					<div
+						v-else
+						ref="rowsRef"
+						class="metagame-rows"
+						:style="rowLayoutStyle"
+					>
 						<div
 							v-for="(entry, index) in pageData"
 							:key="config.viewMode === 'cards' && isCardEntry(entry) ? entry.id : isArchetypeEntry(entry) ? entry.id : index"
@@ -328,6 +332,11 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 <style scoped>
 .metagame-display {
 	color: var(--metagame-primary-text);
+}
+
+.metagame-content {
+	min-height: 0;
+	overflow: hidden;
 }
 
 .metagame-table {
@@ -405,8 +414,9 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 
 .metagame-rows {
 	position: relative;
-	flex: 1;
+	flex: 1 1 0;
 	min-height: 0;
+	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 }
