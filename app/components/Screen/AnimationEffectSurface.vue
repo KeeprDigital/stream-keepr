@@ -73,10 +73,17 @@ function targetSize(): { width: number; height: number } {
 }
 
 function resizeToTarget() {
+	// With no instance there is nothing to size, and recording `appliedSize`
+	// would be worse than useless: the ResizeObserver's initial callback fires
+	// while the effect module is still loading, and a size recorded then makes
+	// the post-mount resize an early return — the renderer stays at its default
+	// size and a shader-plane effect renders as a flat, static layer.
+	if (!instance.value)
+		return;
 	const size = targetSize();
 	if (appliedSize && appliedSize.width === size.width && appliedSize.height === size.height)
 		return;
-	instance.value?.resize(size.width, size.height);
+	instance.value.resize(size.width, size.height);
 	appliedSize = size;
 }
 
