@@ -9,7 +9,7 @@ export const LOCAL_AUTH_BYPASS_ENABLED_VALUE = 'true';
  * advertise membership of the family `.env` exists to hold — which is the one
  * file this name must never be in. Activation took a `.env` name and a second
  * launcher-supplied attestation until #519; ADR-0017 records why it is one name
- * now, and ADR-0013 what the pair was for.
+ * now, and what the pair was for.
  */
 export const LOCAL_AUTH_BYPASS_NAME = 'STREAM_KEEPR_LOCAL_AUTH_BYPASS';
 
@@ -45,7 +45,7 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  * `.env` does not carry it and `.env.example` does not name it — so no file can
  * be copied, staged, or synced into a deployed installation in a state that
  * opens this. That is a structural property rather than a policy, and it is what
- * replaced the two-name scheme #460 and ADR-0013 were about: the second name
+ * replaced the two-name scheme of #460: the second name
  * existed to keep a leaked `.env` value inert, and a value that is never written
  * to a file has nothing to leak.
  *
@@ -54,7 +54,7 @@ export function isLocalDeveloperSessionId(sessionId: string): boolean {
  *
  * Setting this name on a deployed Worker does activate the bypass, and no
  * runtime signal guards against it. That is ADR-0017's accepted residual,
- * inherited from ADR-0013 on the same ground: editing Worker vars or secrets
+ * on this ground: editing Worker vars or secrets
  * takes the same edit permission as deploying code, so whoever can stage it can
  * already ship an arbitrary Worker — and the worker-smoke suite depends on
  * exactly this activation to authenticate its probes against the production

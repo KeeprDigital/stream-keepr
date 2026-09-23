@@ -8,7 +8,7 @@ import { PASSWORD_RESET_PAGE_PATH } from '~~/shared/utils/passwordResetLink';
 /**
  * The Screen Output page, the one page that renders without a session.
  *
- * A Screen Output is credential-free in ADR-0008's sense and stays that way
+ * A Screen Output is credential-free in ADR-0010's sense and stays that way
  * under ADR-0010: the Screen Output Asset Capability already in its URL hash
  * _is_ its credential, and the machine showing it has no operator to sign in.
  * Gating it would put a login form on program output.

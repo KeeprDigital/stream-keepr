@@ -144,7 +144,7 @@ async function observe(response) {
  * rather than being asked for. The **author cookie** says which Graphics Author
  * owns a Graphics Ingestion Operation, which is why it is opt-in per request:
  * a helper that staged an operation as one author and then read it as another
- * would get a 404 and read as a broken route (ADR-0003, #276).
+ * would get a 404 and read as a broken route (ADR-0010, #276).
  *
  * `deployed` decides where the session's credentials may come from, and the
  * decision is `./operator.mjs`'s. It is a parameter rather than something

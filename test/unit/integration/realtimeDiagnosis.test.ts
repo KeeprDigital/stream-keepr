@@ -317,7 +317,7 @@ describe('the Screen-command route\'s own refusals', () => {
 
 	it('are read from the route\'s imports too, not from the route file alone', () => {
 		// #277: the scan read `command.post.ts` and nothing else, so a 401/403 raised
-		// from an imported guard was invisible — the shape ADR-0008 predicted for
+		// from an imported guard was invisible — the shape ADR-0010 predicted for
 		// `assertTrustedScreenCommandBoundary` once authentication landed and that
 		// seam started refusing. Authentication landed on #396 and the seam still
 		// refuses nothing; the 401 came from the middleware instead, which the row

@@ -33,7 +33,7 @@ describe('graphic Style Set browsing', () => {
 	it('rejects the listing before touching the service without a graphics author session', async () => {
 		// #206: the same session the sibling writes ask for, asked as
 		// authentication and never consulted again — session-scoping, not access
-		// control (ADR-0008).
+		// control (ADR-0010).
 		mockRequireUserId.mockRejectedValue(
 			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
 		);

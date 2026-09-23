@@ -155,7 +155,7 @@ export async function main(argv = process.argv) {
 					});
 					// One expression, because the page and the identity it reads as are one
 					// fact: the operation staged above is a 404 to every session but this
-					// one (ADR-0003, #276).
+					// one (ADR-0010, #276).
 					page = authoredPageRequest(session, `${origin}${ACCEPTANCE_PATH}?operation=${staged.operationId}`);
 				}
 				else {

@@ -22,7 +22,7 @@ import ts from 'typescript';
  * drop costs them the guarantee.
  *
  * #277 also widened *where* it looks. The scan used to read the route file alone, so a
- * refusal raised from an imported helper was invisible — the shape ADR-0008 predicted for
+ * refusal raised from an imported helper was invisible — the shape ADR-0010 predicted for
  * `assertTrustedScreenCommandBoundary` once app-level authentication landed, since it
  * named these guards as the seams a credential would strengthen and a 401/403 is what such
  * a guard raises. It now walks the route's first-party import graph.

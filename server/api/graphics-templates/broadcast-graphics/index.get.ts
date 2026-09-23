@@ -16,7 +16,7 @@ import { requireUserId } from '~~/server/utils/auth';
  * because "what can I place" is one question. Where an entry came from is a property
  * of the entry rather than a reason to look somewhere else for it.
  *
- * The session is session-scoping, not access control (ADR-0008, #206).
+ * The session is session-scoping, not access control (ADR-0010, #206).
  */
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);

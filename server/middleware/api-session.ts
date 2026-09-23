@@ -22,8 +22,8 @@ import { requestUserSession } from '~~/server/utils/auth';
  *   first would let an anonymous caller ask which Event ids exist and read the
  *   answer off the difference between 404 and 401.
  * - `request-body-limit.ts` wraps the request body in a bounded stream, and
- *   `graphics-author-session.ts` mints a KV session for a page request. Neither
- *   is work worth doing for a request that is about to be refused.
+ *   `retired-author-session-cookies.ts` expires stale cookies. Neither is work
+ *   worth doing for a request that is about to be refused.
  *
  * **The 401 is written out here, as literals, on purpose.** It is composed
  * around every route in the application, so it lands in every graph
