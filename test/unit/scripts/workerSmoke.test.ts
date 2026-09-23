@@ -214,9 +214,10 @@ describe('the built Worker smoke runner', () => {
 			.mockResolvedValueOnce(Response.json({ events: [] }));
 		const outcome = runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }).catch(error => error);
 
-		for (let attempt = 0; attempt < 100 && worker.kill.mock.calls.length === 0; attempt++)
-			await new Promise(resolve => setImmediate(resolve));
-		expect(worker.kill).toHaveBeenCalledWith('SIGTERM');
+		// Bounded by real time, not event-loop turns: the runner does real
+		// filesystem work first, and a slow CI machine needs more turns than a
+		// fixed count allowed. `vi.waitFor` keeps real timers under fake ones.
+		await vi.waitFor(() => expect(worker.kill).toHaveBeenCalledWith('SIGTERM'), { timeout: 10_000 });
 		await vi.advanceTimersByTimeAsync(2_000);
 
 		expect(await outcome).toMatchObject({
