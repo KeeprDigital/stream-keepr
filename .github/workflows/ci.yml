@@ -8,30 +8,24 @@
 #
 # When it runs, and why no more often:
 #
-#   - PRs only, never on push to main. Every change reaches main as a squash
-#     merge of a PR whose run was green (AGENTS.md), and deploys ship released
-#     tags, so re-running the same gates on the merge commit doubled Actions
-#     spend for no added signal.
+#   - PRs only, never on push to main. main's ruleset admits only squash
+#     merges of PRs whose `CI passed` was green, and deploys ship released
+#     tags, so re-running the same gates on the merge commit adds no signal.
 #   - Not on draft PRs. `pnpm verify` is the gate while a branch is in
 #     progress; marking the PR ready for review runs CI.
-#   - Not when a PR changes only docs or workflows that are not this one.
+#   - Only the jobs a change can affect: none for docs or other workflows, no
+#     Worker build for tests alone (the `scope` job decides).
 #   - A newer push cancels the run it supersedes.
 #
-# Safe while main has no required status checks, which a private repository on
-# the Free plan cannot have (see README.md § Releases).
+# `CI passed` is the one required status check. It always reports, whatever
+# was skipped, so a docs-only PR is never left waiting on a check that cannot
+# arrive; a workflow-level `paths-ignore` would do exactly that.
 
 name: CI
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**.md'
-      - '.vscode/**'
-      - .github/dependabot.yml
-      - .github/workflows/deploy.yml
-      - .github/workflows/pr-title.yml
-      - .github/workflows/release-please.yml
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -46,16 +40,43 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  # Every suite `pnpm test` runs appears below as its own `pnpm <script>` step
-  # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
-  # jobs so the longest one, not the sum, sets the wall time. Each extra job
-  # costs a checkout and install (~1 runner-minute); the split is worth that
-  # and no finer.
-  checks:
-    name: Lint, typecheck, unit and Nuxt suites
+  scope:
+    name: Decide what the change can affect
     if: ${{ !github.event.pull_request.draft }}
     # Pinned rather than `ubuntu-latest`, so an image change (Chrome, system
     # libraries the browser gates depend on) is a reviewed edit, not a surprise.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      bundle: ${{ steps.scope.outputs.bundle }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent, the base: enough to diff.
+          fetch-depth: 2
+      - id: scope
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          printf '%s\n' "$changed"
+          # Docs, editor settings, and workflows other than this one.
+          outside_code='\.md$|^\.vscode/|^\.github/dependabot\.yml$|^\.github/workflows/(deploy|pr-title|release-please)\.yml$'
+          # Anything that is not a test or outside the code cannot change the
+          # uploaded Worker bundle.
+          outside_bundle="^test/|$outside_code"
+          if grep -qvE "$outside_code" <<< "$changed"; then code=true; else code=false; fi
+          if grep -qvE "$outside_bundle" <<< "$changed"; then bundle=true; else bundle=false; fi
+          echo "code=$code bundle=$bundle"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+
+  # Every suite `pnpm test` runs appears below as its own `pnpm <script>` step
+  # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
+  # jobs so the longest one, not the sum, sets the wall time.
+  checks:
+    name: Lint, typecheck, unit and Nuxt suites
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -73,7 +94,8 @@ jobs:
 
   integration:
     name: Integration suite (${{ matrix.shard }}/2)
-    if: ${{ !github.event.pull_request.draft }}
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -90,7 +112,8 @@ jobs:
 
   server-and-browser:
     name: Local-auth suite and browser gates
-    if: ${{ !github.event.pull_request.draft }}
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -104,35 +127,41 @@ jobs:
 
   worker-guard:
     name: Build, wrangler dry run, and Worker smoke
-    if: ${{ !github.event.pull_request.draft }}
+    needs: scope
+    # A PR touching only tests or docs cannot change the uploaded bundle, so
+    # building it again would prove what main already proved.
+    if: needs.scope.outputs.bundle == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The merge commit and its first parent, the base: enough to diff.
-          fetch-depth: 2
-      # A PR touching only tests or docs cannot change the uploaded bundle, so
-      # building it again would prove what main already proved.
-      - name: Decide whether the Worker bundle can have changed
-        id: scope
-        run: |
-          if git diff --name-only HEAD^1 HEAD | grep -qvE '^(test/|\.vscode/)|\.md$'; then
-            echo "bundle=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Only tests or docs changed; the Worker bundle is the base branch's."
-            echo "bundle=false" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.scope.outputs.bundle == 'true'
-        uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup
       # The #302 class of failure: green on Node, broken on workerd. The dry
       # run asserts the bundle wrangler would upload compiles no Wasm from
       # bytes, so it belongs on every PR — not just deploy day.
-      - if: steps.scope.outputs.bundle == 'true'
-        run: pnpm build
-      - if: steps.scope.outputs.bundle == 'true'
-        run: pnpm worker:dry-run
+      - run: pnpm build
+      - run: pnpm worker:dry-run
       # Starts that same artifact under production-shaped local workerd and
       # sends the small runtime/bindings/auth/streaming probe set through it.
-      - if: steps.scope.outputs.bundle == 'true'
-        run: pnpm worker:smoke
+      - run: pnpm worker:smoke
+
+  passed:
+    name: CI passed
+    needs: [scope, checks, integration, server-and-browser, worker-guard]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      # Skipped is fine: `scope` decided the job had nothing to prove. Failed or
+      # cancelled is not. A draft PR skips everything and passes here, which is
+      # harmless: a draft cannot be merged, and marking it ready runs CI again.
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "::error::A CI job ended $result."; exit 1 ;;
+            esac
+          done

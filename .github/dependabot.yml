@@ -14,3 +14,15 @@ updates:
     groups:
       actions:
         patterns: ['*']
+
+  # Security updates only: `open-pull-requests-limit: 0` turns version updates
+  # off without affecting security PRs, and this entry is what gives those PRs
+  # a Conventional Commit title (`fix(deps): bump …`) instead of `Bump …`.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: fix
+      include: scope
