@@ -19,7 +19,8 @@
 # is dispatching this workflow with the previous tag. Local `pnpm deploy`
 # stays free-form for emergencies.
 #
-# Required repository secrets: CLOUDFLARE_API_TOKEN (Workers Scripts:Edit,
+# Required `production` environment secrets (the environment deploys only
+# from main): CLOUDFLARE_API_TOKEN (Workers Scripts:Edit,
 # D1:Edit — plus the Containers scope whenever a run deploys the validator,
 # which is a Container), CLOUDFLARE_ACCOUNT_ID.
 

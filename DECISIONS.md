@@ -493,7 +493,7 @@ Accepted · 2026-09-23
 
 ### Decision
 
-**`main` takes changes only as squash merges of PRs, with the PR title as the commit title and a Conventional Commit PR title** (`.github/workflows/pr-title.yml` checks it). The repository allows no merge commits or rebase merges. CI runs on ready-for-review PRs, not on drafts, pushes to `main`, or PRs changing only docs or other workflows.
+**`main` takes changes only as squash merges of PRs (enforced by the `main` ruleset), with the PR title as the commit title and a Conventional Commit PR title** (`.github/workflows/pr-title.yml` checks it). The repository allows no merge commits or rebase merges. CI runs on ready-for-review PRs, not on drafts, pushes to `main`, or PRs changing only docs or other workflows.
 
 ### Why
 
@@ -501,6 +501,8 @@ release-please builds the changelog and version from the commits on `main`. Bran
 
 ### Consequences
 
-- Nothing enforces it server-side: branch protection and rulesets need GitHub Team or a public repository. AGENTS.md and README § Releases carry it as a convention.
+- The `main` ruleset enforces it: PR required, squash only, linear history, no force-push or deletion, required checks `CI passed` (one always-reporting summary job, so path-scoped CI never leaves a PR waiting) and `Conventional Commit title`. Admins can bypass, which is how release-please's PRs merge: the default token's PRs trigger no checks.
+- `v*` tags are immutable (the **release tags** ruleset). The `production` tag is not protected: the deploy workflow force-moves it, and GitHub refuses the Actions app as a ruleset bypass actor.
+- The Cloudflare secrets live on the `production` environment, which deploys only from `main`.
 - The default workflow token is read-only; each workflow declares its own write scopes.
 - A branch's individual commits no longer reach `main`; the PR body is the squash commit's message.

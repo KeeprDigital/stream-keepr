@@ -251,12 +251,15 @@ How a change reaches `main`, and why:
 - **PR titles are Conventional Commits**, checked by
   `.github/workflows/pr-title.yml`. A title that is not one would drop the PR
   from the changelog and the version bump.
-- **Nothing enforces this server-side.** Branch protection and rulesets need
-  GitHub Team, or a public repository; until then these are conventions.
-- **Release PRs do not trigger CI** (default-token limitation), and need none:
-  they change only the version and changelog. Wire a PAT before adding required
-  status checks. Run the workflow by hand (`gh workflow run release-please.yml`)
-  to refresh the Release PR without a push.
+- **The `main` ruleset enforces it**: a PR is required, squash is the only
+  merge method, history stays linear, force-pushes and deletion are refused,
+  and `CI passed` plus `Conventional Commit title` must be green. The **release
+  tags** ruleset makes `v*` tags immutable. Repository admins can bypass both.
+- **Release PRs do not trigger CI** (default-token limitation), so they never
+  get the required checks; an admin merges them with the ruleset bypass. They
+  change only the version and changelog. Run the workflow by hand
+  (`gh workflow run release-please.yml`) to refresh the Release PR without a
+  push. A GitHub App token for release-please would remove the bypass.
 
 Requires Settings → Actions → General → **Allow GitHub Actions to create and
 approve pull requests**. The default workflow token is read-only; each workflow
@@ -305,8 +308,9 @@ what `pnpm deploy` runs, but ships a **released tag**, never `main`'s HEAD:
   git tag, which each successful deploy moves. `always` and `never` override.
 
 It needs the `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, D1:Edit, plus
-Containers when deploying the validator) and `CLOUDFLARE_ACCOUNT_ID` repository
-secrets. The acceptance gates and the "nothing on air" check stay with the
+Containers when deploying the validator) and `CLOUDFLARE_ACCOUNT_ID` secrets on
+the `production` environment, which deploys only from `main`: a workflow on any
+other branch cannot read them. The acceptance gates and the "nothing on air" check stay with the
 operator.
 
 ### Deploy day
