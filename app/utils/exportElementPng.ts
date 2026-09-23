@@ -300,8 +300,12 @@ async function replaceVideoSnapshots(source: Element, target: Element) {
 }
 
 function cssUrls(style: string): string[] {
-	return Array.from(style.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/g), match => match[2] ?? '')
-		.filter(Boolean);
+	// One branch per quoting form, so no two quantifiers can trade characters.
+	// An unquoted CSS url cannot contain whitespace, quotes, or parentheses.
+	return Array.from(
+		style.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s"'()]+))\s*\)/g),
+		match => match[1] ?? match[2] ?? match[3] ?? '',
+	).filter(Boolean);
 }
 
 function internalFragmentUrl(source: string): string | undefined {
