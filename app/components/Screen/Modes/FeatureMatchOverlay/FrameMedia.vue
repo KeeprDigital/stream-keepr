@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import { featureMatchOverlayFrameContentMaskStyle } from '~/modules/feature-match-overlay/renderModel';
 import ScreenMediaBackground from '../../MediaBackground.vue';
 
 const props = defineProps<{
 	media?: ScreenMediaBackgroundConfig;
 	canvasWidth: number;
 	canvasHeight: number;
-	maskId: string;
+	cutoutPaths: readonly string[];
 	output: FeatureMatchOverlayOutput;
 }>();
 
 const isVisible = computed(() => props.output !== 'key' && props.media?.enabled === true && props.media.url.trim().length > 0);
+const maskStyle = computed(() => featureMatchOverlayFrameContentMaskStyle(
+	props.canvasWidth,
+	props.canvasHeight,
+	props.cutoutPaths,
+));
 </script>
 
 <template>
@@ -20,11 +26,11 @@ const isVisible = computed(() => props.output !== 'key' && props.media?.enabled 
 		y="0"
 		:width="canvasWidth"
 		:height="canvasHeight"
-		:mask="`url(#${maskId})`"
 	>
 		<div
 			xmlns="http://www.w3.org/1999/xhtml"
 			class="frame-media"
+			:style="maskStyle"
 		>
 			<ScreenMediaBackground :media="media" />
 		</div>

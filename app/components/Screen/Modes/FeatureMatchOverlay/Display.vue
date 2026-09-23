@@ -374,7 +374,7 @@ onBeforeUnmount(() => {
 				:media="config.layout.frame.mediaBackground"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
-				:mask-id="frameMaskId"
+				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
 				:output="resolvedOutput"
 			/>
 			<image
@@ -406,7 +406,7 @@ onBeforeUnmount(() => {
 				:animation="config.layout.frame.animation"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
-				:mask-id="frameMaskId"
+				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
 				:output="resolvedOutput"
 			/>
 			<g

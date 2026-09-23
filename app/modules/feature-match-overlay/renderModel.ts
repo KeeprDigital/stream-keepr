@@ -59,6 +59,45 @@ export interface FeatureMatchOverlayRenderModel {
 	borderSideEnabled: (style: FeatureMatchOverlayBorderSides, side: FeatureMatchOverlayBorderSide) => boolean;
 }
 
+/**
+ * A CSS alpha mask for HTML content embedded in the Frame SVG.
+ *
+ * Chromium can promote a canvas or video inside an SVG `foreignObject` to its
+ * own composited layer and let that layer escape a mask attached to the
+ * `foreignObject` itself. vMix's embedded Chromium exhibits that behaviour for
+ * Animation Effects. A self-contained SVG image used as a CSS mask keeps the
+ * clipping in the HTML compositing path while deriving the exact same rounded
+ * cutouts as the Frame's native SVG layers.
+ */
+export function featureMatchOverlayFrameContentMaskStyle(
+	canvasWidth: number,
+	canvasHeight: number,
+	cutoutPaths: readonly string[],
+): CSSProperties {
+	const width = Math.max(0, canvasWidth);
+	const height = Math.max(0, canvasHeight);
+	const compoundPath = [
+		`M 0 0 H ${width} V ${height} H 0 Z`,
+		...cutoutPaths,
+	].join(' ');
+	const svg = [
+		'<svg xmlns="http://www.w3.org/2000/svg"',
+		` viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">`,
+		`<path d="${compoundPath}" fill="white" fill-rule="evenodd"/>`,
+		'</svg>',
+	].join('');
+	const maskImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+
+	return {
+		maskImage,
+		maskRepeat: 'no-repeat',
+		maskSize: '100% 100%',
+		WebkitMaskImage: maskImage,
+		WebkitMaskRepeat: 'no-repeat',
+		WebkitMaskSize: '100% 100%',
+	};
+}
+
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
 }
