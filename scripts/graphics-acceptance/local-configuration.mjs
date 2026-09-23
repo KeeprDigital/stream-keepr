@@ -47,7 +47,7 @@ import { AcceptanceFailure } from './evidence.mjs';
  * `routes.mjs` is an admin path, so no harness can reach it. Blocking a run on
  * that name would refuse a checkout that would have passed.
  *
- * `.env.example` and `docs/operations/graphics-staging-acceptance.md` both
+ * `.env.example` and the README both
  * already say the signing key is load-bearing; this is that sentence made
  * executable.
  *
@@ -247,7 +247,7 @@ export function localConfigurationNotice(missing) {
 		+ `inherit it from the one it was branched from, and a copied .env.example carries the names with empty `
 		+ `values. Fix: copy .env in from the checkout you branched from, or fill in .env.example — `
 		+ `\`pnpm preview\` stages .env into .output/server/, which is where wrangler resolves it from the config. `
-		+ `A --deployed run reads no local file and is unaffected. See docs/agents/parallel-rounds.md.`;
+		+ `A --deployed run reads no local file and is unaffected. See README.md → Local configuration.`;
 }
 
 /**

@@ -14,7 +14,7 @@ import { requireUserId } from '~~/server/utils/auth';
  * differs.
  *
  * The session is asked for as authentication and never consulted again —
- * session-scoping, not access control (ADR-0008). The document embeds Graphic
+ * session-scoping, not access control (ADR-0010). The document embeds Graphic
  * Asset identities, so before this guard the identifiers #172 hid from the
  * Asset Library stayed reachable one layer over (#206).
  */

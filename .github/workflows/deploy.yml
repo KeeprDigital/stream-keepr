@@ -1,7 +1,7 @@
 # Manually triggered production deploy — the Actions counterpart of running
 # `pnpm deploy` locally. It exists as an *option*, not a replacement: deploys
 # are never merge-triggered, because deploy day is a human procedure
-# (README.md § Deploy day, in order). This workflow covers only what
+# (README.md § Deploy day). This workflow covers only what
 # `pnpm deploy` covers — build, Wasm dry run, Worker smoke against the
 # production-env build, D1 migration, Worker promotion, health verify.
 # Everything after promotion stays with the operator:
@@ -38,7 +38,7 @@ on:
       d1_recovery_point:
         description: >-
           Type "confirmed" once a recent D1 Time Travel recovery point or
-          export exists (README § Deploy). D1 migration and Worker promotion
+          export exists (README § Deploy day). D1 migration and Worker promotion
           are not one atomic transaction; this is the rollback anchor.
         required: true
         type: string

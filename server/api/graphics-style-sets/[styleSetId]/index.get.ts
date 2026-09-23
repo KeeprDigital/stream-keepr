@@ -6,7 +6,7 @@ import { requireUserId } from '~~/server/utils/auth';
 /**
  * One Graphic Style Set with both its working draft and its published entries.
  *
- * The session is session-scoping, not access control (ADR-0008, #206).
+ * The session is session-scoping, not access control (ADR-0010, #206).
  */
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);

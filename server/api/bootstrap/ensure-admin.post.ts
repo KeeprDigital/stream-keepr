@@ -4,8 +4,8 @@ import { ensureAdminSchema } from '~~/server/schemas/api/adminBootstrap';
 
 /**
  * `POST /api/bootstrap/ensure-admin` — the secret-armed first-admin bootstrap
- * (#394, ADR-0010). Curl-only; the operator ceremony is in the README's Worker
- * secrets section: set the secret, call this once, delete the secret.
+ * (#394, ADR-0010). Curl-only; the operator ceremony is in the README's "First
+ * admin account" section: set the secret, call this once, delete the secret.
  *
  * **Every account this makes is an administrator**, and it grants the role to an
  * existing account that lacks one, so it cannot make an ordinary user even
@@ -13,8 +13,8 @@ import { ensureAdminSchema } from '~~/server/schemas/api/adminBootstrap';
  * has lost every administrator — and wrong for everything else: since #399,
  * ordinary accounts come from `POST /api/admin/users`, which creates them with no
  * role and no password and answers with a Password Reset Link. The README
- * documents both ceremonies, under "The first admin account" and "Everybody
- * else's account".
+ * documents both ceremonies, under "First admin account" and "Other
+ * accounts".
  *
  * **Not under `/api/admin/` or `/api/auth/`, deliberately.** Both prefixes
  * already mean something in the boundary ADR-0010 describes — `/api/admin/**`

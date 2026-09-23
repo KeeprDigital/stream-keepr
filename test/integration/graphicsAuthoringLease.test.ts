@@ -176,8 +176,8 @@ describe('graphics Authoring Leases', () => {
 	 * This suite used to be a script: the grant in the first test was the premise of
 	 * the third, the takeover in the eleventh was the premise of the twelfth, and so
 	 * on. A name-filtered rerun then failed for reasons that had nothing to do with
-	 * the test named — and a name-filtered rerun is precisely what this repo's own
-	 * parallel-rounds procedure prescribes when something looks flaky (#311).
+	 * the test named — and a name-filtered rerun is the first thing anyone tries when
+	 * something looks flaky (#311).
 	 *
 	 * A release only deletes the asking session's own row, so asking both to release
 	 * clears the artifact whichever of them was holding it.

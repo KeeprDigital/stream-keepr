@@ -15,7 +15,7 @@ import { requireUserId } from '~~/server/utils/auth';
  * Layouts authored here and layouts a `.sklayout` Template Package installed appear
  * in one list, because "what can I place" is one question.
  *
- * The session is session-scoping, not access control (ADR-0008, #206).
+ * The session is session-scoping, not access control (ADR-0010, #206).
  */
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);

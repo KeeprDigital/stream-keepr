@@ -17,9 +17,8 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 /**
  * The Feature Match Overlay capability-parity checklist, verified row by row.
  *
- * `docs/feature-match-overlay-capability-parity.md` is the settled mapping from
- * each legacy Feature Match Overlay construct to its Shared Graphics Foundation
- * equivalent. Spec #60 uses it *instead of* a data migration: the database is
+ * The settled mapping from each legacy Feature Match Overlay construct to its
+ * Shared Graphics Foundation equivalent (issue #14). Spec #60 uses it *instead of* a data migration: the database is
  * wiped before ship, so what proves the rewrite kept its capability is that the
  * built-in Feature Match Overlay Presets are recreated on the shared schema and
  * every row of the mapping lands somewhere in them.

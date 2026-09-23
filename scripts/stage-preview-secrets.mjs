@@ -6,11 +6,7 @@
  * the file it opens is `.output/server/.env`, never the repository root's.
  * Nothing copied it there, and nothing said so: the previewed Worker simply
  * came up with no environment variables at all, and the first authored request
- * answered 503. `docs/agents/parallel-rounds.md` meanwhile told every agent
- * that copying the file into the worktree was what made `pnpm preview` work,
- * so following the repository's own instructions exactly still produced the
- * failure — necessary and not sufficient, with nothing anywhere naming the gap
- * (#274).
+ * answered 503, with nothing anywhere naming the gap (#274).
  *
  * Measured rather than reasoned about, twice over and independently: a probe
  * with a minimal Worker showed the root file delivering nothing and the same

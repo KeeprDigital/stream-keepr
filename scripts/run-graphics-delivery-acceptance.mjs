@@ -18,7 +18,7 @@
  * The fault modes assert what an injected outage must look like from outside;
  * they do not inject it. `--arm` provisions the scenario, the operator injects
  * the outage, and `--fault` resumes against the same identities. See
- * docs/operations/graphics-staging-acceptance.md.
+ * README.md → Deploy day → Fault injection.
  *
  * Arming provisions **two** Screen Outputs, because the faults disagree about
  * what a cache should be holding and a single representation cannot satisfy

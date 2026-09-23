@@ -125,7 +125,7 @@ export function operatorUnavailableNotice({ deployed = false } = {}) {
 		+ `from .env and creates its own account through the first-admin bootstrap; a fresh git worktree has no `
 		+ `such file, because it is gitignored. Fix: copy .env in from the checkout you branched from, or fill `
 		+ `in .env.example. ${credentials} instead, `
-		+ `if you would rather not arm the bootstrap. See docs/agents/parallel-rounds.md.`;
+		+ `if you would rather not arm the bootstrap. See README.md → Local configuration.`;
 }
 
 /**

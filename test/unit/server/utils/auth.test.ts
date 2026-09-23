@@ -150,7 +150,7 @@ describe('the identities a request carries', () => {
 	const signedIn = { session: { id: 'a-browser-session' }, user: { id: 'a-user' } };
 
 	it('names the person, not the browser, as who a request is acting as', async () => {
-		// The widening ADR-0003 pre-committed to: an operation survives the browser
+		// The widening ADR-0010 pre-committed to: an operation survives the browser
 		// that started it, and the same idempotency key sent from a second browser
 		// dedupes onto the first operation rather than starting a second.
 		const { requireUserId } = await freshAuth(signedIn);

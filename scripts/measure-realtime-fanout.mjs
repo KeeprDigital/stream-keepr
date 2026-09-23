@@ -55,10 +55,8 @@ export class RealtimeFanoutProbeRefusal extends Error {
  * cleanup swallows its own failures, so a run that dies partway leaves what it
  * made behind. And the origin it used to default to, `http://127.0.0.1:8787`, is
  * not this worktree's port — it is the one every worktree on the machine shares.
- * Round nine has a recorded incident of a harness on 8787 writing a full
- * scenario into a sibling lane's D1 and R2 (`docs/agents/parallel-rounds.md`,
- * "A local harness run is a cross-worktree write"), and that harness was the
- * reading one.
+ * A harness on 8787 once wrote a full scenario into a sibling worktree's D1
+ * and R2, and that harness was the reading one.
  *
  * So there is no default. The caller names the installation it is willing to
  * have written to, and a caller who names nothing gets a refusal rather than

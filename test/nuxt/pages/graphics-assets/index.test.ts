@@ -1305,10 +1305,8 @@ describe('the Graphics Asset Library Workspace', () => {
 	 * naming as one rather than dressed up as a restatement.
 	 *
 	 * What this repository has decided about userinfo is that it is refused, not
-	 * that it is unprintable. `docs/operations/approved-remote-graphics-copy.md`:
-	 * "no embedded credentials — a URL carrying userinfo is rejected, and no
-	 * cookie, authorization header, reusable cloud credential, or interactive
-	 * authentication is ever supplied"; enforced by `validateDestination` in
+	 * that it is unprintable (README.md → Remote HTTPS copy: "no userinfo");
+	 * enforced by `validateDestination` in
 	 * `server/modules/graphics-asset-library/remote-source.ts`, which answers
 	 * `remote-source-credentials-present` at the initial URL and again after every
 	 * redirect. Non-display is decided somewhere else and about different parts of
@@ -1395,7 +1393,7 @@ describe('the Graphics Asset Library Workspace', () => {
  * A Graphics Ingestion Operation is owned by one graphics author session and by
  * nothing more durable, so a session that lapses takes its operations with it —
  * reloading mints a new session and a new author, and the old operations are not
- * that author's. ADR-0003 records why that ownership is kept, and both halves of
+ * that author's. ADR-0010 records why that ownership is kept, and both halves of
  * the cost are asserted here: the Workspace states the rule *before* an upload
  * starts, and names the lapse rather than the status code when it happens.
  */
@@ -1542,7 +1540,7 @@ describe('the Library Workspace when its graphics author session decides ownersh
 	});
 
 	/**
-	 * ADR-0003's named residual case, at the exact moment it happens.
+	 * ADR-0010's named residual case, at the exact moment it happens.
 	 *
 	 * An operation paused overnight is reconnected from a durable pointer in
 	 * `localStorage` on the next visit. Until now that restore swallowed its own

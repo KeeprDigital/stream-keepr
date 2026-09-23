@@ -8,8 +8,8 @@ export default withNuxt(
 	antfu({
 		// A git worktree of this repository is a complete second copy of it. Left
 		// unignored, `eslint .` from the repository root lints every one of them and
-		// exhausts the heap — the parallel-round workflow in `docs/agents/` routinely
-		// creates several, so this is reached by following the repo's own docs (#212).
+		// exhausts the heap — agents routinely create several under
+		// `.claude/worktrees/` (#212).
 		// `worker-configuration.d.ts` is emitted by `wrangler types`; anything lint
 		// changes there is overwritten by the next generation (#239).
 		// `docs/superpowers/` is local skill output that lands untracked inside the

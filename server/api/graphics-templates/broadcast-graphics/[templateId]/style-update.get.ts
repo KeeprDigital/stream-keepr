@@ -17,7 +17,7 @@ import { graphicStyleUpdateReview } from '~~/shared/modules/graphic-style-sets';
  * — which is what makes renaming an entry, adding one, and editing one this template
  * never references all produce nothing to review.
  *
- * The session is session-scoping, not access control (ADR-0008, #206).
+ * The session is session-scoping, not access control (ADR-0010, #206).
  */
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);

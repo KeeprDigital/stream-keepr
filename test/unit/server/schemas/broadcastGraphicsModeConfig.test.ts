@@ -561,7 +561,7 @@ const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
  * the caps admit one.
  *
  * Six Graphic Items, counted from the reconstruction inventory reproduced in
- * `docs/adr/0007-broadcast-graphics-item-cap.md`: the split angular lower third
+ * `DECISIONS.md` (ADR-0007): the split angular lower third
  * is "two shape beds, two accent rules, two text items", which is the richest of
  * the four and the shape the Graphic Item cap is derived from. The others are a
  * full-width lower third of about six, a four-item slate, and a two-to-three item
@@ -938,7 +938,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(bytes).toBe(MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES);
 
 		// And the mode-configuration byte total refuses it. That the worst case is
-		// allowed not to fit is a decision with its own record: `docs/adr/0007-broadcast-graphics-item-cap.md`.
+		// allowed not to fit is a decision with its own record: `DECISIONS.md` (ADR-0007).
 		expect(modeConfigsMapSchema.safeParse({ 'broadcast-graphics': config }).success).toBe(false);
 		expect(bytes).toBeGreaterThan(MAX_MODE_CONFIGS_BYTES);
 	});
@@ -978,7 +978,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		// The cap is derived from what a show needs — 50 Broadcast Graphics at the six
 		// Graphic Items of the richest reconstruction in the fidelity prototype — and
 		// this is the check that the derivation is affordable rather than the
-		// derivation itself. See `docs/adr/0007-broadcast-graphics-item-cap.md`.
+		// derivation itself. See `DECISIONS.md` (ADR-0007).
 		//
 		// Pinned exactly rather than bracketed: a window wide enough to be comfortable
 		// is a window wide enough for a vocabulary change to move the figure without

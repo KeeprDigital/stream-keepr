@@ -465,9 +465,10 @@ describe('the notice a missing name produces', () => {
 		// The command itself rather than a mention of the filename. The document
 		// names the file a dozen times over — a check for that is satisfied by prose
 		// about the problem, which is exactly what the reader already has.
-		const doc = readFileSync(fileURLToPath(new URL('../../../docs/agents/parallel-rounds.md', import.meta.url)), 'utf8');
+		const doc = readFileSync(fileURLToPath(new URL('../../../README.md', import.meta.url)), 'utf8');
 
-		expect(notice).toContain('docs/agents/parallel-rounds.md');
+		expect(notice).toContain('README.md → Local configuration');
+		expect(doc).toContain('### Local configuration');
 		expect(doc).toContain('cp .env ');
 	});
 });
@@ -497,7 +498,7 @@ describe('the file this ticket deleted', () => {
 		// Read as commands rather than as prose. The document explains the two-file
 		// era in the past tense on purpose — what must not survive is a line an agent
 		// pastes into a shell, and that is what this reads.
-		const doc = readFileSync(join(root, 'docs/agents/parallel-rounds.md'), 'utf8');
+		const doc = readFileSync(join(root, 'README.md'), 'utf8');
 		const copySteps = [...doc.matchAll(/^cp .*$/gm)].map(match => match[0]);
 
 		expect(copySteps.length).toBeGreaterThan(0);

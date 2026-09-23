@@ -12,7 +12,7 @@ import { requireUserId } from '~~/server/utils/auth';
  * reads exactly like one authored here. Only `authored` tells them apart, and only
  * because what a caller may *do* with them differs.
  *
- * The session is session-scoping, not access control (ADR-0008). The document
+ * The session is session-scoping, not access control (ADR-0010). The document
  * embeds Graphic Asset identities, the same reach-around #206 named on the
  * Broadcast Graphic Template entry.
  */

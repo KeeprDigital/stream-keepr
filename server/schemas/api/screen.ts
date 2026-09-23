@@ -1432,7 +1432,7 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * richest reconstruction in the fidelity acceptance set** — every Broadcast
  * Graphic the Screen admits, authored at the richest shape that evidence
  * contains. The inventory those six are counted from is reproduced in
- * `docs/adr/0007-broadcast-graphics-item-cap.md`; the prototype document it was
+ * `DECISIONS.md` (ADR-0007); the prototype document it was
  * originally read off is no longer in the repository. A realistic Screen at this
  * cap measures 248,734 bytes, 47% of the shared budget.
  *
@@ -1451,7 +1451,7 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  *
  * The reasoning, the arithmetic that shows no narrowing reaches a fitting worst
  * case, what is given up, and what a later ticket should do instead of re-deriving
- * this number are all in **`docs/adr/0007-broadcast-graphics-item-cap.md`**. Read
+ * this number are all in **`DECISIONS.md` (ADR-0007)**. Read
  * that before moving this constant.
  *
  * Two notes that belong beside the code rather than in the record:

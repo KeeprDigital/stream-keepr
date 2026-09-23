@@ -231,7 +231,7 @@ export function localConfigurationBootNotice(missing: readonly LocallyRequiredNu
 		+ 'A fresh git worktree is the usual way to arrive here — .env is gitignored, so a new checkout '
 		+ 'inherits none of it from the one it was branched from, and a copied .env.example carries the names '
 		+ 'with empty values. Fix: copy .env in from the checkout you branched from, or fill in .env.example. '
-		+ 'See docs/agents/parallel-rounds.md.';
+		+ 'See README.md → Local configuration.';
 }
 
 /**

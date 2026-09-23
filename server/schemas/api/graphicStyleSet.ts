@@ -82,7 +82,7 @@ const paletteValueSchema = z.object({ color: cssColorSchema }).strict();
  * well; a Graphic Style Set does not, because a `.skstyle` carries no asset bytes
  * for one to resolve against on the far side of a transfer. This schema is where
  * that decision is enforced rather than merely documented — see
- * `docs/adr/0001-graphic-style-sets-reference-application-fonts.md`.
+ * `DECISIONS.md` (ADR-0001).
  */
 const typographyValueSchema = z.object({
 	font: z.object({

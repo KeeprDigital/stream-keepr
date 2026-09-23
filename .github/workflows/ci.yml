@@ -46,9 +46,8 @@ jobs:
       # job to save a third checkout + install per run.
       - run: pnpm lint
       - run: pnpm typecheck
-      # One runner, sequential tiers: this is the "one authoritative run on a
-      # quiet machine" that docs/agents/parallel-rounds.md requires for
-      # integration numbers. Realtime integration tests self-skip here — no
+      # One runner, sequential tiers: integration suites must never run
+      # concurrently (README § Testing). Realtime integration tests self-skip here — no
       # Ably key is configured in CI by decision; realtime coverage runs
       # locally (#189). The unit and nuxt tiers run with --coverage, so the
       # thresholds in vitest.shared.ts fail this step when coverage drops

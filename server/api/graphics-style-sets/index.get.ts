@@ -11,7 +11,7 @@ import { requireUserId } from '~~/server/utils/auth';
  *
  * The session is asked for as authentication and never consulted again —
  * session-scoping like every sibling author-facing route, not access control
- * (ADR-0008, #206).
+ * (ADR-0010, #206).
  */
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);
