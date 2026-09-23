@@ -301,6 +301,21 @@ describe('the built Worker smoke runner', () => {
 		expect(suites.filter(suite => !(suite in GATES))).toEqual([]);
 	});
 
+	it('runs every suite `pnpm test` runs as a CI step', async () => {
+		// CI splits the suites across parallel jobs rather than calling `pnpm test`,
+		// so a suite added there must be added to ci.yml too.
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+		const steps = new Set([...ci.matchAll(/run: pnpm (\S+)/gu)].map(match => match[1]));
+		const suites = packageJson.scripts.test!.split('&&').map(step => step.trim().replace(/^pnpm /u, ''));
+
+		expect(suites.length).toBeGreaterThan(4);
+		expect(suites.filter(suite => !steps.has(suite))).toEqual([]);
+	});
+
 	/**
 	 * #519: the launchers are the only place the bypass is named, so the launchers
 	 * are what this has to read.

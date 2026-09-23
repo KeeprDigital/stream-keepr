@@ -33,6 +33,7 @@
 		"db:migrations:list:remote": "wrangler d1 migrations list DB --remote --config .output/server/wrangler.json",
 		"db:migrate:remote": "wrangler d1 migrations apply DB --remote --config .output/server/wrangler.json",
 		"test": "pnpm test:unit:coverage && pnpm test:nuxt:coverage && pnpm test:local-auth:run && pnpm test:integration:run && pnpm test:browser:still-images && pnpm test:browser:silent-video && pnpm test:browser:fonts && pnpm test:browser:animation-effects",
+		"test:changed": "vitest run --changed origin/main --passWithNoTests && vitest run --config vitest.nuxt.config.ts --changed origin/main --passWithNoTests",
 		"test:unit": "vitest",
 		"test:unit:run": "vitest run",
 		"test:unit:coverage": "vitest run --coverage",

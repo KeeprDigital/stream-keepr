@@ -142,6 +142,7 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | ------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth:run` | Watch mode; append `:run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                         |
 | Before commit                               | `pnpm test`                                                                             | Unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. Needs Chrome/Chromium.                   |
+| Tests your branch touches                   | `pnpm test:changed`                                                                     | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                     |
 | Quick check while developing                | `pnpm verify:quick`                                                                     | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                  |
 | Before push                                 | `pnpm verify`                                                                           | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.         |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                     | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build. |
@@ -175,7 +176,8 @@ How `pnpm verify` runs:
   their own build directory. Keep it that way when adding a gate.
 
 CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs,
-split across two jobs. It skips draft PRs (marking one ready runs it), PRs that
+split across parallel jobs (checks, two integration shards, local-auth and
+browser gates, Worker build) so the longest job sets the wall time. It skips draft PRs (marking one ready runs it), PRs that
 change only docs or other workflows, and the Worker build when only tests or
 docs changed; it does not re-run on merge, and a newer push cancels the older
 run. `pnpm verify` is the gate before that.
