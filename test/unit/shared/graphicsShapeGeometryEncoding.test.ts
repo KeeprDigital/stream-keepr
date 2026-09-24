@@ -54,9 +54,16 @@ function shapeGeometryDeclarations(): string[] {
 	const found: string[] = [];
 
 	for (const filename of SCANNED_ROOTS.flatMap(sourceFiles)) {
+		const text = readFileSync(filename, 'utf8');
+		// A match needs a member named with "slant", so a file never saying it
+		// cannot hold one. Skipping it before the full parse keeps this scan cheap
+		// enough to stay inside its timeout while `pnpm verify` builds beside it.
+		if (!/slant/i.test(text))
+			continue;
+
 		const sourceFile = ts.createSourceFile(
 			filename,
-			readFileSync(filename, 'utf8'),
+			text,
 			ts.ScriptTarget.Latest,
 			true,
 			ts.ScriptKind.TS,
