@@ -1,8 +1,7 @@
-import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { DbBroadcastGraphicTemplate } from '~~/server/db/schema';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { asc, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { broadcastGraphicTemplates } from '~~/server/db/schema';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 

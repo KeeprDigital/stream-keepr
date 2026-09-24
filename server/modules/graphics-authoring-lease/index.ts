@@ -6,7 +6,7 @@ import type {
 	GraphicsAuthoringLeaseState,
 } from '~~/shared/modules/graphics-authoring-lease';
 import { and, eq, lte, or } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { graphicsAuthoringLeases } from '~~/server/db/schema';
 import { sessionHolderName } from '~~/server/utils/actorNames';
 import {

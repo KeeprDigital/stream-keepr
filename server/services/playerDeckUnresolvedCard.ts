@@ -1,7 +1,7 @@
 import type { DbPlayerDeckUnresolvedCard, DeckListCompartment } from '~~/server/db/schema';
 import type { UnresolvedDeckEntryType } from '~~/shared/types/enums';
 import { and, asc, eq, getTableColumns } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypes, phases, playerDecks, playerDeckUnresolvedCards, players } from '~~/server/db/schema';
 import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
 

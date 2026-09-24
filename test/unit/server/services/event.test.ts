@@ -9,7 +9,7 @@ const buildClearImportedMatchDataQueries = vi.fn().mockResolvedValue({
 });
 const protectMeleeClientSecret = vi.fn(async (secret: string) => `encrypted:${secret}`);
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	eventCardNameOverrides: { eventId: 'eventCardNameOverrides.eventId' },
 	events: {

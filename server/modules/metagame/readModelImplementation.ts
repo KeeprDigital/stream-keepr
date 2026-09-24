@@ -20,7 +20,7 @@ import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypeCards, archetypes, cards, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
 import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
 import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype, isConvertedPlayer, limitArchetypeBreakdownEntries } from '~~/server/modules/metagame/archetypes';

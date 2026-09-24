@@ -58,10 +58,7 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
-// The Screen write module reaches the Card service, which binds the KV namespace at
-// import time. Nothing here deletes a Screen, which is the only path that uses it.
-vi.doMock('hub:kv', () => ({ kv: { get: async () => null, set: async () => {}, del: async () => {} } }));
+vi.doMock('~~/server/db', () => ({ db }));
 
 /** Every realtime message the writes under test published, in order. */
 const published: Array<{ channel: number; name: string; payload: unknown }> = [];

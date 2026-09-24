@@ -19,7 +19,7 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { playerDeckService } = await import('~~/server/services/playerDeck');
 const { playerDeckCardService } = await import('~~/server/services/playerDeckCard');

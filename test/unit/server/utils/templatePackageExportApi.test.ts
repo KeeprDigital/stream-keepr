@@ -9,7 +9,7 @@ const { mockSetResponseHeader, mockSetResponseHeaders } = vi.hoisted(() => ({
 	mockSetResponseHeaders: vi.fn(),
 }));
 
-// The module reaches the library runtime for its two exporters, which reach `hub:db`.
+// The module reaches the library runtime for its two exporters, which reach `~~/server/db`.
 // Nothing here exercises those; the HTTP boundary below is called directly.
 vi.mock('~~/server/modules/graphics-asset-library/runtime', () => ({
 	graphicsAssetLibraryForEvent: () => ({ exportTemplatePackage: vi.fn() }),

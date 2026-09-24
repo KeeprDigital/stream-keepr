@@ -1,6 +1,6 @@
 import type { DbCard, DbEventCardNameOverride } from '~~/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { cards, eventCardNameOverrides } from '~~/server/db/schema';
 
 export interface EventCardNameOverrideResolved extends DbEventCardNameOverride {

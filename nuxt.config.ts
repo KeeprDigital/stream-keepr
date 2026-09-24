@@ -25,8 +25,6 @@ const supportedSocialNetworkIcons = SUPPORTED_SOCIAL_NETWORKS.map(network =>
 	network.icon.replace('i-simple-icons-', 'simple-icons:'),
 );
 
-const databaseId = '26830437-975a-4378-a135-acfc01ea89ae';
-const kvNamespaceId = 'a15cf281b12d43e4b5479baf8b69b587';
 const workerName = 'stream';
 
 export default defineNuxtConfig({
@@ -34,8 +32,8 @@ export default defineNuxtConfig({
 
 	// Nothing but `nuxt prepare` may rewrite `.nuxt` while other gates run:
 	// the root tsconfig extends it, so every Vite and TypeScript consumer reads it.
-	// An integration server keeps its build and NuxtHub directories inside its own
-	// Wrangler state, so the suite can run several servers from one checkout
+	// An integration server keeps its build directory inside its own Wrangler
+	// state, so the suite can run several servers from one checkout
 	// (`test/integration/state.ts`); `pnpm verify` builds into a directory of its
 	// own (`scripts/verify.mjs`).
 	...(isIntegration
@@ -59,7 +57,6 @@ export default defineNuxtConfig({
 		// longer needs to be: it populated the environment later modules read their
 		// runtimeConfig from until #412 deleted the file it read.
 		localConfigurationModule,
-		'@nuxthub/core',
 		'@nuxt/eslint',
 		'@nuxt/fonts',
 		'@nuxt/ui',
@@ -90,21 +87,6 @@ export default defineNuxtConfig({
 	css: [
 		'~/assets/css/main.css',
 	],
-
-	hub: {
-		...(isIntegration ? { dir: `${integrationWranglerPersistDir}/hub` } : {}),
-		db: {
-			dialect: 'sqlite',
-			driver: 'd1',
-			connection: {
-				databaseId,
-			},
-		},
-		kv: {
-			driver: 'cloudflare-kv-binding',
-			namespaceId: kvNamespaceId,
-		},
-	},
 
 	eslint: {
 		config: {
@@ -212,6 +194,14 @@ export default defineNuxtConfig({
 						},
 					}
 				: {}),
+		},
+		// The KV binding, as `useStorage('kv')`. Every binding itself is declared in
+		// `wrangler.jsonc` (deploy) and `wrangler.dev.jsonc` (dev).
+		storage: {
+			kv: {
+				driver: 'cloudflare-kv-binding',
+				binding: 'KV',
+			},
 		},
 		cloudflare: {
 			deployConfig: true,

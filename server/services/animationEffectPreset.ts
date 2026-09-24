@@ -1,6 +1,6 @@
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import { asc, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { animationEffectPresets } from '~~/server/db/schema';
 
 export interface SaveAnimationEffectPreset {

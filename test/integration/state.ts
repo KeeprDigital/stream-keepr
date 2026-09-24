@@ -6,9 +6,8 @@ import process from 'node:process';
 export const INTEGRATION_MODE_ENV = 'STREAM_KEEPR_INTEGRATION';
 /**
  * Everything one integration server writes: its Wrangler state, and (through
- * `nuxt.config.ts`) its Nuxt build directory and NuxtHub directory. One directory
- * per server is what lets several run side by side from one checkout; sharing
- * `.nuxt` or `.data` races at boot.
+ * `nuxt.config.ts`) its Nuxt build directory. One directory per server is what
+ * lets several run side by side from one checkout; sharing `.nuxt` races at boot.
  */
 export const INTEGRATION_WRANGLER_PERSIST_DIR_ENV = 'STREAM_KEEPR_INTEGRATION_WRANGLER_PERSIST_DIR';
 export const DEFAULT_INTEGRATION_WRANGLER_PERSIST_DIR = '.wrangler/state/integration';

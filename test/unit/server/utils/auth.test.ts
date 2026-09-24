@@ -27,7 +27,7 @@ import { stubH3Event } from '~~/test/helpers/h3Event';
  * sentence nothing says.
  */
 
-vi.mock('hub:db', () => ({ db: {}, schema: {} }));
+vi.mock('~~/server/db', () => ({ db: {}, schema: {} }));
 
 const { mockGetCookie, mockSetCookie } = vi.hoisted(() => ({
 	mockGetCookie: vi.fn(),

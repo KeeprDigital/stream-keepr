@@ -7,7 +7,7 @@ import type {
 	ScreenGraphicAssetReference,
 } from '~~/shared/utils/graphicsAssetReferences';
 import { and, eq, like } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import { StateConflictError } from '~~/server/utils/errors';

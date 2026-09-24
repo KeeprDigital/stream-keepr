@@ -3,7 +3,7 @@ import type { DbFeatureMatch, DbMatch } from '~~/server/db/schema';
 import type { CreateMatchInput, PlayerSlotData, UpdateMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { featureMatches, matches, rounds } from '~~/server/db/schema';
 import { chunkJsonRows } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';

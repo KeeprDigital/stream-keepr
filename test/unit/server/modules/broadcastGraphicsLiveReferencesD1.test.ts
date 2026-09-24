@@ -42,14 +42,14 @@ import { createMiniflareD1Harness } from '~~/test/helpers/miniflare-d1';
  * first a distinction rather than a description of a database that never fails.
  */
 
-// Built before the module under test is imported, because that module binds
-// `hub:db` at import time and the binding has to be this harness's D1.
+// Built before the module under test is imported, because `~~/server/db` is
+// mocked with a client over this harness's D1 before that module loads.
 const harness: MiniflareD1Harness = await createMiniflareD1Harness();
 const db = drizzle(harness.database, { schema });
 
 afterAll(async () => await harness.dispose());
 
-vi.doMock('hub:db', () => ({ db: { $client: harness.database } }));
+vi.doMock('~~/server/db', () => ({ db: { $client: harness.database } }));
 
 const { updateBroadcastGraphicsLiveSessionGraphicAssetReferences } = await import(
 	'~~/server/modules/screen-graphic-asset-references',

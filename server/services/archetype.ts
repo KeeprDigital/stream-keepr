@@ -1,7 +1,7 @@
 import type { DbArchetype } from '~~/server/db/schema';
 import type { CreateArchetypeInput, UpdateArchetypeInput } from '~~/shared/api';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypes } from '~~/server/db/schema';
 import { chunkArray, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
 

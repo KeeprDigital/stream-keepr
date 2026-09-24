@@ -5,7 +5,7 @@ import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';

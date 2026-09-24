@@ -132,7 +132,7 @@ mockNuxtImport('useServerTime', () => () => ({
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 // The Graphics Asset Library is injected by the route and reached only by a command
 // naming media. Nothing here names any, so this stands in for the binding rather than
 // for any behaviour.

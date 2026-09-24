@@ -24,7 +24,7 @@ const mockWhere = vi.fn();
 /** The holder lookup, which joins the session table before it filters. */
 const mockJoinedWhere = vi.fn();
 
-vi.mock('hub:db', () => ({
+vi.mock('~~/server/db', () => ({
 	db: {
 		select: () => ({
 			from: () => ({

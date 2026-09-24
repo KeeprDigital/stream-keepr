@@ -18,12 +18,11 @@ export default defineVitestConfig({
 		environmentOptions: {
 			nuxt: {
 				domEnvironment: 'happy-dom',
-				// Its own build and NuxtHub directories: the config-time Nuxt build
-				// rewrites both, and in `.nuxt` and `.data` it would race `nuxt
-				// prepare`, lint and typecheck when `pnpm verify` runs them side by side.
+				// Its own build directory: the config-time Nuxt build rewrites it, and
+				// in `.nuxt` it would race `nuxt prepare`, lint and typecheck when
+				// `pnpm verify` runs them side by side.
 				overrides: {
 					buildDir: 'node_modules/.cache/nuxt-vitest',
-					hub: { dir: 'node_modules/.cache/nuxt-vitest-hub' },
 				},
 			},
 		},

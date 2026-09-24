@@ -9,7 +9,7 @@ import type {
 } from '~~/server/db/schema';
 import type { MtgPlayerGameData } from '~~/shared/types/game';
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import {
 	archetypes,
 	phases,

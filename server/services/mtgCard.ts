@@ -1,6 +1,6 @@
 import type { DbCard, DbCardInsert } from '~~/server/db/schema';
 import { sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { cards } from '~~/server/db/schema';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 

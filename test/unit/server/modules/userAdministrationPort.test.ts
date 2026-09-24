@@ -7,7 +7,7 @@ import { authStaticOptions } from '~~/server/utils/authOptions';
 // The port module imports `serverAuth`, which reaches the database binding at
 // module scope. Every test here passes its own instance in, so the stub only has
 // to exist.
-vi.mock('hub:db', () => ({ db: {}, schema: {} }));
+vi.mock('~~/server/db', () => ({ db: {}, schema: {} }));
 vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 	Object.assign(new Error(input.message), input));
 

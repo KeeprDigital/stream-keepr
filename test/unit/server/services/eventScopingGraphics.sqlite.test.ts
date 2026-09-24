@@ -25,10 +25,7 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
-// The Card service binds the KV display cache at import time; nothing here
-// should reach it, and the durable Screen row is the authority under test.
-vi.doMock('hub:kv', () => ({ kv: { get: async () => null, set: async () => {}, del: async () => {} } }));
+vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/utils/ably', () => ({
 	publishMessage: async () => {},
 	publishMessageStrict: async () => {},

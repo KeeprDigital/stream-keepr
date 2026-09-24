@@ -1,6 +1,6 @@
 import type { DbPlayerRoundStandings } from '~~/server/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { playerRoundStandings } from '~~/server/db/schema';
 
 export interface RoundStandingInput {

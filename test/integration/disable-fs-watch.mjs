@@ -4,12 +4,9 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import process from 'node:process';
 
-// These integration-only warnings happen during Nuxt test server boot before
-// Cloudflare dev bindings settle, or when Nuxt starts an internal websocket
+// This integration-only warning happens when Nuxt starts an internal websocket
 // probe twice. The assertions still exercise the real D1-backed API paths.
 const ignoredIntegrationWarningPatterns = [
-	'[nuxt:hub] Failed to create migrations table',
-	'[nuxt-hub] DB binding not found',
 	'WebSocket server error: Port 24678 is already in use',
 ];
 

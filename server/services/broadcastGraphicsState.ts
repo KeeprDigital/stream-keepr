@@ -8,7 +8,7 @@ import type {
 	BroadcastGraphicsCommandResult,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { broadcastGraphicsLiveSessions, screens } from '~~/server/db/schema';
 import {
 	broadcastGraphicsCommandAppliedPayload,

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 
 // createError is auto-imported in Nitro
 vi.stubGlobal('createError', (opts: any) => {

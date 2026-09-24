@@ -2,7 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import type { BoardSelection, MetagameScope } from '~~/shared/types/enums';
 import type { PlayerScope } from './scope';
 import { and, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypes, playerDecks, players } from '~~/server/db/schema';
 import { countScopedPlayers, getPlayerScope, playerScopeWhere } from './scope';
 

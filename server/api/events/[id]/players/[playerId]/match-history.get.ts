@@ -1,5 +1,5 @@
 import { and, asc, eq, or } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypes, matches, phases, players, rounds } from '~~/server/db/schema';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
 import { playerParamsSchema } from '~~/server/schemas/api/player';

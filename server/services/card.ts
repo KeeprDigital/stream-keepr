@@ -1,9 +1,15 @@
 import type { CardInput, StoredCardData } from '~~/server/schemas/kv/card';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
-import { kv } from 'hub:kv';
+import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { storedCardSchema } from '~~/server/schemas/kv/card';
+
+/**
+ * Where a Card Screen's derived copy of its card lives: the KV binding Nitro
+ * mounts at `kv` (`nuxt.config.ts`). Resolved per call, because storage is a
+ * Nitro runtime global.
+ */
+const kvStorage = () => useStorage('kv');
 
 export function cardService() {
 	const getScreenCardKey = (eventId: number, screenId: number) => `event:${eventId}:screen:${screenId}:card`;
@@ -56,7 +62,7 @@ export function cardService() {
 
 		const validated = storedCardSchema.parse(data);
 		await writeAuthoritativeCard(eventId, screenId, validated);
-		await bestEffort(eventId, screenId, 'kv_set', async () => await kv.set(getScreenCardKey(eventId, screenId), validated));
+		await bestEffort(eventId, screenId, 'kv_set', async () => await kvStorage().set(getScreenCardKey(eventId, screenId), validated));
 
 		// Set up Ably-based timeout if card has timeout data
 		if (cardData.timeoutData) {
@@ -110,7 +116,7 @@ export function cardService() {
 					eventId,
 					screenId,
 					'kv_expired_delete',
-					async () => await kv.del(getScreenCardKey(eventId, screenId)),
+					async () => await kvStorage().del(getScreenCardKey(eventId, screenId)),
 				);
 			}
 			return null;
@@ -127,7 +133,7 @@ export function cardService() {
 		const timeoutService = cardTimeoutService();
 		await bestEffort(eventId, screenId, 'timeout_clear', async () => await timeoutService.clearCardTimeout(eventId, screenId, originConnectionId));
 
-		await bestEffort(eventId, screenId, 'kv_delete', async () => await kv.del(getScreenCardKey(eventId, screenId)));
+		await bestEffort(eventId, screenId, 'kv_delete', async () => await kvStorage().del(getScreenCardKey(eventId, screenId)));
 	};
 
 	/** Clean derived artifacts after a Screen/Event row has already been deleted. */
@@ -136,7 +142,7 @@ export function cardService() {
 		const timeoutService = cardTimeoutService();
 		await Promise.all([
 			bestEffort(eventId, screenId, 'timeout_cleanup', async () => await timeoutService.clearCardTimeout(eventId, screenId, originConnectionId)),
-			bestEffort(eventId, screenId, 'kv_cleanup', async () => await kv.del(getScreenCardKey(eventId, screenId))),
+			bestEffort(eventId, screenId, 'kv_cleanup', async () => await kvStorage().del(getScreenCardKey(eventId, screenId))),
 		]);
 	};
 

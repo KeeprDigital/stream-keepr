@@ -392,7 +392,7 @@ describe('the Screen-command route\'s own refusals', () => {
 		// A module the scan could not reach is a hole in the exhaustiveness guarantee
 		// that nothing else reports, so it fails here rather than being a caveat in a
 		// comment. Third-party and virtual specifiers are excluded by design: a refusal
-		// from `h3` or `hub:db` is not one this repository can list or rename.
+		// from `h3` or `drizzle-orm` is not one this repository can list or rename.
 		expect(scan.unfollowedImports).toEqual([]);
 	});
 
@@ -749,18 +749,18 @@ describe('the scan\'s reach through a route\'s imports', () => {
 	});
 
 	it('says nothing about a third-party or virtual specifier, which is not the route\'s code', () => {
-		// A refusal raised inside `h3` or `hub:db` is not one this repository can list or
+		// A refusal raised inside `h3` or `ofetch` is not one this repository can list or
 		// rename, so these are excluded by design rather than reported as holes. `#imports`
 		// is Nuxt's virtual module and belongs with them, not with the real aliases.
 		//
 		// #292: these three are *named in the same `paths` map* the aliases are now read
-		// from, so lifting that map wholesale would have made `h3` and `hub:db`
+		// from, so lifting that map wholesale would have made `h3` and `ofetch`
 		// first-party and walked the scan into `node_modules`. They are excluded by
 		// where their target resolves to, not by a list of names.
 		const entry = join(root, 'third-party.ts');
 		writeFileSync(entry, [
 			'import { createError } from \'h3\';',
-			'import { db } from \'hub:db\';',
+			'import { ofetch } from \'ofetch\';',
 			'import { useRuntimeConfig } from \'#imports\';',
 		].join('\n'));
 
@@ -778,7 +778,7 @@ describe('the scan\'s reach through a route\'s imports', () => {
  * the source of truth for what this repository's own aliases are.
  *
  * It is also a trap, which is why these pin both directions: the same map names `h3`,
- * `ofetch`, `nitropack`, `hub:kv` and Nuxt's own virtual modules, so a map lifted
+ * `ofetch`, `nitropack` and Nuxt's own virtual modules, so a map lifted
  * wholesale would have destroyed the deliberate `node_modules` exclusion and sent the
  * scan walking a dependency's refusals it can neither list nor rename.
  */
@@ -796,7 +796,7 @@ describe('the path aliases the scan follows', () => {
 		const prefixes = firstPartyPathAliases().map(alias => alias.prefix);
 
 		// Dependencies: following these is how the scan escapes into `node_modules`.
-		for (const dependency of ['h3', 'ofetch', 'nitropack', 'consola', 'hub:db', 'hub:kv', '#ui', '#app'])
+		for (const dependency of ['h3', 'ofetch', 'nitropack', 'consola', '#ui', '#app'])
 			expect(prefixes).not.toContain(dependency);
 		// Nuxt's own generated virtual modules, which are not this repository's code
 		// either — and which live under `.nuxt/`, inside the repository, so the rule

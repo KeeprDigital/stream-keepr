@@ -54,7 +54,7 @@ const d1Client = {
 };
 
 Reflect.set(sqliteDb, '$client', d1Client);
-vi.doMock('hub:db', () => ({ db: sqliteDb }));
+vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
 
 const { graphicStyleSetService, GraphicStyleSetRevisionConflict } = await import('~~/server/services/graphicStyleSet');
 

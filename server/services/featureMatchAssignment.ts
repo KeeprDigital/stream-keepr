@@ -2,7 +2,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbFeatureMatchAssignment } from '~~/server/db/schema';
 import type { CreateFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInput } from '~~/shared/api';
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { featureMatchAssignments } from '~~/server/db/schema';
 import { selectForInsert } from '~~/server/utils/db';
 

@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3';
 import type { GraphicsObjectStoreHealth } from './object-store';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
 import { createGraphicsAssetLibrary } from '.';
 import { createD1GraphicsAssetCatalogue } from './catalogue';
@@ -21,7 +21,7 @@ import {
  * library is built.
  *
  * A missing binding and a failing query are the same thing to a caller — the
- * catalogue cannot answer — but they were not the same thing here. `hub:db`
+ * catalogue cannot answer — but they were not the same thing here. `db`
  * throws from its `$client` getter, so an absent binding failed while the
  * library was still being assembled: before the guards that turn a catalogue
  * failure into the settled retryable outcome, and so outside every route's

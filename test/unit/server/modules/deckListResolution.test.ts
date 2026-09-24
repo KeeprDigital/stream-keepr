@@ -20,7 +20,7 @@ const mockFetchScryfallCardById = vi.fn();
 
 class MockDeckCompanionValidationError extends Error {}
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/modules/melee-sync/eventData', () => ({
 	requireMeleeSyncEventData: mockRequireMeleeSyncEventData,
 }));

@@ -1,7 +1,7 @@
 import type { DbCard, DbPlayerDeckCompanionInsert } from '~~/server/db/schema';
 import type { DeckCompanion } from '~~/shared/types/deckCompanion';
 import { and, eq } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { cards, playerDeckCards, playerDeckCompanions } from '~~/server/db/schema';
 
 const MAX_MTG_SIDEBOARD_SIZE = 15;

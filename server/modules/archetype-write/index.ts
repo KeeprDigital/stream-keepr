@@ -1,7 +1,7 @@
 import type { SetArchetypeKeyCardsInput } from '~~/server/schemas/api/archetype';
 import type { CreateArchetypeInput, UpdateArchetypeInput } from '~~/shared/api';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { cards, events } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { playerUpdateModule } from '~~/server/modules/player-update';

@@ -1,7 +1,7 @@
 import type { DbFeatureMatch, DbPlayer, DbPlayerDeck } from '~~/server/db/schema';
 import type { PlayerSlotData } from '~~/shared/api';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypes, featureMatches, matches, phases, playerDecks, players, rounds } from '~~/server/db/schema';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';

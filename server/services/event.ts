@@ -2,7 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import type { DbEvent, DbEventInsert, DbEventTalent } from '~~/server/db/schema';
 import type { CreateEventInput, MeleeConfigInput, UpdateEventInput } from '~~/shared/api';
 import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { eventCardNameOverrides, events, eventTalents, matches, phases, players, screens } from '~~/server/db/schema';
 import { buildClearImportedMatchDataQueries } from '~~/server/services/featureMatch';
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';

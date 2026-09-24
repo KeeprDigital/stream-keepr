@@ -26,7 +26,7 @@ const mockPlayerFeatureMatchSyncService = {
 const mockBatch = vi.fn();
 const mockPublishMessage = vi.fn();
 
-vi.mock('hub:db', () => ({
+vi.mock('~~/server/db', () => ({
 	db: { batch: (...args: unknown[]) => mockBatch(...args) },
 }));
 vi.mock('~~/server/services/match', () => ({

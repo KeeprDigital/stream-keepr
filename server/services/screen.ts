@@ -4,7 +4,7 @@ import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/scr
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, ne } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import {
 	deleteScreenWithGraphicAssetReferences,

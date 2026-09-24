@@ -16,7 +16,7 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
 // The API boundary imports the asking user for its actor resolution, which builds the
-// Better Auth instance over `hub:db` — a binding no unit run has. Nothing here asks it
+// Better Auth instance over `~~/server/db` — a binding no unit run has. Nothing here asks it
 // anything.
 vi.mock('~~/server/utils/auth', () => ({
 	optionalUserId: vi.fn(),

@@ -2,18 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
 
 /**
- * `hub:db` throws from its `$client` getter when the D1 binding is absent —
+ * `db` throws from its `$client` getter when the D1 binding is absent —
  * the shape a removed binding takes in a deployed Worker, and the one a failing
  * query does not.
  */
 let bindingPresent = true;
 const query = vi.fn();
 
-vi.mock('hub:db', () => ({
+vi.mock('~~/server/db', () => ({
 	db: {
 		get $client() {
 			if (!bindingPresent)
-				throw new Error('[nuxt-hub] DB binding not found');
+				throw new Error('DB binding not found');
 			return { prepare: query, batch: query };
 		},
 	},

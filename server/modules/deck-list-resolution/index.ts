@@ -2,7 +2,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import type { H3Event } from 'h3';
 import type { DbPlayerDeckUnresolvedCard, DeckListCompartment } from '~~/server/db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import {
 	cards,
 	eventCardNameOverrides,

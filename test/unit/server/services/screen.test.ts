@@ -4,7 +4,7 @@ import { getChain, mockD1Client, mockDb, resetDbMocks } from '~~/test/helpers/db
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetId, testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	screens: {
 		id: 'screens.id',

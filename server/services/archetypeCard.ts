@@ -1,6 +1,6 @@
 import type { DbCard } from '~~/server/db/schema';
 import { asc, eq, inArray } from 'drizzle-orm';
-import { db } from 'hub:db';
+import { db } from '~~/server/db';
 import { archetypeCards, cards } from '~~/server/db/schema';
 import { chunkArray, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
 

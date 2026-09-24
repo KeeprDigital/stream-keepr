@@ -35,7 +35,7 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-vi.doMock('hub:db', () => ({ db }));
+vi.doMock('~~/server/db', () => ({ db }));
 // Opening an epoch is not what this file is about, and it publishes.
 vi.doMock('~~/server/utils/ably', () => ({
 	publishMessage: async () => {},

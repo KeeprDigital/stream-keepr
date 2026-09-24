@@ -3,7 +3,7 @@ import { mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 
 // ── Mocks ──
 
-vi.mock('hub:db', () => ({ db: mockDb }));
+vi.mock('~~/server/db', () => ({ db: mockDb }));
 vi.mock('~~/server/db/schema', () => ({
 	players: {
 		id: 'players.id',

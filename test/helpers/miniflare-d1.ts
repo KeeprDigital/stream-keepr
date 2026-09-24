@@ -30,8 +30,8 @@ const wranglerConfigPath = fileURLToPath(
 /**
  * The deployed runtime's compatibility date, read from the real config so this
  * harness cannot drift into testing a different runtime than production runs.
- * NuxtHub injects the D1 binding itself at build time, so the binding is
- * declared here rather than read from that config.
+ * That config's D1 binding names the production database, so a local one is
+ * declared here rather than read from it.
  */
 function deployedCompatibility() {
 	const config = JSON.parse(
