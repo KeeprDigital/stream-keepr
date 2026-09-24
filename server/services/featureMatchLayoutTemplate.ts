@@ -1,4 +1,3 @@
-import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { DbFeatureMatchLayoutTemplate } from '~~/server/db/schema';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { asc, eq } from 'drizzle-orm';

@@ -1,4 +1,3 @@
-import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { DbBroadcastGraphicTemplate } from '~~/server/db/schema';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { asc, eq } from 'drizzle-orm';
