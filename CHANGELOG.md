@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/KeeprDigital/stream-keepr/compare/v1.3.0...v1.3.1) (2026-09-24)
+
+
+### Refactoring
+
+* **server:** remove NuxtHub; bindings in wrangler.jsonc, Drizzle over D1 directly ([#530](https://github.com/KeeprDigital/stream-keepr/issues/530)) ([e7f97af](https://github.com/KeeprDigital/stream-keepr/commit/e7f97af19f95698a2b2da7822d762e644d3e165f))
+
 ## [1.3.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.2.0...v1.3.0) (2026-09-23)
 
 
