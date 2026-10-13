@@ -101,6 +101,10 @@ export default defineNuxtConfig({
 		provider: process.env.NODE_ENV === 'test' ? 'none' : undefined,
 		clientBundle: {
 			icons: supportedSocialNetworkIcons,
+			// So the bundle holds every icon the app names. Without it, an unbundled
+			// icon's failure is logged asynchronously, and a log landing as a file
+			// closes fails the run under load (vitest-dev/vitest#11153).
+			scan: process.env.NODE_ENV === 'test',
 		},
 	},
 

@@ -348,7 +348,7 @@ describe('screenDeckDisplay', () => {
 		})];
 		companion.value = { name: 'Kaheera, the Orphanguard' };
 		deckStats.value = [{ type: 'Creatures', count: 0 }];
-		deckCounters.value = [{ key: 'energy', label: 'Energy', icon: 'i-lucide-zap' }];
+		deckCounters.value = [{ key: 'energy', label: 'Energy', icon: 'i-lucide-activity' }];
 		highlander.value = null;
 
 		const wrapper = await mountComponent();
