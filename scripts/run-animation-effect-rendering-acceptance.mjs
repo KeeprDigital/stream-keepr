@@ -12,10 +12,11 @@
  * The run bundles the application's own effect modules, mounts every catalogue
  * effect at its defaults and at named range extremes in unattended Chromium on
  * SwiftShader, and requires each one to compile, light a dark frame, and move
- * between two frames. Two controls hold the run honest: fog, which has rendered
- * on air since the first slice, and a planted broken shader that must fail all
- * three checks — because a proof whose checks have stopped biting passes
- * everything.
+ * between two frames. The one accumulating effect must also fade back to its
+ * background once nothing feeds it (#502). Two controls hold the run honest:
+ * fog, which has rendered on air since the first slice, and a planted broken
+ * shader that must fail all three checks — because a proof whose checks have
+ * stopped biting passes everything.
  *
  * Usage: node scripts/run-animation-effect-rendering-acceptance.mjs
  */
@@ -114,6 +115,7 @@ export async function main(argv = process.argv) {
 					backend: report.backend,
 					effects: (report.catalogue ?? []).length,
 					scenarios: (report.scenarios ?? []).length,
+					settles: (report.settles ?? []).length,
 				};
 			}
 			finally {

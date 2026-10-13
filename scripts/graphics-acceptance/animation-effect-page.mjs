@@ -24,6 +24,11 @@
  * - **changed pixels** — between two frames two seconds apart on the effect's own
  *   clock. A shader can compile and light the frame and still be frozen; this is
  *   the only check that notices.
+ *
+ * Accumulating effects are also measured settling: drawn, then switched to
+ * params that stop feeding them, then compared with a fresh mount that never
+ * had anything to fade. Trails left behind are the one failure a frame-by-frame
+ * check cannot see (#502).
  */
 
 import * as THREE from 'three';
@@ -35,10 +40,11 @@ import {
 	ANIMATION_EFFECT_PROOF_FRAME,
 	ANIMATION_EFFECT_PROOF_PIXELS,
 	animationEffectProofScenarios,
+	animationEffectSettleScenarios,
 } from './animation-effect-scenarios.mjs';
 
 const { width, height, seconds } = ANIMATION_EFFECT_PROOF_FRAME;
-const { litLuminance, darkLuminance, changedChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
+const { litLuminance, darkLuminance, changedChannel, residualChannel } = ANIMATION_EFFECT_PROOF_PIXELS;
 
 /**
  * Count every shader that would not compile and every program that would not
@@ -213,6 +219,121 @@ function measureScenario({ effect, scenario, frameRate, mount, compilation }) {
 	};
 }
 
+/**
+ * Mount, draw, capture, and tear down, surviving anything the effect throws.
+ * The capture is `undefined` when the effect died before it was taken.
+ */
+function drawOnStage(mount, draw) {
+	const stage = document.getElementById('stage');
+	let instance;
+	let captured;
+	try {
+		instance = mount(stage);
+		instance.resize(width, height);
+		captured = draw(instance, stage.querySelector('canvas'));
+	}
+	catch {
+		// An effect that died is measured as one that drew nothing.
+	}
+	finally {
+		try {
+			instance?.dispose();
+		}
+		catch {
+			// As in `measureScenario`: the stage is cleared below either way.
+		}
+		stage.replaceChildren();
+	}
+	return { mounted: instance !== undefined, captured };
+}
+
+/** Draw `instance` at `frameRate` from frame `from` up to and including frame `to`. */
+function stepFrames(instance, frameRate, from, to) {
+	for (let frame = from + 1; frame <= to; frame += 1)
+		instance.render(frame / frameRate);
+}
+
+/**
+ * Pixels where any channel of `settled` is at least `residualChannel` away from
+ * `reference`, and the largest channel difference anywhere.
+ */
+function countResidualPixels(settled, reference) {
+	let residual = 0;
+	let largest = 0;
+	for (let index = 0; index < settled.length; index += 4) {
+		const difference = Math.max(
+			Math.abs(settled[index] - reference[index]),
+			Math.abs(settled[index + 1] - reference[index + 1]),
+			Math.abs(settled[index + 2] - reference[index + 2]),
+		);
+		if (difference >= residualChannel)
+			residual += 1;
+		largest = Math.max(largest, difference);
+	}
+	return { residual, largest };
+}
+
+/** Pixels where any channel is at least `residualChannel` away from the first pixel's. */
+function countVariedPixels(frame) {
+	let varied = 0;
+	for (let index = 0; index < frame.length; index += 4) {
+		if (Math.abs(frame[index] - frame[0]) >= residualChannel
+			|| Math.abs(frame[index + 1] - frame[1]) >= residualChannel
+			|| Math.abs(frame[index + 2] - frame[2]) >= residualChannel) {
+			varied += 1;
+		}
+	}
+	return varied;
+}
+
+/**
+ * Prove an accumulating effect fades out completely.
+ *
+ * The effect is drawn at its defaults up to the last sampled time, so the
+ * buffer holds what the defaults scenario measured, then switched to params
+ * that stop feeding it and drawn on. The settled frame is compared with a
+ * fresh mount of those params drawn once — the same shader with nothing to
+ * fade — rather than with a background colour, so the comparison never has to
+ * know how the effect's colours reach the screen. That reference is counted
+ * too: it has to be one flat colour, or it is not the background it stands in
+ * for.
+ */
+function measureSettle({ effect, scenario, frameRate, defaults, params, durationSeconds, factory, compilation }) {
+	const mark = compilation.mark();
+	const drawnFrames = Math.round(seconds[seconds.length - 1] * frameRate);
+	const settledFrames = drawnFrames + Math.round(durationSeconds * frameRate);
+	const settledParams = { ...defaults, ...params };
+
+	const drawn = drawOnStage(stage => factory(stage, defaults), (instance, canvas) => {
+		stepFrames(instance, frameRate, 0, drawnFrames);
+		const lit = countFrame(captureFrame(canvas)).lit;
+		instance.setParams(settledParams);
+		stepFrames(instance, frameRate, drawnFrames, settledFrames);
+		return { lit, settled: captureFrame(canvas) };
+	});
+	const fresh = drawOnStage(stage => factory(stage, settledParams), (instance, canvas) => {
+		instance.render(1 / frameRate);
+		return captureFrame(canvas);
+	});
+
+	const compared = drawn.captured?.settled && fresh.captured
+		? countResidualPixels(drawn.captured.settled, fresh.captured)
+		: undefined;
+	return {
+		effect,
+		scenario,
+		mounted: drawn.mounted && fresh.mounted,
+		compileFailures: compilation.since(mark),
+		totalPixels: width * height,
+		litPixels: drawn.captured?.lit ?? 0,
+		// Nothing to compare is all residue: a settle that could not be measured
+		// has proven nothing faded.
+		residualPixels: compared?.residual ?? width * height,
+		largestResidualChannel: compared?.largest ?? 255,
+		referenceVariedPixels: fresh.captured ? countVariedPixels(fresh.captured) : width * height,
+	};
+}
+
 async function measureEverything() {
 	const compilation = countShaderFailures();
 	const scenarios = [];
@@ -224,6 +345,16 @@ async function measureEverything() {
 			scenario: scenario.scenario,
 			frameRate: scenario.frameRate,
 			mount: stage => factory(stage, params),
+			compilation,
+		}));
+	}
+
+	const settles = [];
+	for (const settle of animationEffectSettleScenarios()) {
+		settles.push(measureSettle({
+			...settle,
+			defaults: animationEffectDefaultParams(settle.effect),
+			factory: await loadAnimationEffect(settle.effect),
 			compilation,
 		}));
 	}
@@ -243,7 +374,7 @@ async function measureEverything() {
 		compilation,
 	});
 
-	return { catalogue: [...ANIMATION_EFFECT_VALUES], scenarios, control };
+	return { catalogue: [...ANIMATION_EFFECT_VALUES], scenarios, settles, control };
 }
 
 /**
@@ -263,7 +394,7 @@ function publish(report) {
 
 /** A run that reached no effects, in the shape Node judges every run in. */
 function nothingMeasured(backend, pageFailed) {
-	return { backend, pageFailed, catalogue: [], scenarios: [], control: { mounted: false } };
+	return { backend, pageFailed, catalogue: [], scenarios: [], settles: [], control: { mounted: false } };
 }
 
 async function run() {

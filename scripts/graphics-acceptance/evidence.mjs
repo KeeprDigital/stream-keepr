@@ -118,6 +118,10 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'animation-effect-frame-unlit',
 	'animation-effect-frame-washed-out',
 	'animation-effect-frame-static',
+	// An accumulating effect left its trails on screen after nothing was feeding
+	// them, or drew nothing for a settle to prove anything about (#502).
+	'animation-effect-trail-lingered',
+	'animation-effect-settle-unproven',
 	// The known-good effect failed, so read the block below it as evidence about
 	// the run — driver, flags, readback — before reading it as fifteen defects.
 	'animation-effect-known-good-control-failed',
