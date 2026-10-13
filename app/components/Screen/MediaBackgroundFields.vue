@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import type { ScreenMediaBackgroundConfig, ScreenMediaBackgroundFit } from '~~/shared/types/screenConfig';
+import type { ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import { DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
+import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
+/** The Feature Match Overlay Frame's video: its switch and URL, then the shared media fields. */
 const props = defineProps<{
 	media?: ScreenMediaBackgroundConfig;
 }>();
@@ -10,16 +13,14 @@ const emit = defineEmits<{
 	update: [updates: Partial<ScreenMediaBackgroundConfig>];
 }>();
 
-const FIT_OPTIONS: { label: string; value: ScreenMediaBackgroundFit }[] = [
-	{ label: 'Cover', value: 'cover' },
-	{ label: 'Contain', value: 'contain' },
-	{ label: 'Fill', value: 'fill' },
-];
-
 const media = computed<ScreenMediaBackgroundConfig>(() => ({
 	...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG,
 	...(props.media ?? {}),
 }));
+
+function updateMedia(patch: MediaFieldsPatch) {
+	emit('update', resolveMediaFieldsPatch(patch));
+}
 </script>
 
 <template>
@@ -30,8 +31,8 @@ const media = computed<ScreenMediaBackgroundConfig>(() => ({
 			@update:model-value="emit('update', { enabled: $event })"
 		/>
 
-		<div v-if="media.enabled" class="grid gap-3 md:grid-cols-2">
-			<UFormField label="Video URL" class="md:col-span-2">
+		<template v-if="media.enabled">
+			<UFormField label="Video URL">
 				<UInput
 					:model-value="media.url"
 					placeholder="https://.../background.mp4"
@@ -41,43 +42,12 @@ const media = computed<ScreenMediaBackgroundConfig>(() => ({
 				/>
 			</UFormField>
 
-			<UFormField label="Fit">
-				<USelect
-					:model-value="media.fit"
-					:items="FIT_OPTIONS"
-					value-key="value"
-					size="sm"
-					class="w-full"
-					@update:model-value="emit('update', { fit: $event as ScreenMediaBackgroundFit })"
-				/>
-			</UFormField>
-
-			<UFormField label="Opacity">
-				<UIOpacityInput
-					:model-value="media.opacity"
-					size="sm"
-					class="w-full"
-					@update:model-value="emit('update', { opacity: Number($event) })"
-				/>
-			</UFormField>
-
-			<UFormField label="Playback Speed">
-				<UInputNumber
-					:model-value="media.playbackRate"
-					:step="0.05"
-					:min="0.1"
-					:max="4"
-					size="sm"
-					class="w-full"
-					@update:model-value="emit('update', { playbackRate: Number($event) })"
-				/>
-			</UFormField>
-
-			<ScreenSettingsToggle
-				label="Loop"
-				:model-value="media.loop"
-				@update:model-value="emit('update', { loop: $event })"
+			<GraphicsMediaFields
+				:media="media"
+				opacity
+				playback
+				@update="updateMedia"
 			/>
-		</div>
+		</template>
 	</div>
 </template>

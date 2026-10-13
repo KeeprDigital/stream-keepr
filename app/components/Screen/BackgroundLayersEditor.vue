@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import type { BackgroundLayer, BackgroundLayerType, ScreenMediaBackgroundFit, ScreenMediaSource } from '~~/shared/types/screenConfig';
+import type { BackgroundLayer, BackgroundLayerType, ScreenMediaSource } from '~~/shared/types/screenConfig';
+import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import { BACKGROUND_LAYER_TYPE_VALUES } from '~~/shared/types/screenConfig';
 import { randomUuid } from '~~/shared/utils/uuid';
+import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
 /**
  * Edits one ordered Background Layer stack. The Background Screen's settings
@@ -29,12 +31,6 @@ const LAYER_TYPE_LABELS: Record<BackgroundLayerType, string> = {
 	video: 'Video',
 	animation: 'Animation',
 };
-
-const FIT_OPTIONS = [
-	{ label: 'Cover', value: 'cover' },
-	{ label: 'Contain', value: 'contain' },
-	{ label: 'Fill', value: 'fill' },
-] satisfies Array<{ label: string; value: ScreenMediaBackgroundFit }>;
 
 const SOURCE_KIND_OPTIONS = [
 	{ label: 'Asset library', value: 'asset' },
@@ -96,6 +92,11 @@ function patchLayer(id: string, updates: Partial<BackgroundLayer>) {
 	writeLayers(props.layers.map(layer =>
 		layer.id === id ? { ...layer, ...updates } as BackgroundLayer : layer,
 	));
+}
+
+/** A media layer's fit and playback; its opacity is the layer's own, edited above. */
+function patchLayerMedia(id: string, patch: MediaFieldsPatch) {
+	patchLayer(id, resolveMediaFieldsPatch(patch) as Partial<BackgroundLayer>);
 }
 
 function updateSource(layer: BackgroundLayer & { type: 'image' | 'video' }, source: ScreenMediaSource) {
@@ -216,7 +217,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 							:model-value="layer.opacity"
 							size="sm"
 							class="w-full"
-							@update:model-value="patchLayer(layer.id, { opacity: Number($event) })"
+							@update:model-value="patchLayer(layer.id, { opacity: $event ?? 1 })"
 						/>
 					</UFormField>
 				</div>
@@ -240,28 +241,16 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 				</UFormField>
 
 				<template v-if="layer.type === 'image' || layer.type === 'video'">
-					<div class="grid gap-3 sm:grid-cols-2">
-						<UFormField label="Source">
-							<USelect
-								:model-value="sourceKind(layer)"
-								:items="SOURCE_KIND_OPTIONS"
-								value-key="value"
-								size="sm"
-								class="w-full"
-								@update:model-value="selectSourceKind(layer, $event as 'asset' | 'url')"
-							/>
-						</UFormField>
-						<UFormField label="Fit">
-							<USelect
-								:model-value="layer.fit"
-								:items="FIT_OPTIONS"
-								value-key="value"
-								size="sm"
-								class="w-full"
-								@update:model-value="patchLayer(layer.id, { fit: $event as ScreenMediaBackgroundFit })"
-							/>
-						</UFormField>
-					</div>
+					<UFormField label="Source">
+						<USelect
+							:model-value="sourceKind(layer)"
+							:items="SOURCE_KIND_OPTIONS"
+							value-key="value"
+							size="sm"
+							class="w-full"
+							@update:model-value="selectSourceKind(layer, $event as 'asset' | 'url')"
+						/>
+					</UFormField>
 
 					<UFormField v-if="sourceKind(layer) === 'url'" label="Media URL">
 						<UInput
@@ -284,24 +273,11 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						/>
 					</UFormField>
 
-					<div v-if="layer.type === 'video'" class="grid gap-3 sm:grid-cols-2 sm:items-end">
-						<UFormField label="Playback rate">
-							<UInputNumber
-								:model-value="layer.playbackRate"
-								:step="0.05"
-								:min="0.1"
-								:max="16"
-								size="sm"
-								class="w-full"
-								@update:model-value="patchLayer(layer.id, { playbackRate: Number($event) })"
-							/>
-						</UFormField>
-						<ScreenSettingsToggle
-							label="Loop"
-							:model-value="layer.loop"
-							@update:model-value="patchLayer(layer.id, { loop: $event })"
-						/>
-					</div>
+					<GraphicsMediaFields
+						:media="layer"
+						:playback="layer.type === 'video'"
+						@update="patchLayerMedia(layer.id, $event)"
+					/>
 				</template>
 
 				<ScreenAnimationEffectFields

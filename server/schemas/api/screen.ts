@@ -46,7 +46,7 @@ import {
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
-	MEDIA_GRAPHIC_ITEM_FIT_VALUES,
+	MEDIA_FIT_VALUES,
 	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
 } from '~~/shared/types/graphicItem';
 import {
@@ -266,7 +266,7 @@ const screenMediaBackgroundConfigSchema = z.object({
 	enabled: z.boolean(),
 	type: z.literal('video'),
 	url: safeMediaUrlSchema,
-	fit: z.enum(['cover', 'contain', 'fill']),
+	fit: z.enum(MEDIA_FIT_VALUES),
 	opacity: opacitySchema,
 	playbackRate: finiteNumberSchema.positive().min(0.1).max(16),
 	loop: z.boolean(),
@@ -313,13 +313,13 @@ const backgroundLayerSchema = z.discriminatedUnion('type', [
 		...backgroundLayerShape,
 		type: z.literal('image'),
 		source: screenMediaSourceSchema,
-		fit: z.enum(['cover', 'contain', 'fill']),
+		fit: z.enum(MEDIA_FIT_VALUES),
 	}).strict(),
 	z.object({
 		...backgroundLayerShape,
 		type: z.literal('video'),
 		source: screenMediaSourceSchema,
-		fit: z.enum(['cover', 'contain', 'fill']),
+		fit: z.enum(MEDIA_FIT_VALUES),
 		playbackRate: finiteNumberSchema.positive().min(0.1).max(16),
 		loop: z.boolean(),
 	}).strict(),
@@ -587,7 +587,7 @@ const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchem
 	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
 	backgroundImage: graphicAssetReferenceSchema.optional(),
-	backgroundImageFit: z.enum(['cover', 'contain', 'fill']).optional(),
+	backgroundImageFit: z.enum(MEDIA_FIT_VALUES).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
 	gradient: z.string().max(1000).optional(),
 	// The stored-payload wrapper rather than the plain config schema: every
@@ -1076,7 +1076,7 @@ const graphicStyleSetIdSchema = graphicStyleIdSchema;
  * partial of exactly the same thing the Media Graphic Item stores.
  */
 const graphicMediaTreatmentPropertiesSchema = z.object({
-	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	fit: z.enum(MEDIA_FIT_VALUES),
 	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
 	opacity: opacitySchema,
 	clipGeometry: graphicShapeGeometrySchema.optional(),
@@ -1225,7 +1225,7 @@ const mediaGraphicItemShape = {
 	type: z.literal('media'),
 	asset: graphicAssetReferenceSchema.optional(),
 	mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
-	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	fit: z.enum(MEDIA_FIT_VALUES),
 	focalPosition: z.object({
 		horizontal: opacitySchema,
 		vertical: opacitySchema,

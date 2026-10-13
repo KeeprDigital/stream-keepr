@@ -388,6 +388,30 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(fieldNamed(wrapper, 'Fixed distance (px)').get<HTMLInputElement>('input').element.value).toBe('120');
 	});
 
+	it('edits a media treatment preset with the same media fields a Media Graphic Item has', async () => {
+		const treatment: GraphicStyleSetEntry = {
+			id: 'hero-media',
+			kind: 'media-treatment',
+			name: 'Hero media',
+			schemaVersion: 1,
+			value: { fit: 'contain', focalPosition: { horizontal: 0.5, vertical: 0.5 }, opacity: 0.6, playbackRate: 2, loop: false },
+		};
+		const wrapper = await mountEditor(treatment);
+
+		const fit = wrapper.get('[data-testid="media-fit"]');
+		expect(fit.findAll('option').map(option => option.text())).toEqual(['Cover', 'Contain', 'Fill']);
+		await fit.setValue('fill');
+		expect(emittedValue(wrapper)).toEqual({ ...treatment.value, fit: 'fill' });
+
+		// A cleared opacity or playback rate goes back to its default rather than to zero.
+		const number = (testId: string) => wrapper.findAllComponents({ name: 'UInputNumber' })
+			.find(input => input.attributes('data-testid') === testId)!;
+		number('media-opacity').vm.$emit('update:modelValue', null);
+		expect(emittedValue(wrapper).opacity).toBe(1);
+		number('media-playback-rate').vm.$emit('update:modelValue', null);
+		expect(emittedValue(wrapper).playbackRate).toBe(1);
+	});
+
 	it('gives an observer every preset to read and none to write', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY, { writable: false });
 

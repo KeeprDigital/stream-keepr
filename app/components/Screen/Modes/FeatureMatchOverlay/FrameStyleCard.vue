@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AnimationEffectName, AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
+import type { MediaFit } from '~~/shared/types/graphicItem';
 import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
 import {
 	ANIMATION_EFFECT_CATALOGUE,
@@ -8,6 +9,7 @@ import {
 } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
+import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
@@ -18,11 +20,6 @@ const props = defineProps<{
 	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
 }>();
 
-const BACKGROUND_IMAGE_FIT_OPTIONS = [
-	{ label: 'Cover', value: 'cover' },
-	{ label: 'Contain', value: 'contain' },
-	{ label: 'Fill', value: 'fill' },
-] satisfies Array<{ label: string; value: NonNullable<FeatureMatchLayoutFrameConfig['backgroundImageFit']> }>;
 /**
  * A pre-rebuild or unknown-effect config starts the editor over from the
  * defaults rather than carrying fields no effect declares into its next write.
@@ -110,11 +107,11 @@ function animationSummary() {
 						<UFormField label="Image fit">
 							<USelect
 								:model-value="config.layout.frame.backgroundImageFit"
-								:items="BACKGROUND_IMAGE_FIT_OPTIONS"
+								:items="MEDIA_FIT_OPTIONS"
 								value-key="value"
 								size="sm"
 								class="w-full"
-								@update:model-value="updateFrame({ backgroundImageFit: $event as 'cover' | 'contain' | 'fill' })"
+								@update:model-value="updateFrame({ backgroundImageFit: $event as MediaFit })"
 							/>
 						</UFormField>
 					</div>

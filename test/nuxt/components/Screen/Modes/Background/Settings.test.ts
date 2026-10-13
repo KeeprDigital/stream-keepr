@@ -183,6 +183,35 @@ describe('screenModesBackgroundSettings', () => {
 		expect(lastLayersWrite().find(layer => layer.id === 'base')).toMatchObject({ opacity: 0.4 });
 	});
 
+	it('returns a cleared layer opacity to opaque rather than to clear', async () => {
+		config.value = { layers: [colorLayer('base', { opacity: 0.4 })] };
+		const wrapper = await mountComponent();
+
+		wrapper.findComponent(UInputNumberStub).vm.$emit('update:modelValue', null);
+
+		expect(lastLayersWrite()[0]).toMatchObject({ opacity: 1 });
+	});
+
+	it('edits a video layer through the shared media fields, and an image layer without playback', async () => {
+		const video: BackgroundLayer = { id: 'clip', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url: '' }, fit: 'cover', playbackRate: 2, loop: true };
+		const image: BackgroundLayer = { id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '' }, fit: 'cover' };
+		config.value = { layers: [video, image] };
+		const wrapper = await mountComponent();
+
+		const fit = wrapper.get('[data-layer-id="clip"] [data-testid="media-fit"]');
+		expect(fit.findAll('option').map(option => option.text())).toEqual(['Cover', 'Contain', 'Fill']);
+		await fit.setValue('contain');
+		expect(lastLayersWrite()[0]).toMatchObject({ fit: 'contain' });
+
+		// The layer owns its opacity, so its media offers none of its own.
+		expect(wrapper.find('[data-layer-id="clip"] [data-testid="media-opacity"]').exists()).toBe(false);
+		expect(wrapper.find('[data-layer-id="plate"] [data-testid="media-playback-rate"]').exists()).toBe(false);
+
+		const rate = wrapper.findAllComponents(UInputNumberStub).find(input => input.attributes('data-testid') === 'media-playback-rate')!;
+		rate.vm.$emit('update:modelValue', null);
+		expect(lastLayersWrite()[0]).toMatchObject({ playbackRate: 1 });
+	});
+
 	it('edits an animation layer through the shared Animation Effect fields', async () => {
 		config.value = { layers: [animationLayer('anim')] };
 		const wrapper = await mountComponent();

@@ -7,7 +7,7 @@ import type {
 } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
-import type { GraphicFocalPosition, MediaGraphicItemFit } from '~~/shared/types/graphicItem';
+import type { GraphicFocalPosition } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	DeckListGraphicItemConfig,
@@ -40,6 +40,7 @@ import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphi
 import type { GraphicStyleRef, GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import {
 	bindGraphicStyleRef,
 	recaptureGraphicStyleOverrides,
@@ -82,7 +83,6 @@ import {
 	setMediaClipGeometry,
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
-import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	applicationGraphicFont,
 	DECK_LIST_VIEW_VALUES,
@@ -96,16 +96,15 @@ import {
 	MAX_GRAPHIC_FONT_SIZE,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
-	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_FONT_SIZE,
-	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
+import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import GraphicsGeometryFields from '../GeometryFields.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
@@ -182,7 +181,6 @@ const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => 
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
 const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({ label: value, value }));
-const MEDIA_FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
 	label: network.label,
 	value: network.key,
@@ -615,6 +613,15 @@ function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'i
 
 function updateFocalPosition(patch: Partial<GraphicFocalPosition>) {
 	applyToSelectedGraphic((graphic, itemId) => patchMediaFocalPosition(graphic, itemId, patch));
+}
+
+/** A cleared opacity is opaque again and a cleared playback rate is normal speed. */
+function updateMediaFields(patch: MediaFieldsPatch) {
+	const { focalPosition, ...rest } = resolveMediaFieldsPatch(patch);
+	if (focalPosition)
+		updateFocalPosition(focalPosition);
+	else
+		updateMediaItem(rest);
 }
 
 function updateMediaClipping(clipping: boolean) {
@@ -1917,85 +1924,21 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</UFormField>
 
-				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Fit" size="sm">
-						<USelect
-							:model-value="selectedMediaItem.fit"
-							:items="MEDIA_FIT_OPTIONS"
-							value-key="value"
-							class="w-full"
-							data-testid="media-fit"
-							@update:model-value="updateMediaItem({ fit: $event as MediaGraphicItemFit })"
-						/>
-					</UFormField>
-					<UFormField label="Opacity" size="sm">
-						<UIOpacityInput
-							:model-value="selectedMediaItem.opacity"
-							size="sm"
-							class="w-full"
-							data-testid="media-opacity"
-							aria-label="Media opacity"
-							@update:model-value="updateMediaItem({ opacity: $event ?? 1 })"
-						/>
-					</UFormField>
-					<UFormField label="Focal X" size="sm">
-						<UInputNumber
-							:model-value="selectedMediaItem.focalPosition.horizontal"
-							:min="0"
-							:max="1"
-							:step="0.05"
-							size="sm"
-							class="w-full"
-							data-testid="media-focal-horizontal"
-							aria-label="Horizontal focal position"
-							@update:model-value="updateFocalPosition({ horizontal: $event ?? 0.5 })"
-						/>
-					</UFormField>
-					<UFormField label="Focal Y" size="sm">
-						<UInputNumber
-							:model-value="selectedMediaItem.focalPosition.vertical"
-							:min="0"
-							:max="1"
-							:step="0.05"
-							size="sm"
-							class="w-full"
-							data-testid="media-focal-vertical"
-							aria-label="Vertical focal position"
-							@update:model-value="updateFocalPosition({ vertical: $event ?? 0.5 })"
-						/>
-					</UFormField>
-				</div>
-
 				<!--
 					Playback belongs to a silent video, so an image item is offered
 					neither control even though it stores both — switching an item back to
 					a video restores the playback its author already set up.
 				-->
-				<template v-if="selectedMediaItem.mediaKind === 'silent-video'">
-					<UFormField label="Playback rate" size="sm">
-						<UInputNumber
-							:model-value="selectedMediaItem.playbackRate"
-							:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
-							:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
-							:step="0.05"
-							size="sm"
-							class="w-full"
-							data-testid="media-playback-rate"
-							aria-label="Playback rate"
-							@update:model-value="updateMediaItem({ playbackRate: $event ?? 1 })"
-						/>
-					</UFormField>
-					<UFormField label="Loop" size="sm">
-						<USwitch
-							:model-value="selectedMediaItem.loop"
-							data-testid="media-loop"
-							@update:model-value="updateMediaItem({ loop: $event })"
-						/>
-					</UFormField>
-					<p class="text-xs text-muted">
-						Video is silent, and starts from its beginning when its Broadcast Graphic enters.
-					</p>
-				</template>
+				<GraphicsMediaFields
+					:media="selectedMediaItem"
+					opacity
+					focal
+					:playback="selectedMediaItem.mediaKind === 'silent-video'"
+					@update="updateMediaFields"
+				/>
+				<p v-if="selectedMediaItem.mediaKind === 'silent-video'" class="text-xs text-muted">
+					Video is silent, and starts from its beginning when its Broadcast Graphic enters.
+				</p>
 
 				<UFormField label="Clip to Shape Geometry" size="sm">
 					<USwitch

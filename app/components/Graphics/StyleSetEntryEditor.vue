@@ -2,12 +2,9 @@
 import type { GraphicAnimationChannelKey, GraphicAnimationChannels, ShapeGeometryPresetId, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry, SurfaceStyleGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
 import type { BorderGlowEdit } from '~/types/borderGlow';
+import type { MediaFieldsValue } from '~/utils/mediaFields';
 import { getGraphicItemDefinition, getShapeGeometryPreset, mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
-import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
-import {
-	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
-	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
-} from '~~/shared/types/graphics';
+import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
 /**
  * The value controls for one Graphic Style Set entry.
@@ -44,7 +41,10 @@ const geometryOptions = computed(() => props.entries
 	.filter(entry => entry.kind === 'shape-geometry')
 	.map(entry => ({ label: entry.name, value: entry.id })));
 
-const FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
+/** A media treatment's optional playback shows as a Media Graphic Item's default. */
+const mediaTreatment = computed<MediaFieldsValue | undefined>(() => props.entry.kind === 'media-treatment'
+	? { ...props.entry.value, playbackRate: props.entry.value.playbackRate ?? 1, loop: props.entry.value.loop === true }
+	: undefined);
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
@@ -303,49 +303,18 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 		</template>
 
 		<template v-else-if="entry.kind === 'media-treatment'">
-			<UFormField label="Fit" size="xs">
-				<USelect
-					:model-value="entry.value.fit"
-					:items="FIT_OPTIONS"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					@update:model-value="patch({ fit: $event })"
-				/>
-			</UFormField>
-			<div class="grid grid-cols-3 gap-2">
-				<UFormField label="Focal X" size="xs">
-					<UInputNumber
-						:model-value="entry.value.focalPosition.horizontal"
-						:min="0"
-						:max="1"
-						:step="0.05"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ focalPosition: { ...(entry.value as { focalPosition: object }).focalPosition, horizontal: $event ?? 0.5 } })"
-					/>
-				</UFormField>
-				<UFormField label="Focal Y" size="xs">
-					<UInputNumber
-						:model-value="entry.value.focalPosition.vertical"
-						:min="0"
-						:max="1"
-						:step="0.05"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ focalPosition: { ...(entry.value as { focalPosition: object }).focalPosition, vertical: $event ?? 0.5 } })"
-					/>
-				</UFormField>
-				<UFormField label="Opacity" size="xs">
-					<UIOpacityInput
-						:model-value="entry.value.opacity"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ opacity: $event ?? 1 })"
-					/>
-				</UFormField>
-			</div>
+			<GraphicsMediaFields
+				:media="mediaTreatment!"
+				opacity
+				focal
+				playback
+				size="xs"
+				:disabled="disabled"
+				@update="patch(resolveMediaFieldsPatch($event))"
+			/>
+			<p class="text-xs text-muted">
+				Playback rate and loop apply to silent video only.
+			</p>
 			<UFormField label="Clip to Shape Geometry preset" size="xs">
 				<USelect
 					:model-value="entry.value.clipGeometryEntryId"
@@ -358,26 +327,6 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 					@update:model-value="patch({ clipGeometryEntryId: $event ?? undefined })"
 				/>
 			</UFormField>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Playback rate" size="xs" help="Silent video only.">
-					<UInputNumber
-						:model-value="entry.value.playbackRate ?? 1"
-						:min="MIN_GRAPHIC_MEDIA_PLAYBACK_RATE"
-						:max="MAX_GRAPHIC_MEDIA_PLAYBACK_RATE"
-						:step="0.25"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ playbackRate: $event ?? 1 })"
-					/>
-				</UFormField>
-				<UFormField label="Loop" size="xs">
-					<USwitch
-						:model-value="entry.value.loop === true"
-						:disabled="disabled"
-						@update:model-value="patch({ loop: $event })"
-					/>
-				</UFormField>
-			</div>
 		</template>
 
 		<template v-else-if="entry.kind === 'animation-recipe'">

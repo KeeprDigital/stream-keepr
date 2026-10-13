@@ -814,6 +814,18 @@ describe('graphicsCompositorInspector', () => {
 			expect(mediaOf(emittedGraphics(wrapper, 1)).loop).toBe(false);
 		});
 
+		it('returns a cleared opacity or playback rate to its default', async () => {
+			const wrapper = await mountMedia({ mediaKind: 'silent-video', opacity: 0.4, playbackRate: 2 });
+
+			numberField(wrapper, 'Media opacity')?.vm.$emit('update:modelValue', null);
+			await nextTick();
+			numberField(wrapper, 'Playback rate')?.vm.$emit('update:modelValue', null);
+			await nextTick();
+
+			expect(mediaOf(emittedGraphics(wrapper, 0)).opacity).toBe(1);
+			expect(mediaOf(emittedGraphics(wrapper, 1)).playbackRate).toBe(1);
+		});
+
 		it('offers the Shape Geometry controls only once clipping is switched on', async () => {
 			const unclipped = await mountMedia();
 

@@ -1,7 +1,7 @@
 import type { GraphicApplicationFontId } from '../modules/graphics/typography';
 import type { SupportedSocialNetwork } from '../socialProfiles';
 import type { PlayerSide } from './enums';
-import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
+import type { GraphicFocalPosition, MediaFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 import type { GraphicContainerStyleRefs, GraphicStyleRefs, GraphicStyleSetLink } from './graphicStyleSet';
 
@@ -933,7 +933,7 @@ export interface MediaGraphicItemConfig extends GraphicItemConfigBase {
 	 */
 	asset?: GraphicAssetReference;
 	mediaKind: GraphicMediaKind;
-	fit: MediaGraphicItemFit;
+	fit: MediaFit;
 	focalPosition: GraphicFocalPosition;
 	opacity: number;
 	/**
