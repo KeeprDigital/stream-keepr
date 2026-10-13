@@ -23,6 +23,12 @@ import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
  *
  * An item its row or column Graphic Group positions (`stacked`) offers width and
  * height only: its group's align and justify own where it sits.
+ *
+ * Linking width and height keeps the ratio captured when the author links them:
+ * either size edit then sets the other in pixels, whatever the Geometry Unit.
+ * The link is editor state, never stored on the item, and only offered while
+ * both sizes are fixed values, which a stacked item's group sizing may not be.
+ * A host keys this control by item, so a link never carries over to the next one.
  */
 const props = defineProps<{
 	/** The stored top-left rectangle, in canonical pixels. */
@@ -90,9 +96,26 @@ function updatePosition(axis: 'x' | 'y', value: number | null | undefined) {
 	emit('update', moveGraphicRectToAnchoredPosition(props.rect, axis, pixels, props.anchor));
 }
 
+/** Width over height, captured when the author links them; null while unlinked. */
+const linkedRatio = ref<number | null>(null);
+/** The ratio a size edit keeps: none for a stacked item, whose group may size it. */
+const activeRatio = computed(() => props.stacked ? null : linkedRatio.value);
+const isLinked = computed(() => activeRatio.value !== null);
+
+function toggleLink() {
+	const { width, height } = props.rect;
+	linkedRatio.value = linkedRatio.value === null && width > 0 && height > 0 ? width / height : null;
+}
+
 function updateSize(axis: 'width' | 'height', value: number | null | undefined) {
-	const pixels = parseGeometryValue(value ?? 0, containerSpan(SIZE_AXES[axis]), unit.value);
-	emit('update', resizeGraphicRectFromAnchor(props.rect, { [axis]: Math.max(1, pixels) }, props.anchor));
+	const size = Math.max(1, parseGeometryValue(value ?? 0, containerSpan(SIZE_AXES[axis]), unit.value));
+	const ratio = activeRatio.value;
+	const sizes = ratio === null
+		? { [axis]: size }
+		: axis === 'width'
+			? { width: size, height: Math.max(1, size / ratio) }
+			: { width: Math.max(1, size * ratio), height: size };
+	emit('update', resizeGraphicRectFromAnchor(props.rect, sizes, props.anchor));
 }
 
 function align(axis: 'x' | 'y', edge: 'start' | 'center' | 'end') {
@@ -154,41 +177,55 @@ const stepSnapping = computed(() => unit.value === 'px');
 			</UFormField>
 		</div>
 
-		<div class="grid grid-cols-2 gap-2">
-			<template v-if="!stacked">
-				<UFormField
-					v-for="axis in ['x', 'y'] as const"
-					:key="axis"
-					:label="axis.toUpperCase()"
-					size="sm"
-				>
-					<UInputNumber
-						:model-value="shownPosition(axis)"
-						:step="step"
-						:step-snapping="stepSnapping"
-						size="sm"
-						class="w-full"
-						:aria-label="`Item ${axis}`"
-						@update:model-value="updatePosition(axis, $event)"
-					/>
-				</UFormField>
-			</template>
+		<div v-if="!stacked" class="grid grid-cols-2 gap-2">
 			<UFormField
-				v-for="axis in ['width', 'height'] as const"
+				v-for="axis in ['x', 'y'] as const"
 				:key="axis"
-				:label="axis === 'width' ? 'Width' : 'Height'"
+				:label="axis.toUpperCase()"
 				size="sm"
 			>
 				<UInputNumber
-					:model-value="shownSize(axis)"
+					:model-value="shownPosition(axis)"
 					:step="step"
 					:step-snapping="stepSnapping"
 					size="sm"
 					class="w-full"
 					:aria-label="`Item ${axis}`"
-					@update:model-value="updateSize(axis, $event)"
+					@update:model-value="updatePosition(axis, $event)"
 				/>
 			</UFormField>
+		</div>
+
+		<div class="flex items-end gap-2">
+			<template v-for="axis in ['width', 'height'] as const" :key="axis">
+				<UButton
+					v-if="axis === 'height' && !stacked"
+					aria-label="Link width and height"
+					:title="isLinked ? 'Unlink width and height' : 'Keep the aspect ratio'"
+					:aria-pressed="isLinked"
+					:icon="isLinked ? 'i-lucide-link' : 'i-lucide-unlink'"
+					size="xs"
+					color="neutral"
+					:variant="isLinked ? 'solid' : 'ghost'"
+					class="mb-0.5 size-7 shrink-0 justify-center p-0"
+					@click="toggleLink"
+				/>
+				<UFormField
+					:label="axis === 'width' ? 'Width' : 'Height'"
+					size="sm"
+					class="min-w-0 flex-1"
+				>
+					<UInputNumber
+						:model-value="shownSize(axis)"
+						:step="step"
+						:step-snapping="stepSnapping"
+						size="sm"
+						class="w-full"
+						:aria-label="`Item ${axis}`"
+						@update:model-value="updateSize(axis, $event)"
+					/>
+				</UFormField>
+			</template>
 		</div>
 	</div>
 </template>

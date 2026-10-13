@@ -1298,6 +1298,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</UFormField>
 
 			<GraphicsGeometryFields
+				:key="selectedItem.id"
 				:rect="selectedItem"
 				:container="geometryContainer"
 				:anchor="selectedItem.anchor"

@@ -144,6 +144,67 @@ describe('geometry fields', () => {
 		expect(shown(wrapper, 'Item width')).toBe(400);
 	});
 
+	describe('linked width and height', () => {
+		async function link(wrapper: Wrapper) {
+			await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
+			await flushPromises();
+		}
+
+		it('sets the height from the captured ratio when the width changes', async () => {
+			const wrapper = mountFields();
+			await link(wrapper);
+
+			// 400×100 is 4:1, so 200 wide is 50 high, still centred on (300, 250).
+			expect(await enter(wrapper, 'Item width', 200)).toEqual({ x: 200, y: 225, width: 200, height: 50 });
+		});
+
+		it('sets the width from the height in pixels, whatever the Geometry Unit', async () => {
+			const wrapper = mountFields();
+			await link(wrapper);
+			await chooseUnit(wrapper, '%');
+
+			// 50% of the 1080 canvas is 540 high, so 2160 wide (not 50% of 1920), around (300, 250).
+			expect(await enter(wrapper, 'Item height', 50)).toEqual({ x: -780, y: -20, width: 2160, height: 540 });
+		});
+
+		it('keeps the ratio captured on linking, not the item\'s current one', async () => {
+			const wrapper = mountFields();
+			await link(wrapper);
+			await wrapper.setProps({ rect: { ...rect, height: 200 } });
+
+			expect(await enter(wrapper, 'Item width', 200)).toMatchObject({ width: 200, height: 50 });
+		});
+
+		it('never sets the other size below one pixel', async () => {
+			const wrapper = mountFields({ anchor: 'top-left' });
+			await link(wrapper);
+
+			expect(await enter(wrapper, 'Item width', 2)).toEqual({ x: 100, y: 200, width: 2, height: 1 });
+		});
+
+		it('leaves the other size alone once unlinked', async () => {
+			const wrapper = mountFields({ anchor: 'top-left' });
+			await link(wrapper);
+			await link(wrapper);
+
+			expect(await enter(wrapper, 'Item width', 200)).toEqual({ x: 100, y: 200, width: 200, height: 100 });
+		});
+
+		it('is unlinked by default', async () => {
+			const wrapper = mountFields({ anchor: 'top-left' });
+
+			expect(wrapper.get('button[aria-label="Link width and height"]').attributes('aria-pressed')).toBe('false');
+			expect(await enter(wrapper, 'Item height', 50)).toEqual({ x: 100, y: 200, width: 400, height: 50 });
+		});
+
+		it('is not offered for an item its group sizes', async () => {
+			const wrapper = mountFields({ stacked: true });
+			await flushPromises();
+
+			expect(wrapper.find('button[aria-label="Link width and height"]').exists()).toBe(false);
+		});
+	});
+
 	describe('the remembered Geometry Unit', () => {
 		it('opens in the unit last chosen in any geometry fields control', async () => {
 			const first = mountFields();

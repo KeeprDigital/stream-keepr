@@ -395,6 +395,43 @@ describe('graphicsCompositorInspector', () => {
 		expect(emittedGraphics(wrapper)[0]?.items[0]).toMatchObject({ x: 200, width: 200 });
 	});
 
+	it('keeps the aspect ratio of a linked Graphic Item from its Graphic Anchor Point', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
+		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
+		await nextTick();
+
+		// 400×100 is 4:1, so 200 wide is 50 high, still centred on (300, 250).
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ x: 200, y: 225, width: 200, height: 50 });
+	});
+
+	it('does not carry a width and height link over to the next selected item', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem, { ...shapeItem, id: 'other', anchor: 'top-left' }]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
+		await wrapper.setProps({ selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'other' } });
+		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper), 1)).toMatchObject({ width: 200, height: 100 });
+	});
+
+	it('offers no width and height link for a row Graphic Group child, whose group sizes it', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith([shapeItem])]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		expect(wrapper.find('button[aria-label="Link width and height"]').exists()).toBe(false);
+	});
+
 	it('offers a Minimum font size control only for the shrink Text Overflow Policy', async () => {
 		const ellipsis = await mountComponent({
 			graphics: stack([textItem]),

@@ -74,7 +74,11 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 		return storedRect();
 	}
 
-	return { align, enter };
+	async function link() {
+		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
+	}
+
+	return { align, enter, link };
 }
 
 describe('feature Match Overlay Source Item bounds: align actions', () => {
@@ -101,5 +105,15 @@ describe('feature Match Overlay Source Item bounds: size entry', () => {
 
 		expect(await enter('Item width', 0)).toEqual({ x: 100, y: 50, width: 1, height: 201 });
 		expect(await enter('Item height', 99.6)).toEqual({ x: 100, y: 50, width: 401, height: 100 });
+	});
+});
+
+describe('feature Match Overlay Source Item bounds: linked width and height', () => {
+	it('keeps the Source Item\'s aspect ratio from its anchor', async () => {
+		const { enter, link } = await mountBounds('bottom-right');
+		await link();
+
+		// 401×201 doubled is 802×402, with the bottom-right corner held at (501, 251).
+		expect(await enter('Item width', 802)).toEqual({ x: -301, y: -151, width: 802, height: 402 });
 	});
 });
