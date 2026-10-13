@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorFeatureMatchOverlayRect, displayGeometryValue, featureMatchOverlayAlignmentCoordinate, featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, parseGeometryInput, percentToPixels, pixelsToPercent, resizeFeatureMatchOverlayRectFromAnchor, roundedRectPath, updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOverlayGeometry';
+import { anchorFeatureMatchOverlayRect, displayGeometryValue, featureMatchOverlayAlignedStart, featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, parseGeometryInput, percentToPixels, pixelsToPercent, resizeFeatureMatchOverlayRectFromAnchor, roundedRectPath, updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOverlayGeometry';
 
 describe('broadcast layout geometry utilities', () => {
 	it('converts pixels to percentages of the canvas', () => {
@@ -203,13 +203,16 @@ describe('broadcast layout geometry utilities', () => {
 			radii: { topLeft: 8, topRight: 6, bottomRight: 4, bottomLeft: 2 },
 		})).toBe('M 18 20 H 104 A 6 6 0 0 1 110 26 V 66 A 4 4 0 0 1 106 70 H 12 A 2 2 0 0 1 10 68 V 28 A 8 8 0 0 1 18 20 Z');
 	});
-	it('resolves hard-edge and center alignment coordinates', () => {
-		expect(featureMatchOverlayAlignmentCoordinate('left', 1920)).toBe(0);
-		expect(featureMatchOverlayAlignmentCoordinate('center', 1920)).toBe(960);
-		expect(featureMatchOverlayAlignmentCoordinate('right', 1920)).toBe(1920);
-		expect(featureMatchOverlayAlignmentCoordinate('top', 1080)).toBe(0);
-		expect(featureMatchOverlayAlignmentCoordinate('bottom', 1080)).toBe(1080);
+
+	it('starts an aligned item where its edge or centre meets the canvas edge or centre', () => {
+		// A 401×201 item on a 1920×1080 canvas.
+		expect(featureMatchOverlayAlignedStart('left', 1920, 401)).toBe(0);
+		expect(featureMatchOverlayAlignedStart('center', 1920, 401)).toBe(759.5);
+		expect(featureMatchOverlayAlignedStart('right', 1920, 401)).toBe(1519);
+		expect(featureMatchOverlayAlignedStart('top', 1080, 201)).toBe(0);
+		expect(featureMatchOverlayAlignedStart('center', 1080, 201)).toBe(439.5);
+		expect(featureMatchOverlayAlignedStart('bottom', 1080, 201)).toBe(879);
 		// Rounded to the geometry precision used everywhere else.
-		expect(featureMatchOverlayAlignmentCoordinate('center', 1085)).toBe(542.5);
+		expect(featureMatchOverlayAlignedStart('center', 1920, 400.333)).toBe(759.83);
 	});
 });

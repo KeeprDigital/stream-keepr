@@ -75,13 +75,17 @@ export function roundFeatureMatchOverlayGeometryValue(value: number): number {
 
 export type FeatureMatchOverlayAlignment = 'left' | 'center' | 'right' | 'top' | 'bottom';
 
-/** The anchored coordinate for a hard-edge or center alignment along one axis. */
-export function featureMatchOverlayAlignmentCoordinate(alignment: FeatureMatchOverlayAlignment, total: number): number {
+/**
+ * Where an item of `size` starts so its edge (or centre) sits on the matching
+ * edge (or centre) of `total` along one axis. This is the stored top-left
+ * coordinate, so the item's anchor plays no part.
+ */
+export function featureMatchOverlayAlignedStart(alignment: FeatureMatchOverlayAlignment, total: number, size: number): number {
 	if (alignment === 'left' || alignment === 'top')
 		return 0;
 	if (alignment === 'right' || alignment === 'bottom')
-		return roundFeatureMatchOverlayGeometryValue(total);
-	return roundFeatureMatchOverlayGeometryValue(total / 2);
+		return roundFeatureMatchOverlayGeometryValue(total - size);
+	return roundFeatureMatchOverlayGeometryValue((total - size) / 2);
 }
 
 export function resolveFeatureMatchOverlayAnchor(value: string | undefined) {
