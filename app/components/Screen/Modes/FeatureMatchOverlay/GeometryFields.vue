@@ -2,7 +2,7 @@
 import type { FeatureMatchOverlayAnchorValue, FeatureMatchOverlayRect } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayGeometryField } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
-import { displayGeometryValue, featureMatchOverlayAlignmentCoordinate } from '~/utils/featureMatchOverlayGeometry';
+import { displayGeometryValue, featureMatchOverlayAlignedStart } from '~/utils/featureMatchOverlayGeometry';
 
 const props = defineProps<{
 	rect: FeatureMatchOverlayRect;
@@ -16,6 +16,8 @@ const emit = defineEmits<{
 	updateAnchor: [value: FeatureMatchOverlayAnchorValue];
 	updateAspectLinked: [value: boolean];
 	update: [field: FeatureMatchOverlayGeometryField, value: string, unit: FeatureMatchOverlayGeometryUnit];
+	/** A stored top-left position, not an anchored one: alignment moves the item's edge. */
+	align: [position: Pick<FeatureMatchOverlayRect, 'x'> | Pick<FeatureMatchOverlayRect, 'y'>];
 }>();
 
 const unit = ref<FeatureMatchOverlayGeometryUnit>('px');
@@ -54,11 +56,11 @@ function unitLabel() {
 }
 
 function alignHorizontal(alignment: 'left' | 'center' | 'right') {
-	emit('update', 'x', String(featureMatchOverlayAlignmentCoordinate(alignment, props.screenWidth)), 'px');
+	emit('align', { x: featureMatchOverlayAlignedStart(alignment, props.screenWidth, props.rect.width) });
 }
 
 function alignVertical(alignment: 'top' | 'center' | 'bottom') {
-	emit('update', 'y', String(featureMatchOverlayAlignmentCoordinate(alignment, props.screenHeight)), 'px');
+	emit('align', { y: featureMatchOverlayAlignedStart(alignment, props.screenHeight, props.rect.height) });
 }
 </script>
 

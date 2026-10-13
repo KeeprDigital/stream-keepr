@@ -87,6 +87,7 @@ function removeSelf() {
 				:screen-height="screenHeight"
 				:anchor-value="anchorValue"
 				@update-anchor="value => editor.updateSource(item.id, { anchor: value })"
+				@align="position => editor.updateSource(item.id, position)"
 				@update="(field, value, unit) => editor.updateSourceRectFromAnchor(item.id, field, value, unit)"
 			/>
 		</FeatureMatchOverlayControlSection>
