@@ -64,6 +64,7 @@ export const ANIMATION_EFFECT_PROOF_PIXELS = Object.freeze({
 	litLuminance: 40,
 	darkLuminance: 128,
 	changedChannel: 6,
+	residualChannel: 1,
 });
 
 /**
@@ -165,6 +166,13 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 			{ name: 'max-size', params: { size: 5 } },
 			{ name: 'max-intensity', params: { amplitudeFactor: 4 } },
 		],
+		// The smear has to fade all the way out. Carrying the ring out of frame
+		// leaves nothing feeding it, so every pixel should be back to the
+		// background soon after. Measured clean at ten seconds on the 8-bit
+		// feedback buffers, with residue still on screen at eight (#502); twelve
+		// leaves room. The 8-bit fade does round to nothing near black, but the
+		// shader's outward zoom carries that residue out of frame first.
+		settle: { name: 'settles-to-background', params: { xOffset: 1 }, seconds: 12 },
 	},
 	inkmap: {
 		extremes: [
@@ -292,5 +300,35 @@ export function animationEffectProofScenarios() {
 				floors: { ...effectFloors, ...extreme.floors },
 			})),
 		];
+	});
+}
+
+/**
+ * Every settle the run measures: an accumulating effect drawn at its defaults
+ * up to the last sampled time, switched to params that stop feeding it, and
+ * drawn on for `seconds` more at its frame rate. What is left has to match a
+ * fresh mount of those params that never had anything to fade.
+ *
+ * @returns {{
+ *   effect: string,
+ *   scenario: string,
+ *   params: Record<string, string | number | boolean>,
+ *   frameRate: number,
+ *   seconds: number,
+ *   floors: { minLitFraction: number },
+ * }[]} Every settle the run makes, with the lit floor its drawn frame must clear.
+ */
+export function animationEffectSettleScenarios() {
+	return Object.entries(ANIMATION_EFFECT_PROOF_SCENARIOS).flatMap(([effect, entry]) => {
+		if (!entry.settle)
+			return [];
+		return [{
+			effect,
+			scenario: entry.settle.name,
+			params: entry.settle.params,
+			frameRate: entry.frameRate,
+			seconds: entry.settle.seconds,
+			floors: { minLitFraction: entry.floors?.minLitFraction ?? ANIMATION_EFFECT_PROOF_FLOORS.minLitFraction },
+		}];
 	});
 }

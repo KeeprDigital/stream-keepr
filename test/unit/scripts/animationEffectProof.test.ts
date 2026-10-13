@@ -3,6 +3,7 @@ import { judgeAnimationEffectReport } from '../../../scripts/graphics-acceptance
 import {
 	ANIMATION_EFFECT_PROOF_SCENARIOS,
 	animationEffectProofScenarios,
+	animationEffectSettleScenarios,
 } from '../../../scripts/graphics-acceptance/animation-effect-scenarios.mjs';
 import { ANIMATION_EFFECT_VALUES } from '../../../shared/animationEffects';
 
@@ -33,9 +34,34 @@ function healthyReport(overrides: Record<string, unknown> = {}) {
 			scenario,
 			...measurement(),
 		})),
+		settles: animationEffectSettleScenarios().map(({ effect, scenario }) => ({
+			effect,
+			scenario,
+			...settled(),
+		})),
 		control: measurement({ mounted: true, compileFailures: 1, litPixels: 0, changedPixels: 0 }),
 		...overrides,
 	};
+}
+
+/** A settle in which the effect drew, then faded all the way back. */
+function settled(overrides: Record<string, unknown> = {}) {
+	return {
+		mounted: true,
+		compileFailures: 0,
+		totalPixels: 1000,
+		litPixels: 500,
+		residualPixels: 0,
+		largestResidualChannel: 0,
+		...overrides,
+	};
+}
+
+/** The measurement of halo's settle, replaced with `overrides`. */
+function withSettle(overrides: Record<string, unknown>) {
+	const report = healthyReport();
+	report.settles = report.settles.map(entry => ({ ...entry, ...overrides }));
+	return report;
 }
 
 function codes(report: Parameters<typeof judgeAnimationEffectReport>[0]) {
@@ -188,5 +214,33 @@ describe('judging an animation effect rendering proof', () => {
 
 			expect(codes(report)).toEqual(['animation-effect-checks-not-biting']);
 		});
+	});
+});
+
+describe('judging an accumulating effect settling back to its background', () => {
+	it('measures halo, the catalogue\'s one accumulating effect', () => {
+		expect(animationEffectSettleScenarios().map(({ effect }) => effect)).toEqual(['halo']);
+	});
+
+	it('reports trails still on screen after the effect stopped feeding them', () => {
+		expect(judgeAnimationEffectReport(withSettle({ residualPixels: 1, largestResidualChannel: 3 }))).toEqual([
+			{
+				code: 'animation-effect-trail-lingered',
+				detail: { effect: 'halo', scenario: 'settles-to-background', residual: 0.001, largestChannel: 3 },
+			},
+		]);
+	});
+
+	it('refuses a settle that never drew anything to fade', () => {
+		expect(codes(withSettle({ litPixels: 0 }))).toEqual(['animation-effect-settle-unproven']);
+	});
+
+	it('reports a settle the page did not measure', () => {
+		expect(codes(healthyReport({ settles: [] }))).toEqual(['animation-effect-scenario-missing']);
+	});
+
+	it('reports a settle whose shader failed to compile or would not mount', () => {
+		expect(codes(withSettle({ compileFailures: 1 }))).toContain('animation-effect-shader-compile-failed');
+		expect(codes(withSettle({ mounted: false }))).toEqual(['animation-effect-mount-failed']);
 	});
 });

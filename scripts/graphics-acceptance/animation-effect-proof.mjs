@@ -21,6 +21,7 @@ import {
 	ANIMATION_EFFECT_PROOF_KNOWN_GOOD,
 	ANIMATION_EFFECT_PROOF_SCENARIOS,
 	animationEffectProofScenarios,
+	animationEffectSettleScenarios,
 } from './animation-effect-scenarios.mjs';
 import { AcceptanceFailure } from './evidence.mjs';
 
@@ -160,6 +161,42 @@ export function judgeAnimationEffectScenario(measurement, floors) {
 }
 
 /**
+ * What one settle has to show: it compiled, it drew something worth fading —
+ * a settle over an empty buffer passes by having nothing to leave behind — and
+ * nothing of it was left on screen once the effect stopped feeding it.
+ */
+export function judgeAnimationEffectSettle(measurement, floors) {
+	const where = { effect: measurement.effect, scenario: measurement.scenario };
+	if (!measurement.mounted)
+		return [{ code: 'animation-effect-mount-failed', detail: where }];
+
+	const failures = [];
+	if (measurement.compileFailures > 0) {
+		failures.push({
+			code: 'animation-effect-shader-compile-failed',
+			detail: { ...where, failures: measurement.compileFailures },
+		});
+	}
+
+	const lit = fraction(measurement.litPixels, measurement.totalPixels);
+	if (lit < floors.minLitFraction)
+		failures.push({ code: 'animation-effect-settle-unproven', detail: { ...where, lit: measured(lit), floor: floors.minLitFraction } });
+
+	if (measurement.residualPixels > 0) {
+		failures.push({
+			code: 'animation-effect-trail-lingered',
+			detail: {
+				...where,
+				residual: measured(fraction(measurement.residualPixels, measurement.totalPixels)),
+				largestChannel: measurement.largestResidualChannel,
+			},
+		});
+	}
+
+	return failures;
+}
+
+/**
  * What the planted broken shader has to trip, named by the codes themselves so
  * a `check=` on the way out is the code a reader can go and find.
  *
@@ -249,6 +286,24 @@ export function judgeAnimationEffectReport(report) {
 		failures.push(...found);
 		if (scenario.effect === ANIMATION_EFFECT_PROOF_KNOWN_GOOD)
 			knownGoodFailed.push(...found);
+	}
+
+	const settles = new Map(
+		(report.settles ?? []).map(entry => [`${entry.effect}/${entry.scenario}`, entry]),
+	);
+	for (const settle of animationEffectSettleScenarios()) {
+		const measurement = settles.get(`${settle.effect}/${settle.scenario}`);
+		if (!measurement) {
+			failures.push({
+				code: 'animation-effect-scenario-missing',
+				detail: { effect: settle.effect, scenario: settle.scenario },
+			});
+			continue;
+		}
+		failures.push(...judgeAnimationEffectSettle(
+			{ ...measurement, effect: settle.effect, scenario: settle.scenario },
+			settle.floors,
+		));
 	}
 
 	// The effect that has rendered on air since the first slice of #473 failing
