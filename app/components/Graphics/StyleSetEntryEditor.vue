@@ -5,7 +5,6 @@ import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
-	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
@@ -66,7 +65,6 @@ const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTION_VALUES.map(value => ({ label: 
 const DISTANCE_MODE_OPTIONS = GRAPHIC_SLIDE_DISTANCE_MODE_VALUES.map(value => ({ label: value, value }));
 const REVEAL_EDGE_OPTIONS = GRAPHIC_REVEAL_EDGE_VALUES.map(value => ({ label: value, value }));
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
-const ANIMATION_ORIGIN_OPTIONS = GRAPHIC_ANIMATION_ORIGIN_VALUES.map(value => ({ label: value, value }));
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
@@ -83,9 +81,9 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 	<div class="space-y-2" :data-testid="`style-entry-value-${entry.kind}`">
 		<template v-if="entry.kind === 'palette'">
 			<UFormField label="Colour" size="xs">
-				<UInput
-					type="color"
+				<UIColorPicker
 					:model-value="entry.value.color"
+					hex-only
 					size="xs"
 					:disabled="disabled"
 					data-testid="style-entry-palette-color"
@@ -262,11 +260,8 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 						/>
 					</UFormField>
 					<UFormField label="Opacity" size="xs">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="stop.opacity"
-							:min="0"
-							:max="1"
-							:step="0.05"
 							size="xs"
 							:disabled="disabled"
 							@update:model-value="patch({
@@ -298,11 +293,8 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 				/>
 			</UFormField>
 			<UFormField label="Fill opacity" size="xs">
-				<UInputNumber
+				<UIOpacityInput
 					:model-value="entry.value.fillOpacity"
-					:min="0"
-					:max="1"
-					:step="0.05"
 					size="xs"
 					:disabled="disabled"
 					@update:model-value="patch({ fillOpacity: $event ?? 1 })"
@@ -374,11 +366,8 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					/>
 				</UFormField>
 				<UFormField label="Opacity" size="xs">
-					<UInputNumber
+					<UIOpacityInput
 						:model-value="entry.value.glow.opacity"
-						:min="0"
-						:max="1"
-						:step="0.05"
 						size="xs"
 						:disabled="disabled"
 						@update:model-value="patch({ glow: { ...(entry.value as { glow: object }).glow, opacity: $event ?? 1 } })"
@@ -466,11 +455,8 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					/>
 				</UFormField>
 				<UFormField label="Opacity" size="xs">
-					<UInputNumber
+					<UIOpacityInput
 						:model-value="entry.value.opacity"
-						:min="0"
-						:max="1"
-						:step="0.05"
 						size="xs"
 						:disabled="disabled"
 						@update:model-value="patch({ opacity: $event ?? 1 })"
@@ -554,11 +540,8 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 				/>
 			</UFormField>
 			<UFormField v-if="entry.value.fade" label="Fade from opacity" size="xs">
-				<UInputNumber
+				<UIOpacityInput
 					:model-value="entry.value.fade.opacity"
-					:min="0"
-					:max="1"
-					:step="0.05"
 					size="xs"
 					:disabled="disabled"
 					@update:model-value="patch({ fade: { opacity: $event ?? 0 } })"
@@ -629,12 +612,9 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					/>
 				</UFormField>
 				<UFormField label="Origin" size="xs">
-					<USelect
+					<UINinePointPicker
 						:model-value="entry.value.scale.origin"
-						:items="ANIMATION_ORIGIN_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
+						aria-label="Scale origin"
 						:disabled="disabled"
 						@update:model-value="patch({ scale: { ...(entry.value as { scale: object }).scale, origin: $event } })"
 					/>

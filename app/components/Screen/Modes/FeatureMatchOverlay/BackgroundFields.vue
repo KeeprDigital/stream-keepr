@@ -49,11 +49,8 @@ function updateOpacity(value: number | null | undefined) {
 			/>
 		</UFormField>
 		<UFormField :label="opacityLabel">
-			<UInputNumber
+			<UIOpacityInput
 				:model-value="opacity ?? 0"
-				:step="0.05"
-				:min="0"
-				:max="1"
 				size="sm"
 				class="w-full"
 				@update:model-value="updateOpacity"

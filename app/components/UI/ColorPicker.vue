@@ -1,8 +1,18 @@
 <script setup lang="ts">
+// Attributes (a test id, an aria-label) belong on the swatch trigger: the
+// popover root renders no element of its own to carry them.
+defineOptions({ inheritAttrs: false });
+
 const props = withDefaults(defineProps<{
 	modelValue?: string;
 	placeholder?: string;
 	allowRawValue?: boolean;
+	/**
+	 * For values that must always be a hex colour: no Transparent choice, and a
+	 * typed value is emitted only once it is a complete `#rrggbb`.
+	 */
+	hexOnly?: boolean;
+	disabled?: boolean;
 	size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }>(), {
 	size: 'sm',
@@ -43,6 +53,15 @@ function handleColorChange(value: string | undefined) {
 	emit('update:modelValue', value);
 }
 
+function handleTypedValue(value: string) {
+	if (props.hexOnly) {
+		if (HEX_COLOR_RE.test(value))
+			emit('update:modelValue', value);
+		return;
+	}
+	emit('update:modelValue', value || undefined);
+}
+
 function setTransparent() {
 	emit('update:modelValue', '');
 	open.value = false;
@@ -59,7 +78,9 @@ function setTransparent() {
 			class="min-w-8 rounded-md"
 			:class="isTransparent ? 'checkerboard' : ''"
 			:style="previewStyle"
+			:disabled="disabled"
 			aria-label="Choose color"
+			v-bind="$attrs"
 		>
 			&nbsp;
 		</UButton>
@@ -79,11 +100,12 @@ function setTransparent() {
 					:model-value="modelValue || ''"
 					:placeholder="placeholder || (allowRawValue ? 'transparent, #ffffff, linear-gradient(...)' : '#ffffff')"
 					size="sm"
-					@update:model-value="emit('update:modelValue', $event || undefined)"
+					@update:model-value="handleTypedValue"
 				/>
 
 				<!-- Transparent option -->
 				<UButton
+					v-if="!hexOnly"
 					variant="soft"
 					color="neutral"
 					size="sm"

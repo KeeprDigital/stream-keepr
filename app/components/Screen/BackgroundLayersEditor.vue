@@ -212,11 +212,8 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						@update:model-value="patchLayer(layer.id, { enabled: $event })"
 					/>
 					<UFormField label="Opacity" data-testid="layer-opacity">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="layer.opacity"
-							:step="0.05"
-							:min="0"
-							:max="1"
 							size="sm"
 							class="w-full"
 							@update:model-value="patchLayer(layer.id, { opacity: Number($event) })"

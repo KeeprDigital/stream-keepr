@@ -260,11 +260,10 @@ describe('graphicAnimationEditor', () => {
 		};
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
-		const origin = selectField(wrapper, 'animation-enter-scale-origin')!;
-		expect((origin.props('items') as unknown[]).length).toBe(9);
+		const origin = wrapper.get('[data-testid="animation-enter-scale-origin"]');
+		expect(origin.findAll('button')).toHaveLength(9);
 
-		origin.vm.$emit('update:modelValue', 'bottom-right');
-		await nextTick();
+		await origin.get('[aria-label="Bottom right"]').trigger('click');
 
 		const scale = emittedGraphics(wrapper)[0]?.items[0]?.animation?.enter?.scale;
 		// The anchor is untouched: the two are separate vocabularies.

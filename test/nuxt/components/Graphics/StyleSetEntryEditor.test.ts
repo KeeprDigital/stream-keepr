@@ -32,6 +32,16 @@ const UInputStub = defineComponent({
 	emits: ['update:modelValue'],
 	template: `<input :type="type" :value="modelValue" :disabled="disabled" @input="$emit('update:modelValue', $event.target.value)" />`,
 });
+const UIColorPickerStub = defineComponent({
+	name: 'UIColorPicker',
+	props: {
+		modelValue: { type: String, default: '' },
+		hexOnly: { type: Boolean, default: false },
+		disabled: { type: Boolean, default: false },
+	},
+	emits: ['update:modelValue'],
+	template: `<input data-color-picker :data-hex-only="hexOnly" :value="modelValue" :disabled="disabled" @input="$emit('update:modelValue', $event.target.value)" />`,
+});
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
 	props: {
@@ -112,6 +122,7 @@ async function mountEditor(entry: GraphicStyleSetEntry, props: Record<string, un
 			stubs: {
 				UFormField: UFormFieldStub,
 				UInput: UInputStub,
+				UIColorPicker: UIColorPickerStub,
 				UInputNumber: UInputNumberStub,
 				USelect: USelectStub,
 				USwitch: USwitchStub,
@@ -144,8 +155,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 	it('gives a palette entry the only colour input there is', async () => {
 		const wrapper = await mountEditor(DRAFT[0]!);
 
+		// The shared colour picker, hex-only: a palette colour is always a concrete colour.
 		const color = wrapper.get<HTMLInputElement>('[data-testid="style-entry-palette-color"]');
-		expect(color.element.type).toBe('color');
+		expect(color.attributes('data-color-picker')).toBeDefined();
+		expect(color.attributes('data-hex-only')).toBe('true');
 		expect(color.element.value).toBe('#ff0044');
 
 		await color.setValue('#00ff88');

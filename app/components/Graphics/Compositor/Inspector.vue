@@ -15,7 +15,6 @@ import type {
 	GameWinsBoxOrientation,
 	GameWinsDisplayMode,
 	GameWinsGraphicItemConfig,
-	GraphicAnchorPoint,
 	GraphicFontSelection,
 	GraphicFontSource,
 	GraphicGeometryUnit,
@@ -59,7 +58,6 @@ import {
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
 	displayGraphicGeometryValue,
-	GRAPHIC_ANCHOR_POINTS,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
@@ -191,7 +189,6 @@ const GEOMETRY_UNIT_OPTIONS = GRAPHIC_GEOMETRY_UNIT_VALUES.map(unit => ({
 	label: unit === 'px' ? 'px' : unit === 'percent' ? '%' : 'grid',
 	value: unit,
 }));
-const ANCHOR_OPTIONS = GRAPHIC_ANCHOR_POINTS.map(point => ({ label: point.label, value: point.value }));
 const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Clip', value: 'clip' },
 	{ label: 'Ellipsis', value: 'ellipsis' },
@@ -1228,10 +1225,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</UFormField>
 				<UFormField v-else-if="input.type === 'color'" label="Default" size="xs">
-					<UInput
-						type="color"
+					<UIColorPicker
 						:model-value="input.default ?? '#000000'"
-						size="sm"
+						hex-only
 						data-testid="graphic-input-default"
 						@update:model-value="updateInput(input.key, { default: String($event) })"
 					/>
@@ -1352,13 +1348,11 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</UFormField>
 
 			<UFormField v-if="isCanvasPositioned" label="Graphic Anchor Point" size="sm">
-				<USelect
+				<UINinePointPicker
 					:model-value="selectedItem.anchor"
-					:items="ANCHOR_OPTIONS"
-					value-key="value"
-					class="w-full"
+					aria-label="Graphic Anchor Point"
 					data-testid="graphic-item-anchor"
-					@update:model-value="patchSelectedItem({ anchor: $event as GraphicAnchorPoint })"
+					@update:model-value="patchSelectedItem({ anchor: $event })"
 				/>
 			</UFormField>
 
@@ -1552,11 +1546,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					label="Child fill opacity"
 					size="sm"
 				>
-					<UInputNumber
+					<UIOpacityInput
 						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
-						:min="0"
-						:max="1"
-						:step="0.05"
 						size="sm"
 						class="w-full"
 						aria-label="Child fill opacity"
@@ -2087,11 +2078,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						/>
 					</UFormField>
 					<UFormField label="Opacity" size="sm">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="selectedSocialNetworkIcon.opacity"
-							:min="0"
-							:max="1"
-							:step="0.05"
 							size="sm"
 							class="w-full"
 							data-testid="social-network-icon-opacity"
@@ -2150,11 +2138,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						/>
 					</UFormField>
 					<UFormField label="Opacity" size="sm">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="selectedMediaItem.opacity"
-							:min="0"
-							:max="1"
-							:step="0.05"
 							size="sm"
 							class="w-full"
 							data-testid="media-opacity"

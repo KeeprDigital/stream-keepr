@@ -133,11 +133,8 @@ function testId(suffix: string): string {
 						/>
 					</UFormField>
 					<UFormField label="Opacity" size="sm">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="stop.opacity"
-							:min="0"
-							:max="1"
-							:step="0.05"
 							size="sm"
 							class="w-full"
 							:aria-label="`${title} stop ${index + 1} opacity`"
@@ -170,11 +167,8 @@ function testId(suffix: string): string {
 			</template>
 
 			<UFormField label="Fill opacity" size="sm">
-				<UInputNumber
+				<UIOpacityInput
 					:model-value="surfaceStyle.fillOpacity"
-					:min="0"
-					:max="1"
-					:step="0.05"
 					size="sm"
 					class="w-full"
 					:aria-label="`${title} fill opacity`"
@@ -233,11 +227,8 @@ function testId(suffix: string): string {
 					/>
 				</UFormField>
 				<UFormField label="Glow opacity" size="sm">
-					<UInputNumber
+					<UIOpacityInput
 						:model-value="surfaceStyle.glow.opacity"
-						:min="0"
-						:max="1"
-						:step="0.05"
 						size="sm"
 						class="w-full"
 						:aria-label="`${title} glow opacity`"

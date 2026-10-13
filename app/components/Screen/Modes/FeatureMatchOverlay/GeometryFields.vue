@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayRect } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayAnchorValue, FeatureMatchOverlayRect } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayGeometryField } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlayGeometryUnit } from '~/utils/featureMatchOverlayGeometry';
-import { displayGeometryValue, FEATURE_MATCH_OVERLAY_ANCHOR_POINTS, featureMatchOverlayAlignmentCoordinate } from '~/utils/featureMatchOverlayGeometry';
+import { displayGeometryValue, featureMatchOverlayAlignmentCoordinate } from '~/utils/featureMatchOverlayGeometry';
 
 const props = defineProps<{
 	rect: FeatureMatchOverlayRect;
 	screenWidth: number;
 	screenHeight: number;
-	anchorValue: string;
+	anchorValue: FeatureMatchOverlayAnchorValue;
 	aspectLinked?: boolean;
 }>();
 
 const emit = defineEmits<{
-	updateAnchor: [value: string];
+	updateAnchor: [value: FeatureMatchOverlayAnchorValue];
 	updateAspectLinked: [value: boolean];
 	update: [field: FeatureMatchOverlayGeometryField, value: string, unit: FeatureMatchOverlayGeometryUnit];
 }>();
@@ -85,20 +85,11 @@ function alignVertical(alignment: 'top' | 'center' | 'bottom') {
 		<div class="grid gap-4">
 			<div class="grid gap-4 sm:grid-cols-[auto_auto] sm:justify-start">
 				<UFormField label="Anchor">
-					<div class="grid w-fit grid-cols-3 gap-1">
-						<UButton
-							v-for="anchor in FEATURE_MATCH_OVERLAY_ANCHOR_POINTS"
-							:key="anchor.value"
-							:aria-label="anchor.label"
-							:title="anchor.label"
-							:icon="anchor.icon"
-							size="xs"
-							color="neutral"
-							:variant="anchorValue === anchor.value ? 'solid' : 'soft'"
-							class="size-7 justify-center p-0"
-							@click="emit('updateAnchor', anchor.value)"
-						/>
-					</div>
+					<UINinePointPicker
+						:model-value="anchorValue"
+						aria-label="Anchor"
+						@update:model-value="emit('updateAnchor', $event)"
+					/>
 				</UFormField>
 
 				<UFormField label="Align">

@@ -53,11 +53,8 @@ const media = computed<ScreenMediaBackgroundConfig>(() => ({
 			</UFormField>
 
 			<UFormField label="Opacity">
-				<UInputNumber
+				<UIOpacityInput
 					:model-value="media.opacity"
-					:step="0.05"
-					:min="0"
-					:max="1"
 					size="sm"
 					class="w-full"
 					@update:model-value="emit('update', { opacity: Number($event) })"
