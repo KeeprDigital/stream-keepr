@@ -58,7 +58,9 @@ export const ANIMATION_EFFECT_PROOF_FLOORS = Object.freeze({
  * above that to be the effect rather than the backdrop, and "dark" ends at
  * half-bright, where a pixel begins to compete with the graphics in front of it.
  * "Changed" is a per-channel difference between the two sampled frames big
- * enough not to be dithering.
+ * enough not to be dithering. "Residual" is any difference at all between a
+ * settled frame and its reference: both are the same shader at the same params
+ * drawing the same flat colour, so there is no dithering to allow for (#502).
  */
 export const ANIMATION_EFFECT_PROOF_PIXELS = Object.freeze({
 	litLuminance: 40,
@@ -172,7 +174,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		// feedback buffers, with residue still on screen at eight (#502); twelve
 		// leaves room. The 8-bit fade does round to nothing near black, but the
 		// shader's outward zoom carries that residue out of frame first.
-		settle: { name: 'settles-to-background', params: { xOffset: 1 }, seconds: 12 },
+		settle: { name: 'settles-to-background', params: { xOffset: 1 }, durationSeconds: 12 },
 	},
 	inkmap: {
 		extremes: [
@@ -306,17 +308,19 @@ export function animationEffectProofScenarios() {
 /**
  * Every settle the run measures: an accumulating effect drawn at its defaults
  * up to the last sampled time, switched to params that stop feeding it, and
- * drawn on for `seconds` more at its frame rate. What is left has to match a
- * fresh mount of those params that never had anything to fade.
+ * drawn on for `durationSeconds` more at its frame rate. What is left has to
+ * match a fresh mount of those params that never had anything to fade. The
+ * fade happens once per drawn frame, so a settle is meaningless without a
+ * frame rate; the unit pin holds every settle to one.
  *
  * @returns {{
  *   effect: string,
  *   scenario: string,
  *   params: Record<string, string | number | boolean>,
  *   frameRate: number,
- *   seconds: number,
- *   floors: { minLitFraction: number },
- * }[]} Every settle the run makes, with the lit floor its drawn frame must clear.
+ *   durationSeconds: number,
+ *   floors: { minLitFraction: number, minDarkFraction: number, minChangedFraction: number },
+ * }[]} Every settle the run makes, with the floors its drawn frame must clear.
  */
 export function animationEffectSettleScenarios() {
 	return Object.entries(ANIMATION_EFFECT_PROOF_SCENARIOS).flatMap(([effect, entry]) => {
@@ -327,7 +331,7 @@ export function animationEffectSettleScenarios() {
 			scenario: entry.settle.name,
 			params: entry.settle.params,
 			frameRate: entry.frameRate,
-			seconds: entry.settle.seconds,
+			durationSeconds: entry.settle.durationSeconds,
 			floors: { minLitFraction: entry.floors?.minLitFraction ?? ANIMATION_EFFECT_PROOF_FLOORS.minLitFraction },
 		}];
 	});

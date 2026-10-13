@@ -44,7 +44,7 @@ export const HARNESSES = {
 	},
 	'animation-effects': {
 		script: ['run-animation-effect-rendering-acceptance.mjs'],
-		proves: 'Every Animation Effect shader compiles, lights a frame, and moves',
+		proves: 'Every Animation Effect shader compiles, lights a frame, and moves; halo\'s trails fade out',
 		needs: 'Chrome/Chromium',
 		deployed: false,
 	},

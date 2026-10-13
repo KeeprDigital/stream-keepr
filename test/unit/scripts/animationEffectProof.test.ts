@@ -53,6 +53,7 @@ function settled(overrides: Record<string, unknown> = {}) {
 		litPixels: 500,
 		residualPixels: 0,
 		largestResidualChannel: 0,
+		referenceVariedPixels: 0,
 		...overrides,
 	};
 }
@@ -233,6 +234,15 @@ describe('judging an accumulating effect settling back to its background', () =>
 
 	it('refuses a settle that never drew anything to fade', () => {
 		expect(codes(withSettle({ litPixels: 0 }))).toEqual(['animation-effect-settle-unproven']);
+	});
+
+	it('refuses a settle compared against a frame that was not plain background', () => {
+		expect(codes(withSettle({ referenceVariedPixels: 12 }))).toEqual(['animation-effect-settle-unproven']);
+	});
+
+	it('steps every settle on a frame clock, since the fade happens per frame', () => {
+		for (const settle of animationEffectSettleScenarios())
+			expect(settle.frameRate).toBeGreaterThan(0);
 	});
 
 	it('reports a settle the page did not measure', () => {

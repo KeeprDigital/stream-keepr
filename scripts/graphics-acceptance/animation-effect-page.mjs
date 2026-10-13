@@ -273,6 +273,19 @@ function countResidualPixels(settled, reference) {
 	return { residual, largest };
 }
 
+/** Pixels where any channel is at least `residualChannel` away from the first pixel's. */
+function countVariedPixels(frame) {
+	let varied = 0;
+	for (let index = 0; index < frame.length; index += 4) {
+		if (Math.abs(frame[index] - frame[0]) >= residualChannel
+			|| Math.abs(frame[index + 1] - frame[1]) >= residualChannel
+			|| Math.abs(frame[index + 2] - frame[2]) >= residualChannel) {
+			varied += 1;
+		}
+	}
+	return varied;
+}
+
 /**
  * Prove an accumulating effect fades out completely.
  *
@@ -281,12 +294,14 @@ function countResidualPixels(settled, reference) {
  * that stop feeding it and drawn on. The settled frame is compared with a
  * fresh mount of those params drawn once — the same shader with nothing to
  * fade — rather than with a background colour, so the comparison never has to
- * know how the effect's colours reach the screen.
+ * know how the effect's colours reach the screen. That reference is counted
+ * too: it has to be one flat colour, or it is not the background it stands in
+ * for.
  */
-function measureSettle({ effect, scenario, frameRate, defaults, params, seconds: settleSeconds, factory, compilation }) {
+function measureSettle({ effect, scenario, frameRate, defaults, params, durationSeconds, factory, compilation }) {
 	const mark = compilation.mark();
 	const drawnFrames = Math.round(seconds[seconds.length - 1] * frameRate);
-	const settledFrames = drawnFrames + Math.round(settleSeconds * frameRate);
+	const settledFrames = drawnFrames + Math.round(durationSeconds * frameRate);
 	const settledParams = { ...defaults, ...params };
 
 	const drawn = drawOnStage(stage => factory(stage, defaults), (instance, canvas) => {
@@ -315,6 +330,7 @@ function measureSettle({ effect, scenario, frameRate, defaults, params, seconds:
 		// has proven nothing faded.
 		residualPixels: compared?.residual ?? width * height,
 		largestResidualChannel: compared?.largest ?? 255,
+		referenceVariedPixels: fresh.captured ? countVariedPixels(fresh.captured) : width * height,
 	};
 }
 
