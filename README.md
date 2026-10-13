@@ -238,16 +238,21 @@ code queries through `db` from `~~/server/db`. Wrangler records applied
 migrations in `_hub_migrations`; production's history is in that table, so the
 name must not change.
 
+The history starts at `0000_baseline.sql`, squashed before first ship while no
+database held data (ADR-0019). Its tail is hand-written — a seed row and the
+Screen Deck-source triggers — because drizzle-kit cannot generate either;
+`test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
+drops them.
+
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the
 table has rows, so a missing default passes locally and fails on the first
 replay against real data (#310). `pnpm db:generate` will not add one; you do.
 If the new column has a unique index, a constant default collides, so backfill
-per row between the `ALTER` and the `CREATE UNIQUE INDEX`
-(`0007_serious_the_hunter.sql` is the worked example, using
-`hex(randomblob(n))` or the row's primary key).
-`test/unit/server/db/migrationJournalReplay.test.ts` replays the journal against
-populated tables and catches this.
+per row between the `ALTER` and the `CREATE UNIQUE INDEX` (`hex(randomblob(n))`
+or the row's primary key). A migration that alters or rewrites populated tables
+gets a test that holds it back with `createSqliteD1Harness({ throughMigration })`,
+inserts rows, then runs `applyRemainingMigrations()`.
 
 D1 records applied migrations **by name**, so editing an applied migration is a
 no-op wherever it already ran and only changes future replays. Prefer repairing a

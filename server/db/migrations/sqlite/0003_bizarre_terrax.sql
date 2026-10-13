@@ -1,1 +1,0 @@
-ALTER TABLE `graphics_ingestion_operations` ADD `duplicate_content_policy` text DEFAULT 'reuse' NOT NULL;
