@@ -98,11 +98,8 @@ const selection = computed<AnimationEffectSelection>(() => ({
 
 			<template v-if="background.enabled">
 				<UFormField label="Opacity" data-testid="broadcast-graphics-background-opacity">
-					<UInputNumber
+					<UIOpacityInput
 						:model-value="background.opacity"
-						:step="0.05"
-						:min="0"
-						:max="1"
 						size="sm"
 						class="w-full"
 						@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"

@@ -20,7 +20,6 @@ import {
 	applyGraphicItemAnimationPreset,
 	enableBroadcastGraphicAnimationPhase,
 	enableGraphicItemAnimationPhase,
-	GRAPHIC_ANIMATION_ORIGINS,
 	GRAPHIC_ANIMATION_PHASE_LABELS,
 	GRAPHIC_SLIDE_DIRECTIONS,
 	graphicAnimationPresetsForPhase,
@@ -148,7 +147,6 @@ function unbindStyleRef(phase: GraphicAnimationPhase) {
 }
 
 const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
-const ORIGIN_OPTIONS = GRAPHIC_ANIMATION_ORIGINS.map(origin => ({ label: origin.label, value: origin.value }));
 const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTIONS.map(entry => ({ label: entry.label, value: entry.value }));
 const DISTANCE_MODE_OPTIONS = [
 	{ label: 'Fixed', value: GRAPHIC_SLIDE_DISTANCE_MODE_VALUES[0] },
@@ -474,11 +472,8 @@ function onScreenRecipeOf() {
 
 					<div v-if="channel === 'fade' && recipeOf(phase)!.fade" class="mt-2">
 						<UFormField label="Opacity at excursion" size="xs">
-							<UInputNumber
+							<UIOpacityInput
 								:model-value="recipeOf(phase)!.fade!.opacity"
-								:min="0"
-								:max="1"
-								:step="0.05"
 								size="xs"
 								:data-testid="`animation-${phase}-fade-opacity`"
 								@update:model-value="value => updateChannel(phase, 'fade', { opacity: Number(value ?? 0) })"
@@ -538,12 +533,9 @@ function onScreenRecipeOf() {
 							/>
 						</UFormField>
 						<UFormField label="Origin" size="xs">
-							<USelectMenu
+							<UINinePointPicker
 								:model-value="recipeOf(phase)!.scale!.origin"
-								:items="ORIGIN_OPTIONS"
-								value-key="value"
-								size="xs"
-								class="w-full"
+								aria-label="Scale origin"
 								:data-testid="`animation-${phase}-scale-origin`"
 								@update:model-value="value => updateChannel(phase, 'scale', { origin: value })"
 							/>

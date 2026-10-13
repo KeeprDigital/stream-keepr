@@ -65,11 +65,9 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 				@update:model-value="update({ borderVisible: $event })"
 			/>
 			<UFormField label="Border colour">
-				<UInput
-					type="color"
+				<UIColorPicker
 					:model-value="style.borderColor ?? '#ffffff'"
-					size="sm"
-					class="w-full"
+					hex-only
 					@update:model-value="update({ borderColor: String($event) })"
 				/>
 			</UFormField>
@@ -103,11 +101,9 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 
 		<div class="grid gap-3 md:grid-cols-4">
 			<UFormField label="Glow colour">
-				<UInput
-					type="color"
+				<UIColorPicker
 					:model-value="style.glowColor ?? '#ffffff'"
-					size="sm"
-					class="w-full"
+					hex-only
 					@update:model-value="update({ glowColor: String($event) })"
 				/>
 			</UFormField>
@@ -121,11 +117,8 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 				/>
 			</UFormField>
 			<UFormField label="Glow opacity">
-				<UInputNumber
+				<UIOpacityInput
 					:model-value="style.glowOpacity ?? 0.75"
-					:min="0"
-					:max="1"
-					:step="0.05"
 					size="sm"
 					class="w-full"
 					@update:model-value="update({ glowOpacity: $event ?? 0 })"

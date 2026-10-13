@@ -1,4 +1,6 @@
 import type { GraphicAnchorPoint, GraphicGeometryUnit, GraphicRect } from '../../types/graphics';
+import type { NinePointDefinition } from '../../utils/ninePoints';
+import { NINE_POINTS } from '../../utils/ninePoints';
 
 /**
  * Canvas geometry for the shared compositor.
@@ -10,27 +12,12 @@ import type { GraphicAnchorPoint, GraphicGeometryUnit, GraphicRect } from '../..
  * displayed and entered.
  */
 
-export interface GraphicAnchorPointDefinition {
+/** A Graphic Anchor Point's view of the shared nine-point table. */
+export interface GraphicAnchorPointDefinition extends NinePointDefinition {
 	value: GraphicAnchorPoint;
-	label: string;
-	icon: string;
-	/** Fraction of the item's width the anchor sits at. */
-	x: number;
-	/** Fraction of the item's height the anchor sits at. */
-	y: number;
 }
 
-export const GRAPHIC_ANCHOR_POINTS: readonly GraphicAnchorPointDefinition[] = [
-	{ value: 'top-left', label: 'Top left', icon: 'i-lucide-arrow-up-left', x: 0, y: 0 },
-	{ value: 'top', label: 'Top', icon: 'i-lucide-arrow-up', x: 0.5, y: 0 },
-	{ value: 'top-right', label: 'Top right', icon: 'i-lucide-arrow-up-right', x: 1, y: 0 },
-	{ value: 'left', label: 'Left', icon: 'i-lucide-arrow-left', x: 0, y: 0.5 },
-	{ value: 'center', label: 'Centre', icon: 'i-lucide-crosshair', x: 0.5, y: 0.5 },
-	{ value: 'right', label: 'Right', icon: 'i-lucide-arrow-right', x: 1, y: 0.5 },
-	{ value: 'bottom-left', label: 'Bottom left', icon: 'i-lucide-arrow-down-left', x: 0, y: 1 },
-	{ value: 'bottom', label: 'Bottom', icon: 'i-lucide-arrow-down', x: 0.5, y: 1 },
-	{ value: 'bottom-right', label: 'Bottom right', icon: 'i-lucide-arrow-down-right', x: 1, y: 1 },
-];
+export const GRAPHIC_ANCHOR_POINTS: readonly GraphicAnchorPointDefinition[] = NINE_POINTS;
 
 export function resolveGraphicAnchorPoint(value: GraphicAnchorPoint | undefined): GraphicAnchorPointDefinition {
 	return GRAPHIC_ANCHOR_POINTS.find(point => point.value === value) ?? GRAPHIC_ANCHOR_POINTS[0]!;

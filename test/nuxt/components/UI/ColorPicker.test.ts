@@ -16,9 +16,10 @@ const UButtonStub = defineComponent({
 		color: { type: String, required: false },
 		size: { type: String, required: false },
 		block: { type: Boolean, required: false },
+		disabled: { type: Boolean, required: false },
 	},
 	emits: ['click'],
-	template: '<button type="button" :class="$attrs.class" @click="$emit(\'click\')"><slot /></button>',
+	template: '<button type="button" :class="$attrs.class" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
 const UColorPickerStub = defineComponent({
@@ -74,6 +75,30 @@ describe('uiColorPicker', () => {
 		await input.setValue('radial-gradient(circle, red, blue)');
 
 		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['radial-gradient(circle, red, blue)']);
+	});
+
+	it('offers no transparent choice for a hex-only colour', async () => {
+		const wrapper = await mountComponent({ hexOnly: true, modelValue: '#112233' });
+
+		expect(wrapper.findAll('button')).toHaveLength(1);
+	});
+
+	it('emits a typed hex-only colour only once it is a complete hex colour', async () => {
+		const wrapper = await mountComponent({ hexOnly: true, modelValue: '#112233' });
+		const input = wrapper.get('[data-testid="text-input"]');
+
+		await input.setValue('#12');
+		await input.setValue('');
+		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+
+		await input.setValue('#abcdef');
+		expect(wrapper.emitted('update:modelValue')).toEqual([['#abcdef']]);
+	});
+
+	it('cannot be opened while disabled', async () => {
+		const wrapper = await mountComponent({ disabled: true, modelValue: '#112233' });
+
+		expect(wrapper.get('button').attributes('disabled')).toBeDefined();
 	});
 
 	it('treats the transparent keyword as transparent state', async () => {

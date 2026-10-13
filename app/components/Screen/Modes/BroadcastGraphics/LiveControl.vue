@@ -796,11 +796,10 @@ watch(
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, String($event))"
 				/>
-				<UInput
+				<UIColorPicker
 					v-else-if="trace.declaration.type === 'color'"
-					type="color"
 					:model-value="String(draftValue(trace) ?? '#000000')"
-					size="sm"
+					hex-only
 					:disabled="disconnected"
 					:data-testid="`live-control-field-${trace.declaration.key}`"
 					@update:model-value="commitNow(trace.declaration.key, String($event))"

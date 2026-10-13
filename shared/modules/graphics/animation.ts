@@ -11,11 +11,13 @@ import type {
 	GraphicOnScreenAnimationRecipe,
 	GraphicSlideDirection,
 } from '../../types/graphics';
+import type { NinePointDefinition } from '../../utils/ninePoints';
 import {
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 } from '../../types/graphics';
+import { NINE_POINTS } from '../../utils/ninePoints';
 
 /**
  * Graphic Animation vocabulary.
@@ -43,26 +45,12 @@ import {
  * the same arithmetic Cut relies on, rather than a special case beside it.
  */
 
-export interface GraphicAnimationOriginDefinition {
+/** A Graphic Animation Origin's view of the shared nine-point table. */
+export interface GraphicAnimationOriginDefinition extends NinePointDefinition {
 	value: GraphicAnimationOrigin;
-	label: string;
-	/** Fraction of the owner's width the origin sits at. */
-	x: number;
-	/** Fraction of the owner's height the origin sits at. */
-	y: number;
 }
 
-export const GRAPHIC_ANIMATION_ORIGINS: readonly GraphicAnimationOriginDefinition[] = [
-	{ value: 'top-left', label: 'Top left', x: 0, y: 0 },
-	{ value: 'top', label: 'Top', x: 0.5, y: 0 },
-	{ value: 'top-right', label: 'Top right', x: 1, y: 0 },
-	{ value: 'left', label: 'Left', x: 0, y: 0.5 },
-	{ value: 'center', label: 'Centre', x: 0.5, y: 0.5 },
-	{ value: 'right', label: 'Right', x: 1, y: 0.5 },
-	{ value: 'bottom-left', label: 'Bottom left', x: 0, y: 1 },
-	{ value: 'bottom', label: 'Bottom', x: 0.5, y: 1 },
-	{ value: 'bottom-right', label: 'Bottom right', x: 1, y: 1 },
-];
+export const GRAPHIC_ANIMATION_ORIGINS: readonly GraphicAnimationOriginDefinition[] = NINE_POINTS;
 
 /** A scale channel defaults to centre. */
 export function resolveGraphicAnimationOrigin(

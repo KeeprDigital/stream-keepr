@@ -1,20 +1,9 @@
 import type { FeatureMatchOverlayBorderSides, FeatureMatchOverlayRect, FeatureMatchSourceFramingStyle, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
+import { NINE_POINTS } from '~~/shared/utils/ninePoints';
 
 export type FeatureMatchOverlayGeometryUnit = 'px' | '%' | 'center';
 export type { FeatureMatchOverlayAnchorValue } from '~~/shared/types/screenConfig';
 type FeatureMatchOverlayAnchoredGeometryField = keyof FeatureMatchOverlayRect;
-
-export const FEATURE_MATCH_OVERLAY_ANCHOR_POINTS = [
-	{ label: 'Top left', value: 'top-left', x: 0, y: 0, icon: 'i-lucide-arrow-up-left' },
-	{ label: 'Top', value: 'top', x: 0.5, y: 0, icon: 'i-lucide-arrow-up' },
-	{ label: 'Top right', value: 'top-right', x: 1, y: 0, icon: 'i-lucide-arrow-up-right' },
-	{ label: 'Left', value: 'left', x: 0, y: 0.5, icon: 'i-lucide-arrow-left' },
-	{ label: 'Center', value: 'center', x: 0.5, y: 0.5, icon: 'i-lucide-crosshair' },
-	{ label: 'Right', value: 'right', x: 1, y: 0.5, icon: 'i-lucide-arrow-right' },
-	{ label: 'Bottom left', value: 'bottom-left', x: 0, y: 1, icon: 'i-lucide-arrow-down-left' },
-	{ label: 'Bottom', value: 'bottom', x: 0.5, y: 1, icon: 'i-lucide-arrow-down' },
-	{ label: 'Bottom right', value: 'bottom-right', x: 1, y: 1, icon: 'i-lucide-arrow-down-right' },
-] as const;
 
 export interface FeatureMatchOverlayCornerRadii {
 	topLeft: number;
@@ -96,7 +85,7 @@ export function featureMatchOverlayAlignmentCoordinate(alignment: FeatureMatchOv
 }
 
 export function resolveFeatureMatchOverlayAnchor(value: string | undefined) {
-	return FEATURE_MATCH_OVERLAY_ANCHOR_POINTS.find(point => point.value === value) ?? FEATURE_MATCH_OVERLAY_ANCHOR_POINTS[0];
+	return NINE_POINTS.find(point => point.value === value) ?? NINE_POINTS[0]!;
 }
 
 export function anchorFeatureMatchOverlayRect<T extends FeatureMatchOverlayRect>(rect: T, anchorValue: string | undefined): T {

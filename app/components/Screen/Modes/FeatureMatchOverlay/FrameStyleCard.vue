@@ -141,11 +141,8 @@ function animationSummary() {
 
 				<div v-if="animation.enabled" class="grid gap-3 md:grid-cols-2">
 					<UFormField label="Layer opacity">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="animation.opacity"
-							:step="0.05"
-							:min="0"
-							:max="1"
 							size="sm"
 							class="w-full"
 							@update:model-value="updateAnimation({ opacity: Number($event) })"
@@ -215,11 +212,8 @@ function animationSummary() {
 						/>
 					</UFormField>
 					<UFormField label="Glow opacity">
-						<UInputNumber
+						<UIOpacityInput
 							:model-value="config.layout.frame.glowOpacity ?? 0.75"
-							:step="0.05"
-							:min="0"
-							:max="1"
 							size="sm"
 							class="w-full"
 							@update:model-value="updateFrame({ glowOpacity: Number($event) })"
