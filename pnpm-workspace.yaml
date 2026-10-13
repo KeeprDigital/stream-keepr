@@ -1,28 +1,44 @@
-engineStrict: true
-verifyDepsBeforeRun: error
 # 24h supply-chain cooldown on new releases. This matches pnpm 11's effective
 # default, pinned explicitly so the gate the exclusion list below relies on
 # cannot vanish with a package-manager default change (#461).
 minimumReleaseAge: 1440
+minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
   - '@antfu/eslint-config@9.2.0'
   - miniflare@4.20260721.0 || 5.20260804.0-alpha
   - wrangler@4.113.0 || 4.120.1
-  - '@typescript-eslint/parser@8.67.0'
-  - '@typescript-eslint/project-service@8.67.0'
-  - '@typescript-eslint/scope-manager@8.67.0'
-  - '@typescript-eslint/tsconfig-utils@8.67.0'
-  - '@typescript-eslint/types@8.67.0'
-  - '@typescript-eslint/typescript-estree@8.67.0'
-  - '@typescript-eslint/visitor-keys@8.67.0'
+  - '@typescript-eslint/parser@8.67.0 || 8.71.2'
+  - '@typescript-eslint/project-service@8.67.0 || 8.71.2'
+  - '@typescript-eslint/scope-manager@8.67.0 || 8.71.2'
+  - '@typescript-eslint/tsconfig-utils@8.67.0 || 8.71.2'
+  - '@typescript-eslint/types@8.67.0 || 8.71.2'
+  - '@typescript-eslint/typescript-estree@8.67.0 || 8.71.2'
+  - '@typescript-eslint/visitor-keys@8.67.0 || 8.71.2'
+  - '@typescript-eslint/eslint-plugin@8.71.2'
+  - '@typescript-eslint/type-utils@8.71.2'
+  - '@typescript-eslint/utils@8.71.2'
   - ably@2.27.0
-shamefullyHoist: true
-shellEmulator: true
-
+  - '@iconify-json/lucide@1.2.143'
+  - '@iconify-json/simple-icons@1.2.100'
+  - zod@4.6.7
+  - '@vitest/coverage-v8@5.0.4'
+  - '@vitest/mocker@5.0.4'
+  - '@vitest/pretty-format@5.0.4'
+  - '@vitest/spy@5.0.4'
+  - '@vitest/ui@5.0.4'
+  - '@vitest/utils@5.0.4'
+  - happy-dom@21.0.1
+  - vitest@5.0.4
 # eslint-disable-next-line pnpm/yaml-enforce-settings
 trustPolicy: off
+shamefullyHoist: true
+shellEmulator: true
+verifyDepsBeforeRun: error
+engineStrict: true
+
 patchedDependencies:
   '@scryfall/api-types@1.0.0-alpha.4': patches/@scryfall__api-types@1.0.0-alpha.4.patch
+
 allowBuilds:
   '@parcel/watcher': true
   '@tailwindcss/oxide': true

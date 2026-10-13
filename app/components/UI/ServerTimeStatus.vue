@@ -3,7 +3,7 @@ const { isSynced, lastSyncedAt, serverTimeOffset } = useServerTime();
 
 const timeAgo = useTimeAgo(
 	computed(() => lastSyncedAt.value ?? Date.now()),
-	{ showSecond: true, updateInterval: 1000 },
+	{ showSecond: true, scheduler: tick => useIntervalFn(tick, 1000) },
 );
 
 const statusIcon = computed(() => (isSynced.value ? 'i-lucide-clock-3' : 'i-lucide-clock-alert'));

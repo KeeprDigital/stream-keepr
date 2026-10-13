@@ -182,8 +182,9 @@ How `pnpm verify` runs:
 - **Tried and rejected** (measured on a 10-core machine, September 2026):
   integration test files in parallel against one server (they assert
   library-wide state); `--no-isolate` for the Nuxt suite (about 4× faster, but
-  83 files fail on leaked state); Vitest's `experimental.fsModuleCache` (no gain
-  on the unit suite, breaks the Nuxt suite on a warm cache); `pool: 'threads'`
+  83 files fail on leaked state); Vitest's `fsModuleCache` (no gain on the
+  unit suite, breaks the Nuxt suite on a warm cache; on by default since
+  Vitest 5, so `vitest.nuxt.config.ts` turns it off); `pool: 'threads'`
   (no gain); ESLint `--concurrency` and `projectService` (slower, and
   `projectService` exhausts the heap).
 

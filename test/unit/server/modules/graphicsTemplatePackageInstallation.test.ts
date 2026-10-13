@@ -582,7 +582,10 @@ describe('the Template Package installation contract', () => {
 			kind: 'font',
 			compatibilityProfile: 'static-font-v1-unattested',
 		});
-	});
+		// The file's first font ingestion pays the cold font-validation path: about
+		// 0.7s under coverage alone, past 5s while `pnpm verify` builds, lints and
+		// typechecks beside it. The budget is sized for that, not for a slow test.
+	}, 20_000);
 
 	it('keeps a reused revision\'s own attested profile rather than the packaged one', async () => {
 		const { library } = createLibrary('sender');
