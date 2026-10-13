@@ -1,19 +1,11 @@
 <script setup lang="ts">
+import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
 import type { ShapeCorner, ShapeCornerKey, ShapeGeometry } from '~~/shared/types/graphics';
-import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
+import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
+import { mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
-	GRAPHIC_ANIMATION_EASING_VALUES,
-	GRAPHIC_REVEAL_EDGE_VALUES,
-	GRAPHIC_SLIDE_DIRECTION_VALUES,
-	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
-	MAX_GRAPHIC_ANIMATION_DURATION_MS,
-	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
-	MAX_GRAPHIC_ANIMATION_REPEAT,
-	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
-	MIN_GRAPHIC_ANIMATION_DURATION_MS,
-	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	SHAPE_CORNER_KEYS,
 	SHAPE_CORNER_TREATMENT_VALUES,
@@ -55,15 +47,17 @@ const geometryOptions = computed(() => props.entries
 	.map(entry => ({ label: entry.name, value: entry.id })));
 
 const FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
-const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
-const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTION_VALUES.map(value => ({ label: value, value }));
-const DISTANCE_MODE_OPTIONS = GRAPHIC_SLIDE_DISTANCE_MODE_VALUES.map(value => ({ label: value, value }));
-const REVEAL_EDGE_OPTIONS = GRAPHIC_REVEAL_EDGE_VALUES.map(value => ({ label: value, value }));
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
 	emit('update:value', { ...(props.entry.value as object), ...fields } as GraphicStyleSetEntry['value']);
+}
+
+/** One channel of a Graphic Animation Recipe entry, through the compositor's own merge. */
+function patchRecipeChannel<K extends GraphicAnimationChannelKey>(channel: K, fields: Partial<GraphicAnimationChannels[K]> | null) {
+	const recipe = props.entry.value as AnimationRecipeGraphicStyleEntryValue;
+	emit('update:value', mergeGraphicAnimationRecipeChannel(recipe, channel, fields));
 }
 
 function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
@@ -446,185 +440,19 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 		</template>
 
 		<template v-else-if="entry.kind === 'animation-recipe'">
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Duration (ms)" size="xs">
-					<UInputNumber
-						:model-value="entry.value.duration"
-						:min="MIN_GRAPHIC_ANIMATION_DURATION_MS"
-						:max="MAX_GRAPHIC_ANIMATION_DURATION_MS"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ duration: $event ?? MIN_GRAPHIC_ANIMATION_DURATION_MS })"
-					/>
-				</UFormField>
-				<UFormField label="Delay (ms)" size="xs">
-					<UInputNumber
-						:model-value="entry.value.delay ?? 0"
-						:min="0"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ delay: $event ?? 0 })"
-					/>
-				</UFormField>
-			</div>
-			<UFormField label="Easing" size="xs">
-				<USelect
-					:model-value="entry.value.easing"
-					:items="EASING_OPTIONS"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					@update:model-value="patch({ easing: $event })"
-				/>
-			</UFormField>
-
-			<UFormField label="Fade" size="xs">
-				<USwitch
-					:model-value="entry.value.fade !== undefined"
-					:disabled="disabled"
-					data-testid="style-entry-animation-fade"
-					@update:model-value="patch({ fade: $event ? { opacity: 0 } : undefined })"
-				/>
-			</UFormField>
-			<UFormField v-if="entry.value.fade" label="Fade from opacity" size="xs">
-				<UIOpacityInput
-					:model-value="entry.value.fade.opacity"
-					size="xs"
-					:disabled="disabled"
-					@update:model-value="patch({ fade: { opacity: $event ?? 0 } })"
-				/>
-			</UFormField>
-
-			<UFormField label="Slide" size="xs">
-				<USwitch
-					:model-value="entry.value.slide !== undefined"
-					:disabled="disabled"
-					@update:model-value="patch({
-						slide: $event ? { direction: 'north', distanceMode: 'fixed', distance: 40 } : undefined,
-					})"
-				/>
-			</UFormField>
-			<div v-if="entry.value.slide" class="grid grid-cols-3 gap-2">
-				<UFormField label="Direction" size="xs">
-					<USelect
-						:model-value="entry.value.slide.direction"
-						:items="DIRECTION_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patch({ slide: { ...(entry.value as { slide: object }).slide, direction: $event } })"
-					/>
-				</UFormField>
-				<UFormField label="Mode" size="xs">
-					<USelect
-						:model-value="entry.value.slide.distanceMode"
-						:items="DISTANCE_MODE_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patch({ slide: { ...(entry.value as { slide: object }).slide, distanceMode: $event } })"
-					/>
-				</UFormField>
-				<UFormField label="Distance" size="xs">
-					<UInputNumber
-						:model-value="entry.value.slide.distance"
-						:min="0"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ slide: { ...(entry.value as { slide: object }).slide, distance: $event ?? 0 } })"
-					/>
-				</UFormField>
-			</div>
-
-			<UFormField label="Scale" size="xs">
-				<USwitch
-					:model-value="entry.value.scale !== undefined"
-					:disabled="disabled"
-					data-testid="style-entry-animation-scale"
-					@update:model-value="patch({ scale: $event ? { factor: 0.9, origin: 'center' } : undefined })"
-				/>
-			</UFormField>
-			<div v-if="entry.value.scale" class="grid grid-cols-2 gap-2">
-				<UFormField label="Scale from" size="xs">
-					<UInputNumber
-						:model-value="entry.value.scale.factor"
-						:min="0"
-						:max="MAX_GRAPHIC_ANIMATION_SCALE"
-						:step="0.05"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ scale: { ...(entry.value as { scale: object }).scale, factor: $event ?? 1 } })"
-					/>
-				</UFormField>
-				<UFormField label="Origin" size="xs">
-					<UINinePointPicker
-						:model-value="entry.value.scale.origin"
-						aria-label="Scale origin"
-						:disabled="disabled"
-						@update:model-value="patch({ scale: { ...(entry.value as { scale: object }).scale, origin: $event } })"
-					/>
-				</UFormField>
-			</div>
-
-			<UFormField label="Reveal" size="xs">
-				<USwitch
-					:model-value="entry.value.reveal !== undefined"
-					:disabled="disabled"
-					@update:model-value="patch({ reveal: $event ? { edge: 'left' } : undefined })"
-				/>
-			</UFormField>
-			<UFormField v-if="entry.value.reveal" label="Reveal edge" size="xs">
-				<USelect
-					:model-value="entry.value.reveal.edge"
-					:items="REVEAL_EDGE_OPTIONS"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					@update:model-value="patch({ reveal: { edge: $event } })"
-				/>
-			</UFormField>
-
 			<!--
-				On-screen-only defaults. A template may assign this same preset to any
-				lifecycle phase, and the three that do not cycle simply never receive them —
-				which is why they are authored here rather than being a separate kind.
+				On-screen-only defaults, hence cycling. A template may assign this same preset
+				to any lifecycle phase, and the three that do not cycle simply never receive
+				them — which is why they are authored here rather than being a separate kind.
 			-->
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Pause between cycles (ms)" size="xs">
-					<UInputNumber
-						:model-value="entry.value.pause ?? 0"
-						:min="0"
-						:max="MAX_GRAPHIC_ANIMATION_PAUSE_MS"
-						size="xs"
-						:disabled="disabled"
-						data-testid="style-entry-animation-pause"
-						@update:model-value="patch({ pause: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Repeat" size="xs">
-					<UInputNumber
-						:model-value="entry.value.repeat === 'indefinite' ? undefined : Number(entry.value.repeat ?? 1)"
-						:min="MIN_GRAPHIC_ANIMATION_REPEAT"
-						:max="MAX_GRAPHIC_ANIMATION_REPEAT"
-						:disabled="disabled || entry.value.repeat === 'indefinite'"
-						size="xs"
-						data-testid="style-entry-animation-repeat"
-						@update:model-value="patch({ repeat: $event ?? 1 })"
-					/>
-				</UFormField>
-			</div>
-			<UFormField label="Repeat indefinitely" size="xs">
-				<USwitch
-					:model-value="entry.value.repeat === 'indefinite'"
-					:disabled="disabled"
-					data-testid="style-entry-animation-repeat-indefinite"
-					@update:model-value="patch({ repeat: $event ? 'indefinite' : 1 })"
-				/>
-			</UFormField>
+			<GraphicsAnimationRecipeFields
+				:recipe="entry.value"
+				cycling
+				:disabled="disabled"
+				test-id-prefix="style-entry-animation"
+				@update="patch"
+				@channel="patchRecipeChannel"
+			/>
 		</template>
 	</div>
 </template>

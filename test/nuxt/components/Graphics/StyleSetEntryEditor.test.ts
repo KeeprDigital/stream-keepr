@@ -317,6 +317,33 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper).repeat).toBe(1);
 	});
 
+	it('switches a Graphic Animation Recipe channel the way a lifecycle phase does', async () => {
+		const recipe: GraphicStyleSetEntry = {
+			id: 'drift',
+			kind: 'animation-recipe',
+			name: 'Drift',
+			schemaVersion: 1,
+			value: { duration: 400, easing: 'ease-out', fade: { opacity: 0 } },
+		};
+		const wrapper = await mountEditor(recipe);
+
+		await wrapper.get('[data-testid="style-entry-animation-slide-enabled"]').setValue(true);
+
+		// The compositor's channel defaults, beside the recipe's other fields.
+		expect(emittedValue(wrapper)).toEqual({
+			duration: 400,
+			easing: 'ease-out',
+			fade: { opacity: 0 },
+			slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
+		});
+
+		await wrapper.get('[data-testid="style-entry-animation-fade-enabled"]').setValue(false);
+
+		// Removed, not left as an undefined key on a value persisted as JSON.
+		expect(emittedValue(wrapper)).toEqual({ duration: 400, easing: 'ease-out' });
+		expect('fade' in emittedValue(wrapper)).toBe(false);
+	});
+
 	it('gives an observer every preset to read and none to write', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY, { writable: false });
 

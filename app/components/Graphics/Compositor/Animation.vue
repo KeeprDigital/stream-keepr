@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { GraphicAnimationChannelKey } from '~~/shared/modules/graphics';
+import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
 import type {
 	BroadcastGraphicConfig,
 	GraphicAnimationPhase,
@@ -21,7 +21,6 @@ import {
 	enableBroadcastGraphicAnimationPhase,
 	enableGraphicItemAnimationPhase,
 	GRAPHIC_ANIMATION_PHASE_LABELS,
-	GRAPHIC_SLIDE_DIRECTIONS,
 	graphicAnimationPresetsForPhase,
 	patchBroadcastGraphicAnimationChannel,
 	patchBroadcastGraphicAnimationRecipe,
@@ -36,20 +35,9 @@ import {
 	toggleGraphicItemStaggerMember,
 } from '~~/shared/modules/graphics';
 import {
-	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
-	GRAPHIC_REVEAL_EDGE_VALUES,
-	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
-	MAX_GRAPHIC_ANIMATION_DELAY_MS,
-	MAX_GRAPHIC_ANIMATION_DURATION_MS,
-	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
-	MAX_GRAPHIC_ANIMATION_REPEAT,
-	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
-	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
-	MIN_GRAPHIC_ANIMATION_DURATION_MS,
-	MIN_GRAPHIC_ANIMATION_REPEAT,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
@@ -59,7 +47,9 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  *
  * Enabling a lifecycle phase is what creates its recipe, and disabling it is what
  * removes it — a newly authored graphic or item has none. A preset writes an
- * ordinary editable recipe and nothing records that it was used.
+ * ordinary editable recipe and nothing records that it was used. The recipe body
+ * itself is the shared Graphic Animation Recipe fields control, the same one a
+ * Graphic Animation Recipe preset is edited with; this component owns the phases.
  *
  * Every edit goes through the shared authoring merges, so changing one channel
  * field never drops the channel's siblings and changing one channel never drops
@@ -146,25 +136,10 @@ function unbindStyleRef(phase: GraphicAnimationPhase) {
 	));
 }
 
-const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
-const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTIONS.map(entry => ({ label: entry.label, value: entry.value }));
-const DISTANCE_MODE_OPTIONS = [
-	{ label: 'Fixed', value: GRAPHIC_SLIDE_DISTANCE_MODE_VALUES[0] },
-	{ label: 'Clear parent', value: GRAPHIC_SLIDE_DISTANCE_MODE_VALUES[1] },
-];
-const REVEAL_EDGE_OPTIONS = GRAPHIC_REVEAL_EDGE_VALUES.map(value => ({ label: value, value }));
 const STAGGER_ORDER_OPTIONS = [
 	{ label: 'List order', value: GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES[0] },
 	{ label: 'Reverse list order', value: GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES[1] },
 ];
-const CHANNEL_KEYS: readonly GraphicAnimationChannelKey[] = ['fade', 'slide', 'scale', 'reveal'];
-const CHANNEL_LABELS: Record<GraphicAnimationChannelKey, string> = {
-	fade: 'Fade',
-	slide: 'Slide',
-	scale: 'Scale',
-	reveal: 'Reveal',
-};
-
 const PHASES = GRAPHIC_ANIMATION_PHASE_VALUES;
 
 /**
@@ -278,11 +253,11 @@ function updateRecipe(phase: GraphicAnimationPhase, patch: Partial<GraphicOnScre
 function updateChannel<K extends GraphicAnimationChannelKey>(
 	phase: GraphicAnimationPhase,
 	channel: K,
-	patch: Record<string, unknown> | null,
+	patch: Partial<GraphicAnimationChannels[K]> | null,
 ) {
 	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch as never),
-		(graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch as never),
+		(graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch),
+		(graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch),
 	);
 }
 
@@ -317,10 +292,6 @@ function recipeOf(phase: GraphicAnimationPhase) {
 
 function staggerOf(phase: GraphicAnimationPhase) {
 	return animation.value?.stagger?.[phase];
-}
-
-function onScreenRecipeOf() {
-	return animation.value?.['on-screen'];
 }
 </script>
 
@@ -383,179 +354,14 @@ function onScreenRecipeOf() {
 					/>
 				</UFormField>
 
-				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Duration (ms)" size="xs">
-						<UInputNumber
-							:model-value="recipeOf(phase)!.duration"
-							:min="MIN_GRAPHIC_ANIMATION_DURATION_MS"
-							:max="MAX_GRAPHIC_ANIMATION_DURATION_MS"
-							size="xs"
-							:data-testid="`animation-${phase}-duration`"
-							@update:model-value="value => updateRecipe(phase, { duration: Number(value ?? 0) })"
-						/>
-					</UFormField>
-					<UFormField label="Delay (ms)" size="xs">
-						<UInputNumber
-							:model-value="recipeOf(phase)!.delay"
-							:min="0"
-							:max="MAX_GRAPHIC_ANIMATION_DELAY_MS"
-							size="xs"
-							:data-testid="`animation-${phase}-delay`"
-							@update:model-value="value => updateRecipe(phase, { delay: Number(value ?? 0) })"
-						/>
-					</UFormField>
-				</div>
-
-				<UFormField label="Easing" size="xs">
-					<USelectMenu
-						:model-value="recipeOf(phase)!.easing"
-						:items="EASING_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:data-testid="`animation-${phase}-easing`"
-						@update:model-value="value => updateRecipe(phase, { easing: value })"
-					/>
-				</UFormField>
-
-				<template v-if="phase === 'on-screen'">
-					<div class="grid grid-cols-2 gap-2">
-						<UFormField label="Pause (ms)" size="xs">
-							<UInputNumber
-								:model-value="onScreenRecipeOf()?.pause ?? 0"
-								:min="0"
-								:max="MAX_GRAPHIC_ANIMATION_PAUSE_MS"
-								size="xs"
-								data-testid="animation-on-screen-pause"
-								@update:model-value="value => updateRecipe(phase, { pause: Number(value ?? 0) })"
-							/>
-						</UFormField>
-						<UFormField label="Repeat" size="xs">
-							<UInputNumber
-								:model-value="onScreenRecipeOf()?.repeat === 'indefinite' ? undefined : Number(onScreenRecipeOf()?.repeat ?? 1)"
-								:min="MIN_GRAPHIC_ANIMATION_REPEAT"
-								:max="MAX_GRAPHIC_ANIMATION_REPEAT"
-								:disabled="onScreenRecipeOf()?.repeat === 'indefinite'"
-								size="xs"
-								data-testid="animation-on-screen-repeat"
-								@update:model-value="value => updateRecipe(phase, { repeat: Number(value ?? 1) })"
-							/>
-						</UFormField>
-					</div>
-					<UFormField label="Repeat indefinitely" size="xs" class="flex items-center gap-2">
-						<USwitch
-							:model-value="onScreenRecipeOf()?.repeat === 'indefinite'"
-							size="sm"
-							data-testid="animation-on-screen-indefinite"
-							@update:model-value="value => updateRecipe(phase, { repeat: value === true ? 'indefinite' : 1 })"
-						/>
-					</UFormField>
-				</template>
-
-				<div
-					v-for="channel in CHANNEL_KEYS"
-					:key="channel"
-					class="rounded border border-default/50 p-2"
-				>
-					<div class="flex items-center justify-between gap-2">
-						<p class="text-xs">
-							{{ CHANNEL_LABELS[channel] }}
-						</p>
-						<USwitch
-							:model-value="recipeOf(phase)![channel] !== undefined"
-							size="sm"
-							:aria-label="`${CHANNEL_LABELS[channel]} channel`"
-							:data-testid="`animation-${phase}-${channel}-enabled`"
-							@update:model-value="value => updateChannel(phase, channel, value === true ? {} : null)"
-						/>
-					</div>
-
-					<div v-if="channel === 'fade' && recipeOf(phase)!.fade" class="mt-2">
-						<UFormField label="Opacity at excursion" size="xs">
-							<UIOpacityInput
-								:model-value="recipeOf(phase)!.fade!.opacity"
-								size="xs"
-								:data-testid="`animation-${phase}-fade-opacity`"
-								@update:model-value="value => updateChannel(phase, 'fade', { opacity: Number(value ?? 0) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-if="channel === 'slide' && recipeOf(phase)!.slide" class="mt-2 space-y-2">
-						<UFormField label="Direction" size="xs">
-							<USelectMenu
-								:model-value="recipeOf(phase)!.slide!.direction"
-								:items="DIRECTION_OPTIONS"
-								value-key="value"
-								size="xs"
-								class="w-full"
-								:data-testid="`animation-${phase}-slide-direction`"
-								@update:model-value="value => updateChannel(phase, 'slide', { direction: value })"
-							/>
-						</UFormField>
-						<UFormField label="Distance" size="xs">
-							<USelectMenu
-								:model-value="recipeOf(phase)!.slide!.distanceMode"
-								:items="DISTANCE_MODE_OPTIONS"
-								value-key="value"
-								size="xs"
-								class="w-full"
-								:data-testid="`animation-${phase}-slide-mode`"
-								@update:model-value="value => updateChannel(phase, 'slide', { distanceMode: value })"
-							/>
-						</UFormField>
-						<UFormField
-							v-if="recipeOf(phase)!.slide!.distanceMode === 'fixed'"
-							label="Distance (px)"
-							size="xs"
-						>
-							<UInputNumber
-								:model-value="recipeOf(phase)!.slide!.distance"
-								:min="0"
-								:max="MAX_GRAPHIC_SLIDE_DISTANCE_PX"
-								size="xs"
-								:data-testid="`animation-${phase}-slide-distance`"
-								@update:model-value="value => updateChannel(phase, 'slide', { distance: Number(value ?? 0) })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-if="channel === 'scale' && recipeOf(phase)!.scale" class="mt-2 space-y-2">
-						<UFormField label="Factor" size="xs">
-							<UInputNumber
-								:model-value="recipeOf(phase)!.scale!.factor"
-								:min="0"
-								:max="MAX_GRAPHIC_ANIMATION_SCALE"
-								:step="0.05"
-								size="xs"
-								:data-testid="`animation-${phase}-scale-factor`"
-								@update:model-value="value => updateChannel(phase, 'scale', { factor: Number(value ?? 0) })"
-							/>
-						</UFormField>
-						<UFormField label="Origin" size="xs">
-							<UINinePointPicker
-								:model-value="recipeOf(phase)!.scale!.origin"
-								aria-label="Scale origin"
-								:data-testid="`animation-${phase}-scale-origin`"
-								@update:model-value="value => updateChannel(phase, 'scale', { origin: value })"
-							/>
-						</UFormField>
-					</div>
-
-					<div v-if="channel === 'reveal' && recipeOf(phase)!.reveal" class="mt-2">
-						<UFormField label="From edge" size="xs">
-							<USelectMenu
-								:model-value="recipeOf(phase)!.reveal!.edge"
-								:items="REVEAL_EDGE_OPTIONS"
-								value-key="value"
-								size="xs"
-								class="w-full"
-								:data-testid="`animation-${phase}-reveal-edge`"
-								@update:model-value="value => updateChannel(phase, 'reveal', { edge: value })"
-							/>
-						</UFormField>
-					</div>
-				</div>
+				<GraphicsAnimationRecipeFields
+					:recipe="recipeOf(phase)!"
+					:cycling="phase === 'on-screen'"
+					:disabled="!canAuthor"
+					:test-id-prefix="`animation-${phase}`"
+					@update="patch => updateRecipe(phase, patch)"
+					@channel="(channel, patch) => updateChannel(phase, channel, patch)"
+				/>
 			</div>
 
 			<!--

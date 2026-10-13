@@ -1,4 +1,5 @@
 import type { BroadcastGraphicConfig, GraphicGroupItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
+import type { AnimationRecipeGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
 import { describe, expect, it } from 'vitest';
 import {
 	applyBroadcastGraphicAnimationPreset,
@@ -8,6 +9,7 @@ import {
 	enableBroadcastGraphicAnimationPhase,
 	enableGraphicItemAnimationPhase,
 	findGraphicItem,
+	mergeGraphicAnimationRecipeChannel,
 	patchBroadcastGraphicAnimationChannel,
 	patchBroadcastGraphicAnimationRecipe,
 	patchBroadcastGraphicAnimationStagger,
@@ -281,5 +283,40 @@ describe('whole-graphic animation authoring', () => {
 		const next = applyBroadcastGraphicAnimationPreset(stack, 'lower-third', 'enter', 'fade-in');
 
 		expect(next[0]?.items).toEqual(stack[0]?.items);
+	});
+});
+
+describe('one channel merge for every recipe', () => {
+	it('switches a channel on with its editable default, keeping the recipe\'s other fields', () => {
+		// A Graphic Animation Recipe preset carries no delay and the on-screen defaults;
+		// the merge keeps whatever the recipe holds beside the channel.
+		const recipe: AnimationRecipeGraphicStyleEntryValue = { duration: 400, easing: 'linear', pause: 500, repeat: 3 };
+
+		expect(mergeGraphicAnimationRecipeChannel(recipe, 'slide', {})).toEqual({
+			...recipe,
+			slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
+		});
+		expect(mergeGraphicAnimationRecipeChannel(recipe, 'scale', {}).scale).toEqual({ factor: 0.8, origin: 'center' });
+	});
+
+	it('merges one channel field over the channel siblings', () => {
+		const recipe = {
+			duration: 400,
+			easing: 'linear' as const,
+			slide: { direction: 'west' as const, distanceMode: 'fixed' as const, distance: 40 },
+		};
+
+		expect(mergeGraphicAnimationRecipeChannel(recipe, 'slide', { distanceMode: 'clear-parent' }).slide)
+			.toEqual({ direction: 'west', distanceMode: 'clear-parent', distance: 40 });
+	});
+
+	it('deletes a channel switched off rather than leaving an undefined key behind', () => {
+		const recipe = { duration: 400, easing: 'linear' as const, fade: { opacity: 0 } };
+
+		const next = mergeGraphicAnimationRecipeChannel(recipe, 'fade', null);
+
+		expect(next).toEqual({ duration: 400, easing: 'linear' });
+		expect('fade' in next).toBe(false);
+		expect(recipe.fade).toEqual({ opacity: 0 });
 	});
 });

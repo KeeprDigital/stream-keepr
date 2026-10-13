@@ -83,6 +83,9 @@ const USelectMenuStub = defineComponent({
 	template: '<select :value="modelValue" />',
 });
 
+/** The recipe fields choose with a select; the phase scaffolding with a menu. */
+const USelectStub = defineComponent({ ...USelectMenuStub, name: 'USelect' });
+
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
 	props: {
@@ -123,6 +126,7 @@ async function mountComponent(options: {
 			stubs: {
 				UFormField: SlotOnlyStub,
 				USelectMenu: USelectMenuStub,
+				USelect: USelectStub,
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
 				UBadge: true,
@@ -149,7 +153,10 @@ function numberField(wrapper: Wrapper, testId: string) {
 }
 
 function selectField(wrapper: Wrapper, testId: string) {
-	return wrapper.findAllComponents({ name: 'USelectMenu' })
+	return [
+		...wrapper.findAllComponents({ name: 'USelectMenu' }),
+		...wrapper.findAllComponents({ name: 'USelect' }),
+	]
 		.find(entry => entry.attributes('data-testid') === testId);
 }
 
@@ -280,7 +287,7 @@ describe('graphicAnimationEditor', () => {
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
 		expect(numberField(wrapper, 'animation-on-screen-pause')).toBeDefined();
-		expect(switchField(wrapper, 'animation-on-screen-indefinite')?.props('modelValue')).toBe(true);
+		expect(switchField(wrapper, 'animation-on-screen-repeat-indefinite')?.props('modelValue')).toBe(true);
 		// A repeat count is inert while a recipe repeats indefinitely.
 		expect(numberField(wrapper, 'animation-on-screen-repeat')?.props('disabled')).toBe(true);
 	});
@@ -290,7 +297,7 @@ describe('graphicAnimationEditor', () => {
 		graphics[0]!.items[0]!.animation = { 'on-screen': createDefaultGraphicAnimationRecipe('on-screen') };
 		const wrapper = await mountComponent({ graphics, selectedTarget: ITEM_TARGET });
 
-		switchField(wrapper, 'animation-on-screen-indefinite')!.vm.$emit('update:modelValue', false);
+		switchField(wrapper, 'animation-on-screen-repeat-indefinite')!.vm.$emit('update:modelValue', false);
 		await nextTick();
 
 		expect(emittedGraphics(wrapper)[0]?.items[0]?.animation?.['on-screen']?.repeat).toBe(1);
@@ -348,7 +355,7 @@ describe('graphicAnimationEditor', () => {
 		const { default: Animation } = await import(componentPath);
 		const wrapper = mount(Animation, {
 			props: { graphics: stack(), selectedTarget: ITEM_TARGET },
-			global: { stubs: { UFormField: SlotOnlyStub, USelectMenu: USelectMenuStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
+			global: { stubs: { UFormField: SlotOnlyStub, USelectMenu: USelectMenuStub, USelect: USelectStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
 		});
 
 		expect(wrapper.get('[data-testid="graphic-animation-editor"]').attributes('disabled')).toBeDefined();
