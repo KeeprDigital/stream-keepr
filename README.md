@@ -301,7 +301,7 @@ There is no separate staging environment: **production is the staging gate.**
 The production hostname is `https://stream.keepr.digital`, attached as a
 `custom_domain` route in `wrangler.jsonc`.
 
-`pnpm deploy` runs, in order and stopping at the first failure:
+`pnpm run deploy` runs, in order and stopping at the first failure:
 
 1. `pnpm build`.
 2. `pnpm worker:dry-run`: bundles what Wrangler would upload into
@@ -321,7 +321,7 @@ transaction. Schedule incompatible schema changes for a maintenance window.
 ### Deploy from GitHub Actions
 
 The **Deploy** workflow (`.github/workflows/deploy.yml`) is manual-only and runs
-what `pnpm deploy` runs, but ships a **released tag**, never `main`'s HEAD:
+what `pnpm run deploy` runs, but ships a **released tag**, never `main`'s HEAD:
 
 - `version`: `latest` (default) or a tag like `v1.2.0`. Rollback is dispatching
   it with the previous tag.
@@ -359,7 +359,7 @@ mid-run names the Event it left behind; delete it before rerunning.
 
    ```bash
    pnpm deploy:validator   # when the validator changed
-   pnpm deploy
+   pnpm run deploy
    ```
 
    If `deploy:verify` fails, stop and roll back: redeploy the previous Worker

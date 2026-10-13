@@ -8,7 +8,7 @@
  * support emit the codecs as ESM imports of real `.wasm` assets instead — but
  * nothing failed if a later edit registered that plugin again, and the plugin's
  * own docblock warning was the entire defence. This is the standing guard #319
- * asked for; `pnpm worker:dry-run` runs it, so `pnpm deploy` reaches it before
+ * asked for; `pnpm worker:dry-run` runs it, so `pnpm run deploy` reaches it before
  * promotion rather than after.
  *
  * The pattern is deliberately narrow, and measured rather than assumed. A

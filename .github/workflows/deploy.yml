@@ -1,8 +1,8 @@
 # Manually triggered production deploy — the Actions counterpart of running
-# `pnpm deploy` locally. It exists as an *option*, not a replacement: deploys
+# `pnpm run deploy` locally. It exists as an *option*, not a replacement: deploys
 # are never merge-triggered, because deploy day is a human procedure
 # (README.md § Deploy day). This workflow covers only what
-# `pnpm deploy` covers — build, Wasm dry run, Worker smoke against the
+# `pnpm run deploy` covers — build, Wasm dry run, Worker smoke against the
 # production-env build, D1 migration, Worker promotion, health verify.
 # Everything after promotion stays with the operator:
 #
@@ -16,7 +16,7 @@
 # Actions deploys ship released tags, never main's HEAD: the version input
 # resolves through GitHub Releases (cut by merging the Release PR), so what
 # promotes is always a formally released snapshot whose PRs ran CI green — and rollback
-# is dispatching this workflow with the previous tag. Local `pnpm deploy`
+# is dispatching this workflow with the previous tag. Local `pnpm run deploy`
 # stays free-form for emergencies.
 #
 # Required `production` environment secrets (the environment deploys only
@@ -171,7 +171,7 @@ jobs:
         if: steps.validator.outputs.deploy == 'true'
         run: pnpm deploy:validator
       - name: Deploy (build, dry run, smoke, migrate D1, promote, verify)
-        run: pnpm deploy
+        run: pnpm run deploy
       - name: Move the production tag to the deployed commit
         run: git push origin +HEAD:refs/tags/production
       - name: Remind the operator what is still owed
