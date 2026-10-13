@@ -79,10 +79,14 @@ import {
 	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
+	MAX_GRAPHIC_FONT_SIZE,
+	MAX_GRAPHIC_FONT_WEIGHT,
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_LETTER_SPACING,
+	MAX_GRAPHIC_LINE_HEIGHT,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
@@ -96,6 +100,8 @@ import {
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
+	MIN_GRAPHIC_FONT_WEIGHT,
+	MIN_GRAPHIC_LETTER_SPACING,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_SOCIAL_PROFILE_DWELL_MS,
@@ -639,12 +645,12 @@ const graphicFontSelectionSchema = z.discriminatedUnion('kind', [
 
 const graphicTypographySchema = z.object({
 	font: graphicFontSelectionSchema,
-	fontSize: finiteNumberSchema.positive().max(600),
-	fontWeight: finiteNumberSchema.int().min(1).max(1000),
+	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
+	fontWeight: finiteNumberSchema.int().min(MIN_GRAPHIC_FONT_WEIGHT).max(MAX_GRAPHIC_FONT_WEIGHT),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
 	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
-	letterSpacing: finiteNumberSchema.min(-20).max(100),
-	lineHeight: finiteNumberSchema.positive().max(10),
+	letterSpacing: finiteNumberSchema.min(MIN_GRAPHIC_LETTER_SPACING).max(MAX_GRAPHIC_LETTER_SPACING),
+	lineHeight: finiteNumberSchema.positive().max(MAX_GRAPHIC_LINE_HEIGHT),
 	textAlign: z.enum(GRAPHIC_TEXT_ALIGN_VALUES),
 	color: cssColorSchema,
 }).strict();
@@ -1165,11 +1171,11 @@ const graphicItemBaseShape = {
  */
 const graphicPlaceholderStyleSchema = z.object({
 	font: graphicFontSelectionSchema.optional(),
-	fontSize: finiteNumberSchema.positive().max(600).optional(),
-	fontWeight: z.number().int().min(100).max(900).optional(),
+	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE).optional(),
+	fontWeight: finiteNumberSchema.int().min(MIN_GRAPHIC_FONT_WEIGHT).max(MAX_GRAPHIC_FONT_WEIGHT).optional(),
 	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES).optional(),
 	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES).optional(),
-	letterSpacing: finiteNumberSchema.min(-100).max(100).optional(),
+	letterSpacing: finiteNumberSchema.min(MIN_GRAPHIC_LETTER_SPACING).max(MAX_GRAPHIC_LETTER_SPACING).optional(),
 	color: cssColorSchema.optional(),
 }).strict();
 
@@ -1185,7 +1191,7 @@ const textGraphicItemShape = {
 	text: z.string().max(MAX_GRAPHIC_TEXT_LENGTH),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
-	minFontSize: finiteNumberSchema.positive().max(600),
+	minFontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 	placeholderStyles: z.record(
 		graphicPlaceholderKeySchema,
@@ -1261,7 +1267,7 @@ const clockGraphicItemShape = {
 	type: z.literal('clock'),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
-	minFontSize: finiteNumberSchema.positive().max(600),
+	minFontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 };
 
@@ -1271,7 +1277,7 @@ const playerLifeGraphicItemShape = {
 	playerSide: z.enum(PLAYER_SIDE_VALUES),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
-	minFontSize: finiteNumberSchema.positive().max(600),
+	minFontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
 	lifeAnimation: z.enum(PLAYER_LIFE_ANIMATION_VALUES),
 	lifeAnimationDurationMs: finiteNumberSchema
 		.int()
@@ -1471,7 +1477,7 @@ export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
  * quote different baselines for the same pre-existing Graphic Item.
  */
 export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN = 300;
-export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_713_744;
+export const MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN_WORST_CASE_BYTES = 3_715_514;
 
 function countGraphicItems(items: readonly { type: string; children?: readonly unknown[] }[]): number {
 	return items.reduce(

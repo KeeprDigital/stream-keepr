@@ -92,18 +92,18 @@ import {
 	DECK_LIST_VIEW_VALUES,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
-	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_INPUT_TYPE_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
-	GRAPHIC_TEXT_TRANSFORM_VALUES,
+	MAX_GRAPHIC_FONT_SIZE,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
+	MIN_GRAPHIC_FONT_SIZE,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	PLAYER_LIFE_ANIMATION_VALUES,
@@ -183,12 +183,6 @@ const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Shrink then ellipsis', value: 'shrink' },
 ] satisfies Array<{ label: string; value: typeof TEXT_OVERFLOW_POLICY_VALUES[number] }>;
 const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
-const TEXT_TRANSFORM_OPTIONS = GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value }));
-const FONT_STYLE_OPTIONS = GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value }));
-const PLACEHOLDER_FONT_STYLE_OPTIONS = [
-	{ label: 'Same as base', value: 'base' },
-	...FONT_STYLE_OPTIONS,
-];
 const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
 const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
@@ -951,18 +945,6 @@ function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlacehol
 	);
 }
 
-function updatePlaceholderFontStyle(
-	inputKey: string,
-	fontStyle: string,
-) {
-	if (fontStyle !== 'base' && fontStyle !== 'normal' && fontStyle !== 'italic')
-		return;
-
-	updatePlaceholderStyle(inputKey, {
-		fontStyle: fontStyle === 'base' ? undefined : fontStyle,
-	});
-}
-
 /**
  * Which arm each placeholder's author is editing, when its stored style cannot say.
  *
@@ -1709,100 +1691,49 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				@unbind="unbindStyleRef('typography')"
 			/>
 
-			<!--
-				A font is either one that ships with Stream Keepr or one exact font
-				Graphic Asset Revision from the Graphics Asset Library. The same control
-				a Graphic Placeholder Style below offers, less its third answer: a
-				`GraphicTypography` must name a font, so "same as base" is not one here.
-			-->
-			<GraphicsCompositorFontSelectionField
-				:source="fontSource"
-				:font="selectedFont"
-				:event-id="eventId"
-				field-label="Typography"
-				size="sm"
+			<GraphicsTypographyFields
+				:typography="selectedTypography"
 				test-id-prefix="typography"
-				@update:source="updateFontSource"
-				@application="updateTypography({ font: applicationGraphicFont($event) })"
-				@select="selectFontAsset"
-				@clear="clearFontAsset"
-			/>
-
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Size" size="sm">
-					<UInputNumber
-						:model-value="selectedTypography.fontSize"
-						:min="1"
+				@update="updateTypography"
+			>
+				<!--
+					A font is either one that ships with Stream Keepr or one exact font
+					Graphic Asset Revision from the Graphics Asset Library. The same control
+					a Graphic Placeholder Style below offers, less its third answer: a
+					`GraphicTypography` must name a font, so "same as base" is not one here.
+				-->
+				<template #font>
+					<GraphicsCompositorFontSelectionField
+						:source="fontSource"
+						:font="selectedFont"
+						:event-id="eventId"
+						field-label="Typography"
 						size="sm"
-						class="w-full"
-						aria-label="Font size"
-						@update:model-value="updateTypography({ fontSize: $event ?? 1 })"
+						test-id-prefix="typography"
+						@update:source="updateFontSource"
+						@application="updateTypography({ font: applicationGraphicFont($event) })"
+						@select="selectFontAsset"
+						@clear="clearFontAsset"
 					/>
-				</UFormField>
-				<UFormField label="Weight" size="sm">
-					<UInputNumber
-						:model-value="selectedTypography.fontWeight"
-						:min="1"
-						:max="1000"
-						size="sm"
-						class="w-full"
-						aria-label="Font weight"
-						@update:model-value="updateTypography({ fontWeight: $event ?? 400 })"
-					/>
-				</UFormField>
-				<UFormField label="Letter spacing" size="sm">
-					<UInputNumber
-						:model-value="selectedTypography.letterSpacing"
-						size="sm"
-						class="w-full"
-						aria-label="Letter spacing"
-						@update:model-value="updateTypography({ letterSpacing: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Line height" size="sm">
-					<UInputNumber
-						:model-value="selectedTypography.lineHeight"
-						:step="0.05"
-						size="sm"
-						class="w-full"
-						aria-label="Line height"
-						@update:model-value="updateTypography({ lineHeight: $event ?? 1 })"
-					/>
-				</UFormField>
-				<UFormField label="Style" size="sm">
-					<USelect
-						:model-value="selectedTypography.fontStyle"
-						:items="FONT_STYLE_OPTIONS"
-						value-key="value"
-						class="w-full"
-						@update:model-value="updateTypography({ fontStyle: $event as never })"
-					/>
-				</UFormField>
-				<UFormField label="Case" size="sm">
-					<USelect
-						:model-value="selectedTypography.textTransform"
-						:items="TEXT_TRANSFORM_OPTIONS"
-						value-key="value"
-						class="w-full"
-						@update:model-value="updateTypography({ textTransform: $event as never })"
-					/>
-				</UFormField>
-				<UFormField label="Align" size="sm">
-					<USelect
-						:model-value="selectedTypography.textAlign"
-						:items="TEXT_ALIGN_OPTIONS"
-						value-key="value"
-						class="w-full"
-						@update:model-value="updateTypography({ textAlign: $event as never })"
-					/>
-				</UFormField>
-				<UFormField label="Colour" size="sm">
-					<UIColorPicker
-						:model-value="selectedTypography.color"
-						@update:model-value="updateTypography({ color: $event?.toString() || '#ffffff' })"
-					/>
-				</UFormField>
-			</div>
+				</template>
+				<template #color>
+					<UFormField label="Align" size="sm">
+						<USelect
+							:model-value="selectedTypography.textAlign"
+							:items="TEXT_ALIGN_OPTIONS"
+							value-key="value"
+							class="w-full"
+							@update:model-value="updateTypography({ textAlign: $event as never })"
+						/>
+					</UFormField>
+					<UFormField label="Colour" size="sm">
+						<UIColorPicker
+							:model-value="selectedTypography.color"
+							@update:model-value="updateTypography({ color: $event?.toString() || '#ffffff' })"
+						/>
+					</UFormField>
+				</template>
+			</GraphicsTypographyFields>
 		</template>
 
 		<!--
@@ -1830,7 +1761,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			>
 				<UInputNumber
 					:model-value="selectedTextOverflow.minFontSize"
-					:min="1"
+					:min="MIN_GRAPHIC_FONT_SIZE"
+					:max="MAX_GRAPHIC_FONT_SIZE"
 					size="sm"
 					class="w-full"
 					data-testid="text-min-font-size"
@@ -1865,68 +1797,45 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						Use base
 					</UButton>
 				</div>
-				<!--
-					A placeholder's own Graphic Font Selection. The same control as the base
-					typography above, with the one answer a placeholder has and it does not:
-					a font is optional here, so "same as base" is a real answer. What the two
-					do with an unpinned library arm differs, which is why the answer arrives
-					here rather than being settled inside the control.
-				-->
-				<GraphicsCompositorFontSelectionField
-					:source="placeholderFontSource(inputKey)"
-					:font="placeholderStyleFor(inputKey).font"
-					optional
-					:event-id="eventId"
-					:field-label="`Placeholder ${placeholderToken(inputKey)}`"
+				<GraphicsTypographyFields
+					:typography="placeholderStyleFor(inputKey)"
+					inheritable
 					size="xs"
 					test-id-prefix="graphic-placeholder-style"
-					@update:source="source => updatePlaceholderFontSource(inputKey, source)"
-					@application="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event) })"
-					@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
-					@clear="clearPlaceholderFontAsset(inputKey)"
-				/>
-
-				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Size" size="xs">
-						<UInputNumber
-							:model-value="placeholderStyleFor(inputKey).fontSize"
-							:min="1"
-							size="sm"
-							class="w-full"
-							data-testid="graphic-placeholder-style-size"
-							@update:model-value="updatePlaceholderStyle(inputKey, { fontSize: $event ?? undefined })"
+					@update="updatePlaceholderStyle(inputKey, $event)"
+				>
+					<!--
+						A placeholder's own Graphic Font Selection. The same control as the base
+						typography above, with the one answer a placeholder has and it does not:
+						a font is optional here, so "same as base" is a real answer. What the two
+						do with an unpinned library arm differs, which is why the answer arrives
+						here rather than being settled inside the control.
+					-->
+					<template #font>
+						<GraphicsCompositorFontSelectionField
+							:source="placeholderFontSource(inputKey)"
+							:font="placeholderStyleFor(inputKey).font"
+							optional
+							:event-id="eventId"
+							:field-label="`Placeholder ${placeholderToken(inputKey)}`"
+							size="xs"
+							test-id-prefix="graphic-placeholder-style"
+							@update:source="source => updatePlaceholderFontSource(inputKey, source)"
+							@application="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event) })"
+							@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
+							@clear="clearPlaceholderFontAsset(inputKey)"
 						/>
-					</UFormField>
-					<UFormField label="Weight" size="xs">
-						<UInputNumber
-							:model-value="placeholderStyleFor(inputKey).fontWeight"
-							:min="100"
-							:max="900"
-							:step="100"
-							size="sm"
-							class="w-full"
-							data-testid="graphic-placeholder-style-weight"
-							@update:model-value="updatePlaceholderStyle(inputKey, { fontWeight: $event ?? undefined })"
-						/>
-					</UFormField>
-					<UFormField label="Style" size="xs" class="col-span-2">
-						<USelect
-							:model-value="placeholderStyleFor(inputKey).fontStyle ?? 'base'"
-							:items="PLACEHOLDER_FONT_STYLE_OPTIONS"
-							value-key="value"
-							class="w-full"
-							:data-testid="`graphic-placeholder-style-font-style-${inputKey}`"
-							@update:model-value="updatePlaceholderFontStyle(inputKey, $event)"
-						/>
-					</UFormField>
-					<UFormField label="Colour" size="xs" class="col-span-2">
-						<UIColorPicker
-							:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
-							data-testid="graphic-placeholder-style-color"
-							@update:model-value="updatePlaceholderStyle(inputKey, { color: $event?.toString() || undefined })"
-						/>
-					</UFormField>
-				</div>
+					</template>
+					<template #color>
+						<UFormField label="Colour" size="xs" class="col-span-2">
+							<UIColorPicker
+								:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
+								data-testid="graphic-placeholder-style-color"
+								@update:model-value="updatePlaceholderStyle(inputKey, { color: $event?.toString() || undefined })"
+							/>
+						</UFormField>
+					</template>
+				</GraphicsTypographyFields>
 			</div>
 		</template>
 

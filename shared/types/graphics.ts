@@ -163,6 +163,24 @@ export interface GraphicTypography {
 	color: string;
 }
 
+/**
+ * The bounds the editor offers for every typography: a Graphic Item's base
+ * typography, a Graphic Placeholder Style, and a Graphic Style Set typography preset.
+ *
+ * Weight and letter spacing are the wire schemas' own bounds, and every maximum is.
+ * Font size and line height floors are editor-only: the schemas need those only to be
+ * positive, so `MIN_GRAPHIC_FONT_SIZE` and `MIN_GRAPHIC_LINE_HEIGHT` sit inside what a
+ * write accepts and the editor never offers a value a write refuses.
+ */
+export const MIN_GRAPHIC_FONT_SIZE = 1;
+export const MAX_GRAPHIC_FONT_SIZE = 600;
+export const MIN_GRAPHIC_FONT_WEIGHT = 1;
+export const MAX_GRAPHIC_FONT_WEIGHT = 1000;
+export const MIN_GRAPHIC_LETTER_SPACING = -100;
+export const MAX_GRAPHIC_LETTER_SPACING = 100;
+export const MIN_GRAPHIC_LINE_HEIGHT = 0.05;
+export const MAX_GRAPHIC_LINE_HEIGHT = 10;
+
 /* ────────────────────────────────────────────────
  * Graphic Fill and Graphic Surface Style
  * ──────────────────────────────────────────────── */
