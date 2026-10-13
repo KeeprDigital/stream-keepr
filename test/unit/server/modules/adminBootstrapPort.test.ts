@@ -131,7 +131,7 @@ describe('the first-admin bootstrap against a real Better Auth', () => {
 			email: EMAIL,
 			name: 'An Ordinary User',
 			role: 'user',
-		});
+		}, { method: 'admin' });
 
 		const outcome = await ensureAdminAccount(await betterAuthBootstrapPort(auth), {
 			email: EMAIL,
@@ -159,7 +159,7 @@ describe('the first-admin bootstrap against a real Better Auth', () => {
 			email: EMAIL,
 			name: 'An Ordinary Admin',
 			role: 'user,admin',
-		});
+		}, { method: 'admin' });
 
 		const outcome = await ensureAdminAccount(await betterAuthBootstrapPort(auth), {
 			email: EMAIL,

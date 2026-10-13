@@ -1,7 +1,8 @@
 import { defineVitestConfig } from '@nuxt/test-utils/config';
+import { defineConfig } from 'vitest/config';
 import { nuxtCoverageConfig } from './vitest.shared.ts';
 
-export default defineVitestConfig({
+const nuxtVitestConfig = defineVitestConfig({
 	test: {
 		name: 'nuxt',
 		include: ['test/nuxt/**/*.test.ts'],
@@ -10,6 +11,10 @@ export default defineVitestConfig({
 		// mocks (#367); see the file's docblock for the contract and opt-outs.
 		setupFiles: ['./test/nuxt/setup.ts'],
 		execArgv: ['--no-experimental-webstorage'],
+		// On by default since Vitest 5. A warm cache replays the test-utils app
+		// entry without resolving its relative imports, so every file fails
+		// (README § Testing, "Tried and rejected").
+		fsModuleCache: false,
 		hookTimeout: 30000,
 		restoreMocks: true,
 		clearMocks: true,
@@ -27,4 +32,12 @@ export default defineVitestConfig({
 			},
 		},
 	},
+});
+
+export default defineConfig(async (env) => {
+	const config = await nuxtVitestConfig(env);
+	// Ahead of the test-utils entry, which `defineVitestConfig` puts first and
+	// which mounts the app that prints Vue's Suspense notice; see the file.
+	config.test!.setupFiles = ['./test/nuxt/quietSuspenseNotice.ts', ...[config.test!.setupFiles ?? []].flat()];
+	return config;
 });
