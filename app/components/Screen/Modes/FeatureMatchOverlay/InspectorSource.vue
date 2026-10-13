@@ -76,6 +76,7 @@ function removeSelf() {
 			default-open
 		>
 			<GraphicsGeometryFields
+				:key="item.id"
 				:rect="item"
 				:container="{ width: screenWidth, height: screenHeight }"
 				:anchor="item.anchor ?? 'top-left'"
