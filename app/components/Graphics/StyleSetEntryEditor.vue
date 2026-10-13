@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
-import type { ShapeCorner, ShapeCornerKey, ShapeGeometry } from '~~/shared/types/graphics';
+import type { GraphicAnimationChannelKey, GraphicAnimationChannels, ShapeGeometryPresetId, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry, SurfaceStyleGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
 import type { BorderGlowEdit } from '~/types/borderGlow';
-import { mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
+import { getGraphicItemDefinition, getShapeGeometryPreset, mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
-	SHAPE_CORNER_KEYS,
-	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
 
 /**
@@ -48,7 +45,6 @@ const geometryOptions = computed(() => props.entries
 	.map(entry => ({ label: entry.name, value: entry.id })));
 
 const FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
-const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
 
 /** Merge into the entry's value, so a single-field edit never drops its siblings. */
 function patch(fields: Record<string, unknown>) {
@@ -80,9 +76,18 @@ function editSurfaceBorderGlow(edit: BorderGlowEdit) {
 	patch({ glow: edit.patch ? { ...(value.glow ?? { colorEntryId: firstPaletteEntryId, size: 8, opacity: 0.5 }), ...fields, ...colorEntry } : undefined });
 }
 
-function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
-	const geometry = props.entry.value as ShapeGeometry;
-	patch({ [corner]: { ...geometry[corner], ...fields } });
+/**
+ * The bounds a Shape Geometry preset is initialised against. A Style Set entry has
+ * no bounds of its own, so it takes a new Shape Graphic Item's on a 1080p canvas.
+ */
+const SHAPE_GEOMETRY_PRESET_BOUNDS: ShapeGeometrySize = (() => {
+	const { width, height } = getGraphicItemDefinition('shape')
+		.createDefault({ id: 'shape', label: 'Shape', canvasWidth: 1920, canvasHeight: 1080 });
+	return { width, height };
+})();
+
+function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
+	emit('update:value', getShapeGeometryPreset(presetId).apply(SHAPE_GEOMETRY_PRESET_BOUNDS).geometry);
 }
 </script>
 
@@ -288,46 +293,13 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 		</template>
 
 		<template v-else-if="entry.kind === 'shape-geometry'">
-			<div v-for="corner in SHAPE_CORNER_KEYS" :key="corner" class="grid grid-cols-2 gap-2">
-				<UFormField :label="corner" size="xs">
-					<USelect
-						:model-value="entry.value[corner].treatment"
-						:items="CORNER_TREATMENT_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patchCorner(corner, { treatment: $event })"
-					/>
-				</UFormField>
-				<UFormField label="Size" size="xs">
-					<UInputNumber
-						:model-value="entry.value[corner].size"
-						:min="0"
-						size="xs"
-						:disabled="disabled || entry.value[corner].treatment === 'square'"
-						@update:model-value="patchCorner(corner, { size: $event ?? 0 })"
-					/>
-				</UFormField>
-			</div>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Left slant" size="xs">
-					<UInputNumber
-						:model-value="entry.value.leftSlant"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ leftSlant: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Right slant" size="xs">
-					<UInputNumber
-						:model-value="entry.value.rightSlant"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ rightSlant: $event ?? 0 })"
-					/>
-				</UFormField>
-			</div>
+			<GraphicsShapeGeometryFields
+				:geometry="entry.value"
+				size="xs"
+				:disabled="disabled"
+				@update="patch"
+				@preset="applyShapeGeometryPreset"
+			/>
 		</template>
 
 		<template v-else-if="entry.kind === 'media-treatment'">

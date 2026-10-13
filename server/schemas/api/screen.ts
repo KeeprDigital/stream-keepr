@@ -93,6 +93,7 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
+	MAX_SHAPE_GEOMETRY_PX,
 	MAX_SOCIAL_PROFILE_DWELL_MS,
 	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
@@ -691,16 +692,17 @@ const graphicSurfaceStyleSchema = z.object({
 
 const graphicShapeCornerSchema = z.object({
 	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
-	size: nonNegativePixelSchema,
+	size: finiteNumberSchema.nonnegative().max(MAX_SHAPE_GEOMETRY_PX),
 }).strict();
+const graphicShapeSlantSchema = finiteNumberSchema.min(-MAX_SHAPE_GEOMETRY_PX).max(MAX_SHAPE_GEOMETRY_PX);
 
 const graphicShapeGeometrySchema = z.object({
 	topLeft: graphicShapeCornerSchema,
 	topRight: graphicShapeCornerSchema,
 	bottomRight: graphicShapeCornerSchema,
 	bottomLeft: graphicShapeCornerSchema,
-	leftSlant: pixelPositionSchema,
-	rightSlant: pixelPositionSchema,
+	leftSlant: graphicShapeSlantSchema,
+	rightSlant: graphicShapeSlantSchema,
 }).strict();
 
 /* Graphic Animation: bounded recipes rather than a keyframe timeline. */
