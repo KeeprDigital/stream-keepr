@@ -1,6 +1,7 @@
 import type { InkmapAnimationParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { GLSL_HASH_2D, GLSL_VALUE_NOISE_2D } from './glslPrelude';
 import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
@@ -24,27 +25,16 @@ uniform float coverage;
 uniform float contours;
 uniform float zoom;
 
-float hashInk(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
+${GLSL_HASH_2D}
 
-float noiseInk(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = p - i;
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(
-		mix(hashInk(i), hashInk(i + vec2(1.0, 0.0)), u.x),
-		mix(hashInk(i + vec2(0.0, 1.0)), hashInk(i + vec2(1.0, 1.0)), u.x),
-		u.y
-	);
-}
+${GLSL_VALUE_NOISE_2D}
 
 // Each octave carries its own slowly orbiting time phase, at mutually prime
 // rates, so the field morphs internally instead of sliding as one sheet.
 float fbmInk(vec2 p, float t) {
-	return 0.5 * noiseInk(p + vec2(cos(t * 0.05), sin(t * 0.06)) * 0.5)
-		+ 0.3 * noiseInk(p * 2.13 + 7.7 + vec2(cos(t * 0.083), sin(t * 0.071)) * 0.7)
-		+ 0.2 * noiseInk(p * 4.7 + 13.1 + vec2(cos(t * 0.127), sin(t * 0.113)) * 0.9);
+	return 0.5 * valueNoise2D(p + vec2(cos(t * 0.05), sin(t * 0.06)) * 0.5)
+		+ 0.3 * valueNoise2D(p * 2.13 + 7.7 + vec2(cos(t * 0.083), sin(t * 0.071)) * 0.7)
+		+ 0.2 * valueNoise2D(p * 4.7 + 13.1 + vec2(cos(t * 0.127), sin(t * 0.113)) * 0.9);
 }
 
 void main() {

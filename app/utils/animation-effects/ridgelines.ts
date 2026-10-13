@@ -1,6 +1,7 @@
 import type { RidgelinesAnimationParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { GLSL_HASH_1D, GLSL_VALUE_NOISE_1D } from './glslPrelude';
 import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
@@ -22,21 +23,13 @@ uniform float ridges;
 uniform float relief;
 uniform float glow;
 
-float hashRidge(float n) {
-	return fract(sin(n * 127.1) * 43758.5453);
-}
+${GLSL_HASH_1D}
 
-// 1D value noise with smooth interpolation between per-integer hashes.
-float noiseRidge(float x) {
-	float i = floor(x);
-	float f = x - i;
-	float u = f * f * (3.0 - 2.0 * f);
-	return mix(hashRidge(i), hashRidge(i + 1.0), u);
-}
+${GLSL_VALUE_NOISE_1D}
 
 // A ridge's height profile: two octaves, salted per ridge so no two mirror.
 float profileRidge(float x, float salt) {
-	return 0.65 * noiseRidge(x + salt * 91.3) + 0.35 * noiseRidge(x * 2.7 + salt * 57.1 + 11.0);
+	return 0.65 * valueNoise1D(x + salt * 91.3) + 0.35 * valueNoise1D(x * 2.7 + salt * 57.1 + 11.0);
 }
 
 void main() {

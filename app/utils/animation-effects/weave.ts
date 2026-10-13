@@ -1,6 +1,7 @@
 import type { WeaveAnimationParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { GLSL_HASH_1D } from './glslPrelude';
 import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
@@ -23,9 +24,7 @@ uniform float scale;
 uniform float thickness;
 uniform float sheen;
 
-float hashThread(float n, float salt) {
-	return fract(sin((n + salt * 101.3) * 127.1) * 43758.5453);
-}
+${GLSL_HASH_1D}
 
 // One thread family at a fragment: coverage, cylindrical shade, the covering
 // thread's index, and the distance to its centreline. A swaying band can spill
@@ -35,7 +34,8 @@ vec4 threadAt(float across, float along, float salt, float halfWidth, float time
 	vec4 best = vec4(0.0, 0.0, 0.0, 1.0e3);
 	for (int o = -1; o <= 1; o++) {
 		float index = floor(across) + float(o);
-		float phase = 6.2832 * hashThread(index, salt);
+		// The salt offsets the index so each thread family hashes its own stream.
+		float phase = 6.2832 * hash1D(index + salt * 101.3);
 		float center = index + 0.5 + 0.16 * sin(along * 0.9 + timePhase + phase);
 		float distance = abs(across - center);
 		float q = distance / halfWidth;
