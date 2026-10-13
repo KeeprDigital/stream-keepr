@@ -1,1 +1,0 @@
-ALTER TABLE `screens` ADD `graphic_asset_reference_version` text;

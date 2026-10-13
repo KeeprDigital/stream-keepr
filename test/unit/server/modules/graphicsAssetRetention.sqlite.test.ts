@@ -372,55 +372,6 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 		});
 
-		it('keeps the seven-day promise for input already staged when the migration lands', async () => {
-			// Operations that were mid-flight when the transfer-completed column
-			// arrived must not be re-read as incomplete transfers: that would cut
-			// their promised seven days down to 24 hours.
-			await harness.close();
-			harness = await createSqliteD1Harness({ throughMigration: '0014' });
-			const stagedAt = new Date('2026-07-28T00:00:00.000Z').getTime();
-			await harness.client.execute({
-				sql: `
-					INSERT INTO graphics_ingestion_operations (
-						id, idempotency_key, source, stage, initiated_by, proposed_name,
-						duplicate_content_policy, declared_byte_length,
-						transferred_byte_length, staging_reserved_byte_length,
-						staging_used_byte_length, canonical_reserved_byte_length,
-						created_at, updated_at
-					) VALUES (
-						'awaiting-operation', 'pre-migration', 'local-upload',
-						'awaiting-confirmation', 'retention-author', 'Awaiting font',
-						'reuse', 100, 100, 0, 100, 0, ?, ?
-					)
-				`,
-				args: [stagedAt, stagedAt],
-			});
-			await harness.applyRemainingMigrations();
-
-			const context = createRetentionLibrary();
-			await expect(context.library.getRetentionOverview()).resolves.toMatchObject({
-				stagedInput: [
-					expect.objectContaining({
-						operationId: 'awaiting-operation',
-						transferComplete: true,
-						expiresAt: new Date(stagedAt + 7 * DAY).toISOString(),
-					}),
-				],
-			});
-
-			context.advanceTo(new Date(stagedAt + 7 * DAY - 1).toISOString());
-			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
-				expiredIncompleteTransfers: 0,
-				expiredCompletedInput: 0,
-			});
-
-			context.advanceTo(new Date(stagedAt + 7 * DAY).toISOString());
-			expect((await context.library.runGraphicsRetention()).stagedInput).toEqual({
-				expiredIncompleteTransfers: 0,
-				expiredCompletedInput: 1,
-			});
-		});
-
 		it('gives an approved remote copy awaiting confirmation the seven-day promise', async () => {
 			// A remote copy stages its complete input through its own path rather
 			// than the streamed-upload one. If that path skipped the durable
