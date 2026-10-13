@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnimationEffectName, AnimationEffectParamsMap } from '~~/shared/animationEffects';
+import type { AnimationEffectName, AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from '~/utils/animation-effects';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
 import { loadAnimationEffect } from '~/utils/animation-effects';
@@ -19,12 +19,12 @@ import { loadAnimationEffect } from '~/utils/animation-effects';
 const props = defineProps<{
 	effect: AnimationEffectName;
 	/** Fully-defaulted params; absent means the effect's schema defaults. */
-	params?: AnimationEffectParamsMap[AnimationEffectName];
+	params?: AnimationEffectParams<AnimationEffectName>;
 	width?: number;
 	height?: number;
 }>();
 
-type AnyAnimationEffectParams = AnimationEffectParamsMap[AnimationEffectName];
+type AnyAnimationEffectParams = AnimationEffectParams<AnimationEffectName>;
 
 const host = ref<HTMLElement | null>(null);
 const instance = shallowRef<AnimationEffectInstance<AnyAnimationEffectParams> | null>(null);

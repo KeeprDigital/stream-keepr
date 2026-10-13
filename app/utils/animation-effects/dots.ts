@@ -1,4 +1,4 @@
-import type { DotsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
@@ -63,7 +63,7 @@ function buildLineSegments(
 	return new three.LineSegments(geometry, new three.LineBasicMaterial());
 }
 
-export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
+export function createDotsDelegate(): SceneEffectDelegate<AnimationEffectParams<'dots'>> {
 	let stars: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
 	let lines: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial> | undefined;
 	let restHeights: Float32Array;
@@ -164,7 +164,7 @@ export function createDotsDelegate(): SceneEffectDelegate<DotsAnimationParams> {
 
 export default function createDotsEffect(
 	host: HTMLElement,
-	params: DotsAnimationParams,
-): AnimationEffectInstance<DotsAnimationParams> {
+	params: AnimationEffectParams<'dots'>,
+): AnimationEffectInstance<AnimationEffectParams<'dots'>> {
 	return createSceneEffect({ three: THREE, host, delegate: createDotsDelegate() }, params);
 }

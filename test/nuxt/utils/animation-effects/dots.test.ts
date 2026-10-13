@@ -1,4 +1,4 @@
-import type { DotsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -10,7 +10,7 @@ import { createDotsDelegate } from '~/utils/animation-effects/dots';
  * needs no WebGL context, so the assertions land on the fork's actual numbers.
  */
 
-function mountDelegate(overrides: Partial<DotsAnimationParams> = {}) {
+function mountDelegate(overrides: Partial<AnimationEffectParams<'dots'>> = {}) {
 	const params = { ...animationEffectDefaultParams('dots'), ...overrides };
 	const delegate = createDotsDelegate();
 	const scene = new THREE.Scene();

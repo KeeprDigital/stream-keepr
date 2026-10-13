@@ -1,4 +1,4 @@
-import type { InkmapAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { GLSL_HASH_2D, GLSL_VALUE_NOISE_2D } from './glslPrelude';
@@ -74,8 +74,8 @@ void main() {
 
 export default function createInkmapEffect(
 	host: HTMLElement,
-	params: InkmapAnimationParams,
-): AnimationEffectInstance<InkmapAnimationParams> {
+	params: AnimationEffectParams<'inkmap'>,
+): AnimationEffectInstance<AnimationEffectParams<'inkmap'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

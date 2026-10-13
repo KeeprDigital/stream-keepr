@@ -1,4 +1,4 @@
-import type { RingsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -12,7 +12,7 @@ import { createRingsDelegate, RINGS_PALETTE } from '~/utils/animation-effects/ri
  * and invariants rather than exact values.
  */
 
-function mountDelegate(overrides: Partial<RingsAnimationParams> = {}) {
+function mountDelegate(overrides: Partial<AnimationEffectParams<'rings'>> = {}) {
 	const params = { ...animationEffectDefaultParams('rings'), ...overrides };
 	const delegate = createRingsDelegate();
 	const scene = new THREE.Scene();

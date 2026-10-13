@@ -1,4 +1,4 @@
-import type { RidgelinesAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { GLSL_HASH_1D, GLSL_VALUE_NOISE_1D } from './glslPrelude';
@@ -79,8 +79,8 @@ void main() {
 
 export default function createRidgelinesEffect(
 	host: HTMLElement,
-	params: RidgelinesAnimationParams,
-): AnimationEffectInstance<RidgelinesAnimationParams> {
+	params: AnimationEffectParams<'ridgelines'>,
+): AnimationEffectInstance<AnimationEffectParams<'ridgelines'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

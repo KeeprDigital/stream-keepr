@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import type { z } from 'zod';
+import type { AnimationEffectName, AnimationEffectParams } from '~~/shared/animationEffects';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
 	ANIMATION_EFFECT_CATALOGUE,
 	ANIMATION_EFFECT_VALUES,
@@ -27,7 +29,6 @@ const PRE_REBUILD_FLAT_BAG = {
 describe('animationEffects catalogue', () => {
 	it('names every effect in the closed vocabulary exactly once', () => {
 		expect(ANIMATION_EFFECT_VALUES).toEqual(['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave']);
-		expect(Object.keys(ANIMATION_EFFECT_CATALOGUE).sort()).toEqual([...ANIMATION_EFFECT_VALUES].sort());
 	});
 
 	it('ships ridgelines under its designed defaults', () => {
@@ -338,13 +339,39 @@ describe('animationEffectSelectionSchema', () => {
 });
 
 describe('animation effect host unions', () => {
+	it('pairs each effect with its own params, and only those, in every union', () => {
+		// Checked by `pnpm typecheck`: the per-effect pairing is the property a
+		// derived declaration could silently collapse into one wide union.
+		interface Rings { backgroundColor: string }
+		interface Cells { color1: string; color2: string; size: number; speed: number }
+		expectTypeOf<'not-an-effect'>().not.toExtend<AnimationEffectName>();
+		expectTypeOf<AnimationEffectParams<'rings'>>().toEqualTypeOf<Rings>();
+		expectTypeOf<AnimationEffectParams<'cells'>>().toEqualTypeOf<Cells>();
+
+		type Selection = z.output<typeof animationEffectSelectionSchema>;
+		type Frame = z.output<typeof featureMatchOverlayFrameAnimationConfigSchema>;
+		type Background = z.output<typeof broadcastGraphicsBackgroundConfigSchema>;
+		expectTypeOf<Extract<Selection, { effect: 'rings' }>>().toEqualTypeOf<{ effect: 'rings'; params?: Rings | undefined }>();
+		expectTypeOf<Extract<Frame, { effect: 'cells' }>>().toEqualTypeOf<{ effect: 'cells'; params?: Cells | undefined; enabled: boolean; opacity: number }>();
+		expectTypeOf<Extract<Background, { effect: 'rings' }>>().toEqualTypeOf<{ effect: 'rings'; params?: Rings | undefined; enabled: boolean; opacity: number }>();
+	});
+
 	it('covers the whole catalogue in every host union, in catalogue order', () => {
-		// The branch list each host extends is spelled out rather than mapped, because
-		// mapping collapses the discriminated union's per-effect params. This is what
-		// makes forgetting a new effect there a failing test rather than an effect that
-		// silently cannot be selected on one host.
+		// Every host union is mapped from the catalogue; an effect missing from one
+		// would be an effect that silently cannot be selected on that host.
 		for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema]) {
 			expect(schema.options.map(branch => branch.shape.effect.value)).toEqual([...ANIMATION_EFFECT_VALUES]);
+		}
+	});
+
+	it('fills each effect\'s params from that effect\'s own schema in every union', () => {
+		// The branch list is asserted to its per-effect type, so this is what proves
+		// the runtime pairing the type claims.
+		for (const effect of ANIMATION_EFFECT_VALUES) {
+			const expected = animationEffectDefaultParams(effect);
+			expect(animationEffectSelectionSchema.parse({ effect, params: {} }).params).toEqual(expected);
+			for (const schema of [featureMatchOverlayFrameAnimationConfigSchema, broadcastGraphicsBackgroundConfigSchema])
+				expect(schema.parse({ effect, params: {}, enabled: true, opacity: 1 }).params).toEqual(expected);
 		}
 	});
 });
