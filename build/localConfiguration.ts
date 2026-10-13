@@ -283,7 +283,7 @@ export interface LocalConfigurationContext {
  * output. It guarded nothing the output could carry: the generated
  * `.output/server/wrangler.json` declares no `vars`, the bundle reads this name
  * from the Worker environment at request time rather than inlining it, and
- * `pnpm deploy` rebuilds `.output` before uploading, so a staged preview file
+ * `pnpm run deploy` rebuilds `.output` before uploading, so a staged preview file
  * cannot survive into a deploy. Meanwhile it cost every checkout that wanted a
  * bypassed dev server its `pnpm verify`, which is this repository's mandated
  * pre-push gate — #504 had already carved out `nuxt prepare` for the same

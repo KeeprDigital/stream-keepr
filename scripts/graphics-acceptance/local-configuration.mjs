@@ -288,7 +288,7 @@ export function localConfigurationNotice(missing) {
  * be a second place to look when it is not there.
  *
  * That line is the only thing this ever adds, `.output` is gitignored and wiped
- * by every `nuxt build`, and `pnpm deploy` builds before it uploads — so a
+ * by every `nuxt build`, and `pnpm run deploy` builds before it uploads — so a
  * bypassed preview cannot leave anything behind that a deploy could pick up.
  *
  * @param {{ source: string | null, existing: string | null, stale: boolean, bypassActive?: boolean }} files

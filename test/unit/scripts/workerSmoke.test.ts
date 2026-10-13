@@ -337,9 +337,9 @@ describe('the built Worker smoke runner', () => {
 		};
 		const assignment = `${LOCAL_AUTH_BYPASS_NAME}=${LOCAL_AUTH_BYPASS_ENABLED_VALUE}`;
 
-		expect(packageJson.scripts['dev:bypass']).toContain(`${assignment} nuxt dev`);
-		expect(packageJson.scripts['preview:bypass']).toContain(`${assignment} pnpm preview`);
-		expect(packageJson.scripts['dev:local:bypass']).toContain(`${assignment} nuxt dev --host 0.0.0.0`);
+		expect(packageJson.scripts['dev:bypass']).toBe(`${assignment} pnpm dev`);
+		expect(packageJson.scripts['preview:bypass']).toBe(`${assignment} pnpm preview`);
+		expect(packageJson.scripts['dev:local:bypass']).toBe(`${assignment} pnpm dev:local`);
 
 		for (const [name, script] of Object.entries(packageJson.scripts)) {
 			if (name.endsWith(':bypass'))
