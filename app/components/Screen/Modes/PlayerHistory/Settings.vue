@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { VueDraggable } from 'vue-draggable-plus';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -27,29 +26,12 @@ const estimatedRowCount = ref(0);
 const loadingHistory = ref(false);
 let requestId = 0;
 
-const columnLabels: Record<string, string> = {
+const columnLabels: Record<PlayerHistoryColumnConfig['key'], string> = {
 	round: 'Round',
 	opponent: 'Opponent',
 	table: 'Table',
 	outcome: 'Outcome',
 };
-
-const localColumns = ref<PlayerHistoryColumnConfig[]>([...config.value.columns]);
-
-watch(() => config.value.columns, (columns) => {
-	localColumns.value = columns.map(column => ({ ...column }));
-}, { deep: true });
-
-function onColumnDragEnd() {
-	updateConfig({ columns: [...localColumns.value] });
-}
-
-function toggleColumnVisibility(index: number) {
-	const columns = [...localColumns.value];
-	columns[index] = { ...columns[index]!, visible: !columns[index]!.visible };
-	localColumns.value = columns;
-	updateConfig({ columns });
-}
 
 const totalPages = computed(() =>
 	Math.max(1, Math.ceil(Math.max(estimatedRowCount.value, 1) / config.value.rowsPerPage)),
@@ -111,33 +93,11 @@ watch(() => config.value.playerId, async (playerId) => {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
-			<VueDraggable
-				v-model="localColumns"
-				:animation="150"
-				handle=".drag-handle"
-				ghost-class="opacity-30"
-				class="flex flex-col gap-1"
-				@end="onColumnDragEnd"
-			>
-				<div
-					v-for="(column, index) in localColumns"
-					:key="column.key"
-					class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-elevated/50 border border-default"
-				>
-					<UIcon
-						name="i-lucide-grip-vertical"
-						class="drag-handle cursor-grab active:cursor-grabbing text-muted shrink-0"
-					/>
-					<span class="flex-1 text-sm" :class="{ 'text-muted': !column.visible }">
-						{{ columnLabels[column.key] ?? column.key }}
-					</span>
-					<USwitch
-						:model-value="column.visible"
-						size="sm"
-						@update:model-value="toggleColumnVisibility(index)"
-					/>
-				</div>
-			</VueDraggable>
+			<ScreenColumnVisibilityList
+				:columns="config.columns"
+				:labels="columnLabels"
+				@update="updateConfig({ columns: $event })"
+			/>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">

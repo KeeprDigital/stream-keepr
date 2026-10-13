@@ -12,7 +12,6 @@ import type {
 	MetagameCardColumnConfig,
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { VueDraggable } from 'vue-draggable-plus';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -86,8 +85,6 @@ const cardSortByOptions = [
 
 type ActiveMetagameColumnConfig = MetagameArchetypeColumnConfig | MetagameCardColumnConfig;
 
-const localColumns = ref<ActiveMetagameColumnConfig[]>([]);
-
 const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, string> = {
 	archetype: 'Archetype',
 	count: 'Count',
@@ -112,10 +109,6 @@ const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 		: config.value.archetypeColumns,
 );
 
-watch(activeColumns, (columns) => {
-	localColumns.value = columns.map(column => ({ ...column }));
-}, { immediate: true, deep: true });
-
 function persistColumns(columns: ActiveMetagameColumnConfig[]) {
 	if (config.value.viewMode === 'cards') {
 		updateConfig({ cardColumns: columns as MetagameCardColumnConfig[] });
@@ -123,17 +116,6 @@ function persistColumns(columns: ActiveMetagameColumnConfig[]) {
 	}
 
 	updateConfig({ archetypeColumns: columns as MetagameArchetypeColumnConfig[] });
-}
-
-function onColumnDragEnd() {
-	persistColumns([...localColumns.value]);
-}
-
-function toggleColumnVisibility(index: number) {
-	const columns = [...localColumns.value];
-	columns[index] = { ...columns[index]!, visible: !columns[index]!.visible };
-	localColumns.value = columns;
-	persistColumns(columns);
 }
 
 function updateMaxTableWidth(value: number | null | undefined) {
@@ -338,33 +320,11 @@ const {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
-			<VueDraggable
-				v-model="localColumns"
-				:animation="150"
-				handle=".drag-handle"
-				ghost-class="opacity-30"
-				class="flex flex-col gap-1"
-				@end="onColumnDragEnd"
-			>
-				<div
-					v-for="(column, index) in localColumns"
-					:key="column.key"
-					class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-elevated/50 border border-default"
-				>
-					<UIcon
-						name="i-lucide-grip-vertical"
-						class="drag-handle cursor-grab active:cursor-grabbing text-muted shrink-0"
-					/>
-					<span class="flex-1 text-sm" :class="{ 'text-muted': !column.visible }">
-						{{ columnLabels[column.key] ?? column.key }}
-					</span>
-					<USwitch
-						:model-value="column.visible"
-						size="sm"
-						@update:model-value="toggleColumnVisibility(index)"
-					/>
-				</div>
-			</VueDraggable>
+			<ScreenColumnVisibilityList
+				:columns="activeColumns"
+				:labels="columnLabels"
+				@update="persistColumns"
+			/>
 
 			<USeparator />
 

@@ -162,7 +162,7 @@ describe('graphicsCompositorPreview', () => {
 	it('asks the preview frame for advisory safe-area guides only when the author turns them on', async () => {
 		const wrapper = await mountComponent();
 
-		await wrapper.get('[data-testid="compositor-safe-area-guides"]').trigger('click');
+		await wrapper.get('[data-testid="preview-safe-area-guides"]').trigger('click');
 		await nextTick();
 
 		expect(wrapper.get('iframe').attributes('src')).toContain('safe=1');
@@ -171,7 +171,7 @@ describe('graphicsCompositorPreview', () => {
 	it('stops asking for item guides when the author turns them off', async () => {
 		const wrapper = await mountComponent();
 
-		await wrapper.get('[data-testid="compositor-item-guides"]').trigger('click');
+		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
 		await nextTick();
 
 		expect(wrapper.get('iframe').attributes('src')).not.toContain('guides=1');

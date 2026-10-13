@@ -8,6 +8,7 @@ import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
+import { GRAPHICS_OUTPUT_OPTIONS } from '~/modules/graphics/previewControls';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
 	isGraphicsPreviewReadyMessage,
@@ -15,8 +16,9 @@ import {
 } from '~/modules/graphics/previewMessages';
 
 /**
- * The Feature Match Overlay editor preview: output selection, zoom, item guides,
- * and advisory action-safe and title-safe guides.
+ * The Feature Match Overlay editor preview: the shared preview panel (output
+ * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
+ * output URL hand-out and PNG capture.
  *
  * Two selections travel through it, because the page has two authoring surfaces.
  * The host-owned one names the Frame or a Source Item; the
@@ -46,28 +48,13 @@ const emit = defineEmits<{
 	selectCompositorTarget: [target: GraphicsSelectionTarget];
 }>();
 
-const OUTPUT_OPTIONS = [
-	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
-	{ label: 'Fill', value: 'fill', icon: 'i-lucide-square' },
-	{ label: 'Key', value: 'key', icon: 'i-lucide-contrast' },
-] satisfies Array<{ label: string; value: FeatureMatchOverlayOutput; icon: string }>;
-
-const PREVIEW_ZOOM_OPTIONS = [
-	{ label: 'Fit', value: 'fit' },
-	{ label: '50%', value: '0.5' },
-	{ label: '100%', value: '1' },
-] as const;
-
-type PreviewZoom = typeof PREVIEW_ZOOM_OPTIONS[number]['value'];
-
 const toast = useToast();
 const { copyToClipboard } = useCopyToClipboard();
 const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const requestUrl = useRequestURL();
 const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
-const previewGuides = ref(true);
-const previewSafeAreas = ref(false);
-const previewZoom = ref<PreviewZoom>('fit');
+const itemGuides = ref(true);
+const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
 const outputBaseUrl = computed(() => import.meta.client ? window.location.origin : requestUrl.origin);
@@ -76,21 +63,8 @@ const previewUrl = computed(() => screenOutputPath({
 	screenSlug: props.screen.slug,
 	output: previewOutput.value,
 	embed: 'preview',
-	itemGuides: previewGuides.value,
-	safeAreaGuides: previewSafeAreas.value,
-}));
-const previewAspectStyle = computed(() => ({
-	...(previewZoom.value === 'fit'
-		? {
-				aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
-				width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
-				maxWidth: '100%',
-			}
-		: {
-				width: `${props.canvasWidth * Number(previewZoom.value)}px`,
-				height: `${props.canvasHeight * Number(previewZoom.value)}px`,
-				maxWidth: 'none',
-			}),
+	itemGuides: itemGuides.value,
+	safeAreaGuides: safeAreaGuides.value,
 }));
 
 /**
@@ -237,7 +211,7 @@ watch(() => props.config, () => {
 
 // Either switch changes the preview URL, which reloads the frame; the working
 // state has to be pushed into the new document once it exists.
-watch([previewGuides, previewSafeAreas], () => {
+watch([itemGuides, safeAreaGuides], () => {
 	void nextTick(syncPreviewState);
 });
 
@@ -286,123 +260,91 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 
 <template>
 	<div class="space-y-6 min-w-0">
-		<ScreenSettingsCard title="Preview" :default-open="true">
-			<template #actions="{ open }">
-				<div v-if="open" class="flex flex-wrap items-center gap-3">
-					<UFormField label="Item guides" size="xs" class="flex items-center gap-2">
-						<USwitch v-model="previewGuides" size="sm" data-testid="preview-item-guides" />
-					</UFormField>
-					<UFormField label="Safe areas" size="xs" class="flex items-center gap-2">
-						<USwitch v-model="previewSafeAreas" size="sm" data-testid="preview-safe-area-guides" />
-					</UFormField>
-					<UFieldGroup size="sm">
-						<UButton
-							v-for="output in OUTPUT_OPTIONS"
-							:key="output.value"
-							:icon="output.icon"
-							:color="previewOutput === output.value ? 'primary' : 'neutral'"
-							:variant="previewOutput === output.value ? 'subtle' : 'outline'"
-							:aria-label="`${output.label} preview output`"
-							@click="() => { previewOutput = output.value }"
-						>
-							{{ output.label }}
-						</UButton>
-					</UFieldGroup>
-					<UFieldGroup size="sm">
-						<UButton
-							v-for="zoom in PREVIEW_ZOOM_OPTIONS"
-							:key="zoom.value"
-							:color="previewZoom === zoom.value ? 'primary' : 'neutral'"
-							:variant="previewZoom === zoom.value ? 'subtle' : 'outline'"
-							@click="() => { previewZoom = zoom.value }"
-						>
-							{{ zoom.label }}
-						</UButton>
-					</UFieldGroup>
-					<UPopover>
-						<UButton
-							size="sm"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-link"
-							trailing-icon="i-lucide-chevron-down"
-							:disabled="publicationBlocked"
-							:title="publicationBlockReason"
-						>
-							Outputs
-						</UButton>
-						<template #content>
-							<div class="w-[min(38rem,calc(100vw-2rem))] space-y-3 p-3">
-								<div class="flex items-start justify-between gap-3">
-									<div>
-										<p class="text-sm font-medium">
-											Output URLs
-										</p>
-										<p class="text-xs text-muted">
-											Copy broadcast URLs or download PNG captures.
-										</p>
-									</div>
-								</div>
-								<div class="space-y-2">
-									<div
-										v-for="output in OUTPUT_OPTIONS"
-										:key="output.value"
-										class="grid gap-2 rounded-lg border border-default/70 bg-muted/20 p-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] sm:items-center"
-									>
-										<UBadge variant="soft" class="justify-center uppercase">
-											{{ output.value }}
-										</UBadge>
-										<UInput
-											:model-value="outputUrl(output.value)"
-											readonly
-											size="sm"
-											class="min-w-0"
-										/>
-										<UButton
-											size="sm"
-											variant="soft"
-											icon="i-lucide-copy"
-											:disabled="publicationBlocked"
-											:title="publicationBlockReason"
-											:data-testid="`copy-output-${output.value}`"
-											@click="copyOutputUrl(output.value)"
-										>
-											Copy
-										</UButton>
-										<UButton
-											size="sm"
-											icon="i-lucide-download"
-											:disabled="publicationBlocked"
-											:title="publicationBlockReason"
-											:data-testid="`download-output-${output.value}`"
-											@click="downloadOutput(output.value)"
-										>
-											PNG
-										</UButton>
-									</div>
+		<GraphicsPreviewPanel
+			v-model:output="previewOutput"
+			v-model:item-guides="itemGuides"
+			v-model:safe-area-guides="safeAreaGuides"
+			:canvas-width="canvasWidth"
+			:canvas-height="canvasHeight"
+		>
+			<template #controls>
+				<UPopover>
+					<UButton
+						size="sm"
+						variant="soft"
+						color="neutral"
+						icon="i-lucide-link"
+						trailing-icon="i-lucide-chevron-down"
+						:disabled="publicationBlocked"
+						:title="publicationBlockReason"
+					>
+						Outputs
+					</UButton>
+					<template #content>
+						<div class="w-[min(38rem,calc(100vw-2rem))] space-y-3 p-3">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<p class="text-sm font-medium">
+										Output URLs
+									</p>
+									<p class="text-xs text-muted">
+										Copy broadcast URLs or download PNG captures.
+									</p>
 								</div>
 							</div>
-						</template>
-					</UPopover>
-				</div>
+							<div class="space-y-2">
+								<div
+									v-for="output in GRAPHICS_OUTPUT_OPTIONS"
+									:key="output.value"
+									class="grid gap-2 rounded-lg border border-default/70 bg-muted/20 p-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] sm:items-center"
+								>
+									<UBadge variant="soft" class="justify-center uppercase">
+										{{ output.value }}
+									</UBadge>
+									<UInput
+										:model-value="outputUrl(output.value)"
+										readonly
+										size="sm"
+										class="min-w-0"
+									/>
+									<UButton
+										size="sm"
+										variant="soft"
+										icon="i-lucide-copy"
+										:disabled="publicationBlocked"
+										:title="publicationBlockReason"
+										:data-testid="`copy-output-${output.value}`"
+										@click="copyOutputUrl(output.value)"
+									>
+										Copy
+									</UButton>
+									<UButton
+										size="sm"
+										icon="i-lucide-download"
+										:disabled="publicationBlocked"
+										:title="publicationBlockReason"
+										:data-testid="`download-output-${output.value}`"
+										@click="downloadOutput(output.value)"
+									>
+										PNG
+									</UButton>
+								</div>
+							</div>
+						</div>
+					</template>
+				</UPopover>
 			</template>
 
-			<div class="overflow-auto">
-				<div
-					class="transparent-checkerboard-backdrop relative mx-auto overflow-hidden"
-					:class="previewZoom === 'fit' ? '' : 'shrink-0'"
-					:style="previewAspectStyle"
-				>
-					<iframe
-						ref="previewFrame"
-						:key="previewUrl"
-						:src="previewUrl"
-						class="absolute inset-0 size-full border-0"
-						title="Feature Match Overlay preview"
-						@load="syncPreviewState"
-					/>
-				</div>
-			</div>
-		</ScreenSettingsCard>
+			<template #viewport>
+				<iframe
+					ref="previewFrame"
+					:key="previewUrl"
+					:src="previewUrl"
+					class="absolute inset-0 size-full border-0"
+					title="Feature Match Overlay preview"
+					@load="syncPreviewState"
+				/>
+			</template>
+		</GraphicsPreviewPanel>
 	</div>
 </template>
