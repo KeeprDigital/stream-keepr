@@ -76,10 +76,13 @@ export type GraphicChannelHandoffPolicy = typeof GRAPHIC_CHANNEL_HANDOFF_POLICY_
  */
 export const DEFAULT_GRAPHIC_CHANNEL_HANDOFF_POLICY: GraphicChannelHandoffPolicy = 'overlap';
 
-/** An authoring projection of canonical pixel geometry. Storage is always pixels. */
-export const GRAPHIC_GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
+/**
+ * A Geometry Unit: an authoring projection of canonical pixel geometry, for
+ * Graphic Items and Source Items alike. Storage is always pixels.
+ */
+export const GEOMETRY_UNIT_VALUES = ['px', 'percent', 'grid'] as const;
 
-export type GraphicGeometryUnit = typeof GRAPHIC_GEOMETRY_UNIT_VALUES[number];
+export type GeometryUnit = typeof GEOMETRY_UNIT_VALUES[number];
 
 /**
  * Which font a Graphic Item's typography paints with: one of the application

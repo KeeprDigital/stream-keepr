@@ -1,93 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { anchorFeatureMatchOverlayRect, displayGeometryValue, featureMatchOverlayAlignedStart, featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, parseGeometryInput, percentToPixels, pixelsToPercent, resizeFeatureMatchOverlayRectFromAnchor, roundedRectPath, updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOverlayGeometry';
+import { featureMatchOverlayBorderRadiusCss, featureMatchOverlaySourceCutoutRect, roundedRectPath } from '~/utils/featureMatchOverlayGeometry';
 
 describe('broadcast layout geometry utilities', () => {
-	it('converts pixels to percentages of the canvas', () => {
-		expect(pixelsToPercent(960, 1920)).toBe(50);
-		expect(pixelsToPercent(333, 1920)).toBe(17.3438);
-	});
-
-	it('converts percentages back to rounded pixels', () => {
-		expect(percentToPixels(50, 1920)).toBe(960);
-		expect(percentToPixels(17.34375, 1920)).toBe(333);
-	});
-
-	it('displays values in the requested unit', () => {
-		expect(displayGeometryValue(540, 1080, 'px')).toBe('540');
-		expect(displayGeometryValue(540, 1080, '%')).toBe('50');
-	});
-
-	it('parses percent edits into stored pixels', () => {
-		expect(parseGeometryInput('25', 1920, '%')).toBe(480);
-		expect(parseGeometryInput('480', 1920, 'px')).toBe(480);
-	});
-
-	it('displays coordinates relative to the selected anchor without changing stored geometry', () => {
-		const rect = { x: 100, y: 50, width: 320, height: 180 };
-
-		expect(anchorFeatureMatchOverlayRect(rect, 'top-left')).toEqual(rect);
-		expect(anchorFeatureMatchOverlayRect(rect, 'center')).toEqual({
-			x: 260,
-			y: 140,
-			width: 320,
-			height: 180,
-		});
-		expect(anchorFeatureMatchOverlayRect(rect, 'bottom-right')).toEqual({
-			x: 420,
-			y: 230,
-			width: 320,
-			height: 180,
-		});
-		expect(rect).toEqual({ x: 100, y: 50, width: 320, height: 180 });
-	});
-
-	it('converts edited anchor coordinates back to stored top-left geometry', () => {
-		const rect = { x: 100, y: 50, width: 320, height: 180 };
-
-		expect(updateFeatureMatchOverlayRectFromAnchor(rect, 'x', 500, 'center')).toEqual({ x: 340 });
-		expect(updateFeatureMatchOverlayRectFromAnchor(rect, 'y', 250, 'bottom')).toEqual({ y: 70 });
-	});
-
-	it('keeps the selected anchor fixed while resizing', () => {
-		const rect = { x: 100, y: 50, width: 320, height: 180 };
-
-		expect(resizeFeatureMatchOverlayRectFromAnchor(rect, 400, 200, 'top-left')).toEqual({
-			x: 100,
-			y: 50,
-			width: 400,
-			height: 200,
-		});
-		expect(resizeFeatureMatchOverlayRectFromAnchor(rect, 400, 200, 'center')).toEqual({
-			x: 60,
-			y: 40,
-			width: 400,
-			height: 200,
-		});
-		expect(resizeFeatureMatchOverlayRectFromAnchor(rect, 400, 200, 'bottom-right')).toEqual({
-			x: 20,
-			y: 30,
-			width: 400,
-			height: 200,
-		});
-	});
-
-	it('applies width and height edits through the same anchored resize path', () => {
-		const rect = { x: 100, y: 50, width: 321, height: 181 };
-
-		expect(updateFeatureMatchOverlayRectFromAnchor(rect, 'width', 400.4, 'right')).toEqual({
-			x: 21,
-			y: 50,
-			width: 400,
-			height: 181,
-		});
-		expect(updateFeatureMatchOverlayRectFromAnchor(rect, 'height', 200.4, 'bottom')).toEqual({
-			x: 100,
-			y: 31,
-			width: 321,
-			height: 200,
-		});
-	});
-
 	it('uses configured border radii as CSS outer radii', () => {
 		expect(featureMatchOverlayBorderRadiusCss({ borderRadius: 12 })).toBe('12px 12px 12px 12px');
 		expect(featureMatchOverlayBorderRadiusCss({
@@ -202,17 +116,5 @@ describe('broadcast layout geometry utilities', () => {
 			height: 50,
 			radii: { topLeft: 8, topRight: 6, bottomRight: 4, bottomLeft: 2 },
 		})).toBe('M 18 20 H 104 A 6 6 0 0 1 110 26 V 66 A 4 4 0 0 1 106 70 H 12 A 2 2 0 0 1 10 68 V 28 A 8 8 0 0 1 18 20 Z');
-	});
-
-	it('starts an aligned item where its edge or centre meets the canvas edge or centre', () => {
-		// A 401×201 item on a 1920×1080 canvas.
-		expect(featureMatchOverlayAlignedStart('left', 1920, 401)).toBe(0);
-		expect(featureMatchOverlayAlignedStart('center', 1920, 401)).toBe(759.5);
-		expect(featureMatchOverlayAlignedStart('right', 1920, 401)).toBe(1519);
-		expect(featureMatchOverlayAlignedStart('top', 1080, 201)).toBe(0);
-		expect(featureMatchOverlayAlignedStart('center', 1080, 201)).toBe(439.5);
-		expect(featureMatchOverlayAlignedStart('bottom', 1080, 201)).toBe(879);
-		// Rounded to the geometry precision used everywhere else.
-		expect(featureMatchOverlayAlignedStart('center', 1920, 400.333)).toBe(759.83);
 	});
 });

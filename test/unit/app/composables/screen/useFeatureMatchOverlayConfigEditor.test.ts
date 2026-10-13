@@ -7,8 +7,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 // Layout mutation semantics live in the pure writer and are covered by
 // test/unit/app/modules/featureMatchOverlayLayout.test.ts. This suite only
 // checks the binding: id-addressed verbs submit the whole updated layout
-// through updateConfig, no-ops submit nothing, and geometry input parsing
-// uses the screen dimensions.
+// through updateConfig and no-ops submit nothing.
 
 function sourceItem(overrides: Partial<FeatureMatchSourceItemConfig> = {}): FeatureMatchSourceItemConfig {
 	return {
@@ -34,8 +33,6 @@ function createEditor(sources: FeatureMatchSourceItemConfig[]) {
 	const editor = useFeatureMatchOverlayConfigEditor({
 		config,
 		updateConfig,
-		screenWidth: ref(1920),
-		screenHeight: ref(1080),
 	});
 	return { config, updateConfig, editor };
 }
@@ -68,14 +65,6 @@ describe('useFeatureMatchOverlayConfigEditor', () => {
 
 		expect(updateConfig).toHaveBeenCalledOnce();
 		expect(config.value.layout.frame.backgroundColor).toBe('#123456');
-	});
-
-	it('parses percentage geometry input against the screen dimensions', () => {
-		const { config, editor } = createEditor([sourceItem()]);
-
-		editor.updateSourceRectFromAnchor('s1', 'width', '50', '%');
-
-		expect(config.value.layout.sources[0]!.width).toBe(960);
 	});
 
 	it('createSourceItem submits and returns the new id', () => {

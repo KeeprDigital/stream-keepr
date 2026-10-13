@@ -24,6 +24,8 @@ import {
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
 
 enableAutoUnmount(afterEach);
+// The Geometry Unit is remembered per browser; no test inherits another's choice.
+afterEach(() => localStorage.clear());
 
 const shapeItem: GraphicItemConfig = {
 	type: 'shape',
@@ -657,11 +659,49 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		selectField(wrapper, 'graphic-geometry-unit')?.vm.$emit('update:modelValue', 'percent');
-		await nextTick();
+		await wrapper.get('button[title="Percent of the container"]').trigger('click');
 
 		// The group is 800 wide, so 400px is half of the containing canvas.
 		expect(numberField(wrapper, 'Item x')?.props('modelValue')).toBe(50);
+	});
+
+	it('aligns a top-level item\'s edge with the canvas', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await wrapper.get('button[aria-label="Hard right"]').trigger('click');
+
+		// The canvas is 1920 wide, so the 400-wide item starts at 1520.
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ x: 1520, y: 200 });
+	});
+
+	it('aligns a canvas Graphic Group child\'s edge with its group bounds', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith(
+				[{ ...shapeItem, x: 100, y: 20, width: 300, height: 60 }],
+				{ arrangement: 'canvas' },
+			)]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		await wrapper.get('button[aria-label="Hard right"]').trigger('click');
+		await wrapper.get('button[aria-label="Hard bottom"]').trigger('click');
+
+		// The group is 800×200, not the 1920×1080 canvas.
+		expect(childOf(emittedGraphics(wrapper, 0))).toMatchObject({ x: 500 });
+		expect(childOf(emittedGraphics(wrapper, 1))).toMatchObject({ y: 140 });
+	});
+
+	it('offers no align actions for a row Graphic Group child, whose group positions it', async () => {
+		const wrapper = await mountComponent({
+			graphics: stack([groupWith([shapeItem])]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+		});
+
+		expect(wrapper.find('button[aria-label="Hard left"]').exists()).toBe(false);
+		expect(numberField(wrapper, 'Item width')).toBeDefined();
 	});
 
 	it('lets a Graphic Group child override the local style default of its group', async () => {

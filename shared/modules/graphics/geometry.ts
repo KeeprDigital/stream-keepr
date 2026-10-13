@@ -1,4 +1,4 @@
-import type { GraphicAnchorPoint, GraphicGeometryUnit, GraphicRect } from '../../types/graphics';
+import type { GeometryUnit, GraphicAnchorPoint, GraphicRect } from '../../types/graphics';
 import type { NinePointDefinition } from '../../utils/ninePoints';
 import { NINE_POINTS } from '../../utils/ninePoints';
 
@@ -8,8 +8,8 @@ import { NINE_POINTS } from '../../utils/ninePoints';
  * A Graphic Anchor Point is an editing and geometry reference: it decides which
  * point of the item an author positions and which point stays fixed while the
  * item is resized. Stored geometry always remains a top-left rectangle in
- * canvas pixels, and a Graphic Geometry Unit only changes how that geometry is
- * displayed and entered.
+ * canvas pixels, and a Geometry Unit only changes how that geometry is displayed
+ * and entered.
  */
 
 /** A Graphic Anchor Point's view of the shared nine-point table. */
@@ -69,11 +69,28 @@ export function resizeGraphicRectFromAnchor(
 	};
 }
 
-/** Project canonical pixels into the unit an author is working in. */
-export function displayGraphicGeometryValue(
+/**
+ * Move a rectangle so its edge (or centre) on one axis meets the matching edge
+ * (or centre) of its container. The result is a stored top-left coordinate, so
+ * the Graphic Anchor Point plays no part.
+ */
+export function alignGraphicRect(
+	rect: GraphicRect,
+	axis: 'x' | 'y',
+	edge: 'start' | 'center' | 'end',
+	container: { width: number; height: number },
+): Partial<GraphicRect> {
+	const total = axis === 'x' ? container.width : container.height;
+	const size = axis === 'x' ? rect.width : rect.height;
+	const start = edge === 'start' ? 0 : edge === 'end' ? total - size : (total - size) / 2;
+	return { [axis]: roundGeometry(start) };
+}
+
+/** Project canonical pixels into the Geometry Unit an author is working in. */
+export function displayGeometryValue(
 	pixels: number,
 	total: number,
-	unit: GraphicGeometryUnit,
+	unit: GeometryUnit,
 	isPosition = false,
 ): number {
 	if (unit === 'percent')
@@ -88,10 +105,10 @@ export function displayGraphicGeometryValue(
 }
 
 /** Read an authored value in any unit back into canonical pixels. */
-export function parseGraphicGeometryValue(
+export function parseGeometryValue(
 	value: number,
 	total: number,
-	unit: GraphicGeometryUnit,
+	unit: GeometryUnit,
 	isPosition = false,
 ): number {
 	if (!Number.isFinite(value))

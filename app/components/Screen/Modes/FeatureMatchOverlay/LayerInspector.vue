@@ -42,8 +42,6 @@ const treeNodeRefs = ref<Record<string, HTMLElement>>({});
 const { createSourceItem, patchFrame } = useFeatureMatchOverlayConfigEditor({
 	config: toRef(props, 'config'),
 	updateConfig: props.updateConfig,
-	screenWidth: toRef(props, 'screenWidth'),
-	screenHeight: toRef(props, 'screenHeight'),
 });
 
 /** The selection target resolved against the Feature Match Layout. */

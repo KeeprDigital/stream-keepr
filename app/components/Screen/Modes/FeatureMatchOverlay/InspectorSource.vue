@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, FeatureMatchSourceRole } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
+import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
-import { anchorFeatureMatchOverlayRect } from '~/utils/featureMatchOverlayGeometry';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
-import FeatureMatchOverlayGeometryFields from './GeometryFields.vue';
 import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
@@ -25,11 +23,7 @@ const emit = defineEmits<{
 const editor = useFeatureMatchOverlayConfigEditor({
 	config: toRef(props, 'config'),
 	updateConfig: props.updateConfig,
-	screenWidth: toRef(props, 'screenWidth'),
-	screenHeight: toRef(props, 'screenHeight'),
 });
-
-const anchorValue = computed<FeatureMatchOverlayAnchorValue>(() => props.item.anchor ?? 'top-left');
 
 const SOURCE_ROLE_OPTIONS = [
 	{ label: 'Main', value: 'main' },
@@ -81,14 +75,12 @@ function removeSelf() {
 			:summary="rectSummary(item)"
 			default-open
 		>
-			<FeatureMatchOverlayGeometryFields
-				:rect="anchorFeatureMatchOverlayRect(item, anchorValue)"
-				:screen-width="screenWidth"
-				:screen-height="screenHeight"
-				:anchor-value="anchorValue"
-				@update-anchor="value => editor.updateSource(item.id, { anchor: value })"
-				@align="position => editor.updateSource(item.id, position)"
-				@update="(field, value, unit) => editor.updateSourceRectFromAnchor(item.id, field, value, unit)"
+			<GraphicsGeometryFields
+				:rect="item"
+				:container="{ width: screenWidth, height: screenHeight }"
+				:anchor="item.anchor ?? 'top-left'"
+				@update:anchor="anchor => editor.updateSource(item.id, { anchor })"
+				@update="patch => editor.updateSource(item.id, patch)"
 			/>
 		</FeatureMatchOverlayControlSection>
 

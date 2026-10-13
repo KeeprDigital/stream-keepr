@@ -52,10 +52,10 @@ const UButtonStub = defineComponent({
 
 const GeometryFieldsStub = defineComponent({
 	props: {
-		anchorValue: { type: String, required: true },
+		anchor: { type: String, required: true },
 	},
-	emits: ['updateAnchor'],
-	template: '<button type="button" data-testid="geometry-anchor" :data-anchor-value="anchorValue" @click="$emit(\'updateAnchor\', \'bottom-right\')">Anchor</button>',
+	emits: ['update:anchor'],
+	template: '<button type="button" data-testid="geometry-anchor" :data-anchor-value="anchor" @click="$emit(\'update:anchor\', \'bottom-right\')">Anchor</button>',
 });
 
 const OrderSectionStub = defineComponent({
@@ -93,7 +93,7 @@ async function mountComponent(overrides: Partial<{
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				FeatureMatchOverlayControlSection: ControlSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
-				FeatureMatchOverlayGeometryFields: GeometryFieldsStub,
+				GraphicsGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlayOrderSection: OrderSectionStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({
 					props: { framingStyle: { type: Object, required: false } },

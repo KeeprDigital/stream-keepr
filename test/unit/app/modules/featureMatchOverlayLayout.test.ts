@@ -7,7 +7,6 @@ import {
 	patchFrame,
 	patchSource,
 	patchSourceFramingStyle,
-	patchSourceRectFromAnchor,
 	removeSource,
 	sendSourceToBack,
 } from '~~/app/modules/feature-match-overlay/layout';
@@ -74,18 +73,8 @@ describe('feature match layout writer', () => {
 
 		expect(patchSource(layout, 'missing', { label: 'x' })).toBe(layout);
 		expect(patchSourceFramingStyle(layout, 'missing', { borderWidth: 1 })).toBe(layout);
-		expect(patchSourceRectFromAnchor(layout, 'missing', 'width', 10)).toBe(layout);
 		expect(removeSource(layout, 'missing')).toBe(layout);
 		expect(moveSourceOrder(layout, 'missing', 1)).toBe(layout);
-	});
-
-	it('resizes a Source Item around its anchor', () => {
-		const layout = layoutOf([source({ anchor: 'center' })]);
-
-		const next = patchSourceRectFromAnchor(layout, 's1', 'width', 100);
-
-		// The centre stays at 200; halving the width moves the left edge in by 50.
-		expect(next.sources[0]).toMatchObject({ x: 150, width: 100 });
 	});
 
 	it('orders Source Items back to front by list order', () => {
