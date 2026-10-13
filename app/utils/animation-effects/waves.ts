@@ -1,4 +1,4 @@
-import type { WavesAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
@@ -30,8 +30,8 @@ const CAMERA_TARGET = { x: 140, y: -30, z: 190 };
 /** The fork advanced `t` in 60fps-normalised frames, and the wave phase uses it. */
 const FORK_FRAMES_PER_SECOND = 60;
 
-export function createWavesDelegate(): SceneEffectDelegate<WavesAnimationParams> {
-	let current: WavesAnimationParams;
+export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams<'waves'>> {
+	let current: AnimationEffectParams<'waves'>;
 	let mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshPhongMaterial>;
 	let restHeights: Float32Array;
 
@@ -134,7 +134,7 @@ export function createWavesDelegate(): SceneEffectDelegate<WavesAnimationParams>
 
 export default function createWavesEffect(
 	host: HTMLElement,
-	params: WavesAnimationParams,
-): AnimationEffectInstance<WavesAnimationParams> {
+	params: AnimationEffectParams<'waves'>,
+): AnimationEffectInstance<AnimationEffectParams<'waves'>> {
 	return createSceneEffect({ three: THREE, host, delegate: createWavesDelegate() }, params);
 }

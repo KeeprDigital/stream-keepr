@@ -1,4 +1,4 @@
-import type { NetAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { ConnectionLineField } from './connectionLines';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
@@ -35,8 +35,8 @@ interface OrbitingPoint {
 	spinRate: number;
 }
 
-export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
-	let current: NetAnimationParams;
+export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'net'>> {
+	let current: AnimationEffectParams<'net'>;
 	let group: THREE.Group;
 	let points: OrbitingPoint[];
 	let positions: THREE.Vector3[];
@@ -148,7 +148,7 @@ export function createNetDelegate(): SceneEffectDelegate<NetAnimationParams> {
 
 export default function createNetEffect(
 	host: HTMLElement,
-	params: NetAnimationParams,
-): AnimationEffectInstance<NetAnimationParams> {
+	params: AnimationEffectParams<'net'>,
+): AnimationEffectInstance<AnimationEffectParams<'net'>> {
 	return createSceneEffect({ three: THREE, host, delegate: createNetDelegate() }, params);
 }

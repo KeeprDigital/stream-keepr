@@ -1,4 +1,4 @@
-import type { RingsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
@@ -77,7 +77,7 @@ interface RingSpec {
 	speed: number;
 }
 
-export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams> {
+export function createRingsDelegate(): SceneEffectDelegate<AnimationEffectParams<'rings'>> {
 	let group: THREE.Group;
 	let rings: SpinningRing[];
 
@@ -208,7 +208,7 @@ export function createRingsDelegate(): SceneEffectDelegate<RingsAnimationParams>
 
 export default function createRingsEffect(
 	host: HTMLElement,
-	params: RingsAnimationParams,
-): AnimationEffectInstance<RingsAnimationParams> {
+	params: AnimationEffectParams<'rings'>,
+): AnimationEffectInstance<AnimationEffectParams<'rings'>> {
 	return createSceneEffect({ three: THREE, host, delegate: createRingsDelegate() }, params);
 }

@@ -1,4 +1,4 @@
-import type { NetAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -10,7 +10,7 @@ import { createNetDelegate } from '~/utils/animation-effects/net';
  * bounds, and invariants rather than exact positions.
  */
 
-function mountDelegate(overrides: Partial<NetAnimationParams> = {}) {
+function mountDelegate(overrides: Partial<AnimationEffectParams<'net'>> = {}) {
 	const params = { ...animationEffectDefaultParams('net'), ...overrides };
 	const delegate = createNetDelegate();
 	const scene = new THREE.Scene();

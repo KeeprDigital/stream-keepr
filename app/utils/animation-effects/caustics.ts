@@ -1,4 +1,4 @@
-import type { CausticsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { createShaderPlaneEffect } from './shaderPlane';
@@ -53,8 +53,8 @@ void main() {
 
 export default function createCausticsEffect(
 	host: HTMLElement,
-	params: CausticsAnimationParams,
-): AnimationEffectInstance<CausticsAnimationParams> {
+	params: AnimationEffectParams<'caustics'>,
+): AnimationEffectInstance<AnimationEffectParams<'caustics'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

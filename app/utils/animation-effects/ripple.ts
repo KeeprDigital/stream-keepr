@@ -1,4 +1,4 @@
-import type { RippleAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { createShaderPlaneEffect } from './shaderPlane';
@@ -56,8 +56,8 @@ void main( void ) {
 
 export default function createRippleEffect(
 	host: HTMLElement,
-	params: RippleAnimationParams,
-): AnimationEffectInstance<RippleAnimationParams> {
+	params: AnimationEffectParams<'ripple'>,
+): AnimationEffectInstance<AnimationEffectParams<'ripple'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

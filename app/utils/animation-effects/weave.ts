@@ -1,4 +1,4 @@
-import type { WeaveAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { GLSL_HASH_1D } from './glslPrelude';
@@ -84,8 +84,8 @@ void main() {
 
 export default function createWeaveEffect(
 	host: HTMLElement,
-	params: WeaveAnimationParams,
-): AnimationEffectInstance<WeaveAnimationParams> {
+	params: AnimationEffectParams<'weave'>,
+): AnimationEffectInstance<AnimationEffectParams<'weave'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

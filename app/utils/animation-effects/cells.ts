@@ -1,4 +1,4 @@
-import type { CellsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { createShaderPlaneEffect } from './shaderPlane';
@@ -60,8 +60,8 @@ void main() {
 
 export default function createCellsEffect(
 	host: HTMLElement,
-	params: CellsAnimationParams,
-): AnimationEffectInstance<CellsAnimationParams> {
+	params: AnimationEffectParams<'cells'>,
+): AnimationEffectInstance<AnimationEffectParams<'cells'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

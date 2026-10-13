@@ -1,4 +1,4 @@
-import type { GlobeAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -10,7 +10,7 @@ import { createGlobeDelegate } from '~/utils/animation-effects/globe';
  * exact rather than bounds.
  */
 
-function mountDelegate(overrides: Partial<GlobeAnimationParams> = {}) {
+function mountDelegate(overrides: Partial<AnimationEffectParams<'globe'>> = {}) {
 	const params = { ...animationEffectDefaultParams('globe'), ...overrides };
 	const delegate = createGlobeDelegate();
 	const scene = new THREE.Scene();

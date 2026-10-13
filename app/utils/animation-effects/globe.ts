@@ -1,4 +1,4 @@
-import type { GlobeAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { ConnectionLineField } from './connectionLines';
 import type { SceneEffectDelegate } from './sceneEffect';
 import type { AnimationEffectInstance } from './types';
@@ -35,8 +35,8 @@ const GLOBE_GROUP_POSITION = { x: 0, y: 15, z: 0 };
 const GLOBE_GROUP_TILT_X = -0.25;
 const GLOBE_RADIUS = 18;
 
-export function createGlobeDelegate(): SceneEffectDelegate<GlobeAnimationParams> {
-	let current: GlobeAnimationParams;
+export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams<'globe'>> {
+	let current: AnimationEffectParams<'globe'>;
 	let fieldGroup: THREE.Group;
 	let globeGroup: THREE.Group;
 	let positions: THREE.Vector3[];
@@ -209,7 +209,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<GlobeAnimationParams>
 
 export default function createGlobeEffect(
 	host: HTMLElement,
-	params: GlobeAnimationParams,
-): AnimationEffectInstance<GlobeAnimationParams> {
+	params: AnimationEffectParams<'globe'>,
+): AnimationEffectInstance<AnimationEffectParams<'globe'>> {
 	return createSceneEffect({ three: THREE, host, delegate: createGlobeDelegate() }, params);
 }

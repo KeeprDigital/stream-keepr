@@ -18,13 +18,8 @@ import { z } from 'zod';
  * The vocabulary is closed for the same reason a Source Role's is: an effect
  * names a renderer this application ships, so a config or Template Package
  * naming one an installation does not implement is refused rather than
- * approximated. Ports from the retired fork rejoin this list under their old
- * names as they land; until then the vocabulary is exactly what renders.
+ * approximated: the vocabulary is exactly what renders.
  */
-
-export const ANIMATION_EFFECT_VALUES = ['caustics', 'cells', 'dots', 'ember', 'fog', 'globe', 'halo', 'inkmap', 'net', 'ridgelines', 'rings', 'ripple', 'shards', 'waves', 'weave'] as const;
-
-export type AnimationEffectName = typeof ANIMATION_EFFECT_VALUES[number];
 
 /** What a parameter's `.meta()` carries: the editor-facing facts Zod checks cannot. */
 interface AnimationEffectParamMeta {
@@ -71,312 +66,309 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
 }
 
 /**
- * Fog: the fbm domain-warp shader ported from the retired fork under its old
- * name, minus the mouse uniform nothing on a headless browser source ever fed.
+ * The catalogue itself: one declaration per effect — its editor label and its
+ * params schema — from which the vocabulary, every params type, and every host
+ * union below are derived (#501). Outside this module an effect also needs its
+ * renderer and lazy loader in `app/utils/animation-effects/` and its proof
+ * scenario in `scripts/graphics-acceptance/animation-effect-scenarios.mjs`.
  */
-export const fogAnimationParamsSchema = z.strictObject({
-	highlightColor: colorParam('Highlight color', '#f59e0b'),
-	midtoneColor: colorParam('Midtone color', '#7c3aed'),
-	lowlightColor: colorParam('Lowlight color', '#06b6d4'),
-	baseColor: colorParam('Base color', '#111111'),
-	blurFactor: numberParam('Softness', { min: 0.1, max: 0.95, step: 0.05, default: 0.55 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
-	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
-});
-
-/**
- * Cells: a Worley-noise cellular field, ported from the retired fork under its
- * old name. Only the params the fragment shader reads survive the port: the
- * fork's editor also offered `amplitudeFactor`, `ringFactor`, `rotationFactor`,
- * and a background colour that its cells shader declared but never referenced.
- * Defaults are the pre-rebuild application's, not the fork's.
- */
-export const cellsAnimationParamsSchema = z.strictObject({
-	color1: colorParam('Primary color', '#008c8c'),
-	color2: colorParam('Secondary color', '#06b6d4'),
-	size: numberParam('Cell size', { min: 0.2, max: 5, step: 0.1, default: 3 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
-});
-
-/**
- * Ripple: rings of orbiting lights accumulating over a background colour,
- * ported from the retired fork under its old name and the pre-rebuild
- * application's defaults.
- */
-export const rippleAnimationParamsSchema = z.strictObject({
-	color1: colorParam('Primary color', '#008c8c'),
-	color2: colorParam('Secondary color', '#06b6d4'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
-	ringFactor: numberParam('Ripple scale', { min: 0, max: 12, step: 0.1, default: 1 }),
-	rotationFactor: numberParam('Rotation', { min: 0, max: 4, step: 0.1, default: 1 }),
-	centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
-	centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),
-	frequency: numberParam('Ripple frequency', { min: 0, max: 4, step: 0.1, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
-});
-
-/**
- * Halo: a flower-edged ring of cycling hues smearing through a feedback
- * buffer, ported from the retired fork under its old name. Only the params the
- * fragment shader reads survive the port: the fork's editor also offered
- * `color2`, `ringFactor`, and `rotationFactor`, which its halo shader declared
- * and never referenced. Defaults are the pre-rebuild application's.
- */
-export const haloAnimationParamsSchema = z.strictObject({
-	baseColor: colorParam('Base color', '#111111'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
-	size: numberParam('Size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
-	xOffset: numberParam('Horizontal offset', { min: -1, max: 1, step: 0.05, default: 0 }),
-	yOffset: numberParam('Vertical offset', { min: -1, max: 1, step: 0.05, default: 0 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/**
- * Dots: a drifting field of point sprites with slowly tumbling radial line
- * segments, ported from the retired fork under its old name. `backgroundColor`
- * survives for the same reason as waves' — the fork's base cleared the canvas
- * to it, and a dot field never covers the frame. `showLines` is the
- * catalogue's first toggle param. Defaults and ranges are the pre-rebuild
- * application's, including the dots-specific `spacing` fallback of 34 rather
- * than the shared bag's 16.
- */
-export const dotsAnimationParamsSchema = z.strictObject({
-	color: colorParam('Dot color', '#7c3aed'),
-	color2: colorParam('Accent color', '#06b6d4'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	size: numberParam('Dot size', { min: 0.5, max: 20, step: 0.5, default: 3 }),
-	spacing: numberParam('Spacing', { min: 5, max: 100, step: 1, default: 34 }),
-	showLines: toggleParam('Connecting lines', 'Render connecting line segments between dots.', true),
-});
-
-/**
- * Globe: a wireframe sphere with radial accents and pole lines turning over a
- * waving, line-strung point plane, ported from the retired fork under its old
- * name. Every param is read. Net's vertex-colour restoration applies here too —
- * the fork passed the removed `THREE.VertexColors` constant, so its connection
- * lines rendered flat white on air; the port enables vertex colours. One label
- * is corrected: the pre-rebuild editor called `size` "Point size", but the
- * fork only ever read it as the wireframe globe's radius scale.
- */
-export const globeAnimationParamsSchema = z.strictObject({
-	color: colorParam('Primary color', '#7c3aed'),
-	color2: colorParam('Secondary color', '#06b6d4'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	size: numberParam('Globe size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
-	points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
-	maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
-	spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
-	showDots: toggleParam('Point markers', 'Render point markers around the globe.', true),
-});
-
-/**
- * Net: a slowly orbiting point field strung with distance-faded connection
- * lines, ported from the retired fork under its old name. Every param is read:
- * `color` drives the lines and the point markers, `backgroundColor` the clear
- * colour and the line gradient's dark end, and the rest the field's
- * construction. One knowing restoration rides the port: the fork passed the
- * `THREE.VertexColors` constant that three had removed, so on air its
- * per-vertex line gradient silently degraded to flat default-white lines and
- * "Line color" coloured only the dots — proven by running the fork against
- * three 0.185 in unattended Chromium. The port enables vertex colours, so the
- * lines render the gradient the fork wrote and the label describes.
- */
-export const netAnimationParamsSchema = z.strictObject({
-	color: colorParam('Line color', '#7c3aed'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
-	maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
-	spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
-	showDots: toggleParam('Point markers', 'Render point markers at net intersections.', true),
-});
-
-/**
- * Rings: a tumbling stack of extruded arc segments in the fork's fixed
- * thirteen-colour palette, ported from the retired fork under its old name.
- * Only the background colour survives as a param: the fork's renderer sampled
- * its palette for every ring and never read the colour option, so the
- * pre-rebuild editor's "Ring color" picker was inert and drops with the port
- * (the halo precedent for declared-but-unread params). `backgroundColor`
- * survives under the waves rule — the fork's base cleared the canvas to it,
- * and the rings never cover the frame.
- */
-export const ringsAnimationParamsSchema = z.strictObject({
-	backgroundColor: colorParam('Background color', '#111111'),
-});
-
-/**
- * Shards: a pane of shattered glass — slowly shifting Voronoi facets, each
- * tinted a hashed shade between the background and the shard colour, crack
- * lines glowing along every facet boundary, and an occasional glint sweeping
- * across facets whose hashed orientation catches it. A new effect (no fork
- * ancestry), so the params carry semantic names and the defaults are the
- * recorded design's (#473). `size` scales the facets, `intensity` the crack
- * glow and the glint together.
- */
-export const shardsAnimationParamsSchema = z.strictObject({
-	shardColor: colorParam('Shard color', '#312e81'),
-	edgeColor: colorParam('Edge color', '#7dd3fc'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	size: numberParam('Shard size', { min: 0.5, max: 3, step: 0.1, default: 1 }),
-	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/**
- * Waves: a lit, choppy water plane — the first mesh-backend port from the
- * retired fork, under its old name. `backgroundColor` survives the port even
- * though the mesh never reads it: the fork's base cleared the canvas to it,
- * and the water plane leaves the frame's far corners uncovered at low zoom, so
- * it is visible on air. Defaults and ranges are the pre-rebuild application's,
- * including the waves-specific `zoom` fallback of 0.85 rather than the shared
- * bag's 1.
- */
-export const wavesAnimationParamsSchema = z.strictObject({
-	color: colorParam('Wave color', '#7c3aed'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
-	waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
-	waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 0.85 }),
-});
-
-/**
- * Ember: drifting embers rising through a dark frame — the first new effect
- * after the ports, so the params carry semantic names (the caustics precedent)
- * rather than a fork bag's. `density` thins or crowds the field without
- * resizing any ember; `size` and `intensity` scale one ember's glow radius and
- * brightness.
- */
-export const emberAnimationParamsSchema = z.strictObject({
-	emberColor: colorParam('Ember color', '#f97316'),
-	coreColor: colorParam('Core color', '#fef3c7'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	density: numberParam('Density', { min: 0.2, max: 3, step: 0.1, default: 1 }),
-	size: numberParam('Ember size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
-	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/**
- * Inkmap: slow-morphing ink islands on dark paper, drawn like a living map —
- * a domain-warped noise field thresholded into hard-edged pools with a
- * luminous rim, ringed by faint topographic contour lines in the surrounding
- * paper. A new effect (no fork ancestry), so the params carry semantic names
- * and the defaults are the recorded design's (#473). `coverage` moves the ink
- * threshold, `contours` counts the iso-lines outside the islands.
- */
-export const inkmapAnimationParamsSchema = z.strictObject({
-	inkColor: colorParam('Ink color', '#312e81'),
-	edgeColor: colorParam('Edge color', '#06b6d4'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	coverage: numberParam('Coverage', { min: 0.2, max: 0.8, step: 0.05, default: 0.5 }),
-	contours: numberParam('Contour lines', { min: 0, max: 8, step: 1, default: 4 }),
-	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/**
- * Ridgelines: stacked mountain-ridge silhouettes receding into the frame, each
- * a drifting 1D-noise profile with a glowing crest line — a joyplot horizon.
- * A new effect (no fork ancestry), so the params carry semantic names and the
- * defaults are the recorded design's (#473). `ridges` counts the silhouettes,
- * `relief` scales every profile's amplitude, `glow` the crest-line halo.
- */
-export const ridgelinesAnimationParamsSchema = z.strictObject({
-	crestColor: colorParam('Crest color', '#06b6d4'),
-	fillColor: colorParam('Ridge color', '#1e1b4b'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	ridges: numberParam('Ridge count', { min: 3, max: 12, step: 1, default: 7 }),
-	relief: numberParam('Relief', { min: 0.2, max: 2, step: 0.1, default: 1 }),
-	glow: numberParam('Crest glow', { min: 0, max: 2, step: 0.05, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/**
- * Weave: an interlaced fabric of undulating warp and weft threads crossing
- * over and under in strict alternation, with a soft sheen sweeping the cloth.
- * A new effect (no fork ancestry), so the params carry semantic names and the
- * defaults are the recorded design's (#473). `scale` sets the thread grid,
- * `thickness` the band width within it, `sheen` the travelling highlight.
- */
-export const weaveAnimationParamsSchema = z.strictObject({
-	warpColor: colorParam('Warp color', '#7c3aed'),
-	weftColor: colorParam('Weft color', '#06b6d4'),
-	backgroundColor: colorParam('Background color', '#111111'),
-	scale: numberParam('Weave scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
-	thickness: numberParam('Thread width', { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }),
-	sheen: numberParam('Sheen', { min: 0, max: 2, step: 0.05, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-});
-
-/** Caustics: refracted-light interference drifting over a water colour. */
-export const causticsAnimationParamsSchema = z.strictObject({
-	lightColor: colorParam('Light color', '#7dd3fc'),
-	waterColor: colorParam('Water color', '#083344'),
-	intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
-	speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-	zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
-});
-
-/** Fully-defaulted params, as an effect renderer receives them. */
-export type FogAnimationParams = z.output<typeof fogAnimationParamsSchema>;
-export type CausticsAnimationParams = z.output<typeof causticsAnimationParamsSchema>;
-export type CellsAnimationParams = z.output<typeof cellsAnimationParamsSchema>;
-export type EmberAnimationParams = z.output<typeof emberAnimationParamsSchema>;
-export type DotsAnimationParams = z.output<typeof dotsAnimationParamsSchema>;
-export type HaloAnimationParams = z.output<typeof haloAnimationParamsSchema>;
-export type GlobeAnimationParams = z.output<typeof globeAnimationParamsSchema>;
-export type InkmapAnimationParams = z.output<typeof inkmapAnimationParamsSchema>;
-export type NetAnimationParams = z.output<typeof netAnimationParamsSchema>;
-export type RidgelinesAnimationParams = z.output<typeof ridgelinesAnimationParamsSchema>;
-export type RingsAnimationParams = z.output<typeof ringsAnimationParamsSchema>;
-export type RippleAnimationParams = z.output<typeof rippleAnimationParamsSchema>;
-export type ShardsAnimationParams = z.output<typeof shardsAnimationParamsSchema>;
-export type WavesAnimationParams = z.output<typeof wavesAnimationParamsSchema>;
-export type WeaveAnimationParams = z.output<typeof weaveAnimationParamsSchema>;
-
-export interface AnimationEffectParamsMap {
-	caustics: CausticsAnimationParams;
-	cells: CellsAnimationParams;
-	dots: DotsAnimationParams;
-	ember: EmberAnimationParams;
-	fog: FogAnimationParams;
-	globe: GlobeAnimationParams;
-	halo: HaloAnimationParams;
-	inkmap: InkmapAnimationParams;
-	net: NetAnimationParams;
-	ridgelines: RidgelinesAnimationParams;
-	rings: RingsAnimationParams;
-	ripple: RippleAnimationParams;
-	shards: ShardsAnimationParams;
-	waves: WavesAnimationParams;
-	weave: WeaveAnimationParams;
-}
-
 export const ANIMATION_EFFECT_CATALOGUE = {
-	caustics: { label: 'Caustics', paramsSchema: causticsAnimationParamsSchema },
-	cells: { label: 'Cells', paramsSchema: cellsAnimationParamsSchema },
-	dots: { label: 'Dots', paramsSchema: dotsAnimationParamsSchema },
-	ember: { label: 'Ember', paramsSchema: emberAnimationParamsSchema },
-	fog: { label: 'Fog', paramsSchema: fogAnimationParamsSchema },
-	globe: { label: 'Globe', paramsSchema: globeAnimationParamsSchema },
-	halo: { label: 'Halo', paramsSchema: haloAnimationParamsSchema },
-	inkmap: { label: 'Inkmap', paramsSchema: inkmapAnimationParamsSchema },
-	net: { label: 'Net', paramsSchema: netAnimationParamsSchema },
-	ridgelines: { label: 'Ridgelines', paramsSchema: ridgelinesAnimationParamsSchema },
-	rings: { label: 'Rings', paramsSchema: ringsAnimationParamsSchema },
-	ripple: { label: 'Ripple', paramsSchema: rippleAnimationParamsSchema },
-	shards: { label: 'Shards', paramsSchema: shardsAnimationParamsSchema },
-	waves: { label: 'Waves', paramsSchema: wavesAnimationParamsSchema },
-	weave: { label: 'Weave', paramsSchema: weaveAnimationParamsSchema },
-} satisfies Record<AnimationEffectName, { label: string; paramsSchema: z.ZodObject }>;
+	/** Caustics: refracted-light interference drifting over a water colour. */
+	caustics: {
+		label: 'Caustics',
+		paramsSchema: z.strictObject({
+			lightColor: colorParam('Light color', '#7dd3fc'),
+			waterColor: colorParam('Water color', '#083344'),
+			intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Cells: a Worley-noise cellular field, ported from the retired fork under its
+	 * old name. Only the params the fragment shader reads survive the port: the
+	 * fork's editor also offered `amplitudeFactor`, `ringFactor`, `rotationFactor`,
+	 * and a background colour that its cells shader declared but never referenced.
+	 * Defaults are the pre-rebuild application's, not the fork's.
+	 */
+	cells: {
+		label: 'Cells',
+		paramsSchema: z.strictObject({
+			color1: colorParam('Primary color', '#008c8c'),
+			color2: colorParam('Secondary color', '#06b6d4'),
+			size: numberParam('Cell size', { min: 0.2, max: 5, step: 0.1, default: 3 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
+		}),
+	},
+	/**
+	 * Dots: a drifting field of point sprites with slowly tumbling radial line
+	 * segments, ported from the retired fork under its old name. `backgroundColor`
+	 * survives for the same reason as waves' — the fork's base cleared the canvas
+	 * to it, and a dot field never covers the frame. `showLines` is the
+	 * catalogue's first toggle param. Defaults and ranges are the pre-rebuild
+	 * application's, including the dots-specific `spacing` fallback of 34 rather
+	 * than the shared bag's 16.
+	 */
+	dots: {
+		label: 'Dots',
+		paramsSchema: z.strictObject({
+			color: colorParam('Dot color', '#7c3aed'),
+			color2: colorParam('Accent color', '#06b6d4'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			size: numberParam('Dot size', { min: 0.5, max: 20, step: 0.5, default: 3 }),
+			spacing: numberParam('Spacing', { min: 5, max: 100, step: 1, default: 34 }),
+			showLines: toggleParam('Connecting lines', 'Render connecting line segments between dots.', true),
+		}),
+	},
+	/**
+	 * Ember: drifting embers rising through a dark frame — the first new effect
+	 * after the ports, so the params carry semantic names (the caustics precedent)
+	 * rather than a fork bag's. `density` thins or crowds the field without
+	 * resizing any ember; `size` and `intensity` scale one ember's glow radius and
+	 * brightness.
+	 */
+	ember: {
+		label: 'Ember',
+		paramsSchema: z.strictObject({
+			emberColor: colorParam('Ember color', '#f97316'),
+			coreColor: colorParam('Core color', '#fef3c7'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			density: numberParam('Density', { min: 0.2, max: 3, step: 0.1, default: 1 }),
+			size: numberParam('Ember size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+			intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Fog: the fbm domain-warp shader ported from the retired fork under its old
+	 * name, minus the mouse uniform nothing on a headless browser source ever fed.
+	 */
+	fog: {
+		label: 'Fog',
+		paramsSchema: z.strictObject({
+			highlightColor: colorParam('Highlight color', '#f59e0b'),
+			midtoneColor: colorParam('Midtone color', '#7c3aed'),
+			lowlightColor: colorParam('Lowlight color', '#06b6d4'),
+			baseColor: colorParam('Base color', '#111111'),
+			blurFactor: numberParam('Softness', { min: 0.1, max: 0.95, step: 0.05, default: 0.55 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
+			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Globe: a wireframe sphere with radial accents and pole lines turning over a
+	 * waving, line-strung point plane, ported from the retired fork under its old
+	 * name. Every param is read. Net's vertex-colour restoration applies here too —
+	 * the fork passed the removed `THREE.VertexColors` constant, so its connection
+	 * lines rendered flat white on air; the port enables vertex colours. One label
+	 * is corrected: the pre-rebuild editor called `size` "Point size", but the
+	 * fork only ever read it as the wireframe globe's radius scale.
+	 */
+	globe: {
+		label: 'Globe',
+		paramsSchema: z.strictObject({
+			color: colorParam('Primary color', '#7c3aed'),
+			color2: colorParam('Secondary color', '#06b6d4'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			size: numberParam('Globe size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
+			maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
+			showDots: toggleParam('Point markers', 'Render point markers around the globe.', true),
+		}),
+	},
+	/**
+	 * Halo: a flower-edged ring of cycling hues smearing through a feedback
+	 * buffer, ported from the retired fork under its old name. Only the params the
+	 * fragment shader reads survive the port: the fork's editor also offered
+	 * `color2`, `ringFactor`, and `rotationFactor`, which its halo shader declared
+	 * and never referenced. Defaults are the pre-rebuild application's.
+	 */
+	halo: {
+		label: 'Halo',
+		paramsSchema: z.strictObject({
+			baseColor: colorParam('Base color', '#111111'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
+			size: numberParam('Size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+			xOffset: numberParam('Horizontal offset', { min: -1, max: 1, step: 0.05, default: 0 }),
+			yOffset: numberParam('Vertical offset', { min: -1, max: 1, step: 0.05, default: 0 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Inkmap: slow-morphing ink islands on dark paper, drawn like a living map —
+	 * a domain-warped noise field thresholded into hard-edged pools with a
+	 * luminous rim, ringed by faint topographic contour lines in the surrounding
+	 * paper. A new effect (no fork ancestry), so the params carry semantic names
+	 * and the defaults are the recorded design's (#473). `coverage` moves the ink
+	 * threshold, `contours` counts the iso-lines outside the islands.
+	 */
+	inkmap: {
+		label: 'Inkmap',
+		paramsSchema: z.strictObject({
+			inkColor: colorParam('Ink color', '#312e81'),
+			edgeColor: colorParam('Edge color', '#06b6d4'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			coverage: numberParam('Coverage', { min: 0.2, max: 0.8, step: 0.05, default: 0.5 }),
+			contours: numberParam('Contour lines', { min: 0, max: 8, step: 1, default: 4 }),
+			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Net: a slowly orbiting point field strung with distance-faded connection
+	 * lines, ported from the retired fork under its old name. Every param is read:
+	 * `color` drives the lines and the point markers, `backgroundColor` the clear
+	 * colour and the line gradient's dark end, and the rest the field's
+	 * construction. One knowing restoration rides the port: the fork passed the
+	 * `THREE.VertexColors` constant that three had removed, so on air its
+	 * per-vertex line gradient silently degraded to flat default-white lines and
+	 * "Line color" coloured only the dots — proven by running the fork against
+	 * three 0.185 in unattended Chromium. The port enables vertex colours, so the
+	 * lines render the gradient the fork wrote and the label describes.
+	 */
+	net: {
+		label: 'Net',
+		paramsSchema: z.strictObject({
+			color: colorParam('Line color', '#7c3aed'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
+			maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
+			showDots: toggleParam('Point markers', 'Render point markers at net intersections.', true),
+		}),
+	},
+	/**
+	 * Ridgelines: stacked mountain-ridge silhouettes receding into the frame, each
+	 * a drifting 1D-noise profile with a glowing crest line — a joyplot horizon.
+	 * A new effect (no fork ancestry), so the params carry semantic names and the
+	 * defaults are the recorded design's (#473). `ridges` counts the silhouettes,
+	 * `relief` scales every profile's amplitude, `glow` the crest-line halo.
+	 */
+	ridgelines: {
+		label: 'Ridgelines',
+		paramsSchema: z.strictObject({
+			crestColor: colorParam('Crest color', '#06b6d4'),
+			fillColor: colorParam('Ridge color', '#1e1b4b'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			ridges: numberParam('Ridge count', { min: 3, max: 12, step: 1, default: 7 }),
+			relief: numberParam('Relief', { min: 0.2, max: 2, step: 0.1, default: 1 }),
+			glow: numberParam('Crest glow', { min: 0, max: 2, step: 0.05, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Rings: a tumbling stack of extruded arc segments in the fork's fixed
+	 * thirteen-colour palette, ported from the retired fork under its old name.
+	 * Only the background colour survives as a param: the fork's renderer sampled
+	 * its palette for every ring and never read the colour option, so the
+	 * pre-rebuild editor's "Ring color" picker was inert and drops with the port
+	 * (the halo precedent for declared-but-unread params). `backgroundColor`
+	 * survives under the waves rule — the fork's base cleared the canvas to it,
+	 * and the rings never cover the frame.
+	 */
+	rings: {
+		label: 'Rings',
+		paramsSchema: z.strictObject({
+			backgroundColor: colorParam('Background color', '#111111'),
+		}),
+	},
+	/**
+	 * Ripple: rings of orbiting lights accumulating over a background colour,
+	 * ported from the retired fork under its old name and the pre-rebuild
+	 * application's defaults.
+	 */
+	ripple: {
+		label: 'Ripple',
+		paramsSchema: z.strictObject({
+			color1: colorParam('Primary color', '#008c8c'),
+			color2: colorParam('Secondary color', '#06b6d4'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
+			ringFactor: numberParam('Ripple scale', { min: 0, max: 12, step: 0.1, default: 1 }),
+			rotationFactor: numberParam('Rotation', { min: 0, max: 4, step: 0.1, default: 1 }),
+			centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
+			centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),
+			frequency: numberParam('Ripple frequency', { min: 0, max: 4, step: 0.1, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
+		}),
+	},
+	/**
+	 * Shards: a pane of shattered glass — slowly shifting Voronoi facets, each
+	 * tinted a hashed shade between the background and the shard colour, crack
+	 * lines glowing along every facet boundary, and an occasional glint sweeping
+	 * across facets whose hashed orientation catches it. A new effect (no fork
+	 * ancestry), so the params carry semantic names and the defaults are the
+	 * recorded design's (#473). `size` scales the facets, `intensity` the crack
+	 * glow and the glint together.
+	 */
+	shards: {
+		label: 'Shards',
+		paramsSchema: z.strictObject({
+			shardColor: colorParam('Shard color', '#312e81'),
+			edgeColor: colorParam('Edge color', '#7dd3fc'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			size: numberParam('Shard size', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+	/**
+	 * Waves: a lit, choppy water plane — the first mesh-backend port from the
+	 * retired fork, under its old name. `backgroundColor` survives the port even
+	 * though the mesh never reads it: the fork's base cleared the canvas to it,
+	 * and the water plane leaves the frame's far corners uncovered at low zoom, so
+	 * it is visible on air. Defaults and ranges are the pre-rebuild application's,
+	 * including the waves-specific `zoom` fallback of 0.85 rather than the shared
+	 * bag's 1.
+	 */
+	waves: {
+		label: 'Waves',
+		paramsSchema: z.strictObject({
+			color: colorParam('Wave color', '#7c3aed'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
+			waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
+			waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 0.85 }),
+		}),
+	},
+	/**
+	 * Weave: an interlaced fabric of undulating warp and weft threads crossing
+	 * over and under in strict alternation, with a soft sheen sweeping the cloth.
+	 * A new effect (no fork ancestry), so the params carry semantic names and the
+	 * defaults are the recorded design's (#473). `scale` sets the thread grid,
+	 * `thickness` the band width within it, `sheen` the travelling highlight.
+	 */
+	weave: {
+		label: 'Weave',
+		paramsSchema: z.strictObject({
+			warpColor: colorParam('Warp color', '#7c3aed'),
+			weftColor: colorParam('Weft color', '#06b6d4'),
+			backgroundColor: colorParam('Background color', '#111111'),
+			scale: numberParam('Weave scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			thickness: numberParam('Thread width', { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }),
+			sheen: numberParam('Sheen', { min: 0, max: 2, step: 0.05, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+		}),
+	},
+} satisfies Record<string, { label: string; paramsSchema: z.ZodObject }>;
+
+type AnimationEffectCatalogue = typeof ANIMATION_EFFECT_CATALOGUE;
+
+export type AnimationEffectName = keyof AnimationEffectCatalogue;
+
+/** The closed vocabulary, in catalogue order. */
+export const ANIMATION_EFFECT_VALUES = Object.keys(ANIMATION_EFFECT_CATALOGUE) as readonly AnimationEffectName[];
+
+/** One effect's fully-defaulted params, as its renderer receives them. */
+export type AnimationEffectParams<Effect extends AnimationEffectName> = z.output<AnimationEffectCatalogue[Effect]['paramsSchema']>;
 
 export function animationEffectDefaultParams<Effect extends AnimationEffectName>(
 	effect: Effect,
-): AnimationEffectParamsMap[Effect] {
-	return ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.parse({}) as AnimationEffectParamsMap[Effect];
+): AnimationEffectParams<Effect> {
+	return ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.parse({}) as AnimationEffectParams<Effect>;
 }
 
 /** One effect parameter as the editor renders it: control kind, bounds, and starting value. */
@@ -418,27 +410,55 @@ export function animationEffectParamFields(effect: AnimationEffectName): Animati
 }
 
 /**
- * One effect selection branch: the effect's name paired with that effect's own
- * params and nothing else. `.strictObject` so a bag from any other effect — or
- * from the retired pre-rebuild flat shape — is refused rather than half-read.
+ * One effect's branch of a host union: the effect's name paired with that
+ * effect's own params and nothing else, plus whatever fields the host adds
+ * (spread first, so a host field can never displace `effect` or `params`).
+ * Strict, so a bag from any other effect — or from the retired pre-rebuild flat
+ * shape — is refused rather than half-read (the reset ADR-0014 accepts).
  */
-const selectionBranches = {
-	caustics: z.strictObject({ effect: z.literal('caustics'), params: causticsAnimationParamsSchema.optional() }),
-	cells: z.strictObject({ effect: z.literal('cells'), params: cellsAnimationParamsSchema.optional() }),
-	dots: z.strictObject({ effect: z.literal('dots'), params: dotsAnimationParamsSchema.optional() }),
-	ember: z.strictObject({ effect: z.literal('ember'), params: emberAnimationParamsSchema.optional() }),
-	fog: z.strictObject({ effect: z.literal('fog'), params: fogAnimationParamsSchema.optional() }),
-	globe: z.strictObject({ effect: z.literal('globe'), params: globeAnimationParamsSchema.optional() }),
-	halo: z.strictObject({ effect: z.literal('halo'), params: haloAnimationParamsSchema.optional() }),
-	inkmap: z.strictObject({ effect: z.literal('inkmap'), params: inkmapAnimationParamsSchema.optional() }),
-	net: z.strictObject({ effect: z.literal('net'), params: netAnimationParamsSchema.optional() }),
-	ridgelines: z.strictObject({ effect: z.literal('ridgelines'), params: ridgelinesAnimationParamsSchema.optional() }),
-	rings: z.strictObject({ effect: z.literal('rings'), params: ringsAnimationParamsSchema.optional() }),
-	ripple: z.strictObject({ effect: z.literal('ripple'), params: rippleAnimationParamsSchema.optional() }),
-	shards: z.strictObject({ effect: z.literal('shards'), params: shardsAnimationParamsSchema.optional() }),
-	waves: z.strictObject({ effect: z.literal('waves'), params: wavesAnimationParamsSchema.optional() }),
-	weave: z.strictObject({ effect: z.literal('weave'), params: weaveAnimationParamsSchema.optional() }),
-} satisfies Record<AnimationEffectName, z.ZodObject>;
+function animationEffectHostBranch<Effect extends AnimationEffectName, Shape extends z.ZodRawShape>(
+	effect: Effect,
+	shape: Shape,
+) {
+	// Narrowed by annotation, which the compiler takes on trust: reading through
+	// the generic index alone widens it to every effect's schema.
+	const paramsSchema: AnimationEffectCatalogue[Effect]['paramsSchema'] = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema;
+	return z.strictObject({
+		...shape,
+		effect: z.literal(effect),
+		params: z.optional(paramsSchema),
+	});
+}
+
+/** Every effect's branch as one union type — distributed, so each keeps its own params. */
+type AnimationEffectHostBranches<Shape extends z.ZodRawShape> = {
+	[Effect in AnimationEffectName]: ReturnType<typeof animationEffectHostBranch<Effect, Shape>>;
+}[AnimationEffectName];
+
+/**
+ * Every selection branch extended with one host's own fields, in catalogue
+ * order.
+ *
+ * A host composes the shared selection rather than restating it, and it does so
+ * across every branch — so the branch list is built once here and each host
+ * names only what it adds.
+ *
+ * Mapping the vocabulary widens each branch to "any effect, any params", so the
+ * list is asserted back to the distributed `AnimationEffectHostBranches`: the
+ * discriminated union's per-effect params are what every consumer reads. Both
+ * sides map the same catalogue keys, so neither can miss an effect, and the
+ * branch type is `animationEffectHostBranch`'s own return type, so strictness
+ * and optionality cannot drift from what is built. What the compiler takes on
+ * trust is the pairing of each effect with its own schema; "fills each
+ * effect's params from that effect's own schema in every union" in
+ * `test/unit/shared/animationEffects.test.ts` pins it at runtime.
+ */
+function animationEffectHostBranches<Shape extends z.ZodRawShape>(shape: Shape) {
+	return ANIMATION_EFFECT_VALUES.map(effect => animationEffectHostBranch(effect, shape)) as [
+		AnimationEffectHostBranches<Shape>,
+		...AnimationEffectHostBranches<Shape>[],
+	];
+}
 
 /**
  * The host-neutral Animation Effect selection: which effect, with that effect's
@@ -453,23 +473,7 @@ const selectionBranches = {
  * `params` is optional and may be sparse: every field defaults from the effect's
  * schema, so an absent bag means "as shipped" and survives new params being added.
  */
-export const animationEffectSelectionSchema = z.discriminatedUnion('effect', [
-	selectionBranches.caustics,
-	selectionBranches.cells,
-	selectionBranches.dots,
-	selectionBranches.ember,
-	selectionBranches.fog,
-	selectionBranches.globe,
-	selectionBranches.halo,
-	selectionBranches.inkmap,
-	selectionBranches.net,
-	selectionBranches.ridgelines,
-	selectionBranches.rings,
-	selectionBranches.ripple,
-	selectionBranches.shards,
-	selectionBranches.waves,
-	selectionBranches.weave,
-]);
+export const animationEffectSelectionSchema = z.discriminatedUnion('effect', animationEffectHostBranches({}));
 
 /** The stored/authored selection shape: params sparse, defaults implied. */
 export type AnimationEffectSelection = z.input<typeof animationEffectSelectionSchema>;
@@ -491,7 +495,7 @@ export function parseAnimationEffectSelection(
 /** What a renderer mount takes: the effect to draw, and the params to draw it with. */
 export interface AnimationEffectRenderPlan {
 	effect: AnimationEffectName;
-	params?: AnimationEffectParamsMap[AnimationEffectName];
+	params?: AnimationEffectParams<AnimationEffectName>;
 }
 
 /**
@@ -508,46 +512,8 @@ export function animationEffectRenderPlan(
 ): AnimationEffectRenderPlan {
 	return {
 		effect: selection.effect,
-		params: selection.params as AnimationEffectParamsMap[AnimationEffectName] | undefined,
+		params: selection.params as AnimationEffectParams<AnimationEffectName> | undefined,
 	};
-}
-
-/**
- * Every selection branch extended with one host's own fields, in the order the
- * catalogue declares them.
- *
- * A host composes the shared selection rather than restating it, and it does so
- * across every branch — so the branch list is written once here and each host
- * names only what it adds. `.extend` keeps the branches strict, which is what
- * makes a stored config carrying fields no effect declares (the retired
- * pre-rebuild flat bag, recognisable by its `mouseDrift*` fields) reset to
- * defaults rather than being half-read (the reset ADR-0014 accepts).
- *
- * Spelled out rather than mapped over `ANIMATION_EFFECT_VALUES`, because the
- * discriminated union's type is what gives every consumer its per-effect params
- * and a mapped list collapses it. That an effect added to the catalogue must be
- * added here too is pinned by a test rather than by the compiler: "covers the
- * whole catalogue in every host union, in catalogue order", in
- * `test/unit/shared/animationEffects.test.ts`.
- */
-function animationEffectHostBranches<Shape extends z.ZodRawShape>(shape: Shape) {
-	return [
-		selectionBranches.caustics.extend(shape),
-		selectionBranches.cells.extend(shape),
-		selectionBranches.dots.extend(shape),
-		selectionBranches.ember.extend(shape),
-		selectionBranches.fog.extend(shape),
-		selectionBranches.globe.extend(shape),
-		selectionBranches.halo.extend(shape),
-		selectionBranches.inkmap.extend(shape),
-		selectionBranches.net.extend(shape),
-		selectionBranches.ridgelines.extend(shape),
-		selectionBranches.rings.extend(shape),
-		selectionBranches.ripple.extend(shape),
-		selectionBranches.shards.extend(shape),
-		selectionBranches.waves.extend(shape),
-		selectionBranches.weave.extend(shape),
-	] as const;
 }
 
 /**
@@ -605,7 +571,7 @@ export function parseBroadcastGraphicsBackgroundConfig(
 
 /**
  * The stored/authored shape: params sparse, defaults implied. Renderers parse it
- * through the schema to get the fully-defaulted `AnimationEffectParamsMap` form.
+ * through the schema to get the fully-defaulted `AnimationEffectParams` form.
  */
 export type FeatureMatchOverlayFrameAnimationConfig = z.input<typeof featureMatchOverlayFrameAnimationConfigSchema>;
 

@@ -1,4 +1,4 @@
-import type { AnimationEffectName, AnimationEffectParamsMap } from '~~/shared/animationEffects';
+import type { AnimationEffectName, AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectFactory } from './types';
 
 /**
@@ -9,7 +9,7 @@ import type { AnimationEffectFactory } from './types';
  * never reaches this map — refused upstream rather than approximated.
  */
 const effectLoaders: {
-	[Effect in AnimationEffectName]: () => Promise<{ default: AnimationEffectFactory<AnimationEffectParamsMap[Effect]> }>;
+	[Effect in AnimationEffectName]: () => Promise<{ default: AnimationEffectFactory<AnimationEffectParams<Effect>> }>;
 } = {
 	caustics: () => import('./caustics'),
 	cells: () => import('./cells'),
@@ -30,7 +30,7 @@ const effectLoaders: {
 
 export async function loadAnimationEffect<Effect extends AnimationEffectName>(
 	effect: Effect,
-): Promise<AnimationEffectFactory<AnimationEffectParamsMap[Effect]>> {
+): Promise<AnimationEffectFactory<AnimationEffectParams<Effect>>> {
 	const module = await effectLoaders[effect]();
 	return module.default;
 }

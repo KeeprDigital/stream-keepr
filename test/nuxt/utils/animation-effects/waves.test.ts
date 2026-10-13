@@ -1,4 +1,4 @@
-import type { WavesAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
@@ -12,7 +12,7 @@ import { createWavesDelegate } from '~/utils/animation-effects/waves';
  * rendered with rather than on a stub's call log.
  */
 
-function mountDelegate(overrides: Partial<WavesAnimationParams> = {}) {
+function mountDelegate(overrides: Partial<AnimationEffectParams<'waves'>> = {}) {
 	const params = { ...animationEffectDefaultParams('waves'), ...overrides };
 	const delegate = createWavesDelegate();
 	const scene = new THREE.Scene();

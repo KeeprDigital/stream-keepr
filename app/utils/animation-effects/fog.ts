@@ -1,4 +1,4 @@
-import type { FogAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { createShaderPlaneEffect } from './shaderPlane';
@@ -99,8 +99,8 @@ void main() {
 
 export default function createFogEffect(
 	host: HTMLElement,
-	params: FogAnimationParams,
-): AnimationEffectInstance<FogAnimationParams> {
+	params: AnimationEffectParams<'fog'>,
+): AnimationEffectInstance<AnimationEffectParams<'fog'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

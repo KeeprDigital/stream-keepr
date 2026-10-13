@@ -1,4 +1,4 @@
-import type { EmberAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { GLSL_HASH_2D_SALTED } from './glslPrelude';
@@ -96,8 +96,8 @@ void main() {
 
 export default function createEmberEffect(
 	host: HTMLElement,
-	params: EmberAnimationParams,
-): AnimationEffectInstance<EmberAnimationParams> {
+	params: AnimationEffectParams<'ember'>,
+): AnimationEffectInstance<AnimationEffectParams<'ember'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

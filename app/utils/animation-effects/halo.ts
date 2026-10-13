@@ -1,4 +1,4 @@
-import type { HaloAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { createShaderPlaneEffect } from './shaderPlane';
@@ -85,8 +85,8 @@ void main() {
 
 export default function createHaloEffect(
 	host: HTMLElement,
-	params: HaloAnimationParams,
-): AnimationEffectInstance<HaloAnimationParams> {
+	params: AnimationEffectParams<'halo'>,
+): AnimationEffectInstance<AnimationEffectParams<'halo'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,

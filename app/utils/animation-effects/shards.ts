@@ -1,4 +1,4 @@
-import type { ShardsAnimationParams } from '~~/shared/animationEffects';
+import type { AnimationEffectParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
 import { GLSL_HASH_2D_SALTED } from './glslPrelude';
@@ -91,8 +91,8 @@ void main() {
 
 export default function createShardsEffect(
 	host: HTMLElement,
-	params: ShardsAnimationParams,
-): AnimationEffectInstance<ShardsAnimationParams> {
+	params: AnimationEffectParams<'shards'>,
+): AnimationEffectInstance<AnimationEffectParams<'shards'>> {
 	return createShaderPlaneEffect({
 		three: THREE,
 		host,
