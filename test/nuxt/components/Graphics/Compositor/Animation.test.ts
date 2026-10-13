@@ -1,11 +1,12 @@
 import type {
 	BroadcastGraphicConfig,
+	GraphicAnimation,
 	GraphicGroupItemConfig,
 	GraphicItemConfig,
 } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { createDefaultGraphicAnimationRecipe, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
 
@@ -121,6 +122,8 @@ async function mountComponent(options: {
 			graphics: options.graphics,
 			selectedTarget: options.selectedTarget,
 			writable: options.writable ?? true,
+			canvasWidth: 1920,
+			canvasHeight: 1080,
 		},
 		global: {
 			stubs: {
@@ -260,6 +263,57 @@ describe('graphicAnimationEditor', () => {
 		expect(selectField(wrapper, 'animation-enter-slide-mode')).toBeDefined();
 	});
 
+	describe('a fixed slide distance in a Geometry Unit', () => {
+		function sliding<T extends { animation?: GraphicAnimation }>(owner: T, direction: 'east' | 'north', distance: number): T {
+			owner.animation = {
+				enter: { duration: 400, easing: 'linear', delay: 0, slide: { direction, distanceMode: 'fixed', distance } },
+			};
+			return owner;
+		}
+
+		beforeEach(() => {
+			localStorage.setItem('editor-geometryUnit', 'percent');
+		});
+
+		afterEach(() => {
+			localStorage.clear();
+		});
+
+		it('measures a top-level Graphic Item\'s slide against the canvas', async () => {
+			const wrapper = await mountComponent({ graphics: stack([sliding(shape('bar'), 'east', 192)]), selectedTarget: ITEM_TARGET });
+			await flushPromises();
+
+			expect(numberField(wrapper, 'animation-enter-slide-distance')!.props('modelValue')).toBe(10);
+		});
+
+		it('measures a Broadcast Graphic\'s own slide against the canvas', async () => {
+			const graphics = stack();
+			sliding(graphics[0]!, 'north', 108);
+			const wrapper = await mountComponent({ graphics, selectedTarget: GRAPHIC_TARGET });
+			await flushPromises();
+
+			expect(numberField(wrapper, 'animation-enter-slide-distance')!.props('modelValue')).toBe(10);
+		});
+
+		it('measures a Graphic Group child\'s slide against its group, and stores pixels', async () => {
+			const cluster = group('cluster', ['one']);
+			sliding(cluster.children[0]!, 'north', 100);
+			const wrapper = await mountComponent({
+				graphics: stack([cluster]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'one' },
+			});
+			await flushPromises();
+
+			// The group is 800×200: a vertical slide is measured against its 200px height.
+			expect(numberField(wrapper, 'animation-enter-slide-distance')!.props('modelValue')).toBe(50);
+			numberField(wrapper, 'animation-enter-slide-distance')!.vm.$emit('update:modelValue', 25);
+			await flushPromises();
+
+			const child = emittedGraphics(wrapper)[0]?.items[0];
+			expect(child?.type === 'group' && child.children[0]?.animation?.enter?.slide?.distance).toBe(50);
+		});
+	});
+
 	it('offers a scale origin independent of the Graphic Anchor Point', async () => {
 		const graphics = stack();
 		graphics[0]!.items[0]!.animation = {
@@ -354,7 +408,7 @@ describe('graphicAnimationEditor', () => {
 		const componentPath = '../../../../../app/components/Graphics/Compositor/Animation.vue';
 		const { default: Animation } = await import(componentPath);
 		const wrapper = mount(Animation, {
-			props: { graphics: stack(), selectedTarget: ITEM_TARGET },
+			props: { graphics: stack(), selectedTarget: ITEM_TARGET, canvasWidth: 1920, canvasHeight: 1080 },
 			global: { stubs: { UFormField: SlotOnlyStub, USelectMenu: USelectMenuStub, USelect: USelectStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
 		});
 

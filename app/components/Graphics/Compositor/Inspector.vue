@@ -2191,6 +2191,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			:selected-target="selectedTarget"
 			:writable="writable"
 			:style-set="styleSet"
+			:canvas-width="canvasWidth"
+			:canvas-height="canvasHeight"
 			@update:graphics="emit('update:graphics', $event)"
 		/>
 	</fieldset>
