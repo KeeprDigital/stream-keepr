@@ -1,6 +1,7 @@
 import type { ShardsAnimationParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { GLSL_HASH_2D_SALTED } from './glslPrelude';
 import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
@@ -24,19 +25,17 @@ uniform vec3 backgroundColor;
 uniform float size;
 uniform float intensity;
 
-float hashShard(vec2 cell, float salt) {
-	return fract(sin(dot(cell, vec2(127.1, 311.7)) + salt * 74.7) * 43758.5453);
-}
+${GLSL_HASH_2D_SALTED}
 
 // A cell's feature point: a hashed rest position well inside the cell, plus a
 // small orbit at a hashed rate and phase — the stateless animated-Voronoi form.
 vec2 featurePoint(vec2 cell) {
 	vec2 rest = cell + vec2(
-		0.3 + 0.4 * hashShard(cell, 1.0),
-		0.3 + 0.4 * hashShard(cell, 2.0)
+		0.3 + 0.4 * hash2DSalted(cell, 1.0),
+		0.3 + 0.4 * hash2DSalted(cell, 2.0)
 	);
-	float rate = 0.3 + 0.5 * hashShard(cell, 3.0);
-	float phase = 6.2832 * hashShard(cell, 4.0);
+	float rate = 0.3 + 0.5 * hash2DSalted(cell, 3.0);
+	float phase = 6.2832 * hash2DSalted(cell, 4.0);
 	return rest + 0.13 * vec2(cos(iTime * rate + phase), sin(iTime * rate * 0.9 + phase));
 }
 
@@ -69,7 +68,7 @@ void main() {
 
 	// Facet fill: a hashed shade of the shard colour over the background, with
 	// a linear directional term across the facet standing in for a normal.
-	float tint = 0.35 + 0.5 * hashShard(nearestCell, 5.0);
+	float tint = 0.35 + 0.5 * hash2DSalted(nearestCell, 5.0);
 	float facing = clamp(dot(toNearest, normalize(vec2(0.62, 0.79))), -1.0, 1.0);
 	vec3 facet = mix(backgroundColor, shardColor, tint) * (0.85 + 0.3 * facing);
 
@@ -80,7 +79,7 @@ void main() {
 	// orientation is near the band's cycling phase — single shards, not strobe.
 	// The phase distance wraps at 0/1 so every facet gets the same flash window.
 	float band = pow(max(sin(dot(p, normalize(vec2(0.83, 0.55))) * 0.5 - iTime * 0.45), 0.0), 24.0);
-	float orientation = hashShard(nearestCell, 6.0);
+	float orientation = hash2DSalted(nearestCell, 6.0);
 	float phaseDistance = abs(orientation - fract(iTime * 0.05));
 	float gate = 1.0 - smoothstep(0.02, 0.22, min(phaseDistance, 1.0 - phaseDistance));
 	vec3 glint = mix(edgeColor, vec3(1.0), 0.4) * band * gate;

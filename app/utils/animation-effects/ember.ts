@@ -1,6 +1,7 @@
 import type { EmberAnimationParams } from '~~/shared/animationEffects';
 import type { AnimationEffectInstance } from './types';
 import * as THREE from 'three';
+import { GLSL_HASH_2D_SALTED } from './glslPrelude';
 import { createShaderPlaneEffect } from './shaderPlane';
 
 /**
@@ -22,9 +23,7 @@ uniform float density;
 uniform float size;
 uniform float intensity;
 
-float hashCell(vec2 cell, float salt) {
-	return fract(sin(dot(cell, vec2(127.1, 311.7)) + salt * 74.7) * 43758.5453);
-}
+${GLSL_HASH_2D_SALTED}
 
 void main() {
 	vec3 glow = vec3(0.0);
@@ -61,22 +60,22 @@ void main() {
 			for (int cx = -1; cx <= 1; cx++) {
 				vec2 offset = vec2(float(cx), float(cy));
 				vec2 cell = homeCell + offset;
-				if (hashCell(cell, 1.0 + salt) > litThreshold)
+				if (hash2DSalted(cell, 1.0 + salt) > litThreshold)
 					continue;
 
 				vec2 emberPosition = offset + vec2(
-					0.2 + 0.6 * hashCell(cell, 2.0 + salt),
-					0.2 + 0.6 * hashCell(cell, 3.0 + salt)
+					0.2 + 0.6 * hash2DSalted(cell, 2.0 + salt),
+					0.2 + 0.6 * hash2DSalted(cell, 3.0 + salt)
 				);
 				// Sideways sway at a hashed rate and phase.
-				emberPosition.x += 0.14 * sin(iTime * (0.4 + 0.5 * hashCell(cell, 4.0 + salt)) + 6.2832 * hashCell(cell, 5.0 + salt));
+				emberPosition.x += 0.14 * sin(iTime * (0.4 + 0.5 * hash2DSalted(cell, 4.0 + salt)) + 6.2832 * hash2DSalted(cell, 5.0 + salt));
 
 				// Each ember fades in, burns, and fades out on its own hashed
 				// period, so embers die rather than visibly loop.
-				float lifeRate = 0.07 + 0.08 * hashCell(cell, 6.0 + salt);
-				float life = fract(iTime * lifeRate + hashCell(cell, 7.0 + salt));
+				float lifeRate = 0.07 + 0.08 * hash2DSalted(cell, 6.0 + salt);
+				float life = fract(iTime * lifeRate + hash2DSalted(cell, 7.0 + salt));
 				float envelope = smoothstep(0.0, 0.25, life) * (1.0 - smoothstep(0.65, 1.0, life));
-				float flicker = 0.78 + 0.22 * sin(iTime * (5.0 + 9.0 * hashCell(cell, 8.0 + salt)) + 6.2832 * hashCell(cell, 9.0 + salt));
+				float flicker = 0.78 + 0.22 * sin(iTime * (5.0 + 9.0 * hash2DSalted(cell, 8.0 + salt)) + 6.2832 * hash2DSalted(cell, 9.0 + salt));
 
 				// A tight hot core resolving toward the core colour, inside a
 				// wider soft halo of the ember colour.
