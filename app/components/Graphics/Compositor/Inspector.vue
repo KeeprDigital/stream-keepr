@@ -17,7 +17,6 @@ import type {
 	GameWinsGraphicItemConfig,
 	GraphicFontSelection,
 	GraphicFontSource,
-	GraphicGeometryUnit,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
 	GraphicInputChoiceOption,
@@ -50,22 +49,18 @@ import {
 } from '~~/shared/modules/graphic-style-sets';
 import {
 	addGraphicInput,
-	anchoredGraphicPosition,
 	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
-	displayGraphicGeometryValue,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
 	graphicsHostTokenCatalogue,
 	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
-	moveGraphicRectToAnchoredPosition,
-	parseGraphicGeometryValue,
 	patchBroadcastGraphic,
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
@@ -84,7 +79,6 @@ import {
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
-	resizeGraphicRectFromAnchor,
 	selectMediaGraphicItemAsset,
 	setGraphicInputChoiceOptions,
 	setGraphicInputMediaKind,
@@ -99,7 +93,6 @@ import {
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
 	GRAPHIC_FONT_STYLE_VALUES,
-	GRAPHIC_GEOMETRY_UNIT_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
@@ -119,6 +112,7 @@ import {
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
+import GraphicsGeometryFields from '../GeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
 import GraphicsCompositorSocialProfileProjections from './SocialProfileProjections.vue';
@@ -126,8 +120,8 @@ import GraphicsCompositorSocialProfileProjections from './SocialProfileProjectio
 /**
  * Property controls for the current selection: the Broadcast Graphic, or one
  * Graphic Item's geometry, Graphic Anchor Point, Graphic Surface Style, and
- * kind-specific properties. Geometry is authored in any Graphic Geometry Unit
- * and always stored as canonical canvas pixels.
+ * kind-specific properties. Geometry is authored in any Geometry Unit and
+ * always stored as canonical canvas pixels.
  *
  * Every nested property group goes through its own merge helper, so editing one
  * field of a Shape Geometry, Graphic Fill, or typography never drops its siblings.
@@ -183,12 +177,6 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
  */
 const canAuthor = computed(() => props.writable === true);
 
-const geometryUnit = ref<GraphicGeometryUnit>('px');
-
-const GEOMETRY_UNIT_OPTIONS = GRAPHIC_GEOMETRY_UNIT_VALUES.map(unit => ({
-	label: unit === 'px' ? 'px' : unit === 'percent' ? '%' : 'grid',
-	value: unit,
-}));
 const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Clip', value: 'clip' },
 	{ label: 'Ellipsis', value: 'ellipsis' },
@@ -450,28 +438,10 @@ function applySurfaceStyleEdit(slot: GraphicSurfaceStyleSlot, edit: GraphicSurfa
 	applyToSelectedGraphic((graphic, itemId) => applyGraphicSurfaceStyleEdit(graphic, itemId, slot, edit));
 }
 
-/** A Graphic Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
-function axisTotal(axis: 'x' | 'y') {
-	const group = parentGroup.value;
-	if (group)
-		return axis === 'x' ? group.width : group.height;
-	return axis === 'x' ? props.canvasWidth : props.canvasHeight;
-}
-
-const anchoredPosition = computed(() => selectedItem.value
-	? anchoredGraphicPosition(selectedItem.value, selectedItem.value.anchor)
-	: { x: 0, y: 0 });
-
-function displayedPosition(axis: 'x' | 'y') {
-	return displayGraphicGeometryValue(anchoredPosition.value[axis], axisTotal(axis), geometryUnit.value, true);
-}
-
-function displayedSize(axis: 'width' | 'height') {
-	const item = selectedItem.value;
-	if (!item)
-		return 0;
-	return displayGraphicGeometryValue(item[axis], axisTotal(axis === 'width' ? 'x' : 'y'), geometryUnit.value);
-}
+/** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
+const geometryContainer = computed(() => parentGroup.value
+	? { width: parentGroup.value.width, height: parentGroup.value.height }
+	: { width: props.canvasWidth, height: props.canvasHeight });
 
 /**
  * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
@@ -555,26 +525,6 @@ function unbindStyleRef(slot: GraphicStyleSlot) {
 		props.graphics,
 		unbindGraphicStyleRef(current.graphic, current.item.id, slot),
 	));
-}
-
-function updatePosition(axis: 'x' | 'y', value: number | null | undefined) {
-	const item = selectedItem.value;
-	if (!item)
-		return;
-	const pixels = parseGraphicGeometryValue(value ?? 0, axisTotal(axis), geometryUnit.value, true);
-	patchSelectedItem(moveGraphicRectToAnchoredPosition(item, axis, pixels, item.anchor));
-}
-
-function updateSize(axis: 'width' | 'height', value: number | null | undefined) {
-	const item = selectedItem.value;
-	if (!item)
-		return;
-	const pixels = parseGraphicGeometryValue(
-		value ?? 0,
-		axisTotal(axis === 'width' ? 'x' : 'y'),
-		geometryUnit.value,
-	);
-	patchSelectedItem(resizeGraphicRectFromAnchor(item, { [axis]: Math.max(1, pixels) }, item.anchor));
 }
 
 /** Nested property groups go through their own merge, so a single-field edit keeps its siblings. */
@@ -1347,63 +1297,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				/>
 			</UFormField>
 
-			<UFormField v-if="isCanvasPositioned" label="Graphic Anchor Point" size="sm">
-				<UINinePointPicker
-					:model-value="selectedItem.anchor"
-					aria-label="Graphic Anchor Point"
-					data-testid="graphic-item-anchor"
-					@update:model-value="patchSelectedItem({ anchor: $event })"
-				/>
-			</UFormField>
-
-			<UFormField label="Graphic Geometry Unit" size="sm">
-				<USelect
-					v-model="geometryUnit"
-					:items="GEOMETRY_UNIT_OPTIONS"
-					value-key="value"
-					class="w-full"
-					data-testid="graphic-geometry-unit"
-				/>
-			</UFormField>
-
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField v-if="isCanvasPositioned" label="X" size="sm">
-					<UInputNumber
-						:model-value="displayedPosition('x')"
-						size="sm"
-						class="w-full"
-						aria-label="Item x"
-						@update:model-value="updatePosition('x', $event)"
-					/>
-				</UFormField>
-				<UFormField v-if="isCanvasPositioned" label="Y" size="sm">
-					<UInputNumber
-						:model-value="displayedPosition('y')"
-						size="sm"
-						class="w-full"
-						aria-label="Item y"
-						@update:model-value="updatePosition('y', $event)"
-					/>
-				</UFormField>
-				<UFormField label="Width" size="sm">
-					<UInputNumber
-						:model-value="displayedSize('width')"
-						size="sm"
-						class="w-full"
-						aria-label="Item width"
-						@update:model-value="updateSize('width', $event)"
-					/>
-				</UFormField>
-				<UFormField label="Height" size="sm">
-					<UInputNumber
-						:model-value="displayedSize('height')"
-						size="sm"
-						class="w-full"
-						aria-label="Item height"
-						@update:model-value="updateSize('height', $event)"
-					/>
-				</UFormField>
-			</div>
+			<GraphicsGeometryFields
+				:rect="selectedItem"
+				:container="geometryContainer"
+				:anchor="selectedItem.anchor"
+				:stacked="!isCanvasPositioned"
+				anchor-label="Graphic Anchor Point"
+				@update:anchor="patchSelectedItem({ anchor: $event })"
+				@update="patchSelectedItem($event)"
+			/>
 
 			<UFormField v-if="isCanvasPositioned" label="Graphic Rotation" size="sm">
 				<UInputNumber

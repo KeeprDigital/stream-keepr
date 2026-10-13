@@ -1,18 +1,24 @@
-import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
+import type { FeatureMatchOverlayAnchorValue, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what
- * each align action leaves in the layout.
+ * each align action and size entry leaves in the layout.
  */
 
 const PassThroughStub = defineComponent({
 	template: '<div><slot /></div>',
+});
+
+const UInputNumberStub = defineComponent({
+	name: 'UInputNumber',
+	props: { modelValue: { type: Number, required: false } },
+	emits: ['update:modelValue'],
+	template: '<input type="number" :value="modelValue" />',
 });
 
 const UButtonStub = defineComponent({
@@ -41,21 +47,34 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 				UFieldGroup: PassThroughStub,
 				UINinePointPicker: true,
 				UInput: true,
-				UInputNumber: true,
+				UInputNumber: UInputNumberStub,
 				USelect: true,
 				UButton: UButtonStub,
 			},
 		},
 	});
 
-	async function align(label: string) {
-		await wrapper.get(`button[aria-label="${label}"]`).trigger('click');
+	function storedRect() {
 		const layout = updateConfig.mock.calls.at(-1)?.[0].layout as FeatureMatchOverlayModeConfig['layout'];
 		const { x, y, width, height } = layout.sources[0]!;
 		return { x, y, width, height };
 	}
 
-	return { align };
+	async function align(label: string) {
+		await wrapper.get(`button[aria-label="${label}"]`).trigger('click');
+		return storedRect();
+	}
+
+	async function enter(ariaLabel: string, value: number) {
+		wrapper.findAllComponents({ name: 'UInputNumber' })
+			.find(input => input.attributes('aria-label') === ariaLabel)!
+			.vm
+			.$emit('update:modelValue', value);
+		await nextTick();
+		return storedRect();
+	}
+
+	return { align, enter };
 }
 
 describe('feature Match Overlay Source Item bounds: align actions', () => {
@@ -73,5 +92,14 @@ describe('feature Match Overlay Source Item bounds: align actions', () => {
 		const { align } = await mountBounds(anchor);
 
 		expect(await align(label)).toEqual({ ...position, width: 401, height: 201 });
+	});
+});
+
+describe('feature Match Overlay Source Item bounds: size entry', () => {
+	it('stores whole pixels and never shrinks a Source Item below one pixel', async () => {
+		const { enter } = await mountBounds('top-left');
+
+		expect(await enter('Item width', 0)).toEqual({ x: 100, y: 50, width: 1, height: 201 });
+		expect(await enter('Item height', 99.6)).toEqual({ x: 100, y: 50, width: 401, height: 100 });
 	});
 });

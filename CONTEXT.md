@@ -523,8 +523,9 @@ _Avoid_: Author-editable z-index
 **Graphic Anchor Point**:
 One of nine points on a canvas-positioned Graphic Item that fixes its displayed position during resize. Stored geometry stays a top-left rectangle; it is not a responsive constraint or animation origin.
 
-**Graphic Geometry Unit**:
-An authoring projection of canonical pixel geometry or motion distance as pixels, canvas percentage, or a centred 32-unit grid. It changes display and entry only.
+**Geometry Unit**:
+An authoring projection of canonical pixel geometry or motion distance as pixels, a percentage of the containing canvas or Graphic Group, or a centred 32-unit grid. It serves Graphic Items and Source Items alike and changes display and entry only.
+_Avoid_: Graphic Geometry Unit, ±16 unit
 
 **Graphic Rotation**:
 The optional static rotation of a canvas-positioned Graphic Item around its Graphic Anchor Point. Row and column items do not rotate; skew, perspective, and raw transforms are not exposed.
@@ -653,7 +654,7 @@ _Avoid_: Dummy data, test data
 - Graphic Animation presets are authoring shortcuts that initialise editable recipes, not runtime concepts
 - Every recipe operates relative to its owner's **Graphic Resting State**
 - A scale channel uses one **Graphic Animation Origin** and a uniform factor from zero to twice the resting size
-- A slide channel uses one of eight compass directions and a fixed distance (any **Graphic Geometry Unit**) or the distance needed to clear its owner's parent
+- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**) or the distance needed to clear its owner's parent
 - A reveal channel wipes from one edge across its owner's rectangular bounds, preserving existing **Shape Geometry** clipping
 - A fade channel reduces opacity from the resting value; fades on a **Broadcast Graphic** and its items compose multiplicatively
 - Easing is linear, ease-in, ease-out, ease-in-out, back-in, back-out, or back-in-out; rotation, skew, perspective, filters, morphing, motion paths, and arbitrary transforms are outside **Graphic Animation**

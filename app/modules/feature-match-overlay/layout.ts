@@ -4,9 +4,7 @@ import type {
 	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayAnchorValue } from '~/utils/featureMatchOverlayGeometry';
 import { createFeatureMatchSourceItem } from '~~/shared/featureMatchSourceItems';
-import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOverlayGeometry';
 
 /**
  * The host-owned Feature Match Layout writer: every mutation of the Frame or of
@@ -18,8 +16,6 @@ import { updateFeatureMatchOverlayRectFromAnchor } from '~/utils/featureMatchOve
  * module. This one is deliberately small now: the legacy widget, widget-group,
  * and numeric z-index model it used to write is gone.
  */
-
-export type FeatureMatchOverlayGeometryField = 'x' | 'y' | 'width' | 'height';
 
 function nextId(prefix: string) {
 	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -65,14 +61,6 @@ export function patchSourceFramingStyle(layout: FeatureMatchLayoutConfig, id: st
 export function removeSource(layout: FeatureMatchLayoutConfig, id: string): FeatureMatchLayoutConfig {
 	const sources = layout.sources.filter(item => item.id !== id);
 	return sources.length === layout.sources.length ? layout : withSources(layout, sources);
-}
-
-/** Anchored geometry edit: resize/move around the Source Item's anchor with an already-parsed value. */
-export function patchSourceRectFromAnchor(layout: FeatureMatchLayoutConfig, id: string, field: FeatureMatchOverlayGeometryField, nextValue: number): FeatureMatchLayoutConfig {
-	return mapSource(layout, id, (item) => {
-		const updates = updateFeatureMatchOverlayRectFromAnchor(item, field, nextValue, item.anchor ?? 'top-left' as FeatureMatchOverlayAnchorValue);
-		return { ...item, ...updates };
-	});
 }
 
 // ──────────────── Graphic Layer Order ────────────────
