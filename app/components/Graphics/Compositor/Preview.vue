@@ -17,9 +17,9 @@ import {
 import { graphicsSelectionGraphicId } from '~/modules/graphics/selection';
 
 /**
- * The shared graphics preview: output selection, zoom, item selection and item
- * guides, advisory action-safe and title-safe guides, and Graphic Animation
- * Preview.
+ * The Broadcast Graphics editor preview: the shared preview panel (output
+ * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
+ * item selection, a preview background, and Graphic Animation Preview.
  *
  * The preview is a real Screen Output frame, asked explicitly for its guides.
  * A live Screen Output is never asked, so no guide can reach one.
@@ -47,26 +47,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{ selectTarget: [target: GraphicsSelectionTarget] }>();
 
-const OUTPUT_OPTIONS = [
-	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
-	{ label: 'Fill', value: 'fill', icon: 'i-lucide-square' },
-	{ label: 'Key', value: 'key', icon: 'i-lucide-contrast' },
-] satisfies Array<{ label: string; value: ScreenOutput; icon: string }>;
-
-const PREVIEW_ZOOM_OPTIONS = [
-	{ label: 'Fit', value: 'fit' },
-	{ label: '50%', value: '0.5' },
-	{ label: '100%', value: '1' },
-] as const;
-
-type PreviewZoom = typeof PREVIEW_ZOOM_OPTIONS[number]['value'];
-
 type PreviewBackground = 'transparent' | 'black' | 'white' | 'green';
-const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackground }> = [
+const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackground; color?: string }> = [
 	{ label: 'Transparency', value: 'transparent' },
-	{ label: 'Black', value: 'black' },
-	{ label: 'White', value: 'white' },
-	{ label: 'Green', value: 'green' },
+	{ label: 'Black', value: 'black', color: '#000000' },
+	{ label: 'White', value: 'white', color: '#ffffff' },
+	{ label: 'Green', value: 'green', color: '#00b140' },
 ];
 
 const ANIMATION_PHASE_OPTIONS = GRAPHIC_ANIMATION_PHASE_VALUES.map(phase => ({
@@ -82,8 +68,9 @@ const ANIMATION_SPEED_OPTIONS = [
 ] as const;
 
 const previewOutput = ref<ScreenOutput>('overlay');
-const previewZoom = ref<PreviewZoom>('fit');
 const previewBackground = ref<PreviewBackground>('transparent');
+const previewBackgroundColor = computed(() =>
+	PREVIEW_BACKGROUND_OPTIONS.find(option => option.value === previewBackground.value)?.color);
 const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
@@ -213,27 +200,6 @@ const previewUrl = computed(() => screenOutputPath({
 	safeAreaGuides: safeAreaGuides.value,
 }));
 
-const previewAspectStyle = computed(() => (previewZoom.value === 'fit'
-	? {
-			aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
-			width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
-			maxWidth: '100%',
-		}
-	: {
-			width: `${props.canvasWidth * Number(previewZoom.value)}px`,
-			height: `${props.canvasHeight * Number(previewZoom.value)}px`,
-			maxWidth: 'none',
-		}));
-const previewBackgroundStyle = computed(() => {
-	if (previewBackground.value === 'black')
-		return { backgroundColor: '#000000' };
-	if (previewBackground.value === 'white')
-		return { backgroundColor: '#ffffff' };
-	if (previewBackground.value === 'green')
-		return { backgroundColor: '#00b140' };
-	return undefined;
-});
-
 function pushPreviewState() {
 	if (!import.meta.client || !previewFrame.value?.contentWindow)
 		return;
@@ -284,49 +250,23 @@ watch(
 </script>
 
 <template>
-	<ScreenSettingsCard title="Preview" :default-open="true">
-		<template #actions="{ open }">
-			<div v-if="open" class="flex flex-wrap items-center gap-3">
-				<UFormField label="Item guides" size="xs" class="flex items-center gap-2">
-					<USwitch v-model="itemGuides" size="sm" data-testid="compositor-item-guides" />
-				</UFormField>
-				<UFormField label="Safe areas" size="xs" class="flex items-center gap-2">
-					<USwitch v-model="safeAreaGuides" size="sm" data-testid="compositor-safe-area-guides" />
-				</UFormField>
-				<UFieldGroup size="sm">
-					<UButton
-						v-for="output in OUTPUT_OPTIONS"
-						:key="output.value"
-						:icon="output.icon"
-						:color="previewOutput === output.value ? 'primary' : 'neutral'"
-						:variant="previewOutput === output.value ? 'subtle' : 'outline'"
-						:aria-label="`${output.label} preview output`"
-						@click="() => { previewOutput = output.value }"
-					>
-						{{ output.label }}
-					</UButton>
-				</UFieldGroup>
-				<UFieldGroup size="sm">
-					<UButton
-						v-for="zoom in PREVIEW_ZOOM_OPTIONS"
-						:key="zoom.value"
-						:color="previewZoom === zoom.value ? 'primary' : 'neutral'"
-						:variant="previewZoom === zoom.value ? 'subtle' : 'outline'"
-						:aria-label="`${zoom.label} preview zoom`"
-						@click="() => { previewZoom = zoom.value }"
-					>
-						{{ zoom.label }}
-					</UButton>
-				</UFieldGroup>
-				<USelect
-					v-model="previewBackground"
-					:items="PREVIEW_BACKGROUND_OPTIONS"
-					value-key="value"
-					size="sm"
-					class="w-32"
-					aria-label="Preview background"
-				/>
-			</div>
+	<GraphicsPreviewPanel
+		v-model:output="previewOutput"
+		v-model:item-guides="itemGuides"
+		v-model:safe-area-guides="safeAreaGuides"
+		:canvas-width="canvasWidth"
+		:canvas-height="canvasHeight"
+		:background="previewBackgroundColor"
+	>
+		<template #controls>
+			<USelect
+				v-model="previewBackground"
+				:items="PREVIEW_BACKGROUND_OPTIONS"
+				value-key="value"
+				size="sm"
+				class="w-32"
+				aria-label="Preview background"
+			/>
 		</template>
 
 		<div
@@ -438,24 +378,15 @@ watch(
 			</p>
 		</div>
 
-		<div class="overflow-auto">
-			<div
-				class="relative mx-auto overflow-hidden"
-				:class="[
-					previewZoom === 'fit' ? '' : 'shrink-0',
-					{ 'transparent-checkerboard-backdrop': previewBackground === 'transparent' },
-				]"
-				:style="[previewAspectStyle, previewBackgroundStyle]"
-			>
-				<iframe
-					ref="previewFrame"
-					:key="previewUrl"
-					:src="previewUrl"
-					class="absolute inset-0 size-full border-0"
-					title="Graphics compositor preview"
-					@load="pushPreviewState"
-				/>
-			</div>
-		</div>
-	</ScreenSettingsCard>
+		<template #viewport>
+			<iframe
+				ref="previewFrame"
+				:key="previewUrl"
+				:src="previewUrl"
+				class="absolute inset-0 size-full border-0"
+				title="Graphics compositor preview"
+				@load="pushPreviewState"
+			/>
+		</template>
+	</GraphicsPreviewPanel>
 </template>

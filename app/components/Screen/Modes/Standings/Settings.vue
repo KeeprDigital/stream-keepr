@@ -2,7 +2,6 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { VueDraggable } from 'vue-draggable-plus';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -64,7 +63,7 @@ const roundOptions = computed(() => [
 ]);
 
 // ── Column Reordering ──
-const COLUMN_LABELS: Record<string, string> = {
+const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
 	position: '#',
 	name: 'Name',
 	record: 'Record (W-L-D)',
@@ -72,25 +71,9 @@ const COLUMN_LABELS: Record<string, string> = {
 	deck: 'Deck',
 };
 
-const localColumns = ref<StandingsColumnConfig[]>([...config.value.columns]);
 const isDeckColumnVisible = computed(() =>
-	localColumns.value.some(col => col.key === 'deck' && col.visible),
+	config.value.columns.some(col => col.key === 'deck' && col.visible),
 );
-
-watch(() => config.value.columns, (newCols) => {
-	localColumns.value = [...newCols];
-}, { deep: true });
-
-function onColumnDragEnd() {
-	updateConfig({ columns: [...localColumns.value] });
-}
-
-function toggleColumnVisibility(index: number) {
-	const cols = [...localColumns.value];
-	cols[index] = { ...cols[index]!, visible: !cols[index]!.visible };
-	localColumns.value = cols;
-	updateConfig({ columns: cols });
-}
 
 function updateMaxTableWidth(value: number | null | undefined) {
 	updateConfig({ maxTableWidth: value ?? null } as Partial<StandingsModeConfig>);
@@ -346,33 +329,11 @@ const modeSettingsLabel = computed(() => {
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
-			<VueDraggable
-				v-model="localColumns"
-				:animation="150"
-				handle=".drag-handle"
-				ghost-class="opacity-30"
-				class="flex flex-col gap-1"
-				@end="onColumnDragEnd"
-			>
-				<div
-					v-for="(col, index) in localColumns"
-					:key="col.key"
-					class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-elevated/50 border border-default"
-				>
-					<UIcon
-						name="i-lucide-grip-vertical"
-						class="drag-handle cursor-grab active:cursor-grabbing text-muted shrink-0"
-					/>
-					<span class="flex-1 text-sm" :class="{ 'text-muted': !col.visible }">
-						{{ COLUMN_LABELS[col.key] ?? col.key }}
-					</span>
-					<USwitch
-						:model-value="col.visible"
-						size="sm"
-						@update:model-value="toggleColumnVisibility(index)"
-					/>
-				</div>
-			</VueDraggable>
+			<ScreenColumnVisibilityList
+				:columns="config.columns"
+				:labels="COLUMN_LABELS"
+				@update="updateConfig({ columns: $event })"
+			/>
 
 			<template v-if="isDeckColumnVisible">
 				<USeparator />
