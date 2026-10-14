@@ -15,8 +15,8 @@ import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
  *
  * Each edit is emitted as a patch of that one field. A cleared opacity or
  * playback rate is `null`, which a host turns into its default with
- * `resolveMediaFieldsPatch`. The playback-rate bounds are the Media Graphic
- * Item's, the narrowest any host stores, so every host accepts what this offers.
+ * `resolveMediaFieldsPatch`. The playback-rate bounds are the ones every host's
+ * schema stores: 0.25–4, a Media Graphic Item's.
  */
 const props = withDefaults(defineProps<{
 	media: MediaFieldsValue;

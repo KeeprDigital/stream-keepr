@@ -262,13 +262,39 @@ const mediaGraphicInputValueSchema = z.object({
 	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
 }).strict();
 
+/**
+ * The bounds Screen-owned video (the Feature Match Overlay Frame's video and a
+ * video Background Layer) was stored under before #539 narrowed it to a Media
+ * Graphic Item's 0.25–4.
+ */
+const LEGACY_SCREEN_MEDIA_PLAYBACK_RATE = { min: 0.1, max: 16 } as const;
+
+/**
+ * A Screen-owned video's playback rate: a Media Graphic Item's 0.25–4, so every
+ * media host shares one bound (#539).
+ *
+ * Stored mode configurations are read without a schema, but the editors re-send
+ * a whole Background Layer stack or Frame layout on any edit. A rate the old
+ * 0.1–16 bounds accepted is therefore clamped into range rather than refused:
+ * refusing it would refuse every later edit to that stack or layout, however
+ * unrelated. Anything outside the old bounds was never storable and is refused.
+ */
+const screenMediaPlaybackRateSchema = z.preprocess(
+	value => typeof value === 'number'
+		&& value >= LEGACY_SCREEN_MEDIA_PLAYBACK_RATE.min
+		&& value <= LEGACY_SCREEN_MEDIA_PLAYBACK_RATE.max
+		? Math.min(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, Math.max(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE, value))
+		: value,
+	finiteNumberSchema.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE).max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
+);
+
 const screenMediaBackgroundConfigSchema = z.object({
 	enabled: z.boolean(),
 	type: z.literal('video'),
 	url: safeMediaUrlSchema,
 	fit: z.enum(MEDIA_FIT_VALUES),
 	opacity: opacitySchema,
-	playbackRate: finiteNumberSchema.positive().min(0.1).max(16),
+	playbackRate: screenMediaPlaybackRateSchema,
 	loop: z.boolean(),
 }).strict();
 
@@ -320,7 +346,7 @@ const backgroundLayerSchema = z.discriminatedUnion('type', [
 		type: z.literal('video'),
 		source: screenMediaSourceSchema,
 		fit: z.enum(MEDIA_FIT_VALUES),
-		playbackRate: finiteNumberSchema.positive().min(0.1).max(16),
+		playbackRate: screenMediaPlaybackRateSchema,
 		loop: z.boolean(),
 	}).strict(),
 	z.object({
