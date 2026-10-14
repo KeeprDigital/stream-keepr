@@ -180,6 +180,29 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper).colorEntryId).toBe('ink');
 	});
 
+	it('offers a typography preset application fonts only, through the shared font control', async () => {
+		const wrapper = await mountEditor(TYPOGRAPHY);
+
+		// ADR-0001: a preset travels in a `.skstyle` with no asset bytes, so there is no
+		// source to choose and no library to pick from.
+		expect(wrapper.find('[data-testid="style-entry-typography-font-source"]').exists()).toBe(false);
+		const font = wrapper.get('[data-testid="style-entry-typography-font"]');
+
+		await font.setValue('mplantin');
+
+		expect(emittedValue(wrapper)).toEqual({ ...TYPOGRAPHY.value, font: { kind: 'application', fontId: 'mplantin' } });
+	});
+
+	it('bounds a typography preset to what every typography accepts', async () => {
+		const wrapper = await mountEditor(TYPOGRAPHY);
+
+		await fieldNamed(wrapper, 'Letter spacing').get('input').setValue(-250);
+		expect(emittedValue(wrapper).letterSpacing).toBe(-100);
+
+		await fieldNamed(wrapper, 'Line height').get('input').setValue(0);
+		expect(emittedValue(wrapper).lineHeight).toBe(0.05);
+	});
+
 	it('keeps every sibling field when one is edited', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY);
 

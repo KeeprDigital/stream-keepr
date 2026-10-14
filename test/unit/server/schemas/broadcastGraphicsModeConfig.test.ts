@@ -188,7 +188,7 @@ const WORST_FONT = {
 const WORST_TYPOGRAPHY = {
 	font: WORST_FONT,
 	fontSize: 599.5,
-	fontWeight: 900,
+	fontWeight: 1000,
 	fontStyle: 'italic' as const,
 	textTransform: 'uppercase' as const,
 	letterSpacing: -19.5,
@@ -224,7 +224,7 @@ const WORST_ITEM_STYLE_REFS = {
 		overrides: {
 			font: WORST_FONT,
 			fontSize: 599.5,
-			fontWeight: 900,
+			fontWeight: 1000,
 			fontStyle: 'italic' as const,
 			textTransform: 'uppercase' as const,
 			letterSpacing: -19.5,
@@ -281,7 +281,7 @@ function worstCaseItem(id: string) {
 				{
 					font: WORST_FONT,
 					fontSize: 599.5,
-					fontWeight: 900,
+					fontWeight: 1000,
 					fontStyle: 'italic' as const,
 					textTransform: 'uppercase' as const,
 					letterSpacing: -19.5,
@@ -544,7 +544,7 @@ function worstCaseScreen(arrangement: 'flat' | 'grouped') {
 }
 
 /** The same budget laid out flat, measured so the choice of shape stays checked. */
-const WORST_CASE_FLAT_BYTES = 3_711_076;
+const WORST_CASE_FLAT_BYTES = 3_712_876;
 
 /** A realistic Screen filled to the Graphic Item cap. See ADR-0007. */
 const REALISTIC_SCREEN_AT_CAP_BYTES = 248_734;

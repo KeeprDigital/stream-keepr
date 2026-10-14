@@ -20,6 +20,10 @@ import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
  * the caller to say *what to do with it*: a `GraphicTypography` must name a font, so
  * its caller falls back to the application default, while a Graphic Placeholder Style
  * need not, so its caller removes the key instead. Neither policy belongs here.
+ *
+ * A Graphic Style Set typography preset is `applicationOnly`: it references
+ * application fonts only (ADR-0001), so it has no source to choose and no library to
+ * pick from, and this control is just the application font.
  */
 const props = defineProps<{
 	/**
@@ -32,7 +36,7 @@ const props = defineProps<{
 	 * until the picker pins one, and holds it where it can also clear it when the
 	 * selection moves and this control would otherwise describe the previous item.
 	 */
-	source: GraphicFontSource;
+	source?: GraphicFontSource;
 	/** What the owner currently stores, which is absent while the arm is unstored. */
 	font: GraphicFontSelection | undefined;
 	/**
@@ -46,11 +50,18 @@ const props = defineProps<{
 	 * the font.
 	 */
 	optional?: boolean;
+	/**
+	 * Offers application fonts only, for a Graphic Style Set typography preset
+	 * (ADR-0001). `source`, `eventId` and `fieldLabel` describe the library arm, so
+	 * this mode needs none of them.
+	 */
+	applicationOnly?: boolean;
 	/** The Event whose Graphic Asset associations organise the picker's discovery. */
-	eventId: number;
+	eventId?: number;
 	/** What the picker calls the field it is pinning a revision for. */
-	fieldLabel: string;
+	fieldLabel?: string;
 	size: 'sm' | 'xs';
+	disabled?: boolean;
 	/** Distinguishes this control's fields from the other font control on the panel. */
 	testIdPrefix: string;
 }>();
@@ -81,20 +92,21 @@ const assetReference = computed(() =>
 </script>
 
 <template>
-	<UFormField :label="optional ? 'Font' : 'Font source'" :size="size">
+	<UFormField v-if="!applicationOnly" :label="optional ? 'Font' : 'Font source'" :size="size">
 		<USelect
 			:model-value="source"
 			:items="SOURCE_OPTIONS"
 			value-key="value"
 			size="sm"
 			class="w-full"
+			:disabled="disabled"
 			:data-testid="`${testIdPrefix}-font-source`"
 			@update:model-value="emit('update:source', $event as GraphicFontSource)"
 		/>
 	</UFormField>
 
 	<UFormField
-		v-if="source === 'application'"
+		v-if="applicationOnly || source === 'application'"
 		:label="optional ? 'Application font' : 'Font'"
 		:size="size"
 	>
@@ -104,16 +116,18 @@ const assetReference = computed(() =>
 			value-key="value"
 			size="sm"
 			class="w-full"
+			:disabled="disabled"
 			:data-testid="`${testIdPrefix}-font`"
 			@update:model-value="emit('application', $event as GraphicApplicationFontId)"
 		/>
 	</UFormField>
 
-	<UFormField v-else-if="source === 'asset'" label="Library font" :size="size">
+	<UFormField v-else-if="source === 'asset' && eventId !== undefined" label="Library font" :size="size">
 		<GraphicsAssetFocusPicker
 			:model-value="assetReference"
 			:event-id="eventId"
-			:field-label="fieldLabel"
+			:field-label="fieldLabel ?? 'Font'"
+			:disabled="disabled"
 			asset-kind="font"
 			@update:model-value="$event ? undefined : emit('clear')"
 			@select="(asset: GraphicAsset, reference: GraphicAssetReference) => emit('select', asset, reference)"

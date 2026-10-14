@@ -1197,14 +1197,11 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
-			const nameStyle = selectField(
-				wrapper,
-				'graphic-placeholder-style-font-style-player1Name',
-			);
-			const recordStyle = selectField(
-				wrapper,
-				'graphic-placeholder-style-font-style-player1Record',
-			);
+			const styleOf = (inputKey: string) => wrapper.findAllComponents({ name: 'USelect' }).find(select =>
+				select.attributes('data-testid') === 'graphic-placeholder-style-font-style'
+				&& select.element.closest(`[data-graphic-placeholder-style="${inputKey}"]`) !== null);
+			const nameStyle = styleOf('player1Name');
+			const recordStyle = styleOf('player1Record');
 
 			expect(nameStyle?.attributes('value')).toBe('base');
 			expect(recordStyle?.attributes('value')).toBe('base');
@@ -1627,6 +1624,38 @@ describe('graphicsCompositorInspector', () => {
 			.toEqual({ name: { fontWeight: 300, fontSize: 24 } });
 
 		const cleared = itemOf(emittedGraphics(wrapper, 1));
+		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
+	});
+
+	it('sets one placeholder’s case and letter spacing, and offers it no line height', async () => {
+		const wrapper = await mountComponent({
+			graphics: [{
+				id: 'lower-third',
+				name: 'Lower Third',
+				inputs: [textInput('name')],
+				items: [{ ...textItem, text: '{name}', placeholderStyles: { name: { fontWeight: 300 } } }],
+			}],
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+		});
+		const placeholder = wrapper.find('[data-graphic-placeholder-style="name"]');
+
+		expect(selectField(wrapper, 'graphic-placeholder-style-case')?.attributes('value')).toBe('base');
+		expect(placeholder.find('[data-testid="graphic-placeholder-style-line-height"]').exists()).toBe(false);
+		selectField(wrapper, 'graphic-placeholder-style-case')?.vm.$emit('update:modelValue', 'uppercase');
+		await nextTick();
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-letter-spacing')?.vm.$emit('update:modelValue', 4);
+		await nextTick();
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-weight')?.vm.$emit('update:modelValue', null);
+		await nextTick();
+
+		const cased = itemOf(emittedGraphics(wrapper, 0));
+		expect(cased?.type === 'text' ? cased.placeholderStyles : undefined)
+			.toEqual({ name: { fontWeight: 300, textTransform: 'uppercase' } });
+		const spaced = itemOf(emittedGraphics(wrapper, 1));
+		expect(spaced?.type === 'text' ? spaced.placeholderStyles : undefined)
+			.toEqual({ name: { fontWeight: 300, letterSpacing: 4 } });
+		// A cleared weight is the item's base weight again, and nothing else was set.
+		const cleared = itemOf(emittedGraphics(wrapper, 2));
 		expect(cleared?.type === 'text' ? cleared.placeholderStyles : undefined).toBeUndefined();
 	});
 

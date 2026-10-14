@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import type { ShapeCorner, ShapeCornerKey, ShapeGeometry } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
-	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
-	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
 	MAX_GRAPHIC_ANIMATION_REPEAT,
@@ -57,8 +54,6 @@ const geometryOptions = computed(() => props.entries
 	.filter(entry => entry.kind === 'shape-geometry')
 	.map(entry => ({ label: entry.name, value: entry.id })));
 
-const FONT_STYLE_OPTIONS = GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value }));
-const TEXT_TRANSFORM_OPTIONS = GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value }));
 const FIT_OPTIONS = MEDIA_GRAPHIC_ITEM_FIT_VALUES.map(value => ({ label: value, value }));
 const EASING_OPTIONS = GRAPHIC_ANIMATION_EASING_VALUES.map(value => ({ label: value, value }));
 const DIRECTION_OPTIONS = GRAPHIC_SLIDE_DIRECTION_VALUES.map(value => ({ label: value, value }));
@@ -93,90 +88,43 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 		</template>
 
 		<template v-else-if="entry.kind === 'typography'">
-			<UFormField label="Font" size="xs">
-				<USelect
-					:model-value="entry.value.font.fontId"
-					:items="GRAPHIC_FONT_OPTIONS"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					@update:model-value="patch({ font: { kind: 'application', fontId: $event } })"
-				/>
-			</UFormField>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Size" size="xs">
-					<UInputNumber
-						:model-value="entry.value.fontSize"
-						:min="1"
-						:max="600"
-						size="xs"
+			<GraphicsTypographyFields
+				:typography="entry.value"
+				:disabled="disabled"
+				size="xs"
+				test-id-prefix="style-entry-typography"
+				@update="patch"
+			>
+				<template #font>
+					<GraphicsCompositorFontSelectionField
+						application-only
+						:font="entry.value.font"
 						:disabled="disabled"
-						@update:model-value="patch({ fontSize: $event ?? 1 })"
-					/>
-				</UFormField>
-				<UFormField label="Weight" size="xs">
-					<UInputNumber
-						:model-value="entry.value.fontWeight"
-						:min="1"
-						:max="1000"
 						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ fontWeight: $event ?? 400 })"
+						test-id-prefix="style-entry-typography"
+						@application="patch({ font: { kind: 'application', fontId: $event } })"
 					/>
-				</UFormField>
-				<UFormField label="Letter spacing" size="xs">
-					<UInputNumber
-						:model-value="entry.value.letterSpacing"
+				</template>
+				<template #color>
+					<UFormField
+						label="Colour"
 						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ letterSpacing: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField label="Line height" size="xs">
-					<UInputNumber
-						:model-value="entry.value.lineHeight"
-						:step="0.05"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ lineHeight: $event ?? 1 })"
-					/>
-				</UFormField>
-				<UFormField label="Style" size="xs">
-					<USelect
-						:model-value="entry.value.fontStyle"
-						:items="FONT_STYLE_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patch({ fontStyle: $event })"
-					/>
-				</UFormField>
-				<UFormField label="Case" size="xs">
-					<USelect
-						:model-value="entry.value.textTransform"
-						:items="TEXT_TRANSFORM_OPTIONS"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patch({ textTransform: $event })"
-					/>
-				</UFormField>
-			</div>
-			<UFormField label="Colour" size="xs" help="A palette entry, so a brand change reaches every preset that links to it.">
-				<USelect
-					:model-value="entry.value.colorEntryId"
-					:items="paletteOptions"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="style-entry-typography-color"
-					@update:model-value="patch({ colorEntryId: $event })"
-				/>
-			</UFormField>
+						class="col-span-2"
+						help="A palette entry, so a brand change reaches every preset that links to it."
+					>
+						<USelect
+							:model-value="entry.value.colorEntryId"
+							:items="paletteOptions"
+							value-key="value"
+							size="xs"
+							class="w-full"
+							:disabled="disabled"
+							data-testid="style-entry-typography-color"
+							@update:model-value="patch({ colorEntryId: $event })"
+						/>
+					</UFormField>
+				</template>
+			</GraphicsTypographyFields>
 		</template>
 
 		<template v-else-if="entry.kind === 'fill'">
