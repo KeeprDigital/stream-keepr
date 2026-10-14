@@ -1689,20 +1689,45 @@ export function patchGraphicGroupChildSizing(
 export type GraphicAnimationRecipeFor<P extends GraphicAnimationPhase>
 	= P extends 'on-screen' ? GraphicOnScreenAnimationRecipe : GraphicAnimationRecipe;
 
-/** The channel a merge addresses. Each recipe holds at most one of each. */
-export type GraphicAnimationChannelKey = 'fade' | 'slide' | 'scale' | 'reveal';
-
-const GRAPHIC_ANIMATION_CHANNEL_DEFAULTS: {
+/** The channels a Graphic Animation Recipe may hold, at most one of each. */
+export interface GraphicAnimationChannels {
 	fade: GraphicFadeChannel;
 	slide: GraphicSlideChannel;
 	scale: GraphicScaleChannel;
 	reveal: GraphicRevealChannel;
-} = {
+}
+
+/** The channel a merge addresses. Each recipe holds at most one of each. */
+export type GraphicAnimationChannelKey = keyof GraphicAnimationChannels;
+
+/** What a channel holds when it is switched on with nothing of its own. */
+const GRAPHIC_ANIMATION_CHANNEL_DEFAULTS: Readonly<GraphicAnimationChannels> = {
 	fade: { opacity: 0 },
 	slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
 	scale: { factor: 0.8, origin: 'center' },
 	reveal: { edge: 'left' },
 };
+
+/**
+ * Merge into one channel of a recipe, or remove that channel with null.
+ *
+ * Any recipe shape: a lifecycle phase's recipe and a Graphic Animation Recipe preset
+ * hold the same channels, so both editors switch and edit them through this one
+ * merge. A switched-on channel starts from its default and keeps its own fields; a
+ * removed one is deleted rather than set to undefined, because the recipe is
+ * persisted as JSON and an undefined key survives every in-memory comparison.
+ */
+export function mergeGraphicAnimationRecipeChannel<
+	R extends Partial<GraphicAnimationChannels>,
+	K extends GraphicAnimationChannelKey,
+>(recipe: R, channel: K, patch: Partial<GraphicAnimationChannels[K]> | null): R {
+	const next = { ...recipe };
+	if (patch === null)
+		delete next[channel];
+	else
+		next[channel] = { ...GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[channel], ...recipe[channel], ...patch } as R[K];
+	return next;
+}
 
 /**
  * An animation with no recipes and no staggers left is no animation at all.
@@ -1758,17 +1783,10 @@ function mergeAnimationChannel<K extends GraphicAnimationChannelKey>(
 	animation: GraphicContainerAnimation | undefined,
 	phase: GraphicAnimationPhase,
 	channel: K,
-	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+	patch: Partial<GraphicAnimationChannels[K]> | null,
 ): GraphicContainerAnimation | undefined {
 	const current = animation?.[phase] ?? createDefaultGraphicAnimationRecipe(phase);
-	const next = { ...current } as GraphicAnimationRecipe & Record<K, unknown>;
-
-	if (patch === null)
-		delete next[channel];
-	else
-		next[channel] = { ...GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[channel], ...current[channel], ...patch };
-
-	return setAnimationRecipe(animation, phase, next);
+	return setAnimationRecipe(animation, phase, mergeGraphicAnimationRecipeChannel(current, channel, patch));
 }
 
 /** Merge into one phase's stagger, or remove it. Only a container carries one. */
@@ -1870,7 +1888,7 @@ export function patchGraphicItemAnimationChannel<K extends GraphicAnimationChann
 	itemId: string,
 	phase: GraphicAnimationPhase,
 	channel: K,
-	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+	patch: Partial<GraphicAnimationChannels[K]> | null,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ANIMATION_KINDS, item => ({
 		animation: mergeAnimationChannel(item.animation, phase, channel, patch),
@@ -1959,7 +1977,7 @@ export function patchBroadcastGraphicAnimationChannel<K extends GraphicAnimation
 	graphicId: string,
 	phase: GraphicAnimationPhase,
 	channel: K,
-	patch: Partial<typeof GRAPHIC_ANIMATION_CHANNEL_DEFAULTS[K]> | null,
+	patch: Partial<GraphicAnimationChannels[K]> | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map(entry => entry.id === graphicId
 		? { ...entry, animation: mergeAnimationChannel(entry.animation, phase, channel, patch) }
