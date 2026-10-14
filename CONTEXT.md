@@ -654,7 +654,7 @@ _Avoid_: Dummy data, test data
 - Graphic Animation presets are authoring shortcuts that initialise editable recipes, not runtime concepts
 - Every recipe operates relative to its owner's **Graphic Resting State**
 - A scale channel uses one **Graphic Animation Origin** and a uniform factor from zero to twice the resting size
-- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**) or the distance needed to clear its owner's parent
+- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A **Graphic Style Set** recipe preset has no owner, so its fixed distance is entered in pixels
 - A reveal channel wipes from one edge across its owner's rectangular bounds, preserving existing **Shape Geometry** clipping
 - A fade channel reduces opacity from the resting value; fades on a **Broadcast Graphic** and its items compose multiplicatively
 - Easing is linear, ease-in, ease-out, ease-in-out, back-in, back-out, or back-in-out; rotation, skew, perspective, filters, morphing, motion paths, and arbitrary transforms are outside **Graphic Animation**

@@ -1,6 +1,6 @@
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
@@ -152,6 +152,10 @@ function emittedValue(wrapper: VueWrapper): Record<string, unknown> {
 }
 
 describe('graphicsStyleSetEntryEditor', () => {
+	afterEach(() => {
+		localStorage.clear();
+	});
+
 	it('gives a palette entry the only colour input there is', async () => {
 		const wrapper = await mountEditor(DRAFT[0]!);
 
@@ -342,6 +346,22 @@ describe('graphicsStyleSetEntryEditor', () => {
 		// Removed, not left as an undefined key on a value persisted as JSON.
 		expect(emittedValue(wrapper)).toEqual({ duration: 400, easing: 'ease-out' });
 		expect('fade' in emittedValue(wrapper)).toBe(false);
+	});
+
+	it('keeps a Graphic Animation Recipe preset\'s slide length in pixels, whatever the Geometry Unit', async () => {
+		localStorage.setItem('editor-geometryUnit', 'percent');
+		const recipe: GraphicStyleSetEntry = {
+			id: 'rise',
+			kind: 'animation-recipe',
+			name: 'Rise',
+			schemaVersion: 1,
+			value: { duration: 400, easing: 'ease-out', slide: { direction: 'north', distanceMode: 'fixed', distance: 120 } },
+		};
+		const wrapper = await mountEditor(recipe);
+		await flushPromises();
+
+		// A preset has no owner, so no parent a percentage could be measured against.
+		expect(fieldNamed(wrapper, 'Fixed distance (px)').get<HTMLInputElement>('input').element.value).toBe('120');
 	});
 
 	it('gives an observer every preset to read and none to write', async () => {

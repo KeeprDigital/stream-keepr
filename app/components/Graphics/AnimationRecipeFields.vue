@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
 import type {
+	GraphicAnimationChannelKey,
+	GraphicAnimationChannels,
+	GraphicSlideDistanceDimension,
+} from '~~/shared/modules/graphics';
+import type {
+	GeometryUnit,
 	GraphicAnimationEasing,
 	GraphicAnimationRecipe,
 	GraphicOnScreenAnimationRecipe,
 	GraphicRevealEdge,
 	GraphicSlideDistanceMode,
 } from '~~/shared/types/graphics';
-import { GRAPHIC_SLIDE_DIRECTIONS } from '~~/shared/modules/graphics';
+import {
+	displayGeometryValue,
+	geometryUnitInputStep,
+	GRAPHIC_SLIDE_DIRECTIONS,
+	graphicSlideDistanceReference,
+	parseGeometryValue,
+} from '~~/shared/modules/graphics';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
@@ -22,6 +33,7 @@ import {
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 } from '~~/shared/types/graphics';
+import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
 
 /**
  * The one Graphic Animation Recipe fields control, for a lifecycle phase's recipe
@@ -40,6 +52,12 @@ import {
  *
  * Pause and repetition belong to the phase that cycles, so a host offers them with
  * `cycling`: on-screen, and a Style Set preset, which any phase may reference.
+ *
+ * A fixed slide distance is entered in the author's Geometry Unit when the host
+ * names the owner's parent (`slideParent`): a horizontal slide against its width,
+ * a vertical one against its height, a diagonal against its shorter side. It is
+ * stored and emitted in pixels either way. A Graphic Animation Recipe preset has
+ * no owner, so nothing to measure against, and stays in pixels.
  */
 const props = defineProps<{
 	/**
@@ -49,6 +67,11 @@ const props = defineProps<{
 	recipe: Omit<GraphicAnimationRecipe, 'delay'> & Partial<Pick<GraphicOnScreenAnimationRecipe, 'delay' | 'pause' | 'repeat'>>;
 	cycling?: boolean;
 	disabled?: boolean;
+	/**
+	 * The bounds the owner slides within — the canvas, or its Graphic Group — and
+	 * the name the help line gives them. Absent, the distance stays in pixels.
+	 */
+	slideParent?: { width: number; height: number; name: 'canvas' | 'group' };
 	/** Prefixes every field's test id, e.g. `animation-enter`. */
 	testIdPrefix: string;
 }>();
@@ -96,6 +119,48 @@ const CHANNELS: readonly { key: GraphicAnimationChannelKey; label: string }[] = 
 ];
 
 const repeatsIndefinitely = computed(() => props.recipe.repeat === GRAPHIC_ANIMATION_REPEAT_INDEFINITE);
+
+const geometryUnit = useGeometryUnit();
+
+const SLIDE_DIMENSION_LABELS: Record<GraphicSlideDistanceDimension, string> = {
+	'width': 'width',
+	'height': 'height',
+	'shorter-side': 'shorter side',
+};
+
+/** The span a fixed slide distance is shown against, or null while it stays in pixels. */
+const slideReference = computed(() => {
+	const parent = props.slideParent;
+	const slide = props.recipe.slide;
+	if (!parent || !slide)
+		return null;
+	const reference = graphicSlideDistanceReference(parent, slide.direction);
+	return reference.span > 0 ? { ...reference, name: parent.name } : null;
+});
+
+/** Pixels whenever there is no parent to measure a relative unit against. */
+const slideUnit = computed<GeometryUnit>(() => slideReference.value ? geometryUnit.value : 'px');
+
+function shownSlideDistance(pixels: number) {
+	return displayGeometryValue(pixels, slideReference.value?.span ?? 0, slideUnit.value);
+}
+
+const slideDistanceMax = computed(() => shownSlideDistance(MAX_GRAPHIC_SLIDE_DISTANCE_PX));
+const slideDistanceStep = computed(() => geometryUnitInputStep(slideUnit.value));
+
+/** Names what a relative unit is measured against; pixels need no reference. */
+const slideDistanceHelp = computed(() => {
+	const reference = slideReference.value;
+	if (!reference || slideUnit.value === 'px')
+		return undefined;
+	const measured = `${reference.name} ${SLIDE_DIMENSION_LABELS[reference.dimension]}`;
+	return slideUnit.value === 'percent' ? `% of ${measured}` : `32-unit grid across ${measured}`;
+});
+
+function updateSlideDistance(value: number | null | undefined) {
+	const pixels = parseGeometryValue(value ?? 0, slideReference.value?.span ?? 0, slideUnit.value);
+	emit('channel', 'slide', { distance: Math.min(MAX_GRAPHIC_SLIDE_DISTANCE_PX, Math.max(0, pixels)) });
+}
 
 function testId(field: string) {
 	return `${props.testIdPrefix}-${field}`;
@@ -238,16 +303,30 @@ function testId(field: string) {
 					/>
 				</UFormField>
 				<!-- The fixed distance: the one place the slide's length is entered. -->
-				<UFormField v-if="recipe.slide.distanceMode === 'fixed'" label="Distance (px)" size="xs">
-					<UInputNumber
-						:model-value="recipe.slide.distance"
-						:min="0"
-						:max="MAX_GRAPHIC_SLIDE_DISTANCE_PX"
-						size="xs"
-						:disabled="disabled"
-						:data-testid="testId('slide-distance')"
-						@update:model-value="value => emit('channel', 'slide', { distance: value ?? 0 })"
-					/>
+				<UFormField
+					v-if="recipe.slide.distanceMode === 'fixed'"
+					:label="slideReference ? 'Fixed distance' : 'Fixed distance (px)'"
+					:help="slideDistanceHelp"
+					size="xs"
+				>
+					<div class="flex items-center gap-2">
+						<UInputNumber
+							:model-value="shownSlideDistance(recipe.slide.distance)"
+							:min="0"
+							:max="slideDistanceMax"
+							:step="slideDistanceStep.step"
+							:step-snapping="slideDistanceStep.stepSnapping"
+							size="xs"
+							class="min-w-0 flex-1"
+							:disabled="disabled"
+							:data-testid="testId('slide-distance')"
+							@update:model-value="updateSlideDistance"
+						/>
+						<GraphicsGeometryUnitPicker
+							v-if="slideReference"
+							v-model="geometryUnit"
+						/>
+					</div>
 				</UFormField>
 			</div>
 

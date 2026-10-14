@@ -71,6 +71,9 @@ const props = defineProps<{
 	 * referenced from the property control that already edits it.
 	 */
 	styleSet?: GraphicStyleAuthoringContext;
+	/** The Broadcast Graphics canvas, which a top-level owner's slide is measured against. */
+	canvasWidth: number;
+	canvasHeight: number;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
@@ -166,6 +169,18 @@ const staggerMembers = computed(() => {
 	if (current.kind === 'item' && current.item.type === 'group')
 		return current.item.children.map(child => ({ id: child.id, label: child.label }));
 	return [];
+});
+
+/**
+ * The owner's parent, as the renderer resolves it: a Graphic Group for its
+ * children, and the canvas for a top-level Graphic Item or a Broadcast Graphic.
+ * A fixed slide distance is entered against it in the author's Geometry Unit.
+ */
+const slideParent = computed(() => {
+	const current = selection.value;
+	if (current.kind === 'item' && current.group)
+		return { width: current.group.width, height: current.group.height, name: 'group' } as const;
+	return { width: props.canvasWidth, height: props.canvasHeight, name: 'canvas' } as const;
 });
 
 const ownerLabel = computed(() => {
@@ -358,6 +373,7 @@ function staggerOf(phase: GraphicAnimationPhase) {
 					:recipe="recipeOf(phase)!"
 					:cycling="phase === 'on-screen'"
 					:disabled="!canAuthor"
+					:slide-parent="slideParent"
 					:test-id-prefix="`animation-${phase}`"
 					@update="patch => updateRecipe(phase, patch)"
 					@channel="(channel, patch) => updateChannel(phase, channel, patch)"

@@ -4,6 +4,7 @@ import {
 	graphicAnimationExcursion,
 	graphicAnimationLinearProgress,
 	graphicClearParentDistance,
+	graphicSlideDistanceReference,
 	isGraphicRestingProjection,
 	resolveGraphicAnimationValues,
 } from '~~/shared/modules/graphics';
@@ -294,6 +295,24 @@ describe('graphicClearParentDistance', () => {
 
 		expect(graphicClearParentDistance(outside, CANVAS, 'north')).toBe(0);
 		expect(graphicClearParentDistance(outside, CANVAS, 'west')).toBe(0);
+	});
+});
+
+describe('graphicSlideDistanceReference', () => {
+	it('measures a horizontal slide against the parent width', () => {
+		expect(graphicSlideDistanceReference(CANVAS, 'east')).toEqual({ dimension: 'width', span: 1920 });
+		expect(graphicSlideDistanceReference(CANVAS, 'west')).toEqual({ dimension: 'width', span: 1920 });
+	});
+
+	it('measures a vertical slide against the parent height', () => {
+		expect(graphicSlideDistanceReference(CANVAS, 'north')).toEqual({ dimension: 'height', span: 1080 });
+		expect(graphicSlideDistanceReference(CANVAS, 'south')).toEqual({ dimension: 'height', span: 1080 });
+	});
+
+	it('measures a diagonal slide against the parent\'s shorter side', () => {
+		expect(graphicSlideDistanceReference(CANVAS, 'north-east')).toEqual({ dimension: 'shorter-side', span: 1080 });
+		expect(graphicSlideDistanceReference({ width: 300, height: 800 }, 'south-west'))
+			.toEqual({ dimension: 'shorter-side', span: 300 });
 	});
 });
 

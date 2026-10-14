@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { GeometryUnit, GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicRect } from '~~/shared/types/graphics';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import {
 	alignGraphicRect,
 	anchoredGraphicPosition,
 	displayGeometryValue,
+	geometryUnitInputStep,
 	moveGraphicRectToAnchoredPosition,
 	parseGeometryValue,
 	resizeGraphicRectFromAnchor,
@@ -48,12 +49,6 @@ const emit = defineEmits<{
 }>();
 
 const unit = useGeometryUnit();
-
-const UNIT_OPTIONS = [
-	{ label: 'px', value: 'px', title: 'Pixels' },
-	{ label: '%', value: 'percent', title: 'Percent of the container' },
-	{ label: '±16', value: 'grid', title: 'Centred 32-unit grid' },
-] as const satisfies ReadonlyArray<{ label: string; value: GeometryUnit; title: string }>;
 
 /** One row of align actions per axis. */
 const ALIGN_ACTIONS = [
@@ -122,26 +117,13 @@ function align(axis: 'x' | 'y', edge: 'start' | 'center' | 'end') {
 	emit('update', alignGraphicRect(props.rect, axis, edge, props.container));
 }
 
-/** Typed decimals survive in % and the grid; the arrows still step whole units in px and %. */
-const step = computed(() => unit.value === 'grid' ? 0.01 : 1);
-const stepSnapping = computed(() => unit.value === 'px');
+const inputStep = computed(() => geometryUnitInputStep(unit.value));
 </script>
 
 <template>
 	<div class="space-y-3">
 		<UFormField label="Units" size="sm">
-			<UFieldGroup size="xs">
-				<UButton
-					v-for="option in UNIT_OPTIONS"
-					:key="option.value"
-					:label="option.label"
-					:title="option.title"
-					:aria-pressed="unit === option.value"
-					color="neutral"
-					:variant="unit === option.value ? 'solid' : 'outline'"
-					@click="unit = option.value"
-				/>
-			</UFieldGroup>
+			<GraphicsGeometryUnitPicker v-model="unit" />
 		</UFormField>
 
 		<div v-if="!stacked" class="flex flex-wrap gap-4">
@@ -186,8 +168,8 @@ const stepSnapping = computed(() => unit.value === 'px');
 			>
 				<UInputNumber
 					:model-value="shownPosition(axis)"
-					:step="step"
-					:step-snapping="stepSnapping"
+					:step="inputStep.step"
+					:step-snapping="inputStep.stepSnapping"
 					size="sm"
 					class="w-full"
 					:aria-label="`Item ${axis}`"
@@ -217,8 +199,8 @@ const stepSnapping = computed(() => unit.value === 'px');
 				>
 					<UInputNumber
 						:model-value="shownSize(axis)"
-						:step="step"
-						:step-snapping="stepSnapping"
+						:step="inputStep.step"
+						:step-snapping="inputStep.stepSnapping"
 						size="sm"
 						class="w-full"
 						:aria-label="`Item ${axis}`"

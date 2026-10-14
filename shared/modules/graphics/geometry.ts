@@ -104,6 +104,14 @@ export function displayGeometryValue(
 	return roundGeometry(pixels);
 }
 
+/**
+ * How a number field steps in a Geometry Unit: typed decimals survive in % and
+ * the grid, and the arrows still step whole units in px and %.
+ */
+export function geometryUnitInputStep(unit: GeometryUnit): { step: number; stepSnapping: boolean } {
+	return { step: unit === 'grid' ? 0.01 : 1, stepSnapping: unit === 'px' };
+}
+
 /** Read an authored value in any unit back into canonical pixels. */
 export function parseGeometryValue(
 	value: number,

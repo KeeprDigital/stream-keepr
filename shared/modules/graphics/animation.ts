@@ -603,6 +603,27 @@ export function graphicClearParentDistance(
 	return requirements.length === 0 ? 0 : Math.min(...requirements);
 }
 
+/** Which of its parent's dimensions a fixed slide distance is measured against. */
+export type GraphicSlideDistanceDimension = 'width' | 'height' | 'shorter-side';
+
+/**
+ * The parent span a fixed slide distance is entered against in a relative
+ * Geometry Unit: the width for a horizontal slide, the height for a vertical one,
+ * and the shorter side for a diagonal, which travels the stored distance along
+ * both axes at once. The stored distance stays canonical pixels either way.
+ */
+export function graphicSlideDistanceReference(
+	parent: { width: number; height: number },
+	direction: GraphicSlideDirection,
+): { dimension: GraphicSlideDistanceDimension; span: number } {
+	const step = resolveGraphicSlideDirection(direction);
+	if (step.x !== 0 && step.y !== 0)
+		return { dimension: 'shorter-side', span: Math.min(parent.width, parent.height) };
+	return step.x !== 0
+		? { dimension: 'width', span: parent.width }
+		: { dimension: 'height', span: parent.height };
+}
+
 /**
  * How far through its own travel one recipe is at `elapsed`, before easing.
  *

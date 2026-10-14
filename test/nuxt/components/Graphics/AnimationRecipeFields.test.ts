@@ -1,6 +1,6 @@
 import type { GraphicAnimationRecipe, GraphicOnScreenAnimationRecipe } from '~~/shared/types/graphics';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import AnimationRecipeFields from '~/components/Graphics/AnimationRecipeFields.vue';
 
@@ -45,9 +45,20 @@ const USwitchStub = defineComponent({
 	template: '<input type="checkbox" :checked="modelValue" :disabled="disabled" />',
 });
 
+const UButtonStub = defineComponent({
+	props: { label: { type: String, required: false } },
+	emits: ['click'],
+	template: '<button type="button" @click="$emit(\'click\')">{{ label }}</button>',
+});
+
 const global = {
 	stubs: {
-		UFormField: defineComponent({ template: '<div><slot /></div>' }),
+		UFormField: defineComponent({
+			props: { label: { type: String, required: false }, help: { type: String, required: false } },
+			template: '<div><label>{{ label }}</label><slot /><p v-if="help" class="help">{{ help }}</p></div>',
+		}),
+		UFieldGroup: defineComponent({ template: '<div><slot /></div>' }),
+		UButton: UButtonStub,
 		UInputNumber: UInputNumberStub,
 		USelect: USelectStub,
 		USwitch: USwitchStub,
@@ -67,7 +78,9 @@ const RECIPE: GraphicAnimationRecipe = {
 /** A phase's recipe, or a Style Set preset's, which may leave out its delay. */
 type FieldsRecipe = Omit<GraphicAnimationRecipe, 'delay'> & Partial<Pick<GraphicOnScreenAnimationRecipe, 'delay' | 'pause' | 'repeat'>>;
 
-function mountFields(props: { recipe?: FieldsRecipe; cycling?: boolean; disabled?: boolean } = {}) {
+interface SlideParent { width: number; height: number; name: 'canvas' | 'group' }
+
+function mountFields(props: { recipe?: FieldsRecipe; cycling?: boolean; disabled?: boolean; slideParent?: SlideParent } = {}) {
 	return mount(AnimationRecipeFields, {
 		global,
 		props: { recipe: RECIPE, testIdPrefix: 'recipe', ...props },
@@ -199,6 +212,94 @@ describe('graphic animation recipe fields', () => {
 
 		// A whole count rather than nothing, which is a recipe the write accepts.
 		expect(wrapper.emitted('update')).toEqual([[{ repeat: 1 }], [{ pause: 0 }], [{ repeat: 3 }]]);
+	});
+
+	describe('slide distance in a Geometry Unit', () => {
+		const CANVAS: SlideParent = { width: 1920, height: 1080, name: 'canvas' };
+
+		function slideRecipe(direction: 'east' | 'north' | 'north-east', distance = 192): FieldsRecipe {
+			return { ...RECIPE, slide: { direction, distanceMode: 'fixed', distance } };
+		}
+
+		async function chooseUnit(wrapper: Wrapper, label: 'px' | '%' | '±16') {
+			await wrapper.findAll('button').find(button => button.text() === label)!.trigger('click');
+			await flushPromises();
+		}
+
+		function help(wrapper: Wrapper) {
+			return wrapper.findAll('.help').map(entry => entry.text());
+		}
+
+		beforeEach(() => {
+			localStorage.clear();
+		});
+
+		it('stays in pixels, with no unit choice, without a parent to measure against', () => {
+			const wrapper = mountFields({ recipe: slideRecipe('east') });
+
+			expect(wrapper.findAll('button').filter(button => ['px', '%', '±16'].includes(button.text()))).toEqual([]);
+			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(192);
+			expect(wrapper.text()).toContain('Fixed distance (px)');
+		});
+
+		it('measures a horizontal slide against the parent width and emits pixels', async () => {
+			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			await chooseUnit(wrapper, '%');
+
+			const distance = control(wrapper, 'UInputNumber', 'slide-distance')!;
+			expect([distance.props('modelValue'), distance.props('min'), distance.props('max')]).toEqual([10, 0, 520.83]);
+			expect(help(wrapper)).toEqual(['% of canvas width']);
+
+			await enter(wrapper, 'UInputNumber', 'slide-distance', 25);
+			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 480 }]]);
+		});
+
+		it('measures a vertical slide against the parent height', async () => {
+			const wrapper = mountFields({ recipe: slideRecipe('north', 108), slideParent: { ...CANVAS, name: 'group' } });
+			await chooseUnit(wrapper, '±16');
+
+			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(3.2);
+			expect(help(wrapper)).toEqual(['32-unit grid across group height']);
+
+			await enter(wrapper, 'UInputNumber', 'slide-distance', 16);
+			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 540 }]]);
+		});
+
+		it('measures a diagonal slide against the parent\'s shorter side', async () => {
+			const wrapper = mountFields({ recipe: slideRecipe('north-east', 108), slideParent: CANVAS });
+			await chooseUnit(wrapper, '%');
+
+			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
+			expect(help(wrapper)).toEqual(['% of canvas shorter side']);
+		});
+
+		it('names no reference in pixels, and clamps an entry to what a write accepts', async () => {
+			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			await flushPromises();
+
+			expect(help(wrapper)).toEqual([]);
+			await chooseUnit(wrapper, '%');
+			await enter(wrapper, 'UInputNumber', 'slide-distance', 900);
+			await enter(wrapper, 'UInputNumber', 'slide-distance', undefined);
+
+			expect(wrapper.emitted('channel')).toEqual([['slide', { distance: 10000 }], ['slide', { distance: 0 }]]);
+		});
+
+		it('lets a reader who may not write still switch the unit they read in', async () => {
+			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS, disabled: true });
+			await chooseUnit(wrapper, '%');
+
+			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
+			expect(wrapper.emitted('channel')).toBeUndefined();
+		});
+
+		it('opens in the Geometry Unit the geometry fields last used', async () => {
+			localStorage.setItem('editor-geometryUnit', 'percent');
+			const wrapper = mountFields({ recipe: slideRecipe('east'), slideParent: CANVAS });
+			await flushPromises();
+
+			expect(control(wrapper, 'UInputNumber', 'slide-distance')!.props('modelValue')).toBe(10);
+		});
 	});
 
 	it('disables every field for a reader who may not write', () => {
