@@ -31,8 +31,6 @@ import type {
 	OnAirUpdatePolicy,
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
-	ShapeCorner,
-	ShapeCornerKey,
 	ShapeGeometry,
 	SocialNetworkIconGraphicItemConfig,
 	TEXT_OVERFLOW_POLICY_VALUES,
@@ -75,7 +73,6 @@ import {
 	patchMediaFocalPosition,
 	patchMediaGraphicItem,
 	patchPlayerLifeGraphicItem,
-	patchShapeCorner,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	replaceBroadcastGraphic,
@@ -83,7 +80,6 @@ import {
 	setGraphicInputChoiceOptions,
 	setGraphicInputMediaKind,
 	setMediaClipGeometry,
-	SHAPE_GEOMETRY_PRESETS,
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
@@ -107,12 +103,11 @@ import {
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	PLAYER_LIFE_ANIMATION_VALUES,
-	SHAPE_CORNER_KEYS,
-	SHAPE_CORNER_TREATMENT_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import GraphicsGeometryFields from '../GeometryFields.vue';
+import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
 import GraphicsCompositorSocialProfileProjections from './SocialProfileProjections.vue';
@@ -183,7 +178,6 @@ const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Shrink then ellipsis', value: 'shrink' },
 ] satisfies Array<{ label: string; value: typeof TEXT_OVERFLOW_POLICY_VALUES[number] }>;
 const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
-const CORNER_TREATMENT_OPTIONS = SHAPE_CORNER_TREATMENT_VALUES.map(value => ({ label: value, value }));
 const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
 const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
@@ -197,11 +191,6 @@ const SOCIAL_NETWORK_ICON_SOURCE_OPTIONS = [
 	{ label: 'Static network', value: 'static' },
 	{ label: 'Social Profile Projection', value: 'projection' },
 ];
-const GEOMETRY_PRESET_OPTIONS = SHAPE_GEOMETRY_PRESETS.map(preset => ({
-	label: preset.label,
-	value: preset.id,
-	icon: preset.icon,
-}));
 const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({ label: value, value }));
 const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({ label: value, value }));
 const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({ label: value, value }));
@@ -209,12 +198,6 @@ const SIZING_MODE_OPTIONS = [
 	{ label: 'Fixed', value: 'fixed' },
 	{ label: 'Weighted fill', value: 'fill' },
 ] satisfies Array<{ label: string; value: GraphicGroupChildSizing['mode'] }>;
-const CORNER_LABELS: Record<ShapeCornerKey, string> = {
-	topLeft: 'Top left',
-	topRight: 'Top right',
-	bottomRight: 'Bottom right',
-	bottomLeft: 'Bottom left',
-};
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 
@@ -587,10 +570,6 @@ function clearFontAsset() {
 
 function updateGeometry(patch: Partial<ShapeGeometry>) {
 	applyToSelectedGraphic((graphic, itemId) => patchShapeGeometry(graphic, itemId, patch));
-}
-
-function updateCorner(corner: ShapeCornerKey, patch: Partial<ShapeCorner>) {
-	applyToSelectedGraphic((graphic, itemId) => patchShapeCorner(graphic, itemId, corner, patch));
 }
 
 function applyPreset(presetId: ShapeGeometryPresetId) {
@@ -2043,66 +2022,11 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@bind="entryId => bindStyleRef(geometryStyleSlot, entryId)"
 					@unbind="unbindStyleRef(geometryStyleSlot)"
 				/>
-				<UFormField label="Preset" size="sm">
-					<USelect
-						:items="GEOMETRY_PRESET_OPTIONS"
-						value-key="value"
-						placeholder="Apply preset..."
-						class="w-full"
-						data-testid="shape-geometry-preset"
-						@update:model-value="applyPreset($event as ShapeGeometryPresetId)"
-					/>
-				</UFormField>
-
-				<div v-for="corner in SHAPE_CORNER_KEYS" :key="corner" class="grid grid-cols-2 gap-2">
-					<UFormField :label="CORNER_LABELS[corner]" size="sm">
-						<USelect
-							:model-value="selectedGeometry[corner].treatment"
-							:items="CORNER_TREATMENT_OPTIONS"
-							value-key="value"
-							class="w-full"
-							:data-testid="`shape-corner-${corner}`"
-							@update:model-value="updateCorner(corner, { treatment: $event as never })"
-						/>
-					</UFormField>
-					<UFormField
-						v-if="selectedGeometry[corner].treatment !== 'square'"
-						label="Size"
-						size="sm"
-					>
-						<UInputNumber
-							:model-value="selectedGeometry[corner].size"
-							:min="0"
-							size="sm"
-							class="w-full"
-							:aria-label="`${CORNER_LABELS[corner]} size`"
-							@update:model-value="updateCorner(corner, { size: $event ?? 0 })"
-						/>
-					</UFormField>
-				</div>
-
-				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Left slant" size="sm">
-						<UInputNumber
-							:model-value="selectedGeometry.leftSlant"
-							size="sm"
-							class="w-full"
-							data-testid="shape-left-slant"
-							aria-label="Left edge slant"
-							@update:model-value="updateGeometry({ leftSlant: $event ?? 0 })"
-						/>
-					</UFormField>
-					<UFormField label="Right slant" size="sm">
-						<UInputNumber
-							:model-value="selectedGeometry.rightSlant"
-							size="sm"
-							class="w-full"
-							data-testid="shape-right-slant"
-							aria-label="Right edge slant"
-							@update:model-value="updateGeometry({ rightSlant: $event ?? 0 })"
-						/>
-					</UFormField>
-				</div>
+				<GraphicsShapeGeometryFields
+					:geometry="selectedGeometry"
+					@update="updateGeometry"
+					@preset="applyPreset"
+				/>
 			</div>
 		</template>
 

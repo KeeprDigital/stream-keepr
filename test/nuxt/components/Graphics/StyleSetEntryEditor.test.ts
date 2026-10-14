@@ -284,7 +284,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(outlined).outline).toBeUndefined();
 	});
 
-	it('will not size a square corner of a Shape Geometry preset', async () => {
+	it('asks for a corner size only while the corner is not square', async () => {
 		const geometry: GraphicStyleSetEntry = {
 			id: 'cut-corner',
 			kind: 'shape-geometry',
@@ -294,11 +294,35 @@ describe('graphicsStyleSetEntryEditor', () => {
 		};
 		const wrapper = await mountEditor(geometry);
 
-		const sizes = fieldsNamed(wrapper, 'Size').map(field => field.get<HTMLInputElement>('input').element);
-		// Corner order is the vocabulary's: top-left is square, top-right is cut.
-		expect(sizes[0]!.disabled).toBe(true);
-		expect(sizes[1]!.disabled).toBe(false);
-		expect(sizes[1]!.value).toBe('24');
+		// Only the cut top-right corner has a size; the square ones would ignore it.
+		const sizes = fieldsNamed(wrapper, 'Size').map(field => field.get<HTMLInputElement>('input'));
+		expect(sizes.map(size => size.attributes('aria-label'))).toEqual(['Top right size']);
+		expect(sizes[0]!.element.value).toBe('24');
+
+		await sizes[0]!.setValue('40');
+
+		expect(emittedValue(wrapper)).toEqual({ ...squareShapeGeometry(), topRight: { treatment: 'cut', size: 40 } });
+	});
+
+	it('initialises a Shape Geometry entry from a built-in preset, sized as a new Shape Graphic Item', async () => {
+		const geometry: GraphicStyleSetEntry = {
+			id: 'cut-corner',
+			kind: 'shape-geometry',
+			name: 'Cut corner',
+			schemaVersion: 1,
+			value: { ...squareShapeGeometry(), leftSlant: 12 },
+		};
+		const wrapper = await mountEditor(geometry);
+
+		await wrapper.get('[data-testid="shape-geometry-preset"]').setValue('corner-cut');
+
+		// A new Shape Graphic Item on a 1080p canvas is 768×108; 30% of the shorter
+		// side, rounded, is 32. The preset replaces the slant too.
+		expect(emittedValue(wrapper)).toEqual({
+			...squareShapeGeometry(),
+			topRight: { treatment: 'cut', size: 32 },
+			bottomLeft: { treatment: 'cut', size: 32 },
+		});
 	});
 
 	it('will not ask for a repeat count while a Graphic Animation Recipe repeats indefinitely', async () => {

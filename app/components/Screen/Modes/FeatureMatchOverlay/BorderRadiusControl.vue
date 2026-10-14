@@ -23,6 +23,7 @@ function valueFor(field: RadiusField) {
 		<UFormField label="Top Left" class="md:col-start-1 md:row-start-1">
 			<UInputNumber
 				:model-value="valueFor('borderRadiusTopLeft')"
+				:min="0"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusTopLeft', Number($event))"
@@ -32,6 +33,7 @@ function valueFor(field: RadiusField) {
 		<UFormField label="All Corners" class="md:col-start-2 md:row-span-2 md:row-start-1">
 			<UInputNumber
 				:model-value="valueFor('borderRadius')"
+				:min="0"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadius', Number($event))"
@@ -41,6 +43,7 @@ function valueFor(field: RadiusField) {
 		<UFormField label="Top Right" class="md:col-start-3 md:row-start-1">
 			<UInputNumber
 				:model-value="valueFor('borderRadiusTopRight')"
+				:min="0"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusTopRight', Number($event))"
@@ -50,6 +53,7 @@ function valueFor(field: RadiusField) {
 		<UFormField label="Bottom Left" class="md:col-start-1 md:row-start-2">
 			<UInputNumber
 				:model-value="valueFor('borderRadiusBottomLeft')"
+				:min="0"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusBottomLeft', Number($event))"
@@ -59,6 +63,7 @@ function valueFor(field: RadiusField) {
 		<UFormField label="Bottom Right" class="md:col-start-3 md:row-start-2">
 			<UInputNumber
 				:model-value="valueFor('borderRadiusBottomRight')"
+				:min="0"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusBottomRight', Number($event))"

@@ -22,6 +22,7 @@ import {
 	MAX_GRAPHIC_LINE_HEIGHT,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
+	MAX_SHAPE_GEOMETRY_PX,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
@@ -71,7 +72,6 @@ export const GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES = 4 * 1024;
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
 const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(10000);
-const pixelPositionSchema = finiteNumberSchema.min(-10000).max(10000);
 const cssColorSchema = z.string().min(1).max(500);
 
 export const graphicStyleSetIdSchema = z.string().min(1).max(100);
@@ -131,13 +131,19 @@ const surfaceStyleValueSchema = z.object({
 	}).strict().optional(),
 }).strict();
 
+const shapeCornerValueSchema = z.object({
+	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
+	size: finiteNumberSchema.nonnegative().max(MAX_SHAPE_GEOMETRY_PX),
+}).strict();
+const shapeSlantValueSchema = finiteNumberSchema.min(-MAX_SHAPE_GEOMETRY_PX).max(MAX_SHAPE_GEOMETRY_PX);
+
 const shapeGeometryValueSchema = z.object({
-	topLeft: z.object({ treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES), size: nonNegativePixelSchema }).strict(),
-	topRight: z.object({ treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES), size: nonNegativePixelSchema }).strict(),
-	bottomRight: z.object({ treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES), size: nonNegativePixelSchema }).strict(),
-	bottomLeft: z.object({ treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES), size: nonNegativePixelSchema }).strict(),
-	leftSlant: pixelPositionSchema,
-	rightSlant: pixelPositionSchema,
+	topLeft: shapeCornerValueSchema,
+	topRight: shapeCornerValueSchema,
+	bottomRight: shapeCornerValueSchema,
+	bottomLeft: shapeCornerValueSchema,
+	leftSlant: shapeSlantValueSchema,
+	rightSlant: shapeSlantValueSchema,
 }).strict();
 
 const mediaTreatmentValueSchema = z.object({

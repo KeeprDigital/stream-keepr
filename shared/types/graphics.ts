@@ -278,6 +278,12 @@ export const SHAPE_CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomL
 export type ShapeCornerKey = typeof SHAPE_CORNER_KEYS[number];
 
 /**
+ * The largest corner size, and the largest slant either way, a saved Shape
+ * Geometry accepts, in canvas pixels.
+ */
+export const MAX_SHAPE_GEOMETRY_PX = 10_000;
+
+/**
  * A parameterised rectangle with independently configurable square, rounded, or
  * cut corners and bounded left or right edge slants.
  *
