@@ -159,6 +159,15 @@ describe('graphic animation recipe fields', () => {
 		]);
 	});
 
+	it('resets a cleared scale factor to no scale at all', async () => {
+		const wrapper = mountFields();
+
+		await enter(wrapper, 'UInputNumber', 'scale-factor', undefined);
+
+		// Zero would be a scale from nothing, which nobody asked for by clearing the field.
+		expect(wrapper.emitted('channel')).toEqual([['scale', { factor: 1 }]]);
+	});
+
 	it('hides the slide distance while the slide clears its parent instead', () => {
 		const wrapper = mountFields({
 			recipe: { ...RECIPE, slide: { direction: 'north', distanceMode: 'clear-parent', distance: 0 } },

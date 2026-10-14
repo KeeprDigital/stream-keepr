@@ -35,7 +35,8 @@ import {
  * shared channel defaults fill it, whichever host it lands in.
  *
  * A cleared field emits the nearest value a write accepts: the shortest duration,
- * no delay, no pause, one repetition, or zero. A repetition is a whole number.
+ * no delay, no pause, one repetition, no scale (a factor of 1), or zero. A
+ * repetition is a whole number.
  *
  * Pause and repetition belong to the phase that cycles, so a host offers them with
  * `cycling`: on-screen, and a Style Set preset, which any phase may reference.
@@ -260,7 +261,7 @@ function testId(field: string) {
 						size="xs"
 						:disabled="disabled"
 						:data-testid="testId('scale-factor')"
-						@update:model-value="value => emit('channel', 'scale', { factor: value ?? 0 })"
+						@update:model-value="value => emit('channel', 'scale', { factor: value ?? 1 })"
 					/>
 				</UFormField>
 				<UFormField label="Origin" size="xs">
