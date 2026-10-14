@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { GraphicAnimationChannelKey, GraphicAnimationChannels } from '~~/shared/modules/graphics';
 import type { ShapeCorner, ShapeCornerKey, ShapeGeometry } from '~~/shared/types/graphics';
-import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
+import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry, SurfaceStyleGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
+import type { BorderGlowEdit } from '~/types/borderGlow';
 import { mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
 import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
@@ -58,6 +59,25 @@ function patch(fields: Record<string, unknown>) {
 function patchRecipeChannel<K extends GraphicAnimationChannelKey>(channel: K, fields: Partial<GraphicAnimationChannels[K]> | null) {
 	const recipe = props.entry.value as AnimationRecipeGraphicStyleEntryValue;
 	emit('update:value', mergeGraphicAnimationRecipeChannel(recipe, channel, fields));
+}
+
+/**
+ * A Graphic Surface Style preset's outline and glow name a palette entry where an
+ * item's own would hold a colour; switching one on starts it from the first palette
+ * entry.
+ */
+function editSurfaceBorderGlow(edit: BorderGlowEdit) {
+	if (edit.kind === 'border-side')
+		return;
+	const value = props.entry.value as SurfaceStyleGraphicStyleEntryValue;
+	const firstPaletteEntryId = paletteOptions.value[0]?.value ?? '';
+	const { color, ...fields } = edit.patch ?? {};
+	const colorEntry = color === undefined ? {} : { colorEntryId: color };
+	if (edit.kind === 'border') {
+		patch({ outline: edit.patch ? { ...(value.outline ?? { colorEntryId: firstPaletteEntryId, width: 2 }), ...fields, ...colorEntry } : undefined });
+		return;
+	}
+	patch({ glow: edit.patch ? { ...(value.glow ?? { colorEntryId: firstPaletteEntryId, size: 8, opacity: 0.5 }), ...fields, ...colorEntry } : undefined });
 }
 
 function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
@@ -242,80 +262,29 @@ function patchCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					@update:model-value="patch({ fillOpacity: $event ?? 1 })"
 				/>
 			</UFormField>
-			<UFormField label="Outline" size="xs">
-				<USwitch
-					:model-value="entry.value.outline !== undefined"
-					:disabled="disabled"
-					data-testid="style-entry-surface-outline"
-					@update:model-value="patch({
-						outline: $event ? { colorEntryId: paletteOptions[0]?.value ?? '', width: 2 } : undefined,
-					})"
-				/>
-			</UFormField>
-			<div v-if="entry.value.outline" class="grid grid-cols-2 gap-2">
-				<UFormField label="Outline colour" size="xs">
+			<GraphicsBorderGlowFields
+				border-label="Outline"
+				:border="entry.value.outline ? { color: entry.value.outline.colorEntryId, width: entry.value.outline.width } : null"
+				:glow="entry.value.glow ? { color: entry.value.glow.colorEntryId, size: entry.value.glow.size, opacity: entry.value.glow.opacity } : null"
+				:disabled="disabled"
+				size="xs"
+				border-test-id="style-entry-surface-outline"
+				glow-test-id="style-entry-surface-glow"
+				@edit="editSurfaceBorderGlow"
+			>
+				<template #color="{ value, label, update }">
 					<USelect
-						:model-value="entry.value.outline.colorEntryId"
+						:model-value="value"
 						:items="paletteOptions"
 						value-key="value"
 						size="xs"
 						class="w-full"
+						:aria-label="label"
 						:disabled="disabled"
-						@update:model-value="patch({ outline: { ...(entry.value as { outline: object }).outline, colorEntryId: $event } })"
+						@update:model-value="update($event)"
 					/>
-				</UFormField>
-				<UFormField label="Width" size="xs">
-					<UInputNumber
-						:model-value="entry.value.outline.width"
-						:min="0"
-						:max="500"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ outline: { ...(entry.value as { outline: object }).outline, width: $event ?? 0 } })"
-					/>
-				</UFormField>
-			</div>
-			<UFormField label="Glow" size="xs">
-				<USwitch
-					:model-value="entry.value.glow !== undefined"
-					:disabled="disabled"
-					data-testid="style-entry-surface-glow"
-					@update:model-value="patch({
-						glow: $event ? { colorEntryId: paletteOptions[0]?.value ?? '', size: 8, opacity: 0.5 } : undefined,
-					})"
-				/>
-			</UFormField>
-			<div v-if="entry.value.glow" class="grid grid-cols-3 gap-2">
-				<UFormField label="Colour" size="xs">
-					<USelect
-						:model-value="entry.value.glow.colorEntryId"
-						:items="paletteOptions"
-						value-key="value"
-						size="xs"
-						class="w-full"
-						:disabled="disabled"
-						@update:model-value="patch({ glow: { ...(entry.value as { glow: object }).glow, colorEntryId: $event } })"
-					/>
-				</UFormField>
-				<UFormField label="Size" size="xs">
-					<UInputNumber
-						:model-value="entry.value.glow.size"
-						:min="0"
-						:max="500"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ glow: { ...(entry.value as { glow: object }).glow, size: $event ?? 0 } })"
-					/>
-				</UFormField>
-				<UFormField label="Opacity" size="xs">
-					<UIOpacityInput
-						:model-value="entry.value.glow.opacity"
-						size="xs"
-						:disabled="disabled"
-						@update:model-value="patch({ glow: { ...(entry.value as { glow: object }).glow, opacity: $event ?? 1 } })"
-					/>
-				</UFormField>
-			</div>
+				</template>
+			</GraphicsBorderGlowFields>
 		</template>
 
 		<template v-else-if="entry.kind === 'shape-geometry'">

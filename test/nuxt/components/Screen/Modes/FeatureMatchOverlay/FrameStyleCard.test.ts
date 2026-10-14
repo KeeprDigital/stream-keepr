@@ -63,6 +63,13 @@ const ControlSectionStub = defineComponent({
 	template: '<section data-testid="control-section"><h3>{{ title }}</h3><slot /></section>',
 });
 
+const USwitchStub = defineComponent({
+	name: 'USwitch',
+	props: { modelValue: { type: Boolean, required: false } },
+	emits: ['update:modelValue'],
+	template: '<button type="button" role="switch" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
+});
+
 async function mountComponent(options: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	patchFrame: ReturnType<typeof vi.fn>;
@@ -86,7 +93,9 @@ async function mountComponent(options: Partial<{
 				ScreenMediaBackgroundFields: defineComponent({ template: '<div data-testid="media-background-fields" />' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				FeatureMatchOverlayControlSection: ControlSectionStub,
-				FeatureMatchOverlayBorderSidesControl: defineComponent({ template: '<div data-testid="border-sides-control" />' }),
+				USwitch: USwitchStub,
+				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
+				UIOpacityInput: defineComponent({ template: '<input />' }),
 			},
 		},
 	});
@@ -120,5 +129,25 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 
 		const patch = patchFrame.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig['layout']['frame']>;
 		expect(patch.backgroundColor).toBe('transparent');
+	});
+
+	it('edits the frame border and its glow through the shared border and glow fields', async () => {
+		const patchFrame = vi.fn();
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame = { ...config.layout.frame, borderVisible: undefined, glowSize: 0 };
+		const off = await mountComponent({ config, patchFrame });
+		const borderSwitch = off.find('[role="switch"][aria-label="Frame border"]');
+
+		// An unset border is not painted, so it reads as off and its glow is not offered.
+		expect(borderSwitch.attributes('aria-checked')).toBe('false');
+		expect(off.find('[role="switch"][aria-label="Glow"]').exists()).toBe(false);
+
+		await borderSwitch.trigger('click');
+		expect(patchFrame).toHaveBeenLastCalledWith({ borderVisible: true });
+
+		config.layout.frame = { ...config.layout.frame, borderVisible: true };
+		const on = await mountComponent({ config, patchFrame });
+		await on.get('[role="switch"][aria-label="Glow"]').trigger('click');
+		expect(patchFrame).toHaveBeenLastCalledWith({ glowSize: 8 });
 	});
 });

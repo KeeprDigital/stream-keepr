@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayGlowPosition, FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
+import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
+import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
-import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 
 /**
  * The Source Item framing controls.
  *
- * Only what a Source Item paints: a background wash behind the video area, a
- * per-side border, per-corner radii, and a glow. The shared Graphic Surface Style
- * has no per-side border by design — a composed rule-preset Shape Graphic Item
- * replaces it there — but the Frame and its Source Items are host capability, and
- * that is what this edits.
+ * Only what a Source Item paints: a background wash behind the video area,
+ * per-corner radii, and, through the shared border and glow fields, a per-side
+ * border and a glow. Colours are hex only, because the renderer applies the glow
+ * opacity to a hex colour.
+ *
+ * The shared Graphic Surface Style has no per-side border by design — a composed
+ * rule-preset Shape Graphic Item replaces it there — but the Frame and its Source
+ * Items are host capability, and that is what this edits.
  *
  * The background block is the Frame's own, so both host-owned surfaces offer the
  * same base colour, gradient overlay, and opacity.
@@ -22,12 +25,6 @@ const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
 const emit = defineEmits<{
 	update: [updates: Partial<FeatureMatchSourceFramingStyle>];
 }>();
-
-const GLOW_POSITION_OPTIONS = [
-	{ label: 'Both', value: 'both' },
-	{ label: 'Inside', value: 'inside' },
-	{ label: 'Outside', value: 'outside' },
-] satisfies Array<{ label: string; value: FeatureMatchOverlayGlowPosition }>;
 
 const style = computed(() => props.framingStyle ?? {});
 
@@ -58,38 +55,6 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 			@update="updateBackground"
 		/>
 
-		<div class="grid gap-3 md:grid-cols-3 md:items-end">
-			<ScreenSettingsToggle
-				label="Border"
-				:model-value="style.borderVisible ?? false"
-				@update:model-value="update({ borderVisible: $event })"
-			/>
-			<UFormField label="Border colour">
-				<UIColorPicker
-					:model-value="style.borderColor ?? '#ffffff'"
-					hex-only
-					@update:model-value="update({ borderColor: String($event) })"
-				/>
-			</UFormField>
-			<UFormField label="Border width">
-				<UInputNumber
-					:model-value="style.borderWidth ?? 0"
-					:min="0"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ borderWidth: $event ?? 0 })"
-				/>
-			</UFormField>
-		</div>
-
-		<FeatureMatchOverlayBorderSidesControl
-			:border-top-visible="style.borderTopVisible"
-			:border-right-visible="style.borderRightVisible"
-			:border-bottom-visible="style.borderBottomVisible"
-			:border-left-visible="style.borderLeftVisible"
-			@update="(side, value) => update({ [side]: value })"
-		/>
-
 		<FeatureMatchOverlayBorderRadiusControl
 			:border-radius="style.borderRadius"
 			:border-radius-top-left="style.borderRadiusTopLeft"
@@ -99,41 +64,14 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 			@update="(field, value) => update({ [field]: value })"
 		/>
 
-		<div class="grid gap-3 md:grid-cols-4">
-			<UFormField label="Glow colour">
-				<UIColorPicker
-					:model-value="style.glowColor ?? '#ffffff'"
-					hex-only
-					@update:model-value="update({ glowColor: String($event) })"
-				/>
-			</UFormField>
-			<UFormField label="Glow size">
-				<UInputNumber
-					:model-value="style.glowSize ?? 0"
-					:min="0"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ glowSize: $event ?? 0 })"
-				/>
-			</UFormField>
-			<UFormField label="Glow opacity">
-				<UIOpacityInput
-					:model-value="style.glowOpacity ?? 0.75"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ glowOpacity: $event ?? 0 })"
-				/>
-			</UFormField>
-			<UFormField label="Glow position">
-				<USelect
-					:model-value="style.glowPosition ?? 'both'"
-					:items="GLOW_POSITION_OPTIONS"
-					value-key="value"
-					size="sm"
-					class="w-full"
-					@update:model-value="update({ glowPosition: $event as FeatureMatchOverlayGlowPosition })"
-				/>
-			</UFormField>
-		</div>
+		<GraphicsBorderGlowFields
+			border-label="Border"
+			v-bind="borderGlowFieldsValue(style, '#ffffff')"
+			per-side
+			glow-position
+			glow-gated-on-border
+			hex-only
+			@edit="update(borderGlowStyleUpdates($event))"
+		/>
 	</div>
 </template>

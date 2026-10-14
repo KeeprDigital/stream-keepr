@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { GraphicSurfaceStyleEdit } from '~~/shared/modules/graphics';
-import type { GRAPHIC_FILL_KIND_VALUES, GraphicSurfaceStyle } from '~~/shared/types/graphics';
+import type { GRAPHIC_FILL_KIND_VALUES, GraphicGlow, GraphicOutline, GraphicSurfaceStyle } from '~~/shared/types/graphics';
+import type { BorderGlowEdit } from '~/types/borderGlow';
 import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/graphics';
 
 /**
  * The property controls for one Graphic Surface Style: its Graphic Fill, fill
- * opacity, uniform outline, and glow.
+ * opacity, and, through the shared border and glow fields, its uniform outline
+ * and glow.
  *
  * One component rather than one block per surface, because a Game Wins Graphic
  * Item has three — its own, and the two that paint a win box before and after the
@@ -48,6 +50,19 @@ const FILL_KIND_OPTIONS = [
 
 function testId(suffix: string): string {
 	return props.testIdPrefix ? `${props.testIdPrefix}-${suffix}` : suffix;
+}
+
+/** An outline or glow always has a colour, so a cleared one is white. */
+function editBorderGlow(edit: BorderGlowEdit) {
+	if (edit.kind === 'border-side')
+		return;
+	const patch = edit.patch && 'color' in edit.patch
+		? { ...edit.patch, color: edit.patch.color || '#ffffff' }
+		: edit.patch;
+	if (edit.kind === 'border')
+		emit('edit', { kind: 'outline', patch: patch as Partial<GraphicOutline> | null });
+	else
+		emit('edit', { kind: 'glow', patch: patch as Partial<GraphicGlow> | null });
 }
 </script>
 
@@ -176,66 +191,15 @@ function testId(suffix: string): string {
 				/>
 			</UFormField>
 
-			<UFormField label="Outline" size="sm">
-				<USwitch
-					:model-value="surfaceStyle.outline !== undefined"
-					:data-testid="testId('graphic-outline-enabled')"
-					@update:model-value="emit('edit', { kind: 'outline', patch: $event ? {} : null })"
-				/>
-			</UFormField>
-			<div v-if="surfaceStyle.outline" class="grid grid-cols-2 gap-2">
-				<UFormField label="Outline colour" size="sm">
-					<UIColorPicker
-						:model-value="surfaceStyle.outline.color"
-						@update:model-value="emit('edit', { kind: 'outline', patch: { color: $event?.toString() || '#ffffff' } })"
-					/>
-				</UFormField>
-				<UFormField label="Outline width" size="sm">
-					<UInputNumber
-						:model-value="surfaceStyle.outline.width"
-						:min="0"
-						size="sm"
-						class="w-full"
-						:aria-label="`${title} outline width`"
-						@update:model-value="emit('edit', { kind: 'outline', patch: { width: $event ?? 0 } })"
-					/>
-				</UFormField>
-			</div>
-
-			<UFormField label="Glow" size="sm">
-				<USwitch
-					:model-value="surfaceStyle.glow !== undefined"
-					:data-testid="testId('graphic-glow-enabled')"
-					@update:model-value="emit('edit', { kind: 'glow', patch: $event ? {} : null })"
-				/>
-			</UFormField>
-			<div v-if="surfaceStyle.glow" class="grid grid-cols-3 gap-2">
-				<UFormField label="Glow colour" size="sm">
-					<UIColorPicker
-						:model-value="surfaceStyle.glow.color"
-						@update:model-value="emit('edit', { kind: 'glow', patch: { color: $event?.toString() || '#ffffff' } })"
-					/>
-				</UFormField>
-				<UFormField label="Glow size" size="sm">
-					<UInputNumber
-						:model-value="surfaceStyle.glow.size"
-						:min="0"
-						size="sm"
-						class="w-full"
-						:aria-label="`${title} glow size`"
-						@update:model-value="emit('edit', { kind: 'glow', patch: { size: $event ?? 0 } })"
-					/>
-				</UFormField>
-				<UFormField label="Glow opacity" size="sm">
-					<UIOpacityInput
-						:model-value="surfaceStyle.glow.opacity"
-						size="sm"
-						class="w-full"
-						:aria-label="`${title} glow opacity`"
-						@update:model-value="emit('edit', { kind: 'glow', patch: { opacity: $event ?? 1 } })"
-					/>
-				</UFormField>
-			</div>
+			<GraphicsBorderGlowFields
+				border-label="Outline"
+				:border="surfaceStyle.outline ?? null"
+				:glow="surfaceStyle.glow ?? null"
+				:aria-label-prefix="title"
+				:border-test-id="testId('graphic-outline-enabled')"
+				:glow-test-id="testId('graphic-glow-enabled')"
+				@edit="editBorderGlow"
+			/>
 		</template>
 	</div>
 </template>

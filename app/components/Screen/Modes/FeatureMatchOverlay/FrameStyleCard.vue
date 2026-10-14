@@ -7,8 +7,8 @@ import {
 	parseFrameAnimationConfig,
 } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
+import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
-import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
 const props = defineProps<{
@@ -73,10 +73,6 @@ function updateFrameBackground(updates: { color?: string; gradient?: string; opa
 	if ('opacity' in updates)
 		frameUpdates.opacity = updates.opacity ?? 0;
 	updateFrame(frameUpdates);
-}
-
-function borderSideValue(side: 'borderTopVisible' | 'borderRightVisible' | 'borderBottomVisible' | 'borderLeftVisible') {
-	return props.config.layout.frame[side] ?? true;
 }
 
 function animationEffectLabel(effect: AnimationEffectName) {
@@ -163,63 +159,14 @@ function animationSummary() {
 				</FeatureMatchOverlayControlSection>
 			</section>
 
-			<section class="space-y-3 py-4 first:pt-0 last:pb-0">
-				<ScreenSettingsToggle
-					label="Frame border"
-					:model-value="config.layout.frame.borderVisible"
-					@update:model-value="updateFrame({ borderVisible: $event })"
+			<section class="py-4 first:pt-0 last:pb-0">
+				<GraphicsBorderGlowFields
+					border-label="Frame border"
+					v-bind="borderGlowFieldsValue(config.layout.frame)"
+					per-side
+					glow-gated-on-border
+					@edit="updateFrame(borderGlowStyleUpdates($event))"
 				/>
-				<div v-if="config.layout.frame.borderVisible" class="grid items-end gap-3 md:grid-cols-[auto_auto_minmax(0,1fr)]">
-					<UFormField label="Color">
-						<UIColorPicker
-							:model-value="config.layout.frame.borderColor"
-							placeholder="#0077a3"
-							@update:model-value="updateFrame({ borderColor: $event || undefined })"
-						/>
-					</UFormField>
-					<FeatureMatchOverlayBorderSidesControl
-						:border-top-visible="borderSideValue('borderTopVisible')"
-						:border-right-visible="borderSideValue('borderRightVisible')"
-						:border-bottom-visible="borderSideValue('borderBottomVisible')"
-						:border-left-visible="borderSideValue('borderLeftVisible')"
-						@update="(side, value) => updateFrame({ [side]: value })"
-					/>
-					<UFormField label="Width">
-						<UInputNumber
-							:model-value="config.layout.frame.borderWidth"
-							size="sm"
-							class="w-full"
-							@update:model-value="updateFrame({ borderWidth: Number($event) })"
-						/>
-					</UFormField>
-				</div>
-				<div v-if="config.layout.frame.borderVisible" class="grid gap-3 md:grid-cols-3">
-					<UFormField label="Glow color">
-						<UIColorPicker
-							:model-value="config.layout.frame.glowColor"
-							placeholder="#ffffff"
-							@update:model-value="updateFrame({ glowColor: $event || undefined })"
-						/>
-					</UFormField>
-					<UFormField label="Glow size">
-						<UInputNumber
-							:model-value="config.layout.frame.glowSize ?? 0"
-							:min="0"
-							:max="200"
-							size="sm"
-							class="w-full"
-							@update:model-value="updateFrame({ glowSize: Number($event) })"
-						/>
-					</UFormField>
-					<UFormField label="Glow opacity">
-						<UIOpacityInput
-							:model-value="config.layout.frame.glowOpacity ?? 0.75"
-							size="sm"
-							class="w-full"
-							@update:model-value="updateFrame({ glowOpacity: Number($event) })"
-						/>
-					</UFormField>
-				</div>
 			</section>
 		</div>
 	</div>
