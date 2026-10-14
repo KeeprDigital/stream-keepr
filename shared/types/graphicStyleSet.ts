@@ -1,4 +1,4 @@
-import type { GraphicFocalPosition, MediaGraphicItemFit } from './graphicItem';
+import type { GraphicFocalPosition, MediaFit } from './graphicItem';
 import type {
 	GraphicAnimationEasing,
 	GraphicAnimationOrigin,
@@ -158,7 +158,7 @@ export interface SurfaceStyleGraphicStyleEntryValue {
  * which an image item stores and ignores exactly as the Media Graphic Item does.
  */
 export interface MediaTreatmentGraphicStyleEntryValue {
-	fit: MediaGraphicItemFit;
+	fit: MediaFit;
 	focalPosition: GraphicFocalPosition;
 	opacity: number;
 	/** An optional Shape Geometry preset reference used as the clipping boundary. */

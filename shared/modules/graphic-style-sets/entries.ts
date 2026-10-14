@@ -1,4 +1,4 @@
-import type { GraphicFocalPosition, MediaGraphicItemFit } from '../../types/graphicItem';
+import type { GraphicFocalPosition, MediaFit } from '../../types/graphicItem';
 import type {
 	GraphicFill,
 	GraphicGlow,
@@ -56,7 +56,7 @@ export interface ResolvedGraphicStyleSurface {
 
 /** A media treatment preset's resolved value. */
 export interface ResolvedGraphicStyleMediaTreatment {
-	fit: MediaGraphicItemFit;
+	fit: MediaFit;
 	focalPosition: GraphicFocalPosition;
 	opacity: number;
 	clipGeometry?: ShapeGeometry;

@@ -486,7 +486,11 @@ _Avoid_: Font family, font stack
 The behaviour when a Text Graphic Item's text exceeds its bounds: clip, ellipsis, or shrink to an author-set minimum size and then ellipsis. Text never visibly overflows.
 
 **Media Graphic Item**:
-A Graphic Item rendering an image or silent video with contain, cover, or fill fitting, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
+A Graphic Item rendering an image or silent video with a Media Fit, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
+
+**Media Fit**:
+How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, media treatment presets, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
+_Avoid_: object fit, scaling mode
 
 **Shape Graphic Item**:
 A Graphic Item that renders a bounded Shape Geometry.

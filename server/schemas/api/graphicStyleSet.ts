@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics';
-import { MEDIA_GRAPHIC_ITEM_FIT_VALUES } from '~~/shared/types/graphicItem';
+import { MEDIA_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
@@ -147,7 +147,7 @@ const shapeGeometryValueSchema = z.object({
 }).strict();
 
 const mediaTreatmentValueSchema = z.object({
-	fit: z.enum(MEDIA_GRAPHIC_ITEM_FIT_VALUES),
+	fit: z.enum(MEDIA_FIT_VALUES),
 	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
 	opacity: opacitySchema,
 	clipGeometryEntryId: entryIdSchema.optional(),

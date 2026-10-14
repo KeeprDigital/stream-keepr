@@ -1,6 +1,7 @@
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
 import type { CardTypeBucket } from '../utils/metagame';
 import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
+import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
@@ -243,7 +244,6 @@ export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 ] as const;
 export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR_VALUES[number];
 export type ScreenMediaBackgroundType = 'video';
-export type ScreenMediaBackgroundFit = 'cover' | 'contain' | 'fill';
 
 /**
  * What a Source Item declares instead of a camera.
@@ -321,7 +321,7 @@ export interface ScreenMediaBackgroundConfig {
 	enabled: boolean;
 	type: ScreenMediaBackgroundType;
 	url: string;
-	fit: ScreenMediaBackgroundFit;
+	fit: MediaFit;
 	opacity: number;
 	playbackRate: number;
 	loop: boolean;
@@ -373,13 +373,13 @@ export interface GradientBackgroundLayer extends BackgroundLayerBase {
 export interface ImageBackgroundLayer extends BackgroundLayerBase {
 	type: 'image';
 	source: ScreenMediaSource;
-	fit: ScreenMediaBackgroundFit;
+	fit: MediaFit;
 }
 
 export interface VideoBackgroundLayer extends BackgroundLayerBase {
 	type: 'video';
 	source: ScreenMediaSource;
-	fit: ScreenMediaBackgroundFit;
+	fit: MediaFit;
 	playbackRate: number;
 	loop: boolean;
 }
@@ -435,7 +435,7 @@ export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorde
 	backgroundColor: string;
 	opacity: number;
 	backgroundImage?: GraphicAssetReference;
-	backgroundImageFit?: 'cover' | 'contain' | 'fill';
+	backgroundImageFit?: MediaFit;
 	mediaBackground?: ScreenMediaBackgroundConfig;
 	gradient?: string;
 	animation?: FeatureMatchOverlayFrameAnimationConfig;

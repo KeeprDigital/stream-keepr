@@ -1,8 +1,10 @@
+import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	backgroundModeConfigSchema,
 	createScreenSchema,
 	deckModeConfigSchema,
+	featureMatchLayoutConfigSchema,
 	featureMatchOverlayModeConfigSchema,
 	matchModeConfigSchema,
 	metagameModeConfigSchema,
@@ -526,6 +528,31 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 			expect(result.data.layout.sources[0]!.anchor).toBe('center');
 	});
 
+	describe('the Frame video playback rate', () => {
+		function withRate(playbackRate: number) {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.mediaBackground = { enabled: true, type: 'video', url: '/loop.mp4', fit: 'cover', opacity: 1, playbackRate, loop: true };
+			return config;
+		}
+
+		it('is bounded to 0.25–4, as a Media Graphic Item\'s is', () => {
+			expect(featureMatchOverlayModeConfigSchema.safeParse(withRate(0.25)).success).toBe(true);
+			expect(featureMatchOverlayModeConfigSchema.safeParse(withRate(4)).success).toBe(true);
+			expect(featureMatchOverlayModeConfigSchema.safeParse(withRate(0.05)).success).toBe(false);
+			expect(featureMatchOverlayModeConfigSchema.safeParse(withRate(20)).success).toBe(false);
+		});
+
+		it('clamps a rate the earlier 0.1–16 bounds stored, so a layout carrying one still saves', () => {
+			// A layout edit re-sends the whole layout, so refusing a stored legacy rate
+			// would refuse every later edit to that Frame, however unrelated.
+			const fast = modeConfigPatchSchemaMap['feature-match-overlay'].parse({ layout: withRate(8).layout }) as Pick<FeatureMatchOverlayModeConfig, 'layout'>;
+			const slow = featureMatchLayoutConfigSchema.parse(withRate(0.1).layout);
+
+			expect(fast.layout.frame.mediaBackground?.playbackRate).toBe(4);
+			expect(slow.frame.mediaBackground?.playbackRate).toBe(0.25);
+		});
+	});
+
 	it('accepts partial top-level Feature Match Overlay patches but validates nested values', () => {
 		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ featureMatchId: null }).success).toBe(true);
 		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: { sources: [] } }).success).toBe(false);
@@ -590,6 +617,23 @@ describe('backgroundModeConfigSchema', () => {
 
 			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'javascript:alert(1)' } }],
 		}).success).toBe(false);
+	});
+
+	it('bounds a video layer\'s playback rate to 0.25–4, as a Media Graphic Item\'s is', () => {
+		for (const playbackRate of [0.25, 4])
+			expect(backgroundModeConfigSchema.safeParse({ layers: [{ ...assetVideoLayer, playbackRate }] }).success, String(playbackRate)).toBe(true);
+		for (const playbackRate of [0, 0.05, 20])
+			expect(backgroundModeConfigSchema.safeParse({ layers: [{ ...assetVideoLayer, playbackRate }] }).success, String(playbackRate)).toBe(false);
+	});
+
+	it('clamps a playback rate the earlier 0.1–16 bounds stored, so an unrelated layer edit still saves', () => {
+		// The editor writes the whole stack: an edit to the colour layer re-sends the
+		// stored video layer beside it.
+		const result = modeConfigPatchSchemaMap.background.parse({
+			layers: [{ ...colorLayer, opacity: 0.9 }, { ...assetVideoLayer, playbackRate: 8 }, { ...assetVideoLayer, id: 'vid-slow', playbackRate: 0.1 }],
+		}) as { layers: Array<{ playbackRate?: number }> };
+
+		expect(result.layers.map(layer => layer.playbackRate)).toEqual([undefined, 4, 0.25]);
 	});
 
 	it('enforces the one-animation-layer rule on the PATCH path too, because it lives on the layers field', () => {
