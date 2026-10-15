@@ -221,6 +221,10 @@ export const fetch: typeof unauthenticatedFetch = async (path, options) => {
  * `typeof unauthenticated$Fetch`: every **caller** keeps the real types, including
  * the `$fetch<Screen>(…)` generics the suites rely on. What is narrowed is only
  * this file's own view of the callee.
+ *
+ * The same goes for `requestLedger.record` inside them: left to infer, its `T` is
+ * drawn from the cast's contextual return type — the routed one — so it is pinned
+ * to `unknown`.
  */
 const untyped$Fetch = unauthenticated$Fetch as unknown as (
 	path: string,
@@ -230,7 +234,7 @@ const untyped$Fetch = unauthenticated$Fetch as unknown as (
 /** `@nuxt/test-utils`' `$fetch`, signed in. */
 export const $fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
 	const headers = await signed(path, options?.headers as HeadersInit | undefined);
-	return await requestLedger.record(
+	return await requestLedger.record<unknown>(
 		requestLabel(path, options?.method),
 		async () => await untyped$Fetch(path, { ...options, headers }),
 	);
@@ -251,7 +255,7 @@ export const anonymousFetch: typeof unauthenticatedFetch = async (path, options)
 	);
 };
 export const anonymous$Fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
-	return await requestLedger.record(
+	return await requestLedger.record<unknown>(
 		requestLabel(path, options?.method),
 		async () => await untyped$Fetch(path, options),
 	);
