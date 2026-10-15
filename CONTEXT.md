@@ -116,7 +116,7 @@ Where a Screen's own image or video comes from: one exact Graphic Asset Revision
 _Avoid_: media URL, asset source
 
 **Remote Media URL**:
-A Screen Media Source naming media the installation does not hold, fetched by every rendering. It is a remote dependency, never a Graphic Asset Reference, so it protects nothing in the library and cannot travel in a Template Package.
+A Screen Media Source naming media by URL rather than by library revision, fetched by every rendering: an HTTPS URL to media the installation does not hold, or a root-relative path to a file the application serves. It is never a Graphic Asset Reference, so it protects nothing in the library. An HTTPS URL cannot travel in a Template Package; a root-relative path travels as data and resolves against whichever installation renders it.
 _Avoid_: hotlink, external asset
 
 **Animation Effect**:

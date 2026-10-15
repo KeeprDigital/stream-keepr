@@ -539,7 +539,7 @@ Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed con
 ### Consequences
 
 - **No old shape is accepted.** Stored Frames holding a bare `{ assetId, revisionId }` `backgroundImage` or a `mediaBackground.url` fail the schema, as do v1 `sklayout` payloads in that shape. `FEATURE_MATCH_LAYOUT_FORMAT_VERSION` and the package schema version stay 1. That is safe because nothing has shipped and ADR-0019 wipes production; local D1s holding such Frames need a reset.
-- **A Feature Match Layout with a Remote Media URL still cannot be exported or installed** (`remote-resource-dependency`). The issue names the slot and points to the library's approved HTTPS copy. Asset-sourced Frame media exports through the existing reference walker.
+- **A Feature Match Layout with an HTTPS Remote Media URL still cannot be exported or installed** (`remote-resource-dependency`). The issue names the slot and points to the library's approved HTTPS copy. A root-relative path is not refused: it travels as data and resolves against the receiving installation, so a file that installation does not serve renders blank. Accepted, as that already held for the Frame video and the failure is a blank, not lost data. Asset-sourced Frame media exports through the existing reference walker.
 - Asset-sourced Frame media keeps its place in Graphic Asset Reference indexing (`layout.frame.*`); URL sources fabricate no reference. Plain-mode Background Layers are indexed too, each under its own `<mode>.backgroundLayers.` namespace, because every plain mode names its stack alike (#580).
 
 ### Rejected alternatives
