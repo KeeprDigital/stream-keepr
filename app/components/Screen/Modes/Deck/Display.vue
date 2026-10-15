@@ -2,7 +2,7 @@
 import type { DeckCardSize, QuantityPosition } from '~~/shared/types/enums';
 import type { ResolvedDeckBoardLayout, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 
@@ -217,12 +217,12 @@ const BADGE_POSITION_CLASSES: Record<QuantityPosition, string> = {
 };
 
 const quantityPositionClass = computed(() => {
-	const pos: QuantityPosition = config.value.quantityPosition ?? 'top-right';
+	const pos: QuantityPosition = config.value.quantityPosition ?? DEFAULT_QUANTITY_POSITION;
 	return BADGE_POSITION_CLASSES[pos];
 });
 
 const highlanderPointsPositionClass = computed(() => {
-	const pos: QuantityPosition = config.value.highlanderPointsPosition ?? 'top-left';
+	const pos: QuantityPosition = config.value.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION;
 	return BADGE_POSITION_CLASSES[pos];
 });
 

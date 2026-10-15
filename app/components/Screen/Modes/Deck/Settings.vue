@@ -4,7 +4,7 @@ import type { BoardSelection, DeckBoardView, QuantityPosition, SideboardPlacemen
 import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
-import { resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import {
 	DECK_CARD_SIZE_SELECT_OPTIONS,
@@ -29,9 +29,9 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 
 defineExpose({ resetConfig, saving });
 
-// A badge on the centre would cover the card's art, so the badge position
-// pickers offer every point but this one — which is why what they emit is
-// always a `QuantityPosition`.
+// A badge in the centre of a Deck Screen card would cover its art, so the badge
+// position pickers offer every point but this one — which is why what they emit
+// is always a `QuantityPosition`, and why the casts below are safe.
 const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 const broadcastDeckListsEnabled = computed(() =>
@@ -612,7 +612,7 @@ const emptyBoardHint = computed(() => {
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UINinePointPicker
-						:model-value="config.quantityPosition ?? 'top-right'"
+						:model-value="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
 						:disabled-points="BADGE_DISABLED_POINTS"
 						aria-label="Quantity badge position"
 						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
@@ -682,7 +682,7 @@ const emptyBoardHint = computed(() => {
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
 						<UINinePointPicker
-							:model-value="config.highlanderPointsPosition ?? 'top-left'"
+							:model-value="config.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION"
 							:disabled-points="BADGE_DISABLED_POINTS"
 							aria-label="Highlander point badge position"
 							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
