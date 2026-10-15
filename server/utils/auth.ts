@@ -14,6 +14,7 @@ import {
 	localAuthBypassEnabled,
 } from '~~/shared/utils/localDeveloperAuth';
 import { authStaticOptions } from './authOptions';
+import { readConfiguredSecret } from './configuredSecret';
 import { ServiceConfigurationError } from './errors';
 
 /** The environment name behind `runtimeConfig.betterAuthSecret`, as the operator sets it. */
@@ -87,7 +88,7 @@ export function serverAuth() {
 	if (!auth) {
 		const config = useRuntimeConfig();
 
-		if (!config.betterAuthSecret?.trim()) {
+		if (!readConfiguredSecret(config.betterAuthSecret, BETTER_AUTH_SECRET_SETTING)) {
 			throw new ServiceConfigurationError(BETTER_AUTH_SECRET_SETTING, BETTER_AUTH_SECRET_UNAVAILABLE_CLAUSE);
 		}
 
