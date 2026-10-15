@@ -111,6 +111,14 @@ _Avoid_: Idle screen, empty state
 One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every plain overlay mode (Card, Deck, Standings, Top Cut, Metagame, Player History) carries its own optional stack behind its content; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
 _Avoid_: background type, media background (when meaning a layer)
 
+**Screen Media Source**:
+Where a Screen's own image or video comes from: one exact Graphic Asset Revision, referenced like any other Graphic Asset, or a Remote Media URL. Image and video Background Layers and the Feature Match Overlay Frame's image and video take one; Graphic Items and Graphic Inputs never do, as their media is Graphics Asset Library content only (ADR-0021).
+_Avoid_: media URL, asset source
+
+**Remote Media URL**:
+A Screen Media Source naming media the installation does not hold, fetched by every rendering. It is a remote dependency, never a Graphic Asset Reference, so it protects nothing in the library and cannot travel in a Template Package.
+_Avoid_: hotlink, external asset
+
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, the Background Screen, and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
