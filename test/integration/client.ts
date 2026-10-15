@@ -8,6 +8,7 @@ import {
 	INTEGRATION_OPERATOR_EMAIL,
 	INTEGRATION_OPERATOR_PASSWORD,
 } from './environment';
+import { requestLedger } from './requestLedger';
 
 /**
  * The integration suite's HTTP client: `@nuxt/test-utils`' own, signed in (#396).
@@ -191,13 +192,26 @@ async function signed(path: string, headers: HeadersInit | undefined): Promise<R
 }
 
 /**
+ * How a request reads in the ledger a failed test prints (`./requestLedger.ts`).
+ *
+ * Both wrappers below record there, signed or not, so a test that times out
+ * names the round trip it was waiting on.
+ */
+function ledgerLabel(path: string, method: unknown): string {
+	return `${typeof method === 'string' ? method.toUpperCase() : 'GET'} ${path}`;
+}
+
+/**
  * `@nuxt/test-utils`' `fetch`, signed in.
  *
  * Same signature, so a suite reads exactly as it did before the boundary existed —
  * which is the point: what changed is who the suite is, not what it asserts.
  */
 export const fetch: typeof unauthenticatedFetch = async (path, options) => {
-	return await unauthenticatedFetch(path, { ...options, headers: await signed(path, options?.headers) });
+	return await requestLedger.record(
+		ledgerLabel(path, options?.method),
+		async () => await unauthenticatedFetch(path, { ...options, headers: await signed(path, options?.headers) }),
+	);
 };
 
 /**
@@ -223,10 +237,13 @@ const untyped$Fetch = unauthenticated$Fetch as unknown as (
 
 /** `@nuxt/test-utils`' `$fetch`, signed in. */
 export const $fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
-	return await untyped$Fetch(path, {
-		...options,
-		headers: await signed(path, options?.headers as HeadersInit | undefined),
-	});
+	return await requestLedger.record(
+		ledgerLabel(path, options?.method),
+		async () => await untyped$Fetch(path, {
+			...options,
+			headers: await signed(path, options?.headers as HeadersInit | undefined),
+		}),
+	);
 }) as typeof unauthenticated$Fetch;
 
 /**

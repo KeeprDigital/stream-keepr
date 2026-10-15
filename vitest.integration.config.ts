@@ -10,7 +10,7 @@ export default defineConfig({
 		name: 'integration',
 		include: ['test/integration/**/*.test.ts'],
 		globalSetup: ['test/integration/globalSetup.ts'],
-		setupFiles: ['test/integration/selectServer.ts'],
+		setupFiles: ['test/integration/selectServer.ts', 'test/integration/requestLedgerReport.ts'],
 		environment: 'node',
 		testTimeout: 30000,
 		hookTimeout: 60000,
