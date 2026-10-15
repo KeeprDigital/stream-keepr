@@ -118,13 +118,13 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	caustics: {
 		extremes: [
 			{ name: 'max-intensity', params: { intensity: 2 } },
-			{ name: 'min-zoom', params: { zoom: 0.5 } },
+			{ name: 'max-scale', params: { scale: 2 } },
 		],
 	},
 	cells: {
 		extremes: [
-			{ name: 'min-size', params: { size: 0.2 } },
-			{ name: 'max-size', params: { size: 5 } },
+			{ name: 'min-scale', params: { scale: 0.1 } },
+			{ name: 'max-scale', params: { scale: 1.65 } },
 		],
 	},
 	dots: {
@@ -148,7 +148,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	fog: {
 		extremes: [
 			{ name: 'max-softness', params: { blurFactor: 0.95 } },
-			{ name: 'max-zoom', params: { zoom: 3 } },
+			{ name: 'min-scale', params: { scale: 0.35 } },
 		],
 	},
 	globe: {
@@ -180,8 +180,8 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		extremes: [
 			{ name: 'low-coverage', params: { coverage: 0.2, contours: 8 } },
 			{ name: 'high-coverage', params: { coverage: 0.8, contours: 0 } },
-			{ name: 'min-zoom', params: { zoom: 0.5 } },
-			{ name: 'max-zoom', params: { zoom: 3 } },
+			{ name: 'min-scale', params: { scale: 0.35 } },
+			{ name: 'max-scale', params: { scale: 2 } },
 		],
 	},
 	net: {
@@ -220,24 +220,24 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	},
 	shards: {
 		extremes: [
-			{ name: 'min-size', params: { size: 0.5, intensity: 2 } },
-			{ name: 'max-size', params: { size: 3 } },
+			{ name: 'min-scale', params: { scale: 0.5, intensity: 2 } },
+			{ name: 'max-scale', params: { scale: 3 } },
 			{ name: 'min-intensity', params: { intensity: 0.5 } },
 			{ name: 'max-intensity', params: { intensity: 2 } },
 		],
 	},
 	waves: {
 		extremes: [
-			// The water plane leaves the frame's far corners uncovered at low zoom,
+			// The water plane leaves the frame's far corners uncovered at low scale,
 			// which is why `backgroundColor` survived the port at all (#473).
-			{ name: 'min-zoom', params: { zoom: 0.5, waveHeight: 50 } },
-			{ name: 'max-zoom', params: { zoom: 3 } },
+			{ name: 'min-scale', params: { scale: 0.6, waveHeight: 50 } },
+			{ name: 'max-scale', params: { scale: 3.5 } },
 		],
 	},
 	weave: {
 		extremes: [
-			{ name: 'thin-threads', params: { thickness: 0.2, scale: 3 } },
-			{ name: 'thick-threads', params: { thickness: 0.9, scale: 0.5 } },
+			{ name: 'thin-threads', params: { thickness: 0.2, scale: 0.35 } },
+			{ name: 'thick-threads', params: { thickness: 0.9, scale: 2 } },
 		],
 	},
 });
