@@ -10,7 +10,7 @@ import { and, eq, like } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
-import { StateConflictError } from '~~/server/utils/errors';
+import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX,
@@ -317,7 +317,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 					referenceVersion,
 				)]),
 	];
-	const [updateResult] = await client.batch(statements);
+	const [updateResult] = await client.batch(statements).catch(mapDeckSourceConflict);
 	if (updateResult?.meta.changes !== 1) {
 		const current = await findScreen(input.id, input.eventId);
 		if (!current)
