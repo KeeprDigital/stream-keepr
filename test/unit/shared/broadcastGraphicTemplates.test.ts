@@ -199,14 +199,12 @@ describe('placeBroadcastGraphicTemplate', () => {
 		const media = addGraphicItem(document, { kind: 'media', id: 'brand', ...CANVAS }).graphic;
 		const item = media.items.find(entry => entry.id === 'brand') as MediaGraphicItemConfig;
 		item.asset = testGraphicAssetReference('asset-1', 'revision-1');
-		item.videoCompatibility = 'chromium-transparency';
 		const template = { id: 'template-1', name: 'Lower third', document: media };
 
 		const placed = placeBroadcastGraphicTemplate(template, { generateId: sequentialIds(), existing: [] });
 
 		const placedMedia = placed.items.find(entry => entry.type === 'media') as MediaGraphicItemConfig;
 		expect(placedMedia.asset).toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
-		expect(placedMedia.videoCompatibility).toBe('chromium-transparency');
 	});
 
 	it('round-trips a Social Network Icon as semantic configuration with no Graphic Asset', () => {

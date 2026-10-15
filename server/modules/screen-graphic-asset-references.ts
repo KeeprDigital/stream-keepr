@@ -16,7 +16,6 @@ import {
 	BROADCAST_GRAPHICS_LIVE_SESSION_SLOT_PREFIX,
 	graphicAssetReferenceSlotPrefix,
 	sameGraphicAssetReference,
-	screenGraphicAssetReferenceTargetCompatibility,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -25,22 +24,20 @@ interface GraphicAssetReferenceFacts {
 	reference: GraphicAssetReference;
 	allowRetired: boolean;
 	kind: 'image' | 'silent-video' | 'font';
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-	videoTarget?: 'chromium' | 'safari';
 }
 
 /**
  * Whether one Graphic Asset Reference resolves, as the `FROM … WHERE` tail of a
  * statement about the revision it names: the revision exists on the asset it
- * claims, the asset is still selectable, its kind is the one the configuration
- * expects, and a silent video's pinned target compatibility is the one the
- * reference was recorded against.
+ * claims, the asset is still selectable, and its kind is the one the configuration
+ * expects. Playback engines play no part: Chromium is the only supported engine
+ * for transparent video (ADR-0020).
  *
  * Written against expressions rather than placeholders because the same rule is
  * asked in two shapes. Each index insert asks it about one reference with that
  * reference's facts bound as parameters; the configuration write asks it about
  * every reference at once, reading their facts out of a single bound JSON array.
- * Spelling it twice is how a retirement or compatibility rule comes to hold on the
+ * Spelling it twice is how a retirement or kind rule comes to hold on the
  * insert and not on the precondition that admits it — which would be invisible,
  * because both statements ride in the same batch and only the precondition decides
  * whether the configuration commits.
@@ -50,8 +47,6 @@ function resolvedGraphicAssetRevision(fact: {
 	assetId: string;
 	allowRetired: string;
 	kind: string;
-	videoCompatibility: string;
-	videoTarget: string;
 }): string {
 	return `
 		FROM graphic_asset_revisions revision
@@ -59,14 +54,6 @@ function resolvedGraphicAssetRevision(fact: {
 			WHERE revision.id = ${fact.revisionId} AND revision.asset_id = ${fact.assetId}
 				AND (asset.lifecycle_state = 'active' OR ${fact.allowRetired} = 1)
 				AND asset.kind = ${fact.kind}
-				AND (
-					${fact.kind} != 'silent-video'
-					OR json_extract(revision.technical_facts, '$.targetCompatibility') = ${fact.videoCompatibility}
-				)
-				AND (
-					COALESCE(${fact.videoCompatibility}, '') != 'chromium-transparency'
-					OR ${fact.videoTarget} = 'chromium'
-				)
 	`;
 }
 
@@ -82,8 +69,6 @@ const BOUND_GRAPHIC_ASSET_REFERENCE_RESOLUTION = resolvedGraphicAssetRevision({
 	assetId: '?',
 	allowRetired: '?',
 	kind: '?',
-	videoCompatibility: '?',
-	videoTarget: '?',
 });
 
 function graphicAssetReferenceBindings(fact: GraphicAssetReferenceFacts) {
@@ -92,10 +77,6 @@ function graphicAssetReferenceBindings(fact: GraphicAssetReferenceFacts) {
 		fact.reference.assetId,
 		fact.allowRetired ? 1 : 0,
 		fact.kind,
-		fact.kind,
-		fact.videoCompatibility ?? null,
-		fact.videoCompatibility ?? null,
-		fact.videoTarget ?? null,
 	] as const;
 }
 
@@ -106,8 +87,6 @@ function jsonElementGraphicAssetRevisionResolution(alias: string): string {
 		assetId: `json_extract(${alias}.value, '$.assetId')`,
 		allowRetired: `json_extract(${alias}.value, '$.allowRetired')`,
 		kind: `json_extract(${alias}.value, '$.kind')`,
-		videoCompatibility: `json_extract(${alias}.value, '$.videoCompatibility')`,
-		videoTarget: `json_extract(${alias}.value, '$.videoTarget')`,
 	});
 }
 
@@ -168,8 +147,6 @@ function boundGraphicAssetReferenceFacts(
 		assetId: fact.reference.assetId,
 		allowRetired: fact.allowRetired ? 1 : 0,
 		kind: fact.kind,
-		videoCompatibility: fact.videoCompatibility ?? null,
-		videoTarget: fact.videoTarget ?? null,
 	})));
 }
 
@@ -246,10 +223,6 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 	const referenceVersion = crypto.randomUUID();
 	const now = Date.now();
 	const references = screenModeGraphicAssetReferences(input.mode, mergedConfigs);
-	if (references.some(reference =>
-		screenGraphicAssetReferenceTargetCompatibility(reference).outcome === 'blocked')) {
-		throw new StateConflictError('Screen Output target compatibility', input.id);
-	}
 	const previousReferences = new Map(
 		screenModeGraphicAssetReferences(input.mode, screen.modeConfigs)
 			.map(item => [item.ownerSlot, item.reference] as const),
@@ -454,8 +427,6 @@ export async function updateBroadcastGraphicsLiveSessionGraphicAssetReferences(i
 				reference: item.reference,
 				allowRetired: sameGraphicAssetReference(previousBySlot.get(item.ownerSlot), item.reference),
 				kind: item.kind,
-				videoCompatibility: item.videoCompatibility,
-				videoTarget: item.videoTarget,
 			}),
 			...sessionGuardBindings,
 		)),

@@ -68,26 +68,17 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// A face the static-font-v1 profile rejects loaded here anyway, so the
 	// server-side check and the browser disagree about the same bytes.
 	'font-refused-face-loaded',
-	// A Screen Output publishing a restricted revision refused the whole
-	// capability session rather than that revision. Named apart from a
-	// precondition failure because it is not an unready environment: it is the
-	// #98 regression itself, and it costs the output every other asset the
-	// Screen publishes.
+	// Retired with the Safari gate by ADR-0020 and never emitted: no Screen
+	// Output refuses a revision by engine any more. Kept, because a code is added
+	// and never renamed or removed.
 	'restricted-video-session-refused',
-	// The session opened and said nothing about the revision it was about to
-	// refuse. Named apart from the refusal itself because both halves have to
-	// hold: a refusal nobody forecast leaves the output rendering a `<video>` for
-	// bytes it never gets, which is the blank rectangle #98 removed arriving by a
-	// different route (#184).
 	'restricted-video-refusal-unforecast',
 	'font-ready-before-load',
 	'browser-driver-unavailable',
 	'browser-acceptance-failed',
 	'browser-acceptance-timed-out',
-	// The product boundary let a restricted Screen Output through to a browser
-	// that cannot show it correctly. What the browser would then have done is a
-	// recorded fact rather than a code, because none of its answers is a defect
-	// in this contract.
+	// Retired with the Safari gate by ADR-0020 and never emitted. Kept, because a
+	// code is added and never renamed or removed.
 	'safari-vp9-alpha-not-blocked',
 	'safari-vp9-alpha-transparency-rendered',
 	// Template Package publication.

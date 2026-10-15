@@ -33,7 +33,7 @@ function assetVideoLayer(id: string): BackgroundLayer {
 		type: 'video',
 		enabled: true,
 		opacity: 1,
-		source: { kind: 'asset', assetId: assetId('asset-2'), revisionId: revisionId('revision-2'), videoCompatibility: 'all-supported' },
+		source: { kind: 'asset', assetId: assetId('asset-2'), revisionId: revisionId('revision-2') },
 		fit: 'cover',
 		playbackRate: 1,
 		loop: true,
@@ -61,8 +61,6 @@ describe('backgroundGraphicAssetReferences', () => {
 				reference: { assetId: 'asset-2', revisionId: 'revision-2' },
 				ownerSlot: 'layers.loop.source',
 				kind: 'silent-video',
-				videoCompatibility: 'all-supported',
-				videoTarget: 'chromium',
 			},
 		]);
 	});

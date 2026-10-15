@@ -18,7 +18,6 @@ import { readLocalConfigurationFiles, suppliedNames } from './local-configuratio
 import { openOperatorSession } from './operator.mjs';
 import {
 	featureMatchLayoutReferencing,
-	featureMatchLayoutWithRestrictedVideo,
 } from './repository-bridge.mjs';
 import { acceptanceRoutes, screenOutputRepresentation } from './routes.mjs';
 
@@ -472,103 +471,4 @@ export async function stageFontIngestion(session, { bytes, declaredMime, sourceF
 			}
 		},
 	};
-}
-
-/**
- * Publish one Screen Output that pins a VP9-alpha silent video.
- *
- * This is the arrangement in which the product's own restriction becomes
- * observable: the capability-session bootstrap refuses a Safari user agent
- * only when the Screen Output actually holds restricted video. Ingesting the
- * video needs the silent-video validator, so this is a deployed-only
- * provisioning path — the local Worker has no service binding to reach it.
- */
-export async function provisionRestrictedVideoScenario(session, { label, webm }) {
-	const marker = randomUUID();
-	const event = await session.json(acceptanceRoutes.events(), {
-		method: 'POST',
-		body: {
-			name: `${label} ${marker.slice(0, 8)}`,
-			game: 'mtg',
-			featureMatchOrientation: 'horizontal',
-		},
-	});
-	const slug = `acceptance-restricted-${marker.slice(0, 8)}`;
-	const screen = await session.json(acceptanceRoutes.screens(event.id), {
-		method: 'POST',
-		body: { name: 'Acceptance Restricted Overlay', slug, currentMode: 'feature-match-overlay' },
-	});
-
-	// Set once the ingestion settles, so the failure path's dispose can trash
-	// whatever was already published before the throw (#375).
-	let publishedAssetId;
-	async function dispose() {
-		try {
-			await session.request(acceptanceRoutes.event(event.id), { method: 'DELETE' });
-		}
-		catch {
-			// A left-behind acceptance Event is noise, never a failure of the gate.
-		}
-		await trashGraphicAssetBestEffort(session, publishedAssetId);
-	}
-
-	try {
-		const initiated = await session.json(acceptanceRoutes.ingestionOperations(), {
-			method: 'POST',
-			body: {
-				idempotencyKey: `staging-acceptance-vp9-alpha-${marker}`,
-				name: 'Staging acceptance VP9 alpha',
-				sourceFileName: 'acceptance-vp9-alpha.webm',
-				declaredMime: 'video/webm',
-				defaultEventId: event.id,
-				declaredByteLength: webm.byteLength,
-			},
-		});
-		const operation = await session.json(acceptanceRoutes.ingestionContent(initiated.id), {
-			method: 'PUT',
-			headers: { 'content-type': 'video/webm' },
-			body: webm,
-		});
-		// Validation runs in a Container, so the transfer response may land
-		// before the report does.
-		let settled = operation;
-		const deadline = Date.now() + 120_000;
-		while (settled.stage !== 'completed' && Date.now() < deadline) {
-			if (settled.stage === 'failed' || settled.stage === 'cancelled')
-				break;
-			await new Promise(resolve => setTimeout(resolve, 1000));
-			settled = await session.json(acceptanceRoutes.ingestionOperation(initiated.id), {
-			});
-		}
-		if (settled.stage !== 'completed' || !settled.result) {
-			throw new AcceptanceFailure('harness-precondition-unmet', {
-				route: deliveryRouteLabel(acceptanceRoutes.ingestionContent(initiated.id)),
-				reason: `the video settled at ${settled.stage}`,
-			});
-		}
-		// Assigned the moment ingestion has published, before any later check can
-		// throw: a video refused for its compatibility facts is already in the
-		// library, and the failure path's dispose must take it with it (#375).
-		publishedAssetId = settled.result.assetId;
-		if (settled.report?.facts?.targetCompatibility !== 'chromium-transparency') {
-			throw new AcceptanceFailure('harness-precondition-unmet', {
-				reason: 'the ingested video is not restricted to chromium transparency',
-			});
-		}
-
-		const { assetId, revisionId } = settled.result;
-		await session.json(
-			acceptanceRoutes.screenModeConfig(event.id, screen.id, 'feature-match-overlay'),
-			{
-				method: 'PATCH',
-				body: { layout: featureMatchLayoutWithRestrictedVideo({ assetId, revisionId }) },
-			},
-		);
-
-		return { eventId: event.id, screenId: screen.id, screenSlug: slug, assetId, revisionId, dispose };
-	}
-	catch (error) {
-		await dispose();
-		throw error;
-	}
 }

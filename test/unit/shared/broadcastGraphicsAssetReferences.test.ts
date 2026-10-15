@@ -164,33 +164,20 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		expect(references).toHaveLength(1);
 	});
 
-	it('carries a silent video reference with its own target compatibility and a Chromium target', () => {
-		// The reference index checks a silent-video reference against the pinned
-		// revision's recorded compatibility, so it has to travel with the reference.
+	it('carries nothing about playback engines on a silent video reference', () => {
+		// Chromium is the only supported engine for transparent video (ADR-0020), so
+		// the index has no engine fact to check.
 		const references = broadcastGraphicsGraphicAssetReferences(config([{
 			id: 'sting',
 			name: 'Sting',
-			items: [media('clip', { mediaKind: 'silent-video', videoCompatibility: 'chromium-transparency' })],
+			items: [media('clip', { mediaKind: 'silent-video' })],
 		}]));
 
-		expect(references[0]).toMatchObject({
+		expect(references[0]).toEqual({
+			reference: expect.any(Object),
+			ownerSlot: expect.any(String),
 			kind: 'silent-video',
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
 		});
-	});
-
-	it('names an image reference with no video facts at all', () => {
-		const references = broadcastGraphicsGraphicAssetReferences(config([{
-			id: 'bug',
-			name: 'Bug',
-			items: [media('logo', { videoCompatibility: 'all-supported' })],
-		}]));
-
-		// A stale compatibility fact on an image must not reach the index, where it
-		// would gate a rule that does not apply to the pinned bytes.
-		expect(references[0]).not.toHaveProperty('videoCompatibility');
-		expect(references[0]).not.toHaveProperty('videoTarget');
 	});
 
 	it('keeps owner slots stable when the authored stack is reordered', () => {

@@ -20,6 +20,7 @@ import {
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
 // ──────────────── createScreenSchema ────────────────
 
@@ -643,6 +644,36 @@ describe('backgroundModeConfigSchema', () => {
 		expect(modeConfigPatchSchemaMap.background.safeParse({
 			layers: [animationLayer],
 		}).success).toBe(true);
+	});
+});
+
+/**
+ * Documents stored or exported before ADR-0020 recorded a `videoCompatibility` on
+ * every asset-backed video. Chromium is now the only supported engine for
+ * transparent video, so the key means nothing — but refusing it would refuse every
+ * later edit to a stack or layout that still carries it, and every package
+ * exported before the change.
+ */
+describe('documents recorded before ADR-0020', () => {
+	it('reads a Background Layer video source that still carries videoCompatibility, and drops the key', () => {
+		const source = { kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2', videoCompatibility: 'chromium-transparency' };
+		const result = backgroundModeConfigSchema.safeParse({
+			layers: [{ id: 'vid', type: 'video', enabled: true, opacity: 1, source, fit: 'fill', playbackRate: 1, loop: true }],
+		});
+
+		expect(result.success).toBe(true);
+		expect(JSON.parse(JSON.stringify(result.data)).layers[0].source).toEqual({ kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2' });
+	});
+
+	it('reads a layout whose Media Graphic Item still carries videoCompatibility, and drops the key', () => {
+		const layout = maximalFeatureMatchLayoutDocument({
+			frameAsset: { assetId: 'frame-asset' as never, revisionId: 'frame-revision' as never },
+			itemAsset: { assetId: 'item-asset' as never, revisionId: 'item-revision' as never },
+		});
+		const result = featureMatchLayoutConfigSchema.safeParse(layout);
+
+		expect(result.success).toBe(true);
+		expect(JSON.stringify(result.data)).not.toContain('videoCompatibility');
 	});
 });
 

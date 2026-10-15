@@ -1,10 +1,8 @@
-import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	ifNoneMatchMatches,
 	rangePermitted,
 	requestedByteRange,
 } from '~~/server/utils/byteRangeContentDelivery';
-import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	screenOutputAssetCapabilityDigest,
 	screenOutputAssetRepresentationTag,
@@ -15,21 +13,11 @@ interface ScreenOutputAssetAuthorizationInput {
 	capabilityDigest: string;
 	assetId: string;
 	revisionId: string;
-	/**
-	 * The playback engine of the browser asking for these exact bytes.
-	 *
-	 * Carried per request rather than per capability session because that is the
-	 * granularity the answer has: a Screen may publish one revision only Chromium
-	 * can play and a dozen every engine can, and refusing the session for the first
-	 * loses the output all twelve (#98).
-	 */
-	actualVideoTarget: GraphicsVideoTarget;
 }
 
 type ScreenOutputAssetAuthorization
 	= { outcome: 'authorized'; contentIdentity: string }
-		| { outcome: 'missing' }
-		| { outcome: 'incompatible'; code: 'vp9-alpha-chromium-required' };
+		| { outcome: 'missing' };
 
 type ScreenOutputAssetResolution
 	= {
@@ -84,7 +72,6 @@ interface ScreenOutputAssetDeliveryInput {
 type ScreenOutputAssetDeliveryOutcome
 	= { outcome: 'delivered'; response: Response }
 		| { outcome: 'missing' }
-		| { outcome: 'incompatible'; code: 'vp9-alpha-chromium-required' }
 		| { outcome: 'unavailable'; retryable: true };
 
 function opaqueEtag(representationTag: string): string {
@@ -150,9 +137,6 @@ export function createScreenOutputAssetDelivery(
 				capabilityDigest: await screenOutputAssetCapabilityDigest(input.capability),
 				assetId: input.assetId,
 				revisionId: input.revisionId,
-				actualVideoTarget: graphicsVideoTargetForUserAgent(
-					input.headers.get('user-agent') ?? '',
-				),
 			});
 		}
 		catch {
@@ -160,8 +144,6 @@ export function createScreenOutputAssetDelivery(
 		}
 		if (authorization.outcome === 'missing')
 			return { outcome: 'missing' };
-		if (authorization.outcome === 'incompatible')
-			return authorization;
 
 		const representationTag = await screenOutputAssetRepresentationTag({
 			signingKey: dependencies.signingKey,

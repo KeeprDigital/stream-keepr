@@ -17,12 +17,11 @@ export type ScreenCardDataHealth = 'complete' | 'degraded';
 export interface ScreenPresenceData {
 	screenId: number;
 	connectedAt: number;
-	userAgent?: string;
 	outputMode?: 'overlay' | 'fill' | 'key';
 	/**
 	 * Whether this Screen Output arrived holding a Screen Output Asset Capability.
 	 *
-	 * Reported by the output about itself, exactly as its engine is: an output with
+	 * Reported by the output about itself: an output with
 	 * no capability has no route to a Graphic Asset's bytes and renders every graphic
 	 * the Screen publishes *except* its media — silently, and identically to a Screen
 	 * that simply has no media on air. Saying so here is what lets a control surface

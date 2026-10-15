@@ -68,7 +68,7 @@ const graphicAssetReferences = computed(() =>
 
 // A live output resolves content only through its Screen Output Asset Capability;
 // an editor preview resolves it as an author. Neither path can browse the library.
-const { contentUrl, contentRefusal, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
+const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
 
 // Typography naming a library font paints in the family this registers, so the
 // canvas stays hidden until every one of them is loaded rather than flashing a
@@ -99,10 +99,6 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	safeAreaGuides: previewSafeAreas?.value ?? false,
 	selectedTarget: selectedTarget.value,
 	graphicAssetContentUrl: contentUrl,
-	// The same resolver's other half: what it has been told this output will be
-	// refused, so a clip whose recorded compatibility disagrees with its revision's
-	// facts reports the reason rather than drawing a blank rectangle (#184).
-	graphicAssetContentRefusal: contentRefusal,
 }));
 </script>
 

@@ -4,9 +4,7 @@ import type {
 	GraphicAssetReference,
 	GraphicAssetReferenceStatus,
 } from '~~/shared/types/graphicsAsset';
-import type { GraphicsVideoTarget } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import type { GraphicAssetPickerScope } from '~/composables/useGraphicAssetPickerScope';
-import { graphicAssetTargetCompatibility } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import { graphicAssetReferenceStatusOrUnavailable } from '~/utils/graphicAssetReferenceStatus';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
@@ -15,20 +13,6 @@ const props = withDefaults(defineProps<{
 	eventId: number;
 	fieldLabel: string;
 	assetKind?: GraphicAsset['kind'] | GraphicAsset['kind'][];
-	/**
-	 * The target this host writes its references with, which decides what may be
-	 * pinned here at all. A blocked revision is not offered.
-	 */
-	videoTarget?: GraphicsVideoTarget;
-	/**
-	 * The Open Screen Output Engines, when the host knows them.
-	 *
-	 * Reports rather than gates, which is what keeps it apart from `videoTarget`: a
-	 * revision one open output cannot play costs that output that revision and nothing
-	 * else (#98), and the operator may well be choosing for the Chromium program
-	 * output. Stated before the choice, never taken instead of it.
-	 */
-	openOutputTargets?: GraphicsVideoTarget[];
 	/** Withhold every affordance, without hiding what is already pinned. */
 	disabled?: boolean;
 	/**
@@ -41,8 +25,6 @@ const props = withDefaults(defineProps<{
 	clearable?: boolean;
 }>(), {
 	assetKind: 'image',
-	videoTarget: 'other',
-	openOutputTargets: () => [],
 	disabled: false,
 	clearable: true,
 });
@@ -148,44 +130,6 @@ const selectedAsset = computed(() => (assets.value ?? []).find(asset =>
 	&& asset.id === props.modelValue?.assetId
 	&& asset.revisionId === props.modelValue?.revisionId,
 ));
-function assetCompatibility(asset: GraphicAsset) {
-	return graphicAssetTargetCompatibility(asset.facts, props.videoTarget);
-}
-
-/** The engines an operator would name, rather than the tokens the code matches on. */
-const VIDEO_TARGET_LABELS: Record<GraphicsVideoTarget, string> = {
-	chromium: 'Chromium',
-	safari: 'Safari',
-	other: 'a non-Chromium engine',
-};
-
-/**
- * Why this revision cannot be pinned here, in the terms of what actually refused it.
- *
- * Two different refusals wear the same `blocked` outcome. One is about this host's
- * target: a VP9-alpha clip is Chromium-only, so pinning it against any other target
- * would write a reference that target could never resolve. The other is about the
- * revision itself — a transparent clip whose facts do not confirm Chromium playback is
- * one no engine is known to play, and it is refused for the Chromium target too.
- *
- * Asking the gate about the Chromium target is what separates them, rather than
- * restating its conditions here: Chromium is the only target that can accept a
- * transparent clip, so a revision blocked even for it is blocked everywhere. Naming a
- * target for that one would send the operator to change a setting that cannot help.
- */
-function blockedReason(asset: GraphicAsset): string {
-	return graphicAssetTargetCompatibility(asset.facts, 'chromium').outcome === 'blocked'
-		? 'Blocked · no engine plays this revision'
-		: `Blocked for ${VIDEO_TARGET_LABELS[props.videoTarget]} target`;
-}
-
-/** The engines open right now that cannot play this exact revision. */
-function blockedOpenOutputs(asset: GraphicAsset): string[] {
-	return props.openOutputTargets
-		.filter(target => graphicAssetTargetCompatibility(asset.facts, target).outcome === 'blocked')
-		.map(target => VIDEO_TARGET_LABELS[target]);
-}
-
 watch(() => ({
 	reference: props.modelValue,
 	refreshSignal: referenceStatusRefreshSignal.value,
@@ -201,8 +145,6 @@ watch(() => ({
 }, { immediate: true });
 
 function selectAsset(asset: GraphicAsset) {
-	if (assetCompatibility(asset).outcome === 'blocked')
-		return;
 	const reference = {
 		assetId: asset.id,
 		revisionId: asset.revisionId,
@@ -386,16 +328,8 @@ function selectAsset(asset: GraphicAsset) {
 									<UBadge size="xs" variant="soft">
 										{{ asset.facts.format.toUpperCase() }} compatible
 									</UBadge>
-									<UBadge v-if="asset.facts.kind === 'image' && asset.facts.hasAlpha" size="xs" variant="soft">
+									<UBadge v-if="asset.facts.kind !== 'font' && asset.facts.hasAlpha" size="xs" variant="soft">
 										Alpha
-									</UBadge>
-									<UBadge
-										v-if="asset.facts.kind === 'silent-video' && asset.facts.hasAlpha"
-										size="xs"
-										:color="assetCompatibility(asset).outcome === 'blocked' ? 'error' : 'warning'"
-										variant="soft"
-									>
-										VP9 alpha · Chromium only
 									</UBadge>
 									<UBadge
 										v-if="asset.eventIds.includes(eventId)"
@@ -406,28 +340,13 @@ function selectAsset(asset: GraphicAsset) {
 										This Event
 									</UBadge>
 								</div>
-								<!--
-									What this revision costs the outputs open right now, stated before
-									the choice. It never withholds the revision: the cost falls on the
-									outputs that cannot play it, and the operator may be choosing for
-									the Chromium program output.
-								-->
-								<p
-									v-if="blockedOpenOutputs(asset).length > 0"
-									class="mt-2 text-xs text-warning"
-									:data-testid="`open-output-incompatible-${asset.id}`"
-								>
-									Will not play on {{ blockedOpenOutputs(asset).join(', ') }}
-									{{ blockedOpenOutputs(asset).length === 1 ? 'output' : 'outputs' }} open now.
-								</p>
 							</div>
 							<UButton
 								:data-testid="`select-${asset.id}`"
 								class="mt-auto"
-								:disabled="assetCompatibility(asset).outcome === 'blocked'"
 								@click="selectAsset(asset)"
 							>
-								{{ assetCompatibility(asset).outcome === 'blocked' ? blockedReason(asset) : `Select revision ${asset.revisionNumber}` }}
+								Select revision {{ asset.revisionNumber }}
 							</UButton>
 						</article>
 						<div v-if="visibleAssets.length === 0" class="text-sm text-muted sm:col-span-2 lg:col-span-3">

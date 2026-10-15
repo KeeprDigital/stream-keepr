@@ -778,12 +778,9 @@ describe('media Graphic Input values on air', () => {
 	const CHROMIUM_USER_AGENT = 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36';
 
 	/**
-	 * A request as one Screen Output browser, whose engine decides what it may play.
-	 *
-	 * The user agent is stated wherever a restricted revision is involved rather than
-	 * defaulted, because playback compatibility is now answered per resolution
-	 * request: a caller that names no engine cannot be proven to be Chromium and is
-	 * refused a chromium-transparency revision, which is the behaviour under test.
+	 * A request as one Screen Output browser. The user agent is stated where a
+	 * transparent revision is involved, to show that no engine is refused one
+	 * (ADR-0020).
 	 */
 	function outputStatus(screenId: number, capability: string, reference: Reference, userAgent?: string) {
 		return fetch(
@@ -1067,24 +1064,25 @@ describe('media Graphic Input values on air', () => {
 		expect(after.currentState.inputs.promo).toBeUndefined();
 	});
 
-	it('records the pinned revision’s target compatibility on a value chosen at runtime', async () => {
-		// The fact travels with the value because nothing downstream can go and ask the
-		// library for it — and because the reference index compares a silent-video
-		// reference against the pinned revision's own, so a value carrying none loses
-		// the write's precondition silently instead of failing it.
+	/**
+	 * A transparent video chosen live is published and delivered like any other
+	 * value: Chromium is the only supported engine for transparent video
+	 * (ADR-0020), so nothing about engines is recorded on it or asked of the output.
+	 */
+	it('takes a transparent video chosen at runtime on air for every engine', async () => {
 		const screenId = await createScreen('media-input-vp9');
-		const restricted = await ingestImage(eventId, `media-input-vp9-${runId}`, pngWithTextChunks(102), graphicsAuthorCookie);
+		const transparent = await ingestImage(eventId, `media-input-vp9-${runId}`, pngWithTextChunks(102), graphicsAuthorCookie);
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET kind = 'silent-video'
-			WHERE id = '${restricted.assetId}';
+			WHERE id = '${transparent.assetId}';
 			UPDATE graphic_asset_revisions
 			SET technical_facts = json_set(
 				technical_facts,
 				'$.kind', 'silent-video',
 				'$.targetCompatibility', 'chromium-transparency'
 			)
-			WHERE id = '${restricted.revisionId}';
+			WHERE id = '${transparent.revisionId}';
 		`);
 
 		await declare(screenId, [
@@ -1094,12 +1092,10 @@ describe('media Graphic Input values on air', () => {
 		const capability = await capabilityFor(screenId);
 		const session = await liveSession(screenId);
 
-		// The client sends an exact revision and no facts at all; the authoritative side
-		// is what records them, so a client cannot assert a compatibility it does not have.
 		await command(screenId, session.id, {
 			commandId: `media-input-vp9-set-${runId}`,
 			type: 'Set Input',
-			payload: { graphicId: 'promo', inputKey: 'sting', value: restricted },
+			payload: { graphicId: 'promo', inputKey: 'sting', value: transparent },
 		});
 		await command(screenId, session.id, {
 			commandId: `media-input-vp9-set-backdrop-${runId}`,
@@ -1112,90 +1108,52 @@ describe('media Graphic Input values on air', () => {
 			payload: { graphicId: 'promo' },
 		});
 
-		expect(taken.currentState.inputs.promo!.accepted.sting).toEqual({
-			...restricted,
-			videoCompatibility: 'chromium-transparency',
-		});
-		await expect(outputStatus(screenId, capability, restricted, CHROMIUM_USER_AGENT)).resolves.toBe(200);
-
-		/**
-		 * What an incompatible revision costs the output (#98).
-		 *
-		 * It used to cost everything: the capability session itself was refused, so a
-		 * Safari output resolved no content URL for any reference on the Screen and
-		 * went to black rather than losing the one clip it could not play. The session
-		 * now opens for every engine, and only the exact restricted revision is
-		 * refused — with the code the output prints in the clip's place.
-		 */
-		function bootstrap(userAgent: string) {
-			return fetch(`/api/screen-output/screens/${screenId}/asset-capability-session`, {
-				method: 'POST',
-				headers: { 'authorization': `Bearer ${capability}`, 'user-agent': userAgent },
-			});
+		expect(taken.currentState.inputs.promo!.accepted.sting).toEqual(transparent);
+		for (const userAgent of [CHROMIUM_USER_AGENT, SAFARI_USER_AGENT]) {
+			await expect(outputStatus(screenId, capability, transparent, userAgent)).resolves.toBe(200);
+			await expect(outputStatus(screenId, capability, first, userAgent)).resolves.toBe(200);
 		}
-		await expect(bootstrap(SAFARI_USER_AGENT).then(response => response.status)).resolves.toBe(200);
-		await expect(bootstrap(CHROMIUM_USER_AGENT).then(response => response.status)).resolves.toBe(200);
-
-		// A media Graphic Input value the Live Session accepted is published like any
-		// other reference, so the session forecasts its refusal like any other (#184).
-		await expect((await bootstrap(SAFARI_USER_AGENT)).json()).resolves.toMatchObject({
-			unplayableRevisions: [{
-				assetId: restricted.assetId,
-				revisionId: restricted.revisionId,
-				code: 'vp9-alpha-chromium-required',
-			}],
-		});
-		await expect((await bootstrap(CHROMIUM_USER_AGENT)).json()).resolves.toMatchObject({
-			unplayableRevisions: [],
-		});
-
-		// The image the same graphic pins keeps playing out on the engine that lost
-		// everything before.
-		await expect(outputStatus(screenId, capability, first, SAFARI_USER_AGENT)).resolves.toBe(200);
-		const refused = await fetch(
-			`/api/screen-output/screens/${screenId}/assets/${restricted.assetId}/revisions/${restricted.revisionId}/content`,
-			{ headers: { 'authorization': `Bearer ${capability}`, 'user-agent': SAFARI_USER_AGENT } },
-		);
-		expect(refused.status).toBe(409);
-		await expect(refused.json()).resolves.toMatchObject({
-			data: { code: 'vp9-alpha-chromium-required' },
-		});
 	});
 
-	it('publishes an authored media Graphic Input default, and refuses one with no compatibility facts', async () => {
+	it('publishes an authored media Graphic Input default with no compatibility facts, and reads one that still carries them', async () => {
 		const screenId = await createScreen('media-input-default');
-		const restricted = await ingestImage(eventId, `media-input-default-vp9-${runId}`, pngWithTextChunks(103), graphicsAuthorCookie);
+		const transparent = await ingestImage(eventId, `media-input-default-vp9-${runId}`, pngWithTextChunks(103), graphicsAuthorCookie);
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET kind = 'silent-video'
-			WHERE id = '${restricted.assetId}';
+			WHERE id = '${transparent.assetId}';
 			UPDATE graphic_asset_revisions
 			SET technical_facts = json_set(
 				technical_facts,
 				'$.kind', 'silent-video',
 				'$.targetCompatibility', 'chromium-transparency'
 			)
-			WHERE id = '${restricted.revisionId}';
+			WHERE id = '${transparent.revisionId}';
 		`);
-
-		// Without the recorded fact the reference-index predicate has nothing to compare,
-		// so the write is refused rather than committing a configuration whose media the
-		// Screen's outputs would never be able to fetch.
-		await expect(declare(screenId, [mediaInput('sting', {
-			mediaKind: 'silent-video',
-			default: restricted,
-		})])).rejects.toMatchObject({ statusCode: 409 });
 
 		await declare(screenId, [mediaInput('sting', {
 			mediaKind: 'silent-video',
-			default: { ...restricted, videoCompatibility: 'chromium-transparency' },
+			default: transparent,
 		})]);
+		// A default recorded before ADR-0020 still carries the fact; it reads, and the
+		// fact is dropped.
+		await declare(screenId, [mediaInput('sting', {
+			mediaKind: 'silent-video',
+			default: { ...transparent, videoCompatibility: 'chromium-transparency' } as typeof transparent,
+		})]);
+		const stored = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`, {
+			headers: { cookie: graphicsAuthorCookie },
+		});
+		const storedInput = stored.modeConfigs?.['broadcast-graphics']?.graphics[0]?.inputs?.[0];
+		expect(storedInput).toMatchObject({ key: 'sting', default: transparent });
+		expect(JSON.stringify(storedInput)).not.toContain('videoCompatibility');
 
 		const capability = await capabilityFor(screenId);
-		await expect(outputStatus(screenId, capability, restricted, CHROMIUM_USER_AGENT)).resolves.toBe(200);
-		await expect(usageOf(restricted)).resolves.toEqual([
+		await expect(outputStatus(screenId, capability, transparent, CHROMIUM_USER_AGENT)).resolves.toBe(200);
+		await expect(outputStatus(screenId, capability, transparent, SAFARI_USER_AGENT)).resolves.toBe(200);
+		await expect(usageOf(transparent)).resolves.toEqual([
 			expect.objectContaining({
-				reference: restricted,
+				reference: transparent,
 				owner: expect.objectContaining({
 					kind: 'screen',
 					id: String(screenId),

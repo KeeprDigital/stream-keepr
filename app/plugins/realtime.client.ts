@@ -33,7 +33,7 @@ export default defineNuxtPlugin({
 		 *
 		 * Nothing depended on the old one. It was written at construction and read
 		 * nowhere else, and no presence consumer reads `member.clientId` — they read
-		 * `member.data` (`useScreenOutputVideoTargets.ts`). Two outputs of one Screen
+		 * `member.data`. Two outputs of one Screen
 		 * still appear as two presence members, because presence is per connection
 		 * rather than per identity.
 		 */

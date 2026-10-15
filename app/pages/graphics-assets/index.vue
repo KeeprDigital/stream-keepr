@@ -1391,8 +1391,8 @@ onMounted(async () => {
 									</dt>
 									<dd class="text-muted">
 										{{ asset.facts.codec.toUpperCase() }} · 8-bit SDR 4:2:0
-										<template v-if="asset.facts.targetCompatibility === 'chromium-transparency'">
-											· VP9 alpha restricted to proven Chromium targets
+										<template v-if="asset.facts.hasAlpha">
+											· alpha
 										</template>
 									</dd>
 								</div>

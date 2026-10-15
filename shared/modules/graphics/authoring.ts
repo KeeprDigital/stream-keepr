@@ -1257,9 +1257,7 @@ export function patchMediaFocalPosition(
 /**
  * Pin one exact Graphic Asset identity and revision on a Media Graphic Item.
  *
- * The asset's own kind decides the item's media kind, and a silent video also
- * records the revision's target compatibility, which the reference index checks.
- * Playback rate and looping survive a switch to an image and back: they are the
+ * The asset's own kind decides the item's media kind. Playback rate and looping survive a switch to an image and back: they are the
  * author's settings, not the asset's.
  */
 export function selectMediaGraphicItemAsset(
@@ -1268,13 +1266,11 @@ export function selectMediaGraphicItemAsset(
 	selection: {
 		asset: GraphicAssetReference;
 		mediaKind: GraphicMediaKind;
-		videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	},
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
 		asset: selection.asset,
 		mediaKind: selection.mediaKind,
-		videoCompatibility: selection.mediaKind === 'silent-video' ? selection.videoCompatibility : undefined,
 	}));
 }
 
@@ -1295,7 +1291,6 @@ export function clearMediaGraphicItemAsset(
 	return patchGraphicItemGroup(graphic, itemId, ['media'], () => ({
 		asset: undefined,
 		mediaKind: 'image',
-		videoCompatibility: undefined,
 	}));
 }
 

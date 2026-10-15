@@ -85,7 +85,7 @@ describe('the domain refusal a failed Broadcast Graphics command carries', () =>
 		// The vocabulary is what a client is entitled to act on. A code it does not know
 		// is a code whose next move it cannot name, so it is left to the fallback.
 		expect(broadcastGraphicsCommandRefusal(
-			failedCommand(refusalBody('vp9-alpha-chromium-required', 'Not playable on this target')),
+			failedCommand(refusalBody('not-a-refusal-code', 'Something the client does not know')),
 		)).toBeUndefined();
 	});
 

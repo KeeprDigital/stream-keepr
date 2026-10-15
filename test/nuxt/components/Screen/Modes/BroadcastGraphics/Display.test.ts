@@ -52,14 +52,6 @@ mockNuxtImport('useScreenContext', () => () => ({
  */
 const capabilitySessionRequests: string[] = [];
 
-/**
- * What the authoritative side tells the session it will refuse this browser.
- *
- * Empty on every Screen whose published revisions this engine can play, which is
- * every case but the one #184 exists for.
- */
-let unplayableRevisions: Array<{ assetId: string; revisionId: string; code: string }> = [];
-
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
 	graphics: [],
 	...mockScreen.value?.modeConfigs?.['broadcast-graphics'],
@@ -442,10 +434,9 @@ describe('broadcastGraphicsDisplay', () => {
 		mockLoadSession.value = () => {};
 		mockAssetCapability.value = undefined;
 		capabilitySessionRequests.length = 0;
-		unplayableRevisions = [];
 		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
 			capabilitySessionRequests.push(String(input));
-			return new Response(JSON.stringify({ unplayableRevisions }), {
+			return new Response(JSON.stringify({}), {
 				status: 200,
 				headers: { 'content-type': 'application/json' },
 			});
@@ -1006,74 +997,20 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 
 		/**
-		 * A media item whose recorded `videoCompatibility` disagrees with its pinned
-		 * revision's own technical facts (#184).
-		 *
-		 * The write path keeps the two equal, so this is what a Screen looks like after
-		 * the facts change underneath a configuration that already published — and
-		 * before #184 it was the one case that rendered exactly the blank rectangle #98
-		 * exists to remove: the client believed the clip playable, so it drew a
-		 * `<video>` and withheld the notice, and the authoritative side then refused the
-		 * bytes with nobody listening.
+		 * Chromium is the only supported engine for transparent video (ADR-0020), so a
+		 * live output renders every silent video it publishes as a video.
 		 */
-		describe('a recorded compatibility the authoritative side disagrees with', () => {
-			function divergent() {
-				mockAssetCapability.value = 'capability-token';
-				mockScreen.value = screenWithStack([withMedia({
-					mediaKind: 'silent-video',
-					videoCompatibility: 'all-supported',
-				})]);
-				mockOnAirGraphicIds.value = ['lower-third'];
-			}
+		it('plays a silent video on a live output, whatever the browser', async () => {
+			mockAssetCapability.value = 'capability-token';
+			mockScreen.value = screenWithStack([withMedia({ mediaKind: 'silent-video' })]);
+			mockOnAirGraphicIds.value = ['lower-third'];
 
-			it('reads as the refusal’s own words rather than as a blank rectangle', async () => {
-				divergent();
-				unplayableRevisions = [{
-					assetId: 'asset-1',
-					revisionId: 'revision-7',
-					code: 'vp9-alpha-chromium-required',
-				}];
+			const wrapper = await mountComponent();
+			await flushPromises();
+			await nextTick();
 
-				const wrapper = await mountComponent();
-				await flushPromises();
-				await nextTick();
-
-				const item = wrapper.get('[data-graphic-item-kind="media"]');
-				expect(item.find('video').exists()).toBe(false);
-				expect(item.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text())
-					.toBe('Video needs Chromium (vp9-alpha-chromium-required)');
-			});
-
-			it('keeps the notice off the Key Output, whose colour is the alpha matte', async () => {
-				mockOutputMode.value = 'key';
-				divergent();
-				unplayableRevisions = [{
-					assetId: 'asset-1',
-					revisionId: 'revision-7',
-					code: 'vp9-alpha-chromium-required',
-				}];
-
-				const wrapper = await mountComponent();
-				await flushPromises();
-				await nextTick();
-
-				const item = wrapper.get('[data-graphic-item-kind="media"]');
-				expect(item.find('video').exists()).toBe(false);
-				expect(item.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text()).toBe('');
-			});
-
-			it('still plays a clip the authoritative side names no objection to', async () => {
-				divergent();
-
-				const wrapper = await mountComponent();
-				await flushPromises();
-				await nextTick();
-
-				const item = wrapper.get('[data-graphic-item-kind="media"]');
-				expect(item.find('[data-video-compatibility-blocked]').exists()).toBe(false);
-				expect(item.get('video').attributes('src'))
-					.toBe('/api/screen-output/screens/1/assets/asset-1/revisions/revision-7/content');
-			});
+			expect(wrapper.get('[data-graphic-item-kind="media"] video').attributes('src'))
+				.toBe('/api/screen-output/screens/1/assets/asset-1/revisions/revision-7/content');
 		});
 	});
 

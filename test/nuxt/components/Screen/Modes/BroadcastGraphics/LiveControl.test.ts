@@ -34,8 +34,6 @@ const mockBindingData = ref<GraphicBindingDataSet>(createEmptyGraphicBindingData
 const mockSupersededInputKeys = ref<string[]>([]);
 /** Why the last edit to one Graphic Input was refused, as the store holds it. */
 const mockInputRefusals = ref<Record<string, string>>({});
-/** The engines of the Screen Outputs currently open on this Screen. */
-const mockOpenOutputTargets = ref<string[]>([]);
 /** The Graphics Asset Library's answer about one exact revision. */
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
 
@@ -69,8 +67,6 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		},
 	),
 }));
-
-mockNuxtImport('useScreenOutputVideoTargets', () => () => computed(() => mockOpenOutputTargets.value));
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -146,8 +142,6 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		eventId: { type: Number, required: true },
 		fieldLabel: { type: String, required: true },
 		assetKind: { type: [String, Array], default: 'image' },
-		videoTarget: { type: String, default: 'other' },
-		openOutputTargets: { type: Array, default: () => [] },
 		disabled: { type: Boolean, default: false },
 		clearable: { type: Boolean, default: true },
 	},
@@ -244,7 +238,6 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockBindingData.value = createEmptyGraphicBindingDataSet();
 		mockSupersededInputKeys.value = [];
 		mockInputRefusals.value = {};
-		mockOpenOutputTargets.value = [];
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
 	});
@@ -815,7 +808,7 @@ describe('broadcastGraphicsLiveControl', () => {
 		});
 
 		/**
-		 * `recordMediaSelectionFacts` rebuilds the value from the library and refuses a
+		 * `admitMediaSelection` rebuilds the value from the library and refuses a
 		 * revision that does not resolve with a 409. An operator must not be able to
 		 * reach that refusal by choosing from the picker, so the surface asks the same
 		 * question of the same library before it writes anything.
@@ -924,23 +917,6 @@ describe('broadcastGraphicsLiveControl', () => {
 
 			expect(wrapper.find('[data-testid="live-control-media-refused-badge"]').exists()).toBe(false);
 			expect(mockSetInput).toHaveBeenCalledTimes(1);
-		});
-
-		/**
-		 * Compatibility is a fact of the revision rather than a choice, and what it
-		 * costs depends on which engines are watching: the picker states it against the
-		 * outputs open now rather than letting an operator discover it on air (#98).
-		 */
-		it('tells the picker which engines the Screen Outputs currently open use', async () => {
-			mockOpenOutputTargets.value = ['chromium', 'safari'];
-
-			const wrapper = await mountComponent(graphic([BADGE]));
-
-			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('openOutputTargets'))
-				.toEqual(['chromium', 'safari']);
-			// The authored target a Broadcast Graphics reference is indexed with, so a
-			// VP9-alpha clip is offered here exactly as it is to an author.
-			expect(wrapper.getComponent(GraphicsAssetFocusPickerStub).props('videoTarget')).toBe('chromium');
 		});
 
 		/**

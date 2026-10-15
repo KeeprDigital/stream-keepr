@@ -207,29 +207,23 @@ export function broadcastGraphicsLiveSessionModule() {
 	};
 
 	/**
-	 * Record the pinned revision's own facts on a media Graphic Input value, at the
-	 * moment the operator selects it.
+	 * Admit a media Graphic Input value only when the revision it pins resolves,
+	 * and rebuild it as exactly `{assetId, revisionId}` at the moment the operator
+	 * selects it.
 	 *
-	 * This is the authoritative half of #96. A media value is `{assetId, revisionId}`
-	 * on the wire and carries no target compatibility, but the reference index checks
-	 * a silent-video reference against the pinned revision's own — and a value with no
-	 * such fact loses that precondition silently rather than failing it, so the media
-	 * simply never becomes resolvable and the graphic reaches air without it. Nothing
-	 * downstream of the value can go and ask the library, so the fact is stamped on
-	 * here, by the authority, and travels with the value from then on.
-	 *
-	 * Recorded rather than trusted: the wire shape carries no facts precisely so a
-	 * client cannot assert one. Selecting a revision that does not resolve is refused
-	 * outright, because creating a Graphic Asset Reference requires its exact revision
-	 * to resolve — a value naming a revision that is not there is a Missing Graphic
-	 * Asset Reference rather than a value an operator can be shown and correct.
+	 * Selecting a revision that does not resolve is refused outright, because
+	 * creating a Graphic Asset Reference requires its exact revision to resolve — a
+	 * value naming a revision that is not there is a Missing Graphic Asset Reference
+	 * rather than a value an operator can be shown and correct. Nothing else is
+	 * recorded on the value: Chromium is the only supported engine for transparent
+	 * video (ADR-0020), so no playback compatibility travels with it.
 	 *
 	 * That refusal is raised as a domain rejection so it reaches the client carrying
 	 * the code for what it is. A bare conflict is what an ended epoch looks like, and a
 	 * client that cannot tell the two apart reloads the session and restates the very
 	 * command the authority has just refused (#203).
 	 */
-	const recordMediaSelectionFacts = async (
+	const admitMediaSelection = async (
 		graphic: BroadcastGraphicConfig,
 		command: BroadcastGraphicsCommand,
 		graphicsAssets: ApplyCommandParams['graphicsAssets'],
@@ -271,9 +265,6 @@ export function broadcastGraphicsLiveSessionModule() {
 				value: {
 					assetId: value.assetId,
 					revisionId: value.revisionId,
-					...(status.targetCompatibility === undefined
-						? {}
-						: { videoCompatibility: status.targetCompatibility }),
 				},
 			},
 		};
@@ -639,7 +630,7 @@ export function broadcastGraphicsLiveSessionModule() {
 			], graphicsAssets);
 		}
 
-		const admitted = await recordMediaSelectionFacts(graphic, command, graphicsAssets);
+		const admitted = await admitMediaSelection(graphic, command, graphicsAssets);
 
 		const result = await state.applyCommand(
 			sessionId,

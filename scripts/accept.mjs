@@ -69,12 +69,6 @@ export const HARNESSES = {
 		proves: 'Template Package publication is atomic and its retry is idempotent',
 		needs: '`pnpm preview`',
 	},
-	'safari-vp9-alpha': {
-		script: ['run-safari-vp9-alpha-acceptance.mjs'],
-		proves: 'A Screen Output refuses Safari a VP9-alpha revision while its session opens',
-		needs: 'Safari automation (README § Safari automation)',
-		flags: '--allow-manual',
-	},
 };
 
 /** README § Deploy day, step 5, in order. */
@@ -84,7 +78,6 @@ export const DEPLOY_DAY = [
 	'still-images',
 	'silent-video',
 	'fonts',
-	'safari-vp9-alpha',
 	'graphics-package',
 ];
 

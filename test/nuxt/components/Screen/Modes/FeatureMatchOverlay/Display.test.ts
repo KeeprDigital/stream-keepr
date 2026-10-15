@@ -75,16 +75,9 @@ mockNuxtImport('useFeatureMatchOverlaySideboardData', () => () => ({
 	cardDataDegraded: ref(false),
 }));
 
-/** Which pinned revisions this output's resolver has been told it will be refused. */
-const mockRefusedRevisions = ref<string[]>([]);
-
 mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 	contentUrl: (reference: { assetId: string; revisionId: string }) =>
 		mockContentUrlsCleared.value ? '' : `/private-assets/${reference.assetId}/${reference.revisionId}`,
-	contentRefusal: (reference: { revisionId: string }) =>
-		mockRefusedRevisions.value.includes(reference.revisionId)
-			? 'vp9-alpha-chromium-required'
-			: undefined,
 	contentUrlsSettled: mockContentUrlsSettled,
 }));
 
@@ -573,7 +566,6 @@ describe('featureMatchOverlayDisplay', () => {
 		mockContentUrlsSettled.value = true;
 		mockContentUrlsCleared.value = false;
 		mockUsesSampleDataset.value = false;
-		mockRefusedRevisions.value = [];
 		mockIsPreview.value = false;
 		mockMatchState.value = null;
 		mockEvent.value = null;
@@ -751,7 +743,11 @@ describe('featureMatchOverlayDisplay', () => {
 	});
 
 	describe('exact Graphic Asset revisions', () => {
-		function videoComposition(videoCompatibility: 'all-supported' | 'chromium-transparency') {
+		/**
+		 * A silent-video composition. The item may carry the `videoCompatibility` a
+		 * layout recorded before ADR-0020; it changes nothing.
+		 */
+		function videoComposition(videoCompatibility?: 'all-supported' | 'chromium-transparency') {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.composition = {
 				...createFeatureMatchLayoutComposition(),
@@ -767,14 +763,14 @@ describe('featureMatchOverlayDisplay', () => {
 						assetId: 'video-asset' as never,
 						revisionId: 'video-revision-1' as never,
 					},
-					videoCompatibility,
+					...(videoCompatibility ? { videoCompatibility } : {}),
 				}] as never,
 			};
 			return config;
 		}
 
 		it('renders a silent-video Media Graphic Item from its exact revision content URL', async () => {
-			mockConfig.value = videoComposition('all-supported');
+			mockConfig.value = videoComposition();
 
 			const wrapper = await mountComponent();
 
@@ -783,43 +779,16 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('true');
 		});
 
-		it('marks restricted video output not ready outside a proven Chromium target, and says why on the output', async () => {
-			// The content URL resolves — this Screen's capability session is no longer
-			// refused Screen-wide for pinning one alpha clip (#98) — so the item reaches
-			// its blocked branch rather than rendering an empty box for a missing `src`.
+		it('plays and stays export-ready for a transparent video recorded before ADR-0020, whatever the browser', async () => {
+			// Chromium is the only supported engine for transparent video, so a layout
+			// that still records a Chromium-only clip is rendered and ready like any other.
 			mockConfig.value = videoComposition('chromium-transparency');
 
 			const wrapper = await mountComponent();
 
-			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('false');
-			const blocked = wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]');
-			expect(blocked.text()).toContain('Chromium');
-			expect(blocked.text()).toContain('vp9-alpha-chromium-required');
-		});
-
-		it('keeps the reason out of the Key Output, whose colour is the alpha matte', async () => {
-			mockConfig.value = videoComposition('chromium-transparency');
-			mockOutputMode.value = 'key';
-
-			const wrapper = await mountComponent();
-
-			expect(wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text()).toBe('');
-		});
-
-		it('says why for a clip the authoritative side refuses whatever the item recorded', async () => {
-			// This host's own wiring of the reconciled compatibility (#184). The
-			// mechanism is the shared compositor's, but a Feature Match Overlay passes
-			// its resolver down itself, and a pass-through nobody checks is a
-			// pass-through that can go missing — which here is silent, because the
-			// blank rectangle it leaves is what the item drew before anyway.
-			mockConfig.value = videoComposition('all-supported');
-			mockRefusedRevisions.value = ['video-revision-1'];
-
-			const wrapper = await mountComponent();
-
-			expect(wrapper.find('video').exists()).toBe(false);
-			expect(wrapper.get('[data-video-compatibility-blocked="vp9-alpha-chromium-required"]').text())
-				.toContain('vp9-alpha-chromium-required');
+			expect(wrapper.get('video').attributes('src'))
+				.toBe('/private-assets/video-asset/video-revision-1');
+			expect(wrapper.get('.feature-match-overlay').attributes('data-export-ready')).toBe('true');
 		});
 	});
 

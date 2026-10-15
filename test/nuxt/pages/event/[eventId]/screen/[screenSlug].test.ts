@@ -167,7 +167,7 @@ describe('screen output route', () => {
 		useScreenStore().activeScreen = null;
 		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
 			requests.push(String(input));
-			return new Response(JSON.stringify({ unplayableRevisions: [] }), {
+			return new Response(JSON.stringify({}), {
 				status: 200,
 				headers: { 'content-type': 'application/json' },
 			});

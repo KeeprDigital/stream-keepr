@@ -202,8 +202,8 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		it('prints the page\'s own word for the failure when the registry publishes it', () => {
 			expect(verdictFailureCode({ outcome: 'failed', code: 'font-glyph-not-rendered' }))
 				.toBe('font-glyph-not-rendered');
-			expect(verdictFailureCode({ outcome: 'failed', code: 'safari-vp9-alpha-not-blocked' }))
-				.toBe('safari-vp9-alpha-not-blocked');
+			expect(verdictFailureCode({ outcome: 'failed', code: 'font-refused-face-loaded' }))
+				.toBe('font-refused-face-loaded');
 		});
 
 		/**
@@ -216,14 +216,14 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		 * regex sees single-quoted literals only, so a code written with double
 		 * quotes, built as a template literal, or reached through a variable is
 		 * missed — and missed quietly, since a smaller enumeration still passes.
-		 * Two of the four pages author no code at all (`silent-video-v1` and
+		 * Two of the three pages author no code at all (`silent-video-v1` and
 		 * `still-image-v1` publish only `dataset.result`), so a mistake in the
 		 * pattern would leave a plausible-looking set rather than an empty one.
 		 * The control below is what keeps that from reading as a pass.
 		 */
 		it('publishes every code the acceptance pages actually author', () => {
 			const authored = new Set<string>();
-			for (const page of ['static-font-v1', 'vp9-alpha-safari-v1', 'silent-video-v1', 'still-image-v1']) {
+			for (const page of ['static-font-v1', 'silent-video-v1', 'still-image-v1']) {
 				const html = readFileSync(
 					new URL(`../../../public/_acceptance/${page}.html`, import.meta.url),
 					'utf8',
@@ -234,7 +234,7 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 
 			// A positive control: an empty enumeration would pass the loop below.
 			expect(authored.has('font-glyph-not-rendered')).toBe(true);
-			expect(authored.size).toBeGreaterThan(5);
+			expect(authored.size).toBeGreaterThan(4);
 
 			for (const code of authored)
 				expect(verdictFailureCode({ outcome: 'failed', code })).toBe(code);

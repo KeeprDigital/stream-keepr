@@ -1,10 +1,13 @@
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
+import { readInstalledBroadcastGraphicDocument } from '~~/server/modules/template-package-payload/broadcastGraphic';
+import { readInstalledFeatureMatchLayoutDocument } from '~~/server/modules/template-package-payload/featureMatchLayout';
 import { GRAPHIC_ITEM_KINDS } from '~~/shared/modules/graphics/itemDefinitions';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
+import { maximalFeatureMatchLayoutDocument } from '../../../helpers/featureMatchLayoutDocument';
 
 const asset = testGraphicAssetReference('asset-1', 'revision-1');
 
@@ -119,5 +122,38 @@ describe('the `.skgraphic` payload', () => {
 		if (outcome.outcome !== 'rejected')
 			throw new Error('Expected the document to be refused');
 		expect(outcome.issues.some(issue => issue.subject === 'name')).toBe(true);
+	});
+});
+
+/**
+ * A v1 package exported before ADR-0020 carries `videoCompatibility` on its media.
+ * Both payloads read documents through the strict screen schemas, so the key has to
+ * be accepted there — refused, every such package would stop installing — and
+ * dropped from the typed document an installed Template is read back as.
+ */
+describe('a v1 package exported before ADR-0020', () => {
+	const layout = maximalFeatureMatchLayoutDocument({
+		frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
+		itemAsset: asset,
+	});
+	const graphic = maximalBroadcastGraphicDocument({ asset });
+
+	it('carries the retired key in the fixtures this suite reads', () => {
+		expect(JSON.stringify(graphic)).toContain('videoCompatibility');
+		expect(JSON.stringify(layout)).toContain('videoCompatibility');
+	});
+
+	it('installs a `.skgraphic` whose media carries videoCompatibility, and reads it back without the key', () => {
+		expect(templatePackagePayloads('skgraphic').readInstallableDocument(graphic).outcome).toBe('read');
+		const installed = readInstalledBroadcastGraphicDocument(graphic);
+		expect(installed).toBeDefined();
+		expect(JSON.stringify(installed)).not.toContain('videoCompatibility');
+	});
+
+	it('installs a `.sklayout` whose media carries videoCompatibility, and reads it back without the key', () => {
+		expect(templatePackagePayloads('sklayout').readInstallableDocument(layout).outcome).toBe('read');
+		const installed = readInstalledFeatureMatchLayoutDocument(layout);
+		expect(installed).toBeDefined();
+		expect(JSON.stringify(installed)).not.toContain('videoCompatibility');
 	});
 });

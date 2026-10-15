@@ -40,45 +40,6 @@ const videoElement = ref<HTMLVideoElement | null>(null);
 const fittedFontSize = ref<number | null>(null);
 
 const media = computed(() => props.render.media);
-const actualVideoTarget = useGraphicsVideoTarget();
-
-/**
- * A VP9-alpha silent video only plays in Chromium, so elsewhere the element is
- * withheld and a diagnostic placeholder takes its place.
- *
- * The decision splits across two owners, because neither knows the other's half.
- * Whether *this browser* can play the clip is a runtime fact, asked for here. What
- * the placeholder may then paint comes from the render model as
- * `incompatibilityNotice`, because only the model knows which Screen Output it is
- * building: the Key Output renders composed opacity as an alpha matte, so legible
- * text there would key the message onto program. The model withholds the notice
- * for that output and the placeholder stays empty, exactly as it did everywhere
- * before #98.
- *
- * The marker attribute is unconditional either way, so a test or a developer
- * inspecting the DOM reads the same thing in every output.
- *
- * This is reachable on a live Screen Output. Before #98 it was not: the capability
- * session was refused outright when a Screen published a chromium-transparency
- * revision to a non-Chromium target, so no content URL resolved, every `src` was
- * empty, and the output lost all of its media rather than this one clip. The
- * refusal is now per resolution request, so every other reference still resolves
- * and this branch renders where the clip would have been.
- *
- * The `videoCompatibility` read here is reconciled before it arrives. It starts as
- * the value the Media Graphic Item's configuration carries, which the write path
- * keeps equal to the pinned revision's recorded `technical_facts` — a
- * silent-video reference that states no compatibility, or states one the revision
- * contradicts, is refused publication. But that equality holds at the moment of
- * writing, and the facts can change under a configuration that already published.
- * Where they have, the render model takes the authoritative refusal over the
- * recorded copy, so this branch renders for a clip the server will not deliver
- * even though the configuration says it would (#184). Believing the copy alone was
- * what left an output drawing a `<video>` for bytes it was about to be refused,
- * with the notice suppressed because nothing thought there was anything to report.
- */
-const videoBlocked = computed(() => media.value?.videoCompatibility === 'chromium-transparency'
-	&& actualVideoTarget.value !== 'chromium');
 
 /**
  * Playback rate is set on the element rather than bound, because it is a property
@@ -492,7 +453,7 @@ watch(
 		-->
 		<template v-if="media && media.src !== ''">
 			<video
-				v-if="media.mediaKind === 'silent-video' && !videoBlocked"
+				v-if="media.mediaKind === 'silent-video'"
 				ref="videoElement"
 				:src="media.src"
 				:loop="media.loop"
@@ -502,11 +463,6 @@ watch(
 				preload="auto"
 				:style="media.style"
 			/>
-			<span
-				v-else-if="media.mediaKind === 'silent-video'"
-				data-video-compatibility-blocked="vp9-alpha-chromium-required"
-				:style="media.incompatibilityNotice?.style"
-			>{{ media.incompatibilityNotice?.text }}</span>
 			<!--
 				Empty alt, deliberately. A Media Graphic Item is decorative — it carries
 				no meaning a caption would convey — and a broken image draws its alt text

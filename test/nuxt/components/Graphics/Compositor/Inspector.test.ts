@@ -198,10 +198,9 @@ const GraphicsAssetFocusPickerStub = defineComponent({
 		eventId: { type: Number, required: false },
 		fieldLabel: { type: String, required: false },
 		assetKind: { type: [String, Array], required: false },
-		videoTarget: { type: String, required: false },
 	},
 	emits: ['update:modelValue', 'select'],
-	template: '<div v-bind="$attrs" :data-testid="$attrs[\'data-testid\'] ?? \'media-asset-picker\'" :data-field-label="fieldLabel" :data-video-target="videoTarget" :data-asset-id="modelValue?.assetId" />',
+	template: '<div v-bind="$attrs" :data-testid="$attrs[\'data-testid\'] ?? \'media-asset-picker\'" :data-field-label="fieldLabel" :data-asset-id="modelValue?.assetId" />',
 });
 
 async function mountComponent(options: {
@@ -865,8 +864,8 @@ describe('graphicsCompositorInspector', () => {
 			expect(mediaOf(emittedGraphics(wrapper))).toMatchObject({
 				asset: { assetId: 'asset-2', revisionId: 'revision-3' },
 				mediaKind: 'silent-video',
-				videoCompatibility: 'chromium-transparency',
 			});
+			expect(mediaOf(emittedGraphics(wrapper))).not.toHaveProperty('videoCompatibility');
 		});
 
 		it('unpins the asset when the picker clears it', async () => {
@@ -877,14 +876,6 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 
 			expect(mediaOf(emittedGraphics(wrapper)).asset).toBeUndefined();
-		});
-
-		it('asks the picker for a Chromium target, so alpha video is selectable', async () => {
-			// A Broadcast Graphics Screen Output is consumed as a Chromium browser
-			// source, which is the whole reason a transparent overlay works at all.
-			const wrapper = await mountMedia();
-
-			expect(wrapper.get('[data-testid="media-asset-picker"]').attributes('data-video-target')).toBe('chromium');
 		});
 
 		it('hands the picker the exact revision this item pins, so it diagnoses against this item', async () => {
@@ -1530,7 +1521,7 @@ describe('graphicsCompositorInspector', () => {
 			.toEqual({ assetId: 'asset-1', revisionId: 'revision-1' });
 	});
 
-	it('pins a media Graphic Input’s default revision, with the fact the reference index checks it against', async () => {
+	it('pins a media Graphic Input’s default revision as exactly that revision', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
 				...graphic,
@@ -1546,12 +1537,10 @@ describe('graphicsCompositorInspector', () => {
 		);
 		await nextTick();
 
-		// The revision's own target compatibility travels with the default, because the
-		// Graphic Asset Reference index checks a silent-video reference against it and
-		// nothing downstream can go and ask the Graphics Asset Library.
 		expect(declarationOf(wrapper)).toMatchObject({
-			default: { assetId: 'asset-2', revisionId: 'revision-3', videoCompatibility: 'chromium-transparency' },
+			default: { assetId: 'asset-2', revisionId: 'revision-3' },
 		});
+		expect((declarationOf(wrapper) as { default?: object }).default).not.toHaveProperty('videoCompatibility');
 	});
 
 	it('unpins a media Graphic Input’s default when the picker clears it', async () => {
