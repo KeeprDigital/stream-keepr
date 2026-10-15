@@ -524,6 +524,63 @@ export function useDeckModeData() {
 		{ immediate: true },
 	);
 
+	/**
+	 * Live-follow of the selected Player (#483): a deck edited mid-display (a Melee
+	 * re-sync, an operator edit) rolls the Player's `updatedAt` through
+	 * `player:updated`, and that revision is the deck cache's freshness key, so the
+	 * rebuilt deck arrives through the ordinary staged swap.
+	 *
+	 * `player:updated` replaces only a record the store-held roster already holds,
+	 * so the roster is loaded while a Player is selected — beside the deck rather
+	 * than ahead of it, so first paint does not wait on it.
+	 */
+	watch(
+		() => {
+			const source = config.value.deckSource;
+			return source.type === 'player' && source.playerId !== null ? eventId.value : null;
+		},
+		(evtId) => {
+			if (evtId && !playerStore.isLoaded)
+				void playerStore.loadPlayersByEventId(evtId);
+		},
+		{ immediate: true },
+	);
+
+	/** The revision of the selected Player's deck on program, or staged to replace it. */
+	function programRevisionFor(playerId: number): number | null | undefined {
+		const deck = pendingDeck.value ?? displayedDeck.value;
+		return deck && loadedDeckSourcesMatch(deck.source, { type: 'player', playerId })
+			? deck.sourceRevision
+			: undefined;
+	}
+
+	/**
+	 * A load follows the store-held revision whenever it differs from program's,
+	 * rather than whenever it changes: the roster can land holding an edit the deck
+	 * read missed, and a message published before the roster arrived replaced
+	 * nothing. The load itself still reads the Player fresh, because the store-held
+	 * record can equally be the one behind.
+	 */
+	watch(
+		() => {
+			const source = config.value.deckSource;
+			if (source.type !== 'player' || source.playerId === null)
+				return null;
+			const playerId = source.playerId;
+			const player = playerStore.players.find(candidate => candidate.id === playerId);
+			return player ? `${playerId}:${deckSourceStamp(player.updatedAt)}` : null;
+		},
+		() => {
+			const source = config.value.deckSource;
+			if (source.type !== 'player' || source.playerId === null)
+				return;
+			const playerId = source.playerId;
+			const player = playerStore.players.find(candidate => candidate.id === playerId);
+			if (player && deckSourceStamp(player.updatedAt) !== programRevisionFor(playerId))
+				void loadPlayerDeck(playerId);
+		},
+	);
+
 	let unsubscribeFromBroadcastUpdates: (() => void) | null = null;
 	watch(eventId, (evtId) => {
 		unsubscribeFromBroadcastUpdates?.();
@@ -541,8 +598,18 @@ export function useDeckModeData() {
 		);
 	}, { immediate: true });
 
+	/**
+	 * Reconnect Resync (#307): a message published while this client was suspended
+	 * is simply gone, so coming back re-reads the selected source and, for a Player,
+	 * the roster live-follow watches — a record the reload replaces only reloads
+	 * the deck if it differs from program.
+	 */
 	useReconnectResync(() => {
 		void reloadSelectedSource();
+		const source = config.value.deckSource;
+		const evtId = eventId.value;
+		if (source.type === 'player' && source.playerId !== null && evtId)
+			void playerStore.loadPlayersByEventId(evtId);
 	}, realtime);
 
 	onScopeDispose(() => {
