@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.4.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.3.0...v1.4.0) (2026-10-15)
+
+
+### Features
+
+* **editor:** link width and height to keep the aspect ratio ([#556](https://github.com/KeeprDigital/stream-keepr/issues/556)) ([a3a8b0e](https://github.com/KeeprDigital/stream-keepr/commit/a3a8b0e327ce49674afb3eb88904bf024a247f6f))
+* **editor:** slide distance in any Geometry Unit ([#559](https://github.com/KeeprDigital/stream-keepr/issues/559)) ([fa9723e](https://github.com/KeeprDigital/stream-keepr/commit/fa9723e14966889e14e348868aeeec745f8711dc))
+
+
+### Bug Fixes
+
+* **editor:** align actions move the item's edge, not its anchor point ([#554](https://github.com/KeeprDigital/stream-keepr/issues/554)) ([16187ce](https://github.com/KeeprDigital/stream-keepr/commit/16187ce41a27a8b9e42d3f12c6af2f6a0d22de0b))
+* **editor:** close composite-editor consolidation gaps ([#566](https://github.com/KeeprDigital/stream-keepr/issues/566)) ([6fb47b7](https://github.com/KeeprDigital/stream-keepr/commit/6fb47b7fcad3812fe98424a205c10c9ffec269d3))
+* **screens:** Deck screen live-follows edits to the selected Player's deck ([#567](https://github.com/KeeprDigital/stream-keepr/issues/567)) ([4b0317a](https://github.com/KeeprDigital/stream-keepr/commit/4b0317aa985af9e2cc400a2416fa23ee9d01dd54))
+
+
+### Refactoring
+
+* **animation-effects:** derive the vocabulary, params types and host unions from one catalogue ([#540](https://github.com/KeeprDigital/stream-keepr/issues/540)) ([f0d5435](https://github.com/KeeprDigital/stream-keepr/commit/f0d543586d662153dbe3bcd22a8a00f202a39853))
+* **animation-effects:** share the hash and value-noise GLSL helpers ([#537](https://github.com/KeeprDigital/stream-keepr/issues/537)) ([04b45c9](https://github.com/KeeprDigital/stream-keepr/commit/04b45c9989fd10aa74665aa40b46f9d0d8bc4ad7))
+* **editor:** one border and glow fields control ([#560](https://github.com/KeeprDigital/stream-keepr/issues/560)) ([18fb937](https://github.com/KeeprDigital/stream-keepr/commit/18fb937ed1ec15d5b9489fed0e8f04f51cc135ca))
+* **editor:** one geometry fields control for Graphic Items and Source Items ([#555](https://github.com/KeeprDigital/stream-keepr/issues/555)) ([00900b3](https://github.com/KeeprDigital/stream-keepr/commit/00900b32c03d942af413b7c8f8d4ba590faadf7b))
+* **editor:** one Graphic Animation Recipe fields control ([#558](https://github.com/KeeprDigital/stream-keepr/issues/558)) ([4fd2e4d](https://github.com/KeeprDigital/stream-keepr/commit/4fd2e4db7a4496682433eed616acef9073228a23))
+* **editor:** one media fields control and fit vocabulary ([#562](https://github.com/KeeprDigital/stream-keepr/issues/562)) ([9ce7ebb](https://github.com/KeeprDigital/stream-keepr/commit/9ce7ebba0a55a608f2937eb3ae143d0b6e2ab76d))
+* **editor:** one nine-point picker, colour picker and opacity input across the editors ([#541](https://github.com/KeeprDigital/stream-keepr/issues/541)) ([72a44ac](https://github.com/KeeprDigital/stream-keepr/commit/72a44ac7f8e3419b984c123a371c8348d18345dc))
+* **editor:** one Shape Geometry fields control ([#561](https://github.com/KeeprDigital/stream-keepr/issues/561)) ([7b6b910](https://github.com/KeeprDigital/stream-keepr/commit/7b6b91029dd0d4e97c8071afd1bef554e33f3654))
+* **editor:** one typography fields control ([#557](https://github.com/KeeprDigital/stream-keepr/issues/557)) ([1643c41](https://github.com/KeeprDigital/stream-keepr/commit/1643c41d2df37e44b9f63568de1930b6d48740ea))
+* **editor:** shared preview controls and column visibility list ([#563](https://github.com/KeeprDigital/stream-keepr/issues/563)) ([857b1ae](https://github.com/KeeprDigital/stream-keepr/commit/857b1ae67a9e80618990122a3798c65d86e19a26))
+* **server:** remove NuxtHub; bindings in wrangler.jsonc, Drizzle over D1 directly ([#530](https://github.com/KeeprDigital/stream-keepr/issues/530)) ([e7f97af](https://github.com/KeeprDigital/stream-keepr/commit/e7f97af19f95698a2b2da7822d762e644d3e165f))
+
 ## [1.3.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.2.0...v1.3.0) (2026-09-23)
 
 
