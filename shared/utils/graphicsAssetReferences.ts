@@ -12,6 +12,7 @@ import type {
 	BroadcastGraphicsModeConfig,
 	FeatureMatchLayoutConfig,
 	FeatureMatchOverlayModeConfig,
+	ScreenMediaSource,
 } from '../types/screenConfig';
 import { BACKGROUND_LAYERS_CAPABLE_MODES } from '../screenModes';
 
@@ -41,6 +42,27 @@ export function mediaScreenGraphicAssetReference(
 		ownerSlot,
 		kind,
 	};
+}
+
+/**
+ * The exact revision a Screen Media Source pins, or null for a Remote Media URL,
+ * which is a remote dependency and never a Graphic Asset Reference (ADR-0021).
+ */
+export function screenMediaSourceReference(source: ScreenMediaSource | undefined): GraphicAssetReference | null {
+	return source?.kind === 'asset'
+		? { assetId: source.assetId, revisionId: source.revisionId }
+		: null;
+}
+
+function appendScreenMediaSourceReference(
+	references: ScreenGraphicAssetReference[],
+	source: ScreenMediaSource | undefined,
+	kind: 'image' | 'silent-video',
+	ownerSlot: string,
+) {
+	const reference = screenMediaSourceReference(source);
+	if (reference)
+		references.push(mediaScreenGraphicAssetReference(reference, kind, ownerSlot));
 }
 
 export function sameGraphicAssetReference(
@@ -157,8 +179,9 @@ function appendGraphicInputReferences(
 /**
  * Every Graphic Asset Revision one Feature Match Layout pins.
  *
- * Two sources, and only two: the Frame's background image, which is host-owned
- * capability outside the shared vocabulary, and the shared item tree — its Media
+ * Two sources, and only two: the Frame's own image and video, which are
+ * host-owned Screen Media Sources outside the shared vocabulary and publish only
+ * when library-sourced (ADR-0021), and the shared item tree — its Media
  * Graphic Items' content and its typography's library fonts. Source Items pin
  * nothing: they frame an external video source rather than carrying content, and
  * their framing style is host-owned and carries no typography at all.
@@ -176,13 +199,9 @@ export function featureMatchLayoutGraphicAssetReferences(
 	layout: FeatureMatchLayoutConfig,
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
-	if (layout.frame.backgroundImage) {
-		references.push({
-			reference: layout.frame.backgroundImage,
-			ownerSlot: 'layout.frame.backgroundImage',
-			kind: 'image',
-		});
-	}
+	// A disabled Frame video still publishes, as a disabled Background Layer does.
+	appendScreenMediaSourceReference(references, layout.frame.backgroundImage, 'image', 'layout.frame.backgroundImage');
+	appendScreenMediaSourceReference(references, layout.frame.mediaBackground?.source, 'silent-video', 'layout.frame.mediaBackground.source');
 	appendSharedGraphicItemReferences(references, layout.composition.items, 'layout.composition.items');
 	appendGraphicInputReferences(references, layout.composition.inputs, 'layout.composition.inputs');
 
@@ -264,13 +283,12 @@ function backgroundLayerStackGraphicAssetReferences(
 	for (const layer of layers ?? []) {
 		if (layer.type !== 'image' && layer.type !== 'video')
 			continue;
-		if (layer.source.kind !== 'asset')
-			continue;
-		references.push(mediaScreenGraphicAssetReference(
-			{ assetId: layer.source.assetId, revisionId: layer.source.revisionId },
+		appendScreenMediaSourceReference(
+			references,
+			layer.source,
 			layer.type === 'video' ? 'silent-video' : 'image',
 			`${slotRoot}.${layer.id}.source`,
-		));
+		);
 	}
 
 	return references;

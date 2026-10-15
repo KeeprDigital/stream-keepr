@@ -188,6 +188,7 @@ describe('screenService', () => {
 		it('guards the Screen update with every exact Graphic Asset Reference precondition', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: testGraphicAssetId('asset-1'),
 				revisionId: testGraphicAssetRevisionId('revision-1'),
 			};

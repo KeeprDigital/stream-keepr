@@ -392,21 +392,25 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(legacy).success).toBe(false);
 	});
 
-	it('accepts an exact Graphic Asset Reference for the Frame background and rejects a raw URL', () => {
+	it('takes a Screen Media Source for the Frame image: an exact library revision or a Remote Media URL', () => {
 		const referenced = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		referenced.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: 'asset-frame' as never,
 			revisionId: 'revision-frame-3' as never,
 		};
+		const remote = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		remote.layout.frame.backgroundImage = { kind: 'url', url: 'https://example.com/frame.png' };
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(referenced).success).toBe(true);
-		expect(featureMatchOverlayModeConfigSchema.safeParse({
-			...referenced,
-			layout: {
-				...referenced.layout,
-				frame: { ...referenced.layout.frame, backgroundImageUrl: 'https://example.com/frame.png' },
-			},
-		}).success).toBe(false);
+		expect(featureMatchOverlayModeConfigSchema.safeParse(remote).success).toBe(true);
+	});
+
+	it('refuses the Frame image as a bare reference, the shape before ADR-0021', () => {
+		const bare = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
+		bare.layout.frame.backgroundImage = { assetId: 'asset-frame', revisionId: 'revision-frame-3' };
+
+		expect(featureMatchOverlayModeConfigSchema.safeParse(bare).success).toBe(false);
 	});
 
 	it('requires the shared item tree rather than treating it as optional', () => {
@@ -465,56 +469,50 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
-	it('accepts frame video background playback settings', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse({
+	function withFrameVideo(mediaBackground: Record<string, unknown>) {
+		return {
 			...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 			layout: {
 				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-				frame: {
-					...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame,
-					mediaBackground: {
-						enabled: true,
-						type: 'video',
-						url: '/backgrounds/feature-loop.mp4',
-						fit: 'cover',
-						opacity: 0.75,
-						playbackRate: 0.5,
-						loop: true,
-					},
-				},
+				frame: { ...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame, mediaBackground },
 			},
-		});
+		};
+	}
 
-		expect(result.success).toBe(true);
+	const frameVideo = { enabled: true, fit: 'cover', opacity: 0.75, playbackRate: 0.5, loop: true };
+
+	it('takes a Screen Media Source for the Frame video, from either source', () => {
+		for (const source of [
+			{ kind: 'url', url: '/backgrounds/feature-loop.mp4' },
+			{ kind: 'asset', assetId: 'asset-loop', revisionId: 'revision-loop' },
+		])
+			expect(featureMatchOverlayModeConfigSchema.safeParse(withFrameVideo({ ...frameVideo, source })).success, source.kind).toBe(true);
 	});
 
-	it('rejects executable or credential-bearing media URLs', () => {
+	it('refuses the Frame video as a typed URL, the shape before ADR-0021', () => {
+		expect(featureMatchOverlayModeConfigSchema.safeParse(withFrameVideo({
+			...frameVideo,
+			type: 'video',
+			url: '/backgrounds/feature-loop.mp4',
+		})).success).toBe(false);
+	});
+
+	it('rejects executable, credential-bearing, or plain-HTTP media URLs', () => {
+		// Plain HTTP is blocked as mixed content by an HTTPS-served Screen, so it
+		// would only ever show a blank output (ADR-0021).
 		for (const url of [
 			'javascript:alert(1)',
 			'data:text/html,<script>alert(1)</script>',
 			'//example.com/video.mp4',
 			'https://user:secret@example.com/video.mp4',
+			'http://example.com/video.mp4',
 		]) {
-			const result = featureMatchOverlayModeConfigSchema.safeParse({
-				...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-				layout: {
-					...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout,
-					frame: {
-						...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame,
-						mediaBackground: {
-							enabled: true,
-							type: 'video',
-							url,
-							fit: 'cover',
-							opacity: 1,
-							playbackRate: 1,
-							loop: true,
-						},
-					},
-				},
-			});
+			const result = featureMatchOverlayModeConfigSchema.safeParse(withFrameVideo({
+				...frameVideo,
+				source: { kind: 'url', url },
+			}));
 
-			expect(result.success).toBe(false);
+			expect(result.success, url).toBe(false);
 		}
 	});
 
@@ -532,7 +530,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	describe('the Frame video playback rate', () => {
 		function withRate(playbackRate: number) {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.mediaBackground = { enabled: true, type: 'video', url: '/loop.mp4', fit: 'cover', opacity: 1, playbackRate, loop: true };
+			config.layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url: '/loop.mp4' }, fit: 'cover', opacity: 1, playbackRate, loop: true };
 			return config;
 		}
 
@@ -617,6 +615,15 @@ describe('backgroundModeConfigSchema', () => {
 		expect(backgroundModeConfigSchema.safeParse({
 
 			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'javascript:alert(1)' } }],
+		}).success).toBe(false);
+	});
+
+	it('takes a Remote Media URL over HTTPS only, by the same rule as the Frame', () => {
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' } }],
+		}).success).toBe(true);
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: [{ ...urlImageLayer, source: { kind: 'url', url: 'http://cdn.example.com/plate.png' } }],
 		}).success).toBe(false);
 	});
 

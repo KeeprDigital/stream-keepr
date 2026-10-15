@@ -43,12 +43,12 @@ function overlayConfig(layout: Record<string, unknown> = {}): FeatureMatchOverla
 const BACKGROUND_SLOT = 'layout.frame.backgroundImage';
 
 function configWithBackground() {
-	return overlayConfig({ frame: { backgroundImage: { assetId: 'asset-1', revisionId: 'rev-1' } } });
+	return overlayConfig({ frame: { backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' } } });
 }
 
 function configWithBackgroundAndLogo() {
 	return overlayConfig({
-		frame: { backgroundImage: { assetId: 'asset-1', revisionId: 'rev-1' } },
+		frame: { backgroundImage: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' } },
 		composition: {
 			items: [{ id: 'logo', type: 'media', mediaKind: 'image', asset: { assetId: 'asset-2', revisionId: 'rev-2' } }],
 			inputs: [],

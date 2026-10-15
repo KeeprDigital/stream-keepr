@@ -84,7 +84,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			revisionId: operation.result!.revisionId,
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		config.layout.composition.items.push({
 			...getGraphicItemDefinition('media').createDefault({
 				id: 'sponsor-logo',
@@ -111,7 +111,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
 		);
-		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual(reference);
+		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
 
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
@@ -157,6 +157,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
 		config!.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: testGraphicAssetId('missing-asset'),
 			revisionId: testGraphicAssetRevisionId('missing-revision'),
 		};
@@ -168,6 +169,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		)).rejects.toMatchObject({ statusCode: 409 });
 		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(unchanged!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({
+			kind: 'asset',
 			assetId: operation.result!.assetId,
 			revisionId: operation.result!.revisionId,
 		});

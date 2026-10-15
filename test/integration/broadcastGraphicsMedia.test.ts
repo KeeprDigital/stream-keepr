@@ -408,7 +408,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// The shipped default, so the layout satisfies its own schema: this test is
 		// about which references survive a write, not about authoring a valid layout.
 		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
-		layout.frame.backgroundImage = logo as never;
+		layout.frame.backgroundImage = { kind: 'asset', ...logo } as never;
 		const overlayConfig = await $fetch<ScreenResponse>(
 			`/api/events/${eventId}/screens/${overlayScreen.id}/config/feature-match-overlay`,
 			{
@@ -417,7 +417,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 				headers: { cookie: graphicsAuthorCookie },
 			},
 		);
-		expect(overlayConfig.modeConfigs!['feature-match-overlay']!.layout.frame.backgroundImage).toEqual(logo);
+		expect(overlayConfig.modeConfigs!['feature-match-overlay']!.layout.frame.backgroundImage).toEqual({ kind: 'asset', ...logo });
 
 		function slotsFor(screen: ScreenResponse, usage: GraphicAssetUsage[]) {
 			return usage.filter(item => item.owner.id === String(screen.id)).map(item => item.owner.slot).sort();

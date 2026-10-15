@@ -141,7 +141,7 @@ describe('template Package installation through the API boundary', () => {
 		};
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference as never;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference } as never;
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
@@ -182,6 +182,7 @@ describe('template Package installation through the API boundary', () => {
 			frame: {
 				...((parts.template as { frame: Record<string, unknown> }).frame),
 				backgroundImage: {
+					kind: 'asset',
 					assetId: 'a-source-asset-never-seen-here',
 					revisionId: 'a-source-revision-never-seen-here',
 				},
@@ -343,6 +344,7 @@ describe('template Package installation through the API boundary', () => {
 			frame: {
 				...((parts.template as { frame: Record<string, unknown> }).frame),
 				backgroundImage: {
+					kind: 'asset',
 					assetId: packaged.origin.sourceAssetId,
 					revisionId: 'another-unseen-revision',
 				},
