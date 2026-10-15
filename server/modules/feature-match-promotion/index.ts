@@ -1,6 +1,7 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { FeatureMatchNoteDiscardConfirmation, FeatureMatchPromotionResponse } from '~~/shared/api';
 import { db } from '~~/server/db';
+import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
@@ -141,6 +142,19 @@ export function featureMatchPromotionModule() {
 		}
 
 		const assignment = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
+		// Decide this promotion's outcome before anything is published. The batch
+		// committed, so this Slot did hold the Match; if another promotion has
+		// moved it off since, this one is answered as lost, and a peer must not be
+		// shown a promotion its operator was told failed (#576). Read after the
+		// Assignment, so a move that carried the Assignment to another Slot shows
+		// here too, rather than as a missing Assignment.
+		const committedSlot = await slots.findById(slotId, eventId);
+		if (!committedSlot) {
+			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
+		}
+		if (committedSlot.matchId !== matchId) {
+			throw new StateConflictError('Feature match slot', slotId);
+		}
 		if (!assignment) {
 			throw createError({ statusCode: 500, message: 'Failed to save feature match assignment' });
 		}
@@ -178,22 +192,15 @@ export function featureMatchPromotionModule() {
 			}
 		}
 
+		// Re-read for the reverse sync's snapshot. A promotion that has moved the
+		// Match off since the outcome was decided does not undo this one, whose
+		// Assignment peers have already been shown: the history is "promoted, then
+		// moved" (#575). This promotion answers with what it committed, and leaves
+		// publishing the Slot's current state to the promotion that moved it.
 		const promotedSlot = await slots.findById(slotId, eventId);
-		if (!promotedSlot) {
-			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
-		}
-		if (promotedSlot.matchId !== matchId) {
-			// The batch committed, so this Slot did hold the Match; another promotion
-			// has taken it since. Answering with the Slot as it is now would report
-			// somebody else's promotion as this one's result.
-			throw new StateConflictError('Feature match slot', slotId);
-		}
-
-		const response = await eventData.featureMatchSlotUpdated({
-			eventId,
-			entity: promotedSlot,
-			originConnectionId,
-		});
+		const response = promotedSlot?.matchId === matchId
+			? await eventData.featureMatchSlotUpdated({ eventId, entity: promotedSlot, originConnectionId })
+			: mapFeatureMatchToResponse(committedSlot);
 
 		return {
 			promotedSlot: response,

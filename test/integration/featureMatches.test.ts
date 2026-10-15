@@ -606,33 +606,26 @@ describe('feature match slots API', () => {
 			}),
 		]);
 
-		// Exactly one lane may win, and the loser must be told it lost rather than
-		// shown a promotion it did not get. Both answering 200 is the defect even
-		// when only one Slot ends up holding the Match, because the lane whose
-		// promotion was undone was still told it had succeeded.
-		const statuses = responses.map(response => response.status).toSorted();
-		expect(statuses).toEqual([200, 409]);
-		// Classified as this promotion losing a race, not as the generic "resource
-		// already exists" any unique index violation would otherwise produce.
-		const losing = responses.find(response => response.status === 409)!;
-		expect(losing._data.message).toContain('state was modified concurrently');
-		// And marked as a lost race on the wire, because the client's conflict
-		// retry replays only a marked 409 — an unmarked one is a refusal it must
-		// surface instead (#381). This is the end-to-end proof the mark the
-		// error hook stamps actually serializes through Nitro.
-		expect(losing._data.data).toEqual({ code: 'state-conflict' });
-
+		// Exactly one Slot ends up holding the Match: the winner's.
 		const stored = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
 		expect(holders).toHaveLength(1);
 		const winner = holders[0]!;
-		// The loser ends up empty by one of two histories, and the race picks which
-		// (#572). Either its D1 batch aborted on the one-Slot-per-Match index,
-		// leaving its Slot and Session untouched, or its batch committed first and
-		// the winner's promotion then moved the Match off it, clearing it with a
-		// fresh Session. The winner's cleared Slots say which one happened.
-		const loserBefore = responses[0]!.status === 409 ? lane1 : lane2;
-		const winning = responses.find(response => response.status === 200)!;
+		const [winning, other] = winner.id === lane1.id ? responses : [responses[1]!, responses[0]!];
+		const loserBefore = winner.id === lane1.id ? lane2 : lane1;
+		expect(winning.status).toBe(200);
+
+		// The other lane ends up empty by one of three histories, and the race picks
+		// which (#572, #575). The winner's cleared Slots say whether it moved the
+		// Match off the other lane.
+		// 1. The other lane's D1 batch aborted on the one-Slot-per-Match index,
+		//    leaving its Slot and Session untouched, and it answers 409.
+		// 2. Its batch committed first, the winner moved the Match off before it
+		//    decided its outcome, and it answers 409 having published nothing.
+		// 3. Its batch committed first and it decided its outcome before the
+		//    winner moved the Match off. That is a serial "promoted, then moved",
+		//    so it answers 200 with its own promotion. It must never answer 200
+		//    for a promotion the winner did not then undo.
 		const movedOffLoser = winning._data.clearedSlots.some((slot: { id: number }) => slot.id === loserBefore.id);
 		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id)!;
 		expect(loserAfter).toMatchObject({ id: loserBefore.id, matchId: null });
@@ -642,6 +635,22 @@ describe('feature match slots API', () => {
 		}
 		else {
 			expect(loserAfter.activeSessionId).toBe(loserBefore.activeSessionId);
+		}
+		if (other.status === 200) {
+			expect(movedOffLoser).toBe(true);
+			expect(other._data.promotedSlot).toMatchObject({ id: loserBefore.id, matchId: contested.id });
+		}
+		else {
+			expect(other.status).toBe(409);
+			// Classified as this promotion losing a race, not as the generic
+			// "resource already exists" any unique index violation would otherwise
+			// produce.
+			expect(other._data.message).toContain('state was modified concurrently');
+			// And marked as a lost race on the wire, because the client's conflict
+			// retry replays only a marked 409 — an unmarked one is a refusal it must
+			// surface instead (#381). This is the end-to-end proof the mark the
+			// error hook stamps actually serializes through Nitro.
+			expect(other._data.data).toEqual({ code: 'state-conflict' });
 		}
 		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
 		expect(assignments.featureMatchAssignments.filter(

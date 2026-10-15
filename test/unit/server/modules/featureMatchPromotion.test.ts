@@ -132,8 +132,7 @@ describe('feature Match Slot Promotion server module', () => {
 		mockMatchService.findById.mockResolvedValue(match);
 		mockFeatureMatchService.findById
 			.mockResolvedValueOnce(initialSlot)
-			.mockResolvedValueOnce(refreshedClearedSlot)
-			.mockResolvedValueOnce(refreshedPromotedSlot);
+			.mockImplementation(async (id: number) => id === 5 ? refreshedClearedSlot : refreshedPromotedSlot);
 		mockBuildMatchPromotionPlan.mockResolvedValue({
 			clearedSlots: [clearedFuture],
 			promotedSlot: promotedFuture,
@@ -307,9 +306,57 @@ describe('feature Match Slot Promotion server module', () => {
 			name: 'StateConflictError',
 		});
 
-		expect(mockPublishMessage).not.toHaveBeenCalledWith(1, 'featureMatch:updated', {
-			featureMatch: expect.objectContaining({ id: 2 }),
+		// The operator is told this promotion failed, so no peer may be shown it
+		// (#576): neither its Assignment nor any Slot it cleared is published.
+		expect(mockPublishMessage).not.toHaveBeenCalled();
+		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).not.toHaveBeenCalled();
+	});
+
+	it('answers a promotion whose Assignment a later move carried off as lost, not as a failed save', async () => {
+		stagePromotion();
+		mockFeatureMatchService.findById
+			.mockReset()
+			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
+			.mockResolvedValue(createFeatureMatch({ id: 2, matchId: null, activeSessionId: 60 }));
+		mockFeatureMatchAssignmentService.findByRoundAndSlot
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(undefined);
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: 1,
+			slotId: 2,
+			matchId: 7,
+		})).rejects.toMatchObject({ statusCode: 409, name: 'StateConflictError' });
+
+		expect(mockPublishMessage).not.toHaveBeenCalled();
+	});
+
+	it('still reports a promotion that held its Match when decided, though a later one moves it off', async () => {
+		const committedSlot = createFeatureMatch({ id: 2, matchId: 7, activeSessionId: 57 });
+		const movedOffSlot = createFeatureMatch({ id: 2, matchId: null, activeSessionId: 60 });
+		mockMatchService.findById.mockResolvedValue(createMatch());
+		mockFeatureMatchService.findById
+			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
+			.mockResolvedValueOnce(committedSlot)
+			.mockResolvedValue(movedOffSlot);
+		mockBuildMatchPromotionPlan.mockResolvedValue({
+			clearedSlots: [],
+			promotedSlot: createFeatureMatch({ id: 2, matchId: 7 }),
+			queries: ['promote-q'],
+		});
+		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue({ id: 9 });
+
+		const result = await featureMatchPromotionModule().promoteMatchToSlot({ eventId: 1, slotId: 2, matchId: 7 });
+
+		// Its Assignment was already published as a success, so a 409 now would
+		// contradict it (#576). The history is a serial "promoted, then moved"
+		// (#575): this promotion answers with what it committed, and the moving
+		// promotion publishes the Slot's current state.
+		expect(result.promotedSlot).toMatchObject({ id: 2, matchId: 7, activeSessionId: 57 });
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:created', {
+			featureMatchAssignment: expect.objectContaining({ id: 9 }),
 		}, undefined);
+		expect(mockPublishMessage).not.toHaveBeenCalledWith(1, 'featureMatch:updated', expect.anything(), undefined);
 	});
 
 	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed promotion', async () => {
