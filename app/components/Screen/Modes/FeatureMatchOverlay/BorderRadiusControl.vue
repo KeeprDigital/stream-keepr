@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { MAX_PIXEL_VALUE } from '~~/shared/types/graphics';
+
 type RadiusField = 'borderRadius' | 'borderRadiusTopLeft' | 'borderRadiusTopRight' | 'borderRadiusBottomRight' | 'borderRadiusBottomLeft';
 
 const props = defineProps<{
@@ -24,6 +26,7 @@ function valueFor(field: RadiusField) {
 			<UInputNumber
 				:model-value="valueFor('borderRadiusTopLeft')"
 				:min="0"
+				:max="MAX_PIXEL_VALUE"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusTopLeft', Number($event))"
@@ -34,6 +37,7 @@ function valueFor(field: RadiusField) {
 			<UInputNumber
 				:model-value="valueFor('borderRadius')"
 				:min="0"
+				:max="MAX_PIXEL_VALUE"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadius', Number($event))"
@@ -44,6 +48,7 @@ function valueFor(field: RadiusField) {
 			<UInputNumber
 				:model-value="valueFor('borderRadiusTopRight')"
 				:min="0"
+				:max="MAX_PIXEL_VALUE"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusTopRight', Number($event))"
@@ -54,6 +59,7 @@ function valueFor(field: RadiusField) {
 			<UInputNumber
 				:model-value="valueFor('borderRadiusBottomLeft')"
 				:min="0"
+				:max="MAX_PIXEL_VALUE"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusBottomLeft', Number($event))"
@@ -64,6 +70,7 @@ function valueFor(field: RadiusField) {
 			<UInputNumber
 				:model-value="valueFor('borderRadiusBottomRight')"
 				:min="0"
+				:max="MAX_PIXEL_VALUE"
 				size="sm"
 				class="w-full"
 				@update:model-value="emit('update', 'borderRadiusBottomRight', Number($event))"

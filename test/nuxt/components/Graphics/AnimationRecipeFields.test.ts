@@ -6,7 +6,7 @@ import AnimationRecipeFields from '~/components/Graphics/AnimationRecipeFields.v
 
 /**
  * The one Graphic Animation Recipe fields control, shared by a lifecycle phase in
- * the compositor and a Graphic Animation Recipe preset: the bounds it presents, what
+ * the compositor and a Graphic Animation Recipe entry: the bounds it presents, what
  * an empty field emits, which fields the recipe's own values hide, and the
  * on-screen repetition only a cycling recipe is offered.
  */
@@ -75,7 +75,7 @@ const RECIPE: GraphicAnimationRecipe = {
 	reveal: { edge: 'left' },
 };
 
-/** A phase's recipe, or a Style Set preset's, which may leave out its delay. */
+/** A phase's recipe, or a Style Set entry's, which may leave out its delay. */
 type FieldsRecipe = Omit<GraphicAnimationRecipe, 'delay'> & Partial<Pick<GraphicOnScreenAnimationRecipe, 'delay' | 'pause' | 'repeat'>>;
 
 interface SlideParent { width: number; height: number; name: 'canvas' | 'group' }

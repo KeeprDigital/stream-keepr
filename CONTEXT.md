@@ -292,9 +292,13 @@ The synchronized visual change between profiles in a Social Profile Rotation: Cu
 ### Graphic Style Sets and Template Packages
 
 **Graphic Style Set**:
-A named reusable authoring resource, shared across the graphics template libraries, holding named values and bounded presets that keep a cohesive visual and motion language across Broadcast Graphic Templates and Feature Match Layout Templates. Events consume but never own one.
-Its entry kinds are palette colours, typography presets, Graphic Fill presets, Graphic Surface Style presets, media treatment presets, Shape Geometry presets, and Graphic Animation Recipe presets. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
+A named reusable authoring resource, shared across the graphics template libraries, holding Graphic Style Set Entries that keep a cohesive visual and motion language across Broadcast Graphic Templates and Feature Match Layout Templates. Events consume but never own one.
+Its entry kinds are palette colour, typography, Graphic Fill, Graphic Surface Style, media treatment, Shape Geometry, and Graphic Animation Recipe. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
 Edits accumulate in a working draft and become a Style Set revision only through an explicit atomic publish (deleting a published entry is the one exception). Linked templates receive an update to review and apply as a new template revision, preserving their property-level overrides; placed graphics never change automatically.
+
+**Graphic Style Set Entry**:
+One named, bounded value in a Graphic Style Set that templates link to rather than copy, so a published change reaches them as a reviewable update.
+_Avoid_: Preset — which initialises a value by copying it, with no link.
 
 **Graphic Style Set Package**:
 A single-Style-Set portable `.skstyle` archive, carrying one published revision and no templates or asset files; it declares the application fonts it needs and a receiver missing one refuses it. It follows the Template Package principles; an import never field-merges and may always install as an independent copy.
@@ -489,7 +493,7 @@ The behaviour when a Text Graphic Item's text exceeds its bounds: clip, ellipsis
 A Graphic Item rendering an image or silent video with a Media Fit, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
 
 **Media Fit**:
-How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, media treatment presets, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
+How an image or video fills the box it is drawn in: cover, contain, or fill. One vocabulary shared by Media Graphic Items, media treatment Graphic Style Set Entries, image and video Background Layers, and the Feature Match Overlay Frame's image and video.
 _Avoid_: object fit, scaling mode
 
 **Shape Graphic Item**:
@@ -658,7 +662,7 @@ _Avoid_: Dummy data, test data
 - Graphic Animation presets are authoring shortcuts that initialise editable recipes, not runtime concepts
 - Every recipe operates relative to its owner's **Graphic Resting State**
 - A scale channel uses one **Graphic Animation Origin** and a uniform factor from zero to twice the resting size
-- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A **Graphic Style Set** recipe preset has no owner, so its fixed distance is entered in pixels
+- A slide channel uses one of eight compass directions and a fixed distance (any **Geometry Unit**, measured against its owner's parent: width for east/west, height for north/south, the shorter side for a diagonal; stored in pixels) or the distance needed to clear its owner's parent. A Graphic Animation Recipe **Graphic Style Set Entry** has no owner, so its fixed distance is entered in pixels
 - A reveal channel wipes from one edge across its owner's rectangular bounds, preserving existing **Shape Geometry** clipping
 - A fade channel reduces opacity from the resting value; fades on a **Broadcast Graphic** and its items compose multiplicatively
 - Easing is linear, ease-in, ease-out, ease-in-out, back-in, back-out, or back-in-out; rotation, skew, perspective, filters, morphing, motion paths, and arbitrary transforms are outside **Graphic Animation**

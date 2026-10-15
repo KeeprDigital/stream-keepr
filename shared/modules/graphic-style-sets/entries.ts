@@ -20,9 +20,9 @@ import { GRAPHIC_FONT_IDS } from '../graphics/typography';
  * Resolving one Graphic Style Set's entries into the values a graphics document
  * can actually hold.
  *
- * An entry is not a value. A typography preset stores a *palette entry id* for its
- * colour, a Graphic Fill preset stores one or more of them, and a Graphic Surface
- * Style preset stores a Graphic Fill preset's id — so reading any of them means
+ * An entry is not a value. A typography entry stores a *palette entry id* for its
+ * colour, a Graphic Fill entry stores one or more of them, and a Graphic Surface
+ * Style entry stores a Graphic Fill entry's id — so reading any of them means
  * walking a small reference graph that can be broken in four ways: a reference to
  * nothing, a reference to an entry of the wrong kind, a cycle, and an entry stored
  * in a schema version this build does not read.
@@ -41,10 +41,10 @@ import { GRAPHIC_FONT_IDS } from '../graphics/typography';
  * would make both of those all-or-nothing for no gain.
  */
 
-/** A Graphic Surface Style preset's resolved value. */
+/** A Graphic Surface Style entry's resolved value. */
 export interface ResolvedGraphicStyleSurface {
 	/**
-	 * Absent when the preset references no Graphic Fill preset, in which case the
+	 * Absent when the entry references no Graphic Fill entry, in which case the
 	 * consuming property keeps whatever fill it already had — a Graphic Surface Style
 	 * always has a fill, so there is nothing to clear it to.
 	 */
@@ -54,7 +54,7 @@ export interface ResolvedGraphicStyleSurface {
 	glow?: GraphicGlow;
 }
 
-/** A media treatment preset's resolved value. */
+/** A media treatment entry's resolved value. */
 export interface ResolvedGraphicStyleMediaTreatment {
 	fit: MediaFit;
 	focalPosition: GraphicFocalPosition;
@@ -123,11 +123,11 @@ export function graphicStyleEntryReferences(entry: GraphicStyleSetEntry): Graphi
 }
 
 /**
- * The Graphic Animation Recipe an animation preset resolves to.
+ * The Graphic Animation Recipe a Graphic Animation Recipe entry resolves to.
  *
  * `delay` defaults to zero rather than staying absent because every recipe has one:
- * an optional delay in the preset means "the author did not set one", and the value
- * that means is zero. `pause` and `repeat` are left as the preset stored them — they
+ * an optional delay in the entry means "the author did not set one", and the value
+ * that means is zero. `pause` and `repeat` are left as the entry stored them — they
  * are on-screen-only, and the slot that receives them decides whether they apply.
  */
 function resolveAnimationRecipe(value: AnimationRecipeGraphicStyleEntryValue): GraphicStyleAnimationProperties {
@@ -351,7 +351,7 @@ export function resolveGraphicStyleSet(
  * Every entry inside this Style Set that references the given entry.
  *
  * What deletion asks first. An entry other entries depend on cannot simply be
- * detached — a Graphic Fill preset has nowhere to put a literal colour — so this is
+ * detached — a Graphic Fill entry has nowhere to put a literal colour — so this is
  * what makes the difference between a deletion that can offer both modes and one
  * that can only offer replacement.
  */

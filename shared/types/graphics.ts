@@ -165,7 +165,7 @@ export interface GraphicTypography {
 
 /**
  * The bounds the editor offers for every typography: a Graphic Item's base
- * typography, a Graphic Placeholder Style, and a Graphic Style Set typography preset.
+ * typography, a Graphic Placeholder Style, and a Graphic Style Set typography entry.
  *
  * Weight and letter spacing are the wire schemas' own bounds, and every maximum is.
  * Font size and line height floors are editor-only: the schemas need those only to be
@@ -276,6 +276,13 @@ export interface ShapeCorner {
 
 export const SHAPE_CORNER_KEYS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as const;
 export type ShapeCornerKey = typeof SHAPE_CORNER_KEYS[number];
+
+/**
+ * The largest pixel length a saved Screen or Graphic Style Set value accepts, either
+ * way: sizes, positions, border widths, and Feature Match Overlay border radii.
+ * Controls bound their inputs to it so the editor never offers what a write refuses.
+ */
+export const MAX_PIXEL_VALUE = 10_000;
 
 /**
  * The largest corner size, and the largest slant either way, a saved Shape

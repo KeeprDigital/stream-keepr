@@ -10,11 +10,11 @@ import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
  * The value controls for one Graphic Style Set entry.
  *
  * Every colour is a *picker of palette entries* rather than a colour input, and that
- * is the whole point of the kind: a preset that stored a colour would make a brand
- * change a find-and-replace across every preset that happened to use it. Only a
+ * is the whole point of the kind: an entry that stored a colour would make a brand
+ * change a find-and-replace across every entry that happened to use it. Only a
  * palette entry itself has a colour input.
  *
- * The bounds match the property each preset produces, because a preset outside the
+ * The bounds match the property each entry produces, because an entry outside the
  * document's bounds would publish cleanly and then make every template referencing it
  * unwritable.
  */
@@ -58,7 +58,7 @@ function patchRecipeChannel<K extends GraphicAnimationChannelKey>(channel: K, fi
 }
 
 /**
- * A Graphic Surface Style preset's outline and glow name a palette entry where an
+ * A Graphic Surface Style entry's outline and glow name a palette entry where an
  * item's own would hold a colour; switching one on starts it from the first palette
  * entry.
  */
@@ -115,13 +115,12 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 				@update="patch"
 			>
 				<template #font>
-					<GraphicsCompositorFontSelectionField
-						application-only
-						:font="entry.value.font"
+					<GraphicsApplicationFontField
+						:font-id="entry.value.font.fontId"
 						:disabled="disabled"
 						size="xs"
 						test-id-prefix="style-entry-typography"
-						@application="patch({ font: { kind: 'application', fontId: $event } })"
+						@update:font-id="patch({ font: { kind: 'application', fontId: $event } })"
 					/>
 				</template>
 				<template #color>
@@ -129,7 +128,7 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 						label="Colour"
 						size="xs"
 						class="col-span-2"
-						help="A palette entry, so a brand change reaches every preset that links to it."
+						help="A palette entry, so a brand change reaches every other entry that links to it."
 					>
 						<USelect
 							:model-value="entry.value.colorEntryId"
@@ -243,7 +242,7 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 
 		<template v-else-if="entry.kind === 'surface-style'">
 			<UFormField
-				label="Graphic Fill preset"
+				label="Graphic Fill entry"
 				size="xs"
 				help="Optional. Without one, the items that inherit this keep their own fill."
 			>
@@ -315,7 +314,7 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 			<p class="text-xs text-muted">
 				Playback rate and loop apply to silent video only.
 			</p>
-			<UFormField label="Clip to Shape Geometry preset" size="xs">
+			<UFormField label="Clip to Shape Geometry entry" size="xs">
 				<USelect
 					:model-value="entry.value.clipGeometryEntryId"
 					:items="geometryOptions"
@@ -331,7 +330,7 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 
 		<template v-else-if="entry.kind === 'animation-recipe'">
 			<!--
-				On-screen-only defaults, hence cycling. A template may assign this same preset
+				On-screen-only defaults, hence cycling. A template may assign this same entry
 				to any lifecycle phase, and the three that do not cycle simply never receive
 				them — which is why they are authored here rather than being a separate kind.
 			-->

@@ -10,10 +10,10 @@ import { squareShapeGeometry } from '~~/shared/modules/graphics';
  *
  * The rules under test are the ones that make an entry worth having. Every colour is
  * a *picker of palette entries* rather than a colour input, so a brand change reaches
- * every preset that links to it. A single-field edit keeps its siblings, because the
+ * every entry that links to it. A single-field edit keeps its siblings, because the
  * editor writes whole entry values. A Graphic Fill's kind replaces the value rather
  * than merging into it, because it is a discriminated union. And an observer can read
- * every preset and write none of them.
+ * every entry and write none of them.
  */
 
 enableAutoUnmount(afterEach);
@@ -99,7 +99,7 @@ const TYPOGRAPHY: GraphicStyleSetEntry = {
 	name: 'Heading',
 	schemaVersion: 1,
 	value: {
-		// An application font, never a Graphics Asset Library one: a preset travels in a
+		// An application font, never a Graphics Asset Library one: an entry travels in a
 		// `.skstyle` with no asset envelope, so it takes only the arm that needs no bytes.
 		font: { kind: 'application', fontId: 'inter' },
 		fontSize: 64,
@@ -170,11 +170,11 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper)).toEqual({ color: '#00ff88' });
 	});
 
-	it('makes a typography preset\'s colour a choice between palette entries', async () => {
+	it('makes a typography entry\'s colour a choice between palette entries', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY);
 
-		// A preset that stored a colour would make a brand change a find-and-replace
-		// across every preset that happened to use it.
+		// An entry that stored a colour would make a brand change a find-and-replace
+		// across every entry that happened to use it.
 		expect(wrapper.find('input[type="color"]').exists()).toBe(false);
 		const picker = wrapper.get('[data-testid="style-entry-typography-color"]');
 		expect(picker.findAll('option').map(option => option.text())).toEqual(['Brand', 'Ink']);
@@ -184,10 +184,10 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper).colorEntryId).toBe('ink');
 	});
 
-	it('offers a typography preset application fonts only, through the shared font control', async () => {
+	it('offers a typography entry application fonts only, through the shared font control', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY);
 
-		// ADR-0001: a preset travels in a `.skstyle` with no asset bytes, so there is no
+		// ADR-0001: an entry travels in a `.skstyle` with no asset bytes, so there is no
 		// source to choose and no library to pick from.
 		expect(wrapper.find('[data-testid="style-entry-typography-font-source"]').exists()).toBe(false);
 		const font = wrapper.get('[data-testid="style-entry-typography-font"]');
@@ -197,7 +197,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper)).toEqual({ ...TYPOGRAPHY.value, font: { kind: 'application', fontId: 'mplantin' } });
 	});
 
-	it('bounds a typography preset to what every typography accepts', async () => {
+	it('bounds a typography entry to what every typography accepts', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY);
 
 		await fieldNamed(wrapper, 'Letter spacing').get('input').setValue(-250);
@@ -213,7 +213,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		await fieldNamed(wrapper, 'Size').get('input').setValue(32);
 
 		// The editor writes whole entry values, so a control that dropped its siblings
-		// would silently reset the rest of the preset.
+		// would silently reset the rest of the entry.
 		expect(emittedValue(wrapper)).toEqual({ ...TYPOGRAPHY.value, fontSize: 32 });
 	});
 
@@ -241,7 +241,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		});
 	});
 
-	it('offers a Graphic Surface Style the Graphic Fill presets, and no colour of its own', async () => {
+	it('offers a Graphic Surface Style the Graphic Fill entries, and no colour of its own', async () => {
 		const surface: GraphicStyleSetEntry = {
 			id: 'panel',
 			kind: 'surface-style',
@@ -372,7 +372,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect('fade' in emittedValue(wrapper)).toBe(false);
 	});
 
-	it('keeps a Graphic Animation Recipe preset\'s slide length in pixels, whatever the Geometry Unit', async () => {
+	it('keeps a Graphic Animation Recipe entry\'s slide length in pixels, whatever the Geometry Unit', async () => {
 		localStorage.setItem('editor-geometryUnit', 'percent');
 		const recipe: GraphicStyleSetEntry = {
 			id: 'rise',
@@ -384,11 +384,11 @@ describe('graphicsStyleSetEntryEditor', () => {
 		const wrapper = await mountEditor(recipe);
 		await flushPromises();
 
-		// A preset has no owner, so no parent a percentage could be measured against.
+		// An entry has no owner, so no parent a percentage could be measured against.
 		expect(fieldNamed(wrapper, 'Fixed distance (px)').get<HTMLInputElement>('input').element.value).toBe('120');
 	});
 
-	it('edits a media treatment preset with the same media fields a Media Graphic Item has', async () => {
+	it('edits a media treatment entry with the same media fields a Media Graphic Item has', async () => {
 		const treatment: GraphicStyleSetEntry = {
 			id: 'hero-media',
 			kind: 'media-treatment',
@@ -412,7 +412,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(wrapper).playbackRate).toBe(1);
 	});
 
-	it('gives an observer every preset to read and none to write', async () => {
+	it('gives an observer every entry to read and none to write', async () => {
 		const wrapper = await mountEditor(TYPOGRAPHY, { writable: false });
 
 		expect(wrapper.find('[data-testid="style-entry-value-typography"]').exists()).toBe(true);

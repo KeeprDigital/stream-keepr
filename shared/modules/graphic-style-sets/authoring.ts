@@ -33,7 +33,7 @@ import { GRAPHIC_STYLE_SLOT_KINDS, graphicStyleOwnerSupportsSlot, readGraphicSty
 /**
  * A new entry of one kind, with a value an author can immediately see the effect of.
  *
- * The kinds that involve colour need a palette entry to point at, because a preset
+ * The kinds that involve colour need a palette entry to point at, because an entry
  * stores a reference rather than a colour. An author creating one before any palette
  * entry exists is asking for something that cannot be represented, so this returns
  * null rather than inventing a dangling reference the next publish would refuse.
@@ -42,7 +42,7 @@ export function createGraphicStyleEntry(options: {
 	id: string;
 	kind: GraphicStyleEntryKind;
 	name: string;
-	/** The palette entry a colour-bearing preset starts out referencing. */
+	/** The palette entry a colour-bearing entry starts out referencing. */
 	paletteEntryId?: string;
 }): GraphicStyleSetEntry | null {
 	const base = { id: options.id, name: options.name, schemaVersion: GRAPHIC_STYLE_ENTRY_SCHEMA_VERSION };
@@ -190,20 +190,20 @@ export function unbindGraphicStyleRef(
  * override the glossary requires. The editor's controls write values, not
  * provenance — an author drags a font size slider on an item whose typography is
  * inherited — and running this after an edit records exactly which owned keys no
- * longer match the preset.
+ * longer match the entry.
  *
  * What one slot ends up recording is what {@link authoredGraphicStyleOverrides} names,
  * so an ordinary edit and review's "Keep mine" leave the identical record: the pins
  * already recorded that this composition still holds, plus every owned key that now
- * deviates from the preset. It is deliberately not the deviation alone. Deriving the
+ * deviates from the entry. It is deliberately not the deviation alone. Deriving the
  * whole record that way discarded any pin the Style Set had since caught up with — the
- * author's value and the preset's agreed, so nothing looked like a deviation — and the
- * next republish moving that preset away then took the property (#229).
+ * author's value and the entry's agreed, so nothing looked like a deviation — and the
+ * next republish moving that entry away then took the property (#229).
  *
  * The derived half is a diff against the Style Set revision the composition
  * was *reconciled to*, which is the one its values were produced from. That is what
  * makes it correct: an override is by definition where the author's value and the
- * preset's disagree, and both sides of that comparison are in front of it. An author
+ * entry's disagree, and both sides of that comparison are in front of it. An author
  * who edits a value and puts it back is left with no override rather than one pinning
  * it.
  *
@@ -291,7 +291,7 @@ export function recaptureGraphicStyleOverrides(
 			const current = readGraphicStyleSlot(owner as never, slot);
 
 			if (GRAPHIC_STYLE_SLOT_OWNED_KEYS[slot].length === 0) {
-				// Deviating from the preset is what lets go of the reference. The author's
+				// Deviating from the entry is what lets go of the reference. The author's
 				// deviation is the only thing that can, which is why the revisions must
 				// already agree for this to be reached at all.
 				if (graphicStyleSlotDeviates(resolution, slot, ref.entryId, current))

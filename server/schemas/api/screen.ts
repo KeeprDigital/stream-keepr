@@ -8,6 +8,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
 import { animationEffectSelectionSchema, broadcastGraphicsBackgroundConfigSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
@@ -59,7 +60,6 @@ import {
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
 	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
 	GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES,
-	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
@@ -71,7 +71,6 @@ import {
 	GRAPHIC_SOURCE_RELATION_VALUES,
 	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
-	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
@@ -80,20 +79,17 @@ import {
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 	MAX_GRAPHIC_FILL_STOPS,
 	MAX_GRAPHIC_FONT_SIZE,
-	MAX_GRAPHIC_FONT_WEIGHT,
 	MAX_GRAPHIC_INPUT_CHOICE_LENGTH,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
-	MAX_GRAPHIC_LETTER_SPACING,
-	MAX_GRAPHIC_LINE_HEIGHT,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_TEXT_LENGTH,
+	MAX_PIXEL_VALUE,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
-	MAX_SHAPE_GEOMETRY_PX,
 	MAX_SOCIAL_PROFILE_DWELL_MS,
 	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
@@ -101,15 +97,12 @@ import {
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
-	MIN_GRAPHIC_FONT_WEIGHT,
-	MIN_GRAPHIC_LETTER_SPACING,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MIN_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_SOCIAL_PROFILE_DWELL_MS,
 	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	ON_AIR_UPDATE_POLICY_VALUES,
 	PLAYER_LIFE_ANIMATION_VALUES,
-	SHAPE_CORNER_TREATMENT_VALUES,
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
@@ -223,9 +216,9 @@ const sideboardPlacementSchema = z.enum(SIDEBOARD_PLACEMENT_VALUES);
 const cardAnimationSpeedSchema = z.enum(CARD_ANIMATION_SPEED_VALUES);
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
-const pixelSizeSchema = finiteNumberSchema.positive().max(10000);
-const pixelPositionSchema = finiteNumberSchema.min(-10000).max(10000);
-const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(10000);
+const pixelSizeSchema = finiteNumberSchema.positive().max(MAX_PIXEL_VALUE);
+const pixelPositionSchema = finiteNumberSchema.min(-MAX_PIXEL_VALUE).max(MAX_PIXEL_VALUE);
+const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(MAX_PIXEL_VALUE);
 const cssColorSchema = z.string().min(1).max(500);
 const optionalCssColorSchema = cssColorSchema.optional();
 const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
@@ -672,12 +665,7 @@ const graphicFontSelectionSchema = z.discriminatedUnion('kind', [
 
 const graphicTypographySchema = z.object({
 	font: graphicFontSelectionSchema,
-	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
-	fontWeight: finiteNumberSchema.int().min(MIN_GRAPHIC_FONT_WEIGHT).max(MAX_GRAPHIC_FONT_WEIGHT),
-	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
-	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
-	letterSpacing: finiteNumberSchema.min(MIN_GRAPHIC_LETTER_SPACING).max(MAX_GRAPHIC_LETTER_SPACING),
-	lineHeight: finiteNumberSchema.positive().max(MAX_GRAPHIC_LINE_HEIGHT),
+	...graphicTypographyFields,
 	textAlign: z.enum(GRAPHIC_TEXT_ALIGN_VALUES),
 	color: cssColorSchema,
 }).strict();
@@ -714,21 +702,6 @@ const graphicSurfaceStyleSchema = z.object({
 		size: nonNegativePixelSchema.max(500),
 		opacity: opacitySchema,
 	}).strict().optional(),
-}).strict();
-
-const graphicShapeCornerSchema = z.object({
-	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
-	size: finiteNumberSchema.nonnegative().max(MAX_SHAPE_GEOMETRY_PX),
-}).strict();
-const graphicShapeSlantSchema = finiteNumberSchema.min(-MAX_SHAPE_GEOMETRY_PX).max(MAX_SHAPE_GEOMETRY_PX);
-
-const graphicShapeGeometrySchema = z.object({
-	topLeft: graphicShapeCornerSchema,
-	topRight: graphicShapeCornerSchema,
-	bottomRight: graphicShapeCornerSchema,
-	bottomLeft: graphicShapeCornerSchema,
-	leftSlant: graphicShapeSlantSchema,
-	rightSlant: graphicShapeSlantSchema,
 }).strict();
 
 /* Graphic Animation: bounded recipes rather than a keyframe timeline. */
@@ -1105,7 +1078,7 @@ const graphicMediaTreatmentPropertiesSchema = z.object({
 	fit: z.enum(MEDIA_FIT_VALUES),
 	focalPosition: z.object({ horizontal: opacitySchema, vertical: opacitySchema }).strict(),
 	opacity: opacitySchema,
-	clipGeometry: graphicShapeGeometrySchema.optional(),
+	clipGeometry: shapeGeometrySchema.optional(),
 	playbackRate: finiteNumberSchema
 		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
 		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
@@ -1151,9 +1124,9 @@ const graphicItemStyleRefsSchema = z.object({
 	'defaultChildSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
 	'boxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
 	'wonBoxSurfaceStyle': graphicStyleRefSchema(graphicSurfaceStyleSchema.partial()).optional(),
-	'geometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
-	'clipGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
-	'boxGeometry': graphicStyleRefSchema(graphicShapeGeometrySchema.partial()).optional(),
+	'geometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
+	'clipGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
+	'boxGeometry': graphicStyleRefSchema(shapeGeometrySchema.partial()).optional(),
 	'media': graphicStyleRefSchema(graphicMediaTreatmentPropertiesSchema.partial()).optional(),
 	...graphicAnimationStyleRefShape,
 }).strict();
@@ -1199,11 +1172,11 @@ const graphicItemBaseShape = {
  */
 const graphicPlaceholderStyleSchema = z.object({
 	font: graphicFontSelectionSchema.optional(),
-	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE).optional(),
-	fontWeight: finiteNumberSchema.int().min(MIN_GRAPHIC_FONT_WEIGHT).max(MAX_GRAPHIC_FONT_WEIGHT).optional(),
-	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES).optional(),
-	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES).optional(),
-	letterSpacing: finiteNumberSchema.min(MIN_GRAPHIC_LETTER_SPACING).max(MAX_GRAPHIC_LETTER_SPACING).optional(),
+	fontSize: graphicTypographyFields.fontSize.optional(),
+	fontWeight: graphicTypographyFields.fontWeight.optional(),
+	fontStyle: graphicTypographyFields.fontStyle.optional(),
+	textTransform: graphicTypographyFields.textTransform.optional(),
+	letterSpacing: graphicTypographyFields.letterSpacing.optional(),
 	color: cssColorSchema.optional(),
 }).strict();
 
@@ -1233,7 +1206,7 @@ const textGraphicItemShape = {
 const shapeGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('shape'),
-	geometry: graphicShapeGeometrySchema,
+	geometry: shapeGeometrySchema,
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 };
 
@@ -1257,7 +1230,7 @@ const mediaGraphicItemShape = {
 		vertical: opacitySchema,
 	}).strict(),
 	opacity: opacitySchema,
-	clipGeometry: graphicShapeGeometrySchema.optional(),
+	clipGeometry: shapeGeometrySchema.optional(),
 	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
 	playbackRate: finiteNumberSchema
 		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
@@ -1330,7 +1303,7 @@ const gameWinsGraphicItemShape = {
 	boxWidth: pixelSizeSchema,
 	boxHeight: pixelSizeSchema,
 	boxGap: nonNegativePixelSchema,
-	boxGeometry: graphicShapeGeometrySchema,
+	boxGeometry: shapeGeometrySchema,
 	boxSurfaceStyle: graphicSurfaceStyleSchema,
 	wonBoxSurfaceStyle: graphicSurfaceStyleSchema,
 	typography: graphicTypographySchema,
@@ -1399,7 +1372,7 @@ const graphicGroupItemConfigSchema = z.object({
 	align: z.enum(GRAPHIC_GROUP_ALIGN_VALUES),
 	justify: z.enum(GRAPHIC_GROUP_JUSTIFY_VALUES),
 	clip: z.boolean(),
-	geometry: graphicShapeGeometrySchema,
+	geometry: shapeGeometrySchema,
 	surfaceStyle: graphicSurfaceStyleSchema.optional(),
 	defaultChildSurfaceStyle: graphicSurfaceStyleSchema.optional(),
 	// A Graphic Group coordinates the animation of its direct items as well as

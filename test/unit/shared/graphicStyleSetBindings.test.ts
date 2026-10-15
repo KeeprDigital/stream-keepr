@@ -96,7 +96,7 @@ function styleSet(brandColor = '#ff0044', headingSize = 64): GraphicStyleSetEntr
 /**
  * A typography that already matches what the `heading` entry resolves to.
  *
- * `TYPOGRAPHY` above deliberately disagrees with the preset in most keys, which is
+ * `TYPOGRAPHY` above deliberately disagrees with the entry in most keys, which is
  * what most of these tests want. A test about *which* keys an author deviates in
  * needs the opposite starting point: an item in step with its entry, so a single
  * edited value is the only deviation there is.
@@ -263,7 +263,7 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 });
 
 describe('applyGraphicStyleSet', () => {
-	it('writes a typography preset\'s resolved properties into the item and leaves the item-specific ones alone', () => {
+	it('writes a typography entry\'s resolved properties into the item and leaves the item-specific ones alone', () => {
 		const composition = graphic([textItem({ styleRefs: { typography: { entryId: 'heading' } } })]);
 
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet()));
@@ -284,7 +284,7 @@ describe('applyGraphicStyleSet', () => {
 		expect(headlineOf(applied).overflowPolicy).toBe('shrink');
 	});
 
-	it('preserves a local property-level override on top of the preset', () => {
+	it('preserves a local property-level override on top of the entry', () => {
 		const composition = graphic([textItem({
 			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 32 } } },
 		})]);
@@ -292,15 +292,15 @@ describe('applyGraphicStyleSet', () => {
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(styleSet('#ff0044', 96)));
 
 		expect(headlineOf(applied).typography).toMatchObject({
-			// The preset moved to 96 and the author's own 32 still wins.
+			// The entry moved to 96 and the author's own 32 still wins.
 			fontSize: 32,
-			// Everything they did not claim followed the preset.
+			// Everything they did not claim followed the entry.
 			color: '#ff0044',
 			letterSpacing: 2,
 		});
 	});
 
-	it('removes an inherited glow the Graphic Surface Style preset no longer carries', () => {
+	it('removes an inherited glow the Graphic Surface Style entry no longer carries', () => {
 		const shape: GraphicItemConfig = {
 			type: 'shape',
 			id: 'backing',
@@ -325,13 +325,13 @@ describe('applyGraphicStyleSet', () => {
 
 		const applied = applyGraphicStyleSet(graphic([shape]), resolveGraphicStyleSet(withoutGlow));
 
-		// A merge would have left the glow behind, which would make a preset unable to
+		// A merge would have left the glow behind, which would make an entry unable to
 		// take back something it once gave.
 		expect(applied.items[0]).not.toHaveProperty('glow');
 		expect((applied.items[0] as { surfaceStyle?: { glow?: unknown } }).surfaceStyle?.glow).toBeUndefined();
 	});
 
-	it('keeps the item\'s own fill when the Graphic Surface Style preset names no Graphic Fill preset', () => {
+	it('keeps the item\'s own fill when the Graphic Surface Style entry names no Graphic Fill entry', () => {
 		const outlineOnly = [
 			...styleSet(),
 			entry('surface-style', 'edge', { fillOpacity: 1, outline: { colorEntryId: 'brand', width: 4 } }),
@@ -350,7 +350,7 @@ describe('applyGraphicStyleSet', () => {
 		});
 	});
 
-	it('lets the finer Graphic Fill reference win over the Graphic Surface Style preset carrying one', () => {
+	it('lets the finer Graphic Fill reference win over the Graphic Surface Style entry carrying one', () => {
 		const entries = [
 			...styleSet(),
 			entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' }),
@@ -366,14 +366,14 @@ describe('applyGraphicStyleSet', () => {
 		const applied = applyGraphicStyleSet(composition, resolveGraphicStyleSet(entries));
 
 		expect(headlineOf(applied).surfaceStyle).toMatchObject({
-			// The surface preset's own fill is `panel-fill` (ink); the item said something
+			// The surface entry's own fill is `panel-fill` (ink); the item said something
 			// more specific about the fill alone.
 			fill: { type: 'solid', color: '#ff0044' },
 			fillOpacity: 0.9,
 		});
 	});
 
-	it('writes a Graphic Animation Recipe preset into the phase its slot names, without on-screen repetition', () => {
+	it('writes a Graphic Animation Recipe entry into the phase its slot names, without on-screen repetition', () => {
 		const composition = graphic(
 			[textItem({ styleRefs: { 'animation.enter': { entryId: 'rise' } } })],
 			{ styleRefs: { 'animation.exit': { entryId: 'rise' } } },
@@ -394,7 +394,7 @@ describe('applyGraphicStyleSet', () => {
 		expect(applied.animation?.exit).not.toHaveProperty('repeat');
 	});
 
-	it('carries an on-screen preset\'s repetition defaults only into the on-screen phase', () => {
+	it('carries an on-screen entry\'s repetition defaults only into the on-screen phase', () => {
 		const pulsing = [
 			...styleSet(),
 			entry('animation-recipe', 'pulse', {
@@ -558,7 +558,7 @@ describe('applyGraphicStyleSet', () => {
 			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
 		})]);
 
-		// The palette moves the typography preset's colour; the size the author already
+		// The palette moves the typography entry's colour; the size the author already
 		// pinned does not move at all.
 		const applied = applyGraphicStyleSet(
 			composition,
@@ -591,22 +591,22 @@ describe('applyGraphicStyleSet', () => {
 
 	/**
 	 * An override the author had already pinned survives even when the republished
-	 * preset happens to land on the same value.
+	 * entry happens to land on the same value.
 	 *
 	 * "Where this owner deviates from the entry" is not the whole answer to "what is
-	 * mine". A pin whose value the new preset coincidentally agrees with is no longer a
+	 * mine". A pin whose value the new entry coincidentally agrees with is no longer a
 	 * deviation, but it is still the author's explicit statement that this property is
-	 * theirs — and dropping it means the next republish that moves the preset away takes
+	 * theirs — and dropping it means the next republish that moves the entry away takes
 	 * the property with it. Story 20's "with my local property overrides preserved"
 	 * is exactly what that would break.
 	 */
-	it('keeps a pin the republished preset happens to agree with', () => {
+	it('keeps a pin the republished entry happens to agree with', () => {
 		const composition = graphic([textItem({
 			typography: { ...inheritedTypography(), fontSize: 30 },
 			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 30 } } },
 		})]);
 
-		// The republished preset moves the colour and lands on the author's own size.
+		// The republished entry moves the colour and lands on the author's own size.
 		const applied = applyGraphicStyleSet(
 			composition,
 			resolveGraphicStyleSet(styleSet('#00ff88', 30)),
@@ -618,7 +618,7 @@ describe('applyGraphicStyleSet', () => {
 	});
 
 	/**
-	 * A stored value that agrees with the preset while its own recorded override does
+	 * A stored value that agrees with the entry while its own recorded override does
 	 * not pins nothing at all.
 	 *
 	 * The override is stale — it describes a value this owner is not holding — so there
@@ -627,7 +627,7 @@ describe('applyGraphicStyleSet', () => {
 	 * contradicts. An empty override settles the row just as well, because what the
 	 * entry resolves to is already what is stored.
 	 */
-	it('pins nothing when a slot holds the preset and only a stale override disagrees', () => {
+	it('pins nothing when a slot holds the entry and only a stale override disagrees', () => {
 		const composition = graphic([textItem({
 			typography: inheritedTypography(),
 			styleRefs: { typography: { entryId: 'heading', overrides: { fontSize: 999 } } },
@@ -762,7 +762,7 @@ describe('graphicStyleUpdateChanges', () => {
 			resolveGraphicStyleSet(entries),
 		);
 
-		// The preset's size moved; the author owns that key, so nothing changes for them.
+		// The entry's size moved; the author owns that key, so nothing changes for them.
 		expect(graphicStyleUpdateChanges(composition, resolveGraphicStyleSet(styleSet('#ff0044', 96))))
 			.toEqual([]);
 		// A key they did not claim still moves.
@@ -842,7 +842,7 @@ describe('captureGraphicStyleOverrides', () => {
 			.toEqual({ fontSize: 30 });
 	});
 
-	it('records nothing when the property matches the preset again', () => {
+	it('records nothing when the property matches the entry again', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const matching = {
 			...TYPOGRAPHY,
@@ -867,7 +867,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 	const LINKED = 1;
 	/**
 	 * The same Style Set after a publish this composition has *not* been reconciled to.
-	 * `brand` moved, so both the typography preset's colour and the Graphic Fill do.
+	 * `brand` moved, so both the typography entry's colour and the Graphic Fill do.
 	 */
 	const republished = [...styleSet('#00ff88'), entry('fill', 'accent-fill', { type: 'solid', colorEntryId: 'brand' })];
 	const AHEAD = LINKED + 1;
@@ -883,7 +883,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		);
 	}
 
-	/** One composition inheriting both a typography preset and a Graphic Fill. */
+	/** One composition inheriting both a typography entry and a Graphic Fill. */
 	function boundBoth(): BroadcastGraphicConfig {
 		return applyGraphicStyleSet(
 			graphic([textItem({
@@ -964,7 +964,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const recaptured = recaptureGraphicStyleOverrides(edited, resolution, LINKED, composition);
 
 		// A Graphic Fill is a discriminated union with no partial to record a deviation
-		// in, so deviating from the preset is unbinding it — the same answer "Keep mine"
+		// in, so deviating from the entry is unbinding it — the same answer "Keep mine"
 		// gives during review. The value is already inline, so only the provenance moves.
 		expect(headlineOf(recaptured).surfaceStyle?.fill).toEqual({ type: 'solid', color: '#00ff88' });
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toBeUndefined();
@@ -974,7 +974,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(graphicStyleUpdateChanges(recaptured, resolution)).toEqual([]);
 	});
 
-	it('keeps a Graphic Fill reference the author has left where the preset put it', () => {
+	it('keeps a Graphic Fill reference the author has left where the entry put it', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		const composition = boundFill();
 
@@ -983,7 +983,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		expect(headlineOf(recaptured).styleRefs?.['surfaceStyle.fill']).toEqual({ entryId: 'accent-fill' });
 	});
 
-	it('keeps a Graphic Fill reference the author has edited back to the preset\'s own value', () => {
+	it('keeps a Graphic Fill reference the author has edited back to the entry\'s own value', () => {
 		const resolution = resolveGraphicStyleSet(withAccentFill);
 		const wandered = paintFill(boundFill(), '#00ff88');
 
@@ -1032,7 +1032,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 		const resolution = resolveGraphicStyleSet(styleSet());
 		const inStep = inheritedTypography();
 		// What the pre-#162 "Keep mine" recorded: the whole property group, every key of
-		// it agreeing with the preset the composition is in step with.
+		// it agreeing with the entry the composition is in step with.
 		const wholeGroup = Object.fromEntries(
 			GRAPHIC_STYLE_SLOT_OWNED_KEYS.typography.map(key => [key, inStep[key as keyof typeof inStep]]),
 		);
@@ -1119,7 +1119,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 	/**
 	 * Deriving nothing is not the same as deriving that nothing is the author's.
 	 *
-	 * A Style Set that failed to load resolves no entry, so there is no preset in front of
+	 * A Style Set that failed to load resolves no entry, so there is no entry in front of
 	 * this slot to disagree with and no deviation to read off it. What is recorded is then
 	 * the only evidence there is, and it survives — the same reason a reference the
 	 * resolution cannot honour is left in place rather than dropped.
@@ -1174,9 +1174,9 @@ describe('recaptureGraphicStyleOverrides', () => {
 				.toContain('surfaceStyle.fill');
 		});
 
-		it('records no override on a typography preset the author never touched, so its update stays reviewable', () => {
+		it('records no override on a typography entry the author never touched, so its update stays reviewable', () => {
 			// The author's edit is to the fill; the typography they are inheriting is
-			// untouched, and the only reason it differs from the preset is the republish.
+			// untouched, and the only reason it differs from the entry is the republish.
 			const stored = boundBoth();
 			const behind = paintFill(stored, '#123456');
 
@@ -1324,14 +1324,14 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 * A pin the Style Set has caught up with is still the author's (#229).
 	 *
 	 * An override is a claim about a property — "this one is mine" — and a republished
-	 * preset landing on the value it names does not retract the claim. Recapture used to
-	 * derive the whole record from where the composition deviates, so a pin the preset
+	 * entry landing on the value it names does not retract the claim. Recapture used to
+	 * derive the whole record from where the composition deviates, so a pin the entry
 	 * agreed with was not a deviation and stopped being recorded; the author's next edit
 	 * anywhere in the document dropped it, and the republish after that took the property
 	 * back. `applyGraphicStyleSet` had always read the signal the other way, and these
 	 * pin the two paths reading it the same way.
 	 */
-	describe('when a republished preset lands on the value the author pinned', () => {
+	describe('when a republished entry lands on the value the author pinned', () => {
 		const PINNED_SIZE = 30;
 		/** The revision the coincident publish is at, which this composition lags. */
 		const COINCIDENT = LINKED + 1;
@@ -1408,7 +1408,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 
 		/**
 		 * The whole defect, end to end: the pin survives the edit, so the republish that
-		 * moves the preset off it again does not take the property — and does not even ask,
+		 * moves the entry off it again does not take the property — and does not even ask,
 		 * because a pinned property is not one the author is deciding about.
 		 */
 		it('keeps the property when the Style Set moves it away again, applied with every row\'s default answer', () => {
@@ -1483,13 +1483,13 @@ describe('recaptureGraphicStyleOverrides', () => {
 	});
 
 	/**
-	 * A value the author types *onto* the preset's own value records nothing, and the
+	 * A value the author types *onto* the entry's own value records nothing, and the
 	 * next republish takes the property. Accepted, not fixed (#240).
 	 *
 	 * #229 made a *recorded* pin survive the Style Set arriving at its value. This is the
 	 * other half, and it is not the same case: there was never a pin to preserve. Capture
 	 * is a diff against the entry, and a value that agrees with the entry is not a diff,
-	 * so an author who types the size the preset already resolves to leaves the document
+	 * so an author who types the size the entry already resolves to leaves the document
 	 * byte-identical and the record empty.
 	 *
 	 * The intent signal a fix needs exists — the inspector's controls write
@@ -1499,7 +1499,7 @@ describe('recaptureGraphicStyleOverrides', () => {
 	 * key". These pin the two halves of it that are executable: the behaviour itself, and
 	 * the review row that is the whole of what makes it survivable.
 	 */
-	describe('when the author types the value the preset already resolves to', () => {
+	describe('when the author types the value the entry already resolves to', () => {
 		/** The size the entry itself holds, and the one the author types onto it. */
 		const TYPED_SIZE = 30;
 		/** The Style Set whose `heading` already resolves to what the author will type. */

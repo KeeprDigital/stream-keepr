@@ -214,7 +214,7 @@ describe('graphicsStyleUpdateReview', () => {
 	 *
 	 * An absent value says so rather than rendering as an empty string, because a blank
 	 * either side of the arrow reads as "unchanged" — the opposite of what it means. A
-	 * media treatment's clipping is the case that produces it: a preset that names a
+	 * media treatment's clipping is the case that produces it: an entry that names a
 	 * Shape Geometry adds one where the item had nothing.
 	 */
 	it('says when a property is not set, and shows a value that is not a scalar whole', async () => {

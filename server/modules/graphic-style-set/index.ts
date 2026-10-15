@@ -93,7 +93,7 @@ export interface GraphicStyleEntryDeletionPlan {
  * Detaching a template's reference is free: the template already stores the value the
  * entry produced, so removing the reference changes nothing it renders. Detaching an
  * entry's* reference is not, because an entry has nowhere to put a literal — a
- * Graphic Fill preset stores a palette entry id and cannot store a colour. So an
+ * Graphic Fill entry stores a palette entry id and cannot store a colour. So an
  * entry other entries depend on can only be replaced, and asking to detach it is
  * refused by name rather than half-applied.
  */

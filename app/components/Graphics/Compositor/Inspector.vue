@@ -1989,8 +1989,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		>
 			<template #style-ref>
 				<!--
-					Two references, because a surface preset may itself carry a Graphic Fill
-					preset and an author may want the brand surface with this one gradient.
+					Two references, because a surface entry may itself carry a Graphic Fill
+					entry and an author may want the brand surface with this one gradient.
 					The finer of the two is applied last and wins.
 				-->
 				<GraphicsCompositorStyleRef

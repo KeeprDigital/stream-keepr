@@ -33,7 +33,7 @@ const HEADING = `heading-${runId}`;
 const PANEL_FILL = `panel-fill-${runId}`;
 const PANEL = `panel-${runId}`;
 
-/** A whole, publishable draft: a palette, a typography preset, a fill, a surface. */
+/** A whole, publishable draft: a palette, a typography entry, a fill, a surface. */
 function soundDraft(brandColor = '#ff0044', headingSize = 64) {
 	return [
 		{ id: BRAND, kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: brandColor } },
@@ -299,7 +299,7 @@ describe('graphic Style Sets', () => {
 	});
 
 	it('accumulates edits in a working draft that no template can see', async () => {
-		// Deliberately broken: the typography preset names a palette entry that is not
+		// Deliberately broken: the typography entry names a palette entry that is not
 		// there yet. A draft is edited into existence in pieces, so this must be storable.
 		const broken = soundDraft().filter(entry => entry.id !== BRAND);
 
@@ -571,7 +571,7 @@ describe('graphic Style Sets', () => {
 			body: { mode: 'detach', draftRevision: current.draftRevision },
 		});
 
-		// A Graphic Fill preset has nowhere to store a colour of its own, so there is no
+		// A Graphic Fill entry has nowhere to store a colour of its own, so there is no
 		// value to freeze — only a replacement is expressible.
 		expect(refused.status).toBe(409);
 		expect(refused.data.data.code).toBe('detach-would-break-entries');
@@ -611,7 +611,7 @@ describe('graphic Style Sets', () => {
 		expect(deleted.status).toBe(409);
 		expect(deleted.data.data.code).toBe('replacement-not-found');
 
-		// Add a second typography preset to replace it with.
+		// Add a second typography entry to replace it with.
 		const withAlternative = [
 			...current.draft,
 			{

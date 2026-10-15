@@ -5,13 +5,13 @@ import BorderRadiusControl from '~/components/Screen/Modes/FeatureMatchOverlay/B
 
 /**
  * A Feature Match Overlay border radius: rounded only, so not a Shape Geometry,
- * and never negative, which a saved radius would not accept.
+ * bounded to what a saved radius accepts: never negative, never past the pixel cap.
  */
 
 enableAutoUnmount(afterEach);
 
 describe('border radius control', () => {
-	it('bounds every radius below at zero', () => {
+	it('bounds every radius to what a saved radius accepts', () => {
 		const wrapper = mount(BorderRadiusControl, {
 			props: { borderRadius: 8 },
 			global: {
@@ -19,7 +19,7 @@ describe('border radius control', () => {
 					UFormField: defineComponent({ template: '<div><slot /></div>' }),
 					UInputNumber: defineComponent({
 						name: 'UInputNumber',
-						props: { modelValue: { type: Number, required: false }, min: { type: Number, required: false } },
+						props: { modelValue: { type: Number, required: false }, min: { type: Number, required: false }, max: { type: Number, required: false } },
 						template: '<input type="number" />',
 					}),
 				},
@@ -28,7 +28,9 @@ describe('border radius control', () => {
 
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs).toHaveLength(5);
-		for (const input of inputs)
+		for (const input of inputs) {
 			expect(input.props('min')).toBe(0);
+			expect(input.props('max')).toBe(10_000);
+		}
 	});
 });

@@ -88,7 +88,7 @@ export async function graphicStyleSetContentDigest(
 /**
  * The application fonts a snapshot requires, as capability declarations.
  *
- * One per distinct font rather than one per preset, with every preset that needs it
+ * One per distinct font rather than one per entry, with every entry that needs it
  * named in `requiredBy`, so an author told "this installation does not have Barlow"
  * can see which entries would break rather than the same sentence six times.
  */

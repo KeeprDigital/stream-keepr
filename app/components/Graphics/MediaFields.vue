@@ -6,7 +6,7 @@ import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
 
 /**
  * The one media fields control: Media Fit, opacity, focal position, playback
- * rate, and loop, for a Media Graphic Item, a media treatment preset, an image or
+ * rate, and loop, for a Media Graphic Item, a media treatment entry, an image or
  * video Background Layer, and the Feature Match Overlay Frame's video.
  *
  * Fit is always offered. The rest are offered by prop, because not every host's

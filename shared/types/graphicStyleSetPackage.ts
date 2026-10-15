@@ -51,7 +51,7 @@ import type {
  *
  * ## Fonts
  *
- * A Style Set's typography presets name application fonts, which ship with Stream
+ * A Style Set's typography entries name application fonts, which ship with Stream
  * Keepr and are declared rather than duplicated — exactly as the Template Package
  * envelope declares them. A receiver that does not have a named font refuses the
  * package instead of installing a Style Set it could never publish. Should a Style
@@ -84,7 +84,7 @@ export const GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY = 'style-set.json';
  *
  * Far smaller than a Template Package's, because the contents are bounded by the
  * artifact rather than by media: a Style Set holds at most
- * `MAX_GRAPHIC_STYLE_SET_ENTRIES` entries of bounded presets and nothing else. Export
+ * `MAX_GRAPHIC_STYLE_SET_ENTRIES` bounded entries and nothing else. Export
  * enforces every limit before emitting a byte, and preflight enforces the same numbers
  * on receipt.
  */
@@ -163,7 +163,7 @@ export interface GraphicStyleSetPackageManifest {
 	/**
 	 * Application-owned capabilities the snapshot requires, declared rather than
 	 * duplicated. Today that is one `application-font` declaration per distinct font a
-	 * typography preset names.
+	 * typography entry names.
 	 */
 	applicationCapabilities: readonly TemplatePackageCapabilityDeclaration[];
 	totals: {

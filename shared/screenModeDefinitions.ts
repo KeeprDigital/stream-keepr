@@ -86,12 +86,24 @@ const CONTROL_HOST_DEFAULTS: ScreenModeHostDefinition = {
 	themePolicy: 'screen-color-mode',
 };
 
-/** The Screen Outputs every graphics host exposes. */
-const GRAPHICS_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = [
-	{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-panel-top' },
-	{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
-	{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
-];
+/**
+ * The graphics Screen Outputs, in the order an editor names, previews and hands them
+ * out. One list so a Screen Output looks the same wherever it is offered: the
+ * preview's output switch shows these labels, and the Screen's "Open … output"
+ * actions are named from them.
+ */
+export const SCREEN_OUTPUT_OPTIONS = [
+	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
+	{ label: 'Fill', value: 'fill', icon: 'i-lucide-square' },
+	{ label: 'Key', value: 'key', icon: 'i-lucide-contrast' },
+] as const satisfies ReadonlyArray<{ label: string; value: ScreenOutput; icon: string }>;
+
+/** The "Open … output" actions every graphics host exposes. */
+const OPEN_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = SCREEN_OUTPUT_OPTIONS.map(option => ({
+	value: option.value,
+	label: `Open ${option.label.toLowerCase()} output`,
+	icon: option.icon,
+}));
 
 const DEFAULT_CONTAINER_CONTROL_PLACEMENT: ScreenModeConfigurationPolicy['containerControlPlacement'] = {
 	dimensions: 'container',
@@ -157,7 +169,7 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 		resetScreenConfigDefaults: fixedDimensions
 			? { width: host.defaultWidth, height: host.defaultHeight }
 			: undefined,
-		outputOptions: graphicsHost ? GRAPHICS_SCREEN_OUTPUT_OPTIONS : [],
+		outputOptions: graphicsHost ? OPEN_SCREEN_OUTPUT_OPTIONS : [],
 		fullWidthConfiguration: Boolean(graphicsHost),
 	};
 }

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import type { PreviewZoom } from '~/modules/graphics/previewControls';
-import { GRAPHICS_OUTPUT_OPTIONS, PREVIEW_ZOOM_OPTIONS } from '~/modules/graphics/previewControls';
+import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
+import { PREVIEW_ZOOM_OPTIONS } from '~/modules/graphics/previewControls';
 
 /**
  * The editor preview shared by the Broadcast Graphics and Feature Match Overlay
@@ -54,7 +55,7 @@ const viewportStyle = computed(() => [
 				</UFormField>
 				<UFieldGroup size="sm">
 					<UButton
-						v-for="option in GRAPHICS_OUTPUT_OPTIONS"
+						v-for="option in SCREEN_OUTPUT_OPTIONS"
 						:key="option.value"
 						:icon="option.icon"
 						:color="output === option.value ? 'primary' : 'neutral'"

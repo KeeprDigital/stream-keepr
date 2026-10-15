@@ -1,12 +1,11 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
-import FontSelectionField from '~/components/Graphics/Compositor/FontSelectionField.vue';
+import ApplicationFontField from '~/components/Graphics/ApplicationFontField.vue';
 
 /**
- * The application-only mode of the Graphic Font Selection control, which a Graphic
- * Style Set typography preset uses: a preset references application fonts only
- * (ADR-0001), so it offers no source to choose and no library to pick from.
+ * The font control of a typography Graphic Style Set Entry, which references
+ * application fonts only (ADR-0001): no source to choose and no library to pick from.
  */
 
 enableAutoUnmount(afterEach);
@@ -28,19 +27,17 @@ const UFormFieldStub = defineComponent({
 });
 
 function mountField(props: Record<string, unknown> = {}) {
-	return mount(FontSelectionField, {
+	return mount(ApplicationFontField, {
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
-				GraphicsAssetFocusPicker: defineComponent({ template: '<div data-testid="library-picker" />' }),
 			},
 		},
 		props: {
-			applicationOnly: true,
-			font: { kind: 'application', fontId: 'inter' },
+			fontId: 'inter',
 			size: 'xs',
-			testIdPrefix: 'preset',
+			testIdPrefix: 'entry',
 			...props,
 		},
 	});
@@ -50,14 +47,13 @@ function selects(wrapper: ReturnType<typeof mountField>) {
 	return wrapper.findAllComponents({ name: 'USelect' });
 }
 
-describe('font selection field, application only', () => {
+describe('application font field', () => {
 	it('offers the application fonts and nothing else', () => {
 		const wrapper = mountField();
 
-		expect(selects(wrapper).map(select => select.attributes('data-testid'))).toEqual(['preset-font']);
-		expect(wrapper.find('[data-label="Font"] [data-testid="preset-font"]').exists()).toBe(true);
+		expect(selects(wrapper).map(select => select.attributes('data-testid'))).toEqual(['entry-font']);
+		expect(wrapper.find('[data-label="Font"] [data-testid="entry-font"]').exists()).toBe(true);
 		expect(selects(wrapper)[0]!.props('modelValue')).toBe('inter');
-		expect(wrapper.find('[data-testid="library-picker"]').exists()).toBe(false);
 	});
 
 	it('reports the application font the author picked', () => {
@@ -65,7 +61,7 @@ describe('font selection field, application only', () => {
 
 		selects(wrapper)[0]!.vm.$emit('update:modelValue', 'mplantin');
 
-		expect(wrapper.emitted('application')).toEqual([['mplantin']]);
+		expect(wrapper.emitted('update:fontId')).toEqual([['mplantin']]);
 	});
 
 	it('is read-only for an observer', () => {
