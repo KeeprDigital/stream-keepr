@@ -65,7 +65,7 @@ describe('the Screen Media Source field', () => {
 
 		await wrapper.find('[data-testid="source-kind"]').setValue('asset');
 
-		// An asset source with no revision is not storable, so the switch is UI state.
+		// A library source with no revision is not storable, so the switch is UI state.
 		expect(wrapper.find('[data-testid="source-asset"]').attributes('data-asset-kind')).toBe('silent-video');
 		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
 

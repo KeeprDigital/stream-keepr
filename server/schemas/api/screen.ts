@@ -239,7 +239,7 @@ const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
 	catch {
 		return false;
 	}
-}, 'Media URL must be an HTTPS URL or a root-relative path');
+}, 'A Remote Media URL must be HTTPS or a root-relative path');
 const graphicAssetReferenceSchema = z.object({
 	assetId: z.string().min(1).max(100).transform(graphicAssetId),
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),

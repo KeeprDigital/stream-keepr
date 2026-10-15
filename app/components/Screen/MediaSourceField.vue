@@ -31,7 +31,7 @@ const SOURCE_KIND_OPTIONS = [
 
 /**
  * The kind the field is showing, held as UI state rather than written through:
- * an asset source without a picked revision is not a storable value, so
+ * a library-sourced Screen Media Source without a picked revision is not storable, so
  * switching to the library only changes what the field offers until an asset is
  * actually chosen. Switching to URL starts over — a reference and a URL are
  * different choices, not two spellings of one.
@@ -74,7 +74,7 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 		/>
 	</UFormField>
 
-	<UFormField v-if="kind === 'url'" label="Media URL">
+	<UFormField v-if="kind === 'url'" label="Remote Media URL">
 		<UInput
 			:model-value="url"
 			:placeholder="assetKind === 'silent-video' ? 'https://example.com/background.webm' : 'https://example.com/background.png'"

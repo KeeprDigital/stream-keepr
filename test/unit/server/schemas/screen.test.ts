@@ -497,7 +497,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		})).success).toBe(false);
 	});
 
-	it('rejects executable, credential-bearing, or plain-HTTP media URLs', () => {
+	it('rejects an executable, credential-bearing, or plain-HTTP Remote Media URL', () => {
 		// Plain HTTP is blocked as mixed content by an HTTPS-served Screen, so it
 		// would only ever show a blank output (ADR-0021).
 		for (const url of [

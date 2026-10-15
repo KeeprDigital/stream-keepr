@@ -400,7 +400,7 @@ What a show wants behind everything else is a composition — a colour wash over
 - The old `mediaBackground` configuration reset rather than mapping onto a video layer (small install base, as ADR-0014). New Background Screens start empty: black until configured.
 - **At most one animation layer per Screen**, enforced on the `layers` field in the schema: each is its own WebGL context and an OBS browser source is memory-tight. Liftable.
 - Opacity belongs to the layer, never to the stack or the renderer behind it.
-- Image and video layers take a Screen Media Source — a Graphics Asset Library reference or a Remote Media URL — whose reach ADR-0021 sets. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace.
+- Image and video layers take a Screen Media Source — a Graphics Asset Library reference or a Remote Media URL — whose reach ADR-0021 sets. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace; a plain overlay mode's own stack indexes under `<mode>.backgroundLayers.` (#580).
 
 ### Rejected alternatives
 
@@ -532,7 +532,7 @@ A Remote Media URL is HTTPS or root-relative (an application-bundled file), and 
 
 ### Why
 
-Background Layers are where an operator drops in whatever a show needs, including media hosted elsewhere, so they need both sources. Graphic Items and Inputs are graphics content: templates, packages, and live values are built on every persisted graphics reference pinning an exact revision and on remote ingestion never creating a hotlink (CONTEXT.md invariants). A URL there would make every such Template unexportable. The ticket's "everywhere" went no further once that cost was clear.
+Background Layers are where an operator drops in whatever a show needs, including media hosted elsewhere, so they need both sources. Graphic Items and Inputs are graphics content: templates, packages, and live values are built on every persisted graphics reference pinning an exact revision and on approved remote ingestion never creating a remote dependency (CONTEXT.md invariants). A URL there would make every such Template unexportable. The ticket's "everywhere" went no further once that cost was clear.
 
 Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed content, which would show a blank output with no error.
 
@@ -540,7 +540,7 @@ Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed con
 
 - **No old shape is accepted.** Stored Frames holding a bare `{ assetId, revisionId }` `backgroundImage` or a `mediaBackground.url` fail the schema, as do v1 `sklayout` payloads in that shape. `FEATURE_MATCH_LAYOUT_FORMAT_VERSION` and the package schema version stay 1. That is safe because nothing has shipped and ADR-0019 wipes production; local D1s holding such Frames need a reset.
 - **A Feature Match Layout with a Remote Media URL still cannot be exported or installed** (`remote-resource-dependency`). The issue names the slot and points to the library's approved HTTPS copy. Asset-sourced Frame media exports through the existing reference walker.
-- Asset-sourced Frame media keeps its place in Graphic Asset Reference indexing (`layout.frame.*`); URL sources fabricate no reference. Plain-mode Background Layers are not yet indexed at all (#580), which #484 depends on.
+- Asset-sourced Frame media keeps its place in Graphic Asset Reference indexing (`layout.frame.*`); URL sources fabricate no reference. Plain-mode Background Layers are indexed too, each under its own `<mode>.backgroundLayers.` namespace, because every plain mode names its stack alike (#580).
 
 ### Rejected alternatives
 

@@ -331,7 +331,7 @@ export interface ScreenMediaBackgroundConfig {
  * exact Graphic Asset Revision, or a Remote Media URL (ADR-0021).
  *
  * Offered on Background Layers and the Feature Match Overlay Frame only; Graphic
- * Items and Graphic Inputs stay library-only. An asset source pins an exact
+ * Items and Graphic Inputs stay library-only. The library arm pins an exact
  * revision, as a media Graphic Input value does. A URL source is a remote
  * dependency: the application serves nothing and checks nothing, and an empty
  * URL means unset. Never `MediaSource`, which would shadow the browser global.
