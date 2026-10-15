@@ -626,13 +626,23 @@ describe('feature match slots API', () => {
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
 		expect(holders).toHaveLength(1);
 		const winner = holders[0]!;
+		// The loser ends up empty by one of two histories, and the race picks which
+		// (#572). Either its D1 batch aborted on the one-Slot-per-Match index,
+		// leaving its Slot and Session untouched, or its batch committed first and
+		// the winner's promotion then moved the Match off it, clearing it with a
+		// fresh Session. The winner's cleared Slots say which one happened.
 		const loserBefore = responses[0]!.status === 409 ? lane1 : lane2;
-		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id);
-		expect(loserAfter).toMatchObject({
-			id: loserBefore.id,
-			matchId: null,
-			activeSessionId: loserBefore.activeSessionId,
-		});
+		const winning = responses.find(response => response.status === 200)!;
+		const movedOffLoser = winning._data.clearedSlots.some((slot: { id: number }) => slot.id === loserBefore.id);
+		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id)!;
+		expect(loserAfter).toMatchObject({ id: loserBefore.id, matchId: null });
+		if (movedOffLoser) {
+			expect(loserAfter.activeSessionId).not.toBe(loserBefore.activeSessionId);
+			expect(loserAfter.activeSession).toMatchObject({ status: 'active', sequence: 1, sourceSnapshot: { matchId: null } });
+		}
+		else {
+			expect(loserAfter.activeSessionId).toBe(loserBefore.activeSessionId);
+		}
 		const assignments = await $fetch(`/api/events/${eventId}/feature-match-assignments`, { query: { roundId } });
 		expect(assignments.featureMatchAssignments.filter(
 			(assignment: { matchId: number }) => assignment.matchId === contested.id,
