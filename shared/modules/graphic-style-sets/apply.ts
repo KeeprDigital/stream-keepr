@@ -88,7 +88,7 @@ export function sameGraphicStyleValue(left: unknown, right: unknown): boolean {
 /**
  * The property keys each slot's entry owns.
  *
- * Applying a preset replaces exactly these and nothing else, which is what keeps a
+ * Applying an entry replaces exactly these and nothing else, which is what keeps a
  * Text Graphic Item's alignment, content, and overflow policy local while its
  * typography is inherited.
  */
@@ -96,7 +96,7 @@ export const GRAPHIC_STYLE_SLOT_OWNED_KEYS: Record<GraphicStyleSlot, readonly st
 	'typography': ['font', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'letterSpacing', 'lineHeight', 'color'],
 	'surfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	// A Graphic Fill is a discriminated union with no meaningful partial, so this slot
-	// takes no overrides at all: deviating from a Graphic Fill preset is unbinding it.
+	// takes no overrides at all: deviating from a Graphic Fill entry is unbinding it.
 	'surfaceStyle.fill': [],
 	'defaultChildSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
 	'boxSurfaceStyle': ['fill', 'fillOpacity', 'outline', 'glow'],
@@ -127,8 +127,8 @@ function pick(source: Record<string, unknown> | undefined, keys: readonly string
  *
  * `base` is what the owner currently holds, and it contributes only the keys the
  * entry does not own — a Text Graphic Item's alignment, a Graphic Surface Style's
- * fill when the preset carries none. `overrides` are the author's own deviations and
- * are applied last, so an override always wins over the preset.
+ * fill when the entry carries none. `overrides` are the author's own deviations and
+ * are applied last, so an override always wins over the entry.
  *
  * Returns null when the resolved entry is not the kind this slot takes, which leaves
  * the owner's current value untouched rather than writing a shape it cannot hold.
@@ -162,8 +162,8 @@ export function resolveGraphicStyleSlotValue(
 		case 'surface-style': {
 			const surface = resolved.value;
 			const next: GraphicSurfaceStyle = {
-				// A Graphic Surface Style always has a fill, so a preset that names no
-				// Graphic Fill preset leaves the one the item already had rather than
+				// A Graphic Surface Style always has a fill, so an entry that names no
+				// Graphic Fill entry leaves the one the item already had rather than
 				// clearing it to nothing renderable.
 				fill: structuredClone(surface.fill ?? (baseRecord?.fill as GraphicSurfaceStyle['fill'])),
 				fillOpacity: surface.fillOpacity,
@@ -181,7 +181,7 @@ export function resolveGraphicStyleSlotValue(
 				opacity: treatment.opacity,
 				// Absent clears the item's clipping; the write path deletes the key.
 				clipGeometry: treatment.clipGeometry ? structuredClone(treatment.clipGeometry) : undefined,
-				// Video-only defaults. A preset that states none leaves the item's own,
+				// Video-only defaults. An entry that states none leaves the item's own,
 				// exactly as a Media Graphic Item keeps its playback while its kind changes.
 				playbackRate: treatment.playbackRate ?? baseRecord?.playbackRate,
 				loop: treatment.loop ?? baseRecord?.loop,
@@ -367,8 +367,8 @@ function heldGraphicStyleOverrides(
  * question of the same two facts — what is recorded, and what this owner holds — and
  * answering it differently is how a pin was lost. `recaptureGraphicStyleOverrides`
  * used to derive the whole record from the deviation alone, so a pin the republished
- * preset had *coincidentally* landed on was no longer a deviation and stopped being
- * recorded; the next republish moving that preset away then took the property, which
+ * entry had *coincidentally* landed on was no longer a deviation and stopped being
+ * recorded; the next republish moving that entry away then took the property, which
  * is exactly the failure {@link heldGraphicStyleOverrides} exists to prevent on the
  * apply path (#229).
  *
@@ -378,7 +378,7 @@ function heldGraphicStyleOverrides(
  * recorded at all — which is the same escape it has always had, and the only one.
  *
  * The other reading of that last act is what this cannot express: a value typed *onto*
- * the preset's own value is not a deviation either, so it records no pin and the next
+ * the entry's own value is not a deviation either, so it records no pin and the next
  * republish takes the property. Accepted rather than fixed (#240) — the reasoning, and
  * the edit-time signal that would fix it at a cost this decision refuses, are in
  * ADR-0006 under "Record a pin whenever the author edits an owned key", which is the
@@ -387,7 +387,7 @@ function heldGraphicStyleOverrides(
  * authoring gesture is a different proposal and is filed as #244.
  *
  * An entry the resolution cannot honour contributes no deviations, because there is no
- * preset in front of it to disagree with. What is already recorded survives, for the
+ * entry in front of it to disagree with. What is already recorded survives, for the
  * reason a Style Set that failed to load must not be why a composition quietly goes
  * local.
  */
@@ -411,7 +411,7 @@ export function authoredGraphicStyleOverrides(
  * Style Set.
  *
  * Local overrides survive by construction: they are re-applied on top of the newly
- * resolved preset. A slot the author decided to keep as an override instead has its
+ * resolved entry. A slot the author decided to keep as an override instead has its
  * current* value recorded as the override, so the property does not move and the
  * reference stays — which is the one thing review can do that a plain application
  * cannot.
@@ -614,12 +614,12 @@ export function graphicStyleChangedKeys(current: unknown, next: unknown): string
  * ──────────────────────────────────────────────── */
 
 /**
- * The author's deviations from a preset, derived from what the owner currently holds.
+ * The author's deviations from an entry, derived from what the owner currently holds.
  *
  * Used when a property control writes a value into a slot that already references an
  * entry: the edit is a deviation by definition, and this is what turns it into the
  * explicit property-level override the glossary requires. Keys that match the
- * preset produce nothing, so an author who edits a value and puts it back is not left
+ * entry produce nothing, so an author who edits a value and puts it back is not left
  * carrying an override that pins it.
  */
 export function captureGraphicStyleOverrides(
@@ -653,7 +653,7 @@ export function captureGraphicStyleOverrides(
  * property group as a whole — which is the only form it has for a slot that owns no
  * keys, where a Graphic Fill is a discriminated union with no partial to deviate in.
  *
- * A reference the resolution cannot honour deviates from nothing: there is no preset
+ * A reference the resolution cannot honour deviates from nothing: there is no entry
  * in front of it to disagree with, so the comparison has no answer and the safe one
  * is "unchanged". That keeps a Style Set which failed to load from being the reason a
  * composition is treated as having gone local.
@@ -709,8 +709,8 @@ export function detachGraphicStyleRefs(
  * Repoint every reference to one entry at another.
  *
  * The overrides travel with the reference. An override says "this property group is
- * mine, not the preset's", and that stays true of the same property group under a
- * different preset — which is also why the replacement must be of the same kind, so
+ * mine, not the entry's", and that stays true of the same property group under a
+ * different entry — which is also why the replacement must be of the same kind, so
  * the overrides it carries still name keys the slot owns.
  */
 export function replaceGraphicStyleRefs(

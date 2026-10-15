@@ -1711,7 +1711,7 @@ const GRAPHIC_ANIMATION_CHANNEL_DEFAULTS: Readonly<GraphicAnimationChannels> = {
 /**
  * Merge into one channel of a recipe, or remove that channel with null.
  *
- * Any recipe shape: a lifecycle phase's recipe and a Graphic Animation Recipe preset
+ * Any recipe shape: a lifecycle phase's recipe and a Graphic Animation Recipe entry
  * hold the same channels, so both editors switch and edit them through this one
  * merge. A switched-on channel starts from its default and keeps its own fields; a
  * removed one is deleted rather than set to undefined, because the recipe is

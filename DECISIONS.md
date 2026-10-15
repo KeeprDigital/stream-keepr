@@ -8,7 +8,7 @@ Accepted · 2026-08-01 · [#143](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-A Graphic Style Set's typography presets reference **application fonts only**. The entry's font is typed `GraphicApplicationFontSelection` and its wire schema accepts only the `application` arm. A Graphic Item's own typography is unrestricted and takes either arm of `GraphicFontSelection`. The `.skstyle` exporter's `undeclared-graphic-asset-dependency` refusal stays, as enforcement against a document that reached the exporter by some route other than the write path.
+A Graphic Style Set's typography entries reference **application fonts only**. The entry's font is typed `GraphicApplicationFontSelection` and its wire schema accepts only the `application` arm. A Graphic Item's own typography is unrestricted and takes either arm of `GraphicFontSelection`. The `.skstyle` exporter's `undeclared-graphic-asset-dependency` refusal stays, as enforcement against a document that reached the exporter by some route other than the write path.
 
 ### Why
 
@@ -141,7 +141,7 @@ The rule for every recorded key: it leaves the record only when the author sets 
 
 ### Why
 
-- **Storage cannot tell an over-broad pin from a deliberate one.** Both are the same eight keys. The only candidate signal — "this override agrees with what the entry resolves to" — is wrong: a pin the republished preset happens to land on is still the author's, and dropping it lets the next republish take the property. Losing a real override is worse than keeping one the author did not mean to make.
+- **Storage cannot tell an over-broad pin from a deliberate one.** Both are the same eight keys. The only candidate signal — "this override agrees with what the entry resolves to" — is wrong: a pin the republished entry happens to land on is still the author's, and dropping it lets the next republish take the property. Losing a real override is worse than keeping one the author did not mean to make.
 - The same wrong reading used to run on the live path: recapture re-derived overrides from where the composition deviates and discarded the recorded set, so a deliberate pin vanished once the Style Set's value coincided with it — triggered by an edit to _any_ owner in the composition. #229 removed that discard; this is why recapture and apply now share one rule.
 - A fully pinned slot resolves to what the owner already holds, so it never produces a review row and no later Keep mine can narrow it.
 - No such document reaches production: spec #60 wipes the database before ship and puts data migration out of scope.
@@ -149,7 +149,7 @@ The rule for every recorded key: it leaves the record only when the author sets 
 ### Consequences
 
 - A pre-#162 document keeps its over-broad pin, and editing a pinned property re-pins it rather than releasing it. The author cannot read the target value off the screen, since a pinned slot shows no review row. The answer to "this property inherits nothing" is **rebind the slot**.
-- **A value typed onto the preset's own value records nothing (#240).** Capture is a diff against the entry, so the document stays byte-identical and a later publish moving that entry takes the property under the review row's default answer. Accepted: nothing recorded is lost, and the failure is visible — an unpinned property gets a review row (`30 → 99`) where Keep mine records the pin the typing did not. Both halves are pinned in `test/unit/shared/graphicStyleSetBindings.test.ts` under _when the author types the value the preset already resolves to_.
+- **A value typed onto the entry's own value records nothing (#240).** Capture is a diff against the entry, so the document stays byte-identical and a later publish moving that entry takes the property under the review row's default answer. Accepted: nothing recorded is lost, and the failure is visible — an unpinned property gets a review row (`30 → 99`) where Keep mine records the pin the typing did not. Both halves are pinned in `test/unit/shared/graphicStyleSetBindings.test.ts` under _when the author types the value the entry already resolves to_.
 - `heldGraphicStyleOverrides` and `recaptureGraphicStyleOverrides` stay pure functions of what is recorded and what is stored. Nothing may give them provenance (when an override was written) — that is the rejected heuristic under another name.
 - Recapture's guard is per slot and turns on whether the stored value is in step with the published entries, not on revision number (#198), so a template stranded on an older revision it is in step with records deviations too.
 

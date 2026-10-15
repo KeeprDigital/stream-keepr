@@ -7,7 +7,7 @@ import BorderGlowFields from '~/components/Graphics/BorderGlowFields.vue';
 /**
  * The one border and glow fields control, shared by the Feature Match Overlay
  * Frame, Source Item framing, a Graphic Surface Style, and a Graphic Surface
- * Style preset in a Graphic Style Set: what each host's props offer, and the
+ * Style entry in a Graphic Style Set: what each host's props offer, and the
  * edit each change emits.
  */
 

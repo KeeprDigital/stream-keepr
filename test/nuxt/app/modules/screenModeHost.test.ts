@@ -132,7 +132,7 @@ describe('screen mode host definition', () => {
 				height: 1080,
 			},
 			outputOptions: [
-				{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-panel-top' },
+				{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-layers' },
 				{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
 				{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
 			],

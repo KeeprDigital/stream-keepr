@@ -44,7 +44,11 @@ describe('screen Mode Definition module', () => {
 	it('exposes overlay, fill, and key Screen Outputs for Broadcast Graphics', () => {
 		const policy = getScreenModeConfigurationPolicy('broadcast-graphics');
 
-		expect(policy.outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
+		expect(policy.outputOptions).toEqual([
+			{ value: 'overlay', label: 'Open overlay output', icon: 'i-lucide-layers' },
+			{ value: 'fill', label: 'Open fill output', icon: 'i-lucide-square' },
+			{ value: 'key', label: 'Open key output', icon: 'i-lucide-contrast' },
+		]);
 		expect(policy.containerControlPlacement.dimensions).toBe('mode');
 		expect(policy.resetScreenConfigDefaults).toEqual({ width: 1920, height: 1080 });
 	});

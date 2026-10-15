@@ -5,7 +5,7 @@ import { broadcastGraphicsModeConfigSchema } from '~~/server/schemas/api/screen'
 /**
  * One set of typography bounds for every place an author sets typography: a Graphic
  * Item's base typography, a Graphic Placeholder Style, and a Graphic Style Set
- * typography preset. The shared typography fields control bounds its inputs to the
+ * typography entry. The shared typography fields control bounds its inputs to the
  * same numbers, so a value the editor offers is one every write accepts.
  */
 
@@ -55,7 +55,7 @@ function withText(typography: Record<string, unknown>, placeholderStyle?: Record
 	}).success;
 }
 
-function withPreset(value: Record<string, unknown>) {
+function withEntry(value: Record<string, unknown>) {
 	return graphicStyleSetEntrySchema.safeParse({
 		id: 'heading',
 		kind: 'typography',
@@ -83,10 +83,10 @@ describe('graphic typography bounds', () => {
 		expect(withText({ letterSpacing: 101 })).toBe(false);
 	});
 
-	it('lets a typography preset space letters from -100 to 100', () => {
-		expect(withPreset({ letterSpacing: -100 })).toBe(true);
-		expect(withPreset({ letterSpacing: -101 })).toBe(false);
-		expect(withPreset({ letterSpacing: 101 })).toBe(false);
+	it('lets a typography entry space letters from -100 to 100', () => {
+		expect(withEntry({ letterSpacing: -100 })).toBe(true);
+		expect(withEntry({ letterSpacing: -101 })).toBe(false);
+		expect(withEntry({ letterSpacing: 101 })).toBe(false);
 	});
 
 	it('weights a Graphic Placeholder Style from 1 to 1000, as base typography is', () => {
@@ -107,8 +107,8 @@ describe('graphic typography bounds', () => {
 		expect(withText({ fontSize: 601 })).toBe(false);
 		expect(withText({ lineHeight: 10.01 })).toBe(false);
 		expect(withText({}, { fontSize: 601 })).toBe(false);
-		expect(withPreset({ fontSize: 600, lineHeight: 10 })).toBe(true);
-		expect(withPreset({ fontSize: 601 })).toBe(false);
-		expect(withPreset({ lineHeight: 10.01 })).toBe(false);
+		expect(withEntry({ fontSize: 600, lineHeight: 10 })).toBe(true);
+		expect(withEntry({ fontSize: 601 })).toBe(false);
+		expect(withEntry({ lineHeight: 10.01 })).toBe(false);
 	});
 });

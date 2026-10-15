@@ -5,7 +5,7 @@ import TypographyFields from '~/components/Graphics/TypographyFields.vue';
 
 /**
  * The one typography fields control, shared by a Graphic Item's base typography, a
- * Graphic Placeholder Style, and a Graphic Style Set typography preset: the bounds
+ * Graphic Placeholder Style, and a Graphic Style Set typography entry: the bounds
  * each field holds, what clearing one emits, and what the inheritable mode a
  * Graphic Placeholder Style uses adds and removes.
  */

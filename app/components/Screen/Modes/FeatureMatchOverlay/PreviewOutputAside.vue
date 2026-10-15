@@ -2,13 +2,13 @@
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
+import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
-import { GRAPHICS_OUTPUT_OPTIONS } from '~/modules/graphics/previewControls';
 import {
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
 	isGraphicsPreviewReadyMessage,
@@ -294,7 +294,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 							</div>
 							<div class="space-y-2">
 								<div
-									v-for="output in GRAPHICS_OUTPUT_OPTIONS"
+									v-for="output in SCREEN_OUTPUT_OPTIONS"
 									:key="output.value"
 									class="grid gap-2 rounded-lg border border-default/70 bg-muted/20 p-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] sm:items-center"
 								>

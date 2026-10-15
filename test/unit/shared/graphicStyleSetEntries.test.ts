@@ -11,8 +11,8 @@ import { squareShapeGeometry } from '~~/shared/modules/graphics';
  * Resolving a Graphic Style Set's entries.
  *
  * The operator-visible rule under test is the one that makes a Style Set worth
- * having: a palette entry stores one opaque colour, and every preset that uses a
- * colour *references* it. So changing one palette entry changes every preset that
+ * having: a palette entry stores one opaque colour, and every entry that uses a
+ * colour *references* it. So changing one palette entry changes every entry that
  * reaches it — transitively — and a broken reference is found before anything can
  * publish, not when a template fails to render.
  */
@@ -49,7 +49,7 @@ const panel = entry('surface-style', 'panel', {
 });
 
 describe('graphicStyleEntryReferences', () => {
-	it('names every entry a preset depends on, with the kind that reference demands', () => {
+	it('names every entry another entry depends on, with the kind that reference demands', () => {
 		expect(graphicStyleEntryReferences(heading))
 			.toEqual([{ entryId: 'brand', requiredKind: 'palette' }]);
 		expect(graphicStyleEntryReferences(panel)).toEqual([
@@ -58,7 +58,7 @@ describe('graphicStyleEntryReferences', () => {
 		]);
 	});
 
-	it('names every stop of a gradient Graphic Fill preset', () => {
+	it('names every stop of a gradient Graphic Fill entry', () => {
 		const gradient = entry('fill', 'sweep', {
 			type: 'linear-gradient',
 			angle: 90,
@@ -84,7 +84,7 @@ describe('graphicStyleEntryReferences', () => {
 });
 
 describe('resolveGraphicStyleSet', () => {
-	it('resolves a palette-linked typography preset to a concrete colour', () => {
+	it('resolves a palette-linked typography entry to a concrete colour', () => {
 		const resolution = resolveGraphicStyleSet([brand, heading]);
 
 		expect(resolution.issues).toEqual([]);
@@ -103,7 +103,7 @@ describe('resolveGraphicStyleSet', () => {
 		});
 	});
 
-	it('carries a palette change through every preset that transitively reaches it', () => {
+	it('carries a palette change through every entry that transitively reaches it', () => {
 		const before = resolveGraphicStyleSet([brand, ink, panelFill, panel]);
 		const after = resolveGraphicStyleSet([
 			brand,
@@ -112,8 +112,8 @@ describe('resolveGraphicStyleSet', () => {
 			panel,
 		]);
 
-		// The Graphic Surface Style preset never names `ink`; it names the Graphic Fill
-		// preset that does. That indirection is exactly what a transitive dependency is.
+		// The Graphic Surface Style entry never names `ink`; it names the Graphic Fill
+		// entry that does. That indirection is exactly what a transitive dependency is.
 		expect(before.resolved.get('panel')).toMatchObject({
 			value: { fill: { type: 'solid', color: '#101014' } },
 		});
@@ -122,7 +122,7 @@ describe('resolveGraphicStyleSet', () => {
 		});
 	});
 
-	it('resolves a Graphic Surface Style preset that references no Graphic Fill preset', () => {
+	it('resolves a Graphic Surface Style entry that references no Graphic Fill entry', () => {
 		const outlineOnly = entry('surface-style', 'edge', {
 			fillOpacity: 1,
 			outline: { colorEntryId: 'brand', width: 4 },
@@ -139,7 +139,7 @@ describe('resolveGraphicStyleSet', () => {
 		});
 	});
 
-	it('resolves a media treatment preset\'s clipping through a Shape Geometry preset', () => {
+	it('resolves a media treatment entry\'s clipping through a Shape Geometry entry', () => {
 		const rounded = entry('shape-geometry', 'rounded', {
 			...squareShapeGeometry(),
 			topLeft: { treatment: 'rounded', size: 12 },
@@ -159,7 +159,7 @@ describe('resolveGraphicStyleSet', () => {
 		});
 	});
 
-	it('gives an animation preset a delay of zero when its author set none', () => {
+	it('gives a Graphic Animation Recipe entry a delay of zero when its author set none', () => {
 		const resolution = resolveGraphicStyleSet([entry('animation-recipe', 'rise', {
 			duration: 300,
 			easing: 'ease-out',
@@ -196,7 +196,7 @@ describe('resolveGraphicStyleSet', () => {
 	it('refuses a reference that would close a cycle before the cycle can form', () => {
 		// A cycle is unreachable in the current vocabulary, and this is why: every
 		// reference demands a *different* kind, and those kinds form a strict layering.
-		// Two Graphic Fill presets pointed at each other are the closest an author can
+		// Two Graphic Fill entries pointed at each other are the closest an author can
 		// get, and each one is refused for naming the wrong kind rather than for
 		// looping. Resolution still carries the cycle guard, because that layering is a
 		// property of today's kinds and a `.skstyle` package (#76) will one day carry
@@ -279,7 +279,7 @@ describe('resolveGraphicStyleSet', () => {
 		})]);
 	});
 
-	it('refuses a typography preset naming a font this installation does not have', () => {
+	it('refuses a typography entry naming a font this installation does not have', () => {
 		const resolution = resolveGraphicStyleSet([
 			brand,
 			{ ...heading, value: { ...heading.value, font: { kind: 'application', fontId: 'not-a-font' } } } as unknown as GraphicStyleSetEntry,
@@ -298,7 +298,7 @@ describe('resolveGraphicStyleSet', () => {
 
 		expect(resolution.resolved.get('brand')).toEqual({ kind: 'palette', value: '#ff0044' });
 		expect(resolution.resolved.get('heading')).toBeDefined();
-		// `panel` references a Graphic Fill preset that is not in this set.
+		// `panel` references a Graphic Fill entry that is not in this set.
 		expect(resolution.resolved.has('panel')).toBe(false);
 		expect(resolution.issues).toHaveLength(1);
 	});
@@ -306,7 +306,7 @@ describe('resolveGraphicStyleSet', () => {
 	it('does not resolve an entry whose transitive dependency is broken', () => {
 		const resolution = resolveGraphicStyleSet([panelFill, panel]);
 
-		// `panel` itself is well formed. It fails because the Graphic Fill preset it
+		// `panel` itself is well formed. It fails because the Graphic Fill entry it
 		// names could not resolve its own palette reference.
 		expect(resolution.resolved.has('panel-fill')).toBe(false);
 		expect(resolution.resolved.has('panel')).toBe(false);

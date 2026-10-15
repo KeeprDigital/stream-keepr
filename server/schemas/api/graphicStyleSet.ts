@@ -1,35 +1,27 @@
 import { z } from 'zod';
+import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
 import { GRAPHIC_FONT_IDS } from '~~/shared/modules/graphics';
 import { MEDIA_FIT_VALUES } from '~~/shared/types/graphicItem';
 import {
 	GRAPHIC_ANIMATION_EASING_VALUES,
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
-	GRAPHIC_FONT_STYLE_VALUES,
 	GRAPHIC_REVEAL_EDGE_VALUES,
 	GRAPHIC_SLIDE_DIRECTION_VALUES,
 	GRAPHIC_SLIDE_DISTANCE_MODE_VALUES,
-	GRAPHIC_TEXT_TRANSFORM_VALUES,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
 	MAX_GRAPHIC_ANIMATION_REPEAT,
 	MAX_GRAPHIC_ANIMATION_SCALE,
 	MAX_GRAPHIC_FILL_STOPS,
-	MAX_GRAPHIC_FONT_SIZE,
-	MAX_GRAPHIC_FONT_WEIGHT,
-	MAX_GRAPHIC_LETTER_SPACING,
-	MAX_GRAPHIC_LINE_HEIGHT,
 	MAX_GRAPHIC_MEDIA_PLAYBACK_RATE,
 	MAX_GRAPHIC_SLIDE_DISTANCE_PX,
-	MAX_SHAPE_GEOMETRY_PX,
+	MAX_PIXEL_VALUE,
 	MIN_GRAPHIC_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 	MIN_GRAPHIC_FILL_STOPS,
-	MIN_GRAPHIC_FONT_WEIGHT,
-	MIN_GRAPHIC_LETTER_SPACING,
 	MIN_GRAPHIC_MEDIA_PLAYBACK_RATE,
-	SHAPE_CORNER_TREATMENT_VALUES,
 } from '~~/shared/types/graphics';
 import {
 	GRAPHIC_STYLE_ENTRY_SCHEMA_VERSION,
@@ -43,14 +35,15 @@ import {
 /**
  * The Graphic Style Set library's write surface.
  *
- * Every preset is bounded by the same numbers the property it produces is bounded
+ * Every entry is bounded by the same numbers the property it produces is bounded
  * by. That is not a nicety: a Style Set entry's whole purpose is to be written into
  * a graphics document, so an entry outside the document's bounds would publish
- * cleanly and then make every template that referenced it unwritable. The bounds are
- * imported from the shared vocabulary for exactly that reason — one number, one
- * place, both schemas.
+ * cleanly and then make every template that referenced it unwritable. Shape Geometry
+ * and the typography fields are the document's own schemas (`graphicValues.ts`); the
+ * other bounds are imported from the shared vocabulary — one number, one place, both
+ * schemas.
  *
- * Colour is a reference rather than a value in every preset that involves one, so
+ * Colour is a reference rather than a value in every entry that involves one, so
  * these schemas check entry ids where the item schemas check CSS colours. Whether
  * those ids resolve is not a shape question and is not asked here: a draft is edited
  * into existence in pieces and is referentially broken for most of that time.
@@ -71,7 +64,7 @@ export const GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES = 4 * 1024;
 
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
-const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(10000);
+const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(MAX_PIXEL_VALUE);
 const cssColorSchema = z.string().min(1).max(500);
 
 export const graphicStyleSetIdSchema = z.string().min(1).max(100);
@@ -95,12 +88,7 @@ const typographyValueSchema = z.object({
 		kind: z.literal('application'),
 		fontId: z.enum(GRAPHIC_FONT_IDS),
 	}).strict(),
-	fontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
-	fontWeight: finiteNumberSchema.int().min(MIN_GRAPHIC_FONT_WEIGHT).max(MAX_GRAPHIC_FONT_WEIGHT),
-	fontStyle: z.enum(GRAPHIC_FONT_STYLE_VALUES),
-	textTransform: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
-	letterSpacing: finiteNumberSchema.min(MIN_GRAPHIC_LETTER_SPACING).max(MAX_GRAPHIC_LETTER_SPACING),
-	lineHeight: finiteNumberSchema.positive().max(MAX_GRAPHIC_LINE_HEIGHT),
+	...graphicTypographyFields,
 	colorEntryId: entryIdSchema,
 }).strict();
 
@@ -129,21 +117,6 @@ const surfaceStyleValueSchema = z.object({
 		size: nonNegativePixelSchema.max(500),
 		opacity: opacitySchema,
 	}).strict().optional(),
-}).strict();
-
-const shapeCornerValueSchema = z.object({
-	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
-	size: finiteNumberSchema.nonnegative().max(MAX_SHAPE_GEOMETRY_PX),
-}).strict();
-const shapeSlantValueSchema = finiteNumberSchema.min(-MAX_SHAPE_GEOMETRY_PX).max(MAX_SHAPE_GEOMETRY_PX);
-
-const shapeGeometryValueSchema = z.object({
-	topLeft: shapeCornerValueSchema,
-	topRight: shapeCornerValueSchema,
-	bottomRight: shapeCornerValueSchema,
-	bottomLeft: shapeCornerValueSchema,
-	leftSlant: shapeSlantValueSchema,
-	rightSlant: shapeSlantValueSchema,
 }).strict();
 
 const mediaTreatmentValueSchema = z.object({
@@ -203,7 +176,7 @@ export const graphicStyleSetEntrySchema = z.discriminatedUnion('kind', [
 	z.object({ ...entryBase, kind: z.literal('fill'), value: fillValueSchema }).strict(),
 	z.object({ ...entryBase, kind: z.literal('surface-style'), value: surfaceStyleValueSchema }).strict(),
 	z.object({ ...entryBase, kind: z.literal('media-treatment'), value: mediaTreatmentValueSchema }).strict(),
-	z.object({ ...entryBase, kind: z.literal('shape-geometry'), value: shapeGeometryValueSchema }).strict(),
+	z.object({ ...entryBase, kind: z.literal('shape-geometry'), value: shapeGeometrySchema }).strict(),
 	z.object({ ...entryBase, kind: z.literal('animation-recipe'), value: animationRecipeValueSchema }).strict(),
 ]);
 
@@ -212,7 +185,7 @@ export const graphicStyleSetEntrySchema = z.discriminatedUnion('kind', [
  *
  * Written whole rather than as a stream of entry operations. A draft is one JSON
  * document and its edits are unordered — an author adds a palette colour, renames a
- * preset, and deletes an unused one in any sequence — so a per-entry API would need
+ * entry, and deletes an unused one in any sequence — so a per-entry API would need
  * its own concurrency story on top of the one the Style Set already has. The
  * `revision` compare-and-swap on the write is that story.
  */

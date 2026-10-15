@@ -77,15 +77,13 @@ const SlotOnlyStub = defineComponent({
 	template: '<div><span>{{ label }}</span><slot /></div>',
 });
 
-const USelectMenuStub = defineComponent({
-	name: 'USelectMenu',
+/** Every closed choice on the panel, recipe fields and phase scaffolding alike, is a select. */
+const USelectStub = defineComponent({
+	name: 'USelect',
 	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, required: false } },
 	emits: ['update:modelValue'],
 	template: '<select :value="modelValue" />',
 });
-
-/** The recipe fields choose with a select; the phase scaffolding with a menu. */
-const USelectStub = defineComponent({ ...USelectMenuStub, name: 'USelect' });
 
 const UInputNumberStub = defineComponent({
 	name: 'UInputNumber',
@@ -128,7 +126,6 @@ async function mountComponent(options: {
 		global: {
 			stubs: {
 				UFormField: SlotOnlyStub,
-				USelectMenu: USelectMenuStub,
 				USelect: USelectStub,
 				UInputNumber: UInputNumberStub,
 				USwitch: USwitchStub,
@@ -156,10 +153,7 @@ function numberField(wrapper: Wrapper, testId: string) {
 }
 
 function selectField(wrapper: Wrapper, testId: string) {
-	return [
-		...wrapper.findAllComponents({ name: 'USelectMenu' }),
-		...wrapper.findAllComponents({ name: 'USelect' }),
-	]
+	return wrapper.findAllComponents({ name: 'USelect' })
 		.find(entry => entry.attributes('data-testid') === testId);
 }
 
@@ -409,7 +403,7 @@ describe('graphicAnimationEditor', () => {
 		const { default: Animation } = await import(componentPath);
 		const wrapper = mount(Animation, {
 			props: { graphics: stack(), selectedTarget: ITEM_TARGET, canvasWidth: 1920, canvasHeight: 1080 },
-			global: { stubs: { UFormField: SlotOnlyStub, USelectMenu: USelectMenuStub, USelect: USelectStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
+			global: { stubs: { UFormField: SlotOnlyStub, USelect: USelectStub, UInputNumber: UInputNumberStub, USwitch: USwitchStub, UBadge: true, UIcon: true } },
 		});
 
 		expect(wrapper.get('[data-testid="graphic-animation-editor"]').attributes('disabled')).toBeDefined();

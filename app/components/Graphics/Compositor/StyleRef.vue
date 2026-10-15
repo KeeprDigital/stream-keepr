@@ -45,7 +45,7 @@ const linked = computed(() =>
  *
  * Shown as a count rather than a list because the list is the property control
  * directly below it: what an author needs here is the fact that some of what they
- * are looking at no longer follows the preset.
+ * are looking at no longer follows the entry.
  */
 const overrideCount = computed(() => Object.keys(props.current?.overrides ?? {}).length);
 

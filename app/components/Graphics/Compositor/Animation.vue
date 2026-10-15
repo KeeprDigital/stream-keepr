@@ -49,7 +49,7 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
  * removes it — a newly authored graphic or item has none. A preset writes an
  * ordinary editable recipe and nothing records that it was used. The recipe body
  * itself is the shared Graphic Animation Recipe fields control, the same one a
- * Graphic Animation Recipe preset is edited with; this component owns the phases.
+ * Graphic Animation Recipe entry is edited with; this component owns the phases.
  *
  * Every edit goes through the shared authoring merges, so changing one channel
  * field never drops the channel's siblings and changing one channel never drops
@@ -66,8 +66,8 @@ const props = defineProps<{
 	writable?: boolean;
 	/**
 	 * The published Graphic Style Set this composition is linked to, when it is
-	 * linked to one. A Graphic Animation Recipe preset is referenced per lifecycle
-	 * phase, from the phase's own controls, exactly as every other preset is
+	 * linked to one. A Graphic Animation Recipe entry is referenced per lifecycle
+	 * phase, from the phase's own controls, exactly as every other entry is
 	 * referenced from the property control that already edits it.
 	 */
 	styleSet?: GraphicStyleAuthoringContext;
@@ -86,10 +86,9 @@ const selection = computed(() => resolveGraphicsSelection(props.graphics, props.
 /**
  * The Graphic Style Set slot one lifecycle phase's recipe is inherited through.
  *
- * The slot vocabulary names the phase, so a preset assigned to enter and the same
- * preset assigned to exit are two independent references to one entry — which is
- * exactly the glossary's rule that a template "assigns presets to lifecycle phases"
- * while item selection, staggering, and choreography stay local.
+ * The slot vocabulary names the phase, so an entry assigned to enter and the same
+ * entry assigned to exit are two independent references to it, while item selection,
+ * staggering, and choreography stay local.
  */
 function styleSlotFor(phase: GraphicAnimationPhase): GraphicStyleSlot {
 	return `animation.${phase}` as GraphicStyleSlot;
@@ -358,7 +357,7 @@ function staggerOf(phase: GraphicAnimationPhase) {
 				/>
 
 				<UFormField label="Preset" size="xs">
-					<USelectMenu
+					<USelect
 						:items="presetOptions(phase)"
 						value-key="value"
 						size="xs"
@@ -401,7 +400,7 @@ function staggerOf(phase: GraphicAnimationPhase) {
 
 				<div v-if="staggerOf(phase)" class="mt-2 space-y-2">
 					<UFormField label="Order" size="xs">
-						<USelectMenu
+						<USelect
 							:model-value="staggerOf(phase)!.order"
 							:items="STAGGER_ORDER_OPTIONS"
 							value-key="value"

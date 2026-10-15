@@ -22,10 +22,10 @@ import type {
  * ## Why an entry stores references rather than values
  *
  * Every entry kind that involves colour stores a *palette entry id* rather than a
- * colour. That is the whole point of a palette: "each entry stores one opaque colour
- * rather than a fixed application role", and "presets may reference multiple palette
- * entries". A typography preset whose colour was a literal string would make a brand
- * colour change a find-and-replace across every preset that happened to use it, which
+ * colour. That is the whole point of a palette: each entry stores one opaque colour
+ * rather than a fixed application role, and other entries may reference several
+ * palette entries. A typography entry whose colour was a literal string would make a brand
+ * colour change a find-and-replace across every entry that happened to use it, which
  * is the problem a Style Set exists to remove.
  *
  * The consequence is that an entry is not directly usable: it has to be *resolved*
@@ -67,10 +67,10 @@ export const MAX_GRAPHIC_STYLE_SET_ENTRIES = 200;
 /**
  * The entry kinds a Graphic Style Set's initial vocabulary offers.
  *
- * Each names one bounded preset that a template property control can reference
+ * Each names one bounded entry that a template property control can reference
  * whole. There is deliberately no "colour role" kind: the palette is an open-ended
  * collection of freely named colours, and what a colour *does* is decided by the
- * preset or property that references it.
+ * entry or property that references it.
  */
 export const GRAPHIC_STYLE_ENTRY_KIND_VALUES = [
 	'palette',
@@ -99,16 +99,16 @@ export interface PaletteGraphicStyleEntryValue {
 }
 
 /**
- * A typography preset.
+ * A typography entry.
  *
  * Alignment, Text Overflow Policy, content, and placeholder mappings stay
- * item-specific, so they are absent here: a preset that carried alignment would make
+ * item-specific, so they are absent here: an entry that carried alignment would make
  * one shared "heading" style unusable for a right-aligned score.
  */
 export interface TypographyGraphicStyleEntryValue {
 	/**
 	 * An application font, never a Graphics Asset Library one. A Graphic Item's own
-	 * typography takes either; a preset that travels in a `.skstyle` with no asset
+	 * typography takes either; an entry that travels in a `.skstyle` with no asset
 	 * envelope takes only the arm that needs no bytes. See
 	 * `DECISIONS.md` (ADR-0001).
 	 */
@@ -123,7 +123,7 @@ export interface TypographyGraphicStyleEntryValue {
 	colorEntryId: string;
 }
 
-/** One positioned stop of a gradient Graphic Fill preset. */
+/** One positioned stop of a gradient Graphic Fill entry. */
 export interface GraphicStyleFillStop {
 	colorEntryId: string;
 	position: number;
@@ -136,12 +136,12 @@ export type FillGraphicStyleEntryValue
 		| { type: 'linear-gradient'; angle: number; stops: GraphicStyleFillStop[] };
 
 /**
- * A Graphic Surface Style preset.
+ * A Graphic Surface Style entry.
  *
- * `fillEntryId` is optional because the glossary says a surface preset *may*
- * reference one Graphic Fill preset — a preset that only standardises an outline and
- * a glow is a real thing an author wants. Shape Geometry stays a separate preset, so
- * a surface preset never carries corners or slants.
+ * `fillEntryId` is optional because the glossary says a surface entry *may*
+ * reference one Graphic Fill entry — an entry that only standardises an outline and
+ * a glow is a real thing an author wants. Shape Geometry stays a separate entry, so
+ * a surface entry never carries corners or slants.
  */
 export interface SurfaceStyleGraphicStyleEntryValue {
 	fillEntryId?: string;
@@ -151,7 +151,7 @@ export interface SurfaceStyleGraphicStyleEntryValue {
 }
 
 /**
- * A media treatment preset: presentation without content.
+ * A media treatment entry: presentation without content.
  *
  * It never selects a media asset — each graphics template selects its own from the
  * Graphics Asset Library — and its `playbackRate` and `loop` defaults are video-only,
@@ -161,17 +161,17 @@ export interface MediaTreatmentGraphicStyleEntryValue {
 	fit: MediaFit;
 	focalPosition: GraphicFocalPosition;
 	opacity: number;
-	/** An optional Shape Geometry preset reference used as the clipping boundary. */
+	/** An optional Shape Geometry entry reference used as the clipping boundary. */
 	clipGeometryEntryId?: string;
 	playbackRate?: number;
 	loop?: boolean;
 }
 
-/** A Shape Geometry preset: per-corner treatment and bounded edge slants, nothing else. */
+/** A Shape Geometry entry: per-corner treatment and bounded edge slants, nothing else. */
 export type ShapeGeometryGraphicStyleEntryValue = ShapeGeometry;
 
 /**
- * A Graphic Animation Recipe preset.
+ * A Graphic Animation Recipe entry.
  *
  * One bounded fade, slide, scale, and reveal combination with duration, easing, an
  * optional delay, and the on-screen-only repetition defaults. A template assigns it
@@ -230,12 +230,12 @@ export type GraphicStyleSetEntry = {
  * Style Set entry.
  *
  * A closed vocabulary rather than a path expression, for the same reason a Graphic
- * Source Relation is: an author picks a preset in the property control that already
+ * Source Relation is: an author picks an entry in the property control that already
  * edits that property, and nothing has to parse, validate, or migrate a path. Each
  * slot names exactly one property group, and the entry kind it accepts is fixed.
  *
  * `surfaceStyle` and `surfaceStyle.fill` deliberately overlap. A Graphic Surface
- * Style preset may itself reference a Graphic Fill preset, so an item that binds
+ * Style entry may itself reference a Graphic Fill entry, so an item that binds
  * both is stating something more specific about its fill than about its surface —
  * and the finer slot is applied last and wins. That ordering is the whole rule;
  * there is no validation refusing the combination, because "a brand surface but
@@ -272,23 +272,23 @@ export const GRAPHIC_STYLE_SLOT_VALUES = [
 export type GraphicStyleSlot = typeof GRAPHIC_STYLE_SLOT_VALUES[number];
 
 /**
- * The typography properties a typography preset owns.
+ * The typography properties a typography entry owns.
  *
  * Text alignment is absent because it is item-specific, which makes this a strict
  * subset of `GraphicTypography` rather than an alias for it.
  */
 export type GraphicStyleTypographyProperties = Omit<GraphicTypography, 'textAlign'>;
 
-/** The media presentation properties a media treatment preset owns. */
+/** The media presentation properties a media treatment entry owns. */
 export type GraphicStyleMediaProperties = Pick<
 	MediaGraphicItemConfig,
 	'fit' | 'focalPosition' | 'opacity' | 'clipGeometry' | 'playbackRate' | 'loop'
 >;
 
 /**
- * The recipe properties an animation preset owns.
+ * The recipe properties a Graphic Animation Recipe entry owns.
  *
- * The on-screen phase's `pause` and `repeat` are part of the shape because a preset
+ * The on-screen phase's `pause` and `repeat` are part of the shape because an entry
  * carries repetition defaults; the other three phases have no such properties and
  * simply never receive them.
  */
@@ -301,7 +301,7 @@ export type GraphicStyleAnimationProperties = GraphicOnScreenAnimationRecipe;
  * always property-level: "this heading, one size larger" rather than a whole
  * disconnected typography block. `surfaceStyle.fill` is the exception and takes no
  * overrides at all — a Graphic Fill is a discriminated union with no meaningful
- * partial, so deviating from a Graphic Fill preset means not referencing one.
+ * partial, so deviating from a Graphic Fill entry means not referencing one.
  */
 export interface GraphicStyleOverridesBySlot {
 	'typography': Partial<GraphicStyleTypographyProperties>;
@@ -459,7 +459,7 @@ export interface GraphicStyleSetPublishRefusal {
  * One property group a Graphic Style Set update would change in one template.
  *
  * The unit is a slot rather than a field because a slot is what an author decides
- * about: they either take the preset's new statement of this property group or keep
+ * about: they either take the entry's new statement of this property group or keep
  * what they are looking at. `owner` names the Graphic Item, or is null for the
  * Broadcast Graphic's own animation.
  */

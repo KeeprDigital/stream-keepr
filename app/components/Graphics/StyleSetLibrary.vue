@@ -203,9 +203,9 @@ function addEntry() {
 		paletteEntryId: palette?.id,
 	});
 	if (!entry) {
-		// A preset that needs a colour cannot be created before there is one to point
+		// An entry that needs a colour cannot be created before there is one to point
 		// at: a reference to nothing is not a value, and the next publish would refuse it.
-		error.value = 'Add a palette colour first — typography and Graphic Fill presets reference one rather than storing a colour.';
+		error.value = 'Add a palette colour first — typography and Graphic Fill entries reference one rather than storing a colour.';
 		return;
 	}
 	void saveDraft([...current.draft, entry]);

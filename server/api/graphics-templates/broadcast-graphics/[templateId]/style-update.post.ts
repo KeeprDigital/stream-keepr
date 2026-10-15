@@ -24,7 +24,7 @@ import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/
  *   through the template's ordinary compare-and-swap write, so a template is never
  *   half-updated and the update is visible in the library as exactly one revision.
  * - **Overrides preserved.** Every local deviation is re-applied on top of the newly
- *   resolved preset, and a slot the author decided to keep is recorded as a fresh
+ *   resolved entry, and a slot the author decided to keep is recorded as a fresh
  *   override so it does not move now or on any later republish.
  *
  * The whole template moves to the published revision together. There is no way to

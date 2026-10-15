@@ -16,7 +16,7 @@ import {
 
 /**
  * The one typography fields control, for a Graphic Item's base typography, a
- * Graphic Placeholder Style, and a Graphic Style Set typography preset.
+ * Graphic Placeholder Style, and a Graphic Style Set typography entry.
  *
  * It owns the grid every one of them shares — size, weight, letter spacing, line
  * height, style and case — with the bounds every typography schema accepts, and

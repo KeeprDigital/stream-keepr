@@ -26,13 +26,13 @@ import { createDefaultGraphicSurfaceStyle } from '../graphics/itemDefinitions';
  *
  * ## Owned keys, and why absence clears
  *
- * Each slot has a fixed set of keys the entry owns. Applying a preset *replaces*
- * that whole set: a key the resolved preset does not carry is removed rather than
- * left behind, because a Graphic Surface Style preset whose glow the author deleted
+ * Each slot has a fixed set of keys the entry owns. Applying an entry *replaces*
+ * that whole set: a key the resolved entry does not carry is removed rather than
+ * left behind, because a Graphic Surface Style entry whose glow the author deleted
  * has to be able to take the glow off the items that inherit it. The two exceptions
  * are keys the vocabulary requires to exist — a Graphic Surface Style always has a
  * fill, and a Media Graphic Item always has a playback rate and a loop flag — where
- * a preset that supplies none leaves the item's own value alone. Both are stated
+ * an entry that supplies none leaves the item's own value alone. Both are stated
  * where they happen rather than as a general "merge" rule, because a general merge
  * rule is exactly the thing that makes a removed glow un-removable.
  */
@@ -58,9 +58,9 @@ export const GRAPHIC_STYLE_SLOT_KINDS: Record<GraphicStyleSlot, GraphicStyleEntr
 /**
  * The order slots are applied in: coarse first, so the finer statement wins.
  *
- * Two pairs overlap, and both resolve the same way. A Graphic Surface Style preset
- * may carry a Graphic Fill preset, so `surfaceStyle.fill` is applied after
- * `surfaceStyle`. A media treatment preset may carry a Shape Geometry preset for
+ * Two pairs overlap, and both resolve the same way. A Graphic Surface Style entry
+ * may carry a Graphic Fill entry, so `surfaceStyle.fill` is applied after
+ * `surfaceStyle`. A media treatment entry may carry a Shape Geometry entry for
  * clipping, so `clipGeometry` is applied after `media`. In both cases the author
  * bound the narrower slot to say something specific about that one property, and an
  * order that let the broader one win would silently discard it.
@@ -260,7 +260,7 @@ export function writeGraphicStyleSlot<T extends GraphicStyleOwnerNode>(
 		case 'media': {
 			// Written key by key rather than spread, because an absent clipping geometry
 			// has to *remove* the one the item is carrying. A spread of an object that
-			// simply lacks the key would leave a media treatment preset unable to stop
+			// simply lacks the key would leave a media treatment entry unable to stop
 			// clipping the items that inherit it.
 			const treatment = value as Record<string, unknown>;
 			const next = { ...item } as Record<string, unknown>;

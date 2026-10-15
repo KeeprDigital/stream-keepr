@@ -288,7 +288,7 @@ describe('whole-graphic animation authoring', () => {
 
 describe('one channel merge for every recipe', () => {
 	it('switches a channel on with its editable default, keeping the recipe\'s other fields', () => {
-		// A Graphic Animation Recipe preset carries no delay and the on-screen defaults;
+		// A Graphic Animation Recipe entry carries no delay and the on-screen defaults;
 		// the merge keeps whatever the recipe holds beside the channel.
 		const recipe: AnimationRecipeGraphicStyleEntryValue = { duration: 400, easing: 'linear', pause: 500, repeat: 3 };
 
