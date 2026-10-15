@@ -77,6 +77,19 @@ describe('the Better Auth instance', () => {
 
 		expect(() => serverAuth()).toThrow(/NUXT_BETTER_AUTH_SECRET/);
 	});
+
+	it('refuses a secret that does not read as text as a configuration fault, naming the setting', () => {
+		// Nuxt reads `NUXT_*` through `destr`: an all-digits secret arrives as a
+		// number, and `.trim()` on it was an unhandled TypeError that took every
+		// signed-in route down with a 500 naming nothing.
+		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: 482915736104 });
+
+		expect(() => serverAuth()).toThrow(expect.objectContaining({
+			name: 'ServiceConfigurationError',
+			statusCode: 503,
+			message: 'NUXT_BETTER_AUTH_SECRET does not read as text (a value of only digits, true/false or JSON is read as another type), so it cannot be checked: set one that contains a letter',
+		}));
+	});
 });
 
 /**

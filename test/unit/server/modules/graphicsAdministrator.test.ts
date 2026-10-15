@@ -73,6 +73,24 @@ describe('the Graphics Administrator guard', () => {
 		expect(failure.cause).toBeInstanceOf(ServiceConfigurationError);
 	});
 
+	/** The same `destr` reading the first-admin bootstrap met in production. */
+	it.each([
+		['all digits', 482915736104],
+		['true', true],
+	])('names the setting when the token does not read as text (%s)', async (_label, configured) => {
+		mockRuntimeConfig.mockReturnValue({ graphicsAdminToken: configured });
+
+		const failure = await refusalFrom((await requireAdministrator())(stubH3Event()));
+		const { ServiceConfigurationError } = await import('~~/server/utils/errors');
+
+		expect(failure).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'NUXT_GRAPHICS_ADMIN_TOKEN does not read as text (a value of only digits, true/false or JSON is read as another type), so it cannot be checked: set one that contains a letter',
+		});
+		expect(failure.cause).toBeInstanceOf(ServiceConfigurationError);
+	});
+
 	it('names a setting and never a value', async () => {
 		// The class's own rule, restated at the site that has a secret to leak: the
 		// message is public, and the token it is about must not be in it.

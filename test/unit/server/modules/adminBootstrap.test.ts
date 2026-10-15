@@ -103,6 +103,30 @@ describe('the first-admin bootstrap guard', () => {
 		expect(failure.cause).toBeInstanceOf(ServiceConfigurationError);
 	});
 
+	/**
+	 * Nuxt reads `NUXT_*` values through `destr`, so a token typed as all digits
+	 * reaches runtimeConfig as a number, and `true` as a boolean. Production
+	 * answered that with an unhandled `TypeError` 500 on the first real bootstrap;
+	 * the operator is owed the setting's name and what to change instead.
+	 */
+	it.each([
+		['all digits', 482915736104],
+		['true', true],
+	])('names the setting when the token does not read as text (%s)', async (_label, configured) => {
+		mockRuntimeConfig.mockReturnValue({ adminBootstrapToken: configured });
+		const { requireAdminBootstrapToken } = await adminBootstrap();
+
+		const failure = await refusalFrom(requireAdminBootstrapToken(stubH3Event()));
+		const { ServiceConfigurationError } = await import('~~/server/utils/errors');
+
+		expect(failure).toMatchObject({
+			statusCode: 503,
+			statusMessage: 'Service Unavailable',
+			message: 'NUXT_ADMIN_BOOTSTRAP_TOKEN does not read as text (a value of only digits, true/false or JSON is read as another type), so it cannot be checked: set one that contains a letter',
+		});
+		expect(failure.cause).toBeInstanceOf(ServiceConfigurationError);
+	});
+
 	it('names a setting and never a value', async () => {
 		mockRuntimeConfig.mockReturnValue({ adminBootstrapToken: '' });
 		mockRequestHeader.mockReturnValue('a-supplied-token');

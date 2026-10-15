@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import { readConfiguredSecret } from './configuredSecret';
 import { ServiceConfigurationError } from './errors';
 import { secretTokensMatch } from './secretTokenComparison';
 
@@ -29,9 +30,10 @@ export interface SharedSecretSurface {
 	/**
 	 * The configured secret as runtimeConfig holds it, read by the caller so the
 	 * config key stays type-checked at the site that knows which key it is.
-	 * Trimmed here; blank means the surface is not armed.
+	 * `unknown` because runtimeConfig does not always hold a string: see
+	 * `readConfiguredSecret`. Blank means the surface is not armed.
 	 */
-	readonly configuredToken: string;
+	readonly configuredToken: unknown;
 	/**
 	 * The environment name, not the runtimeConfig one, because the only reader
 	 * who can act on the refusal is the one who has to go and set it.
@@ -52,16 +54,15 @@ export interface SharedSecretSurface {
  * than as a branch — `await requireSharedSecret(event, …)` and carry on.
  */
 export async function requireSharedSecret(event: H3Event, surface: SharedSecretSurface) {
-	const configuredToken = surface.configuredToken.trim();
-	if (!configuredToken) {
-		const cause = new ServiceConfigurationError(surface.settingName, surface.unavailableClause);
-		throw createError({
-			statusCode: cause.statusCode,
-			statusMessage: 'Service Unavailable',
-			message: cause.message,
-			cause,
-		});
+	let configuredToken: string;
+	try {
+		configuredToken = readConfiguredSecret(surface.configuredToken, surface.settingName);
 	}
+	catch (failure) {
+		throw failure instanceof ServiceConfigurationError ? unavailable(failure) : failure;
+	}
+	if (!configuredToken)
+		throw unavailable(new ServiceConfigurationError(surface.settingName, surface.unavailableClause));
 
 	const suppliedToken = getRequestHeader(event, surface.headerName)?.trim() ?? '';
 	if (!suppliedToken || !(await secretTokensMatch(suppliedToken, configuredToken))) {
@@ -71,4 +72,17 @@ export async function requireSharedSecret(event: H3Event, surface: SharedSecretS
 			message: surface.forbiddenMessage,
 		});
 	}
+}
+
+/**
+ * The 503 a configuration fault becomes, carrying the fault as its cause so its
+ * sentence survives `mapPublicNitroError`'s 5xx sanitizer.
+ */
+function unavailable(cause: ServiceConfigurationError) {
+	return createError({
+		statusCode: cause.statusCode,
+		statusMessage: 'Service Unavailable',
+		message: cause.message,
+		cause,
+	});
 }
