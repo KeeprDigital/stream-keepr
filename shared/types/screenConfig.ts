@@ -684,6 +684,10 @@ export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeck
 	};
 }
 
+/** Where each badge sits on a Deck Screen card until an operator moves it. */
+export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
+export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
+
 export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	deckSource: { type: 'player', playerId: null },
 	board: 'full',
@@ -707,11 +711,11 @@ export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	highlanderPointedCardsAccentColor: '#7c3aed',
 	highlanderPointedCardsBorderColor: undefined,
 	showHighlanderPoints: true,
-	highlanderPointsPosition: 'top-left',
+	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
 	highlanderPointsSize: 'medium',
 	highlanderPointsTextColor: '#ffffff',
 	highlanderPointsBgColor: '#7c3aed',
-	quantityPosition: 'top-right',
+	quantityPosition: DEFAULT_QUANTITY_POSITION,
 	quantitySize: 'medium',
 	quantityTextColor: '#ffffff',
 	quantityBgColor: '#7c3aed',

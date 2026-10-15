@@ -262,6 +262,23 @@ describe('screenDeckSettings', () => {
 		expect(wrapper.text()).toContain('Highlander Point Badges');
 	});
 
+	it.each([
+		{ label: 'Quantity badge position', field: 'quantityPosition', current: 'top-right' },
+		{ label: 'Highlander point badge position', field: 'highlanderPointsPosition', current: 'top-left' },
+	])('picks the $label on a nine-point grid with no centre (#543)', async ({ label, field, current }) => {
+		mockConfig.value = { ...defaultDeckConfig(), showHighlanderPoints: true };
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const picker = wrapper.get(`[role="radiogroup"][aria-label="${label}"]`);
+		expect(picker.get('[aria-checked="true"]').attributes('data-point')).toBe(current);
+		expect(picker.get('[data-point="center"]').attributes('disabled')).toBeDefined();
+
+		await picker.get('[data-point="bottom"]').trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ [field]: 'bottom' });
+	});
+
 	it('shows a layout section per visible board only', async () => {
 		let wrapper = await mountComponent();
 		await flushPromises();

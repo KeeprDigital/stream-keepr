@@ -9,6 +9,9 @@
  * they share is the geometry and the control, so the table lives here once and
  * each vocabulary's definitions are typed views of it; that the vocabularies
  * stay spelled alike is pinned in `test/unit/shared/ninePoints.test.ts`.
+ *
+ * A badge's position on a Deck Screen card is the same vocabulary less the
+ * centre, which its picker disables rather than spelling the eight differently.
  */
 
 export const NINE_POINT_VALUES = [
