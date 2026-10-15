@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRequestLedger } from '~~/test/integration/requestLedger';
+import { createRequestLedger, requestLabel } from '~~/test/integration/requestLedger';
 
 /**
  * The integration suite's request ledger, and the one question it exists to
@@ -94,5 +94,10 @@ describe('the integration suite\'s request ledger', () => {
 		expect(report[2]).toBe('GET /api/11: 0ms');
 		expect(report.at(-1)).toBe('GET /api/30: 0ms');
 		expect(report).toHaveLength(22);
+	});
+
+	it('labels a request by method and path, reading no method as the GET it is sent as', () => {
+		expect(requestLabel('/api/events/1', 'patch')).toBe('PATCH /api/events/1');
+		expect(requestLabel('/api/events/1', undefined)).toBe('GET /api/events/1');
 	});
 });

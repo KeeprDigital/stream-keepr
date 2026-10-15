@@ -210,6 +210,10 @@ Gotchas:
   a third of the CPU cores, at most four; set `STREAM_KEEPR_INTEGRATION_SERVERS`
   to change it (`1` is the old serial run). Each server's output is kept in
   `node_modules/.cache/integration-servers/`.
+- **A failed integration test prints its requests.** The
+  `[integration] requests during "…"` block lists each request with its time;
+  on a timeout, the one marked `never returned` is the stall. It names the
+  route, not the step inside it, and a `beforeAll` stall prints nothing.
 - **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
   timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
   Re-run the single file, then the suite with `--no-file-parallelism`, before

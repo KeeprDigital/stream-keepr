@@ -8,7 +8,7 @@ import {
 	INTEGRATION_OPERATOR_EMAIL,
 	INTEGRATION_OPERATOR_PASSWORD,
 } from './environment';
-import { requestLedger } from './requestLedger';
+import { requestLabel, requestLedger } from './requestLedger';
 
 /**
  * The integration suite's HTTP client: `@nuxt/test-utils`' own, signed in (#396).
@@ -192,31 +192,23 @@ async function signed(path: string, headers: HeadersInit | undefined): Promise<R
 }
 
 /**
- * How a request reads in the ledger a failed test prints (`./requestLedger.ts`).
- *
- * Both wrappers below record there, signed or not, so a test that times out
- * names the round trip it was waiting on.
- */
-function ledgerLabel(path: string, method: unknown): string {
-	return `${typeof method === 'string' ? method.toUpperCase() : 'GET'} ${path}`;
-}
-
-/**
  * `@nuxt/test-utils`' `fetch`, signed in.
  *
  * Same signature, so a suite reads exactly as it did before the boundary existed —
  * which is the point: what changed is who the suite is, not what it asserts.
  */
 export const fetch: typeof unauthenticatedFetch = async (path, options) => {
+	// Signed before recording: a stalled sign-in is not the route never answering.
+	const headers = await signed(path, options?.headers);
 	return await requestLedger.record(
-		ledgerLabel(path, options?.method),
-		async () => await unauthenticatedFetch(path, { ...options, headers: await signed(path, options?.headers) }),
+		requestLabel(path, options?.method),
+		async () => await unauthenticatedFetch(path, { ...options, headers }),
 	);
 };
 
 /**
  * The same function with its route inference switched off, for use inside the
- * wrapper only.
+ * wrappers only.
  *
  * Nitro types `$fetch` against every route in the application, and instantiating
  * that machinery inside a wrapper exhausts TypeScript's depth budget: `vue-tsc`
@@ -237,12 +229,10 @@ const untyped$Fetch = unauthenticated$Fetch as unknown as (
 
 /** `@nuxt/test-utils`' `$fetch`, signed in. */
 export const $fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
+	const headers = await signed(path, options?.headers as HeadersInit | undefined);
 	return await requestLedger.record(
-		ledgerLabel(path, options?.method),
-		async () => await untyped$Fetch(path, {
-			...options,
-			headers: await signed(path, options?.headers as HeadersInit | undefined),
-		}),
+		requestLabel(path, options?.method),
+		async () => await untyped$Fetch(path, { ...options, headers }),
 	);
 }) as typeof unauthenticated$Fetch;
 
@@ -252,10 +242,20 @@ export const $fetch: typeof unauthenticated$Fetch = (async (path: string, option
  *
  * Exported from here rather than left to a direct import of the raw module, so the
  * structural guard can stay absolute — and so an anonymous request says out loud
- * that it is one.
+ * that it is one. Recorded like the signed pair, so a stall here is named too.
  */
-export const anonymousFetch = unauthenticatedFetch;
-export const anonymous$Fetch = unauthenticated$Fetch;
+export const anonymousFetch: typeof unauthenticatedFetch = async (path, options) => {
+	return await requestLedger.record(
+		requestLabel(path, options?.method),
+		async () => await unauthenticatedFetch(path, options),
+	);
+};
+export const anonymous$Fetch: typeof unauthenticated$Fetch = (async (path: string, options?: Record<string, unknown>) => {
+	return await requestLedger.record(
+		requestLabel(path, options?.method),
+		async () => await untyped$Fetch(path, options),
+	);
+}) as typeof unauthenticated$Fetch;
 
 /**
  * The rest of `@nuxt/test-utils/e2e`'s surface, passed straight through.
