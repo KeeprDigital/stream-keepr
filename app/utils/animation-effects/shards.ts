@@ -22,7 +22,7 @@ uniform float iTime;
 uniform vec3 shardColor;
 uniform vec3 edgeColor;
 uniform vec3 backgroundColor;
-uniform float size;
+uniform float scale;
 uniform float intensity;
 
 ${GLSL_HASH_2D_SALTED}
@@ -40,8 +40,8 @@ vec2 featurePoint(vec2 cell) {
 }
 
 void main() {
-	// Fewer, larger facets as size grows.
-	vec2 p = gl_FragCoord.xy / iResolution.y * (5.0 / size);
+	// Fewer, larger facets as scale grows.
+	vec2 p = gl_FragCoord.xy / iResolution.y * (5.0 / scale);
 	vec2 homeCell = floor(p);
 
 	// Nearest and second-nearest feature points from the 3x3 neighbourhood.
@@ -101,7 +101,7 @@ export default function createShardsEffect(
 			shardColor: current.shardColor,
 			edgeColor: current.edgeColor,
 			backgroundColor: current.backgroundColor,
-			size: current.size,
+			scale: current.scale,
 			intensity: current.intensity,
 		}),
 		timeScale: current => current.speed,

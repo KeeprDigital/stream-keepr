@@ -8,7 +8,9 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * under its old name. The shader is unchanged apart from dropping the uniforms
  * nothing read — the mouse pair, and the `blurFactor`, `backgroundColor`,
  * `amplitudeFactor`, `ringFactor`, and `rotationFactor` the fork declared for
- * every shader effect whether or not its fragment used them.
+ * every shader effect whether or not its fragment used them. The fork's `size`
+ * is now `scale`, renormalised so its default of 1 is the old default of 3
+ * (#503).
  */
 const CELLS_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
@@ -16,7 +18,7 @@ uniform float iTime;
 
 uniform vec3 color1;
 uniform vec3 color2;
-uniform float size;
+uniform float scale;
 
 float length2(vec2 p) { return dot(p, p); }
 
@@ -41,7 +43,7 @@ float fworley(vec2 p) {
 	return sqrt(sqrt(sqrt(
 	1.1 * // light
 	worley(p*5. + .3 + iTime*.0525) *
-	sqrt(worley(p * 50. / size + 0.3 + iTime * -0.15)) *
+	sqrt(worley(p * 50. / (3. * scale) + 0.3 + iTime * -0.15)) *
 	sqrt(sqrt(worley(p * -10. + 9.3))))));
 }
 
@@ -69,7 +71,7 @@ export default function createCellsEffect(
 		uniforms: current => ({
 			color1: current.color1,
 			color2: current.color2,
-			size: current.size,
+			scale: current.scale,
 		}),
 		timeScale: current => current.speed,
 	}, params);

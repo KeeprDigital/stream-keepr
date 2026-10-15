@@ -517,3 +517,41 @@ Every output that matters is Chromium: broadcast software captures a browser sou
 - **Keep the block, drop only the Safari gate** — cheaper. But it kept 700 lines guarding a non-target browser, and the rest of the suite would still have tested the block without ever proving a real Safari needed it.
 - **Detect non-Chromium browsers and warn** — keeps the user-agent detection this removes, to tell an operator something they can't act on mid-show.
 - **Migrate stored documents to remove the key** — five document tables and every exported package, for a key that is harmless once ignored.
+
+## ADR-0022: Animation Effect spatial params share one name, direction, and neutral value
+
+Accepted · 2026-10-15 · [#503](https://github.com/KeeprDigital/stream-keepr/issues/503)
+
+### Decision
+
+**One operator-facing concept gets one param name.** Spatial knobs in the Animation Effect catalogue split by what the operator sees:
+
+- **`scale`** sizes a repeating field's features (cells, facets, threads, fog, waves), so their count changes inversely. Its label is "<Feature> scale".
+- **`size`** sizes discrete elements whose count is fixed or set by another param (`density`, `points`). Its label is "<Element> size".
+- **`spacing`** sets the gap between elements without resizing them.
+
+A larger value always draws larger on screen, and a `scale` of 1 is the effect's designed look. The existing effects are retrofitted:
+
+- `zoom` becomes `scale` on caustics, fog, inkmap, and waves.
+- `size` becomes `scale` on cells and shards.
+- Weave's `scale` is inverted.
+- Halo's "Size" becomes "Halo size".
+
+Each new range is the old range mapped through the change, so the extremes the proof scenarios already passed are the ones offered. The rule is stated beside the catalogue in `shared/animationEffects.ts`, and a catalogue unit test refuses `zoom` and any qualified variant (`cellSize`, `waveScale`).
+
+### Why
+
+The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two directions under one label. Caustics', fog's, and inkmap's "Zoom" drew smaller features as the value rose, while waves' "Zoom" drew larger ones. #503 first proposed applying a standard only to future effects, because renaming shipped params resets stored configs (ADR-0014). Nothing has shipped (ADR-0019), so a retrofit costs no real data now. After first ship, every rename would cost a reset.
+
+### Consequences
+
+- **Stored params, Animation Effect Presets, and Template Packages naming the old keys stop parsing**: the strict schemas refuse them and the renderer falls back to defaults. That is acceptable before ship only. No format-version bump, for the reason ADR-0014 gives.
+- Ripple's `ringFactor` ("Ripple scale") is a motion knob, not a spatial one, so this standard leaves it alone; it goes with the remaining fork-era names (#583).
+- Cells' and waves' ranges are renormalised so 1 reproduces their old defaults (size 3, zoom 0.85), which leaves their bounds at uneven values (cells 0.1–1.65).
+
+### Rejected alternatives
+
+- **Standard for future effects only** — leaves the direction conflict on air permanently, to save a rename that costs nothing before ship.
+- **`zoom` for sample-domain scale, `size` for element scale** (#503's example) — splits on shader maths rather than what the operator sees, and "zoom" suggests a camera that only waves has.
+- **One name for every spatial knob** — ember needs both a density and a size, so "how big" and "how many" must stay distinct.
+- **Pixel-level direction tests** — the renderer harness could prove direction, but the cost outweighs a rule a reviewer checks against the docblock.
