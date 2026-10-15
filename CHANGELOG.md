@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.4.0...v1.5.0) (2026-10-15)
+
+
+### Features
+
+* **graphics:** Chromium is the only supported engine for transparent video ([#571](https://github.com/KeeprDigital/stream-keepr/issues/571)) ([c9cea41](https://github.com/KeeprDigital/stream-keepr/commit/c9cea418cfa19638807097b55db518e46c9a8a70))
+
+
+### Bug Fixes
+
+* **auth:** refuse a secret that does not read as text with a 503, not a TypeError ([#568](https://github.com/KeeprDigital/stream-keepr/issues/568)) ([57ccc89](https://github.com/KeeprDigital/stream-keepr/commit/57ccc89fb7a8aea885982cc9cd969c72a2e2f359))
+* **feature-match:** decide a Slot Promotion's outcome before publishing it ([#577](https://github.com/KeeprDigital/stream-keepr/issues/577)) ([d135a40](https://github.com/KeeprDigital/stream-keepr/commit/d135a405447018488c5788e55e924535f892a614))
+
 ## [1.4.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.3.0...v1.4.0) (2026-10-15)
 
 
