@@ -252,7 +252,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 
 	it('rotation revokes the previous capability and authorizes the replacement', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = { assetId, revisionId };
+		config.layout.frame.backgroundImage = { kind: 'asset', assetId, revisionId };
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },

@@ -220,6 +220,11 @@ const pixelPositionSchema = finiteNumberSchema.min(-MAX_PIXEL_VALUE).max(MAX_PIX
 const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(MAX_PIXEL_VALUE);
 const cssColorSchema = z.string().min(1).max(500);
 const optionalCssColorSchema = cssColorSchema.optional();
+/**
+ * A Remote Media URL: HTTPS, or root-relative for a file the application
+ * bundles; empty means unset. Plain HTTP is refused because an HTTPS-served
+ * Screen blocks it as mixed content and would show a blank output (ADR-0021).
+ */
 const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
 	if (value === '')
 		return true;
@@ -227,14 +232,14 @@ const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
 		return true;
 	try {
 		const parsed = new URL(value);
-		return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+		return parsed.protocol === 'https:'
 			&& parsed.username === ''
 			&& parsed.password === '';
 	}
 	catch {
 		return false;
 	}
-}, 'Media URL must be an HTTP(S) URL or a root-relative path');
+}, 'A Remote Media URL must be HTTPS or a root-relative path');
 const graphicAssetReferenceSchema = z.object({
 	assetId: z.string().min(1).max(100).transform(graphicAssetId),
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
@@ -289,21 +294,11 @@ const screenMediaPlaybackRateSchema = z.preprocess(
 	finiteNumberSchema.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE).max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
 );
 
-const screenMediaBackgroundConfigSchema = z.object({
-	enabled: z.boolean(),
-	type: z.literal('video'),
-	url: safeMediaUrlSchema,
-	fit: z.enum(MEDIA_FIT_VALUES),
-	opacity: opacitySchema,
-	playbackRate: screenMediaPlaybackRateSchema,
-	loop: z.boolean(),
-}).strict();
-
 /**
- * Where a Screen's media comes from: a Graphics Asset Library revision or a
- * remote URL — the standardised media source shape the Background Screen mints
- * (#484 adopts it app-wide). The asset branch is shaped as a media Graphic Input
- * value is.
+ * A Screen Media Source: an exact Graphics Asset Library revision or a Remote
+ * Media URL, offered wherever a Screen supplies its own media — Background
+ * Layers and the Feature Match Overlay Frame (ADR-0021). The asset branch is
+ * shaped as a media Graphic Input value is.
  */
 const screenMediaSourceSchema = z.discriminatedUnion('kind', [
 	z.object({
@@ -317,6 +312,15 @@ const screenMediaSourceSchema = z.discriminatedUnion('kind', [
 		url: safeMediaUrlSchema,
 	}).strict(),
 ]);
+
+const screenMediaBackgroundConfigSchema = z.object({
+	enabled: z.boolean(),
+	source: screenMediaSourceSchema,
+	fit: z.enum(MEDIA_FIT_VALUES),
+	opacity: opacitySchema,
+	playbackRate: screenMediaPlaybackRateSchema,
+	loop: z.boolean(),
+}).strict();
 
 /** What every Background Layer owns regardless of type — see `BackgroundLayerBase`. */
 const backgroundLayerShape = {
@@ -613,7 +617,7 @@ const featureMatchSourceFramingStyleSchema = featureMatchOverlayBorderSidesSchem
 const featureMatchOverlayFrameConfigSchema = featureMatchOverlayBorderSidesSchema.extend({
 	backgroundColor: cssColorSchema,
 	opacity: opacitySchema,
-	backgroundImage: graphicAssetReferenceSchema.optional(),
+	backgroundImage: screenMediaSourceSchema.optional(),
 	backgroundImageFit: z.enum(MEDIA_FIT_VALUES).optional(),
 	mediaBackground: screenMediaBackgroundConfigSchema.optional(),
 	gradient: z.string().max(1000).optional(),

@@ -9,6 +9,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
+import { screenMediaSourceReference } from '../../shared/utils/graphicsAssetReferences';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
@@ -167,7 +168,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			revisionId: original.result!.revisionId,
 		};
 		config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = originalReference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...originalReference };
 		// A Screen mutation, so this is one of the two operations #123 suspects: it
 		// awaits a real Ably REST publish before it answers.
 		// This is one of the two `$fetch` calls here with no explicit response type,
@@ -273,6 +274,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 
 	it('moves the pin only once its owning Screen explicitly adopts the newer Graphic Asset Revision', async () => {
 		config.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: originalReference.assetId,
 			revisionId: replaced.result!.revisionId,
 		};
@@ -289,7 +291,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			{ headers: authorHeaders },
 		))).resolves.toEqual([
 			expect.objectContaining({
-				reference: config.layout.frame.backgroundImage,
+				reference: screenMediaSourceReference(config.layout.frame.backgroundImage),
 				owner: expect.objectContaining({ eventId, id: String(screenId) }),
 			}),
 		]);
@@ -353,7 +355,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			{ headers: authorHeaders },
 		))).resolves.toEqual([
 			expect.objectContaining({
-				reference: config.layout.frame.backgroundImage,
+				reference: screenMediaSourceReference(config.layout.frame.backgroundImage),
 			}),
 		]);
 	});

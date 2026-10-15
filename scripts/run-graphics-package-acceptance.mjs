@@ -58,6 +58,7 @@ function repointedPackage(archive, marker) {
 		frame: {
 			...parts.template.frame,
 			backgroundImage: {
+				kind: 'asset',
 				assetId: origin.sourceAssetId,
 				revisionId: origin.sourceRevisionId,
 			},
