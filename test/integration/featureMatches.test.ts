@@ -611,34 +611,34 @@ describe('feature match slots API', () => {
 		const holders = stored.featureMatchSlots.filter((slot: { matchId: number | null }) => slot.matchId === contested.id);
 		expect(holders).toHaveLength(1);
 		const winner = holders[0]!;
-		const [winning, other] = winner.id === lane1.id ? responses : [responses[1]!, responses[0]!];
-		const loserBefore = winner.id === lane1.id ? lane2 : lane1;
+		const [winning, other, otherSlotBefore] = winner.id === lane1.id
+			? [responses[0]!, responses[1]!, lane2]
+			: [responses[1]!, responses[0]!, lane1];
 		expect(winning.status).toBe(200);
 
-		// The other lane ends up empty by one of three histories, and the race picks
+		// The other Slot ends up empty by one of three histories, and the race picks
 		// which (#572, #575). The winner's cleared Slots say whether it moved the
-		// Match off the other lane.
-		// 1. The other lane's D1 batch aborted on the one-Slot-per-Match index,
-		//    leaving its Slot and Session untouched, and it answers 409.
+		// Match off the other Slot.
+		// 1. The other promotion's D1 batch aborted on the one-Slot-per-Match
+		//    index, leaving its Slot and Session untouched, and it answers 409.
 		// 2. Its batch committed first, the winner moved the Match off before it
 		//    decided its outcome, and it answers 409 having published nothing.
 		// 3. Its batch committed first and it decided its outcome before the
 		//    winner moved the Match off. That is a serial "promoted, then moved",
-		//    so it answers 200 with its own promotion. It must never answer 200
-		//    for a promotion the winner did not then undo.
-		const movedOffLoser = winning._data.clearedSlots.some((slot: { id: number }) => slot.id === loserBefore.id);
-		const loserAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === loserBefore.id)!;
-		expect(loserAfter).toMatchObject({ id: loserBefore.id, matchId: null });
-		if (movedOffLoser) {
-			expect(loserAfter.activeSessionId).not.toBe(loserBefore.activeSessionId);
-			expect(loserAfter.activeSession).toMatchObject({ status: 'active', sequence: 1, sourceSnapshot: { matchId: null } });
+		//    so it answers 200. It must never answer 200 for a promotion the
+		//    winner did not then undo.
+		const movedOffOther = winning._data.clearedSlots.some((slot: { id: number }) => slot.id === otherSlotBefore.id);
+		const otherSlotAfter = stored.featureMatchSlots.find((slot: { id: number }) => slot.id === otherSlotBefore.id)!;
+		expect(otherSlotAfter).toMatchObject({ id: otherSlotBefore.id, matchId: null });
+		if (movedOffOther) {
+			expect(otherSlotAfter.activeSessionId).not.toBe(otherSlotBefore.activeSessionId);
+			expect(otherSlotAfter.activeSession).toMatchObject({ status: 'active', sequence: 1, sourceSnapshot: { matchId: null } });
 		}
 		else {
-			expect(loserAfter.activeSessionId).toBe(loserBefore.activeSessionId);
+			expect(otherSlotAfter.activeSessionId).toBe(otherSlotBefore.activeSessionId);
 		}
 		if (other.status === 200) {
-			expect(movedOffLoser).toBe(true);
-			expect(other._data.promotedSlot).toMatchObject({ id: loserBefore.id, matchId: contested.id });
+			expect(movedOffOther).toBe(true);
 		}
 		else {
 			expect(other.status).toBe(409);

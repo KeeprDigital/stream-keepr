@@ -132,7 +132,7 @@ describe('feature Match Slot Promotion server module', () => {
 		mockMatchService.findById.mockResolvedValue(match);
 		mockFeatureMatchService.findById
 			.mockResolvedValueOnce(initialSlot)
-			.mockImplementation(async (id: number) => id === 5 ? refreshedClearedSlot : refreshedPromotedSlot);
+			.mockImplementation(async (id: number) => id === clearedFuture.id ? refreshedClearedSlot : refreshedPromotedSlot);
 		mockBuildMatchPromotionPlan.mockResolvedValue({
 			clearedSlots: [clearedFuture],
 			promotedSlot: promotedFuture,
@@ -318,9 +318,7 @@ describe('feature Match Slot Promotion server module', () => {
 			.mockReset()
 			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
 			.mockResolvedValue(createFeatureMatch({ id: 2, matchId: null, activeSessionId: 60 }));
-		mockFeatureMatchAssignmentService.findByRoundAndSlot
-			.mockResolvedValueOnce(undefined)
-			.mockResolvedValueOnce(undefined);
+		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue(undefined);
 
 		await expect(featureMatchPromotionModule().promoteMatchToSlot({
 			eventId: 1,
@@ -331,32 +329,28 @@ describe('feature Match Slot Promotion server module', () => {
 		expect(mockPublishMessage).not.toHaveBeenCalled();
 	});
 
-	it('still reports a promotion that held its Match when decided, though a later one moves it off', async () => {
-		const committedSlot = createFeatureMatch({ id: 2, matchId: 7, activeSessionId: 57 });
+	it('still succeeds when moved off after its outcome was decided, answering with the state as it is now', async () => {
+		stagePromotion();
 		const movedOffSlot = createFeatureMatch({ id: 2, matchId: null, activeSessionId: 60 });
-		mockMatchService.findById.mockResolvedValue(createMatch());
 		mockFeatureMatchService.findById
+			.mockReset()
 			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: null }))
-			.mockResolvedValueOnce(committedSlot)
+			.mockResolvedValueOnce(createFeatureMatch({ id: 2, matchId: 7, activeSessionId: 57 }))
 			.mockResolvedValue(movedOffSlot);
-		mockBuildMatchPromotionPlan.mockResolvedValue({
-			clearedSlots: [],
-			promotedSlot: createFeatureMatch({ id: 2, matchId: 7 }),
-			queries: ['promote-q'],
-		});
-		mockFeatureMatchAssignmentService.findByRoundAndSlot.mockResolvedValue({ id: 9 });
+		mockFeatureMatchAssignmentService.findById.mockResolvedValue({ id: 9, slotId: 5 });
 
 		const result = await featureMatchPromotionModule().promoteMatchToSlot({ eventId: 1, slotId: 2, matchId: 7 });
 
 		// Its Assignment was already published as a success, so a 409 now would
-		// contradict it (#576). The history is a serial "promoted, then moved"
-		// (#575): this promotion answers with what it committed, and the moving
-		// promotion publishes the Slot's current state.
-		expect(result.promotedSlot).toMatchObject({ id: 2, matchId: 7, activeSessionId: 57 });
+		// contradict it (#576): the history is a serial "promoted, then moved"
+		// (#575). Answering with what it committed instead would let this
+		// operator's client overwrite the move it may already have applied.
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:created', {
 			featureMatchAssignment: expect.objectContaining({ id: 9 }),
 		}, undefined);
-		expect(mockPublishMessage).not.toHaveBeenCalledWith(1, 'featureMatch:updated', expect.anything(), undefined);
+		expect(result.promotedSlot).toMatchObject({ id: 2, matchId: null, activeSessionId: 60 });
+		expect(result.assignment).toMatchObject({ id: 9, slotId: 5 });
+		expect(mockFeatureMatchAssignmentService.findById).toHaveBeenCalledWith(1, 9);
 	});
 
 	it('reverse-syncs through the post-commit form, so a lost Session race cannot fail a committed promotion', async () => {

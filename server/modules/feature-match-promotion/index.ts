@@ -1,7 +1,6 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { FeatureMatchNoteDiscardConfirmation, FeatureMatchPromotionResponse } from '~~/shared/api';
 import { db } from '~~/server/db';
-import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
@@ -194,18 +193,26 @@ export function featureMatchPromotionModule() {
 
 		// Re-read for the reverse sync's snapshot. A promotion that has moved the
 		// Match off since the outcome was decided does not undo this one, whose
-		// Assignment peers have already been shown: the history is "promoted, then
-		// moved" (#575). This promotion answers with what it committed, and leaves
-		// publishing the Slot's current state to the promotion that moved it.
-		const promotedSlot = await slots.findById(slotId, eventId);
-		const response = promotedSlot?.matchId === matchId
-			? await eventData.featureMatchSlotUpdated({ eventId, entity: promotedSlot, originConnectionId })
-			: mapFeatureMatchToResponse(committedSlot);
+		// Assignment peers have already been shown: the history is a serial
+		// "promoted, then moved" (#575). The Slot and Assignment are answered as
+		// they are now, so this operator's client cannot overwrite a move it has
+		// already applied with what this promotion committed.
+		const currentSlot = await slots.findById(slotId, eventId);
+		if (!currentSlot) {
+			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
+		}
+		const currentAssignment = await assignments.findById(eventId, assignment.id) ?? assignment;
+
+		const response = await eventData.featureMatchSlotUpdated({
+			eventId,
+			entity: currentSlot,
+			originConnectionId,
+		});
 
 		return {
 			promotedSlot: response,
 			clearedSlots,
-			assignment: mapFeatureMatchAssignmentToResponse(assignment),
+			assignment: mapFeatureMatchAssignmentToResponse(currentAssignment),
 		};
 	}
 
