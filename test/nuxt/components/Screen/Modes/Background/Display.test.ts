@@ -13,7 +13,6 @@ const contentUrl = vi.fn((reference: GraphicAssetReference) => `/resolved/${refe
 
 mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 	contentUrl,
-	contentRefusal: () => undefined,
 	contentUrlsSettled: computed(() => true),
 }));
 

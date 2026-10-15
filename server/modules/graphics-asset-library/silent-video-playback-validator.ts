@@ -64,11 +64,11 @@ export function silentVideoPlaybackValidationIssue(
 ) {
 	if (result.outcome === 'rejected') {
 		return result.stage === 'transparency'
-			? 'vp9-alpha-chromium-required' as const
+			? 'vp9-alpha-transparency-unproven' as const
 			: 'browser-video-playback-failed' as const;
 	}
 	if (input.inspectedFacts.hasAlpha && !result.transparencyRendered)
-		return 'vp9-alpha-chromium-required' as const;
+		return 'vp9-alpha-transparency-unproven' as const;
 }
 
 function requiredHeader(response: Response, name: string) {

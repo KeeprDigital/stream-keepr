@@ -170,7 +170,7 @@ describe('silent-video playback validation runtime adapter', () => {
 		};
 
 		expect(silentVideoPlaybackValidationIssue(alphaInput, accepted))
-			.toBe('vp9-alpha-chromium-required');
+			.toBe('vp9-alpha-transparency-unproven');
 		expect(silentVideoPlaybackValidationIssue(alphaInput, {
 			...accepted,
 			transparencyRendered: true,

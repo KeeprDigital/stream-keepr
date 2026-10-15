@@ -934,7 +934,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	/**
 	 * The refusal an operator can act on, and the one that used to arrive anonymous.
 	 *
-	 * `recordMediaSelectionFacts` refuses a revision that no longer resolves, and the
+	 * `admitMediaSelection` refuses a revision that no longer resolves, and the
 	 * residual race puts that refusal in front of an operator who has just clicked a
 	 * revision the picker said was there. Without a code it is a bare 409 — which is
 	 * what an ended epoch looks like — so the store reloaded the session and sent the

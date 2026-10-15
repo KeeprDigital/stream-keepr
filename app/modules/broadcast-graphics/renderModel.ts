@@ -2,7 +2,7 @@ import type { SocialProfilePresentationProjection } from '~~/shared/modules/broa
 import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
-import type { GraphicMediaIncompatibilityCode, GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
+import type { GraphicsAnimationProjection, GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 
@@ -68,14 +68,6 @@ export interface BroadcastGraphicsRenderModelInput {
 	 * capability and never by browsing the Graphics Asset Library.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
-	/**
-	 * Why the same resolver expects one pinned revision to be refused, so a clip a
-	 * Media Graphic Item's recorded compatibility says is playable but the
-	 * authoritative side will not deliver is reported rather than drawn blank (#184).
-	 */
-	graphicAssetContentRefusal?: (
-		reference: GraphicAssetReference,
-	) => GraphicMediaIncompatibilityCode | undefined;
 }
 
 export type BroadcastGraphicsRenderModel = GraphicsCompositionRenderModel;
@@ -112,6 +104,5 @@ export function resolveBroadcastGraphicsRenderModel(
 		safeAreaGuides: input.safeAreaGuides,
 		selectedTarget: input.selectedTarget,
 		graphicAssetContentUrl: input.graphicAssetContentUrl,
-		graphicAssetContentRefusal: input.graphicAssetContentRefusal,
 	});
 }

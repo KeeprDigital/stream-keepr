@@ -123,13 +123,12 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * ## The monitor role's own residual, which is the same shape
 	 *
 	 * A hand-built `embed=monitor` URL opened as a real output renders program
-	 * correctly and reports nothing: it is absent from its Screen's connected count,
-	 * from the Open Screen Output Engines, and from the asset-access warning. That is
-	 * a worse silence than the guides one, since those three surfaces exist precisely
-	 * to state what the outputs watching right now cost. It is accepted on the same
-	 * ground — no URL this application produces sets the role, and every surface that
-	 * hands an operator an output URL goes through `useScreenOutputAccessUrl`, which
-	 * asks for no role at all.
+	 * correctly and reports nothing: it is absent from its Screen's connected count
+	 * and from the asset-access warning. That is a worse silence than the guides one,
+	 * since those surfaces exist precisely to state what the outputs watching right
+	 * now cost. It is accepted on the same ground — no URL this application produces
+	 * sets the role, and every surface that hands an operator an output URL goes
+	 * through `useScreenOutputAccessUrl`, which asks for no role at all.
 	 */
 	const previewGuides = computed(() => isPreview.value && route.query.guides === '1');
 	const previewSafeAreas = computed(() => isPreview.value && route.query.safe === '1');
@@ -232,7 +231,6 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		getPresenceData: (_evtId, screenId): ScreenPresenceData => ({
 			screenId,
 			connectedAt,
-			userAgent: navigator.userAgent,
 			outputMode: outputMode.value,
 			assetAccess: assetCapability.value ? 'granted' : 'absent',
 			cardData: cardDataHealth.value,

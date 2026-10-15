@@ -121,48 +121,6 @@ const assets = ref<GraphicAsset[]>([
 		operation: {} as never,
 	},
 	/**
-	 * A transparent clip no engine is confirmed to play: its validation never
-	 * established Chromium transparency playback, so the hard gate refuses it for every
-	 * target including Chromium.
-	 */
-	{
-		id: 'asset-unplayable-video' as never,
-		name: 'Unverified alpha ident',
-		kind: 'silent-video',
-		revisionId: 'revision-unplayable-video-1' as never,
-		revisionNumber: 1,
-		revisions: [{
-			id: 'revision-unplayable-video-1' as never,
-			revisionNumber: 1,
-			facts: {} as never,
-		}],
-		lifecycle: { state: 'active' },
-		eventIds: [7],
-		facts: {
-			kind: 'silent-video',
-			format: 'webm',
-			codec: 'vp9',
-			canonicalMime: 'video/webm',
-			byteLength: 2048,
-			sha256: 'unplayable-digest',
-			width: 640,
-			height: 360,
-			durationSeconds: 1,
-			frameRate: 30,
-			frameCount: 30,
-			bitDepth: 8,
-			colorSpace: 'sdr',
-			chromaSubsampling: '4:2:0',
-			hasAlpha: true,
-			fastStart: null,
-			seekable: true,
-			posterTimeSeconds: 0.1,
-			targetCompatibility: 'chromium-transparency',
-			browserPlayable: true,
-		},
-		operation: {} as never,
-	},
-	/**
 	 * The library's only font, and it belongs to another Event — the one shape in
 	 * this fixture where exactly one asset is hidden by the Event scope, which is
 	 * what the hint's singular sentence needs. No other test asks for fonts, so it
@@ -465,14 +423,18 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 		expect(wrapper.text()).toContain('Publication-requiring actions are unavailable');
 	});
 
-	it('blocks VP9-alpha placement for a Safari target and permits a declared Chromium target', async () => {
+	/**
+	 * Chromium is the only supported engine for transparent video (ADR-0020), so a
+	 * transparent clip is offered and pinned like any other revision, with no target
+	 * to refuse it for and no open output to warn about.
+	 */
+	it('offers a transparent video like any other revision', async () => {
 		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
 		const wrapper = mount(FocusPicker, {
 			props: {
 				eventId: 7,
 				fieldLabel: 'Media Graphic Item',
 				assetKind: ['silent-video'],
-				videoTarget: 'safari',
 			},
 			global: {
 				stubs: {
@@ -488,156 +450,15 @@ describe('the contextual Graphic Asset Focus Picker', () => {
 
 		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
 		const select = wrapper.get('[data-testid="select-asset-alpha-video"]');
-		expect(select.attributes('disabled')).toBeDefined();
-		await select.trigger('click');
-		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-
-		await wrapper.setProps({ videoTarget: 'chromium' });
 		expect(select.attributes('disabled')).toBeUndefined();
-		await select.trigger('click');
-		expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({
-			assetId: 'asset-alpha-video',
-			revisionId: 'revision-alpha-video-1',
-		});
-	});
-
-	/**
-	 * The refusal has to name what refused it. The hard gate fires for a transparent
-	 * clip whose facts do not confirm Chromium playback — a clip no engine is known to
-	 * play — and it fires whatever target the host writes with. Live Control passes
-	 * `chromium`, so calling that a Safari problem sends an operator mid-show to change
-	 * a setting that is already right and cannot help (#204).
-	 */
-	it('does not blame the target for a revision no engine is confirmed to play', async () => {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
-		const wrapper = mount(FocusPicker, {
-			props: {
-				eventId: 7,
-				fieldLabel: 'Badge',
-				assetKind: ['silent-video'],
-				videoTarget: 'chromium',
-			},
-			global: {
-				stubs: {
-					UModal: passthroughStub,
-					UButton: buttonStub,
-					UInput: passthroughStub,
-					UBadge: passthroughStub,
-					UAlert: passthroughStub,
-					UIcon: passthroughStub,
-				},
-			},
-		});
-
-		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
-
-		const refused = wrapper.get('[data-testid="select-asset-unplayable-video"]');
-		expect(refused.attributes('disabled')).toBeDefined();
-		expect(refused.text()).not.toContain('Safari');
-		expect(refused.text()).toContain('no engine plays this revision');
-	});
-
-	it('names the target when the target is what refuses the revision', async () => {
-		// The same clip the Chromium target accepts, refused for Safari: here the
-		// target really is the reason, and saying so is what tells the operator that
-		// pinning it for the Chromium program output would work.
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
-		const wrapper = mount(FocusPicker, {
-			props: {
-				eventId: 7,
-				fieldLabel: 'Badge',
-				assetKind: ['silent-video'],
-				videoTarget: 'safari',
-			},
-			global: {
-				stubs: {
-					UModal: passthroughStub,
-					UButton: buttonStub,
-					UInput: passthroughStub,
-					UBadge: passthroughStub,
-					UAlert: passthroughStub,
-					UIcon: passthroughStub,
-				},
-			},
-		});
-
-		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
-
-		expect(wrapper.get('[data-testid="select-asset-alpha-video"]').text())
-			.toContain('Blocked for Safari target');
-		// And the clip nothing can play still says so, rather than being folded into
-		// the target's refusal because this host happens to write for Safari.
-		expect(wrapper.get('[data-testid="select-asset-unplayable-video"]').text())
-			.toContain('no engine plays this revision');
-	});
-
-	/**
-	 * Compatibility is a fact of the revision, not a choice, so it is stated before
-	 * the choice rather than discovered on air. It never refuses the revision: post-#98
-	 * a clip one open output cannot play costs that output that clip and nothing else,
-	 * and the Chromium program output is usually the one the operator is choosing for.
-	 */
-	it('names the open outputs that cannot play a revision without refusing it', async () => {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
-		const wrapper = mount(FocusPicker, {
-			props: {
-				eventId: 7,
-				fieldLabel: 'Badge',
-				assetKind: ['silent-video'],
-				videoTarget: 'chromium',
-				openOutputTargets: ['chromium', 'safari'],
-			},
-			global: {
-				stubs: {
-					UModal: passthroughStub,
-					UButton: buttonStub,
-					UInput: passthroughStub,
-					UBadge: passthroughStub,
-					UAlert: passthroughStub,
-					UIcon: passthroughStub,
-				},
-			},
-		});
-
-		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
-
-		const warning = wrapper.get('[data-testid="open-output-incompatible-asset-alpha-video"]');
-		expect(warning.text()).toContain('Safari');
-		const select = wrapper.get('[data-testid="select-asset-alpha-video"]');
-		expect(select.attributes('disabled')).toBeUndefined();
+		expect(select.text()).toContain('Select revision');
+		expect(wrapper.text()).not.toMatch(/Blocked|Will not play|Chromium only/);
 
 		await select.trigger('click');
 		expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual({
 			assetId: 'asset-alpha-video',
 			revisionId: 'revision-alpha-video-1',
 		});
-	});
-
-	it('says nothing about playback when every open output can play the revision', async () => {
-		const { default: FocusPicker } = await import('~/components/GraphicsAsset/FocusPicker.vue');
-		const wrapper = mount(FocusPicker, {
-			props: {
-				eventId: 7,
-				fieldLabel: 'Badge',
-				assetKind: ['silent-video'],
-				videoTarget: 'chromium',
-				openOutputTargets: ['chromium'],
-			},
-			global: {
-				stubs: {
-					UModal: passthroughStub,
-					UButton: buttonStub,
-					UInput: passthroughStub,
-					UBadge: passthroughStub,
-					UAlert: passthroughStub,
-					UIcon: passthroughStub,
-				},
-			},
-		});
-
-		await wrapper.get('[data-testid="open-graphic-asset-picker"]').trigger('click');
-
-		expect(wrapper.find('[data-testid="open-output-incompatible-asset-alpha-video"]').exists()).toBe(false);
 	});
 
 	/**

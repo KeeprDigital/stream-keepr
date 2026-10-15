@@ -7,7 +7,7 @@ import {
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
 } from '~~/shared/featureMatchSampleDataset';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { featureMatchOverlayGraphicAssetReferences, screenGraphicAssetReferenceTargetCompatibility } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
@@ -44,15 +44,8 @@ const indexedGraphicAssetReferences = computed(() =>
 	featureMatchOverlayGraphicAssetReferences(config.value),
 );
 const graphicAssetReferences = computed(() => indexedGraphicAssetReferences.value.map(item => item.reference));
-const videoTarget = useGraphicsVideoTarget();
-const videoCompatibilityBlocked = computed(() =>
-	indexedGraphicAssetReferences.value.some(reference =>
-		reference.kind === 'silent-video'
-		&& screenGraphicAssetReferenceTargetCompatibility(reference, videoTarget.value).outcome === 'blocked',
-	));
 const {
 	contentUrl: graphicAssetContentUrl,
-	contentRefusal: graphicAssetContentRefusal,
 	contentUrlsSettled,
 } = useScreenGraphicAssetContentUrls(
 	graphicAssetReferences,
@@ -150,10 +143,6 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 	safeAreaGuides: showSafeAreaGuides.value,
 	selectedTarget: selectedCompositorTarget.value,
 	graphicAssetContentUrl,
-	// The same resolver's other half: what it has been told this output will be
-	// refused, so a clip whose recorded compatibility disagrees with its revision's
-	// facts reports the reason rather than drawing a blank rectangle (#184).
-	graphicAssetContentRefusal,
 }));
 
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
@@ -317,7 +306,7 @@ onBeforeUnmount(() => {
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
 		:style="{ ...canvasStyle, visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
-		:data-export-ready="(!loading && !error && !videoCompatibilityBlocked && fontsReady && !fontsFailed).toString()"
+		:data-export-ready="(!loading && !error && fontsReady && !fontsFailed).toString()"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
 		:data-export-font-sources="JSON.stringify(fontSources)"

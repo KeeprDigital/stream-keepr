@@ -1812,9 +1812,6 @@ export function createGraphicsAssetLibrary(
 			outcome: 'available',
 			lifecycleState: content.lifecycleState,
 			kind: content.kind,
-			...(content.facts.kind === 'silent-video'
-				? { targetCompatibility: content.facts.targetCompatibility }
-				: {}),
 		};
 	}
 
@@ -2998,8 +2995,6 @@ export function createGraphicsAssetLibrary(
 				contentAlreadyStored,
 				contentCountedByAnotherMapping: countedContentDigests.has(asset.integrity.digest),
 				sharedContentName: originCandidates.exact ? undefined : sharedContent?.name,
-				compatibilityRestricted: content.facts.kind === 'silent-video'
-					&& content.facts.targetCompatibility !== 'all-supported',
 			});
 			if (proposal.mapping.canonicalGrowthBytes > 0)
 				countedContentDigests.add(asset.integrity.digest);

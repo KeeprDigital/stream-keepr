@@ -262,7 +262,6 @@ async function liveSession(): Promise<LiveSession> {
 				capabilityDigest: assetCapabilityDigest,
 				assetId: ASSET_ID,
 				revisionId,
-				actualVideoTarget: 'chromium',
 			});
 			return outcome.outcome === 'authorized';
 		},

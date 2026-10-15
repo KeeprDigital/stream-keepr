@@ -6,8 +6,6 @@
 export const MEDIA_FIT_VALUES = ['cover', 'contain', 'fill'] as const;
 export type MediaFit = typeof MEDIA_FIT_VALUES[number];
 
-export const MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES = ['all-supported', 'chromium-transparency'] as const;
-
 export interface GraphicFocalPosition {
 	horizontal: number;
 	vertical: number;

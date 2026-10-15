@@ -148,10 +148,6 @@ _Avoid_: Preview — which composes the authored state its embedder pushes in an
 **Screen Output Asset Capability**:
 An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010).
 
-**Open Screen Output Engines**:
-The browser engines the Screen Outputs currently watching one Screen report running. They state what a Graphic Asset Revision would cost those outputs and never decide what may be pinned; the set over-reports rather than under-reports.
-_Avoid_: Video target — the write-time compatibility choice a host builds Graphic Asset References with, a property of the authored artifact rather than of who is watching.
-
 ### Client and live-state infrastructure
 
 **Event Data**:
@@ -622,8 +618,7 @@ _Avoid_: Dummy data, test data
 - A **Screen Output** carries its **Screen Output Asset Capability** in its URL; every surface handing an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders nothing at all (ADR-0010)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
-- A control surface states what a **Graphic Asset Revision** costs the **Open Screen Output Engines** before an operator chooses it
-- A revision one **Screen Output**'s browser cannot play costs it that revision only; the output reports the reason in the item's place, except in the **Key Output**
+- **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items
 
 ### Access
@@ -701,7 +696,6 @@ _Avoid_: Dummy data, test data
 - A **Graphic Input Binding** may read discrete live scalar state from a **Feature Match Slot**; ticking clocks and collections need specialised **Graphic Items**
 - A value violating its declared type or constraints is unavailable rather than coerced; an unavailable binding never falls back to the template default
 - A choice input's default is one of its options or none; a media input declares which media it accepts, which bounds both its default and **Live Control**'s picker
-- A media **Graphic Input** value carries its pinned revision's video target compatibility, and a value stating none is refused
 - Each operator-selected **Graphic Source Selection** generates one picker and each **Graphic Input** one field in **Live Control**, which distinguishes latest bound, working, and accepted on-air values
 - Relevant **Realtime Event Session** changes re-resolve affected bindings; the **On-air Update Policy** decides when they go on air
 - Each **Graphic Input** has an **On-air Update Policy** of staged (the default) or live; live applies immediately only while its graphic is on a program output

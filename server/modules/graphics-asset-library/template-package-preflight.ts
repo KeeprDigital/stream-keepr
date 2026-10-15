@@ -484,8 +484,6 @@ export interface TemplatePackageMappingInput {
 	contentCountedByAnotherMapping: boolean;
 	/** A local asset already backed by these exact bytes under other provenance. */
 	sharedContentName?: string;
-	/** Whether the revalidated content is restricted to particular targets. */
-	compatibilityRestricted: boolean;
 }
 
 export interface TemplatePackageMappingOutcome {
@@ -515,13 +513,6 @@ export function templatePackageMappingProposal(
 		origin: asset.origin,
 		contentAlreadyStored: input.contentAlreadyStored,
 	} as const;
-
-	if (input.compatibilityRestricted) {
-		issues.push(templatePackagePreflightIssue('graphic-asset-compatibility-restricted', {
-			subject: asset.packagedId,
-			message: `"${asset.name}" plays only on targets that prove the capability it requires`,
-		}));
-	}
 
 	if (input.originMatch) {
 		// A Retired asset takes no new references and a Trashed one takes none

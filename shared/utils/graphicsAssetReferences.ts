@@ -3,7 +3,6 @@ import type {
 	GraphicGroupChildConfig,
 	GraphicInputDeclaration,
 	GraphicItemConfig,
-	MediaGraphicInputValue,
 } from '../types/graphics';
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
@@ -12,28 +11,11 @@ import type {
 	FeatureMatchLayoutConfig,
 	FeatureMatchOverlayModeConfig,
 } from '../types/screenConfig';
-import type { GraphicsVideoTarget } from './graphicAssetTargetCompatibility';
-import { chromiumTransparencyTargetCompatibility } from './graphicAssetTargetCompatibility';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;
 	kind: 'image' | 'silent-video' | 'font';
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-	videoTarget?: Exclude<GraphicsVideoTarget, 'other'>;
-}
-
-export function screenGraphicAssetReferenceTargetCompatibility(
-	reference: ScreenGraphicAssetReference,
-	actualTarget?: GraphicsVideoTarget,
-):
-	| { outcome: 'compatible' }
-	| { outcome: 'blocked'; code: 'vp9-alpha-chromium-required' } {
-	return chromiumTransparencyTargetCompatibility(
-		reference.videoCompatibility === 'chromium-transparency',
-		reference.videoTarget,
-		actualTarget,
-	);
 }
 
 /**
@@ -43,16 +25,11 @@ export function screenGraphicAssetReferenceTargetCompatibility(
  * value an operator picks live are the same kind of thing indexed the same way, so
  * the facts that travel with them are assembled once here rather than three times.
  *
- * A silent-video reference carries the pinned revision's own target compatibility,
- * which the reference index checks it against, and an authored target of Chromium.
- * That assumption is shared by both hosts on purpose: a graphics Screen Output is
- * consumed as a browser source in Chromium-based capture, which is what makes VP9
- * alpha usable at all, and neither host has a control that would let an author say
- * otherwise. An image carries neither fact, because it has no target compatibility
- * to check.
+ * Nothing about playback engines travels with it: Chromium is the only supported
+ * engine for transparent video (ADR-0020), so there is no compatibility to check.
  */
 export function mediaScreenGraphicAssetReference(
-	value: MediaGraphicInputValue,
+	value: GraphicAssetReference,
 	kind: 'image' | 'silent-video',
 	ownerSlot: string,
 ): ScreenGraphicAssetReference {
@@ -60,9 +37,6 @@ export function mediaScreenGraphicAssetReference(
 		reference: { assetId: value.assetId, revisionId: value.revisionId },
 		ownerSlot,
 		kind,
-		...(kind === 'silent-video'
-			? { videoCompatibility: value.videoCompatibility, videoTarget: 'chromium' as const }
-			: {}),
 	};
 }
 
@@ -116,17 +90,10 @@ function appendGraphicFontReferences(
  * from ids rather than list positions, so a reorder does not read as a set of
  * changed references.
  *
- * A silent-video reference carries the pinned revision's own target compatibility,
- * which the reference index checks it against, and an authored target of Chromium.
- * That assumption is shared by both hosts on purpose: a graphics Screen Output is
- * consumed as a browser source in Chromium-based capture, which is what makes VP9
- * alpha usable at all, and neither host has a control that would let an author say
- * otherwise. An output opened in another engine reports the incompatibility rather
- * than silently showing nothing.
- *
- * A font reference carries no video facts, because a font has no target
- * compatibility to check and nothing in the delivery path treats it differently
- * from any other pinned revision.
+ * Every reference is the exact revision and its kind, nothing more: Chromium is the
+ * only supported engine for transparent video (ADR-0020), so no playback fact
+ * travels with a silent video, and a font is delivered like any other pinned
+ * revision.
  */
 function appendSharedGraphicItemReferences(
 	references: ScreenGraphicAssetReference[],
@@ -138,7 +105,7 @@ function appendSharedGraphicItemReferences(
 		if (item.type !== 'media' || !item.asset)
 			return;
 		references.push(mediaScreenGraphicAssetReference(
-			{ ...item.asset, videoCompatibility: item.videoCompatibility },
+			item.asset,
 			item.mediaKind,
 			`${ownerSlot}.asset`,
 		));
@@ -238,13 +205,6 @@ export function featureMatchOverlayGraphicAssetReferences(
  * repair rather than against the Screen as a whole. Slots are stable across a
  * reorder, because they are built from ids rather than list positions — a
  * reordered stack must not read as a set of changed references.
- *
- * A silent-video reference carries the pinned revision's own target
- * compatibility, which the reference index checks it against, and an authored
- * target of Chromium. Broadcast Graphics Screen Outputs are consumed as browser
- * sources in Chromium-based capture, which is what makes VP9 alpha usable here at
- * all; an output opened in another engine reports the incompatibility rather than
- * silently showing nothing.
  */
 export function broadcastGraphicsGraphicAssetReferences(
 	config: BroadcastGraphicsModeConfig,
@@ -282,13 +242,7 @@ export function backgroundGraphicAssetReferences(
 		if (layer.source.kind !== 'asset')
 			continue;
 		references.push(mediaScreenGraphicAssetReference(
-			{
-				assetId: layer.source.assetId,
-				revisionId: layer.source.revisionId,
-				...(layer.source.videoCompatibility !== undefined
-					? { videoCompatibility: layer.source.videoCompatibility }
-					: {}),
-			},
+			{ assetId: layer.source.assetId, revisionId: layer.source.revisionId },
 			layer.type === 'video' ? 'silent-video' : 'image',
 			`layers.${layer.id}.source`,
 		));
@@ -419,8 +373,6 @@ export function sameScreenGraphicAssetReferences(
 	return left.every((item) => {
 		const other = rightBySlot.get(item.ownerSlot);
 		return item.kind === other?.kind
-			&& item.videoCompatibility === other?.videoCompatibility
-			&& item.videoTarget === other?.videoTarget
 			&& sameGraphicAssetReference(item.reference, other.reference);
 	});
 }

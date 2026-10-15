@@ -630,14 +630,12 @@ function updateMediaClipping(clipping: boolean) {
 
 /**
  * Pin one exact Graphic Asset identity and revision. The asset's own kind decides
- * the item's media kind, and a silent video also records the revision's target
- * compatibility, so the reference index has the fact it checks against.
+ * the item's media kind.
  */
 function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
 	applyToSelectedGraphic((graphic, itemId) => selectMediaGraphicItemAsset(graphic, itemId, {
 		asset: reference,
 		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
-		videoCompatibility: asset.facts.kind === 'silent-video' ? asset.facts.targetCompatibility : undefined,
 	}));
 }
 
@@ -880,20 +878,11 @@ function updateMediaKind(key: string, mediaKind: GraphicMediaKind) {
 }
 
 /**
- * Pin one exact Graphic Asset Revision as a media Graphic Input's default.
- *
- * Recorded with the revision's own target compatibility, exactly as a Media Graphic
- * Item's content is: the Graphic Asset Reference index checks a silent-video
- * reference against that fact, and the authored default is indexed from the
- * configuration the same way an item's asset is.
+ * Pin one exact Graphic Asset Revision as a media Graphic Input's default. The
+ * authored default is indexed from the configuration the same way an item's asset is.
  */
-function selectInputDefaultAsset(key: string, asset: GraphicAsset, reference: GraphicAssetReference) {
-	updateInput(key, {
-		default: {
-			...reference,
-			videoCompatibility: asset.facts.kind === 'silent-video' ? asset.facts.targetCompatibility : undefined,
-		},
-	});
+function selectInputDefaultAsset(key: string, reference: GraphicAssetReference) {
+	updateInput(key, { default: { ...reference } });
 }
 
 /* ────────────────────────────────────────────────
@@ -1208,10 +1197,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							:event-id="eventId"
 							:field-label="input.label"
 							:asset-kind="input.mediaKind"
-							video-target="chromium"
 							data-testid="graphic-input-default"
 							@update:model-value="$event ? undefined : updateInput(input.key, { default: null })"
-							@select="(asset, reference) => selectInputDefaultAsset(input.key, asset, reference)"
+							@select="(_asset, reference) => selectInputDefaultAsset(input.key, reference)"
 						/>
 					</UFormField>
 				</template>
@@ -1909,8 +1897,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					The picker pins one exact Graphic Asset identity and revision, and
 					reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
 					Content against this exact item so an author repairs the item that
-					pinned it. A Broadcast Graphics Screen Output is consumed as a
-					Chromium browser source, which is what makes VP9 alpha selectable.
+					pinned it.
 				-->
 				<UFormField label="Graphic Asset" size="sm">
 					<GraphicsAssetFocusPicker
@@ -1918,7 +1905,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						:event-id="eventId"
 						field-label="Media Graphic Item"
 						:asset-kind="['image', 'silent-video']"
-						video-target="chromium"
 						@update:model-value="$event ? undefined : clearMediaAsset()"
 						@select="selectMediaAsset"
 					/>

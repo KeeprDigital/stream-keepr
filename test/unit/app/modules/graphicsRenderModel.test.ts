@@ -404,21 +404,8 @@ const MEDIA_NON_PAINTING_KEYS = new Set([
  * An unresolved reference paints nothing, so it contributes no paint. A resolved
  * one contributes white at the element's opacity: the worst case for the matte,
  * a fully opaque region of the asset.
- *
- * The incompatibility notice is walked as a second painted surface on the same
- * descriptor. The Key Output is offered none, so in a correct model there is
- * nothing there to walk — which is exactly why it has to be: without this the
- * guard is blind to the field, and deleting the model's `output === 'key'` clause
- * lets an opaque black box into the matte while every walker-based assertion here
- * still passes. Its paints join the element's rather than replacing them: only one
- * of the two ever renders, and which one is a client fact the model does not know,
- * so counting both is the conservative reading this guard wants (#98).
  */
 function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPaint[] {
-	const noticePaints = media.incompatibilityNotice
-		? stylePaints(media.incompatibilityNotice.style, `${path}.media.incompatibilityNotice`)
-		: [];
-
 	for (const [key, value] of Object.entries(media.style)) {
 		if (value === undefined || value === null)
 			continue;
@@ -437,11 +424,11 @@ function mediaPaints(media: GraphicMediaRenderDescriptor, path: string): KeyPain
 	}
 
 	if (media.src === '')
-		return noticePaints;
+		return [];
 	if (media.style.filter !== KEY_MEDIA_ALPHA_TO_WHITE)
 		throw new Error(`${path}.media paints its own colours into the Key Output instead of its alpha as white`);
 
-	return [...noticePaints, { color: '#ffffff', opacity: Number(media.style.opacity ?? 1) }];
+	return [{ color: '#ffffff', opacity: Number(media.style.opacity ?? 1) }];
 }
 
 /**
@@ -1384,7 +1371,6 @@ describe('graphicsCompositionRenderModel', () => {
 					mediaKind: 'silent-video',
 					playbackRate: 0.5,
 					loop: false,
-					videoCompatibility: 'chromium-transparency',
 				})])],
 				graphicAssetContentUrl: contentUrl,
 				...CANVAS,
@@ -1394,134 +1380,16 @@ describe('graphicsCompositionRenderModel', () => {
 				mediaKind: 'silent-video',
 				playbackRate: 0.5,
 				loop: false,
-				videoCompatibility: 'chromium-transparency',
 			});
 			// Nothing in the descriptor expresses where playback should start, because
 			// nothing needs to: the element is created when the graphic enters.
 			expect(Object.keys(model.graphics[0]!.items[0]!.media!).sort()).toEqual([
-				'incompatibilityNotice',
 				'loop',
 				'mediaKind',
 				'playbackRate',
 				'src',
 				'style',
-				'videoCompatibility',
 			]);
-		});
-
-		/**
-		 * The diagnostic an output shows instead of a blank rectangle (#98).
-		 *
-		 * Whether the browser can play the clip is a client fact the component asks
-		 * its own runtime for. Whether the reason may be *painted* is not: the Key
-		 * Output is an alpha matte, so a legible notice there would punch the
-		 * diagnostic straight into the key. Only the render model knows which output
-		 * it is building, so the model is what withholds it.
-		 */
-		function noticeFor(output: 'overlay' | 'fill' | 'key', videoCompatibility: 'all-supported' | 'chromium-transparency') {
-			return resolveGraphicsCompositionRenderModel({
-				output,
-				graphics: [graphic('a', [media('sting', { mediaKind: 'silent-video', videoCompatibility })])],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			}).graphics[0]?.items[0]?.media?.incompatibilityNotice;
-		}
-
-		it('offers a legible reason for a clip this output cannot play, in every output that carries colour', () => {
-			for (const output of ['overlay', 'fill'] as const) {
-				const notice = noticeFor(output, 'chromium-transparency');
-				expect(notice?.code).toBe('vp9-alpha-chromium-required');
-				// Rendered words, not a bare marker: the point of #98 is that an
-				// operator looking at the output can tell what went wrong.
-				expect(notice?.text).toMatch(/chromium/i);
-				expect(notice?.style.color).toBeTruthy();
-				expect(notice?.style.backgroundColor).toBeTruthy();
-			}
-		});
-
-		it('offers no reason to paint in the Key Output, whose colour is the alpha matte', () => {
-			expect(noticeFor('key', 'chromium-transparency')).toBeUndefined();
-		});
-
-		it('offers no reason for a clip every target can play', () => {
-			expect(noticeFor('overlay', 'all-supported')).toBeUndefined();
-		});
-
-		/**
-		 * A recorded compatibility the authoritative side disagrees with (#184).
-		 *
-		 * The item says every target can play its clip; the Screen Output's own
-		 * resolver, which asked the authoritative side, says this one is refused. The
-		 * refusal wins, because it is the revision's own recorded facts answering
-		 * rather than a value copied into a configuration that has since gone stale —
-		 * and because believing the configuration is what left the output drawing a
-		 * `<video>` for bytes it was about to be refused.
-		 */
-		function divergentMedia(output: 'overlay' | 'fill' | 'key') {
-			return resolveGraphicsCompositionRenderModel({
-				output,
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'all-supported',
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				graphicAssetContentRefusal: () => 'vp9-alpha-chromium-required' as const,
-				...CANVAS,
-			}).graphics[0]?.items[0]?.media;
-		}
-
-		it('takes the authoritative refusal over a recorded compatibility that contradicts it', () => {
-			const descriptor = divergentMedia('overlay');
-
-			expect(descriptor?.incompatibilityNotice?.code).toBe('vp9-alpha-chromium-required');
-			// The component withholds the element on this value, so reconciling it is what
-			// stops the output rendering a clip the authoritative side will not deliver.
-			expect(descriptor?.videoCompatibility).toBe('chromium-transparency');
-		});
-
-		it('still withholds the reason from the Key Output when the refusal is what found it', () => {
-			const descriptor = divergentMedia('key');
-
-			expect(descriptor?.incompatibilityNotice).toBeUndefined();
-			expect(descriptor?.videoCompatibility).toBe('chromium-transparency');
-		});
-
-		it('leaves a clip the authoritative side names no objection to exactly as authored', () => {
-			const descriptor = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'all-supported',
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				graphicAssetContentRefusal: () => undefined,
-				...CANVAS,
-			}).graphics[0]?.items[0]?.media;
-
-			expect(descriptor?.incompatibilityNotice).toBeUndefined();
-			expect(descriptor?.videoCompatibility).toBe('all-supported');
-		});
-
-		it('fades the reason with the item, so a transparent item never paints a solid box', () => {
-			// The notice is a sibling of the media element, not a child, so it does not
-			// inherit the element's opacity — an item authored transparent would paint an
-			// opaque black box on air where it previously painted nothing.
-			const notice = (opacity: number) => resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'chromium-transparency',
-					opacity,
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			}).graphics[0]?.items[0]?.media;
-
-			expect(notice(0.4)?.incompatibilityNotice?.style.opacity).toBe(0.4);
-			// The same opacity the element itself carries, from the same authored value.
-			expect(notice(0.4)?.style.opacity).toBe(0.4);
-			// An invisible item has no clip to report, so the notice goes with it.
-			expect(notice(0)?.incompatibilityNotice?.style.opacity).toBe(0);
 		});
 
 		it('clips to an optional Shape Geometry, and to its own rectangle without one', () => {
@@ -1931,84 +1799,6 @@ describe('graphicsCompositionRenderModel', () => {
 			);
 
 			expect(luminance).toBe(0);
-		});
-
-		it('gives a Key Output no incompatibility notice to paint, by key rather than by assertion', () => {
-			// The composed counterpart to the guard below, and the reason `mediaPaints`
-			// walks the notice at all. Every other Key Output test here composes media
-			// every target can play, so none of them produces a notice and none of them
-			// would notice the model starting to. This one pins a VP9-alpha clip on a
-			// Key Output — the exact case that offers a notice everywhere else — so
-			// deleting the model's `output === 'key'` clause fails here by key alone,
-			// not only through the direct assertion in the media suite (#98).
-			const model = resolveGraphicsCompositionRenderModel({
-				output: 'key',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'chromium-transparency',
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			});
-
-			// The walker first, deliberately: it is the assertion that has to be the one
-			// catching this, since it is the guard every other Key Output test leans on.
-			const item = model.graphics[0]!.items[0]!;
-			expect(() => itemPaints(item)).not.toThrow();
-			expect(item.media?.incompatibilityNotice).toBeUndefined();
-			// Non-vacuous: the same composition really does offer one everywhere colour
-			// is allowed, so the absence above is this output's doing.
-			expect(resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'chromium-transparency',
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			}).graphics[0]!.items[0]!.media?.incompatibilityNotice).toBeDefined();
-		});
-
-		it('fails closed on an incompatibility notice the matte identity does not allow', () => {
-			// A notice is an opaque box of legible text: the furthest thing from a matte
-			// identity, and worth stating as a paint the guard refuses by key.
-			const withNotice = (style: CSSProperties): GraphicItemRenderDescriptor => ({
-				id: 'probe',
-				label: 'probe',
-				kind: 'media',
-				style: {},
-				media: {
-					mediaKind: 'silent-video',
-					src: '/content',
-					style: { filter: KEY_MEDIA_ALPHA_TO_WHITE },
-					loop: true,
-					playbackRate: 1,
-					videoCompatibility: 'chromium-transparency',
-					incompatibilityNotice: { code: 'vp9-alpha-chromium-required', text: 'Needs Chromium', style },
-				} satisfies GraphicMediaRenderDescriptor,
-			});
-
-			// The exact notice the model emits for an output that carries colour, taken
-			// from the model rather than restated, so this cannot drift away from it.
-			const emitted = resolveGraphicsCompositionRenderModel({
-				output: 'overlay',
-				graphics: [graphic('a', [media('sting', {
-					mediaKind: 'silent-video',
-					videoCompatibility: 'chromium-transparency',
-				})])],
-				graphicAssetContentUrl: contentUrl,
-				...CANVAS,
-			}).graphics[0]!.items[0]!.media!.incompatibilityNotice!;
-
-			expect(() => itemPaints(withNotice(emitted.style)))
-				.toThrow(/unrecognised style property/);
-			// And each way a notice could paint, named separately.
-			expect(() => itemPaints(withNotice({ color: '#ff0000' }))).toThrow(/must paint white/);
-			expect(() => itemPaints(withNotice({ textShadow: '0 0 2px #ff0000' })))
-				.toThrow(/unrecognised style property/);
-			// A notice that painted nothing at all would be allowed through, which is
-			// the correct floor: the rule is about paint, not about the field existing.
-			expect(() => itemPaints(withNotice({ display: 'flex' }))).not.toThrow();
 		});
 
 		it('fails closed on media: rejects an element paint the matte identity does not allow', () => {

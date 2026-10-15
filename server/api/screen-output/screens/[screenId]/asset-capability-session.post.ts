@@ -4,7 +4,6 @@ import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-ou
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
 import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { bearerScreenOutputCapability } from '~~/server/utils/screenOutputCapabilityAuthorization';
-import { graphicsVideoTargetForUserAgent } from '~~/shared/utils/graphicAssetTargetCompatibility';
 import {
 	screenOutputAssetCapabilityCookieName,
 	screenOutputAssetCapabilityCookiePath,
@@ -60,9 +59,6 @@ export default defineEventHandler(async (event) => {
 			message: 'Screen Output asset capability is unavailable',
 		});
 	}
-	// A session is opened for every engine, whatever the Screen publishes. Playback
-	// compatibility is answered per resolution request, so a clip this browser
-	// cannot play costs the output that clip and nothing else (#98).
 	setCookie(event, screenOutputAssetCapabilityCookieName(screenId), capability, {
 		httpOnly: true,
 		path: screenOutputAssetCapabilityCookiePath(screenId),
@@ -71,49 +67,8 @@ export default defineEventHandler(async (event) => {
 	});
 	setResponseHeader(event, 'cache-control', 'private, no-store');
 
-	/**
-	 * And it says which of them that will be.
-	 *
-	 * The decision is still the per-request one against the requested revision's own
-	 * facts; this is the same answer given early, so an output stops having to
-	 * predict it from the compatibility copied into a Media Graphic Item's
-	 * configuration — a copy those facts can outlive, and one whose disagreement
-	 * produced exactly the blank rectangle #98 removed (#184). It varies by engine,
-	 * and the response is already uncacheable.
-	 *
-	 * Computed after the session is granted, and never able to withdraw it. This is
-	 * a second query for advisory data, and an output refused a session resolves no
-	 * content URL for *anything* — so failing the session on it would reopen the
-	 * whole-output loss #98 closed, by a new route: one unreadable advisory list
-	 * costing the operator every image, video, and font the Screen publishes. An
-	 * output that is offered no forecast falls back to exactly the behaviour it had
-	 * before this existed, which is a per-item blank rectangle at worst rather than
-	 * a Screen with no media at all.
-	 *
-	 * The forecast is a snapshot at session open, and nothing re-reads it: the client's
-	 * resolution key is composed of the Screen, the capability and the references, so
-	 * it cannot notice a revision's facts changing underneath it.
-	 *
-	 * No path in this codebase changes them — `technical_facts` is written once when a
-	 * revision is published and never updated — so that staleness is not currently
-	 * reachable. It is stated because the *bound* is what makes this safe to snapshot,
-	 * not because the scenario exists: were revision facts ever to become mutable, an
-	 * output would report a clip the server would by then serve, cleared only by the
-	 * next session it opens. Reaching for that direction is the safer failure — a
-	 * legible reason rather than a blank rectangle — but it would be a new one.
-	 *
-	 * What the reconciliation actually guards is a different divergence, and one that
-	 * _is_ reachable: `videoCompatibility` is optional on the Media Graphic Item type
-	 * and in the API schema, and an authoring path can write none at all. A
-	 * configuration's copy can therefore be absent or wrong independently of the
-	 * revision it pins, which is why the authoritative answer wins over it (#184).
-	 */
-	const unplayableRevisions = await authorizer.unplayableRevisions({
-		screenId,
-		capabilityDigest,
-		actualVideoTarget: graphicsVideoTargetForUserAgent(
-			getRequestHeader(event, 'user-agent') ?? '',
-		),
-	}).catch(() => []);
-	return { unplayableRevisions };
+	// An empty object rather than no body: an output still running a client from
+	// before ADR-0020 reads a missing forecast as "nothing refused", which is now
+	// the whole truth.
+	return {};
 });

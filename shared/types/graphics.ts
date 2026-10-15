@@ -618,22 +618,10 @@ export interface ColorGraphicInputDeclaration extends GraphicInputDeclarationBas
 }
 
 /**
- * One media Graphic Input value: an exact Graphic Asset Revision, plus the facts
- * about that revision which nothing downstream can go and ask for.
- *
- * A Media Graphic Item stores `videoCompatibility` beside its own reference for
- * exactly this reason — no pure render model can interrogate the Graphics Asset
- * Library, and the reference index compares the fact against the pinned revision's
- * own, so a value that carries none loses the write's precondition rather than
- * failing it. A media value is chosen the same way whether an author sets it as a
- * default or an operator picks it live, so it carries the same facts either way,
- * recorded at the moment of selection.
- *
- * The fact is absent for an image, which has no target compatibility to check.
+ * One media Graphic Input value: an exact Graphic Asset Revision, chosen the same
+ * way whether an author sets it as a default or an operator picks it live.
  */
-export interface MediaGraphicInputValue extends GraphicAssetReference {
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-}
+export type MediaGraphicInputValue = GraphicAssetReference;
 
 /**
  * A media Graphic Input names a Graphics Asset Library revision rather than a
@@ -948,13 +936,6 @@ export interface MediaGraphicItemConfig extends GraphicItemConfigBase {
 	 * Present clips to this Shape Geometry instead.
 	 */
 	clipGeometry?: ShapeGeometry;
-	/**
-	 * The pinned revision's own target compatibility, recorded when the asset is
-	 * selected. The Graphics Asset Library's reference index checks a silent-video
-	 * reference against it, and no pure render model can ask the library, so the
-	 * fact travels with the reference that depends on it.
-	 */
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
 	playbackRate: number;
 	loop: boolean;
 }

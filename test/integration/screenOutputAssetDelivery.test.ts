@@ -217,9 +217,8 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		);
 		expect(session.status).toBe(200);
 		expect(session.headers.get('cache-control')).toBe('private, no-store');
-		// Nothing this Screen publishes is unplayable here, and the session says so
-		// rather than staying silent about a question the output has to ask (#184).
-		await expect(session.json()).resolves.toEqual({ unplayableRevisions: [] });
+		// The session carries no forecast: no revision is refused by engine (ADR-0020).
+		await expect(session.json()).resolves.toEqual({});
 		const setCookie = session.headers.get('set-cookie');
 		expect(setCookie).toContain(
 			`${screenOutputAssetCapabilityCookieName(screenId)}=${capability}`,
@@ -288,12 +287,13 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(authorized.status).toBe(200);
 	});
 
-	it('uses live Screen PATCH and per-revision User-Agent checks as authoritative restricted-video playout gates', async () => {
-		const baseline = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{ method: 'PATCH', body: { layout: baseline.layout } },
-		);
+	/**
+	 * Chromium is the only supported engine for transparent video (ADR-0020), so
+	 * a VP9-alpha revision is published and delivered like any other: no
+	 * per-engine refusal, no forecast of one, and no compatibility fact the
+	 * reference has to carry. An engine that cannot keep the alpha flattens it.
+	 */
+	it('delivers a transparent video revision to every Screen Output, whatever its engine', async () => {
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET kind = 'silent-video'
@@ -307,11 +307,11 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			WHERE id = '${revisionId}';
 		`);
 
-		const restricted = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		restricted.layout.composition.items.push({
+		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
+		layout.composition.items.push({
 			...getGraphicItemDefinition('media').createDefault({
-				id: 'restricted-video',
-				label: 'Restricted VP9 alpha',
+				id: 'transparent-video',
+				label: 'Transparent VP9 alpha',
 				canvasWidth: 1920,
 				canvasHeight: 1080,
 			}),
@@ -319,96 +319,32 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			asset: { assetId, revisionId },
 		} as never);
 
-		// A silent-video reference will not index at all unless it carries the
-		// pinned revision's own target compatibility, so publishing without it is
-		// refused rather than silently losing the reference.
 		const publication = await fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ layout: restricted.layout }),
+				body: JSON.stringify({ layout }),
 			},
 		);
-		expect(publication.status).toBe(409);
-
-		const persisted = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(persisted!.modeConfigs!['feature-match-overlay']!.layout!.composition.items).not.toContainEqual(
-			expect.objectContaining({ id: 'restricted-video' }),
-		);
-
-		(restricted.layout.composition.items.at(-1) as { videoCompatibility?: string }).videoCompatibility = 'chromium-transparency';
-		const chromiumPublication = await fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{
-				method: 'PATCH',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ layout: restricted.layout }),
-			},
-		);
-		expect(chromiumPublication.status).toBe(200);
+		expect(publication.status).toBe(200);
 
 		const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15';
 		const IOS_CHROMIUM = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/138.0 Mobile/15E148 Safari/604.1';
 		const CHROMIUM = 'Mozilla/5.0 Chrome/138.0.0.0 Safari/537.36';
 
-		function bootstrap(userAgent: string) {
-			return fetch(
+		for (const userAgent of [SAFARI, IOS_CHROMIUM, CHROMIUM, undefined]) {
+			const engine: Record<string, string> = userAgent ? { 'user-agent': userAgent } : {};
+			const session = await fetch(
 				`/api/screen-output/screens/${screenId}/asset-capability-session`,
-				{
-					method: 'POST',
-					headers: { ...Object.fromEntries(authorizedHeaders()), 'user-agent': userAgent },
-				},
+				{ method: 'POST', headers: { ...Object.fromEntries(authorizedHeaders()), ...engine } },
 			);
-		}
-
-		// Every engine opens a session, whatever the Screen publishes. Refusing it was
-		// what left a non-Chromium output with no resolvable content URL for anything
-		// at all, so a clip nobody could play took the whole output's media with it —
-		// and left the per-item diagnostic unreachable, because its `src` was empty
-		// too (#98).
-		for (const userAgent of [SAFARI, IOS_CHROMIUM, CHROMIUM]) {
-			const session = await bootstrap(userAgent);
 			expect(session.status).toBe(200);
-			expect(session.headers.get('set-cookie')).toContain(
-				screenOutputAssetCapabilityCookieName(screenId),
-			);
+			expect(await session.json()).not.toHaveProperty('unplayableRevisions');
+
+			const delivered = await fetch(contentPath(), { headers: authorizedHeaders(engine) });
+			expect(delivered.status).toBe(200);
 		}
-
-		// The session also forecasts which of the Screen's published revisions it will
-		// refuse this engine, naming them with the same code the content route answers
-		// with. It is what stops an output rendering a `<video>` for bytes it is about
-		// to be refused — a blank rectangle with nothing to read off it (#184).
-		for (const userAgent of [SAFARI, IOS_CHROMIUM]) {
-			await expect((await bootstrap(userAgent)).json()).resolves.toMatchObject({
-				unplayableRevisions: [{ assetId, revisionId, code: 'vp9-alpha-chromium-required' }],
-			});
-		}
-		await expect((await bootstrap(CHROMIUM)).json()).resolves.toMatchObject({
-			unplayableRevisions: [],
-		});
-
-		// The refusal now names one revision, to the engine that cannot decode it.
-		for (const userAgent of [SAFARI, IOS_CHROMIUM]) {
-			const refused = await fetch(contentPath(), {
-				headers: authorizedHeaders({ 'user-agent': userAgent }),
-			});
-			expect(refused.status).toBe(409);
-			await expect(refused.json()).resolves.toMatchObject({
-				data: { code: 'vp9-alpha-chromium-required' },
-			});
-		}
-
-		// A caller naming no engine cannot be proven to be Chromium, so it is refused
-		// too. Strictly a narrowing versus the session gate this replaced, which
-		// refused an absent user agent along with everything else non-Chromium.
-		const anonymous = await fetch(contentPath(), { headers: authorizedHeaders() });
-		expect(anonymous.status).toBe(409);
-
-		const played = await fetch(contentPath(), {
-			headers: authorizedHeaders({ 'user-agent': CHROMIUM }),
-		});
-		expect(played.status).toBe(200);
 	});
 
 	it('deleting the Screen revokes its current capability', async () => {

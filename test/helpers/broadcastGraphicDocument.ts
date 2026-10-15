@@ -168,7 +168,10 @@ export function maximalBroadcastGraphicDocument(
 		leftSlant: 6,
 		rightSlant: 0,
 	};
-	backdrop.videoCompatibility = 'all-supported';
+	// A key documents carried before ADR-0020. Kept on the maximal document so
+	// every suite that stores, exports or installs it proves old documents still
+	// read: the schemas accept the key and drop it.
+	Object.assign(backdrop, { videoCompatibility: 'all-supported' });
 	backdrop.rotation = 3;
 	backdrop.opacity = 0.85;
 	backdrop.playbackRate = 1.25;

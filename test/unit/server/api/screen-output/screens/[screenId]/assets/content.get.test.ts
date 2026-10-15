@@ -97,16 +97,4 @@ describe('screen Output asset content delivery', () => {
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
-
-	it('keeps the incompatible-engine refusal a 409 the output prints for itself', async () => {
-		// Distinct from both above and unaffected here: the Screen does publish the
-		// revision and this browser cannot play it, which the output answers with its
-		// own diagnostic in the item's place (#98).
-		mockDeliver.mockResolvedValue({ outcome: 'incompatible', code: 'vp9-alpha-chromium-required' });
-
-		await expect((await handler())(outputRequest())).rejects.toMatchObject({
-			statusCode: 409,
-			data: { code: 'vp9-alpha-chromium-required' },
-		});
-	});
 });

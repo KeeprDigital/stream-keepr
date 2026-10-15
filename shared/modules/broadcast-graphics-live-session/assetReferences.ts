@@ -61,14 +61,6 @@ function appendGraphicInputMediaReferences(
  * Values are read through the Screen's current declarations rather than straight out
  * of live state. A declaration removed by a later authored write leaves its accepted
  * value behind, and a Screen publishes what it declares.
- *
- * ## Why the value has to carry its own compatibility facts
- *
- * The reference index compares a silent-video reference against the pinned revision's
- * own target compatibility, and a value carrying no such fact loses that precondition
- * rather than failing it. Nothing downstream can go and ask the Graphics Asset
- * Library, so the fact is recorded on the value at the moment of selection and
- * travels with it from there — exactly as a Media Graphic Item's does.
  */
 export function broadcastGraphicsLiveSessionGraphicAssetReferences(
 	config: BroadcastGraphicsModeConfig,

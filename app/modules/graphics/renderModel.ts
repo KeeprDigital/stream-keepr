@@ -320,35 +320,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 * nothing else, which is what an unresolvable reference should look like.
 	 */
 	graphicAssetContentUrl?: (reference: GraphicAssetReference) => string;
-	/**
-	 * Why this output's own resolver expects to be refused one pinned revision.
-	 *
-	 * Injected for the same reason the URL resolver is: the answer belongs to the
-	 * authoritative side rather than to any pure model. A Media Graphic Item records
-	 * its pinned revision's video target compatibility beside its reference, and
-	 * that recorded value is what the model would otherwise be believing — but it is
-	 * a copy, and a copy the revision's own technical facts can outlive. Where the
-	 * two disagree the refusal is right and the copy is stale, so this reconciles
-	 * them (#184). An absent resolver leaves the recorded value untouched, which is
-	 * what an editor preview and every non-Screen host want.
-	 */
-	graphicAssetContentRefusal?: (
-		reference: GraphicAssetReference,
-	) => GraphicMediaIncompatibilityCode | undefined;
 }
 
-/**
- * How one output reaches the content it composes, and what it has been told it
- * cannot reach.
- *
- * The pair travels together because both answer for the same pinned reference and
- * both come from the same place — the Screen Output's own capability-backed
- * resolver — so a composition that can resolve a URL can always ask why one was
- * refused.
- */
+/** How one output reaches the content it composes. */
 export interface GraphicAssetContentResolution {
 	url: (reference: GraphicAssetReference) => string;
-	refusal?: (reference: GraphicAssetReference) => GraphicMediaIncompatibilityCode | undefined;
 }
 
 /** The measurement bounds a `shrink` Text Overflow Policy fits text between. */
@@ -435,39 +411,6 @@ export interface GraphicMediaRenderDescriptor {
 	/** Silent-video playback. An image item carries both and ignores them. */
 	loop: boolean;
 	playbackRate: number;
-	/**
-	 * The pinned revision's own target compatibility, so an output can report a
-	 * VP9-alpha video it cannot play rather than showing a blank rectangle.
-	 *
-	 * Reconciled rather than copied from the item: an authoritative refusal for this
-	 * exact revision overrides a recorded value that contradicts it, so a Screen
-	 * Output never renders an element for bytes it is about to be refused (#184).
-	 */
-	videoCompatibility?: 'all-supported' | 'chromium-transparency';
-	/**
-	 * What this output may paint in place of a clip it cannot play.
-	 *
-	 * Present only where painting is safe. Whether the browser actually can play
-	 * the clip is a client fact — the user agent's own engine — that no pure model
-	 * can know, so the component asks its runtime for that. What the component
-	 * cannot know is which Screen Output it is inside, and that decides whether a
-	 * legible notice is a diagnostic or a defect: the Key Output renders composed
-	 * opacity as an alpha matte, so text there would punch the message into the key
-	 * and put it on program through the downstream mixer. So the model withholds
-	 * the notice for the Key Output and offers it for every output that carries
-	 * colour.
-	 */
-	incompatibilityNotice?: GraphicMediaIncompatibilityNoticeDescriptor;
-}
-
-/** The same stable code the Screen Output asset routes refuse a revision with. */
-export type GraphicMediaIncompatibilityCode = 'vp9-alpha-chromium-required';
-
-/** The rendered reason an output shows instead of a clip it cannot play. */
-export interface GraphicMediaIncompatibilityNoticeDescriptor {
-	code: GraphicMediaIncompatibilityCode;
-	text: string;
-	style: CSSProperties;
 }
 
 /** One sideboard card, as the deck card data path resolves it for the host (#481). */
@@ -1727,95 +1670,18 @@ function stackedChildClipSize(
 }
 
 /**
- * The reason a clip this output cannot play shows, when showing it is safe.
- *
- * The words carry the stable code as well as plain language, because the two
- * readers differ: an operator reads "needs Chromium" and switches capture, and
- * whoever they report it to searches for `vp9-alpha-chromium-required` and finds
- * the same code on the refusal the Screen Output asset route answers with.
- *
- * It is painted opaquely over the item's whole box rather than as bare text,
- * because the box it replaces may be over anything.
- *
- * It carries the item's own opacity, exactly as the media element does. Without
- * that, an item authored transparent — or at zero — would paint a solid black box
- * on air where it previously painted nothing at all, which is a worse defect than
- * the blank rectangle this notice exists to replace. At zero the notice disappears
- * with the item, and nothing is lost: an invisible item has no clip to report.
- */
-function mediaIncompatibilityNotice(
-	output: ScreenOutput,
-	item: MediaGraphicItemConfig,
-	videoCompatibility: MediaGraphicItemConfig['videoCompatibility'],
-): GraphicMediaIncompatibilityNoticeDescriptor | undefined {
-	if (
-		output === 'key'
-		|| item.mediaKind !== 'silent-video'
-		|| videoCompatibility !== 'chromium-transparency'
-	) {
-		return undefined;
-	}
-	return {
-		code: 'vp9-alpha-chromium-required',
-		text: 'Video needs Chromium (vp9-alpha-chromium-required)',
-		style: {
-			position: 'absolute',
-			inset: 0,
-			display: 'flex',
-			alignItems: 'center',
-			justifyContent: 'center',
-			padding: '8px',
-			boxSizing: 'border-box',
-			backgroundColor: 'rgba(0, 0, 0, 0.78)',
-			color: '#ffffff',
-			fontFamily: 'system-ui, sans-serif',
-			fontSize: '16px',
-			lineHeight: 1.25,
-			textAlign: 'center',
-			overflow: 'hidden',
-			overflowWrap: 'anywhere',
-			opacity: clampOpacity(item.opacity),
-		},
-	};
-}
-
-/**
  * One Media Graphic Item's element paint.
  *
  * Focal position is where `objectPosition` puts the asset inside the box, which
  * is what decides which part of a `cover` fit survives the crop. In the Key
  * Output the element is filtered to white at its own alpha; see
  * `KEY_MEDIA_ALPHA_TO_WHITE`.
- *
- * The compatibility it carries is reconciled rather than copied. The item records
- * its pinned revision's own video target compatibility, and the write path keeps
- * that copy equal to the revision's technical facts — but only at the moment it is
- * written, and only for configurations this system accepts. Where the output's own
- * resolver has been told the authoritative side refuses the revision, that refusal
- * is the revision's facts speaking and the recorded copy is stale, so the refusal
- * wins. Reconciling here rather than in the component is what keeps the answer in
- * one place: the notice and the withheld element are then two readings of one
- * value instead of two independent decisions over one rule (#184).
- *
- * The refusal can itself be stale, in the opposite direction. It is a snapshot the
- * Screen Output took when it opened its capability session, so facts corrected
- * since then make this withhold an element the server would now serve. Preferring
- * it anyway is deliberate: a notice naming a real refusal code is legible and
- * self-correcting on the next session, while trusting the configuration is what
- * produced a silent blank rectangle. See `useScreenGraphicAssetContentUrls` for
- * why the client does not watch a revision's facts for changes.
  */
 function mediaDescriptor(
 	output: ScreenOutput,
 	item: MediaGraphicItemConfig,
 	assetContent: GraphicAssetContentResolution | undefined,
 ): GraphicMediaRenderDescriptor {
-	const refusal = item.asset && assetContent?.refusal
-		? assetContent.refusal(item.asset)
-		: undefined;
-	const videoCompatibility = refusal === 'vp9-alpha-chromium-required'
-		? 'chromium-transparency'
-		: item.videoCompatibility;
 	return {
 		mediaKind: item.mediaKind,
 		src: item.asset && assetContent ? assetContent.url(item.asset) : '',
@@ -1830,8 +1696,6 @@ function mediaDescriptor(
 		},
 		loop: item.loop,
 		playbackRate: item.playbackRate,
-		videoCompatibility,
-		incompatibilityNotice: mediaIncompatibilityNotice(output, item, videoCompatibility),
 	};
 }
 
@@ -2785,10 +2649,8 @@ export function resolveGraphicsCompositionRenderModel(
 
 	const isLayer = input.canvasRole === 'layer';
 
-	// One value for both halves of "what can this output load, and what has it been
-	// told it cannot", assembled once so every Media Graphic Item reads the same pair.
 	const assetContent: GraphicAssetContentResolution | undefined = input.graphicAssetContentUrl
-		? { url: input.graphicAssetContentUrl, refusal: input.graphicAssetContentRefusal }
+		? { url: input.graphicAssetContentUrl }
 		: undefined;
 
 	return {

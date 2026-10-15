@@ -153,8 +153,7 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Touching an Animation Effect shader         | `pnpm accept animation-effects`                                                     | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, motion, and halo's trails fading out. Local only.                                                                                                     |
 | Touching the silent-video validator         | `pnpm accept silent-video-validator`                                                | Needs Docker.                                                                                                                                                                                                                                                                        |
 | Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                         |
-| Investigating VP9 alpha on Safari           | `pnpm accept safari-vp9-alpha`                                                      | Needs [Safari automation](#safari-automation).                                                                                                                                                                                                                                       |
-| Deploy day                                  | `pnpm accept deployed`                                                              | The seven deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                     |
+| Deploy day                                  | `pnpm accept deployed`                                                              | The six deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                       |
 
 `pnpm verify` exists for its tail. `worker:dry-run` checks the upload bundle
 statically; `worker:smoke` runs it under local workerd with production-shaped
@@ -196,7 +195,7 @@ docs changed; it does not re-run on merge, and a newer push cancels the older
 run. `pnpm verify` is the gate before that.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
 decision (#189). The suites in the table above that need a running preview,
-Docker, Safari, or a real store stay local. Other vitest modes work directly,
+Docker, or a real store stay local. Other vitest modes work directly,
 e.g. `pnpm exec vitest --ui`.
 
 Gotchas:
@@ -386,7 +385,7 @@ mid-run names the Event it left behind; delete it before rerunning.
    Setting `NUXT_ADMIN_BOOTSTRAP_TOKEN` in the shell also works if that secret is
    armed on the installation for the run.
 
-5. **Run the gates.** `pnpm accept deployed` runs steps 1–7 in order and
+5. **Run the gates.** `pnpm accept deployed` runs steps 1–6 in order and
    stops at the first failure; run one alone with `pnpm accept <name> --deployed`.
 
    | #   | Harness                             | Proves                                                                                                    |
@@ -396,9 +395,8 @@ mid-run names the Event it left behind; delete it before rerunning.
    | 3   | `still-images`                      | PNG, JPEG, and WebP decode in an OBS-like output.                                                         |
    | 4   | `silent-video`                      | MP4 and WebM play and seek; VP9 alpha keeps transparency on Chromium.                                     |
    | 5   | `fonts`                             | A library font revision is delivered, loads, and renders its glyphs.                                      |
-   | 6   | `safari-vp9-alpha`                  | A Screen Output refuses Safari a VP9-alpha revision (409) while its session still opens.                  |
-   | 7   | `graphics-package`                  | Template Package publication is atomic and its retry is idempotent.                                       |
-   | 8   | [Fault injection](#fault-injection) | Unavailable content, integrity failure, D1 outage, R2 outage with a warm cache.                           |
+   | 6   | `graphics-package`                  | Template Package publication is atomic and its retry is idempotent.                                       |
+   | 7   | [Fault injection](#fault-injection) | Unavailable content, integrity failure, D1 outage, R2 outage with a warm cache.                           |
 
 Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the
@@ -442,23 +440,12 @@ Always break the **cold** object for the first two: a warm capability route
 serves cached bytes through a storage fault by design. The cache fault only
 means something deployed; locally it reports `delivery-cache-not-observable`.
 
-#### Safari automation
+#### Transparent video is Chromium-only
 
-Gate 6 drives Safari through `safaridriver`: run `sudo safaridriver --enable`
-once and tick **Develop → Allow Remote Automation**. Without automation the
-harness reports `acceptance deferred path=manual-check-required`, and a
-`--deployed` run refuses to defer unless given `--allow-manual`. A manual check
-records only the browser fact, so gate 6 stays outstanding until an automated
-run passes.
-
-Safari 26.5 decodes VP9 alpha but flattens the alpha channel. So the product
-blocks it instead: the Screen Output session opens, forecasts the revision in
-`unplayableRevisions`, and the revision answers 409
-`vp9-alpha-chromium-required`. The pass line reports `browserFact=`:
-`substituted` (current Safari), `refused` (older Safari), or
-`transparency-rendered`, which would mean the block may no longer be needed.
-Locally the boundary cannot be exercised (no validator binding), so the run
-reports `boundary=not-exercised`.
+Screen Outputs and authoring are supported on Chromium only (ADR-0020). A
+VP9-alpha revision is delivered to every engine alike; a browser that cannot
+keep its alpha flattens it, and nothing detects or refuses that browser. Gates 1
+and 4 prove the transparency on Chromium.
 
 ### Worker secrets
 

@@ -64,20 +64,16 @@ describe('media Graphic Input default references', () => {
 			}]);
 	});
 
-	it('carries a silent-video default’s pinned target compatibility, as an item’s content does', () => {
-		// Without the fact the reference-index predicate has nothing to compare, and
-		// the write's precondition is lost silently rather than refused.
+	it('publishes a silent-video default as its exact revision, as an item’s content is', () => {
 		const references = broadcastGraphicsGraphicAssetReferences(graphic([mediaInput('sting', {
 			mediaKind: 'silent-video',
-			default: { ...sting, videoCompatibility: 'chromium-transparency' },
+			default: sting,
 		})]));
 
 		expect(references).toEqual([{
 			reference: sting,
 			ownerSlot: 'graphics.lower-third.inputs.sting.default',
 			kind: 'silent-video',
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
 		}]);
 	});
 

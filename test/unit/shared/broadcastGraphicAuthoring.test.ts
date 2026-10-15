@@ -714,35 +714,12 @@ describe('broadcastGraphicAuthoring', () => {
 			const patched = selectMediaGraphicItemAsset(withMedia(), 'logo', {
 				asset: REFERENCE,
 				mediaKind: 'silent-video',
-				videoCompatibility: 'chromium-transparency',
 			});
 
 			expect(media(patched)).toMatchObject({
 				asset: REFERENCE,
 				mediaKind: 'silent-video',
-				videoCompatibility: 'chromium-transparency',
 			});
-		});
-
-		it('records target compatibility only for a silent video, and clears it for an image', () => {
-			// The compatibility fact belongs to a video revision. Carrying a stale one
-			// on an image would make the reference index check a rule that no longer
-			// applies to the pinned bytes.
-			const video = selectMediaGraphicItemAsset(withMedia(), 'logo', {
-				asset: REFERENCE,
-				mediaKind: 'silent-video',
-				videoCompatibility: 'all-supported',
-			});
-
-			const image = selectMediaGraphicItemAsset(video, 'logo', {
-				asset: REFERENCE,
-				mediaKind: 'image',
-				videoCompatibility: 'all-supported',
-			});
-
-			expect(media(video).videoCompatibility).toBe('all-supported');
-			expect(media(image).videoCompatibility).toBeUndefined();
-			expect(media(image).mediaKind).toBe('image');
 		});
 
 		it('keeps authored playback settings across a change of asset kind', () => {
@@ -754,7 +731,6 @@ describe('broadcastGraphicAuthoring', () => {
 			const asVideo = selectMediaGraphicItemAsset(asImage, 'logo', {
 				asset: REFERENCE,
 				mediaKind: 'silent-video',
-				videoCompatibility: 'all-supported',
 			});
 
 			expect(media(asVideo)).toMatchObject({ playbackRate: 0.5, loop: false });
@@ -766,7 +742,7 @@ describe('broadcastGraphicAuthoring', () => {
 			const video = selectMediaGraphicItemAsset(
 				patchMediaGraphicItem(withMedia(), 'logo', { playbackRate: 0.5, loop: false }),
 				'logo',
-				{ asset: REFERENCE, mediaKind: 'silent-video', videoCompatibility: 'all-supported' },
+				{ asset: REFERENCE, mediaKind: 'silent-video' },
 			);
 
 			const cleared = clearMediaGraphicItemAsset(video, 'logo');
@@ -780,13 +756,12 @@ describe('broadcastGraphicAuthoring', () => {
 			const pinned = selectMediaGraphicItemAsset(
 				patchMediaGraphicItem(withMedia(), 'logo', { fit: 'contain' }),
 				'logo',
-				{ asset: REFERENCE, mediaKind: 'silent-video', videoCompatibility: 'all-supported' },
+				{ asset: REFERENCE, mediaKind: 'silent-video' },
 			);
 
 			const cleared = clearMediaGraphicItemAsset(pinned, 'logo');
 
 			expect(media(cleared).asset).toBeUndefined();
-			expect(media(cleared).videoCompatibility).toBeUndefined();
 			expect(media(cleared).fit).toBe('contain');
 		});
 

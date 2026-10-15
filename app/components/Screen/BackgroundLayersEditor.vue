@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
-import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { BackgroundLayer, BackgroundLayerType, ScreenMediaSource } from '~~/shared/types/screenConfig';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import { BACKGROUND_LAYER_TYPE_VALUES } from '~~/shared/types/screenConfig';
@@ -125,24 +125,19 @@ function selectSourceKind(layer: BackgroundLayer & { type: 'image' | 'video' }, 
 
 function selectAssetSource(
 	layer: BackgroundLayer & { type: 'image' | 'video' },
-	asset: GraphicAsset,
 	reference: GraphicAssetReference,
 ) {
 	updateSource(layer, {
 		kind: 'asset',
 		assetId: reference.assetId,
 		revisionId: reference.revisionId,
-		...(asset.facts.kind === 'silent-video'
-			? { videoCompatibility: asset.facts.targetCompatibility }
-			: {}),
 	});
 }
 
 /**
  * Only the picker's Clear reaches the configuration through this event: a
- * choose also fires `select`, which is the write — it alone carries the asset's
- * own facts (`videoCompatibility`), and a second write from here would race it
- * with a fact-less reference.
+ * choose also fires `select`, which is the write, and a second write from here
+ * would race it.
  */
 function clearAssetSource(layer: BackgroundLayer & { type: 'image' | 'video' }, reference: GraphicAssetReference | undefined) {
 	if (reference === undefined)
@@ -267,8 +262,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 							:event-id="eventId"
 							:field-label="layer.type === 'video' ? 'Video asset' : 'Image asset'"
 							:asset-kind="layer.type === 'video' ? 'silent-video' : 'image'"
-							video-target="chromium"
-							@select="(asset, reference) => selectAssetSource(layer, asset, reference)"
+							@select="(_asset, reference) => selectAssetSource(layer, reference)"
 							@update:model-value="clearAssetSource(layer, $event)"
 						/>
 					</UFormField>

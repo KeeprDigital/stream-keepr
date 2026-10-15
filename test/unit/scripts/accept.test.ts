@@ -25,7 +25,7 @@ describe('pnpm accept', () => {
 	});
 
 	it('runs only harnesses with a deployed mode on deploy day', () => {
-		expect(DEPLOY_DAY).toHaveLength(7);
+		expect(DEPLOY_DAY).toHaveLength(6);
 		expect(DEPLOY_DAY.filter(name => !(name in HARNESSES) || HARNESSES[name]?.deployed === false)).toEqual([]);
 	});
 

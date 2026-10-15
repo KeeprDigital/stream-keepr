@@ -27,7 +27,7 @@ function value(assetId: string, revisionId: string, overrides: Partial<MediaGrap
 
 const sponsor = value('image-asset', 'image-revision-1');
 const replacement = value('image-asset', 'image-revision-2');
-const sting = value('video-asset', 'video-revision-1', { videoCompatibility: 'chromium-transparency' });
+const sting = value('video-asset', 'video-revision-1');
 
 function mediaInput(key: string, mediaKind: 'image' | 'silent-video' = 'image'): GraphicInputDeclaration {
 	return { type: 'media', key, label: key, required: false, updatePolicy: 'staged', mediaKind, default: null };
@@ -83,7 +83,7 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 		}]);
 	});
 
-	it('carries an accepted silent-video value’s recorded target compatibility', () => {
+	it('publishes an accepted silent-video value as its exact revision', () => {
 		expect(broadcastGraphicsLiveSessionGraphicAssetReferences(
 			config([mediaInput('sting', 'silent-video')]),
 			state({ working: {}, accepted: { sting }, acceptedRevision: 1 }),
@@ -91,8 +91,6 @@ describe('broadcast Graphics Live Session Graphic Asset References', () => {
 			reference: { assetId: 'video-asset', revisionId: 'video-revision-1' },
 			ownerSlot: 'liveSession.lower-third.inputs.sting',
 			kind: 'silent-video',
-			videoCompatibility: 'chromium-transparency',
-			videoTarget: 'chromium',
 		}]);
 	});
 

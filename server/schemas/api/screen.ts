@@ -48,7 +48,6 @@ import {
 } from '~~/shared/types/enums';
 import {
 	MEDIA_FIT_VALUES,
-	MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES,
 } from '~~/shared/types/graphicItem';
 import {
 	DECK_LIST_VIEW_VALUES,
@@ -242,17 +241,26 @@ const graphicAssetReferenceSchema = z.object({
 }).strict();
 
 /**
- * One media Graphic Input value on the wire: an exact revision, plus the facts about
- * that revision the reference index and the render model cannot go and ask for.
- *
- * The same shape wherever the choice is made — an authored default here, an operator's
- * runtime selection in the Broadcast Graphics Live Session — because it is the same
- * choice, recorded at the moment it is made.
+ * `videoCompatibility` as documents recorded it before ADR-0020: accepted so a
+ * stored stack, layout or exported Template Package that still carries it reads,
+ * and dropped, because Chromium is now the only supported engine for transparent
+ * video and the fact means nothing. Only the values it could hold are accepted, so
+ * a document that never was valid still is not.
+ */
+const retiredVideoCompatibilitySchema = z
+	.enum(['all-supported', 'chromium-transparency'])
+	.optional()
+	.transform(() => undefined);
+
+/**
+ * One media Graphic Input value on the wire: an exact revision, the same shape
+ * wherever the choice is made — an authored default here, an operator's runtime
+ * selection in the Broadcast Graphics Live Session.
  */
 const mediaGraphicInputValueSchema = z.object({
 	assetId: z.string().min(1).max(100).transform(graphicAssetId),
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
-	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+	videoCompatibility: retiredVideoCompatibilitySchema,
 }).strict();
 
 /**
@@ -294,15 +302,15 @@ const screenMediaBackgroundConfigSchema = z.object({
 /**
  * Where a Screen's media comes from: a Graphics Asset Library revision or a
  * remote URL — the standardised media source shape the Background Screen mints
- * (#484 adopts it app-wide). The asset branch carries the same facts a media
- * Graphic Input value does, recorded at the moment of selection.
+ * (#484 adopts it app-wide). The asset branch is shaped as a media Graphic Input
+ * value is.
  */
 const screenMediaSourceSchema = z.discriminatedUnion('kind', [
 	z.object({
 		kind: z.literal('asset'),
 		assetId: z.string().min(1).max(100).transform(graphicAssetId),
 		revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),
-		videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+		videoCompatibility: retiredVideoCompatibilitySchema,
 	}).strict(),
 	z.object({
 		kind: z.literal('url'),
@@ -936,11 +944,7 @@ const graphicInputDeclarationSchema = z.discriminatedUnion('type', [
 		...graphicInputDeclarationBaseShape,
 		type: z.literal('media'),
 		// A media Graphic Input's default is a pinned Graphics Asset Library
-		// revision, exactly as an authored asset reference is — and it carries the
-		// same recorded target compatibility a Media Graphic Item's does, because
-		// the Graphic Asset Reference index checks a silent-video reference against
-		// the pinned revision's own and a value with no such fact loses that
-		// precondition rather than failing it.
+		// revision, exactly as an authored asset reference is.
 		default: mediaGraphicInputValueSchema.nullable(),
 		mediaKind: z.enum(GRAPHIC_MEDIA_KIND_VALUES),
 	}).strict(),
@@ -1215,9 +1219,8 @@ const shapeGraphicItemShape = {
  *
  * `asset` is optional because an author places the rectangle before choosing its
  * content, and `clipGeometry` because clipping is optional — absent, the item
- * clips to its own bounds. `videoCompatibility` records the pinned revision's own
- * target compatibility, which the Graphic Asset Reference index checks a
- * silent-video reference against.
+ * clips to its own bounds. `videoCompatibility` is a retired key, accepted and
+ * dropped so documents recorded before ADR-0020 still read.
  */
 const mediaGraphicItemShape = {
 	...graphicItemBaseShape,
@@ -1231,7 +1234,7 @@ const mediaGraphicItemShape = {
 	}).strict(),
 	opacity: opacitySchema,
 	clipGeometry: shapeGeometrySchema.optional(),
-	videoCompatibility: z.enum(MEDIA_GRAPHIC_ITEM_TARGET_COMPATIBILITY_VALUES).optional(),
+	videoCompatibility: retiredVideoCompatibilitySchema,
 	playbackRate: finiteNumberSchema
 		.min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE)
 		.max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),

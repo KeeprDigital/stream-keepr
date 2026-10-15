@@ -93,12 +93,6 @@ const props = defineProps<{
 const sessionStore = useBroadcastGraphicsLiveSessionStore();
 const { dataSet, selectionOptions } = useGraphicBindingData();
 
-/**
- * The engines of the Screen Outputs open on this Screen right now, so a media
- * revision's playback cost is stated in the picker rather than discovered on air.
- */
-const openOutputTargets = useScreenOutputVideoTargets(() => props.screen.id);
-
 /** Locally typed values, committed to the working value or override on change or blur. */
 const drafts = ref<Record<string, GraphicInputValue>>({});
 
@@ -393,13 +387,6 @@ function mediaRefusal(inputKey: string): string | undefined {
  * a picker should not be able to produce a refusal the picker could have foreseen —
  * and the alternative, sending it and reporting the 409, would name a failure of the
  * command rather than a fact about the revision.
- *
- * The pinned revision's compatibility facts are deliberately not sent. They are the
- * authoritative side's to record at the moment of acceptance, from the library rather
- * than from a browser — the same route a media Graphic Input's authored default would
- * take, which is how #96 settled that a value carries the same facts however it was
- * chosen. Nothing authors such a default today, so that symmetry is currently a
- * property of the mechanism rather than of two surfaces an operator can compare.
  */
 async function selectMedia(key: string, reference: GraphicAssetReference) {
 	const flight = mediaSelectionFlights.begin(mediaSelectionKey(key));
@@ -809,8 +796,7 @@ watch(
 					this is where an operator chooses one. The picker offers only the media
 					kind the Graphic Input declares — the reference index matches a
 					reference's kind against the asset's, so a revision of the other kind
-					would be accepted and then never published — and it is given the engines
-					open now so a clip's playback cost is legible before the choice.
+					would be accepted and then never published.
 				-->
 				<div v-else class="space-y-2">
 					<div class="flex items-center gap-2">
@@ -835,8 +821,6 @@ watch(
 						:event-id="eventId"
 						:field-label="trace.declaration.label"
 						:asset-kind="mediaKindOf(trace)"
-						video-target="chromium"
-						:open-output-targets="openOutputTargets"
 						:disabled="disconnected"
 						:data-testid="`live-control-media-${trace.declaration.key}`"
 						@select="(_asset, reference) => selectMedia(trace.declaration.key, reference)"

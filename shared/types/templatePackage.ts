@@ -289,6 +289,9 @@ export const TEMPLATE_PACKAGE_PREFLIGHT_ERROR_CODES = [
 export const TEMPLATE_PACKAGE_PREFLIGHT_WARNING_CODES = [
 	'package-schema-migrated',
 	'graphic-asset-name-differs',
+	// Retired by ADR-0020 and no longer raised: Chromium is the only supported
+	// engine for transparent video, so no asset is restricted to a target. Kept
+	// because these codes are stable and preflights already recorded carry it.
 	'graphic-asset-compatibility-restricted',
 	'graphic-asset-font-attestation-deferred',
 	'graphic-asset-created-from-related-origin',

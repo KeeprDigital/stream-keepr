@@ -333,14 +333,12 @@ export interface ScreenMediaBackgroundConfig {
  *
  * This is the standardised media source shape the Background Screen mints and
  * the rest of the application adopts over time (#484). An asset source pins an
- * exact revision and carries the same facts a media Graphic Input value does —
- * `videoCompatibility` recorded at the moment of selection, because nothing
- * downstream can go and ask the library for it. A URL source is the escape
+ * exact revision, as a media Graphic Input value does. A URL source is the escape
  * hatch the old media background always was: the application serves nothing and
  * checks nothing.
  */
 export type ScreenMediaSource
-	= | { kind: 'asset'; assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId; videoCompatibility?: 'all-supported' | 'chromium-transparency' }
+	= | { kind: 'asset'; assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }
 		| { kind: 'url'; url: string };
 
 export const BACKGROUND_LAYER_TYPE_VALUES = ['color', 'gradient', 'image', 'video', 'animation'] as const;
