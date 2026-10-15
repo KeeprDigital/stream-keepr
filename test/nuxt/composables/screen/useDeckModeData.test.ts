@@ -3,9 +3,16 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 
-const mockPlayerStore = {
+/**
+ * The store-held roster is reactive, as the real one is: `player:updated` replaces
+ * a record in it, and only a record already there.
+ */
+const mockPlayerStore = reactive({
 	getPlayerById: vi.fn(),
-};
+	players: [] as Array<{ id: number; name: string; updatedAt: string }>,
+	isLoaded: false,
+	loadPlayersByEventId: vi.fn(),
+});
 
 const mockFetchDeck = vi.fn();
 const mockFetchScryfallCards = vi.fn();
@@ -190,6 +197,11 @@ describe('useDeckModeData', () => {
 		mockGetSelectedBroadcastDeckList.mockResolvedValue(null);
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
+		mockPlayerStore.players.splice(0);
+		mockPlayerStore.isLoaded = false;
+		mockPlayerStore.loadPlayersByEventId.mockImplementation(async () => {
+			mockPlayerStore.isLoaded = true;
+		});
 	});
 
 	afterEach(() => {
@@ -849,5 +861,140 @@ describe('useDeckModeData', () => {
 
 		expect(result.primaryHeader.value).toBe('');
 		expect(result.hasDisplayedDeck.value).toBe(false);
+	});
+
+	describe('live-follow of the selected Player (#483)', () => {
+		/** Two revisions of one Player, and the deck the server holds at each. */
+		const BEFORE_EDIT = '2026-10-15T10:00:00.000Z';
+		const AFTER_EDIT = '2026-10-15T10:05:00.000Z';
+
+		/** What the server holds; `getPlayerById` and a roster load both read it. */
+		let serverPlayer: { id: number; name: string; updatedAt: string };
+
+		/** What `player:updated` does to the store: replace the record it already holds. */
+		function applyPlayerUpdated(next: typeof serverPlayer) {
+			serverPlayer = next;
+			const index = mockPlayerStore.players.findIndex(player => player.id === next.id);
+			if (index !== -1)
+				mockPlayerStore.players[index] = next;
+		}
+
+		/** A roster load that lands only when the test says so, with what the server then holds. */
+		function holdRoster() {
+			let release!: () => void;
+			mockPlayerStore.loadPlayersByEventId.mockImplementation(() => new Promise<void>((resolve) => {
+				release = () => {
+					mockPlayerStore.players.splice(0, mockPlayerStore.players.length, serverPlayer, { id: 6, name: 'Bob', updatedAt: BEFORE_EDIT });
+					mockPlayerStore.isLoaded = true;
+					resolve();
+				};
+			}));
+			return () => release();
+		}
+
+		function mainboardNames(result: ReturnType<typeof mountDeckModeData>) {
+			return result.mainboard.value.map(card => card.name);
+		}
+
+		beforeEach(() => {
+			serverPlayer = { id: 5, name: 'Alice', updatedAt: BEFORE_EDIT };
+			mockPlayerStore.getPlayerById.mockImplementation(async (_eventId: number, playerId: number) =>
+				playerId === serverPlayer.id ? serverPlayer : null);
+			mockPlayerStore.loadPlayersByEventId.mockImplementation(async () => {
+				mockPlayerStore.players.splice(0, mockPlayerStore.players.length, serverPlayer);
+				mockPlayerStore.isLoaded = true;
+			});
+			mockFetchDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
+				createDeckResponse([createDeckCard({ name: updatedAt === BEFORE_EDIT ? 'Counterspell' : 'Brainstorm' })]));
+			mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
+				mainboard: [createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`)],
+				sideboard: [],
+			}));
+		});
+
+		it('stages the edited deck when the selected Player is updated mid-display', async () => {
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+			expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+			applyPlayerUpdated({ ...serverPlayer, updatedAt: AFTER_EDIT });
+			await flushPromises();
+
+			expect(mainboardNames(result)).toEqual(['Counterspell']);
+			expect(result.pendingSwapVersion.value).toBe(1);
+			result.commitPendingDeck();
+			await nextTick();
+			expect(mainboardNames(result)).toEqual(['Brainstorm']);
+		});
+
+		it('neither swaps when the roster arrives holding what program shows, nor for another Player\'s update', async () => {
+			const releaseRoster = holdRoster();
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+			expect(result.displayedDeckVersion.value).toBe(1);
+
+			releaseRoster();
+			await flushPromises();
+			mockPlayerStore.players[1] = { id: 6, name: 'Bob', updatedAt: AFTER_EDIT };
+			await flushPromises();
+
+			expect(result.pendingSwapVersion.value).toBe(0);
+		});
+
+		it('stages an edit the roster arrives holding, which the deck read and the update message both missed', async () => {
+			const releaseRoster = holdRoster();
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+			expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+			// Published before the roster landed, so it replaced nothing.
+			applyPlayerUpdated({ ...serverPlayer, updatedAt: AFTER_EDIT });
+			await flushPromises();
+			releaseRoster();
+			await flushPromises();
+
+			expect(result.pendingSwapVersion.value).toBe(1);
+			result.commitPendingDeck();
+			await nextTick();
+			expect(mainboardNames(result)).toEqual(['Brainstorm']);
+		});
+
+		it('shows an edit missed while disconnected once after reconnect, without a second swap', async () => {
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+
+			mockRealtime.connectionState = 'disconnected';
+			await nextTick();
+			// The message is gone; only the server knows.
+			serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
+			mockRealtime.connectionState = 'connected';
+			await flushPromises();
+
+			expect(result.pendingSwapVersion.value).toBe(1);
+			result.commitPendingDeck();
+			await nextTick();
+			expect(mainboardNames(result)).toEqual(['Brainstorm']);
+			expect(result.pendingSwapVersion.value).toBe(1);
+		});
+
+		it('shows a deck imported after the Player was selected without one', async () => {
+			mockFetchDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
+				createDeckResponse(updatedAt === BEFORE_EDIT ? [] : [createDeckCard({ name: 'Brainstorm' })]));
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+			expect(result.error.value).toBe('Player has no deck list');
+			expect(result.hasDisplayedDeck.value).toBe(false);
+
+			applyPlayerUpdated({ ...serverPlayer, updatedAt: AFTER_EDIT });
+			await flushPromises();
+
+			expect(result.error.value).toBeNull();
+			expect(mainboardNames(result)).toEqual(['Brainstorm']);
+		});
 	});
 });
