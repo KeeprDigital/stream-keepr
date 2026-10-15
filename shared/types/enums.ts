@@ -16,7 +16,9 @@ export const CLOCK_TYPE_VALUES = ['countdown', 'countup'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
 export const DECK_BOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
 export const DECK_CARD_SIZE_VALUES = ['small', 'medium', 'large'] as const;
-export const QUANTITY_POSITION_VALUES = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'left-center', 'right-center'] as const;
+// A Deck badge position: the nine points less the centre, spelled as `NINE_POINTS`
+// (`shared/utils/ninePoints.ts`) so the nine-point picker edits it directly (#543).
+export const QUANTITY_POSITION_VALUES = ['top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const;
 export const QUANTITY_SIZE_VALUES = ['small', 'medium', 'large'] as const;
 export const SIDEBOARD_PLACEMENT_VALUES = ['beside', 'below'] as const;
 export const BOARD_SELECTION_VALUES = ['full', 'mainboard', 'sideboard'] as const;

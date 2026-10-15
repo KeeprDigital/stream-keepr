@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
-import type { BoardSelection, DeckBoardView, SideboardPlacement } from '~~/shared/types/enums';
+import type { BoardSelection, DeckBoardView, QuantityPosition, SideboardPlacement } from '~~/shared/types/enums';
 import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
+import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
 import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import {
 	DECK_CARD_SIZE_SELECT_OPTIONS,
-	QUANTITY_POSITION_SELECT_OPTIONS,
 	QUANTITY_SIZE_SELECT_OPTIONS,
 	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
 } from '~~/shared/utils/selectOptions';
@@ -28,6 +28,11 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// A badge on the centre would cover the card's art, so the badge position
+// pickers offer every point but this one — which is why what they emit is
+// always a `QuantityPosition`.
+const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 const broadcastDeckListsEnabled = computed(() =>
 	eventStore.event?.game === 'mtg'
@@ -606,11 +611,11 @@ const emptyBoardHint = computed(() => {
 					description="Where the badge appears on the card."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
-					<USelect
-						:model-value="config.quantityPosition"
-						:items="QUANTITY_POSITION_SELECT_OPTIONS"
-						class="w-40"
-						@update:model-value="updateConfig({ quantityPosition: $event })"
+					<UINinePointPicker
+						:model-value="config.quantityPosition ?? 'top-right'"
+						:disabled-points="BADGE_DISABLED_POINTS"
+						aria-label="Quantity badge position"
+						@update:model-value="updateConfig({ quantityPosition: $event as QuantityPosition })"
 					/>
 				</UFormField>
 
@@ -676,11 +681,11 @@ const emptyBoardHint = computed(() => {
 						description="Where the point badge appears on the card in grid mode."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
-						<USelect
-							:model-value="config.highlanderPointsPosition"
-							:items="QUANTITY_POSITION_SELECT_OPTIONS"
-							class="w-40"
-							@update:model-value="updateConfig({ highlanderPointsPosition: $event })"
+						<UINinePointPicker
+							:model-value="config.highlanderPointsPosition ?? 'top-left'"
+							:disabled-points="BADGE_DISABLED_POINTS"
+							aria-label="Highlander point badge position"
+							@update:model-value="updateConfig({ highlanderPointsPosition: $event as QuantityPosition })"
 						/>
 					</UFormField>
 

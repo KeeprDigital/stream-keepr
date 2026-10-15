@@ -9,12 +9,17 @@ import { NINE_POINTS } from '~~/shared/utils/ninePoints';
  *
  * A radio group: one tab stop on the current point, arrow keys move across the
  * grid. Name it with an `aria-label`, which falls through to the group.
+ *
+ * `disabledPoints` are shown but never chosen, for a vocabulary that is the grid
+ * less some points (a Deck badge has no centre); the arrow keys step over them.
  */
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	disabled?: boolean;
+	disabledPoints?: readonly NinePoint[];
 	size?: 'xs' | 'sm';
 }>(), {
 	disabled: false,
+	disabledPoints: () => [],
 	size: 'xs',
 });
 
@@ -34,11 +39,16 @@ function moveFrom(index: number, event: KeyboardEvent) {
 	if (!move)
 		return;
 	event.preventDefault();
-	const row = Math.floor(index / 3) + move[0];
-	const column = (index % 3) + move[1];
-	if (row < 0 || row > 2 || column < 0 || column > 2)
-		return;
-	const next = NINE_POINTS[(row * 3) + column]!.value;
+	let row = Math.floor(index / 3);
+	let column = index % 3;
+	let next: NinePoint;
+	do {
+		row += move[0];
+		column += move[1];
+		if (row < 0 || row > 2 || column < 0 || column > 2)
+			return;
+		next = NINE_POINTS[(row * 3) + column]!.value;
+	} while (props.disabledPoints.includes(next));
 	model.value = next;
 	void nextTick(() => group.value?.querySelector<HTMLElement>(`[data-point="${next}"]`)?.focus());
 }
@@ -57,7 +67,7 @@ function moveFrom(index: number, event: KeyboardEvent) {
 			:title="point.label"
 			:icon="point.icon"
 			:size="size"
-			:disabled="disabled"
+			:disabled="disabled || disabledPoints.includes(point.value)"
 			color="neutral"
 			:variant="model === point.value ? 'solid' : 'soft'"
 			class="size-7 justify-center p-0"

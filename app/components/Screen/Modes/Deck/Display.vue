@@ -207,12 +207,12 @@ function gridCardSizeClass(layout: ResolvedDeckBoardLayout) {
 // Quantity badge position styles
 const BADGE_POSITION_CLASSES: Record<QuantityPosition, string> = {
 	'top-left': '-top-1 -left-1',
-	'top-center': '-top-1 left-1/2 -translate-x-1/2',
+	'top': '-top-1 left-1/2 -translate-x-1/2',
 	'top-right': '-top-1 -right-1',
-	'left-center': 'top-1/2 -left-1 -translate-y-1/2',
-	'right-center': 'top-1/2 -right-1 -translate-y-1/2',
+	'left': 'top-1/2 -left-1 -translate-y-1/2',
+	'right': 'top-1/2 -right-1 -translate-y-1/2',
 	'bottom-left': '-bottom-1 -left-1',
-	'bottom-center': '-bottom-1 left-1/2 -translate-x-1/2',
+	'bottom': '-bottom-1 left-1/2 -translate-x-1/2',
 	'bottom-right': '-bottom-1 -right-1',
 };
 

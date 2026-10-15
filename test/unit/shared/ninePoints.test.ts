@@ -1,7 +1,9 @@
+import type { QuantityPosition } from '~~/shared/types/enums';
 import type { GraphicAnchorPoint, GraphicAnimationOrigin } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayAnchorValue } from '~~/shared/types/screenConfig';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { QUANTITY_POSITION_VALUES } from '~~/shared/types/enums';
 import { GRAPHIC_ANCHOR_POINT_VALUES, GRAPHIC_ANIMATION_ORIGIN_VALUES } from '~~/shared/types/graphics';
 import { FEATURE_MATCH_OVERLAY_ANCHOR_VALUES } from '~~/shared/types/screenConfig';
 import { NINE_POINT_VALUES, NINE_POINTS } from '~~/shared/utils/ninePoints';
@@ -31,5 +33,12 @@ describe('nine points', () => {
 		expectTypeOf<FeatureMatchOverlayAnchorValue>().toEqualTypeOf<NinePoint>();
 		for (const values of [GRAPHIC_ANCHOR_POINT_VALUES, GRAPHIC_ANIMATION_ORIGIN_VALUES, FEATURE_MATCH_OVERLAY_ANCHOR_VALUES])
 			expect([...values]).toEqual([...NINE_POINT_VALUES]);
+	});
+
+	it('spells the Deck badge positions as the nine points less the centre (#543)', () => {
+		// A badge on the centre would cover the card's art, so the picker disables
+		// that point rather than this vocabulary inventing its own spelling.
+		expectTypeOf<QuantityPosition>().toEqualTypeOf<Exclude<NinePoint, 'center'>>();
+		expect([...QUANTITY_POSITION_VALUES]).toEqual(NINE_POINT_VALUES.filter(point => point !== 'center'));
 	});
 });
