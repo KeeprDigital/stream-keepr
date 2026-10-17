@@ -30,8 +30,8 @@ export interface ScreenOutputStandingsResponse {
 	round: RoundResponse | null;
 	/** The snapshot at that Round; `null` when the standings are current. */
 	roundStandings: ScreenOutputRoundStanding[] | null;
-	/** The watchlist's members; `null` unless the view is a watchlist. */
-	watchlistPlayerIds: number[] | null;
+	/** The watchlist's name and members; `null` unless the view is a watchlist of a list that exists. */
+	watchlist: { name: string; playerIds: number[] } | null;
 }
 
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */

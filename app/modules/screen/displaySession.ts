@@ -13,6 +13,7 @@ import {
 import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
+import { useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
 import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-mode';
 import { useEventStore } from '~/stores/event';
@@ -37,6 +38,7 @@ interface ScreenDisplaySessionOptions {
 	eventStore?: ReturnType<typeof useEventStore>;
 	screenStore?: ReturnType<typeof useScreenStore>;
 	realtime?: ReturnType<typeof useRealtime>;
+	outputReads?: Pick<ReturnType<typeof useScreenOutputReadRepository>, 'event'>;
 	createRealtimeSession?: (options: Parameters<typeof useScreenRealtimeSession>[0]) => ScreenRealtimeDisplaySession;
 	exportAdapter?: Partial<ScreenDisplaySessionExportAdapter>;
 }
@@ -60,6 +62,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	const eventStore = options.eventStore ?? useEventStore();
 	const screenStore = options.screenStore ?? useScreenStore();
 	const realtime = options.realtime ?? useRealtime();
+	const outputReads = options.outputReads ?? useScreenOutputReadRepository();
 	const exportAdapter = { ...defaultExportAdapter, ...options.exportAdapter };
 
 	const eventId = computed(() => eventStore.eventId);
@@ -305,6 +308,18 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 				return;
 			if (!loadedScreen || screenStore.activeScreen?.id !== loadedScreen.id)
 				throw new Error('Screen not found');
+
+			// The Event context comes through the same Screen, not the operator's
+			// private Event read: an output has no Session for that read to admit
+			// (#604). Rendering waits for it, because every mode reads its Event.
+			const outputEvent = await outputReads.event({
+				eventId: evtId,
+				screenId: loadedScreen.id,
+				assetCapability: assetCapability.value,
+			});
+			if (flight.stale)
+				return;
+			eventStore.setOutputEvent(outputEvent);
 
 			// Only a Screen Output joins its Screen's presence and answers its Screen's
 			// commands. An embedded rendering of either kind is a control surface's own

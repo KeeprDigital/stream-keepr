@@ -39,9 +39,16 @@ export interface ScreenPresenceInfo {
 	members: RealtimePresenceMessage<ScreenPresenceData>[];
 }
 
+/** How the active Screen was looked up, so an announcement can look it up the same way. */
+export interface ActiveScreenLookup {
+	slug: string;
+	assetCapability: string | null;
+}
+
 interface ScreenRuntimeState {
 	screens: Ref<Screen[]>;
 	activeScreen: Ref<Screen | null>;
+	activeScreenLookup: Ref<ActiveScreenLookup | null>;
 	currentEventId: Ref<number | null>;
 	screenPresence: Ref<Map<number, ScreenPresenceInfo>>;
 	error: Ref<string | null>;
@@ -490,10 +497,22 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		return cached !== null && screen.stateVersion < cached.stateVersion;
 	}
 
+	/**
+	 * The active Screen is re-read the way it was first read: a Screen Output holds
+	 * no Session for the operator's Screen-by-id path, which used to refuse it here
+	 * silently, so an output never saw a mode or configuration change (#604).
+	 */
+	function fetchAnnouncedScreen(eventId: number, screenId: number) {
+		const lookup = state.activeScreenLookup.value;
+		if (lookup && state.activeScreen.value?.id === screenId)
+			return screenRepo.getBySlug(eventId, lookup.slug, lookup.assetCapability);
+		return screenRepo.getById(eventId, screenId);
+	}
+
 	async function reloadAnnouncedScreen(eventId: number, screenId: number) {
 		const flight = remoteScreenLoads.begin(`screen:${screenId}`);
 		try {
-			const screen = await screenRepo.getById(eventId, screenId);
+			const screen = await fetchAnnouncedScreen(eventId, screenId);
 			if (flight.stale || !screen || isSupersededByCache(screen))
 				return;
 			cacheScreen(screen);
@@ -622,6 +641,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		unsubscribeFromAllPresence();
 		state.screens.value = [];
 		state.activeScreen.value = null;
+		state.activeScreenLookup.value = null;
 		state.error.value = null;
 		state.currentEventId.value = null;
 		state.screenPresence.value = new Map();

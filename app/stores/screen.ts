@@ -1,4 +1,4 @@
-import type { ScreenPresenceInfo } from '~/modules/screen/runtime';
+import type { ActiveScreenLookup, ScreenPresenceInfo } from '~/modules/screen/runtime';
 import type { Screen } from '~/types';
 import { toRaw } from 'vue';
 import { useScreenRuntime } from '~/modules/screen/runtime';
@@ -23,6 +23,7 @@ export const useScreenStore = defineStore('screen', () => {
 
 	const screens = ref<Screen[]>([]);
 	const activeScreen = ref<Screen | null>(null);
+	const activeScreenLookup = ref<ActiveScreenLookup | null>(null);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
 	const currentEventId = ref<number | null>(null);
@@ -69,6 +70,7 @@ export const useScreenStore = defineStore('screen', () => {
 	const screenRuntime = useScreenRuntime({
 		screens,
 		activeScreen,
+		activeScreenLookup,
 		currentEventId,
 		screenPresence,
 		error,
@@ -151,6 +153,7 @@ export const useScreenStore = defineStore('screen', () => {
 		const flight = activeScreenLoads.begin();
 		const token = beginLoad();
 		activeScreen.value = null;
+		activeScreenLookup.value = null;
 		try {
 			const screen = await screenRepo.getBySlug(eventId, slug, assetCapability);
 			if (!screen)
@@ -159,6 +162,7 @@ export const useScreenStore = defineStore('screen', () => {
 				return null;
 			const kept = keptRevision(screen);
 			activeScreen.value = kept;
+			activeScreenLookup.value = { slug, assetCapability: assetCapability ?? null };
 			return kept;
 		}
 		catch (caughtError) {

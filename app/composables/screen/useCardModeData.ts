@@ -4,6 +4,9 @@ export function useCardModeData() {
 	const config = useScreenModeConfig('card');
 	const { screen, cardDataHealth } = useScreenContext();
 	const cardStore = useCardStore();
+	const outputReads = useScreenOutputReads();
+	// A rendering of the Screen reads its Card through the Screen (#604).
+	cardStore.readActiveCardAsScreenOutput(() => outputReads.card());
 
 	// Card-screen deck-source loads report their Scryfall degradation through
 	// the same seam the Deck mode uses (#465, #471): the host carries the report

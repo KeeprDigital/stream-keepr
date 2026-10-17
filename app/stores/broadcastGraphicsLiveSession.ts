@@ -538,12 +538,28 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * the one it fetched: its caller mirrors the answer into its own state, so
 	 * handing back the losing snapshot would put it on screen by the other door.
 	 */
+	/**
+	 * Screens this client renders rather than controls, and how it reads each one's
+	 * snapshot: through the Screen's capability-scoped read, because a Screen
+	 * Output holds no Session for the Live Control path (#604). Every reload —
+	 * first paint, a sequence gap, an ended epoch, a reconnect — goes the same way.
+	 */
+	const screenOutputReads = new Map<number, () => Promise<BroadcastGraphicsLiveSessionResponse>>();
+
+	function readSessionAsScreenOutput(screenId: number, read: () => Promise<BroadcastGraphicsLiveSessionResponse>) {
+		screenOutputReads.set(screenId, read);
+	}
+
+	function fetchSession(eventId: number, screenId: number) {
+		return screenOutputReads.get(screenId)?.() ?? repository.getSession(eventId, screenId);
+	}
+
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		refusal.value = null;
 		const flight = sessionLoads.begin(screenId);
 		return await executeReporting(
 			async () => {
-				const session = await repository.getSession(eventId, screenId);
+				const session = await fetchSession(eventId, screenId);
 				if (flight.stale)
 					return sessions.value.get(screenId) ?? null;
 				storeSession(session);
@@ -1132,6 +1148,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions,
 		error,
 		refusal,
+		readSessionAsScreenOutput,
 		serverNow,
 		clockSynchronized,
 		channelContexts,

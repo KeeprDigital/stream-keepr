@@ -48,6 +48,8 @@ export const usePlayerStore = defineStore('player', () => {
 	const isLoaded = lifecycle.isLoaded;
 
 	const loadPlayersByEventId = lifecycle.loadByEventId;
+	/** Hold a roster another read answered — a Screen Output's — so `player:updated` keeps it live. */
+	const loadPlayersFrom = lifecycle.loadFrom;
 	const createPlayer = lifecycle.create;
 	const updatePlayer = lifecycle.update;
 	const removePlayer = lifecycle.remove;
@@ -68,6 +70,19 @@ export const usePlayerStore = defineStore('player', () => {
 	// Realtime handlers
 	function applyRemoteCreated(data: MessageData<'player:created'>) {
 		lifecycle.applyRemoteCreated(data.player);
+	}
+
+	/**
+	 * Hold one Player a Screen Output read answered (#604). `player:updated`
+	 * replaces only records the store holds, so an output that holds the Players
+	 * it renders follows their edits without loading the private roster.
+	 */
+	function holdPlayer(player: Player) {
+		const index = players.value.findIndex(held => held.id === player.id);
+		if (index === -1)
+			players.value.push(player);
+		else
+			players.value[index] = player;
 	}
 
 	function applyRemoteUpdated(data: MessageData<'player:updated'>) {
@@ -94,6 +109,8 @@ export const usePlayerStore = defineStore('player', () => {
 
 		// Actions
 		loadPlayersByEventId,
+		loadPlayersFrom,
+		holdPlayer,
 		getPlayerById,
 		createPlayer,
 		updatePlayer,

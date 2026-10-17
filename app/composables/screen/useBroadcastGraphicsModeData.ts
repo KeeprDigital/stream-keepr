@@ -351,6 +351,14 @@ export function useBroadcastGraphicsModeData() {
 	// catch up to the current authoritative state rather than replaying how it got
 	// there. It never clears on a disconnection: program holds its last accepted
 	// rendering.
+	//
+	// It reads that snapshot through its Screen, whatever credential it holds
+	// (#604): a Screen Output has no Session for the Live Control path.
+	const outputReads = useScreenOutputReads();
+	watch(() => screen.value?.id, (screenId) => {
+		if (screenId)
+			sessionStore.readSessionAsScreenOutput(screenId, () => outputReads.liveSession());
+	}, { immediate: true });
 	useBroadcastGraphicsLiveSessionSync(
 		() => (isPreview?.value ? undefined : eventId.value ?? undefined),
 		() => (isPreview?.value ? undefined : screen.value?.id),

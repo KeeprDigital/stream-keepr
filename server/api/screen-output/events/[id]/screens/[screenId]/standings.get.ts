@@ -17,15 +17,15 @@ export default defineEventHandler(async (event): Promise<ScreenOutputStandingsRe
 	const { eventId, screen } = await requireScreenOutputRead(event);
 	const config = screenOutputModeConfig(screen, 'standings');
 
-	const [players, round, roundStandings, watchlistPlayerIds] = await Promise.all([
+	const listId = config.viewMode === 'watchlist' ? config.playerListId : null;
+	const [players, round, roundStandings, list, watchlistPlayerIds] = await Promise.all([
 		playerService().findAll({ eventId }),
 		config.roundId ? roundService().findById(config.roundId, eventId) : null,
 		config.roundId ? playerRoundStandingsService().findByRoundId(eventId, config.roundId) : null,
-		config.viewMode === 'watchlist' && config.playerListId
-			// A watchlist whose list has since been deleted renders as an empty
-			// list rather than refusing the whole Standings read.
-			? playerListService().getMemberPlayerIds(config.playerListId, eventId).catch(() => [])
-			: null,
+		listId ? playerListService().findById(listId, eventId) : null,
+		// A watchlist whose list has since been deleted renders as an empty list
+		// rather than refusing the whole Standings read.
+		listId ? playerListService().getMemberPlayerIds(listId, eventId).catch(() => []) : [],
 	]);
 
 	return {
@@ -39,6 +39,6 @@ export default defineEventHandler(async (event): Promise<ScreenOutputStandingsRe
 			position: standing.position,
 			points: standing.points,
 		})) ?? null,
-		watchlistPlayerIds,
+		watchlist: list ? { name: list.name, playerIds: watchlistPlayerIds } : null,
 	};
 });

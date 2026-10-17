@@ -1,6 +1,6 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatch, Match } from '~/types';
+import type { FeatureMatch, Match, Phase, Round } from '~/types';
 import { isFeatureMatchOverlayPreviewConfigMessage } from '~/modules/feature-match-overlay/previewMessages';
 
 export function useFeatureMatchOverlayModeData() {
@@ -20,9 +20,9 @@ export function useFeatureMatchOverlayModeData() {
 	const eventStore = useEventStore();
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
-	const phaseStore = usePhaseStore();
-	const roundStore = useRoundStore();
-	const matchRepo = useMatchRepository();
+	const outputReads = useScreenOutputReads();
+	featureMatchStateStore.readSessionsAsScreenOutput(async slotId =>
+		(await outputReads.featureMatchSlot(slotId)).slot.activeSession ?? null);
 	const sourceMatch = ref<Match | null>(null);
 
 	const displayData = useBroadcastDisplayData<null>({ initialData: null });
@@ -73,30 +73,36 @@ export function useFeatureMatchOverlayModeData() {
 	 */
 	const usesSampleDataset = computed(() => Boolean(isPreview?.value) && !config.value.featureMatchId);
 
-	const round = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
-	const phase = computed(() => round.value ? phaseStore.getPhaseById(round.value.phaseId) : undefined);
+	const round = ref<Round | undefined>(undefined);
+	const phase = ref<Phase | undefined>(undefined);
 
+	/**
+	 * The Slot, its Session, and the Match, Round and Phase it follows come
+	 * through the Screen in one read (#604). The Slot is held in the stores so
+	 * `featureMatch:updated` and Session events keep it live; the Slot's Match
+	 * changing re-reads the rest.
+	 */
 	watch(
-		() => [eventId.value, config.value.featureMatchId, match.value?.matchId] as const,
-		async ([evtId, matchId, sourceMatchId]) => {
-			if (!evtId) {
+		() => [eventId.value, config.value.featureMatchId, match.value?.matchId, outputReads.scopeKey.value] as const,
+		async ([evtId, matchId]) => {
+			if (!evtId || !outputReads.scope.value) {
 				error.value = 'No event loaded';
 				displayData.clear();
 				return;
 			}
 
 			await displayData.refresh(async () => {
-				if (featureMatchStore.currentEventId !== evtId || !featureMatchStore.isLoaded) {
-					await featureMatchStore.loadFeatureMatchesByEventId(evtId);
+				if (!matchId) {
+					sourceMatch.value = null;
+					round.value = undefined;
+					phase.value = undefined;
+					return null;
 				}
-				if (matchId && (featureMatchStateStore.currentEventId !== evtId || !featureMatchStateStore.featureMatchStates.has(matchId))) {
-					await featureMatchStateStore.loadState(evtId, matchId);
-				}
-				if (!roundStore.isLoaded)
-					await roundStore.loadRoundsByEventId(evtId);
-				if (!phaseStore.isLoaded)
-					await phaseStore.loadPhasesByEventId(evtId);
-				sourceMatch.value = sourceMatchId ? await matchRepo.getById(evtId, sourceMatchId) : null;
+				const context = await outputReads.featureMatchSlot(matchId);
+				featureMatchStore.holdFeatureMatch(context.slot);
+				sourceMatch.value = context.match;
+				round.value = context.round ?? undefined;
+				phase.value = context.phase ?? undefined;
 				return null;
 			}, 'Failed to load broadcast layout data');
 		},
@@ -106,10 +112,7 @@ export function useFeatureMatchOverlayModeData() {
 	/**
 	 * The Overlay's half of the same rule the Feature Match Screen holds: nothing
 	 * arrives late after a suspended connection, so the only way to find out what
-	 * was missed is to ask (#307).
-	 *
-	 * Forced past the `has(matchId)` guard in the loader above for the same reason —
-	 * the cached state is what is stale.
+	 * was missed is to ask (#307), through the Screen reader installed above.
 	 */
 	useReconnectResync(() => {
 		const evtId = eventId.value;
@@ -120,5 +123,5 @@ export function useFeatureMatchOverlayModeData() {
 		void featureMatchStateStore.loadState(evtId, matchId);
 	});
 
-	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.event), usesSampleDataset, loading, error };
+	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.displayEvent), usesSampleDataset, loading, error };
 }

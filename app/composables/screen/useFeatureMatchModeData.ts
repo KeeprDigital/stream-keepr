@@ -7,6 +7,9 @@ export function useFeatureMatchModeData() {
 
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
+	const outputReads = useScreenOutputReads();
+	featureMatchStateStore.readSessionsAsScreenOutput(async slotId =>
+		(await outputReads.featureMatchSlot(slotId)).slot.activeSession ?? null);
 
 	const displayData = useBroadcastDisplayData<null>({ initialData: null });
 	const loading = displayData.loading;
@@ -24,29 +27,26 @@ export function useFeatureMatchModeData() {
 		return featureMatchStateStore.featureMatchStates.get(config.value.featureMatchId) ?? null;
 	});
 
+	/**
+	 * The Slot and its Session come through the Screen (#604), and are held in
+	 * the stores so `featureMatch:updated` and Session events keep them live.
+	 */
 	async function loadFeatureMatchData(matchId: number) {
-		const evtId = eventId.value;
-		if (!evtId) {
+		if (!outputReads.scope.value) {
 			error.value = 'No event loaded';
 			displayData.clear();
 			return;
 		}
 
 		await displayData.refresh(async () => {
-			if (featureMatchStore.currentEventId !== evtId || !featureMatchStore.isLoaded) {
-				await featureMatchStore.loadFeatureMatchesByEventId(evtId);
-			}
-
-			if (featureMatchStateStore.currentEventId !== evtId || !featureMatchStateStore.featureMatchStates.has(matchId)) {
-				await featureMatchStateStore.loadState(evtId, matchId);
-			}
-
+			const { slot } = await outputReads.featureMatchSlot(matchId);
+			featureMatchStore.holdFeatureMatch(slot);
 			return null;
 		}, 'Failed to load feature match data');
 	}
 
 	watch(
-		() => [eventId.value, config.value.featureMatchId] as const,
+		() => [eventId.value, config.value.featureMatchId, outputReads.scopeKey.value] as const,
 		async ([evtId, matchId]) => {
 			if (!matchId) {
 				displayData.clear();
@@ -69,10 +69,8 @@ export function useFeatureMatchModeData() {
 	 * delivered late, so what is on screen sits at the last command that arrived
 	 * until the next one does — which on a slow match can be minutes (#307).
 	 *
-	 * `loadState` rather than `loadFeatureMatchData`: the loader above skips the
-	 * fetch for a match whose state is already cached, which is right on a config
-	 * change and exactly wrong here, since the cached state is the stale thing being
-	 * corrected. The store's own loader always re-reads.
+	 * The store's `loadState` re-reads the Session through the Screen reader this
+	 * composable installed, the same read a sequence gap takes.
 	 */
 	useReconnectResync(() => {
 		const evtId = eventId.value;

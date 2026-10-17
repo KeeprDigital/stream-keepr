@@ -236,7 +236,7 @@ describe('capability-only Screen Output reads', () => {
 
 			expect(current.status).toBe(200);
 			expect(current.data.players.map(player => player.id)).toEqual(expect.arrayContaining([alpha.id, beta.id]));
-			expect(current.data).toMatchObject({ round: null, roundStandings: null, watchlistPlayerIds: null });
+			expect(current.data).toMatchObject({ round: null, roundStandings: null, watchlist: null });
 
 			await setModeConfig('standings', { viewMode: 'watchlist', playerListId: list.id, roundId: round.id });
 			const fixed = await asOutput<ScreenOutputStandingsResponse>('standings');
@@ -244,7 +244,7 @@ describe('capability-only Screen Output reads', () => {
 			expect(fixed.data).toMatchObject({
 				round: { id: round.id, name: 'Round 1' },
 				roundStandings: [],
-				watchlistPlayerIds: [beta.id],
+				watchlist: { name: 'Watch', playerIds: [beta.id] },
 			});
 			expect((await asOutput('standings', null)).status).toBe(404);
 		});

@@ -11,6 +11,7 @@ import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
 
 interface DeckDisplayState {
@@ -172,8 +173,7 @@ export function useDeckModeData() {
 	const { screen, eventId, assetCapability, cardDataHealth } = useScreenContext();
 	const config = useScreenModeConfig('deck');
 
-	const playerStore = usePlayerStore();
-	const deckCache = usePlayerDeckCache();
+	const outputReads = useScreenOutputReads();
 	const broadcastDeckLists = useScreenOutputBroadcastDeckListRepository();
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 	const realtime = tryUseRealtime();
@@ -406,26 +406,14 @@ export function useDeckModeData() {
 		error.value = null;
 
 		try {
-			const player = await playerStore.getPlayerById(evtId, playerId);
+			// Read through the Screen (#604): its capability reaches the Player the
+			// Deck mode selects, and only that Player.
+			const { player, decks } = await outputReads.playerDecks(playerId);
 			if (flight.stale) {
 				return;
 			}
 
-			if (!player) {
-				// A degraded rendering keeps re-fetching even when one attempt finds
-				// nothing to build from.
-				degradedRefetch.keepCadence();
-				if (!displayedDeck.value) {
-					error.value = 'Player not found';
-				}
-				return;
-			}
-
-			const deckResponse = await deckCache.fetchDeck(playerId, evtId, player.updatedAt);
-			if (flight.stale) {
-				return;
-			}
-
+			const deckResponse = selectPlayerDeck(decks);
 			if (!deckResponse || deckResponse.cards.length === 0) {
 				degradedRefetch.keepCadence();
 				if (!displayedDeck.value) {
@@ -524,28 +512,6 @@ export function useDeckModeData() {
 		{ immediate: true },
 	);
 
-	/**
-	 * Live-follow of the selected Player (#483): a deck edited mid-display (a Melee
-	 * re-sync, an operator edit) rolls the Player's `updatedAt` through
-	 * `player:updated`, and that revision is the deck cache's freshness key, so the
-	 * rebuilt deck arrives through the ordinary staged swap.
-	 *
-	 * `player:updated` replaces only a record the store-held roster already holds,
-	 * so the roster is loaded while a Player is selected — beside the deck rather
-	 * than ahead of it, so first paint does not wait on it.
-	 */
-	watch(
-		() => {
-			const source = config.value.deckSource;
-			return source.type === 'player' && source.playerId !== null ? eventId.value : null;
-		},
-		(evtId) => {
-			if (evtId && !playerStore.isLoaded)
-				void playerStore.loadPlayersByEventId(evtId);
-		},
-		{ immediate: true },
-	);
-
 	/** The revision of the selected Player's deck on program, or staged to replace it. */
 	function programRevisionFor(playerId: number): number | null | undefined {
 		const deck = pendingDeck.value ?? displayedDeck.value;
@@ -555,65 +521,60 @@ export function useDeckModeData() {
 	}
 
 	/**
-	 * A load follows the store-held revision whenever it differs from program's,
-	 * rather than whenever it changes: the roster can land holding an edit the deck
-	 * read missed, and a message published before the roster arrived replaced
-	 * nothing. The load itself still reads the Player fresh, because the store-held
-	 * record can equally be the one behind.
+	 * Live-follow of the selected Player (#483): a deck edited mid-display (a Melee
+	 * re-sync, an operator edit) rolls the Player's `updatedAt` through
+	 * `player:updated`, and that revision is the deck's freshness key, so the
+	 * rebuilt deck arrives through the ordinary staged swap.
+	 *
+	 * Heard on the Event channel itself rather than through a store-held roster,
+	 * which an output cannot load (#604). A load follows any revision that differs
+	 * from program's — including one announced while the first read is still in
+	 * flight, which that read may have been served before, and one for a Player
+	 * whose deck was empty when it was selected.
 	 */
-	watch(
-		() => {
-			const source = config.value.deckSource;
-			if (source.type !== 'player' || source.playerId === null)
-				return null;
-			const playerId = source.playerId;
-			const player = playerStore.players.find(candidate => candidate.id === playerId);
-			return player ? `${playerId}:${deckSourceStamp(player.updatedAt)}` : null;
-		},
-		() => {
-			const source = config.value.deckSource;
-			if (source.type !== 'player' || source.playerId === null)
-				return;
-			const playerId = source.playerId;
-			const player = playerStore.players.find(candidate => candidate.id === playerId);
-			if (player && deckSourceStamp(player.updatedAt) !== programRevisionFor(playerId))
-				void loadPlayerDeck(playerId);
-		},
-	);
+	function followPlayerUpdate(player: Pick<Player, 'id' | 'updatedAt'>) {
+		const source = config.value.deckSource;
+		if (source.type !== 'player' || source.playerId !== player.id)
+			return;
+		if (deckSourceStamp(player.updatedAt) !== programRevisionFor(player.id))
+			void loadPlayerDeck(player.id);
+	}
 
-	let unsubscribeFromBroadcastUpdates: (() => void) | null = null;
+	let unsubscribeFromEventUpdates: (() => void)[] = [];
 	watch(eventId, (evtId) => {
-		unsubscribeFromBroadcastUpdates?.();
-		unsubscribeFromBroadcastUpdates = null;
+		for (const unsubscribe of unsubscribeFromEventUpdates.splice(0))
+			unsubscribe();
 		if (!realtime || !evtId)
 			return;
-		unsubscribeFromBroadcastUpdates = realtime.onChannel(
-			eventRealtimeChannel(evtId),
-			'broadcastDeckList:updated',
-			(message) => {
-				const source = config.value.deckSource;
-				if (source.type === 'broadcast' && source.broadcastDeckListId === message.listId)
-					void loadBroadcastDeck();
-			},
-		);
+		unsubscribeFromEventUpdates = [
+			realtime.onChannel(
+				eventRealtimeChannel(evtId),
+				'broadcastDeckList:updated',
+				(message) => {
+					const source = config.value.deckSource;
+					if (source.type === 'broadcast' && source.broadcastDeckListId === message.listId)
+						void loadBroadcastDeck();
+				},
+			),
+			realtime.onChannel(
+				eventRealtimeChannel(evtId),
+				'player:updated',
+				message => followPlayerUpdate(message.player),
+			),
+		];
 	}, { immediate: true });
 
 	/**
 	 * Reconnect Resync (#307): a message published while this client was suspended
-	 * is simply gone, so coming back re-reads the selected source and, for a Player,
-	 * the roster live-follow watches — a record the reload replaces only reloads
-	 * the deck if it differs from program.
+	 * is simply gone, so coming back re-reads the selected source.
 	 */
 	useReconnectResync(() => {
 		void reloadSelectedSource();
-		const source = config.value.deckSource;
-		const evtId = eventId.value;
-		if (source.type === 'player' && source.playerId !== null && evtId)
-			void playerStore.loadPlayersByEventId(evtId);
 	}, realtime);
 
 	onScopeDispose(() => {
-		unsubscribeFromBroadcastUpdates?.();
+		for (const unsubscribe of unsubscribeFromEventUpdates.splice(0))
+			unsubscribe();
 	});
 
 	return {
