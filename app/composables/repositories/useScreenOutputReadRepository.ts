@@ -1,8 +1,9 @@
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
+import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
 	ScreenOutputFeatureMatchResponse,
 	ScreenOutputMetagameResponse,
+	ScreenOutputPlayerDecksResponse,
 	ScreenOutputStandingsResponse,
 } from '~~/shared/types/screenOutputReads';
 import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
@@ -49,7 +50,7 @@ export function useScreenOutputReadRepository() {
 		featureMatchSlot: (scope: ScreenOutputReadScope, slotId: number) =>
 			read<ScreenOutputFeatureMatchResponse>(scope, `feature-match-slots/${slotId}`),
 		playerDecks: (scope: ScreenOutputReadScope, playerId: number, selection: { deckId?: number } = {}) =>
-			read<{ player: Player; decks: PlayerDeckCollectionResponse }>(
+			read<ScreenOutputPlayerDecksResponse>(
 				scope,
 				`players/${playerId}/decks`,
 				selection.deckId != null ? { deckId: selection.deckId } : undefined,

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCardStore = reactive({
 	setActiveScreen: vi.fn(),
 	loadActiveCard: vi.fn(),
-	readActiveCardAsScreenOutput: vi.fn(),
+	readActiveCardAsScreenOutput: vi.fn((_read: () => Promise<unknown>) => vi.fn()),
 	cardDataDegraded: false,
 });
 const mockApiFetch = vi.hoisted(() => vi.fn());

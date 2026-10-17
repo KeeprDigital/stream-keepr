@@ -21,7 +21,7 @@ const mockState = createMockFeatureMatchState();
 const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map([[1, mockState]]),
 	loadState: vi.fn(),
-	readSessionsAsScreenOutput: vi.fn(),
+	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 	currentEventId: null as number | null,
 };
 

@@ -355,9 +355,9 @@ export function useBroadcastGraphicsModeData() {
 	// It reads that snapshot through its Screen, whatever credential it holds
 	// (#604): a Screen Output has no Session for the Live Control path.
 	const outputReads = useScreenOutputReads();
-	watch(() => screen.value?.id, (screenId) => {
+	watch(() => screen.value?.id, (screenId, _previous, onCleanup) => {
 		if (screenId)
-			sessionStore.readSessionAsScreenOutput(screenId, () => outputReads.liveSession());
+			onCleanup(sessionStore.readSessionAsScreenOutput(screenId, () => outputReads.liveSession()));
 	}, { immediate: true });
 	useBroadcastGraphicsLiveSessionSync(
 		() => (isPreview?.value ? undefined : eventId.value ?? undefined),

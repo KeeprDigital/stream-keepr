@@ -111,12 +111,12 @@ export function buildArchetypeDetailQuery(
  * Screen publishes.
  */
 export function metagameScreenQuery(config: MetagameModeConfig) {
-	const scope = buildMetagameScopeQuery({
+	const scope: MetagameScopeInput = {
 		scope: config.scope,
 		topN: config.topN,
 		minPoints: config.minPoints,
 		playerListId: config.playerListId,
-	});
+	};
 
 	return config.viewMode === 'cards'
 		? {

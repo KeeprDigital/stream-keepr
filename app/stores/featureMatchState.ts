@@ -235,8 +235,13 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	 */
 	let screenOutputRead: ((slotId: number) => Promise<FeatureMatchSessionResponse | null>) | null = null;
 
+	/** Install the rendering's Session read; the answer uninstalls it when the rendering goes away. */
 	function readSessionsAsScreenOutput(read: (slotId: number) => Promise<FeatureMatchSessionResponse | null>) {
 		screenOutputRead = read;
+		return () => {
+			if (screenOutputRead === read)
+				screenOutputRead = null;
+		};
 	}
 
 	async function loadState(eventId: number, matchId: number) {

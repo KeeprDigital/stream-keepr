@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { CounterTypeConfig } from '~~/shared/types/game';
-import type { PlayerDeckCollectionResponse, PlayerDeckResponse } from '~~/shared/types/metagame';
+import type { PlayerDeckResponse } from '~~/shared/types/metagame';
+import type { ScreenOutputPlayerDecksResponse } from '~~/shared/types/screenOutputReads';
 import type { Player } from '~/types';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
@@ -8,7 +9,7 @@ import { getMtgGameData } from '~~/shared/utils/gameData';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 
 /** How a rendering of a Screen reads a Player it shows, with their decks (#604). */
-export type ScreenOutputPlayerDeckReader = (playerId: number) => Promise<{ player: Player; decks: PlayerDeckCollectionResponse }>;
+export type ScreenOutputPlayerDeckReader = (playerId: number) => Promise<ScreenOutputPlayerDecksResponse>;
 
 export function usePlayerDeckCounters(
 	matchId: MaybeRefOrGetter<number>,

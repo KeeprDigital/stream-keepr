@@ -40,9 +40,10 @@ export interface ScreenOutputRead {
  *
  * What a Screen Output may read is what its Screen publishes, so every read is
  * addressed through the Screen: its capability admits it, or an operator embed's
- * Session does (ADR-0010's dual credential). The resource itself is then derived
- * from the Screen's saved configuration by the route, never named by the client,
- * so a capability cannot browse its Event (ADR-0021).
+ * Session does (ADR-0010's dual credential). The route then derives the resource
+ * from the Screen's saved configuration, or — for the two reads whose client
+ * names it — checks the name against that configuration, so a capability cannot
+ * browse its Event (ADR-0021).
  *
  * Answers are `private, no-store`: they are this Screen's current rendering and
  * must not outlive a rotation in some intermediary's cache.
@@ -56,6 +57,21 @@ export async function requireScreenOutputRead(event: H3Event): Promise<ScreenOut
 
 	setResponseHeader(event, 'cache-control', 'private, no-store');
 	return { eventId, screen, reader };
+}
+
+/**
+ * Admit a read of one mode's data, and resolve that mode's saved configuration.
+ *
+ * A Screen publishes the data of the mode it is in, not of every mode it holds
+ * configuration for: a capability reaches a mode's read only while the Screen is
+ * in that mode. A Session reaches it regardless, as it reaches the Event.
+ */
+export async function requireScreenOutputModeRead<M extends ScreenMode>(event: H3Event, mode: M) {
+	const read = await requireScreenOutputRead(event);
+	if (read.reader === 'capability' && read.screen.currentMode !== mode)
+		screenOutputReadNotFound();
+
+	return { ...read, config: screenOutputModeConfig(read.screen, mode) };
 }
 
 /** The saved configuration of one mode, completed with its defaults as an output renders it. */
@@ -73,9 +89,9 @@ export function screenOutputFeatureMatchSlotId(screen: DbScreen): number | null 
 /**
  * Admit a read of one Feature Match Slot through a Screen.
  *
- * The one read whose client names its resource, because the Feature Match
- * Overlay's editor preview renders a Slot its author has not saved yet. A
- * capability still reaches only the Slot its Screen's current mode shows.
+ * Its client names the Slot, because the Feature Match Overlay's editor preview
+ * renders one its author has not saved yet. A capability still reaches only the
+ * Slot its Screen's current mode shows.
  */
 export async function requireScreenOutputFeatureMatchSlot(event: H3Event, slotId: number) {
 	const read = await requireScreenOutputRead(event);

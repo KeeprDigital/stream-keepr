@@ -1,13 +1,13 @@
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
 import { metagameReadModel } from '~~/server/modules/metagame/readModel';
 import { metagameArchetypesQuerySchema, metagameCardsQuerySchema } from '~~/server/schemas/api/metagame';
-import { requireScreenOutputRead, screenOutputModeConfig } from '~~/server/utils/screenOutputRead';
+import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
 import { metagameScreenQuery } from '~~/shared/utils/metagameQuery';
 
 /** The breakdown this Screen's Metagame mode renders, derived from its saved configuration (#604). */
 export default defineEventHandler(async (event): Promise<ScreenOutputMetagameResponse> => {
-	const { eventId, screen } = await requireScreenOutputRead(event);
-	const request = metagameScreenQuery(screenOutputModeConfig(screen, 'metagame'));
+	const { eventId, config } = await requireScreenOutputModeRead(event, 'metagame');
+	const request = metagameScreenQuery(config);
 	const readModel = metagameReadModel();
 
 	return request.viewMode === 'cards'

@@ -19,7 +19,7 @@ const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map<number, unknown>(),
 	currentEventId: null as number | null,
 	loadState: vi.fn(),
-	readSessionsAsScreenOutput: vi.fn(),
+	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 };
 const mockConnectionState = ref('connected');
 const mockApiFetch = vi.hoisted(() => vi.fn());

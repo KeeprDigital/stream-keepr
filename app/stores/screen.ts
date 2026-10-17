@@ -162,7 +162,7 @@ export const useScreenStore = defineStore('screen', () => {
 				return null;
 			const kept = keptRevision(screen);
 			activeScreen.value = kept;
-			activeScreenLookup.value = { slug, assetCapability: assetCapability ?? null };
+			activeScreenLookup.value = { assetCapability: assetCapability ?? null };
 			return kept;
 		}
 		catch (caughtError) {

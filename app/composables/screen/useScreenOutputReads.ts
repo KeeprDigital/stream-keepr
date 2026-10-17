@@ -45,6 +45,9 @@ export function useScreenOutputReads() {
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		featureMatchSlot: (slotId: number) => repository.featureMatchSlot(requireScope(), slotId),
+		/** The Slot's Feature Match Session, or `null` while it has none — never started by reading. */
+		featureMatchSession: async (slotId: number) =>
+			(await repository.featureMatchSlot(requireScope(), slotId)).slot.activeSession ?? null,
 		playerDecks: (playerId: number, selection?: { deckId?: number }) =>
 			repository.playerDecks(requireScope(), playerId, selection),
 	};

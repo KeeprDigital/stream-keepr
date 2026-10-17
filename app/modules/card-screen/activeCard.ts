@@ -40,8 +40,13 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	 */
 	let screenOutputRead: (() => Promise<MtgCard | null>) | null = null;
 
+	/** Install the rendering's Card read; the answer uninstalls it when the rendering goes away. */
 	function readAsScreenOutput(read: () => Promise<MtgCard | null>) {
 		screenOutputRead = read;
+		return () => {
+			if (screenOutputRead === read)
+				screenOutputRead = null;
+		};
 	}
 
 	function expireCard() {

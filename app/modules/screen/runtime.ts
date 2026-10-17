@@ -39,9 +39,8 @@ export interface ScreenPresenceInfo {
 	members: RealtimePresenceMessage<ScreenPresenceData>[];
 }
 
-/** How the active Screen was looked up, so an announcement can look it up the same way. */
+/** The credential the active Screen was looked up with, so an announcement re-reads it the same way. */
 export interface ActiveScreenLookup {
-	slug: string;
 	assetCapability: string | null;
 }
 
@@ -498,14 +497,15 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	/**
-	 * The active Screen is re-read the way it was first read: a Screen Output holds
-	 * no Session for the operator's Screen-by-id path, which used to refuse it here
-	 * silently, so an output never saw a mode or configuration change (#604).
+	 * The active Screen is re-read through the Screen Output path, with the
+	 * credential it was first read with: a Screen Output holds no Session for the
+	 * operator's Screen-by-id path, which used to refuse it here silently, so an
+	 * output never saw a mode or configuration change (#604).
 	 */
 	function fetchAnnouncedScreen(eventId: number, screenId: number) {
 		const lookup = state.activeScreenLookup.value;
 		if (lookup && state.activeScreen.value?.id === screenId)
-			return screenRepo.getBySlug(eventId, lookup.slug, lookup.assetCapability);
+			return screenRepo.getScreenOutputById(eventId, screenId, lookup.assetCapability);
 		return screenRepo.getById(eventId, screenId);
 	}
 

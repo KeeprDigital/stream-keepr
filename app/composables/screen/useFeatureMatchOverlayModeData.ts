@@ -21,8 +21,7 @@ export function useFeatureMatchOverlayModeData() {
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
 	const outputReads = useScreenOutputReads();
-	featureMatchStateStore.readSessionsAsScreenOutput(async slotId =>
-		(await outputReads.featureMatchSlot(slotId)).slot.activeSession ?? null);
+	onScopeDispose(featureMatchStateStore.readSessionsAsScreenOutput(outputReads.featureMatchSession));
 	const sourceMatch = ref<Match | null>(null);
 
 	const displayData = useBroadcastDisplayData<null>({ initialData: null });

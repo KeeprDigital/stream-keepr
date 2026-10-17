@@ -30,13 +30,21 @@ describe('capability-only Screen Output reads', () => {
 	let neighbourCapability: string;
 
 	function outputPath(resource: string, screenId = screen.id) {
-		return `/api/screen-output/events/${eventId}/screens/${screenId}/${resource}`;
+		return `/api/screen-output/events/${eventId}/screens/${screenId}${resource ? `/${resource}` : ''}`;
 	}
 
 	async function asOutput<T>(resource: string, credential: string | null = capability): Promise<JsonResponse<T>> {
 		return await readJson<T>(await anonymousFetch(outputPath(resource), {
 			headers: credential ? bearer(credential) : undefined,
 		}));
+	}
+
+	/** Put the Screen in a mode: a capability reaches a mode's data only while its Screen is in that mode. */
+	async function setMode(mode: string) {
+		screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screen.id}`, {
+			method: 'PATCH',
+			body: { currentMode: mode, stateVersion: screen.stateVersion },
+		});
 	}
 
 	async function setModeConfig(mode: string, config: Record<string, unknown>) {
@@ -160,6 +168,9 @@ describe('capability-only Screen Output reads', () => {
 				body: { playerId: player.id },
 			});
 
+			const byId = await output.read<ScreenResponse>('');
+			expect(byId.data).toMatchObject({ id: output.screen.id, currentMode: 'player-history' });
+
 			const refreshed = await lookup();
 			expect(refreshed.data).toMatchObject({
 				currentMode: 'player-history',
@@ -196,6 +207,8 @@ describe('capability-only Screen Output reads', () => {
 				},
 			});
 
+			expect((await asOutput('card')).status).toBe(404);
+			await setMode('card');
 			const { status, data } = await asOutput<{ name: string }>('card');
 
 			expect(status).toBe(200);
@@ -231,6 +244,7 @@ describe('capability-only Screen Output reads', () => {
 				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
 			});
 
+			await setMode('standings');
 			await setModeConfig('standings', { viewMode: 'all' });
 			const current = await asOutput<ScreenOutputStandingsResponse>('standings');
 
@@ -252,6 +266,7 @@ describe('capability-only Screen Output reads', () => {
 
 	describe('metagame and Top Cards', () => {
 		it('reads the breakdown the saved Metagame view renders, following a change of view', async () => {
+			await setMode('metagame');
 			await setModeConfig('metagame', { viewMode: 'archetype', scope: 'all' });
 			const archetypes = await asOutput<{ viewMode: string; breakdown: unknown }>('metagame');
 			const operatorArchetypes = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', sortBy: 'metaShare' } });
@@ -266,6 +281,7 @@ describe('capability-only Screen Output reads', () => {
 		});
 
 		it('reads the card breakdown the saved Top Cards configuration renders', async () => {
+			await setMode('top-cards');
 			await setModeConfig('top-cards', { scope: 'all', limit: 5 });
 			const { status, data } = await asOutput('top-cards');
 
@@ -340,6 +356,7 @@ describe('capability-only Screen Output reads', () => {
 				body: { name: 'History Player' },
 			});
 
+			await setMode('player-history');
 			expect((await asOutput('player-history')).status).toBe(404);
 
 			await setModeConfig('player-history', { playerId: player.id });
@@ -348,6 +365,12 @@ describe('capability-only Screen Output reads', () => {
 			expect(status).toBe(200);
 			expect(data.player).toMatchObject({ id: player.id, name: 'History Player' });
 			expect(data.history).toEqual([]);
+
+			// The configuration stays saved, but a Screen in another mode no longer
+			// publishes it.
+			await setMode('background');
+			expect((await asOutput('player-history')).status).toBe(404);
+			expect((await asOutput('standings')).status).toBe(404);
 		});
 	});
 });

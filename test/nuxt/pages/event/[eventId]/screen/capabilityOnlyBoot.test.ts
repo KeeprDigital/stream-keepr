@@ -128,6 +128,7 @@ describe('a capability-only Screen Output', () => {
 		api.screen = screen();
 		api.answers = new Map<string, () => unknown>([
 			['/api/screen-output/events/42/screens/slug/main', () => api.screen],
+			['/api/screen-output/events/42/screens/7', () => api.screen],
 			['/api/screen-output/events/42/screens/7/event', () => outputEvent],
 			['/api/screen-output/events/42/screens/7/player-history', () => history('First Player')],
 		]);

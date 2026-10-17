@@ -1,5 +1,5 @@
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
-import { requireScreenOutputRead } from '~~/server/utils/screenOutputRead';
+import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
 
 /**
  * The authoritative Broadcast Graphics Live Session snapshot, for this Screen's
@@ -7,6 +7,6 @@ import { requireScreenOutputRead } from '~~/server/utils/screenOutputRead';
  * announces that it has moved on.
  */
 export default defineEventHandler(async (event) => {
-	const { eventId, screen } = await requireScreenOutputRead(event);
+	const { eventId, screen } = await requireScreenOutputModeRead(event, 'broadcast-graphics');
 	return await broadcastGraphicsLiveSessionModule().loadSession(eventId, screen.id);
 });

@@ -8,8 +8,7 @@ export function useFeatureMatchModeData() {
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
 	const outputReads = useScreenOutputReads();
-	featureMatchStateStore.readSessionsAsScreenOutput(async slotId =>
-		(await outputReads.featureMatchSlot(slotId)).slot.activeSession ?? null);
+	onScopeDispose(featureMatchStateStore.readSessionsAsScreenOutput(outputReads.featureMatchSession));
 
 	const displayData = useBroadcastDisplayData<null>({ initialData: null });
 	const loading = displayData.loading;
