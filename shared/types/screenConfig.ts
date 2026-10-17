@@ -919,6 +919,22 @@ export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConf
 }
 
 /**
+ * One mode's saved configuration completed with its defaults — what a rendering
+ * of that mode reads. The client's `useScreenModeConfig` and the server's Screen
+ * Output reads both resolve through here, so the two cannot disagree about which
+ * resource a Screen publishes (#604).
+ */
+export function resolveScreenModeConfig<T extends ScreenMode>(
+	modeConfigs: ModeConfigsMap | null | undefined,
+	mode: T,
+): ModeConfigTypeMap[T] {
+	return {
+		...getDefaultConfigForMode(mode),
+		...modeConfigs?.[mode],
+	};
+}
+
+/**
  * Returns the display-only defaults for a mode. Used by "Reset to Defaults", so
  * it omits every key a reset must preserve — data bindings such as
  * `featureMatchId`, and authored content such as a Broadcast Graphics Screen's
