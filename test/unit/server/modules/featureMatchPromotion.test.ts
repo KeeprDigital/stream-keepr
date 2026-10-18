@@ -32,6 +32,7 @@ vi.mock('~~/server/db', () => ({
 vi.mock('~~/server/services/match', () => ({
 	matchService: () => mockMatchService,
 	buildMatchPromotionPlan: (...args: unknown[]) => mockBuildMatchPromotionPlan(...args),
+	isMatchPromotionPlanStaleViolation: (error: unknown) => error instanceof Error && error.message.includes('feature_match_slots.event_id'),
 }));
 vi.mock('~~/server/services/featureMatch', () => ({
 	featureMatchService: () => mockFeatureMatchService,
