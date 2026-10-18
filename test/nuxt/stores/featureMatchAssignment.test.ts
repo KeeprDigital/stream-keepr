@@ -165,4 +165,56 @@ describe('useFeatureMatchAssignmentStore', () => {
 		expect(mockRepo.listByRound).toHaveBeenCalledOnce();
 		expect(mockRepo.listByRound).toHaveBeenCalledWith(1, 11);
 	});
+
+	/**
+	 * A save is answered for the Event it was made in. Neither another Event nor the
+	 * same Event loaded afresh since is the lifetime that answer belongs to, so it may
+	 * not replace a Round's Assignments there (#606).
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('a save answered after the operator moved on to %s', (_, switches) => {
+		/** Ends on Round 10 loaded, as Event A's own is when loaded again. */
+		async function switchAway() {
+			let shown!: FeatureMatchAssignment[];
+			for (const eventId of switches) {
+				shown = [assignment({ id: 1, eventId, roundId: 10, note: `Loaded for ${eventId}` })];
+				store.$reset();
+				store.consumeRound(eventId, 10);
+				mockRepo.listByRound.mockResolvedValueOnce(structuredClone(shown));
+				await store.loadAssignments(eventId, 10);
+			}
+			return shown;
+		}
+
+		it('a late create or update replaces no Assignment', async () => {
+			mockRepo.listByRound.mockResolvedValueOnce([assignment({ id: 1, roundId: 10 })]);
+			store.consumeRound(1, 10);
+			await store.loadAssignments(1, 10);
+			const created = deferred<FeatureMatchAssignment>();
+			const updated = deferred<FeatureMatchAssignment>();
+			mockRepo.create.mockReturnValueOnce(created.promise);
+			mockRepo.update.mockReturnValueOnce(updated.promise);
+
+			const saving = store.saveAssignment(1, { roundId: 10, slotId: 101, matchId: 1001 } as any);
+			const updating = store.updateAssignment(1, 1, { note: 'Saved before the switch' });
+			const shown = await switchAway();
+			created.resolve(assignment({ id: 2, roundId: 10, slotId: 101, matchId: 1001 }));
+			updated.resolve(assignment({ id: 1, roundId: 10, note: 'Saved before the switch' }));
+			await Promise.all([saving, updating]);
+
+			expect(store.assignmentsForRound(10)).toEqual(shown);
+		});
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

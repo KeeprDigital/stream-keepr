@@ -40,16 +40,33 @@ vi.mock('~/stores/screen', async () => {
 });
 
 /**
- * The Event already loaded, which is the state an output that navigated here is in.
+ * The output's Event context already held, which is the state an output is in once
+ * its display session has read it through its Screen.
  *
- * `event.id` has to match the route's or there is no route left to test: the global
- * Event middleware treats a mismatch as an Event switch, tries to load the Event
- * itself, and redirects to `/` when it still has none — taking the page out from
- * under the test. Supplying the loaded Event is what a real navigation to this URL
- * has already done by the time the output page renders.
+ * The global Event middleware leaves this page alone (#604), so no operator Event
+ * is loaded and `event` stays null: a rendering of a Screen holds only the output
+ * context, and `eventId` names its Event from that. `capabilityOnlyBoot.test.ts`
+ * drives the real store and the reads themselves.
  */
 vi.mock('~/stores/event', () => ({
-	useEventStore: () => ({ eventId: 42, event: { id: 42 }, loadEvent: async () => {} }),
+	useEventStore: () => ({
+		eventId: 42,
+		event: null,
+		outputEvent: { id: 42 },
+		displayEvent: { id: 42 },
+		loadEvent: async () => {},
+		setOutputEvent: () => {},
+	}),
+}));
+
+/**
+ * The Event context an output reads through its Screen (#604). What this suite is
+ * about is media resolution, so the context is answered and otherwise left alone.
+ */
+vi.mock('~/composables/repositories/useScreenOutputReadRepository', () => ({
+	useScreenOutputReadRepository: () => ({
+		event: async () => ({ id: 42 }),
+	}),
 }));
 
 vi.mock('~/composables/core/useRealtime', () => {
@@ -92,6 +109,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	socialProfilePresentations: () => ({}),
 	playoutState: () => 'on-air',
 	loadSession: () => {},
+	readSessionAsScreenOutput: () => {},
 }));
 
 const wordmark: MediaGraphicItemConfig = {

@@ -402,6 +402,94 @@ describe('usePlayerListStore', () => {
 		});
 	});
 
+	// ── Writes that outlive their Event (#606) ──
+
+	/**
+	 * A Player List write is answered for the Event it was made in. Neither another
+	 * Event nor the same Event loaded afresh since — whose Lists carry the same ids — is
+	 * the lifetime it belongs to, so neither its answer nor its rollback lands there.
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('a Player List write answered after the operator moved on to %s', (_, switches) => {
+		/** Ends on Lists 1 and 2 with members cached, as Event A's own are when loaded again. */
+		async function switchAway() {
+			for (const eventId of switches) {
+				store.$reset();
+				mockRepo.list.mockResolvedValueOnce([
+					createSummary({ id: 1, eventId, memberCount: 5 }),
+					createSummary({ id: 2, eventId, memberCount: 9 }),
+				]);
+				mockRepo.getMemberIds.mockResolvedValue([7]);
+				await store.loadByEventId(eventId);
+			}
+			return { lists: structuredClone(toRaw(store.lists)), members: new Map(store.membersByListId) };
+		}
+
+		function inEventA() {
+			store.lists = [createSummary({ id: 2, memberCount: 1 }), createSummary({ id: 1, memberCount: 2 })];
+			store.membersByListId.set(1, [10, 20]);
+			store.membersByListId.set(2, [30]);
+		}
+
+		it('late member writes change no List and no cached members, whether they succeed or fail', async () => {
+			inEventA();
+			const added = deferred<{ added: number; memberCount: number }>();
+			const removed = deferred<never>();
+			const batchRemoved = deferred<never>();
+			const reordered = deferred<never>();
+			mockRepo.addMembers.mockReturnValueOnce(added.promise);
+			mockRepo.removeMember.mockReturnValueOnce(removed.promise);
+			mockRepo.batchRemoveMembers.mockReturnValueOnce(batchRemoved.promise);
+			mockRepo.reorderMembers.mockReturnValueOnce(reordered.promise);
+
+			const writes = [
+				store.addMembers(1, 1, [40]),
+				store.removeMember(1, 2, 30),
+				store.batchRemoveMembers(1, 1, [10]),
+				store.reorderMembers(1, 1, [20, 10]),
+			];
+			const shown = await switchAway();
+			added.resolve({ added: 1, memberCount: 3 });
+			removed.reject(new Error('Remove refused'));
+			batchRemoved.reject(new Error('Batch remove refused'));
+			reordered.reject(new Error('Reorder refused'));
+			await Promise.all(writes);
+
+			expect(store.lists).toEqual(shown.lists);
+			expect(store.membersByListId).toEqual(shown.members);
+			expect(store.error).toBeNull();
+		});
+
+		it('a late failed List delete puts back no List and no cached members', async () => {
+			inEventA();
+			const remove = deferred<never>();
+			mockRepo.remove.mockReturnValueOnce(remove.promise);
+
+			const removing = store.removeList(1, 1);
+			const shown = await switchAway();
+			remove.reject(new Error('Delete refused'));
+			await removing;
+
+			expect(store.lists).toEqual(shown.lists);
+			expect(store.membersByListId).toEqual(shown.members);
+			expect(store.error).toBeNull();
+		});
+
+		it('a late member read caches nothing', async () => {
+			const read = deferred<number[]>();
+			mockRepo.getMemberIds.mockReturnValueOnce(read.promise);
+
+			const reading = store.loadListMembers(1, 1);
+			const shown = await switchAway();
+			read.resolve([10, 20]);
+			await reading;
+
+			expect(store.membersByListId).toEqual(shown.members);
+		});
+	});
+
 	// ── $reset ──
 
 	describe('$reset', () => {
@@ -432,3 +520,13 @@ describe('usePlayerListStore', () => {
 		});
 	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

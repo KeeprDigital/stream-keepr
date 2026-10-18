@@ -51,6 +51,13 @@ export const useMeleeStore = defineStore('melee', () => {
 	const error = ref<string | null>(null);
 	const lastOperation = ref<MeleeOperationResult | null>(null);
 	const activeCommandPromises = new Map<string, Promise<unknown>>();
+	/**
+	 * The Event Lifetime an operation's answer belongs to, begun afresh by each reset, so
+	 * an operation answered after the operator moved on — even back to this Event —
+	 * reloads nothing, reports nothing, and answers no operation started since (ADR-0024).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 	let setupStepResetTimer: ReturnType<typeof setTimeout> | null = null;
 	let syncStepResetTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -266,12 +273,15 @@ export const useMeleeStore = defineStore('melee', () => {
 			return { status: 'guard-failed', error: preconditionFailure.error };
 		}
 		const eventId = eventStore.eventId;
+		const flight = lifetime;
 		let projectionRefreshErrors: string[] = [];
 
 		const response = await executeReporting(
 			async () => {
 				config.steps?.start();
 				const response = await config.apiCall(eventId);
+				if (flight.stale)
+					return response;
 				config.steps?.loading();
 				projectionRefreshErrors = await refreshLocalProjection(config.refreshTasks(eventId, response));
 				config.steps?.finish(response);
@@ -280,9 +290,16 @@ export const useMeleeStore = defineStore('melee', () => {
 			{
 				loadingRef: config.loadingRef,
 				errorRef: error,
+				flight,
 				onError: config.steps ? () => { config.steps!.fail(); } : undefined,
 			},
 		);
+
+		if (flight.stale) {
+			return response && config.isSuccess(response)
+				? { status: 'success', response, projectionRefreshErrors }
+				: { status: 'failure', response: response ?? null, error: config.failureDescription(response ?? null), projectionRefreshErrors };
+		}
 
 		if (!response)
 			await refreshEventState();
@@ -595,6 +612,8 @@ export const useMeleeStore = defineStore('melee', () => {
 	}
 
 	function $reset() {
+		lifetime = lifetimes.begin();
+		activeCommandPromises.clear();
 		syncing.value = false;
 		syncingPlayers.value = false;
 		syncingDecklists.value = false;

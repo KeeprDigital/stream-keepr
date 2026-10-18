@@ -7,22 +7,32 @@ import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 
-const mockEventStore = { event: null };
+const mockEventStore = { event: null, displayEvent: null };
 const mockFeatureMatchStore = {
 	featureMatches: [] as { id: number; matchId: number | null }[],
 	currentEventId: null as number | null,
 	isLoaded: true,
 	loadFeatureMatchesByEventId: vi.fn(),
+	holdFeatureMatch: vi.fn(),
 };
 const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map<number, unknown>(),
 	currentEventId: null as number | null,
 	loadState: vi.fn(),
+	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 };
-const mockPhaseStore = { isLoaded: true, loadPhasesByEventId: vi.fn(), getPhaseById: vi.fn() };
-const mockRoundStore = { isLoaded: true, loadRoundsByEventId: vi.fn(), getRoundById: vi.fn() };
-const mockMatchRepository = { getById: vi.fn().mockResolvedValue(null) };
 const mockConnectionState = ref('connected');
+const mockApiFetch = vi.hoisted(() => vi.fn());
+
+/** What the Screen Output read answers for a Slot following Match 300. */
+function slotRead(slotId: number) {
+	return {
+		slot: { id: slotId, matchId: 300, activeSession: { id: 90, slotId } },
+		match: { id: 300, roundId: 20 },
+		round: { id: 20, name: 'Round 3', phaseId: 5 },
+		phase: { id: 5, name: 'Swiss' },
+	};
+}
 
 mockNuxtImport('tryUseRealtime', () => () => ({
 	get connectionState() { return mockConnectionState.value; },
@@ -31,9 +41,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
-mockNuxtImport('usePhaseStore', () => () => mockPhaseStore);
-mockNuxtImport('useRoundStore', () => () => mockRoundStore);
-mockNuxtImport('useMatchRepository', () => () => mockMatchRepository);
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 /**
  * A Feature Match Layout identified by the id of its one Source Item, so a
@@ -95,9 +103,15 @@ describe('useFeatureMatchOverlayModeData', () => {
 		mockFeatureMatchStore.isLoaded = true;
 		mockFeatureMatchStateStore.featureMatchStates = new Map();
 		mockFeatureMatchStateStore.currentEventId = 7;
-		mockPhaseStore.isLoaded = true;
-		mockRoundStore.isLoaded = true;
-		mockMatchRepository.getById.mockResolvedValue(null);
+		mockFeatureMatchStore.holdFeatureMatch.mockImplementation((slot: { id: number; matchId: number | null }) => {
+			mockFeatureMatchStore.featureMatches = [slot];
+		});
+		mockApiFetch.mockImplementation(async (path: string) => {
+			const slotId = Number(/feature-match-slots\/(\d+)$/.exec(path)?.[1]);
+			if (!slotId)
+				throw new Error(`unexpected request ${path}`);
+			return slotRead(slotId);
+		});
 		mockConnectionState.value = 'connected';
 	});
 
@@ -199,6 +213,67 @@ describe('useFeatureMatchOverlayModeData', () => {
 	});
 
 	/**
+	 * A Screen Output holds no Session for the operator's Slot, Round, Phase and
+	 * Match reads, so the Slot it shows comes through its Screen, carrying the
+	 * Match, Round and Phase it follows (#604).
+	 */
+	describe('the Slot a live Screen Output shows', () => {
+		function boundConfig(featureMatchId: number) {
+			const config = layoutNamed('saved-source');
+			config.featureMatchId = featureMatchId;
+			return config;
+		}
+
+		it('reads it through the Screen, holds it, and renders its Match, Round and Phase', async () => {
+			const { wrapper, data } = mountOverlay({
+				isPreview: ref(false),
+				screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': boundConfig(11) } } as never),
+			});
+			await flushPromises();
+
+			expect(mockApiFetch).toHaveBeenCalledWith(
+				'/api/screen-output/events/7/screens/42/feature-match-slots/11',
+				expect.anything(),
+			);
+			expect(mockApiFetch.mock.calls.every(([path]) => String(path).startsWith('/api/screen-output/'))).toBe(true);
+			expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenCalledWith(expect.objectContaining({ id: 11 }));
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
+			expect(data().sourceMatch.value).toMatchObject({ id: 300 });
+			expect(data().round.value).toMatchObject({ name: 'Round 3' });
+			expect(data().phase.value).toMatchObject({ name: 'Swiss' });
+			wrapper.unmount();
+		});
+
+		it('reads Session state through the Screen and never starts a Session', async () => {
+			const { wrapper } = mountOverlay({
+				isPreview: ref(false),
+				screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': boundConfig(11) } } as never),
+			});
+			await flushPromises();
+
+			const read = mockFeatureMatchStateStore.readSessionsAsScreenOutput.mock.calls[0]?.[0] as
+				(slotId: number) => Promise<unknown>;
+			await expect(read(11)).resolves.toEqual({ id: 90, slotId: 11 });
+			expect(mockApiFetch.mock.calls.every(([, options]) => !(options as { method?: string } | undefined)?.method)).toBe(true);
+			wrapper.unmount();
+		});
+
+		it('reads the Slot an editor preview pushes, which its author has not saved', async () => {
+			const { wrapper } = mountOverlay({ isPreview: ref(true) });
+			await flushPromises();
+
+			pushPreviewConfig(boundConfig(12));
+			await flushPromises();
+
+			expect(mockApiFetch).toHaveBeenCalledWith(
+				'/api/screen-output/events/7/screens/42/feature-match-slots/12',
+				expect.anything(),
+			);
+			wrapper.unmount();
+		});
+	});
+
+	/**
 	 * Whether the canonical Feature Match Sample Dataset stands in for the Feature
 	 * Match this rendering does not have.
 	 *
@@ -274,13 +349,12 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await flushPromises();
 		}
 
-		it('re-reads Session state that the ordinary loader would have skipped', async () => {
+		it('re-reads Session state through the store\'s loader', async () => {
 			const { wrapper } = mountBoundOutput();
 			await flushPromises();
 
-			// The loader is guarded on the Slot's state already being cached for this
-			// Event, so it fetched nothing on mount — and that cache is the stale thing
-			// a resync exists to correct.
+			// Mounting reads the Slot through the Screen and asks the store for nothing;
+			// a resync must still re-read, because the held state is what is stale.
 			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
 
 			await suspendAndResume();

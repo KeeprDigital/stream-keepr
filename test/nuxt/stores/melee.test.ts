@@ -663,4 +663,72 @@ describe('useMeleeStore', () => {
 			expect(store.error).toBeNull();
 		});
 	});
+
+	/**
+	 * A Melee operation is answered for the Event it ran against. Neither another Event
+	 * nor the same Event loaded afresh since is the lifetime that answer belongs to, so
+	 * it may not reload that Event's data, report into its banner, or answer a new
+	 * operation started there (ADR-0024).
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('an operation answered after the operator moved on to %s', (_, switches) => {
+		function switchAway() {
+			for (const eventId of switches) {
+				store.$reset();
+				setEvent({ id: eventId });
+			}
+		}
+
+		it('a late success reloads nothing and reports nothing', async () => {
+			setEvent();
+			const sync = deferred<unknown>();
+			mockEventRepo.syncMelee.mockReturnValueOnce(sync.promise);
+
+			const syncing = store.syncEvent();
+			switchAway();
+			sync.resolve({ success: true, event: { name: 'Test Event' }, phases: 2, rounds: 7 });
+			await syncing;
+
+			expect(mockEventState.loadEvent).not.toHaveBeenCalled();
+			expect(mockPhaseStore.loadPhasesByEventId).not.toHaveBeenCalled();
+			expect(mockRoundStore.loadRoundsByEventId).not.toHaveBeenCalled();
+			expect(store.lastOperation).toBeNull();
+			expect(store.syncing).toBe(false);
+		});
+
+		it('a late failure reloads nothing and reports nothing', async () => {
+			setEvent();
+			const sync = deferred<never>();
+			mockEventRepo.syncMelee.mockReturnValueOnce(sync.promise);
+
+			const syncing = store.syncEvent();
+			switchAway();
+			sync.reject(new Error('Melee refused the sync'));
+			await syncing;
+
+			expect(mockEventState.loadEvent).not.toHaveBeenCalled();
+			expect(store.lastOperation).toBeNull();
+			expect(store.error).toBeNull();
+		});
+
+		it('a new operation is not answered by the one still running for the earlier lifetime', async () => {
+			setEvent();
+			const earlier = deferred<unknown>();
+			mockEventRepo.syncMelee
+				.mockReturnValueOnce(earlier.promise)
+				.mockResolvedValueOnce({ success: true, event: { name: 'Current Event' }, phases: 1, rounds: 1 });
+
+			const earlierSync = store.syncEvent();
+			switchAway();
+			const currentSync = await store.syncEvent();
+			earlier.resolve({ success: true, event: { name: 'Earlier Event' }, phases: 2, rounds: 7 });
+			await earlierSync;
+
+			expect(mockEventRepo.syncMelee).toHaveBeenLastCalledWith(switches.at(-1));
+			expect(currentSync).toEqual(expect.objectContaining({ event: { name: 'Current Event' } }));
+			expect(store.lastOperation?.description).toBe('Synced event structure for Current Event');
+		});
+	});
 });

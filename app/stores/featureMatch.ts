@@ -42,6 +42,19 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		return data;
 	}
 
+	/**
+	 * Hold one Slot a Screen Output read answered (#604), with its Session, so
+	 * `featureMatch:updated` keeps it live without loading the Event's Slots.
+	 */
+	function holdFeatureMatch(slot: FeatureMatch) {
+		const index = featureMatches.value.findIndex(held => held.id === slot.id);
+		if (index === -1)
+			featureMatches.value.push(slot);
+		else
+			featureMatches.value[index] = slot;
+		useFeatureMatchStateStore().cacheSlotSession(slot);
+	}
+
 	async function getFeatureMatchById(eventId: number, matchId: number) {
 		return executeReporting(
 			async () => {
@@ -56,15 +69,17 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	async function createFeatureMatch(eventId: number, input: CreateFeatureMatchInput) {
+		const flight = lifecycle.currentLifetime();
 		const createdMatch = await lifecycle.create(eventId, input);
-		if (createdMatch)
+		if (createdMatch && flight.current)
 			useFeatureMatchStateStore().cacheSlotSession(createdMatch);
 		return createdMatch;
 	}
 
 	async function updateFeatureMatch(eventId: number, matchId: number, updates: UpdateFeatureMatchInput) {
+		const flight = lifecycle.currentLifetime();
 		const updated = await lifecycle.update(eventId, matchId, updates);
-		if (updated)
+		if (updated && flight.current)
 			useFeatureMatchStateStore().cacheSlotSession(updated);
 		return updated;
 	}
@@ -92,12 +107,14 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		featureMatches.value[swapIndex] = temp;
 
 		const eventId = currentEventId.value;
+		const flight = lifecycle.currentLifetime();
 		return executeReporting(
 			async () => {
 				await matchRepo.reorder(eventId, slotId, direction);
 			},
 			{
 				errorRef: error,
+				flight,
 				onError: () => {
 					featureMatches.value = snapshot;
 				},
@@ -147,6 +164,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 
 		// Actions
 		loadFeatureMatchesByEventId,
+		holdFeatureMatch,
 		getFeatureMatchById,
 		createFeatureMatch,
 		updateFeatureMatch,
@@ -156,6 +174,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		applyRemoteUpdated,
 		applyRemoteDeleted,
 		applyRemoteReordered,
+		currentLifetime: lifecycle.currentLifetime,
 		$reset,
 	};
 });

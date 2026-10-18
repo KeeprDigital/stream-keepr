@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 
 const mockPlayer: {
 	lifeTotal: number;
@@ -58,6 +58,17 @@ mockNuxtImport('usePlayerDisplayConfig', () => () => ({
 	activePlayerTrackingEnabled: computed(() => false),
 	seatLabel: computed(() => undefined),
 }));
+
+/**
+ * The control Screen reads its Players' decks through the Screen (#604): the
+ * counter types it offers come from a reader the Screen Output read backs.
+ */
+const { mockPlayerDecks, mockUsePlayerDeckCounters } = vi.hoisted(() => ({
+	mockPlayerDecks: vi.fn(),
+	mockUsePlayerDeckCounters: vi.fn(),
+}));
+mockNuxtImport('useScreenOutputReads', () => () => ({ playerDecks: mockPlayerDecks }));
+mockNuxtImport('usePlayerDeckCounters', () => mockUsePlayerDeckCounters);
 
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 	$reset: vi.fn(),
@@ -126,6 +137,18 @@ describe('screenFeatureMatchPlayerSide', () => {
 		mockPronouns = undefined;
 		mockRecord = undefined;
 		mockPlayer.counters = [];
+		mockPlayerDecks.mockReset();
+		mockUsePlayerDeckCounters.mockReset().mockImplementation(() => ({ availableCounterTypes: ref(undefined) }));
+	});
+
+	it('reads its Player\'s deck counters through the Screen Output read', async () => {
+		await mountComponent({ matchId: 4, playerSide: 'player2' });
+
+		const [matchId, playerSide, read] = mockUsePlayerDeckCounters.mock.calls[0]! as [() => number, () => string, (id: number) => unknown];
+		expect(matchId()).toBe(4);
+		expect(playerSide()).toBe('player2');
+		void read(9);
+		expect(mockPlayerDecks).toHaveBeenCalledWith(9);
 	});
 
 	it('passes vertical touch-oriented game win controls to the screen layout', async () => {

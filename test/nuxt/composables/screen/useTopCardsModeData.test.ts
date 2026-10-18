@@ -93,33 +93,29 @@ describe('useTopCardsModeData', () => {
 		expect(headerText.value).toBe('The Chase Cards');
 	});
 
-	it('fetches the cards endpoint with board, sort, limit, and joined excludeTypes', async () => {
+	it('reads the card breakdown through the Screen', async () => {
 		const { fetchData } = useTopCardsModeData();
 		await fetchData();
 
+		// The server derives board, sort, limit and excluded types from the saved
+		// configuration, so the client names only the Screen resource.
 		expect(mockFetch).toHaveBeenLastCalledWith(
-			expect.stringContaining('/api/events/1/metagame/cards'),
-			{
-				query: expect.objectContaining({
-					scope: 'all',
-					board: 'mainboard',
-					sortBy: 'inclusionRate',
-					limit: 10,
-					excludeTypes: 'Land',
-				}),
-			},
+			'/api/screen-output/events/1/screens/1/top-cards',
+			expect.objectContaining({ headers: undefined }),
 		);
 	});
 
-	it('omits excludeTypes when no card types are excluded', async () => {
+	it('re-reads when a configuration field the breakdown depends on changes', async () => {
+		const scope = effectScope();
+		scope.run(() => useTopCardsModeData());
+		await nextTick();
+		mockFetch.mockClear();
+
 		mutableConfig.excludedCardTypes = [];
+		await nextTick();
+		scope.stop();
 
-		const { fetchData } = useTopCardsModeData();
-		await fetchData();
-
-		const query = mockFetch.mock.lastCall?.[1]?.query;
-		expect(query).toBeDefined();
-		expect(query).not.toHaveProperty('excludeTypes');
+		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());
 	});
 
 	it('isEmpty is true when entries are empty and not loading', async () => {
@@ -143,17 +139,19 @@ describe('useTopCardsModeData', () => {
 		expect(entries.value[0]!.name).toBe('Lightning Bolt');
 	});
 
-	it('emptyMessage references no players when store is empty', () => {
-		const origPlayers = mockPlayerStore.players;
-		const origLoaded = mockPlayerStore.isLoaded;
-		mockPlayerStore.players = [];
-		mockPlayerStore.isLoaded = false;
-
-		const { emptyMessage } = useTopCardsModeData();
+	it('emptyMessage references no players when the breakdown counts no decks', async () => {
+		const { emptyMessage, fetchData } = useTopCardsModeData();
+		await fetchData();
 
 		expect(emptyMessage.value).toBe('No players in this event');
+	});
 
-		mockPlayerStore.players = origPlayers;
-		mockPlayerStore.isLoaded = origLoaded;
+	it('emptyMessage reports missing card data when the field has decks', async () => {
+		mockFetch.mockResolvedValue({ entries: [], totalDecks: 4, scope: 'all' });
+
+		const { emptyMessage, fetchData } = useTopCardsModeData();
+		await fetchData();
+
+		expect(emptyMessage.value).toBe('No card data available');
 	});
 });

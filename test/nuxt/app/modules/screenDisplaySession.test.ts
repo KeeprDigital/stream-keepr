@@ -75,7 +75,16 @@ function createHarness(options: {
 	});
 	const eventStore = reactive({
 		eventId: options.eventId ?? null,
+		setOutputEvent: vi.fn(),
 	});
+	// The Event context an output reads through its Screen (#604), never the
+	// operator's private Event read.
+	const outputReads = {
+		event: vi.fn(async (scope: { eventId: number; screenId: number }) => ({
+			id: scope.eventId,
+			name: 'Output Event',
+		})),
+	};
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
@@ -101,6 +110,7 @@ function createHarness(options: {
 				eventStore: eventStore as any,
 				screenStore: screenStore as any,
 				realtime: realtime as any,
+				outputReads: outputReads as any,
 				createRealtimeSession: (callbacks) => {
 					realtimeCallbacks.push(callbacks);
 					return realtimeSession;
@@ -123,6 +133,7 @@ function createHarness(options: {
 		route,
 		screenStore,
 		eventStore,
+		outputReads,
 		realtime,
 		realtimeSession,
 		realtimeCallbacks,
@@ -169,6 +180,34 @@ describe('useScreenDisplaySession', () => {
 
 		expect(harness.screenStore.loadScreenBySlug)
 			.toHaveBeenCalledWith(42, 'main', 'a-screen-output-capability-token');
+	});
+
+	it('loads its Event context through the Screen it looked up, with the same capability', async () => {
+		// The operator's Event read is private; an output has no Session for it, so
+		// the context its modes render with comes through the Screen (#604).
+		const harness = createHarness({
+			route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
+		});
+		await flushPromises();
+
+		expect(harness.outputReads.event).toHaveBeenCalledWith({
+			eventId: 42,
+			screenId: 7,
+			assetCapability: 'a-screen-output-capability-token',
+		});
+		expect(harness.eventStore.setOutputEvent).toHaveBeenCalledWith({ id: 42, name: 'Output Event' });
+		expect(harness.session.error.value).toBeNull();
+	});
+
+	it('shows the not-found state, holding no Event, when its Event context is refused', async () => {
+		const harness = createHarness();
+		harness.outputReads.event.mockRejectedValue(new Error('Not found'));
+		await flushPromises();
+
+		expect(harness.outputReads.event).toHaveBeenCalled();
+		expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalled();
+		expect(harness.session.error.value).toBe('Screen not found');
+		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 	});
 
 	it('reports a missing event when neither the store nor route has an event id', async () => {

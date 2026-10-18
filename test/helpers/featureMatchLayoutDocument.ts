@@ -241,7 +241,7 @@ export function maximalFeatureMatchLayoutDocument(
 					waterColor: '#0b1220',
 					intensity: 1.2,
 					speed: 1.5,
-					zoom: 1.2,
+					scale: 0.8,
 				},
 			},
 		},

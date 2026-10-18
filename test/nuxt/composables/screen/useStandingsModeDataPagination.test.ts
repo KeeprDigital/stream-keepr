@@ -1,4 +1,6 @@
+import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 
@@ -54,24 +56,10 @@ const players = [
 const mockPlayerStore = reactive({
 	players: [...players],
 	isLoaded: true,
-	loadPlayersByEventId: vi.fn(),
-});
-
-const mockPlayerListStore = reactive({
-	lists: [] as any[],
-	isLoaded: true,
-	loadByEventId: vi.fn(),
-});
-
-const mockPlayerListRepo = {
-	getById: vi.fn(),
-};
-
-const mockRoundStore = reactive({
-	rounds: [] as any[],
-	isLoaded: true,
-	loadRoundsByEventId: vi.fn(),
-	getRoundById: vi.fn((id: number) => mockRoundStore.rounds.find((round: any) => round.id === id)),
+	// The roster the Standings read answers is held in the Player store.
+	loadPlayersFrom: vi.fn(async (_eventId: number, loader: () => Promise<any[]>) => {
+		mockPlayerStore.players = await loader();
+	}),
 });
 
 const mockScreenStore = {
@@ -79,7 +67,7 @@ const mockScreenStore = {
 };
 
 const mockEventStore = reactive({
-	event: createMockEvent(),
+	displayEvent: createMockEvent(),
 });
 
 // Mutable eventId and interactive for null-eventId and timer tests
@@ -90,9 +78,6 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
-mockNuxtImport('usePlayerListRepository', () => () => mockPlayerListRepo);
-mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenContext', () => () => ({
@@ -111,6 +96,26 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => mockServerNow,
 }));
 
+/** The Standings Screen Output read's answer; by default, the roster as it stands. */
+function standingsRead(overrides: Record<string, unknown> = {}) {
+	return { players: [...mockPlayerStore.players], round: null, roundStandings: null, watchlist: null, ...overrides };
+}
+
+const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
+
+/**
+ * Every rendering is stopped after its test: a live one re-reads whenever the
+ * shared configuration or Event changes, so leaked ones would count against
+ * the next test's reads.
+ */
+const scopes: EffectScope[] = [];
+
+function makeStandings() {
+	const scope = effectScope();
+	scopes.push(scope);
+	return scope.run(() => useStandingsModeData())!;
+}
+
 // ──────────────── Tests ────────────────
 
 describe('useStandingsModeData pagination and formatting', () => {
@@ -118,23 +123,24 @@ describe('useStandingsModeData pagination and formatting', () => {
 		Object.assign(mutableConfig, defaultConfig);
 		mockPlayerStore.players = [...players];
 		mockPlayerStore.isLoaded = true;
-		mockPlayerListStore.lists = [];
-		mockPlayerListStore.isLoaded = true;
-		mockRoundStore.rounds = [];
-		mockRoundStore.isLoaded = true;
-		mockEventStore.event = createMockEvent();
+		mockEventStore.displayEvent = createMockEvent();
 		mockEventId.value = 1;
 		mockInteractiveStandings.value = false;
 		mockIsSynced.value = true;
 		mockServerNow = 1_000_000;
 		mockFetch.mockReset();
 		vi.clearAllMocks();
+		mockFetch.mockImplementation(async () => standingsRead());
+	});
+
+	afterEach(() => {
+		scopes.splice(0).forEach(scope => scope.stop());
 	});
 
 	// ── Core properties ──
 
 	it('returns expected properties', () => {
-		const result = useStandingsModeData();
+		const result = makeStandings();
 		expect(result).toHaveProperty('displayRows');
 		expect(result).toHaveProperty('headerText');
 		expect(result).toHaveProperty('visibleColumns');
@@ -153,14 +159,14 @@ describe('useStandingsModeData pagination and formatting', () => {
 		it('computes totalPages from displayRows and rowsPerPage', () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 3;
-			const { totalPages } = useStandingsModeData();
+			const { totalPages } = makeStandings();
 			// 10 players / 3 per page = 4 pages
 			expect(totalPages.value).toBe(4);
 		});
 
 		it('returns at least 1 page when no rows', () => {
 			mockPlayerStore.players = [];
-			const { totalPages } = useStandingsModeData();
+			const { totalPages } = makeStandings();
 			expect(totalPages.value).toBe(1);
 		});
 
@@ -168,7 +174,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 3;
 			mutableConfig.currentPage = 2;
-			const { pageData } = useStandingsModeData();
+			const { pageData } = makeStandings();
 			expect(pageData.value).toHaveLength(3);
 			expect(pageData.value[0]!.name).toBe('Diana');
 		});
@@ -177,7 +183,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			mutableConfig.currentPage = 100;
-			const { pageData } = useStandingsModeData();
+			const { pageData } = makeStandings();
 			// Should show page 2 (last page): players 6-10
 			expect(pageData.value).toHaveLength(5);
 			expect(pageData.value[0]!.name).toBe('Fiona');
@@ -187,7 +193,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 3; // 10 players / 3 = 4 pages
-			const { setPage } = useStandingsModeData();
+			const { setPage } = makeStandings();
 			setPage(3);
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
 				1,
@@ -199,7 +205,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 
 		it('setPage clamps below 1', () => {
 			mockInteractiveStandings.value = true;
-			const { setPage } = useStandingsModeData();
+			const { setPage } = makeStandings();
 			setPage(0);
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
 				1,
@@ -213,7 +219,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mockInteractiveStandings.value = true;
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
-			const { setPage } = useStandingsModeData();
+			const { setPage } = makeStandings();
 			setPage(100);
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
 				1,
@@ -228,7 +234,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			mutableConfig.currentPage = 2; // last page (10 / 5 = 2)
-			const { nextPage } = useStandingsModeData();
+			const { nextPage } = makeStandings();
 			nextPage();
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
 				1,
@@ -243,7 +249,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.rowsPerPage = 5;
 			mutableConfig.currentPage = 1;
-			const { prevPage } = useStandingsModeData();
+			const { prevPage } = makeStandings();
 			prevPage();
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(
 				1,
@@ -258,56 +264,56 @@ describe('useStandingsModeData pagination and formatting', () => {
 
 	describe('formatCell', () => {
 		it('formats position', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'position')).toBe('1');
 		});
 
 		it('formats position as dash when null', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			const noPos = createMockPlayer({ position: null });
 			expect(formatCell(noPos as any, 'position')).toBe('-');
 		});
 
 		it('formats name', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[1] as any, 'name')).toBe('Bob');
 		});
 
 		it('formats record as W-L (hides zero draws by default)', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'record')).toBe('5-1');
 		});
 
 		it('formats record with draws when non-zero', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[3] as any, 'record')).toBe('3-3-1');
 		});
 
 		it('formats record with custom separator', () => {
-			mockEventStore.event = createMockEvent({ displayRecordSeparator: '/' });
-			const { formatCell } = useStandingsModeData();
+			mockEventStore.displayEvent = createMockEvent({ displayRecordSeparator: '/' });
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'record')).toBe('5/1');
 		});
 
 		it('formats record showing zero draws when hideZeroDraws is false', () => {
-			mockEventStore.event = createMockEvent({ displayHideZeroDraws: false });
-			const { formatCell } = useStandingsModeData();
+			mockEventStore.displayEvent = createMockEvent({ displayHideZeroDraws: false });
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'record')).toBe('5-1-0');
 		});
 
 		it('formats points', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'points')).toBe('15');
 		});
 
 		it('formats points as dash when null', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			const noPoints = createMockPlayer({ points: null });
 			expect(formatCell(noPoints as any, 'points')).toBe('-');
 		});
 
 		it('formats deck name when available', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			// deckName is now stored in gameData, not deckList
 			const withDeck = createMockPlayer({
 				gameData: { type: 'mtg', deckName: 'Mono Red', deckColors: 'R' },
@@ -316,7 +322,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 		});
 
 		it('formats deck as dash when no deck list', () => {
-			const { formatCell } = useStandingsModeData();
+			const { formatCell } = makeStandings();
 			expect(formatCell(players[0] as any, 'deck')).toBe('-');
 		});
 	});
@@ -326,14 +332,14 @@ describe('useStandingsModeData pagination and formatting', () => {
 	describe('empty state', () => {
 		it('isEmpty is true when no rows and not loading', () => {
 			mockPlayerStore.players = [];
-			const { isEmpty, loading: l } = useStandingsModeData();
+			const { isEmpty, loading: l } = makeStandings();
 			l.value = false;
 			expect(isEmpty.value).toBe(true);
 		});
 
 		it('isEmpty is false when loading', () => {
 			mockPlayerStore.players = [];
-			const { isEmpty, loading: l } = useStandingsModeData();
+			const { isEmpty, loading: l } = makeStandings();
 			l.value = true;
 			expect(isEmpty.value).toBe(false);
 		});
@@ -341,37 +347,39 @@ describe('useStandingsModeData pagination and formatting', () => {
 		it('emptyMessage for watchlist without playerListId', () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = null;
-			const { emptyMessage } = useStandingsModeData();
+			const { emptyMessage } = makeStandings();
 			expect(emptyMessage.value).toBe('Select a player list in settings');
 		});
 
 		it('emptyMessage for watchlist with playerListId', () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = 42;
-			const { emptyMessage } = useStandingsModeData();
+			const { emptyMessage } = makeStandings();
 			expect(emptyMessage.value).toBe('No players in this list');
 		});
 
 		it('emptyMessage for reveal with 0 revealed', () => {
 			mutableConfig.viewMode = 'reveal';
 			mutableConfig.revealedCount = 0;
-			const { emptyMessage } = useStandingsModeData();
+			const { emptyMessage } = makeStandings();
 			expect(emptyMessage.value).toBe('Waiting for reveal...');
 		});
 
 		it('emptyMessage defaults to generic message', () => {
 			mutableConfig.viewMode = 'all';
 			mockPlayerStore.players = [];
-			const { emptyMessage } = useStandingsModeData();
+			const { emptyMessage } = makeStandings();
 			expect(emptyMessage.value).toBe('No standings data available');
 		});
 
 		it('keeps existing standings visible while selected round snapshot refreshes empty', async () => {
 			mutableConfig.roundId = 8;
-			mockRoundStore.rounds = [createMockRound({ id: 8, name: 'Round 8' })];
-			mockFetch.mockResolvedValue({ standings: [] });
+			mockFetch.mockImplementation(async () => standingsRead({
+				round: createMockRound({ id: 8, name: 'Round 8' }),
+				roundStandings: [],
+			}));
 
-			const { isEmpty } = useStandingsModeData();
+			const { isEmpty } = makeStandings();
 			await nextTick();
 			await nextTick();
 
@@ -380,57 +388,53 @@ describe('useStandingsModeData pagination and formatting', () => {
 
 		it('emptyMessage for selected round uses snapshot copy', () => {
 			mutableConfig.roundId = 8;
-			mockFetch.mockResolvedValue({ standings: [] });
-			const { emptyMessage } = useStandingsModeData();
+			mockFetch.mockImplementation(async () => standingsRead({ roundStandings: [] }));
+			const { emptyMessage } = makeStandings();
 			expect(emptyMessage.value).toBe('No standings snapshot available for this round');
 		});
 	});
 
 	// ── Data loading ──
 
-	describe('ensurePlayersLoaded', () => {
-		it('loads players when not already loaded', async () => {
-			mockPlayerStore.isLoaded = false;
-			useStandingsModeData();
-			// The watcher fires immediately → calls ensurePlayersLoaded
-			await nextTick();
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+	describe('loadStandings', () => {
+		it('reads everything Standings renders from in one Screen Output read', async () => {
+			makeStandings();
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockFetch).toHaveBeenCalledWith(STANDINGS_READ, expect.anything());
+			expect(mockPlayerStore.loadPlayersFrom).toHaveBeenCalledWith(1, expect.any(Function));
 		});
 
-		it('loads player lists when not already loaded', async () => {
-			mockPlayerListStore.isLoaded = false;
-			useStandingsModeData();
-			await nextTick();
-			expect(mockPlayerListStore.loadByEventId).toHaveBeenCalledWith(1);
-		});
+		it('re-reads when the selected round changes', async () => {
+			makeStandings();
+			await flushPromises();
 
-		it('loads rounds when roundId is selected and rounds are not loaded', async () => {
 			mutableConfig.roundId = 3;
-			mockRoundStore.isLoaded = false;
-			mockFetch.mockResolvedValue({ standings: [] });
+			await flushPromises();
 
-			useStandingsModeData();
-			await nextTick();
-
-			expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			expect(mockFetch).toHaveBeenLastCalledWith(STANDINGS_READ, expect.anything());
 		});
 
-		it('loads watchlist members when viewMode is watchlist', async () => {
+		it('filters to the watchlist members the read answers', async () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = 42;
-			mockPlayerListRepo.getById.mockResolvedValue({
-				id: 42,
-				name: 'VIPs',
-				members: [{ id: 1 }, { id: 3 }],
-			});
+			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [1, 3] } }));
 
-			const { displayRows } = useStandingsModeData();
-			await nextTick();
-			await nextTick(); // wait for async loadWatchlistMembers
+			const { displayRows } = makeStandings();
+			await flushPromises();
 
-			expect(mockPlayerListRepo.getById).toHaveBeenCalledWith(1, 42);
 			expect(displayRows.value).toHaveLength(2);
 			expect(displayRows.value.map((p: any) => p.name)).toEqual(['Alice', 'Charlie']);
+		});
+
+		it('does not read without an event', async () => {
+			mockEventId.value = null;
+			makeStandings();
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 	});
 
@@ -448,7 +452,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.rotationAnchor = mockServerNow - 5000;
 			mockInteractiveStandings.value = false;
 
-			const { currentPage, pageData } = useStandingsModeData();
+			const { currentPage, pageData } = makeStandings();
 			await nextTick();
 
 			expect(currentPage.value).toBe(2);
@@ -470,7 +474,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.rotationAnchor = mockServerNow - 15_000;
 			mockIsSynced.value = false;
 
-			const { currentPage } = useStandingsModeData();
+			const { currentPage } = makeStandings();
 			await nextTick();
 
 			expect(currentPage.value).toBe(1);
@@ -484,7 +488,7 @@ describe('useStandingsModeData pagination and formatting', () => {
 			mutableConfig.rowsPerPage = 3;
 			mutableConfig.rotationAnchor = mockServerNow;
 
-			const { setPage } = useStandingsModeData();
+			const { setPage } = makeStandings();
 			setPage(3);
 
 			expect(mockScreenStore.updateModeConfig).toHaveBeenCalledWith(

@@ -1,6 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
+import { createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
@@ -24,7 +24,15 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
+const mockAssignmentRepo = {
+	listByRound: vi.fn(),
+	create: vi.fn(),
+	update: vi.fn(),
+	remove: vi.fn(),
+};
+
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);
+mockNuxtImport('useFeatureMatchAssignmentRepository', () => () => mockAssignmentRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 
 /*
@@ -281,6 +289,135 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
+	// ── Writes that outlive their Event (#606) ──
+
+	/**
+	 * A Slot write is answered for the Event it was made in. Neither another Event nor
+	 * the same Event loaded afresh since is the lifetime that answer belongs to, so it
+	 * may not add a Slot, prime a Feature Match Session, or put back an order there.
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('a Slot write answered after the operator moved on to %s', (_, switches) => {
+		const stateStore = () => useFeatureMatchStateStore();
+
+		function slotWithSession(id: number, eventId = 1) {
+			return createMockFeatureMatch({
+				id,
+				eventId,
+				activeSessionId: 500 + id,
+				activeSession: {
+					id: 500 + id,
+					eventId,
+					slotId: id,
+					status: 'active',
+					sourceSnapshot: {},
+					currentState: createMockFeatureMatchState(),
+					sequence: 1,
+					closedAt: null,
+					createdAt: new Date('2026-01-01T00:00:00.000Z'),
+					updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+				},
+			} as any);
+		}
+
+		/** Ends on Slots 1 and 2, as Event A's own are when loaded again. */
+		async function switchAway() {
+			let shown!: ReturnType<typeof createMockFeatureMatch>[];
+			for (const eventId of switches) {
+				shown = [
+					createMockFeatureMatch({ id: 1, eventId, sortOrder: 0, bestOf: 1 }),
+					createMockFeatureMatch({ id: 2, eventId, sortOrder: 1, bestOf: 1 }),
+				];
+				store.$reset();
+				stateStore().$reset();
+				mockRepo.list.mockResolvedValueOnce(structuredClone(shown));
+				await store.loadFeatureMatchesByEventId(eventId);
+			}
+			return shown;
+		}
+
+		it('a late create adds no Slot and primes no Feature Match Session', async () => {
+			const create = deferred<ReturnType<typeof slotWithSession>>();
+			mockRepo.create.mockReturnValueOnce(create.promise);
+
+			const creating = store.createFeatureMatch(1, { bestOf: 3 });
+			const shown = await switchAway();
+			create.resolve(slotWithSession(3));
+			await creating;
+
+			expect(store.featureMatches).toEqual(shown);
+			expect(stateStore().featureMatchSessions.size).toBe(0);
+		});
+
+		it('a late update changes no Slot and primes no Feature Match Session', async () => {
+			store.featureMatches = [createMockFeatureMatch({ id: 1, bestOf: 3 })];
+			const update = deferred<ReturnType<typeof slotWithSession>>();
+			mockRepo.update.mockReturnValueOnce(update.promise);
+
+			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
+			const shown = await switchAway();
+			update.resolve({ ...slotWithSession(1), bestOf: 5 });
+			await updating;
+
+			expect(store.featureMatches).toEqual(shown);
+			expect(stateStore().featureMatchSessions.size).toBe(0);
+		});
+
+		it('a late failed reorder puts back no order and reports nothing', async () => {
+			store.featureMatches = [
+				createMockFeatureMatch({ id: 1, sortOrder: 0 }),
+				createMockFeatureMatch({ id: 2, sortOrder: 1 }),
+			];
+			store.currentEventId = 1;
+			const reorder = deferred<never>();
+			mockRepo.reorder.mockReturnValueOnce(reorder.promise);
+
+			const reordering = store.reorderFeatureMatch(1, 'down');
+			const shown = await switchAway();
+			reorder.reject(new Error('The Feature Match order changed'));
+			await reordering;
+
+			expect(store.featureMatches).toEqual(shown);
+			expect(store.error).toBeNull();
+		});
+
+		it('a late Slot Promotion changes no Slot and no Assignment', async () => {
+			const assignments = useFeatureMatchAssignmentStore();
+			assignments.$reset();
+			const promotion = deferred<unknown>();
+			mockRepo.promoteMatch.mockReturnValueOnce(promotion.promise);
+
+			const promoting = useFeatureMatchPromotion().promote({ eventId: 1, roundId: 10, slotId: 1, matchId: 7 });
+			const shown = await switchAway();
+			const eventId = switches.at(-1)!;
+			const loadedAssignments = [{
+				id: 9,
+				eventId,
+				roundId: 10,
+				slotId: 2,
+				matchId: 8,
+				note: 'Loaded since',
+				createdAt: new Date('2026-01-01T00:00:00Z'),
+				updatedAt: new Date('2026-01-01T00:00:00Z'),
+			}];
+			assignments.$reset();
+			assignments.consumeRound(eventId, 10);
+			mockAssignmentRepo.listByRound.mockResolvedValueOnce(structuredClone(loadedAssignments));
+			await assignments.loadAssignments(eventId, 10);
+			promotion.resolve({
+				promotedSlot: createMockFeatureMatch({ id: 1, matchId: 7 }),
+				clearedSlots: [createMockFeatureMatch({ id: 2, matchId: null })],
+				assignment: { ...loadedAssignments[0]!, eventId: 1, slotId: 1, matchId: 7, note: null },
+			});
+			await promoting;
+
+			expect(store.featureMatches).toEqual(shown);
+			expect(assignments.assignmentsForRound(10)).toEqual(loadedAssignments);
+		});
+	});
+
 	// ── $reset ──
 
 	describe('$reset', () => {
@@ -299,3 +436,13 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

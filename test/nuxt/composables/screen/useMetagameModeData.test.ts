@@ -77,6 +77,15 @@ mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => mockServerNow,
 }));
 
+/** The Metagame Screen Output read's answer: the breakdown its configured view renders. */
+function archetypeRead(breakdown: Record<string, unknown>) {
+	return { viewMode: 'archetype', breakdown };
+}
+
+function cardsRead(breakdown: Record<string, unknown>) {
+	return { viewMode: 'cards', breakdown };
+}
+
 describe('useMetagameModeData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -84,7 +93,7 @@ describe('useMetagameModeData', () => {
 		mockInteractive.value = false;
 		mockIsSynced.value = true;
 		mockServerNow = 1_000_000;
-		mockFetch.mockResolvedValue({ entries: [], totalPlayers: 0, scope: 'all' });
+		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 0, scope: 'all' }));
 	});
 
 	it('returns expected properties', () => {
@@ -120,23 +129,29 @@ describe('useMetagameModeData', () => {
 		expect(headerText.value).toBe('12+ Points Metagame');
 	});
 
-	it('fetchData sends minPoints in the query when scope is minPoints', async () => {
-		mutableConfig.scope = 'minPoints';
-		mutableConfig.minPoints = 12;
-
-		const { fetchData } = useMetagameModeData();
+	it('reads the breakdown through the Screen, re-reading when the scope changes', async () => {
+		const scope = effectScope();
+		const { fetchData } = scope.run(() => useMetagameModeData())!;
 		await fetchData();
 
+		// The server derives scope, sort and limit from the saved configuration,
+		// so the client names only the Screen resource.
 		expect(mockFetch).toHaveBeenLastCalledWith(
-			expect.stringContaining('/metagame/archetypes'),
-			{
-				query: expect.objectContaining({ scope: 'minPoints', minPoints: 12 }),
-			},
+			'/api/screen-output/events/1/screens/1/metagame',
+			expect.objectContaining({ headers: undefined }),
 		);
+
+		mockFetch.mockClear();
+		mutableConfig.scope = 'minPoints';
+		mutableConfig.minPoints = 12;
+		await nextTick();
+		scope.stop();
+
+		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/metagame', expect.anything());
 	});
 
 	it('isEmpty is true when entries are empty and not loading', async () => {
-		mockFetch.mockResolvedValue({ entries: [], totalPlayers: 0, scope: 'all' });
+		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 0, scope: 'all' }));
 
 		const { isEmpty, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -144,33 +159,28 @@ describe('useMetagameModeData', () => {
 		expect(isEmpty.value).toBe(true);
 	});
 
-	it('emptyMessage references no players when store is empty', () => {
-		const origPlayers = mockPlayerStore.players;
-		const origLoaded = mockPlayerStore.isLoaded;
-		mockPlayerStore.players = [];
-		mockPlayerStore.isLoaded = false;
-
-		const { emptyMessage } = useMetagameModeData();
+	it('emptyMessage references no players when the breakdown counts none', async () => {
+		const { emptyMessage, fetchData } = useMetagameModeData();
+		await fetchData();
 
 		expect(emptyMessage.value).toBe('No players in this event');
-
-		// Restore
-		mockPlayerStore.players = origPlayers;
-		mockPlayerStore.isLoaded = origLoaded;
 	});
 
-	it('emptyMessage shows generic message when players exist but no data', () => {
-		const { emptyMessage } = useMetagameModeData();
+	it('emptyMessage shows generic message when players exist but no data', async () => {
+		mockFetch.mockResolvedValue(archetypeRead({ entries: [], totalPlayers: 6, scope: 'all' }));
+
+		const { emptyMessage, fetchData } = useMetagameModeData();
+		await fetchData();
 
 		expect(emptyMessage.value).toBe('No metagame data available');
 	});
 
 	it('totalPages computes from displayRows and pageSize', async () => {
-		mockFetch.mockResolvedValue({
+		mockFetch.mockResolvedValue(archetypeRead({
 			entries: Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 })),
 			totalPlayers: 12,
 			scope: 'all',
-		});
+		}));
 
 		const { totalPages, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -181,7 +191,7 @@ describe('useMetagameModeData', () => {
 
 	it('pageData returns correct slice for current page', async () => {
 		const entries = Array.from({ length: 8 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue({ entries, totalPlayers: 8, scope: 'all' });
+		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 8, scope: 'all' }));
 
 		const { pageData, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -194,7 +204,7 @@ describe('useMetagameModeData', () => {
 	it('setPage calls screenStore.updateModeConfig', async () => {
 		mockInteractive.value = true;
 		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
+		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
 
 		const { setPage, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -210,11 +220,11 @@ describe('useMetagameModeData', () => {
 
 	it('setPage clamps to valid range', async () => {
 		mockInteractive.value = true;
-		mockFetch.mockResolvedValue({
+		mockFetch.mockResolvedValue(archetypeRead({
 			entries: [{ name: 'A', count: 1, metaShare: 100 }],
 			totalPlayers: 1,
 			scope: 'all',
-		});
+		}));
 
 		const { setPage, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -231,11 +241,11 @@ describe('useMetagameModeData', () => {
 
 	it('nextPage wraps to 1 after last page', async () => {
 		mockInteractive.value = true;
-		mockFetch.mockResolvedValue({
+		mockFetch.mockResolvedValue(archetypeRead({
 			entries: [{ name: 'A', count: 1, metaShare: 100 }],
 			totalPlayers: 1,
 			scope: 'all',
-		});
+		}));
 
 		const { nextPage, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -253,7 +263,7 @@ describe('useMetagameModeData', () => {
 	it('prevPage wraps to last page from page 1', async () => {
 		mockInteractive.value = true;
 		const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Arch${i}`, count: 1, metaShare: 1 }));
-		mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
+		mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
 
 		const { prevPage, fetchData } = useMetagameModeData();
 		await fetchData();
@@ -280,7 +290,7 @@ describe('useMetagameModeData', () => {
 				count: 1,
 				metaShare: 1,
 			}));
-			mockFetch.mockResolvedValue({ entries, totalPlayers: 12, scope: 'all' });
+			mockFetch.mockResolvedValue(archetypeRead({ entries, totalPlayers: 12, scope: 'all' }));
 			mockInteractive.value = false;
 
 			const { fetchData, currentPage } = useMetagameModeData();
@@ -302,9 +312,9 @@ describe('useMetagameModeData', () => {
 			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
 		});
 
-		it('fetchData fetches cards endpoint with archetype filter when viewMode=cards', async () => {
+		it('renders the card breakdown the cards view reads', async () => {
 			const cardEntries = [{ id: 1, name: 'Lightning Bolt', inclusionRate: 100, avgCopies: 4, totalCopies: 8, mainboardCount: 8, sideboardCount: 0, mainboardDeckCount: 2, sideboardDeckCount: 0, deckCount: 2, cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1 }];
-			mockFetch.mockResolvedValue({ entries: cardEntries, totalDecks: 2, scope: 'all' });
+			mockFetch.mockResolvedValue(cardsRead({ entries: cardEntries, totalDecks: 2, scope: 'all' }));
 			mutableConfig.viewMode = 'cards';
 			mutableConfig.archetypeFilter = 'Mono Red';
 
@@ -312,12 +322,6 @@ describe('useMetagameModeData', () => {
 			await fetchData();
 
 			expect(displayRows.value).toHaveLength(1);
-			expect(mockFetch).toHaveBeenLastCalledWith(
-				expect.stringContaining('/metagame/cards'),
-				{
-					query: expect.objectContaining({ archetype: 'Mono Red' }),
-				},
-			);
 		});
 	});
 });

@@ -23,7 +23,7 @@ uniform vec3 edgeColor;
 uniform vec3 backgroundColor;
 uniform float coverage;
 uniform float contours;
-uniform float zoom;
+uniform float scale;
 
 ${GLSL_HASH_2D}
 
@@ -38,7 +38,7 @@ float fbmInk(vec2 p, float t) {
 }
 
 void main() {
-	vec2 p = gl_FragCoord.xy / iResolution.y * 3.0 * zoom;
+	vec2 p = gl_FragCoord.xy / iResolution.y * 3.0 / scale;
 
 	// The warp and the field's own offset orbit rather than translate, so the
 	// map morphs in place instead of scrolling past.
@@ -86,7 +86,7 @@ export default function createInkmapEffect(
 			backgroundColor: current.backgroundColor,
 			coverage: current.coverage,
 			contours: current.contours,
-			zoom: current.zoom,
+			scale: current.scale,
 		}),
 		timeScale: current => current.speed,
 	}, params);

@@ -71,6 +71,18 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
  * union below are derived (#501). Outside this module an effect also needs its
  * renderer and lazy loader in `app/utils/animation-effects/` and its proof
  * scenario in `scripts/graphics-acceptance/animation-effect-scenarios.mjs`.
+ *
+ * Spatial params follow one standard, so an operator moving between effects
+ * meets one meaning per name (ADR-0025, #503):
+ * - `scale` sizes a repeating field's features (cells, facets, threads, fog,
+ *   waves), so their count changes inversely. Label: "<Feature> scale".
+ * - `size` sizes discrete elements whose count is fixed or set by another
+ *   param (`density`, `points`). Label: "<Element> size".
+ * - `spacing` sets the gap between elements without resizing them.
+ *
+ * A larger value always draws larger on screen, and a `scale` of 1 is the
+ * effect's designed look. `zoom` and qualified variants (`cellSize`,
+ * `waveScale`) are not used; the catalogue's unit test refuses them.
  */
 export const ANIMATION_EFFECT_CATALOGUE = {
 	/** Caustics: refracted-light interference drifting over a water colour. */
@@ -81,7 +93,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			waterColor: colorParam('Water color', '#083344'),
 			intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			scale: numberParam('Caustic scale', { min: 0.35, max: 2, step: 0.05, default: 1 }),
 		}),
 	},
 	/**
@@ -89,14 +101,15 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * old name. Only the params the fragment shader reads survive the port: the
 	 * fork's editor also offered `amplitudeFactor`, `ringFactor`, `rotationFactor`,
 	 * and a background colour that its cells shader declared but never referenced.
-	 * Defaults are the pre-rebuild application's, not the fork's.
+	 * Defaults are the pre-rebuild application's, not the fork's, with the fork's
+	 * `size` renormalised into `scale` so 1 is its old default of 3.
 	 */
 	cells: {
 		label: 'Cells',
 		paramsSchema: z.strictObject({
 			color1: colorParam('Primary color', '#008c8c'),
 			color2: colorParam('Secondary color', '#06b6d4'),
-			size: numberParam('Cell size', { min: 0.2, max: 5, step: 0.1, default: 3 }),
+			scale: numberParam('Cell scale', { min: 0.1, max: 1.65, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
 		}),
 	},
@@ -152,7 +165,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			baseColor: colorParam('Base color', '#111111'),
 			blurFactor: numberParam('Softness', { min: 0.1, max: 0.95, step: 0.05, default: 0.55 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
-			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			scale: numberParam('Fog scale', { min: 0.35, max: 2, step: 0.05, default: 1 }),
 		}),
 	},
 	/**
@@ -190,7 +203,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			baseColor: colorParam('Base color', '#111111'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
-			size: numberParam('Size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
+			size: numberParam('Halo size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
 			xOffset: numberParam('Horizontal offset', { min: -1, max: 1, step: 0.05, default: 0 }),
 			yOffset: numberParam('Vertical offset', { min: -1, max: 1, step: 0.05, default: 0 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
@@ -212,7 +225,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			backgroundColor: colorParam('Background color', '#111111'),
 			coverage: numberParam('Coverage', { min: 0.2, max: 0.8, step: 0.05, default: 0.5 }),
 			contours: numberParam('Contour lines', { min: 0, max: 8, step: 1, default: 4 }),
-			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			scale: numberParam('Island scale', { min: 0.35, max: 2, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 		}),
 	},
@@ -300,7 +313,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * lines glowing along every facet boundary, and an occasional glint sweeping
 	 * across facets whose hashed orientation catches it. A new effect (no fork
 	 * ancestry), so the params carry semantic names and the defaults are the
-	 * recorded design's (#473). `size` scales the facets, `intensity` the crack
+	 * recorded design's (#473). `scale` sizes the facets, `intensity` the crack
 	 * glow and the glint together.
 	 */
 	shards: {
@@ -309,7 +322,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			shardColor: colorParam('Shard color', '#312e81'),
 			edgeColor: colorParam('Edge color', '#7dd3fc'),
 			backgroundColor: colorParam('Background color', '#111111'),
-			size: numberParam('Shard size', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			scale: numberParam('Shard scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
 			intensity: numberParam('Intensity', { min: 0, max: 2, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 		}),
@@ -318,10 +331,10 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * Waves: a lit, choppy water plane — the first mesh-backend port from the
 	 * retired fork, under its old name. `backgroundColor` survives the port even
 	 * though the mesh never reads it: the fork's base cleared the canvas to it,
-	 * and the water plane leaves the frame's far corners uncovered at low zoom, so
+	 * and the water plane leaves the frame's far corners uncovered at low scale, so
 	 * it is visible on air. Defaults and ranges are the pre-rebuild application's,
-	 * including the waves-specific `zoom` fallback of 0.85 rather than the shared
-	 * bag's 1.
+	 * with its `zoom` renormalised into `scale` so 1 is the waves-specific zoom
+	 * fallback of 0.85 rather than the shared bag's 1.
 	 */
 	waves: {
 		label: 'Waves',
@@ -331,14 +344,14 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
 			waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
 			waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),
-			zoom: numberParam('Zoom', { min: 0.5, max: 3, step: 0.1, default: 0.85 }),
+			scale: numberParam('Wave scale', { min: 0.6, max: 3.5, step: 0.05, default: 1 }),
 		}),
 	},
 	/**
 	 * Weave: an interlaced fabric of undulating warp and weft threads crossing
 	 * over and under in strict alternation, with a soft sheen sweeping the cloth.
 	 * A new effect (no fork ancestry), so the params carry semantic names and the
-	 * defaults are the recorded design's (#473). `scale` sets the thread grid,
+	 * defaults are the recorded design's (#473). `scale` sizes the thread grid,
 	 * `thickness` the band width within it, `sheen` the travelling highlight.
 	 */
 	weave: {
@@ -347,7 +360,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			warpColor: colorParam('Warp color', '#7c3aed'),
 			weftColor: colorParam('Weft color', '#06b6d4'),
 			backgroundColor: colorParam('Background color', '#111111'),
-			scale: numberParam('Weave scale', { min: 0.5, max: 3, step: 0.1, default: 1 }),
+			scale: numberParam('Thread scale', { min: 0.35, max: 2, step: 0.05, default: 1 }),
 			thickness: numberParam('Thread width', { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }),
 			sheen: numberParam('Sheen', { min: 0, max: 2, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),

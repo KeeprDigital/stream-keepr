@@ -138,4 +138,50 @@ describe('usePlayerDeckStore', () => {
 		});
 		expect(mockApplyArchetypeDeleted).toHaveBeenCalledWith(5);
 	});
+
+	/**
+	 * A Deck review is answered for the Event it was made in. Neither another Event nor
+	 * the same Event loaded afresh since is the lifetime that answer belongs to, so it
+	 * may not retag a Deck or Player there, invalidate its Metagame, or reload its
+	 * Feature Match Slots (ADR-0024).
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('a Deck review answered after the operator moved on to %s', (_, switches) => {
+		it('changes nothing and follows up on nothing', async () => {
+			const store = usePlayerDeckStore();
+			store.decks = [deck()] as any;
+			const review = deferred<unknown>();
+			mockReviewDeck.mockReturnValueOnce(review.promise);
+
+			const reviewing = store.reviewDeck(1, 2, 10, 5);
+			let shown!: ReturnType<typeof deck>[];
+			for (const eventId of switches) {
+				store.$reset();
+				shown = [deck({ eventId, name: `Loaded for ${eventId}` })];
+				mockFetch.mockResolvedValueOnce({ decks: structuredClone(shown) });
+				await store.loadByEventId(eventId);
+			}
+			const player = { id: 2, archetypeId: null };
+			mockPlayerStore.players = [player];
+			review.resolve({ deck: deck({ archetypeId: 5, reviewedAt: new Date() }), player: { id: 2, archetypeId: 5 } });
+			await reviewing;
+
+			expect(store.decks).toEqual(shown);
+			expect(player.archetypeId).toBeNull();
+			expect(mockMetagameStore.applyRemoteInvalidated).not.toHaveBeenCalled();
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
+		});
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

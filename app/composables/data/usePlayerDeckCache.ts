@@ -23,7 +23,12 @@ function updatedAtKey(updatedAt: Date | string) {
 	return typeof updatedAt === 'string' ? updatedAt : updatedAt.toISOString();
 }
 
-function selectDeck(
+/**
+ * The deck a selection names in a collection, else the collection's own
+ * selection ladder. Exported for readers that hold a collection the cache did
+ * not fetch — a Screen Output's (#604).
+ */
+export function selectPlayerDeck(
 	collection: PlayerDeckCollectionResponse,
 	selection: PlayerDeckSelection = {},
 ): PlayerDeckResponse | null {
@@ -91,12 +96,12 @@ export function usePlayerDeckCache() {
 		selection: PlayerDeckSelection = {},
 	): Promise<PlayerDeckResponse | null> {
 		const collection = await fetchDecks(playerId, eventId, updatedAt, selection);
-		return collection ? selectDeck(collection, selection) : null;
+		return collection ? selectPlayerDeck(collection, selection) : null;
 	}
 
 	function getCachedDeck(playerId: number, selection: PlayerDeckSelection = {}): PlayerDeckResponse | null {
 		const collection = cache.get(playerId)?.collection;
-		return collection ? selectDeck(collection, selection) : null;
+		return collection ? selectPlayerDeck(collection, selection) : null;
 	}
 
 	function clearCachedDeck(playerId: number) {

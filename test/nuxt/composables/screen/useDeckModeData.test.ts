@@ -4,17 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 
 /**
- * The store-held roster is reactive, as the real one is: `player:updated` replaces
- * a record in it, and only a record already there.
+ * The server's two halves of the Screen Output Player read (#604): the Player
+ * the Screen selects, and that Player's deck at their current revision.
  */
-const mockPlayerStore = reactive({
-	getPlayerById: vi.fn(),
-	players: [] as Array<{ id: number; name: string; updatedAt: string }>,
-	isLoaded: false,
-	loadPlayersByEventId: vi.fn(),
-});
-
-const mockFetchDeck = vi.fn();
+const mockReadPlayer = vi.fn();
+const mockReadDeck = vi.fn();
 const mockFetchScryfallCards = vi.fn();
 const mockBuildDeckListArrays = vi.fn();
 const mockGetSelectedBroadcastDeckList = vi.fn();
@@ -27,6 +21,13 @@ const mockOnChannel = vi.fn<(
 const mockPlayerId = ref<number | null>(null);
 const mockBroadcastDeckListId = ref<number | null>(null);
 const mockEventId = ref<number | null>(1);
+const mockPlayerDecks = vi.fn(async (playerId: number) => {
+	const player = await mockReadPlayer(mockEventId.value, playerId);
+	if (!player)
+		throw Object.assign(new Error('Not found'), { statusCode: 404 });
+	const deck = await mockReadDeck(playerId, mockEventId.value, player.updatedAt);
+	return { player, decks: { decks: deck ? [deck] : [], selectedDeckId: deck?.id ?? null } };
+});
 const mockScreen = ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } });
 const mockAssetCapability = ref<string | null>('output-capability');
 const mockRealtime = reactive({
@@ -34,8 +35,10 @@ const mockRealtime = reactive({
 	onChannel: mockOnChannel,
 });
 
-mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerDeckCache', () => () => ({ fetchDeck: mockFetchDeck }));
+mockNuxtImport('useScreenOutputReads', () => () => ({
+	scope: computed(() => mockEventId.value ? { eventId: mockEventId.value, screenId: mockScreen.value.id } : null),
+	playerDecks: mockPlayerDecks,
+}));
 mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
 	getSelected: mockGetSelectedBroadcastDeckList,
 }));
@@ -166,6 +169,12 @@ function createBroadcastList(revision: number, name: string, entries: Array<Reco
 	};
 }
 
+/** The Event-channel `player:updated` listener live-follow rides on (#604). */
+function playerUpdatedHandler() {
+	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'player:updated');
+	return call?.[2] as unknown as ((message: { eventId: number; player: { id: number; name: string; updatedAt: string } }) => void) | undefined;
+}
+
 function broadcastUpdateHandler() {
 	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'broadcastDeckList:updated');
 	return call?.[2] as ((message: { eventId: number; listId: number; revision: number }) => void) | undefined;
@@ -193,15 +202,10 @@ describe('useDeckModeData', () => {
 		mockAssetCapability.value = 'output-capability';
 		mockRealtime.connectionState = 'connected';
 		mockCardDataHealth.value = 'complete';
-		mockFetchDeck.mockResolvedValue(createDeckResponse([]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([]));
 		mockGetSelectedBroadcastDeckList.mockResolvedValue(null);
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: false });
 		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
-		mockPlayerStore.players.splice(0);
-		mockPlayerStore.isLoaded = false;
-		mockPlayerStore.loadPlayersByEventId.mockImplementation(async () => {
-			mockPlayerStore.isLoaded = true;
-		});
 	});
 
 	afterEach(() => {
@@ -236,12 +240,12 @@ describe('useDeckModeData', () => {
 	});
 
 	it('loads the initial deck immediately and preloads its images', async () => {
-		mockPlayerStore.getPlayerById.mockResolvedValue({
+		mockReadPlayer.mockResolvedValue({
 			id: 5,
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard({ quantity: 4 })]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard({ quantity: 4 })]));
 		mockBuildDeckListArrays.mockReturnValue({
 			mainboard: [createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg', { quantity: 4 })],
 			sideboard: [],
@@ -489,13 +493,13 @@ describe('useDeckModeData', () => {
 	});
 
 	it('keeps the current deck visible until the pending deck is committed', async () => {
-		mockPlayerStore.getPlayerById.mockImplementation(async (_eventId: number, playerId: number) => {
+		mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) => {
 			if (playerId === 1) {
 				return { id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } };
 			}
 			return { id: 2, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } };
 		});
-		mockFetchDeck.mockImplementation(async (playerId: number) => {
+		mockReadDeck.mockImplementation(async (playerId: number) => {
 			return playerId === 1
 				? createDeckResponse([createDeckCard({ name: 'Card A' })], { id: 10, name: 'Deck A', colors: 'U' })
 				: createDeckResponse([createDeckCard({ name: 'Card B', scryfallId: 'card-2' })], { id: 20, name: 'Deck B', colors: 'R' });
@@ -528,7 +532,7 @@ describe('useDeckModeData', () => {
 	it('ignores stale async requests when the selected deck changes rapidly', async () => {
 		interface BobPlayer { id: number; name: string; gameData: { type: string; deckName: string; deckColors: string } }
 		const bobResolver: { resolve: ((value: BobPlayer) => void) | null } = { resolve: null };
-		mockPlayerStore.getPlayerById.mockImplementation((_eventId: number, playerId: number) => {
+		mockReadPlayer.mockImplementation((_eventId: number, playerId: number) => {
 			if (playerId === 1) {
 				return Promise.resolve({ id: 1, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } });
 			}
@@ -539,7 +543,7 @@ describe('useDeckModeData', () => {
 			}
 			return Promise.resolve({ id: 3, name: 'Carol', gameData: { type: 'mtg', deckName: 'Deck C', deckColors: 'G' } });
 		});
-		mockFetchDeck.mockImplementation(async (playerId: number) => {
+		mockReadDeck.mockImplementation(async (playerId: number) => {
 			if (playerId === 1)
 				return createDeckResponse([createDeckCard({ name: 'Card A' })], { id: 10, name: 'Deck A', colors: 'U' });
 			if (playerId === 2)
@@ -578,12 +582,12 @@ describe('useDeckModeData', () => {
 	});
 
 	it('keeps a degraded deck on program and exposes the degradation instead of an error', async () => {
-		mockPlayerStore.getPlayerById.mockResolvedValue({
+		mockReadPlayer.mockResolvedValue({
 			id: 5,
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 		mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 		mockBuildDeckListArrays.mockReturnValue({
 			mainboard: [{ ...createEnrichedCard('Counterspell', ''), mtgCard: null }],
@@ -602,12 +606,12 @@ describe('useDeckModeData', () => {
 	it('re-fetches degraded card data without a reload and recovers when Scryfall answers', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockResolvedValue({
+			mockReadPlayer.mockResolvedValue({
 				id: 5,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards
 				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
 				.mockResolvedValue({ cards: new Map(), degraded: false });
@@ -640,12 +644,12 @@ describe('useDeckModeData', () => {
 	it('reports card data health through the screen context, and settles it on teardown', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockResolvedValue({
+			mockReadPlayer.mockResolvedValue({
 				id: 5,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
@@ -675,12 +679,12 @@ describe('useDeckModeData', () => {
 	it('stops re-fetching and clears the degradation when the player selection is cleared', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockResolvedValue({
+			mockReadPlayer.mockResolvedValue({
 				id: 5,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
@@ -705,12 +709,12 @@ describe('useDeckModeData', () => {
 	it('keeps program untouched while a re-fetch is still degraded, and keeps retrying', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockResolvedValue({
+			mockReadPlayer.mockResolvedValue({
 				id: 5,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
@@ -737,12 +741,12 @@ describe('useDeckModeData', () => {
 	it('keeps the recovery cadence alive when a re-fetch itself fails mid-outage', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockResolvedValue({
+			mockReadPlayer.mockResolvedValue({
 				id: 5,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			});
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards
 				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
 				.mockResolvedValue({ cards: new Map(), degraded: false });
@@ -754,7 +758,7 @@ describe('useDeckModeData', () => {
 			expect(result.cardDataDegraded.value).toBe(true);
 
 			// The same outage takes down the deck endpoint for one cadence tick.
-			mockFetchDeck.mockRejectedValueOnce(new Error('network down'));
+			mockReadDeck.mockRejectedValueOnce(new Error('network down'));
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(result.cardDataDegraded.value).toBe(true);
 
@@ -771,13 +775,13 @@ describe('useDeckModeData', () => {
 		vi.useFakeTimers();
 		try {
 			let updatedAt = '2026-08-21T00:00:00.000Z';
-			mockPlayerStore.getPlayerById.mockImplementation(async () => ({
+			mockReadPlayer.mockImplementation(async () => ({
 				id: 5,
 				name: 'Alice',
 				updatedAt,
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 			}));
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
 
@@ -804,11 +808,11 @@ describe('useDeckModeData', () => {
 	it('cancels a degraded re-fetch when the operator selects another player, so the stale deck cannot come back', async () => {
 		vi.useFakeTimers();
 		try {
-			mockPlayerStore.getPlayerById.mockImplementation(async (_eventId: number, playerId: number) =>
+			mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) =>
 				playerId === 5
 					? { id: 5, name: 'Alice', gameData: { type: 'mtg', deckName: 'Deck A', deckColors: 'U' } }
 					: { id: 6, name: 'Bob', gameData: { type: 'mtg', deckName: 'Deck B', deckColors: 'R' } });
-			mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards
 				.mockResolvedValueOnce({ cards: new Map(), degraded: true })
 				.mockResolvedValue({ cards: new Map(), degraded: false });
@@ -836,12 +840,12 @@ describe('useDeckModeData', () => {
 	});
 
 	it('clears to blank when playerId becomes null', async () => {
-		mockPlayerStore.getPlayerById.mockResolvedValue({
+		mockReadPlayer.mockResolvedValue({
 			id: 5,
 			name: 'Alice',
 			gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
 		});
-		mockFetchDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
+		mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 		mockBuildDeckListArrays.mockReturnValue({
 			mainboard: [createEnrichedCard('Counterspell', 'https://img.test/counterspell.jpg')],
 			sideboard: [],
@@ -868,27 +872,25 @@ describe('useDeckModeData', () => {
 		const BEFORE_EDIT = '2026-10-15T10:00:00.000Z';
 		const AFTER_EDIT = '2026-10-15T10:05:00.000Z';
 
-		/** What the server holds; `getPlayerById` and a roster load both read it. */
+		/** What the server holds; the Screen Output Player read answers it. */
 		let serverPlayer: { id: number; name: string; updatedAt: string };
 
-		/** What `player:updated` does to the store: replace the record it already holds. */
+		/** The server commits an edit and announces it on the Event channel. */
 		function applyPlayerUpdated(next: typeof serverPlayer) {
-			serverPlayer = next;
-			const index = mockPlayerStore.players.findIndex(player => player.id === next.id);
-			if (index !== -1)
-				mockPlayerStore.players[index] = next;
+			if (next.id === serverPlayer.id)
+				serverPlayer = next;
+			playerUpdatedHandler()?.({ eventId: 1, player: next });
 		}
 
-		/** A roster load that lands only when the test says so, with what the server then holds. */
-		function holdRoster() {
+		/** A Player read served now — with what the server holds now — but delivered when the test says so. */
+		function holdRead() {
 			let release!: () => void;
-			mockPlayerStore.loadPlayersByEventId.mockImplementation(() => new Promise<void>((resolve) => {
-				release = () => {
-					mockPlayerStore.players.splice(0, mockPlayerStore.players.length, serverPlayer, { id: 6, name: 'Bob', updatedAt: BEFORE_EDIT });
-					mockPlayerStore.isLoaded = true;
-					resolve();
-				};
-			}));
+			mockReadPlayer.mockImplementationOnce(() => {
+				const served = serverPlayer;
+				return new Promise((resolve) => {
+					release = () => resolve(served);
+				});
+			});
 			return () => release();
 		}
 
@@ -898,13 +900,9 @@ describe('useDeckModeData', () => {
 
 		beforeEach(() => {
 			serverPlayer = { id: 5, name: 'Alice', updatedAt: BEFORE_EDIT };
-			mockPlayerStore.getPlayerById.mockImplementation(async (_eventId: number, playerId: number) =>
+			mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) =>
 				playerId === serverPlayer.id ? serverPlayer : null);
-			mockPlayerStore.loadPlayersByEventId.mockImplementation(async () => {
-				mockPlayerStore.players.splice(0, mockPlayerStore.players.length, serverPlayer);
-				mockPlayerStore.isLoaded = true;
-			});
-			mockFetchDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
+			mockReadDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
 				createDeckResponse([createDeckCard({ name: updatedAt === BEFORE_EDIT ? 'Counterspell' : 'Brainstorm' })]));
 			mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
 				mainboard: [createEnrichedCard(cards[0]!.name, `https://img.test/${cards[0]!.name}.jpg`)],
@@ -928,38 +926,35 @@ describe('useDeckModeData', () => {
 			expect(mainboardNames(result)).toEqual(['Brainstorm']);
 		});
 
-		it('neither swaps when the roster arrives holding what program shows, nor for another Player\'s update', async () => {
-			const releaseRoster = holdRoster();
+		it('neither swaps for its own unchanged revision nor for another Player\'s update', async () => {
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();
 			await flushPromises();
 			expect(result.displayedDeckVersion.value).toBe(1);
 
-			releaseRoster();
-			await flushPromises();
-			mockPlayerStore.players[1] = { id: 6, name: 'Bob', updatedAt: AFTER_EDIT };
+			applyPlayerUpdated({ ...serverPlayer });
+			applyPlayerUpdated({ id: 6, name: 'Bob', updatedAt: AFTER_EDIT });
 			await flushPromises();
 
 			expect(result.pendingSwapVersion.value).toBe(0);
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
 		});
 
-		it('stages an edit the roster arrives holding, which the deck read and the update message both missed', async () => {
-			const releaseRoster = holdRoster();
+		it('shows an edit announced while the first read is in flight, which that read missed', async () => {
+			const releaseRead = holdRead();
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();
 			await flushPromises();
-			expect(mainboardNames(result)).toEqual(['Counterspell']);
 
-			// Published before the roster landed, so it replaced nothing.
+			// Served before the edit, delivered after it: the announcement supersedes
+			// the read, and with nothing on program yet its answer is displayed directly.
 			applyPlayerUpdated({ ...serverPlayer, updatedAt: AFTER_EDIT });
-			await flushPromises();
-			releaseRoster();
+			releaseRead();
 			await flushPromises();
 
-			expect(result.pendingSwapVersion.value).toBe(1);
-			result.commitPendingDeck();
-			await nextTick();
 			expect(mainboardNames(result)).toEqual(['Brainstorm']);
+			expect(result.pendingSwapVersion.value).toBe(0);
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 		});
 
 		it('shows an edit missed while disconnected once after reconnect, without a second swap', async () => {
@@ -982,7 +977,7 @@ describe('useDeckModeData', () => {
 		});
 
 		it('shows a deck imported after the Player was selected without one', async () => {
-			mockFetchDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
+			mockReadDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
 				createDeckResponse(updatedAt === BEFORE_EDIT ? [] : [createDeckCard({ name: 'Brainstorm' })]));
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();

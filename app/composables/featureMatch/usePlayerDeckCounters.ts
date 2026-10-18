@@ -1,12 +1,25 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { CounterTypeConfig } from '~~/shared/types/game';
+import type { PlayerDeckResponse } from '~~/shared/types/metagame';
+import type { ScreenOutputPlayerDecksResponse } from '~~/shared/types/screenOutputReads';
+import type { Player } from '~/types';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
+
+/** How a rendering of a Screen reads a Player it shows, with their decks (#604). */
+export type ScreenOutputPlayerDeckReader = (playerId: number) => Promise<ScreenOutputPlayerDecksResponse>;
 
 export function usePlayerDeckCounters(
 	matchId: MaybeRefOrGetter<number>,
 	playerSide: MaybeRefOrGetter<PlayerSide>,
+	/**
+	 * Set on a rendering of the Screen: a Screen Output holds no Session for the
+	 * operator's Player and deck reads, so it reads the Slot's Players through
+	 * the Screen and holds the record so its edits keep it live.
+	 */
+	readAsScreenOutput?: ScreenOutputPlayerDeckReader,
 ) {
 	const eventStore = useEventStore();
 	const featureMatchStore = useFeatureMatchStore();
@@ -46,7 +59,7 @@ export function usePlayerDeckCounters(
 	watch(
 		() => [
 			eventStore.eventId,
-			eventStore.event?.game,
+			eventStore.displayEvent?.game,
 			playerLocator.value.id,
 			playerLocator.value.name,
 			matchedPlayer.value?.id,
@@ -57,7 +70,7 @@ export function usePlayerDeckCounters(
 			const currentRequestId = ++requestId;
 			availableCounterTypes.value = undefined;
 
-			if (eventStore.event?.game !== 'mtg') {
+			if (eventStore.displayEvent?.game !== 'mtg') {
 				availableCounterTypes.value = [];
 				return;
 			}
@@ -67,18 +80,36 @@ export function usePlayerDeckCounters(
 				return;
 			}
 
-			const player = matchedPlayer.value
-				?? (playerLocator.value.id ? await playerStore.getPlayerById(eventId, playerLocator.value.id) : null);
-			if (currentRequestId !== requestId) {
-				return;
+			let player: Player | null;
+			let deck: PlayerDeckResponse | null;
+			if (readAsScreenOutput) {
+				const playerId = playerLocator.value.id;
+				const read = playerId ? await readAsScreenOutput(playerId).catch(() => null) : null;
+				if (currentRequestId !== requestId) {
+					return;
+				}
+				player = read?.player ?? null;
+				deck = read ? selectPlayerDeck(read.decks) : null;
+				if (player && player.updatedAt !== matchedPlayer.value?.updatedAt)
+					playerStore.holdPlayer(player);
+				if (!player || !getMtgGameData(player.gameData).deckName) {
+					return;
+				}
 			}
-			if (!player || !getMtgGameData(player.gameData).deckName) {
-				return;
-			}
+			else {
+				player = matchedPlayer.value
+					?? (playerLocator.value.id ? await playerStore.getPlayerById(eventId, playerLocator.value.id) : null);
+				if (currentRequestId !== requestId) {
+					return;
+				}
+				if (!player || !getMtgGameData(player.gameData).deckName) {
+					return;
+				}
 
-			const deck = await deckCache.fetchDeck(player.id, eventId, player.updatedAt);
-			if (currentRequestId !== requestId) {
-				return;
+				deck = await deckCache.fetchDeck(player.id, eventId, player.updatedAt);
+				if (currentRequestId !== requestId) {
+					return;
+				}
 			}
 
 			if (!deck || deck.cards.length === 0) {

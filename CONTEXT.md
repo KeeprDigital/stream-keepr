@@ -154,7 +154,7 @@ A control surface's own live rendering of the Screen it drives. It composes what
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 ### Client and live-state infrastructure
 
@@ -163,6 +163,10 @@ The client-side access path for Event-scoped data such as Players, Phases, Round
 
 **Realtime Event Session**:
 The client-side subscription for Event messages.
+
+**Realtime Subscription**:
+A consumer's standing request to the realtime transport: a room handler, a channel handler, a presence watch, or a presence entry. The transport holds it from creation until its consumer disposes it, attaching it whenever its **Event** is covered; no failure ends one (ADR-0023).
+_Avoid_: registration.
 
 **Reconnect Resync**:
 The client-side module owning the invariant "coming back from a disconnection is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
@@ -175,6 +179,10 @@ _Avoid_: generation counter, version guard, latest-wins map.
 **Flight**:
 A ticket for one unit of supersedable async work, checked for staleness after each await. Staleness is monotonic.
 _Avoid_: request id, generation.
+
+**Event Lifetime**:
+The span of one Event's client-side state, from the store reset that begins it to the one that ends it. Coming back to an Event begins a new one, because the Event is loaded afresh. A write's continuation — merging its answer, rolling back, follow-up reloads — runs only while the Flight for the lifetime it began in is current; the caller still receives the answer (ADR-0024).
+_Avoid_: Event session, Event generation.
 
 **Field Ownership**:
 The set of fields one action may write, derived from the change the action predicts.
@@ -622,9 +630,11 @@ _Avoid_: Dummy data, test data
 - Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**; a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
 - A **Screen Output** whose realtime link is disconnected holds its last accepted rendering rather than blanking
 - A client that cannot mint a realtime token for its **Event** re-attempts, and reports a persistent failure where an operator can see it
+- A **Realtime Subscription** outlives any token or transport failure until its consumer disposes it; once its **Event** recovers, the original handler receives again — and a held presence entry enters — without a remount (ADR-0023)
 - Only a **Screen Output** enters its **Screen**'s presence and answers its **Screen**'s commands; a **Program monitor** or preview joins neither, so every count of what is watching a **Screen** counts outputs alone
 - A **Screen Output** carries its **Screen Output Asset Capability** in its URL; every surface handing an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders nothing at all (ADR-0010)
+- A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items

@@ -8,6 +8,7 @@ const mockRepo = {
 };
 const mockFeatureMatchStore = {
 	applyRemoteUpdated: vi.fn(),
+	currentLifetime: () => ({ stale: false, current: true }),
 };
 const mockModalOpen = vi.fn();
 const mockOverlayCreate = vi.fn(() => ({ open: mockModalOpen }));
@@ -15,6 +16,7 @@ const mockAssignmentStore = {
 	currentEventId: 1 as number | null,
 	assignmentsByRound: new Map<number, unknown[]>([[3, []]]),
 	applySavedAssignment: vi.fn(),
+	currentLifetime: () => ({ stale: false, current: true }),
 };
 
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);

@@ -25,8 +25,8 @@ export function useFeatureMatchGameMode(
 	const mid = () => toValue(matchId);
 	const eid = () => eventStore.eventId;
 
-	const game = computed(() => (eventStore.event?.game ?? 'mtg'));
-	const defaults = computed(() => toFeatureMatchDefaults(eventStore.event));
+	const game = computed(() => (eventStore.displayEvent?.game ?? 'mtg'));
+	const defaults = computed(() => toFeatureMatchDefaults(eventStore.displayEvent));
 
 	// ── Feature flags from event config ──
 
@@ -36,10 +36,10 @@ export function useFeatureMatchGameMode(
 	const mulliganTrackingEnabled = computed(() => defaults.value.mulliganTrackingEnabled);
 
 	// Display feature flags (event-level toggles for optional fields)
-	const pronounsEnabled = computed(() => eventStore.event?.pronounsEnabled ?? true);
-	const standingsEnabled = computed(() => eventStore.event?.standingsEnabled ?? true);
-	const lgsEnabled = computed(() => eventStore.event?.lgsEnabled ?? false);
-	const tableNumberEnabled = computed(() => eventStore.event?.tableNumberEnabled ?? false);
+	const pronounsEnabled = computed(() => eventStore.displayEvent?.pronounsEnabled ?? true);
+	const standingsEnabled = computed(() => eventStore.displayEvent?.standingsEnabled ?? true);
+	const lgsEnabled = computed(() => eventStore.displayEvent?.lgsEnabled ?? false);
+	const tableNumberEnabled = computed(() => eventStore.displayEvent?.tableNumberEnabled ?? false);
 
 	// ── Mulligan phase ──
 

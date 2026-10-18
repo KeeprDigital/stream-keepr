@@ -1,4 +1,5 @@
 import type { Ref } from 'vue';
+import type { Flight } from '~/utils/guardedSequence';
 import { computed, ref } from 'vue';
 
 interface EventDataLifecycleRepository<T, TCreate extends object, TUpdate extends object> {
@@ -65,6 +66,13 @@ export function useEventDataLifecycle<
 	 */
 	const { executeReporting } = useReportingAction();
 	let loadGeneration = 0;
+	/**
+	 * The Event Lifetime a write's answer belongs to. Each reset begins a new one, so a
+	 * write answered after the collection moved on — to another Event, or to the same
+	 * Event loaded afresh — neither lands in nor rolls back what it holds now (#606).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 
 	async function loadFrom(eventId: number, loader: (eventId: number) => Promise<T[]>) {
 		const generation = ++loadGeneration;
@@ -102,14 +110,17 @@ export function useEventDataLifecycle<
 	}
 
 	async function create(eventId: number, input: TCreate) {
+		const flight = lifetime;
 		return executeReporting(
 			async () => {
 				const created = await options.repository.create(eventId, input);
+				if (flight.stale)
+					return created;
 				items.value.push(created);
 				options.onMutation?.();
 				return created;
 			},
-			{ errorRef: error },
+			{ errorRef: error, flight },
 		);
 	}
 
@@ -122,6 +133,7 @@ export function useEventDataLifecycle<
 			errorRef: error,
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,
+			flight: lifetime,
 		});
 	}
 
@@ -133,6 +145,7 @@ export function useEventDataLifecycle<
 			errorRef: error,
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,
+			flight: lifetime,
 		});
 	}
 
@@ -174,7 +187,16 @@ export function useEventDataLifecycle<
 		}
 	}
 
+	/**
+	 * The current Event Lifetime, for a store whose own continuation of a write here —
+	 * a cache it primes, a reload it starts — must stop where this collection's does.
+	 */
+	function currentLifetime(): Flight {
+		return lifetime;
+	}
+
 	function reset() {
+		lifetime = lifetimes.begin();
 		loadGeneration++;
 		items.value = [];
 		listLoading.value = false;
@@ -200,6 +222,7 @@ export function useEventDataLifecycle<
 		update,
 		remove,
 		getById,
+		currentLifetime,
 		applyRemoteCreated,
 		applyRemoteUpdated,
 		applyRemoteDeleted,

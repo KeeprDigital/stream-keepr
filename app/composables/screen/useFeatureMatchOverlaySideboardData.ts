@@ -4,6 +4,8 @@ import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig
 import type { FeatureMatchOverlaySideboards } from '~/modules/feature-match-overlay/tokenValues';
 import type { GraphicsDeckListCard } from '~/modules/graphics/renderModel';
 import type { FeatureMatch } from '~/types';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 
 const PLAYER_SIDES = ['player1', 'player2'] as const;
 
@@ -61,19 +63,18 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
 
 /**
  * Real sideboard card data for the Feature Match Overlay output (#491),
- * resolved client-side through the Deck screen's stack: `usePlayerDeckCache` +
- * `useScryfallBatch` + `useDegradedRefetch`. The server contract is untouched —
+ * resolved client-side through the Deck screen's stack: the Screen Output
+ * Player read (#604) + `useScryfallBatch` + `useDegradedRefetch`. The server contract is untouched —
  * `FeatureMatchOverlayHostStateInput` stays summary-only, and this joins at the
  * token-values seam via `featureMatchGraphicsContext`'s deck data parameter.
  *
  * Fetch scoping: a side is fetched only while the composition holds at least
- * one `deck-list` item for it. No item, no fetch. Live-follow rides the
- * store-held player record — `player:updated` replaces it, `updatedAt` rolls
- * the deck-cache key, and the watch below re-runs the load.
+ * one `deck-list` item for it. No item, no fetch. Live-follow rides
+ * `player:updated`: a revision other than the one on screen re-runs the load.
  *
  * Deck selection ladder: the session snapshot's `deckId` first, because the
  * snapshot pins what this session is actually playing; a pin the collection no
- * longer holds falls back to the cache's own ladder (selected → primary →
+ * longer holds falls back to the collection's own ladder (selected → primary →
  * first). Whole-fetch failure is `null`, an empty sideboard is `[]`, and a card
  * without art carries `imageUrl: null` — three states the render model keeps
  * distinct. One deliberate narrowing of the failure rule: a load that throws
@@ -87,8 +88,8 @@ export function useFeatureMatchOverlaySideboardData(
 	match: Ref<FeatureMatch | null>,
 ) {
 	const { eventId, cardDataHealth } = useScreenContext();
-	const playerStore = usePlayerStore();
-	const deckCache = usePlayerDeckCache();
+	const outputReads = useScreenOutputReads();
+	const realtime = tryUseRealtime();
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
 
 	const sideboards = ref<FeatureMatchOverlaySideboards>({ player1: null, player2: null });
@@ -127,22 +128,23 @@ export function useFeatureMatchOverlaySideboardData(
 	});
 
 	async function resolveSide(
-		evtId: number,
 		request: SideRequest | null,
 	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null }> {
 		if (!request)
 			return { cards: null, degraded: false, stamp: null };
 
-		const player = playerStore.players.find(p => p.id === request.playerId)
-			?? await playerStore.getPlayerById(evtId, request.playerId);
-		if (!player)
+		// The Player and their decks come through the Screen (#604).
+		const read = await outputReads.playerDecks(request.playerId, request.deckId != null ? { deckId: request.deckId } : {})
+			.catch(() => null);
+		if (!read)
 			return { cards: null, degraded: false, stamp: `${request.playerId}::none` };
+		const player = read.player;
 
 		const updatedAtMs = new Date(player.updatedAt).getTime();
-		const deck = await deckCache.fetchDeck(player.id, evtId, player.updatedAt, request.deckId != null ? { deckId: request.deckId } : {})
-			// A pinned deck the collection no longer holds falls back to the
-			// cache's own selection ladder rather than rendering nothing.
-			?? (request.deckId != null ? await deckCache.fetchDeck(player.id, evtId, player.updatedAt) : null);
+		// A pinned deck the collection no longer holds falls back to the
+		// collection's own selection ladder rather than rendering nothing.
+		const deck = selectPlayerDeck(read.decks, request.deckId != null ? { deckId: request.deckId } : {})
+			?? (request.deckId != null ? selectPlayerDeck(read.decks) : null);
 		if (!deck)
 			return { cards: null, degraded: false, stamp: `${request.playerId}:${updatedAtMs}:none` };
 
@@ -192,16 +194,9 @@ export function useFeatureMatchOverlaySideboardData(
 		}
 
 		try {
-			// The store-held roster is the live-follow source: `player:updated`
-			// replaces records in it, which rolls the freshness key below.
-			if (!playerStore.isLoaded)
-				await playerStore.loadPlayersByEventId(evtId);
-			if (flight.stale)
-				return;
-
 			const [player1, player2] = await Promise.all([
-				resolveSide(evtId, current.player1),
-				resolveSide(evtId, current.player2),
+				resolveSide(current.player1),
+				resolveSide(current.player2),
 			]);
 			if (flight.stale)
 				return;
@@ -213,11 +208,10 @@ export function useFeatureMatchOverlaySideboardData(
 
 			// A still-degraded re-fetch of unchanged sources has nothing better to
 			// show than the identical placeholder rendering already up (#465).
-			if (degradedRefetch.completeLoad(player1.degraded || player2.degraded, next) === 'keep')
-				return;
-
-			displayed = next;
-			sideboards.value = next.sideboards;
+			if (degradedRefetch.completeLoad(player1.degraded || player2.degraded, next) !== 'keep') {
+				displayed = next;
+				sideboards.value = next.sideboards;
+			}
 		}
 		catch (err) {
 			console.error('Failed to load Feature Match Overlay sideboard data:', err);
@@ -236,8 +230,7 @@ export function useFeatureMatchOverlaySideboardData(
 			const parts: string[] = [String(eventId.value ?? '')];
 			for (const side of PLAYER_SIDES) {
 				const request = current[side];
-				const player = request ? playerStore.players.find(p => p.id === request.playerId) : undefined;
-				parts.push(request ? `${request.playerId}:${request.deckId ?? ''}:${player?.updatedAt ?? ''}` : '');
+				parts.push(request ? `${request.playerId}:${request.deckId ?? ''}` : '');
 			}
 			return parts.join('|');
 		},
@@ -248,21 +241,44 @@ export function useFeatureMatchOverlaySideboardData(
 	);
 
 	/**
+	 * Live-follow of both sides: a `player:updated` whose revision differs from
+	 * the one on screen re-reads, including one announced while a read is still in
+	 * flight. Heard on the Event channel itself, because an output holds no roster
+	 * for the message to replace a record in (#604).
+	 */
+	let unsubscribeFromPlayerUpdates: (() => void) | null = null;
+	watch(eventId, (evtId) => {
+		unsubscribeFromPlayerUpdates?.();
+		unsubscribeFromPlayerUpdates = null;
+		if (!realtime || !evtId)
+			return;
+		unsubscribeFromPlayerUpdates = realtime.onChannel(eventRealtimeChannel(evtId), 'player:updated', ({ player }) => {
+			for (const side of PLAYER_SIDES) {
+				if (requests.value[side]?.playerId !== player.id)
+					continue;
+				if (String(new Date(player.updatedAt).getTime()) !== displayed.stamps[side]?.split(':')[1]) {
+					void load();
+					return;
+				}
+			}
+		});
+	}, { immediate: true });
+
+	/**
 	 * The deck path's half of the Reconnect Resync rule (#307): a `player:updated`
 	 * published while this client was suspended is simply gone, so coming back
-	 * re-reads the roster. A record the reload replaces rolls `updatedAt`, which
-	 * the watch below keys on; an unchanged roster refetches nothing.
+	 * re-reads both sides through the Screen.
 	 */
 	useReconnectResync(() => {
-		const evtId = eventId.value;
 		const current = requests.value;
-		if (!evtId || (!current.player1 && !current.player2))
+		if (!eventId.value || (!current.player1 && !current.player2))
 			return;
 
-		void playerStore.loadPlayersByEventId(evtId);
+		void load();
 	});
 
 	onScopeDispose(() => {
+		unsubscribeFromPlayerUpdates?.();
 		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {

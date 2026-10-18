@@ -63,7 +63,7 @@ export function usePlayerFeatureMatchData(
 		return playerData.value?.pronouns ?? undefined;
 	});
 
-	const game = computed(() => eventStore.event?.game ?? 'mtg');
+	const game = computed(() => eventStore.displayEvent?.game ?? 'mtg');
 
 	const deckName = computed(() => {
 		if (game.value === 'mtg') {
@@ -84,7 +84,7 @@ export function usePlayerFeatureMatchData(
 	});
 
 	const seatLabel = computed(() => {
-		const orientation = eventStore.event?.featureMatchOrientation;
+		const orientation = eventStore.displayEvent?.featureMatchOrientation;
 		if (orientation === 'vertical') {
 			return side() === 'player1' ? 'Top' : 'Bottom';
 		}
@@ -100,7 +100,7 @@ export function usePlayerFeatureMatchData(
 		const displayMode = activeSession.value?.sourceSnapshot.playerDisplayMode ?? match.value?.playerDisplayMode;
 		if (!data || !displayMode)
 			return undefined;
-		const event = eventStore.event;
+		const event = eventStore.displayEvent;
 
 		if (displayMode === 'position') {
 			const pos = data.position;

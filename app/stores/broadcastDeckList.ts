@@ -65,6 +65,13 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 	const collectionLoads = createGuardedSequence();
 	const detailLoads = createKeyedGuardedSequence<number>();
 	const mutationFlights = createKeyedGuardedSequence<number>();
+	/**
+	 * The Event Lifetime a create's answer belongs to, begun afresh whenever the store
+	 * follows another Event or is reset, so a create answered after the operator moved
+	 * on — even back to this Event — caches nothing (ADR-0024).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 	const pendingMutations = new Map<number, PendingMutation>();
 
 	function replaceDetail(listId: number, detail: BroadcastDeckListResponse | null) {
@@ -166,6 +173,7 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 	}
 
 	function resetState(eventId: number | null) {
+		lifetime = lifetimes.begin();
 		collectionLoads.supersede();
 		detailLoads.supersedeAll();
 		mutationFlights.supersedeAll();
@@ -255,17 +263,18 @@ export const useBroadcastDeckListStore = defineStore('broadcastDeckList', () => 
 
 	async function createList(eventId: number, input: CreateBroadcastDeckListInput) {
 		ensureEvent(eventId);
+		const flight = lifetime;
 		error.value = null;
 		let created: BroadcastDeckListResponse;
 		try {
 			created = await withFailureSentence(() => repo.create(eventId, input));
 		}
 		catch (cause) {
-			if (currentEventId.value === eventId)
+			if (flight.current)
 				error.value = cause instanceof Error ? cause.message : 'Failed to create Broadcast Deck List';
 			throw cause;
 		}
-		if (currentEventId.value !== eventId)
+		if (flight.stale)
 			return created;
 		collectionLoads.supersede();
 		detailLoads.supersede(created.id);

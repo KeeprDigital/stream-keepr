@@ -549,3 +549,145 @@ Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed con
 - **Let a URL travel in a Template Package as data** — a package would then depend on a remote host the receiver never vetted, which is what `remote-resource-dependency` exists to refuse.
 - **Turn the Frame's media into a Background Layer stack** — graphics hosts own their backgrounds (ADR-0016); that is its own decision.
 - **Normalise old Frame shapes on read** — costs little, but nothing in the old shape has shipped.
+
+## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
+
+Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604)
+
+### Decision
+
+**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
+
+**A capability reaches a mode's data only while its Screen is in that mode** (`requireScreenOutputModeRead`): a Screen publishes what it is showing, not every mode it holds configuration for.
+
+**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Metagame and Top Cards the breakdown their fields describe (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
+
+- `feature-match-slots/:slotId` — a capability reaches only the Slot the current mode shows; a Session reaches any, because the Feature Match Overlay's editor preview renders a Slot not yet saved.
+- `players/:playerId/decks` — a capability reaches only the Deck mode's selected Player or the shown Slot's two Players, so it cannot read the Event's decklists ahead of their broadcast.
+
+**The Event context is an allowlist** (`SCREEN_OUTPUT_EVENT_FIELDS`): name, game, orientation, display formatting, Feature Match defaults and feature flags. A rendering holds it as `eventStore.outputEvent`; components shared with control pages read `eventStore.displayEvent`.
+
+**A rendering never changes live state by reading it.** A Slot with no Feature Match Session answers `activeSession: null` instead of the output starting one, and an expired Card is hidden locally instead of `DELETE`d (the server's own timeout clears it and announces it).
+
+**Every rendering reads this way, whatever it holds.** A Program monitor or preview with a Session takes the same paths as a capability-only output. No client chooses a path by credential.
+
+### Why
+
+The Event middleware loaded the private Event for the output page, got a 401, and sent program to `/`, then to sign-in. That was the first of many private reads: every mode's data, the Live Session snapshot and the Screen-by-id reload behind `screen:updated` were all session-only. The last swallowed its failure, so an output also silently missed every later mode change.
+
+Deriving from configuration keeps the capability's reach equal to what the Screen publishes, the same rule ADR-0010 and the Broadcast Deck List read already apply. A mismatch between a client's held configuration and the saved one self-corrects: the save announces `screen:updated`, the rendering re-reads its Screen, and its mode re-reads.
+
+### Consequences
+
+- The ordinary `/api/events/**` reads stay private. This widens the capability surface, not the Event boundary.
+- An announced active Screen is re-read by id through the Screen Output path, with the credential it was first read with — by id because a slug can be renamed under an output on program.
+- Store-wide reader hooks a rendering installs (`readActiveCardAsScreenOutput`, `readSessionsAsScreenOutput`, `readSessionAsScreenOutput`) are uninstalled when the rendering is disposed, so a control page never inherits them.
+- Deck and the Feature Match Overlay sideboard follow `player:updated` on the Event channel directly, since an output holds no roster for the message to update; this replaces their roster loads, not the wider freshness work.
+- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`, `playerStore.loadPlayersFrom`), so `player:updated` and `featureMatch:updated` keep them live without the private roster or Slot list.
+- Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
+- Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
+- The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.
+
+### Rejected alternatives
+
+- **Admit the capability on the existing `/api/events/**` reads** — the capability would reach its whole Event, decklists included, and every new private route would need a decision about it.
+- **One aggregate "mode data" read per Screen** — each mode's client would be rebuilt around a new payload, and the Live Session and Feature Match Session would lose the snapshot shapes their followers already apply.
+- **Path ids validated against the configuration everywhere** — repeats every query's validation on the server for no reach the derived form lacks.
+
+## ADR-0023: A Realtime Subscription is held until disposed, and its Event's recovery re-attempts while one waits
+
+Accepted · 2026-10-18 · #609
+
+### Decision
+
+**The realtime transport (`app/plugins/realtime.client.ts`) never forgets a Realtime Subscription on failure.** A room handler, channel handler, presence watch or presence entry that cannot attach stays pending. It might be waiting on a token for its Event, or its channel might have refused the attach. Its Event's recovery attaches it from the transport's own records, and the connection coming back retries it too. Only the consumer's disposal ends it.
+
+**One recovery per Event: mint if no token covers it, then attach everything waiting.** The quick retries (250 ms to 4 s) run first. The fault (`tokenError`) is published when they are spent. Then the recovery backs off (5, 10, 20 s) and settles at one attempt every 30 s, with no attempt limit. It succeeds only once everything waiting has attached, so the fault stands until then. A token in hand is not yet a show receiving. It stops when a recovery for another Event supersedes it, or when the last waiting subscription is disposed. Disposal clears the fault at once, since nothing is failing for anyone any more. A recovery that stops without landing points Ably's own re-mints (on reconnect, before expiry) back at the Event the token in hand covers.
+
+**A refused attach keeps its listener.** Ably re-attaches a suspended channel by itself, and the listener must still be there when it does. A retry takes the listener off before subscribing again, so nothing is delivered twice. A `failed` channel is attached explicitly first, because ably@2.29 refuses a subscribe on one. A refusal on a covered Event starts a recovery if none is running, because nothing else retries it while the connection stays up.
+
+**`enterPresence` holds its entry instead of failing.** It resolves once entered or once held, never waiting out an outage, because a Screen Output stops loading only when it returns. A held entry enters with its latest data once its Event recovers. `leavePresence` withdraws it either way.
+
+### Why
+
+The fix for #307 made a failed mint retry and report, but exhaustion still unsubscribed every waiting subscription. A later subscribe could restore coverage and clear the fault, yet the page's own handlers were gone. With no later subscribe, nothing even re-attempted. Coverage came back with nothing listening, and only a remount recovered. Presence was the same: a Screen Output whose entry failed was never counted again. #590 and #601 work above the transport and cannot restore what it has forgotten.
+
+### Consequences
+
+- Issue #609 asks for retries that are "bounded/backed off". Here that means bounded in rate, not in count: an attempt limit would leave a restored service with nothing listening.
+- A page left open through a long outage makes one attempt every 30 s for as long as something waits. That cost buys a show that recovers without anyone touching the page.
+- A subscribe on the Event the token still covers no longer clears the fault while a recovery for another Event is still running.
+- A refused attach on a covered Event now publishes the fault once its quick retries are spent. Before, it was only a console warning.
+- The token covers one Event at a time. A subscription left undisposed on an Event the client has moved away from stays pending. It attaches only if that Event is recovered again.
+
+### Rejected alternatives
+
+- **A bounded number of recovery attempts.** It brings back the failure this removes: after the last attempt, a restored service finds nothing listening.
+- **Re-register from above the transport** (#590, #601). That would need every consumer to know about token outages and remount, and the transport is the layer that knows a subscription exists.
+- **`enterPresence` waiting for the token.** It would hold a Screen Output's load for the length of the outage.
+
+## ADR-0024: An Event-scoped write's continuation belongs to its Event Lifetime, not its Event id
+
+The client resets every Event-scoped store when the operator leaves an Event, then loads the next one. A write answered after that used to land in whatever the stores held by then. A save of Event A merged A's response, id and all, into Event B. A failed delete put A's row back into B's list. An Archetype edit reloaded A's Feature Match Slots into B's store (#606).
+
+### Decision
+
+**Each Event-scoped store begins a new Event Lifetime on reset, as a Flight from its own Guarded Sequence.** A write captures the current Flight before it awaits. Its continuation runs only while that Flight is current. That covers merging the answer, the optimistic rollback, the error and loading refs, and anything it starts afterwards: priming a Feature Match Session, reloading Slots, invalidating the Metagame. `useAsyncAction` takes the Flight as `flight`. While that Flight is stale, `useAsyncAction` leaves `errorRef` and `loadingRef` alone and does not call `onError`. The Event Data lifecycle module exposes `currentLifetime()` for the stores built on it, and so do the Feature Match Slot and Assignment stores, for the Slot Promotion workflow that writes into both.
+
+This covers the Event store (Event and Talent writes), every Event Data collection, Player List members, Feature Match Slots, Assignments and Slot Promotions, Archetypes, Screens, Deck reviews, Broadcast Deck List creates and Melee operations.
+
+A stale continuation still returns its answer, or raises its failure, to the caller that started the write. The write did happen, and the operator is told so. Only cross-Event state is still updated: the Events list learns a late save or create, because no Event Lifetime owns it. A late Event delete still clears the loaded Event when its id matches, in any lifetime, because that Event no longer exists.
+
+### Why
+
+An Event id cannot tell two lifetimes of the same Event apart. After A → B → A, the second A was loaded fresh. It may already hold what the late answer describes, or something newer. Merging the answer can duplicate a row or bring back an older value, and a rollback can put back a row the reload already has. Flight identity tells the lifetimes apart. The id does not.
+
+### Consequences
+
+- A create answered after the operator returned to the same Event is not added to that Event's collection. The self-origin guard skips this client's own realtime notification, so the row appears after the next load or reconnect resync, not immediately. That is accepted. The alternative is merging answers that the fresh load may already have overtaken.
+- Each store's own `$reset` is its lifetime boundary, as it was already the boundary for loads. `resetAllEventStores()` resets them all together. A store that switches Events without a reset (the Assignment and Broadcast Deck List stores, through `ensureEvent`) begins a new lifetime there too.
+- A Melee operation from an earlier lifetime no longer answers one started since. The in-flight coalescing is cleared on reset.
+- Ordering _within_ one lifetime is unchanged. This decision does not replace live aggregates' sequence and epoch rules (#590, #591). A Slot Promotion result is dropped when its lifetime ended, and otherwise still meets those rules.
+
+### Rejected alternatives
+
+- **Compare the current Event id after each await** — what the code did. It is blind to A → B → A.
+- **One application-wide Event Lifetime superseded in `resetAllEventStores()`** — one place to look. But a store reset on its own would then keep its old lifetime, and the Event Data lifecycle module would have to import the module that imports it.
+
+## ADR-0025: Animation Effect spatial params share one name, direction, and neutral value
+
+Accepted · 2026-10-15 · [#503](https://github.com/KeeprDigital/stream-keepr/issues/503)
+
+### Decision
+
+**One operator-facing concept gets one param name.** Spatial knobs in the Animation Effect catalogue split by what the operator sees:
+
+- **`scale`** sizes a repeating field's features (cells, facets, threads, fog, waves), so their count changes inversely. Its label is "<Feature> scale".
+- **`size`** sizes discrete elements whose count is fixed or set by another param (`density`, `points`). Its label is "<Element> size".
+- **`spacing`** sets the gap between elements without resizing them.
+
+A larger value always draws larger on screen, and a `scale` of 1 is the effect's designed look. The existing effects are retrofitted:
+
+- `zoom` becomes `scale` on caustics, fog, inkmap, and waves.
+- `size` becomes `scale` on cells and shards.
+- Weave's `scale` is inverted.
+- Halo's "Size" becomes "Halo size".
+
+Each new range is the old range mapped through the change, so the extremes the proof scenarios already passed are the ones offered. The rule is stated beside the catalogue in `shared/animationEffects.ts`, and a catalogue unit test refuses `zoom` and any qualified variant (`cellSize`, `waveScale`).
+
+### Why
+
+The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two directions under one label. Caustics', fog's, and inkmap's "Zoom" drew smaller features as the value rose, while waves' "Zoom" drew larger ones. #503 first proposed applying a standard only to future effects, because renaming shipped params resets stored configs (ADR-0014). Nothing has shipped (ADR-0019), so a retrofit costs no real data now. After first ship, every rename would cost a reset.
+
+### Consequences
+
+- **Stored params, Animation Effect Presets, and Template Packages naming the old keys stop parsing**: the strict schemas refuse them and the renderer falls back to defaults. That is acceptable before ship only. No format-version bump, for the reason ADR-0014 gives.
+- Ripple's `ringFactor` ("Ripple scale") is a motion knob, not a spatial one, so this standard leaves it alone; it goes with the remaining fork-era names (#583).
+- Cells' and waves' ranges are renormalised so 1 reproduces their old defaults (size 3, zoom 0.85), which leaves their bounds at uneven values (cells 0.1–1.65).
+
+### Rejected alternatives
+
+- **Standard for future effects only** — leaves the direction conflict on air permanently, to save a rename that costs nothing before ship.
+- **`zoom` for sample-domain scale, `size` for element scale** (#503's example) — splits on shader maths rather than what the operator sees, and "zoom" suggests a camera that only waves has.
+- **One name for every spatial knob** — ember needs both a density and a size, so "how big" and "how many" must stay distinct.
+- **Pixel-level direction tests** — the renderer harness could prove direction, but the cost outweighs a rule a reviewer checks against the docblock.
