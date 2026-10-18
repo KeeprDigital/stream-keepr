@@ -2,7 +2,6 @@ import type {
 	ArchetypeBreakdownResponse,
 	CardBreakdownResponse,
 } from '~~/shared/types/metagame';
-import { buildMetagameScopeQuery, useMetagameClient } from '~/modules/metagame/client';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
 
 type MetagameDisplayRow = ArchetypeBreakdownResponse['entries'][number] | CardBreakdownResponse['entries'][number];
@@ -13,7 +12,7 @@ export function useMetagameModeData() {
 
 	const playerStore = usePlayerStore();
 	const screenStore = useScreenStore();
-	const metagameClient = useMetagameClient();
+	const outputReads = useScreenOutputReads();
 
 	const displayData = useBroadcastDisplayData<{
 		archetypeData: ArchetypeBreakdownResponse | null;
@@ -108,56 +107,33 @@ export function useMetagameModeData() {
 		},
 	});
 
-	// ── Query params builder ──
-	function buildScopeQuery() {
-		return buildMetagameScopeQuery({
-			scope: config.value.scope,
-			topN: config.value.topN,
-			minPoints: config.value.minPoints,
-			playerListId: config.value.playerListId,
-		});
-	}
-
 	// ── Data Loading ──
+	// The Screen Output read derives the breakdown from the saved configuration
+	// (#604), so the watch below re-reads when a field it depends on changes.
 	async function fetchData() {
-		const evtId = eventId.value;
-		if (!evtId) {
+		if (!outputReads.scope.value) {
 			error.value = 'No event loaded';
 			displayData.clear();
 			return;
 		}
 
 		await displayData.refresh(async () => {
-			const scopeQuery = buildScopeQuery();
 			const current = displayData.data.value;
-
-			switch (config.value.viewMode) {
-				case 'cards':
-					return {
-						...current,
-						cardData: await metagameClient.loadCardBreakdown(evtId, scopeQuery, {
-							sortBy: config.value.cardSortBy,
-							limit: config.value.limit,
-							archetype: config.value.archetypeFilter,
-						}),
-					};
-				case 'archetype':
-				default:
-					return {
-						...current,
-						archetypeData: await metagameClient.loadArchetypeBreakdown(evtId, scopeQuery, {
-							sortBy: config.value.sortBy,
-							limit: config.value.archetypeLimit ?? undefined,
-						}),
-					};
-			}
+			const read = await outputReads.metagame();
+			return read.viewMode === 'cards'
+				? { ...current, cardData: read.breakdown }
+				: { ...current, archetypeData: read.breakdown };
 		}, 'Failed to load metagame data');
 	}
 
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
+	// Read off the breakdown: an output holds no roster to count (#604).
 	const emptyMessage = computed(() => {
-		if (!playerStore.isLoaded || playerStore.players.length === 0) {
+		const fieldSize = config.value.viewMode === 'cards'
+			? cardData.value?.totalDecks
+			: archetypeData.value?.totalPlayers;
+		if (!fieldSize) {
 			return 'No players in this event';
 		}
 		return 'No metagame data available';
@@ -167,6 +143,7 @@ export function useMetagameModeData() {
 	// Refetch when viewMode, scope, or filter params change
 	watch(
 		() => [
+			outputReads.scopeKey.value,
 			config.value.viewMode,
 			config.value.scope,
 			config.value.topN,

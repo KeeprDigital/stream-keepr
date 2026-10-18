@@ -226,10 +226,37 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 	// ──────────────── State Management ────────────────
 
+	/**
+	 * Set when this client renders the Slot rather than controls it (#604): the
+	 * Session is read through the Screen, and a Slot with no Session yet is shown
+	 * as such rather than given one — an output must not start live state by
+	 * reading it. The operator surface that starts the Session publishes
+	 * `SessionStarted`, which this client then applies like any other event.
+	 */
+	let screenOutputRead: ((slotId: number) => Promise<FeatureMatchSessionResponse | null>) | null = null;
+
+	/** Install the rendering's Session read; the answer uninstalls it when the rendering goes away. */
+	function readSessionsAsScreenOutput(read: (slotId: number) => Promise<FeatureMatchSessionResponse | null>) {
+		screenOutputRead = read;
+		return () => {
+			if (screenOutputRead === read)
+				screenOutputRead = null;
+		};
+	}
+
 	async function loadState(eventId: number, matchId: number) {
 		currentEventId.value = eventId;
 		return executeReporting(
 			async () => {
+				if (screenOutputRead) {
+					const session = await screenOutputRead(matchId);
+					if (!session)
+						return null;
+					cacheSession(session, { skipStateWrite: true });
+					optimistic.applyRemote(matchId, session.currentState);
+					return session.currentState;
+				}
+
 				const session = await repo.ensureSession(eventId, matchId);
 				if (!session)
 					throw new Error('Feature match session not found');
@@ -783,6 +810,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 		// Actions
 		loadState,
+		readSessionsAsScreenOutput,
 		updateState,
 		setActiveFeatureMatch,
 		startClock,

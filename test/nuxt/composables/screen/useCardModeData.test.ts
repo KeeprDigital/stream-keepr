@@ -5,8 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCardStore = reactive({
 	setActiveScreen: vi.fn(),
 	loadActiveCard: vi.fn(),
+	readActiveCardAsScreenOutput: vi.fn((_read: () => Promise<unknown>) => vi.fn()),
 	cardDataDegraded: false,
 });
+const mockApiFetch = vi.hoisted(() => vi.fn());
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 // Reactive screen ref so we can change screenId between tests
 const mockScreen = ref<{ id: number } | null>({ id: 1 });
@@ -42,6 +45,7 @@ describe('useCardModeData', () => {
 		mockCardStore.loadActiveCard.mockResolvedValue(null);
 		mockCardStore.cardDataDegraded = false;
 		mockCardDataHealth = ref('complete');
+		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
 	});
 
 	it('returns config, displayConfig, screenId, loading, and error', () => {
@@ -66,6 +70,16 @@ describe('useCardModeData', () => {
 
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
 		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();
+	});
+
+	it('reads the Screen\'s Card through the Screen, not the operator\'s Card path (#604)', async () => {
+		mountCardModeData();
+		await flushPromises();
+
+		const read = mockCardStore.readActiveCardAsScreenOutput.mock.calls[0]?.[0] as () => Promise<unknown>;
+		await expect(read()).resolves.toMatchObject({ name: 'Lightning Bolt' });
+		expect(mockApiFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/card', expect.anything());
+		expect(mockApiFetch.mock.calls.every(([, options]) => !(options as { method?: string } | undefined)?.method)).toBe(true);
 	});
 
 	it('sets loading=false after successful card load', async () => {

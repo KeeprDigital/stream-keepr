@@ -117,6 +117,7 @@ export const useCardStore = defineStore('card', () => {
 	// ──────────────── Card CRUD ────────────────
 
 	const loadActiveCard = activeCardRuntime.loadActiveCard;
+	const readActiveCardAsScreenOutput = activeCardRuntime.readAsScreenOutput;
 	const clearActiveCard = activeCardRuntime.clearActiveCard;
 
 	// ──────────────── Card Search and Preview ────────────────
@@ -225,6 +226,7 @@ export const useCardStore = defineStore('card', () => {
 		// Actions
 		setActiveScreen,
 		loadActiveCard,
+		readActiveCardAsScreenOutput,
 		saveActiveCard,
 		clearActiveCard,
 		searchFuzzyCardName,

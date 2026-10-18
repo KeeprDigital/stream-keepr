@@ -532,6 +532,27 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
+	 * Screens this client renders rather than controls, and how it reads each one's
+	 * snapshot: through the Screen's capability-scoped read, because a Screen
+	 * Output holds no Session for the Live Control path (#604). Every reload —
+	 * first paint, a sequence gap, an ended epoch, a reconnect — goes the same way.
+	 */
+	const screenOutputReads = new Map<number, () => Promise<BroadcastGraphicsLiveSessionResponse>>();
+
+	/** Install the rendering's snapshot read; the answer uninstalls it when the rendering goes away. */
+	function readSessionAsScreenOutput(screenId: number, read: () => Promise<BroadcastGraphicsLiveSessionResponse>) {
+		screenOutputReads.set(screenId, read);
+		return () => {
+			if (screenOutputReads.get(screenId) === read)
+				screenOutputReads.delete(screenId);
+		};
+	}
+
+	function fetchSession(eventId: number, screenId: number) {
+		return screenOutputReads.get(screenId)?.() ?? repository.getSession(eventId, screenId);
+	}
+
+	/**
 	 * Load one Screen's authoritative snapshot.
 	 *
 	 * The answer a superseded load returns is the snapshot that superseded it, not
@@ -543,7 +564,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		const flight = sessionLoads.begin(screenId);
 		return await executeReporting(
 			async () => {
-				const session = await repository.getSession(eventId, screenId);
+				const session = await fetchSession(eventId, screenId);
 				if (flight.stale)
 					return sessions.value.get(screenId) ?? null;
 				storeSession(session);
@@ -1132,6 +1153,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		sessions,
 		error,
 		refusal,
+		readSessionAsScreenOutput,
 		serverNow,
 		clockSynchronized,
 		channelContexts,

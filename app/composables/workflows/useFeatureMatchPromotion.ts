@@ -27,6 +27,11 @@ export function useFeatureMatchPromotion() {
 		slotId,
 		matchId,
 	}: PromoteFeatureMatchInput): Promise<FeatureMatchPromotionResponse | undefined> {
+		// The answer belongs to the Event Lifetimes this promotion began in: one that
+		// arrives after the operator moved on — even back to this Event — is still
+		// returned, but changes neither store (ADR-0024).
+		const slotsFlight = featureMatchStore.currentLifetime();
+		const assignmentsFlight = assignmentStore.currentLifetime();
 		let confirmedNoteDiscards: FeatureMatchNoteDiscardConfirmation[] | undefined;
 		let result: FeatureMatchPromotionResponse;
 		while (true) {
@@ -51,11 +56,13 @@ export function useFeatureMatchPromotion() {
 			}
 		}
 
-		for (const featureMatch of result.clearedSlots)
-			featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch });
-		featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch: result.promotedSlot });
+		if (slotsFlight.current) {
+			for (const featureMatch of result.clearedSlots)
+				featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch });
+			featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch: result.promotedSlot });
+		}
 
-		if (assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
+		if (assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
 			assignmentStore.applySavedAssignment(result.assignment);
 
 		return result;

@@ -291,6 +291,96 @@ describe('useArchetypeStore', () => {
 		});
 	});
 
+	// ── Writes that outlive their Event (#606) ──
+
+	/**
+	 * An Archetype write is answered for the Event it was made in. What the store does
+	 * next — reload the Event's Slots, retag Deck Lists, invalidate the Metagame — is
+	 * about that Event, and neither another Event nor the same one loaded afresh since
+	 * is the lifetime it belongs to.
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('an Archetype write answered after the operator moved on to %s', (_, switches) => {
+		const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control' });
+
+		/** Ends on a collection holding Archetype 1, as Event A's own does when loaded again. */
+		async function switchAway() {
+			let shown!: ReturnType<typeof createMockUiArchetype>[];
+			for (const eventId of switches) {
+				shown = [createMockUiArchetype({ id: 1, eventId, name: `Loaded for ${eventId}` } as any)];
+				store.$reset();
+				mockRepo.list.mockResolvedValueOnce(structuredClone(shown));
+				await store.loadByEventId(eventId);
+			}
+			vi.clearAllMocks();
+			return shown;
+		}
+
+		function expectNothingFollowedUp() {
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
+			expect(mockPlayerDeckStore.applyArchetypeUpdated).not.toHaveBeenCalled();
+			expect(mockPlayerDeckStore.applyArchetypeDeleted).not.toHaveBeenCalled();
+			expect(mockMetagameStore.applyRemoteInvalidated).not.toHaveBeenCalled();
+		}
+
+		it('a late create follows up on nothing', async () => {
+			const create = deferred<typeof archetype>();
+			mockRepo.create.mockReturnValueOnce(create.promise);
+
+			const creating = store.createArchetype(1, { name: 'Boros Aggro' });
+			const shown = await switchAway();
+			create.resolve(createMockUiArchetype({ id: 3, name: 'Boros Aggro' }));
+			await creating;
+
+			expect(store.archetypes).toEqual(shown);
+			expectNothingFollowedUp();
+		});
+
+		it('a late update follows up on nothing', async () => {
+			store.archetypes = [archetype];
+			const update = deferred<typeof archetype>();
+			mockRepo.update.mockReturnValueOnce(update.promise);
+
+			const updating = store.updateArchetype(1, 1, { name: 'Azorius Control v2' });
+			const shown = await switchAway();
+			update.resolve({ ...archetype, name: 'Azorius Control v2' });
+			await updating;
+
+			expect(store.archetypes).toEqual(shown);
+			expectNothingFollowedUp();
+		});
+
+		it('a late delete follows up on nothing', async () => {
+			store.archetypes = [archetype];
+			const remove = deferred<{ success: true }>();
+			mockRepo.remove.mockReturnValueOnce(remove.promise);
+
+			const removing = store.removeArchetype(1, 1);
+			const shown = await switchAway();
+			remove.resolve({ success: true });
+			await removing;
+
+			expect(store.archetypes).toEqual(shown);
+			expectNothingFollowedUp();
+		});
+
+		it('a late key-card write changes no Archetype and follows up on nothing', async () => {
+			store.archetypes = [archetype];
+			const write = deferred<{ keyCards: [] }>();
+			mockFetch.mockReturnValueOnce(write.promise);
+
+			const writing = store.setKeyCards(1, 1, ['Counterspell']);
+			const shown = await switchAway();
+			write.resolve({ keyCards: [] });
+			await writing;
+
+			expect(store.archetypes).toEqual(shown);
+			expectNothingFollowedUp();
+		});
+	});
+
 	// ── Queries ──
 
 	describe('findByName', () => {
@@ -421,3 +511,13 @@ describe('useArchetypeStore', () => {
 		});
 	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

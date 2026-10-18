@@ -6,9 +6,15 @@ type PresenceHandler = () => void;
 class MockChannel {
 	publish = vi.fn().mockResolvedValue(undefined);
 	detach = vi.fn();
+	/** Only `failed` changes anything here: ably@2.29 refuses a subscribe on a failed channel until it is attached again. */
+	state = 'initialized';
+	attach = vi.fn(async () => {
+		this.state = 'attached';
+	});
 
-	private handlers = new Map<string, Set<MessageHandler>>();
-	private presenceHandlers = new Map<string, Set<PresenceHandler>>();
+	/** Arrays, as Ably's emitter keeps them: a listener added twice is called twice. */
+	private handlers = new Map<string, MessageHandler[]>();
+	private presenceHandlers = new Map<string, PresenceHandler[]>();
 	private presenceMembers: unknown[] = [];
 	private subscribeResult: Promise<unknown> | undefined;
 	private presenceSubscribeResult: Promise<unknown> | undefined;
@@ -19,25 +25,25 @@ class MockChannel {
 		update: vi.fn().mockResolvedValue(undefined),
 		get: vi.fn(async () => this.presenceMembers),
 		subscribe: vi.fn((event: string, handler: PresenceHandler) => {
-			const handlers = this.presenceHandlers.get(event) ?? new Set<PresenceHandler>();
-			handlers.add(handler);
-			this.presenceHandlers.set(event, handlers);
+			if (this.state === 'failed')
+				return Promise.reject(new Error('channel failed'));
+			this.presenceHandlers.set(event, [...(this.presenceHandlers.get(event) ?? []), handler]);
 			return this.presenceSubscribeResult;
 		}),
 		unsubscribe: vi.fn((event: string, handler: PresenceHandler) => {
-			this.presenceHandlers.get(event)?.delete(handler);
+			this.presenceHandlers.set(event, (this.presenceHandlers.get(event) ?? []).filter(each => each !== handler));
 		}),
 	};
 
 	subscribe = vi.fn((messageType: string, handler: MessageHandler) => {
-		const handlers = this.handlers.get(messageType) ?? new Set<MessageHandler>();
-		handlers.add(handler);
-		this.handlers.set(messageType, handlers);
+		if (this.state === 'failed')
+			return Promise.reject(new Error('channel failed'));
+		this.handlers.set(messageType, [...(this.handlers.get(messageType) ?? []), handler]);
 		return this.subscribeResult;
 	});
 
 	unsubscribe = vi.fn((messageType: string, handler: MessageHandler) => {
-		this.handlers.get(messageType)?.delete(handler);
+		this.handlers.set(messageType, (this.handlers.get(messageType) ?? []).filter(each => each !== handler));
 	});
 
 	emit(messageType: string, data: unknown) {
@@ -56,11 +62,17 @@ class MockChannel {
 		this.presenceMembers = members;
 	}
 
+	/**
+	 * What the next subscribe settles with. A refusal set here may wait a whole
+	 * recovery delay before an attach awaits it, so it is marked handled up front.
+	 */
 	setSubscribeResult(result: Promise<unknown>) {
+		result.catch(() => {});
 		this.subscribeResult = result;
 	}
 
 	setPresenceSubscribeResult(result: Promise<unknown>) {
+		result.catch(() => {});
 		this.presenceSubscribeResult = result;
 	}
 }
@@ -124,6 +136,14 @@ async function createTransport() {
 async function settle() {
 	for (let i = 0; i < 5; i++)
 		await Promise.resolve();
+}
+
+/**
+ * Let a mint's retry timers and the subscribes they gate run to completion: long
+ * past the quick retries (250 + 1,000 + 3,000 + 4,000 ms). Fake timers only.
+ */
+async function settleRetries() {
+	await vi.advanceTimersByTimeAsync(30_000);
 }
 
 describe('realtime plugin', () => {
@@ -423,11 +443,6 @@ describe('realtime plugin', () => {
 			vi.useRealTimers();
 		});
 
-		/** Let the mint's retry timers and the subscribe they gate run to completion. */
-		async function settleRetries() {
-			await vi.advanceTimersByTimeAsync(30_000);
-		}
-
 		it('retries, and the new event\'s subscriptions attach and deliver', async () => {
 			const realtime = await createTransport();
 			realtime.setRoom('event:7');
@@ -500,10 +515,12 @@ describe('realtime plugin', () => {
 			await settleRetries();
 
 			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
-			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			const unsubscribeEvent9 = realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
 			await settleRetries();
 			expect(realtime.tokenError).toBeInstanceOf(Error);
 
+			// Going back unmounts what the operator had open on Event 9.
+			unsubscribeEvent9();
 			const handler = vi.fn();
 			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
 			await settleRetries();
@@ -534,10 +551,6 @@ describe('realtime plugin', () => {
 			vi.useRealTimers();
 		});
 
-		async function settleRetries() {
-			await vi.advanceTimersByTimeAsync(30_000);
-		}
-
 		it('publishes tokenError when the very first mint keeps failing, and the next subscribe recovers', async () => {
 			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 			const realtime = await createTransport();
@@ -561,6 +574,330 @@ describe('realtime plugin', () => {
 			channels.get('screen:7:2')!.emit('screen:command:debug', { screenId: 2 });
 			expect(handler).toHaveBeenCalledOnce();
 			consoleSpy.mockRestore();
+		});
+	});
+
+	/**
+	 * A Realtime Subscription outlives a token outage (#609).
+	 *
+	 * #307 made a failed mint retry and report; it still answered exhaustion by
+	 * unsubscribing every subscription that had been waiting on the mint. Coverage
+	 * could come back later — a fresh subscribe cleared the fault — but the room and
+	 * Screen handlers the page had registered were gone, and with no fresh subscribe
+	 * nothing even tried again. Only a remount recovered.
+	 */
+	describe('a token outage that outlasts the mint\'s retries', () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+			vi.spyOn(console, 'warn').mockImplementation(() => {});
+		});
+
+		afterEach(() => {
+			vi.mocked(console.warn).mockRestore();
+			vi.useRealTimers();
+		});
+
+		it('reattaches the original room handlers once the token service is back, with nothing re-registered', async () => {
+			const realtime = await createTransport();
+			const handler = vi.fn();
+			realtime.onRoom('player', { 'player:updated': handler });
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			await settleRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await settleRetries();
+
+			expect(realtime.tokenError).toBeNull();
+			channels.get('event:9')!.emit('player:updated', { player: { id: 9 } });
+			expect(handler).toHaveBeenCalledOnce();
+			expect(handler).toHaveBeenCalledWith({ player: { id: 9 } }, expect.any(Object));
+		});
+
+		it('reaches the original room handlers in the reported sequence: restore, then a new Screen subscription', async () => {
+			// Review F07 step for step. The new subscription is what used to clear the
+			// fault while the room handlers stayed gone.
+			const realtime = await createTransport();
+			const handler = vi.fn();
+			realtime.onRoom('player', { 'player:updated': handler });
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+
+			expect(realtime.tokenError).toBeNull();
+			channels.get('event:9')!.emit('player:updated', { player: { id: 9 } });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('reattaches the original Screen command and presence handlers too', async () => {
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			const commandHandler = vi.fn();
+			const presenceCallback = vi.fn();
+			realtime.setRoom('event:9');
+			realtime.onChannel('screen:9:1', 'screen:command:debug', commandHandler);
+			realtime.watchPresence('screen:9:1', presenceCallback);
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await settleRetries();
+
+			const channel = channels.get('screen:9:1')!;
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(commandHandler).toHaveBeenCalledOnce();
+
+			presenceCallback.mockClear();
+			channel.setPresenceMembers([{ data: { screenId: 1 } }]);
+			channel.emitPresence('enter');
+			await vi.advanceTimersByTimeAsync(0);
+			expect(presenceCallback).toHaveBeenCalledWith([{ data: { screenId: 1 } }]);
+		});
+
+		it('keeps the fault standing through failed re-attempts, even beside an Event still covered', async () => {
+			// The fault is about the subscriptions still waiting. A subscribe that works
+			// on the Event the token does cover says nothing about them.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', vi.fn());
+			await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+		});
+
+		it('stops re-attempting, and drops the fault, once everything that waited is disposed', async () => {
+			const realtime = await createTransport();
+			realtime.onRoom('player', { 'player:updated': vi.fn() });
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const authorize = realtimeInstances[0]!.auth.authorize;
+			authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			const unsubscribe = realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			realtime.offRoom('player');
+			realtime.setRoom(null);
+			unsubscribe();
+			// At once, not when the backed-off wait would have ended.
+			await vi.advanceTimersByTimeAsync(0);
+			expect(realtime.tokenError).toBeNull();
+
+			const attemptsAtDisposal = authorize.mock.calls.length;
+			await vi.advanceTimersByTimeAsync(10 * 60_000);
+			expect(authorize).toHaveBeenCalledTimes(attemptsAtDisposal);
+		});
+
+		it('keeps the fault standing until what waited has attached, retrying a refused attach on its own', async () => {
+			// A token in hand is not yet a show receiving. Until the subscriptions the
+			// outage held have attached, the fault is still the truth about this client
+			// — and with the connection up throughout, no reconnect will retry them.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			const channel = new MockChannel();
+			channels.set('screen:9:1', channel);
+			const handler = vi.fn();
+			realtime.onChannel('screen:9:1', 'screen:command:debug', handler);
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			channel.setSubscribeResult(Promise.reject(new Error('attach refused')));
+			await settleRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			channel.setSubscribeResult(Promise.resolve());
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			expect(realtime.tokenError).toBeNull();
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('holds a Screen Output\'s presence entry through the outage and enters it once a mint lands', async () => {
+			// A Screen Output enters presence on load and only then stops loading, so the
+			// entry must not wait out the outage — but control surfaces count outputs by
+			// presence, and one that never re-enters is one they report missing.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+
+			// Asked mid-recovery, it answers at once rather than on the next attempt.
+			const entered = vi.fn();
+			void realtime.enterPresence('screen:9:1', { screenId: 1, cardData: 'complete' }).then(entered);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(entered).toHaveBeenCalled();
+			await realtime.updatePresence('screen:9:1', { screenId: 1, cardData: 'degraded' });
+			const channel = channels.get('screen:9:1')!;
+			expect(channel.presence.enter).not.toHaveBeenCalled();
+			expect(channel.presence.update).not.toHaveBeenCalled();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			expect(channel.presence.enter).toHaveBeenCalledOnce();
+			expect(channel.presence.enter).toHaveBeenCalledWith({ screenId: 1, cardData: 'degraded' });
+		});
+
+		it('never enters a held presence entry its output has already left', async () => {
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			const entering = realtime.enterPresence('screen:9:1', { screenId: 1 });
+			await settleRetries();
+			await entering;
+			await realtime.leavePresence('screen:9:1');
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			const channel = channels.get('screen:9:1')!;
+			expect(channel.presence.enter).not.toHaveBeenCalled();
+			expect(channel.presence.leave).not.toHaveBeenCalled();
+		});
+
+		it('keeps the listener through a refused attach, for the channel Ably re-attaches by itself', async () => {
+			// A channel whose attach timed out is suspended, and Ably re-attaches a
+			// suspended channel on its own timer, connected or not. Whatever listens
+			// then is what hears the Event, so the listener has to still be there.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const channel = new MockChannel();
+			channels.set('screen:7:1', channel);
+			channel.setSubscribeResult(Promise.reject(new Error('attach timed out')));
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await vi.advanceTimersByTimeAsync(0);
+
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('retries a refused attach on a covered Event while the connection stays up', async () => {
+			// Nothing reconnects, so no reconnect can be what retries it — and a failed
+			// channel keeps no listener for Ably to deliver to by itself.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const channel = new MockChannel();
+			channels.set('screen:7:1', channel);
+			channel.state = 'failed';
+			channel.attach.mockRejectedValueOnce(new Error('attach refused'));
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await settleRetries();
+
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('re-attaches a refused subscription once the connection is back, delivering once', async () => {
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const channel = new MockChannel();
+			channels.set('screen:7:1', channel);
+			channel.setSubscribeResult(Promise.reject(new Error('attach timed out')));
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await vi.advanceTimersByTimeAsync(0);
+
+			channel.setSubscribeResult(Promise.resolve());
+			connectionHandlers.get('connected')?.();
+			await vi.advanceTimersByTimeAsync(0);
+
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('attaches a failed channel again before re-subscribing, since Ably will not subscribe on one', async () => {
+			// ably@2.29: from `failed` only an explicit attach recovers a channel, and
+			// a subscribe there is refused before its listener is even added.
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const channel = new MockChannel();
+			channels.set('screen:7:1', channel);
+			channel.state = 'failed';
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await vi.advanceTimersByTimeAsync(0);
+
+			connectionHandlers.get('connected')?.();
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(channel.attach).toHaveBeenCalled();
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it('points Ably\'s own token renewals back at the covered Event once a recovery stops', async () => {
+			// Ably re-mints by itself on reconnect and before expiry, for whichever
+			// Event the transport last asked about. Left on the abandoned one, that
+			// renewal would trade the working token for one that cannot be minted.
+			vi.mocked($fetch as unknown as (path: string) => Promise<unknown>).mockResolvedValue({ token: 'token-request' });
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			const unsubscribe = realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await settleRetries();
+			unsubscribe();
+			await vi.advanceTimersByTimeAsync(0);
+
+			await (realtimeInstances[0]!.options as any).authCallback({}, vi.fn());
+			expect($fetch).toHaveBeenLastCalledWith('/api/realtime/token', expect.objectContaining({ query: { eventId: 7 } }));
+		});
+
+		it('backs off to one attempt every 30 seconds for as long as the outage lasts', async () => {
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await settleRetries();
+
+			const authorize = realtimeInstances[0]!.auth.authorize;
+			authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			await vi.advanceTimersByTimeAsync(60 * 60_000);
+			authorize.mockClear();
+
+			await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+			expect(authorize).toHaveBeenCalledTimes(10);
 		});
 	});
 
@@ -689,7 +1026,8 @@ describe('realtime plugin', () => {
 		expect(channel.presence.update).toHaveBeenCalledWith({ screenId: 2, cardData: 'degraded' });
 	});
 
-	it('keeps presence subscriptions synchronous while cleaning up attach failures', async () => {
+	it('keeps presence subscriptions synchronous and desired through attach failures', async () => {
+		// A refused attach no longer ends the watch (#609): only its consumer does.
 		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const channel = new MockChannel();
 		channels.set('screen:1:2', channel);
@@ -701,6 +1039,8 @@ describe('realtime plugin', () => {
 
 		await settle();
 
+		expect(channel.presence.unsubscribe).not.toHaveBeenCalled();
+		unsubscribe();
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('enter', expect.any(Function));
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('leave', expect.any(Function));
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('update', expect.any(Function));

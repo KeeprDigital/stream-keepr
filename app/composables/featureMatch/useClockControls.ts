@@ -9,7 +9,7 @@ export function useClockControls(matchId: MaybeRefOrGetter<number>) {
 	const mid = () => toValue(matchId);
 
 	const defaultDurationMs = computed(() => {
-		const { clockDuration } = toFeatureMatchDefaults(eventStore.event);
+		const { clockDuration } = toFeatureMatchDefaults(eventStore.displayEvent);
 		if (!clockDuration)
 			return undefined;
 		return clockDuration * 60 * 1000;

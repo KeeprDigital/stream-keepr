@@ -1,4 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 
@@ -53,24 +54,10 @@ const players = [
 const mockPlayerStore = reactive({
 	players: [...players],
 	isLoaded: true,
-	loadPlayersByEventId: vi.fn(),
-});
-
-const mockPlayerListStore = reactive({
-	lists: [] as any[],
-	isLoaded: true,
-	loadByEventId: vi.fn(),
-});
-
-const mockPlayerListRepo = {
-	getById: vi.fn(),
-};
-
-const mockRoundStore = reactive({
-	rounds: [] as any[],
-	isLoaded: true,
-	loadRoundsByEventId: vi.fn(),
-	getRoundById: vi.fn((id: number) => mockRoundStore.rounds.find((round: any) => round.id === id)),
+	// The roster the Standings read answers is held in the Player store.
+	loadPlayersFrom: vi.fn(async (_eventId: number, loader: () => Promise<any[]>) => {
+		mockPlayerStore.players = await loader();
+	}),
 });
 
 const mockScreenStore = {
@@ -78,7 +65,7 @@ const mockScreenStore = {
 };
 
 const mockEventStore = reactive({
-	event: createMockEvent(),
+	displayEvent: createMockEvent(),
 });
 
 // Mutable eventId and interactive for null-eventId and timer tests
@@ -89,9 +76,6 @@ const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 mockNuxtImport('$fetch', () => mockFetch);
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
-mockNuxtImport('usePlayerListRepository', () => () => mockPlayerListRepo);
-mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useScreenContext', () => () => ({
@@ -101,6 +85,13 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
+/** The Standings Screen Output read's answer; by default, the roster as it stands. */
+function standingsRead(overrides: Record<string, unknown> = {}) {
+	return { players: [...mockPlayerStore.players], round: null, roundStandings: null, watchlist: null, ...overrides };
+}
+
+const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
+
 // ──────────────── Tests ────────────────
 
 describe('useStandingsModeData', () => {
@@ -108,15 +99,12 @@ describe('useStandingsModeData', () => {
 		Object.assign(mutableConfig, defaultConfig);
 		mockPlayerStore.players = [...players];
 		mockPlayerStore.isLoaded = true;
-		mockPlayerListStore.lists = [];
-		mockPlayerListStore.isLoaded = true;
-		mockRoundStore.rounds = [];
-		mockRoundStore.isLoaded = true;
-		mockEventStore.event = createMockEvent();
+		mockEventStore.displayEvent = createMockEvent();
 		mockEventId.value = 1;
 		mockInteractiveStandings.value = false;
 		mockFetch.mockReset();
 		vi.clearAllMocks();
+		mockFetch.mockImplementation(async () => standingsRead());
 	});
 
 	// ── Core properties ──
@@ -216,23 +204,44 @@ describe('useStandingsModeData', () => {
 
 		it('uses round snapshot standings when roundId is selected', async () => {
 			mutableConfig.roundId = 7;
-			mockRoundStore.rounds = [createMockRound({ id: 7, name: 'Round 7' })];
-			mockFetch.mockResolvedValue({
-				standings: [
+			mockFetch.mockImplementation(async () => standingsRead({
+				round: createMockRound({ id: 7, name: 'Round 7' }),
+				roundStandings: [
 					{ playerId: 3, wins: 5, losses: 0, draws: 0, position: 1, points: 15 },
 					{ playerId: 1, wins: 4, losses: 1, draws: 0, position: 2, points: 12 },
 				],
-			});
+			}));
 
 			const { displayRows } = useStandingsModeData();
-			await nextTick();
-			await nextTick();
+			await flushPromises();
 
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/standings?roundId=7');
+			expect(mockFetch).toHaveBeenCalledWith(STANDINGS_READ, expect.anything());
 			expect(displayRows.value).toHaveLength(2);
 			expect(displayRows.value.map(p => p.name)).toEqual(['Charlie', 'Alice']);
 			expect(displayRows.value[0]!.wins).toBe(5);
 			expect(displayRows.value[0]!.position).toBe(1);
+		});
+
+		it('holds the roster the Standings read answers', async () => {
+			const roster = [createMockPlayer({ id: 21, name: 'Read Player', position: 1 })];
+			mockFetch.mockImplementation(async () => standingsRead({ players: roster }));
+
+			const { displayRows } = useStandingsModeData();
+			await flushPromises();
+
+			expect(mockPlayerStore.loadPlayersFrom).toHaveBeenCalledWith(1, expect.any(Function));
+			expect(displayRows.value.map(p => p.name)).toEqual(['Read Player']);
+		});
+
+		it('filters to the watchlist members the read answers', async () => {
+			mutableConfig.viewMode = 'watchlist';
+			mutableConfig.playerListId = 42;
+			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [2, 4] } }));
+
+			const { displayRows } = useStandingsModeData();
+			await flushPromises();
+
+			expect(displayRows.value.map(p => p.name)).toEqual(['Bob', 'Diana']);
 		});
 	});
 
@@ -269,12 +278,13 @@ describe('useStandingsModeData', () => {
 			expect(headerText.value).toBe('Standings (9-16)');
 		});
 
-		it('returns player list name for "watchlist" mode', () => {
+		it('returns player list name for "watchlist" mode', async () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = 42;
 			mutableConfig.headerText = '';
-			mockPlayerListStore.lists = [{ id: 42, name: 'VIPs' }];
+			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [] } }));
 			const { headerText } = useStandingsModeData();
+			await flushPromises();
 			expect(headerText.value).toBe('VIPs');
 		});
 
@@ -297,14 +307,13 @@ describe('useStandingsModeData', () => {
 		it('returns round header when roundId is selected', async () => {
 			mutableConfig.roundId = 4;
 			mutableConfig.headerText = '';
-			mockRoundStore.rounds = [createMockRound({ id: 4, name: 'Round 4' })];
-			mockFetch.mockResolvedValue({
-				standings: [{ playerId: 1, wins: 5, losses: 0, draws: 0, position: 1, points: 15 }],
-			});
+			mockFetch.mockImplementation(async () => standingsRead({
+				round: createMockRound({ id: 4, name: 'Round 4' }),
+				roundStandings: [{ playerId: 1, wins: 5, losses: 0, draws: 0, position: 1, points: 15 }],
+			}));
 
 			const { headerText } = useStandingsModeData();
-			await nextTick();
-			await nextTick();
+			await flushPromises();
 
 			expect(headerText.value).toBe('End of Round 4');
 		});

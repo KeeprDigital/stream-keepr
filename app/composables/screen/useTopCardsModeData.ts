@@ -1,12 +1,10 @@
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
-import { useMetagameClient } from '~/modules/metagame/client';
 
 export function useTopCardsModeData() {
-	const { eventId } = useScreenContext();
 	const config = useScreenModeConfig('top-cards');
 
 	const playerStore = usePlayerStore();
-	const metagameClient = useMetagameClient();
+	const outputReads = useScreenOutputReads();
 
 	const displayData = useBroadcastDisplayData<{ cardData: CardBreakdownResponse | null }>({
 		initialData: { cardData: null },
@@ -35,36 +33,23 @@ export function useTopCardsModeData() {
 
 	// ── Data Loading ──
 	async function fetchData() {
-		const evtId = eventId.value;
-		if (!evtId) {
+		if (!outputReads.scope.value) {
 			error.value = 'No event loaded';
 			displayData.clear();
 			return;
 		}
 
+		// Derived on the server from the saved configuration (#604).
 		await displayData.refresh(async () => ({
-			cardData: await metagameClient.loadCardBreakdown(
-				evtId,
-				{
-					scope: config.value.scope,
-					topN: config.value.topN,
-					playerListId: config.value.playerListId,
-				},
-				{
-					sortBy: config.value.sortBy,
-					limit: config.value.limit,
-					board: config.value.board,
-					archetype: config.value.archetypeFilter,
-					excludeTypes: config.value.excludedCardTypes,
-				},
-			),
+			cardData: await outputReads.topCards(),
 		}), 'Failed to load top cards data');
 	}
 
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && entries.value.length === 0);
+	// Read off the breakdown: an output holds no roster to count (#604).
 	const emptyMessage = computed(() => {
-		if (!playerStore.isLoaded || playerStore.players.length === 0) {
+		if (!cardData.value?.totalDecks) {
 			return 'No players in this event';
 		}
 		return 'No card data available';
@@ -74,6 +59,7 @@ export function useTopCardsModeData() {
 	// Refetch when any scope, filter, or ranking param changes
 	watch(
 		() => [
+			outputReads.scopeKey.value,
 			config.value.scope,
 			config.value.topN,
 			config.value.playerListId,

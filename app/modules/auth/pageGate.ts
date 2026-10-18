@@ -51,7 +51,16 @@ export function pageRequiresSession(path: string): boolean {
 	if (path === LOGIN_PATH || path === PASSWORD_RESET_PAGE_PATH)
 		return false;
 
-	return !SCREEN_OUTPUT_PAGE.test(path);
+	return !isScreenOutputPage(path);
+}
+
+/**
+ * Whether this is the Screen Output page, which reads only through its Screen's
+ * capability: the Event middleware leaves it alone too, because the operator's
+ * Event read is private and the output loads its Event context itself (#604).
+ */
+export function isScreenOutputPage(path: string): boolean {
+	return SCREEN_OUTPUT_PAGE.test(path);
 }
 
 /** The query name the gate and the login page agree on. */
