@@ -54,7 +54,10 @@ export interface RealtimeTransport {
 	 * healthy-looking page that had silently stopped receiving anything (#307).
 	 *
 	 * Set only after the mint's own retries are exhausted, so a network blip during
-	 * an Event switch never puts a fault in front of anyone.
+	 * an Event switch never puts a fault in front of anyone. It then stands while
+	 * the transport keeps re-attempting for the registrations still waiting, and
+	 * clears when a mint lands and they attach, or when the last of them is
+	 * disposed (#609, ADR-0021).
 	 */
 	readonly tokenError: Error | null;
 	setRoom: (room: string | null) => void;

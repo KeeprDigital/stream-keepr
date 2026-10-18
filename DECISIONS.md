@@ -517,3 +517,31 @@ Every output that matters is Chromium: broadcast software captures a browser sou
 - **Keep the block, drop only the Safari gate** — cheaper. But it kept 700 lines guarding a non-target browser, and the rest of the suite would still have tested the block without ever proving a real Safari needed it.
 - **Detect non-Chromium browsers and warn** — keeps the user-agent detection this removes, to tell an operator something they can't act on mid-show.
 - **Migrate stored documents to remove the key** — five document tables and every exported package, for a key that is harmless once ignored.
+
+## ADR-0021: A realtime subscription is held until disposed, and its Event's mint re-attempts while one waits
+
+Accepted · 2026-10-18 · #609
+
+### Decision
+
+**The realtime transport (`app/plugins/realtime.client.ts`) never forgets a registration on failure.** A room handler, channel handler or presence watch that cannot attach stays pending. It might be waiting on a token for its Event, or its channel might have refused the attach. It attaches from the transport's own records when the condition passes: a mint landing for its Event, or the connection coming back. Only the consumer's disposal ends it.
+
+**A mint keeps re-attempting while anything waits on its Event.** "Anything" means the room or a pending registration. The quick retries (250 ms to 4 s) still run first, and `tokenError` is still published when they are spent. Then the mint backs off (5, 10, 20 s) and settles at one attempt every 30 s, with no attempt limit. It stops when the mint lands, when a mint for another Event supersedes it, or when the last waiting registration is disposed. Disposal clears `tokenError` at once, since nothing is failing for anyone any more.
+
+**An action still gets its answer when the quick retries are spent.** `enterPresence` resolves or throws at that point, as before. A Screen Output's load awaits it, so the load must not wait out the outage.
+
+### Why
+
+The fix for #307 made a failed mint retry and report, but exhaustion still unsubscribed every waiting registration. A later subscribe could restore coverage and clear the fault, yet the page's own handlers were gone. With no later subscribe, nothing even re-attempted. Coverage came back with nothing listening, and only a remount recovered. #590 and #601 work above the transport and cannot restore what it has forgotten.
+
+### Consequences
+
+- A page left open through a long token outage makes one request every 30 s for as long as it waits. That cost buys a show that recovers without anyone touching the page.
+- `tokenError` stands for as long as a registration waits on the recovering mint. A subscribe on the Event the token still covers no longer clears it.
+- Presence entered through `enterPresence` is not re-entered after an outage. It is an action, not a registration, and its caller has already had its answer.
+- The token covers one Event at a time. A registration left undisposed on an Event the client has moved away from stays pending. It attaches only if that Event is minted for again.
+
+### Rejected alternatives
+
+- **A bounded number of recovery attempts.** It brings back the failure this removes: after the last attempt, a restored service finds nothing listening.
+- **Re-register from above the transport** (#590, #601). That would need every consumer to know about token outages and remount, and the transport is the layer that knows a registration exists.

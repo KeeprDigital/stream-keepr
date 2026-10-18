@@ -500,10 +500,12 @@ describe('realtime plugin', () => {
 			await settleRetries();
 
 			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
-			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			const unsubscribeEvent9 = realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
 			await settleRetries();
 			expect(realtime.tokenError).toBeInstanceOf(Error);
 
+			// Going back unmounts what the operator had open on Event 9.
+			unsubscribeEvent9();
 			const handler = vi.fn();
 			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
 			await settleRetries();
@@ -560,6 +562,189 @@ describe('realtime plugin', () => {
 			expect(realtime.tokenError).toBeNull();
 			channels.get('screen:7:2')!.emit('screen:command:debug', { screenId: 2 });
 			expect(handler).toHaveBeenCalledOnce();
+			consoleSpy.mockRestore();
+		});
+	});
+
+	/**
+	 * A desired registration outlives a token outage (#609).
+	 *
+	 * #307 made a failed mint retry and report; it still answered exhaustion by
+	 * unsubscribing every registration that had been waiting on the mint. Coverage
+	 * could come back later — a fresh subscribe cleared the fault — but the room and
+	 * Screen handlers the page had registered were gone, and with no fresh subscribe
+	 * nothing even tried again. Only a remount recovered.
+	 */
+	describe('a token outage that outlasts the mint\'s retries', () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		/** Long past the mint's own retries: 250 + 1,000 + 3,000 + 4,000 ms. */
+		async function exhaustRetries() {
+			await vi.advanceTimersByTimeAsync(30_000);
+		}
+
+		it('reattaches the original room handlers once the token service is back, with nothing re-registered', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			const handler = vi.fn();
+			realtime.onRoom('player', { 'player:updated': handler });
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			await exhaustRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await exhaustRetries();
+
+			expect(realtime.tokenError).toBeNull();
+			channels.get('event:9')!.emit('player:updated', { player: { id: 9 } });
+			expect(handler).toHaveBeenCalledWith({ player: { id: 9 } }, expect.any(Object));
+			consoleSpy.mockRestore();
+		});
+
+		it('reattaches the original Screen command and presence handlers too', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			const commandHandler = vi.fn();
+			const presenceCallback = vi.fn();
+			realtime.setRoom('event:9');
+			realtime.onChannel('screen:9:1', 'screen:command:debug', commandHandler);
+			realtime.watchPresence('screen:9:1', presenceCallback);
+			await exhaustRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockReset().mockResolvedValue(undefined);
+			await exhaustRetries();
+
+			const channel = channels.get('screen:9:1')!;
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(commandHandler).toHaveBeenCalledOnce();
+
+			presenceCallback.mockClear();
+			channel.setPresenceMembers([{ data: { screenId: 1 } }]);
+			channel.emitPresence('enter');
+			await vi.advanceTimersByTimeAsync(0);
+			expect(presenceCallback).toHaveBeenCalledWith([{ data: { screenId: 1 } }]);
+			consoleSpy.mockRestore();
+		});
+
+		it('keeps the fault standing through failed re-attempts, even beside an Event still covered', async () => {
+			// The fault is about the registrations still waiting. A subscribe that works
+			// on the Event the token does cover says nothing about them.
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await exhaustRetries();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', vi.fn());
+			await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+			consoleSpy.mockRestore();
+		});
+
+		it('stops re-attempting, and drops the fault, once everything that waited is disposed', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.onRoom('player', { 'player:updated': vi.fn() });
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			const authorize = realtimeInstances[0]!.auth.authorize;
+			authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			const unsubscribe = realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			await exhaustRetries();
+			expect(realtime.tokenError).toBeInstanceOf(Error);
+
+			realtime.offRoom('player');
+			realtime.setRoom(null);
+			unsubscribe();
+			// At once, not when the backed-off wait would have ended.
+			await vi.advanceTimersByTimeAsync(0);
+			expect(realtime.tokenError).toBeNull();
+
+			const attemptsAtDisposal = authorize.mock.calls.length;
+			await vi.advanceTimersByTimeAsync(10 * 60_000);
+			expect(authorize).toHaveBeenCalledTimes(attemptsAtDisposal);
+			consoleSpy.mockRestore();
+		});
+
+		it('still answers entering presence once the quick retries are spent, so an outage does not hold an output\'s load', async () => {
+			// A Screen Output enters presence on load and only then stops loading. Its
+			// command registrations keep the mint recovering, but the action has its
+			// answer when the fault is reported, as it always has.
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtimeInstances[0]!.auth.authorize.mockRejectedValue(new Error('token endpoint down'));
+
+			realtime.onChannel('screen:9:1', 'screen:command:debug', vi.fn());
+			const entering = realtime.enterPresence('screen:9:1', { screenId: 1 });
+			const settled = vi.fn();
+			void entering.catch(settled);
+			await exhaustRetries();
+
+			expect(settled).toHaveBeenCalledWith(expect.any(Error));
+			consoleSpy.mockRestore();
+		});
+
+		it('re-attaches a registration whose attach was refused once the connection is back, once', async () => {
+			// An attach that times out while the link is down is the same transient
+			// failure one layer down: still desired, so still attached in the end — and
+			// only once, or every message would arrive twice.
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			const channel = new MockChannel();
+			channels.set('screen:7:1', channel);
+			channel.setSubscribeResult(Promise.reject(new Error('attach timed out')));
+			const handler = vi.fn();
+			realtime.onChannel('screen:7:1', 'screen:command:debug', handler);
+			await vi.advanceTimersByTimeAsync(0);
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).not.toHaveBeenCalled();
+
+			channel.setSubscribeResult(Promise.resolve());
+			connectionHandlers.get('connected')?.();
+			await vi.advanceTimersByTimeAsync(0);
+
+			channel.emit('screen:command:debug', { screenId: 1 });
+			expect(handler).toHaveBeenCalledOnce();
+			consoleSpy.mockRestore();
+		});
+
+		it('backs off to one attempt every 30 seconds for as long as the outage lasts', async () => {
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const realtime = await createTransport();
+			realtime.setRoom('event:7');
+			await exhaustRetries();
+
+			const authorize = realtimeInstances[0]!.auth.authorize;
+			authorize.mockRejectedValue(new Error('token endpoint down'));
+			realtime.setRoom('event:9');
+			await vi.advanceTimersByTimeAsync(60 * 60_000);
+			authorize.mockClear();
+
+			await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+			expect(authorize).toHaveBeenCalledTimes(10);
 			consoleSpy.mockRestore();
 		});
 	});
