@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayOutput, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import { featureMatchOverlayFrameContentMaskStyle } from '~/modules/feature-match-overlay/renderModel';
 import ScreenMediaBackground from '../../MediaBackground.vue';
 
 const props = defineProps<{
-	media?: ScreenMediaBackgroundConfig;
+	/** The Frame's video with its source resolved; absent while it is switched off. */
+	video?: ScreenVideoPlayback;
 	canvasWidth: number;
 	canvasHeight: number;
 	cutoutPaths: readonly string[];
 	output: FeatureMatchOverlayOutput;
 }>();
 
-const isVisible = computed(() => props.output !== 'key' && props.media?.enabled === true && props.media.url.trim().length > 0);
+const isVisible = computed(() => props.output !== 'key' && (props.video?.url.trim().length ?? 0) > 0);
 const maskStyle = computed(() => featureMatchOverlayFrameContentMaskStyle(
 	props.canvasWidth,
 	props.canvasHeight,
@@ -32,7 +33,7 @@ const maskStyle = computed(() => featureMatchOverlayFrameContentMaskStyle(
 			class="frame-media"
 			:style="maskStyle"
 		>
-			<ScreenMediaBackground :media="media" />
+			<ScreenMediaBackground :video="video" />
 		</div>
 	</foreignObject>
 </template>

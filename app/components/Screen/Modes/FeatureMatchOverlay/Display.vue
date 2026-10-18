@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import {
@@ -24,6 +24,7 @@ import {
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewSelectedTargetMessage,
 } from '~/modules/graphics/previewMessages';
+import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
 
@@ -61,6 +62,24 @@ const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
 	graphicAssetContentUrl,
 	contentUrlsSettled,
 );
+// The Frame's own media, each a Screen Media Source (ADR-0021). A library
+// revision resolves through the same content URLs as everything else this
+// layout publishes; a Remote Media URL is drawn as given.
+const frameImageUrl = computed(() =>
+	screenMediaSourceUrl(config.value.layout.frame.backgroundImage, graphicAssetContentUrl),
+);
+const frameVideo = computed<ScreenVideoPlayback | undefined>(() => {
+	const media = config.value.layout.frame.mediaBackground;
+	if (!media?.enabled)
+		return undefined;
+	return {
+		url: screenMediaSourceUrl(media.source, graphicAssetContentUrl),
+		fit: media.fit,
+		opacity: media.opacity,
+		playbackRate: media.playbackRate,
+		loop: media.loop,
+	};
+});
 const { displayTime } = useClockDisplay(() => matchState.value?.clock ?? null);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 /**
@@ -369,15 +388,15 @@ onBeforeUnmount(() => {
 				:mask="`url(#${frameMaskId})`"
 			/>
 			<FeatureMatchOverlayFrameMedia
-				:media="config.layout.frame.mediaBackground"
+				:video="frameVideo"
 				:canvas-width="canvasWidth"
 				:canvas-height="canvasHeight"
 				:cutout-paths="sourceCutouts.map(cutout => cutout.path)"
 				:output="resolvedOutput"
 			/>
 			<image
-				v-if="resolvedOutput !== 'key' && config.layout.frame.backgroundImage"
-				:xlink:href="graphicAssetContentUrl(config.layout.frame.backgroundImage)"
+				v-if="resolvedOutput !== 'key' && frameImageUrl"
+				:xlink:href="frameImageUrl"
 				x="0"
 				y="0"
 				:width="canvasWidth"

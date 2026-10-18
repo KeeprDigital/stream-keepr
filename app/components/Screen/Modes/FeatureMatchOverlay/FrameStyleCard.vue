@@ -96,14 +96,15 @@ function animationSummary() {
 						@update="updateFrameBackground"
 					/>
 					<div class="grid gap-3 sm:grid-cols-2 sm:items-end">
-						<UFormField label="Frame image" class="sm:col-span-2">
-							<GraphicsAssetFocusPicker
+						<div class="space-y-3 sm:col-span-2" data-testid="frame-image-source">
+							<ScreenMediaSourceField
 								:model-value="config.layout.frame.backgroundImage"
 								:event-id="eventId"
-								field-label="Frame image"
-								@update:model-value="updateFrame({ backgroundImage: $event })"
+								asset-kind="image"
+								label="Frame image"
+								@update:model-value="updateFrame({ backgroundImage: $event ?? undefined })"
 							/>
-						</UFormField>
+						</div>
 						<UFormField label="Image fit">
 							<USelect
 								:model-value="config.layout.frame.backgroundImageFit"
@@ -121,6 +122,7 @@ function animationSummary() {
 			<section class="py-4 first:pt-0 last:pb-0">
 				<ScreenMediaBackgroundFields
 					:media="mediaBackground"
+					:event-id="eventId"
 					@update="updateMediaBackground"
 				/>
 			</section>

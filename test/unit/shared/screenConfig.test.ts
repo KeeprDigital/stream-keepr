@@ -206,7 +206,7 @@ describe('default config constants', () => {
 	it('default feature match overlay config has disabled frame media playback', () => {
 		expect(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame.mediaBackground).toMatchObject({
 			enabled: false,
-			type: 'video',
+			source: { kind: 'url', url: '' },
 			playbackRate: 1,
 			loop: true,
 		});

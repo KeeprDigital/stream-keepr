@@ -23,10 +23,10 @@ import { addGraphicGroupChild, addGraphicItem } from '../../shared/modules/graph
  *   Graphic Style Set link** on the composition. A Feature Match Overlay binds a
  *   fixed host token catalogue instead of declaring inputs, and the layout
  *   composition schema refuses all four.
- * - **A Frame media background URL.** `mediaBackground.url` is a remote resource,
- *   and the Template Package envelope refuses any document that depends on one. A
- *   layout using it cannot be exported at all, so the fixture carries the field
- *   unset rather than pretending otherwise.
+ * - **A Remote Media URL on the Frame.** A URL Screen Media Source is a remote
+ *   resource, and the Template Package envelope refuses any document that depends
+ *   on one (ADR-0021). A layout using it cannot be exported at all, so the fixture
+ *   pins its Frame image to a library revision rather than pretending otherwise.
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -219,7 +219,7 @@ export function maximalFeatureMatchLayoutDocument(
 		frame: {
 			backgroundColor: '#0b1220',
 			opacity: 0.95,
-			backgroundImage: { ...options.frameAsset },
+			backgroundImage: { kind: 'asset', ...options.frameAsset },
 			backgroundImageFit: 'cover',
 			gradient: 'linear-gradient(180deg, #0b1220 0%, #000000 100%)',
 			borderTopVisible: true,

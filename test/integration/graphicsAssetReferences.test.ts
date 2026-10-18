@@ -84,7 +84,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			revisionId: operation.result!.revisionId,
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		config.layout.composition.items.push({
 			...getGraphicItemDefinition('media').createDefault({
 				id: 'sponsor-logo',
@@ -111,7 +111,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
 		);
-		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual(reference);
+		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
 
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
@@ -157,6 +157,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
 		config!.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: testGraphicAssetId('missing-asset'),
 			revisionId: testGraphicAssetRevisionId('missing-revision'),
 		};
@@ -168,6 +169,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		)).rejects.toMatchObject({ statusCode: 409 });
 		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(unchanged!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({
+			kind: 'asset',
 			assetId: operation.result!.assetId,
 			revisionId: operation.result!.revisionId,
 		});
@@ -358,5 +360,121 @@ describe('background Screen exact Graphic Asset References', () => {
 			`/api/graphics-assets/${operation.result!.assetId}/usage`,
 			{ headers: { cookie: graphicsAuthorCookie } },
 		)).resolves.toEqual([]);
+	});
+});
+
+/**
+ * This suite's own content: the reference pixel padded with a chunk count no
+ * other suite uses, so its usage list is this suite's alone.
+ */
+const plainModeLayerPng = Uint8Array.from(Buffer.concat([
+	basePixelPng.slice(0, -12),
+	...Array.from({ length: 211 }).fill(Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85)) as Uint8Array[],
+	basePixelPng.slice(-12),
+]));
+
+describe('a plain overlay mode’s own Background Layer references (#580)', () => {
+	let eventId: number;
+	let screenId: number;
+	let reference: { assetId: string; revisionId: string };
+	let graphicsAuthorCookie: string;
+
+	function plate() {
+		return { id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', ...reference }, fit: 'cover' };
+	}
+
+	async function usageSlots() {
+		const usage = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${reference.assetId}/usage`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+		return usage.map(item => item.owner.slot).sort();
+	}
+
+	beforeAll(async () => {
+		graphicsAuthorCookie = await operatorSessionCookie();
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'Plain Mode Layer Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+		const screen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Deck Stage', slug: 'deck-stage', currentMode: 'deck' },
+		});
+		screenId = screen.id;
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: { cookie: graphicsAuthorCookie },
+			body: graphicsIngestionRequest({
+				idempotencyKey: 'reference-plain-mode-plate',
+				name: 'Plain mode plate',
+				defaultEventId: eventId,
+				browserDecodeEvidence: {
+					outcome: 'decoded',
+					sourceDigest: createHash('sha256').update(plainModeLayerPng).digest('hex'),
+					width: 1,
+					height: 1,
+				},
+				declaredByteLength: plainModeLayerPng.byteLength,
+			}),
+		});
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: plainModeLayerPng },
+		);
+		const operation = await response.json() as GraphicsIngestionOperation;
+		reference = { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('indexes a Deck Screen’s asset-sourced layer under the Deck’s own namespace', async () => {
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/deck`,
+			{ method: 'PATCH', body: { backgroundLayers: [plate()] } },
+		);
+
+		expect(await usageSlots()).toEqual(['deck.backgroundLayers.plate.source']);
+	});
+
+	it('keeps the Deck’s row when the same Screen’s Card stack is written', async () => {
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/card`,
+			{ method: 'PATCH', body: { backgroundLayers: [plate()] } },
+		);
+
+		expect(await usageSlots()).toEqual([
+			'card.backgroundLayers.plate.source',
+			'deck.backgroundLayers.plate.source',
+		]);
+	});
+
+	it('delivers the layer’s revision to the Screen’s Output while the Deck is showing', async () => {
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+
+		const response = await fetch(
+			`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
+			{ headers: { authorization: `Bearer ${assetCapability}` } },
+		);
+
+		expect(response.status).toBe(200);
+	});
+
+	it('stops indexing a layer once the stack drops it', async () => {
+		await $fetch(
+			`/api/events/${eventId}/screens/${screenId}/config/deck`,
+			{ method: 'PATCH', body: { backgroundLayers: [] } },
+		);
+
+		expect(await usageSlots()).toEqual(['card.backgroundLayers.plate.source']);
 	});
 });

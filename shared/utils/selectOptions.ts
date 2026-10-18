@@ -42,17 +42,6 @@ export const DECK_CARD_SIZE_SELECT_OPTIONS: { label: string; value: DeckCardSize
 	{ label: 'Large', value: 'large' },
 ];
 
-export const QUANTITY_POSITION_SELECT_OPTIONS: { label: string; value: QuantityPosition }[] = [
-	{ label: 'Top Left', value: 'top-left' },
-	{ label: 'Top Center', value: 'top-center' },
-	{ label: 'Top Right', value: 'top-right' },
-	{ label: 'Left Center', value: 'left-center' },
-	{ label: 'Right Center', value: 'right-center' },
-	{ label: 'Bottom Left', value: 'bottom-left' },
-	{ label: 'Bottom Center', value: 'bottom-center' },
-	{ label: 'Bottom Right', value: 'bottom-right' },
-];
-
 export const QUANTITY_SIZE_SELECT_OPTIONS: { label: string; value: QuantitySize }[] = [
 	{ label: 'Small', value: 'small' },
 	{ label: 'Medium', value: 'medium' },
