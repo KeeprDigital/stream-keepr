@@ -209,7 +209,10 @@ Gotchas:
   test files run in parallel but never two against one database. The default is
   a third of the CPU cores, at most four; set `STREAM_KEEPR_INTEGRATION_SERVERS`
   to change it (`1` is the old serial run). Each server's output is kept in
-  `node_modules/.cache/integration-servers/`.
+  `node_modules/.cache/integration-servers/`. The servers share one Ably app,
+  and channels are named by Event id, so each server mints Event ids from its
+  own block of a million (`integrationEventIdBlocks`); without that, two files
+  hear each other's publications (#630).
 - **A failed integration test prints its requests.** The
   `[integration] requests during "…"` block lists each request with its time;
   on a timeout, the one marked `never returned` is the stall. It names the

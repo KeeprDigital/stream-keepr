@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anonymousFetch, fetch, url } from './client';
+import { $fetch, anonymousFetch, fetch, url } from './client';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 
 /**
@@ -78,11 +78,21 @@ describe('the API boundary', () => {
 		// Read as a pair, because the leak is a difference rather than a status: an
 		// Event that exists and one that does not have to be indistinguishable to a
 		// caller with no session.
-		const missing = await anonymous('/api/events/999999999/players');
-		const present = await anonymous('/api/events/1/players');
+		// Its own Event, because no fixed id names one that exists (#630).
+		const event = await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'API Boundary Existence Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		try {
+			const missing = await anonymous('/api/events/999999999/players');
+			const present = await anonymous(`/api/events/${event.id}/players`);
 
-		expect(missing).toEqual(present);
-		expect(missing.status).toBe(401);
+			expect(missing).toEqual(present);
+			expect(missing.status).toBe(401);
+		}
+		finally {
+			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+		}
 	});
 
 	/**
