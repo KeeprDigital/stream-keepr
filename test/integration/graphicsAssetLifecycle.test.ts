@@ -141,7 +141,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			revisionId: operation.result!.revisionId,
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 			{ method: 'PATCH', body: { layout: config.layout } },
@@ -360,7 +360,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			},
 		});
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		// The response is not read, and inferring its route-typed shape inside a
 		// `map` exhausts the type comparison depth limit.
 		await Promise.all([secondScreen.id, thirdScreen.id].map(async id => await $fetch<unknown>(
@@ -414,7 +414,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 			},
 		});
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 
 		const [referenceResult, trashResult] = await Promise.allSettled([
 			$fetch(

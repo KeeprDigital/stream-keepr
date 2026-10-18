@@ -803,6 +803,62 @@ describe('featureMatchOverlayDisplay', () => {
 	 * this host's own vocabulary: this Display owns its canvas element and its
 	 * `data-export-ready`, which the shared compositor knows nothing about.
 	 */
+	/**
+	 * The Frame's image and video each take a Screen Media Source (ADR-0021): a
+	 * library revision resolves through the Screen's content URLs, a Remote Media
+	 * URL is drawn as given.
+	 */
+	describe('the Frame’s own media', () => {
+		const loopVideo = { enabled: true, fit: 'contain' as const, opacity: 0.6, playbackRate: 2, loop: false };
+
+		function frameWith(frame: Partial<FeatureMatchOverlayModeConfig['layout']['frame']>) {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame = { ...config.layout.frame, ...frame };
+			return config;
+		}
+
+		async function frameVideo() {
+			const wrapper = await mountComponent();
+			return wrapper.findComponent({ name: 'FeatureMatchOverlayFrameMedia' }).props('video');
+		}
+
+		it('draws a library-sourced Frame image from its exact revision content URL', async () => {
+			mockConfig.value = frameWith({ backgroundImage: { kind: 'asset', assetId: 'plate' as never, revisionId: 'plate-1' as never } });
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.frame-layer image').html()).toContain('/private-assets/plate/plate-1');
+		});
+
+		it('draws a Remote Media URL Frame image as given', async () => {
+			mockConfig.value = frameWith({ backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' } });
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.frame-layer image').html()).toContain('https://cdn.example.com/plate.png');
+		});
+
+		it('plays a library-sourced Frame video from its exact revision content URL', async () => {
+			mockConfig.value = frameWith({
+				mediaBackground: { ...loopVideo, source: { kind: 'asset', assetId: 'loop' as never, revisionId: 'loop-2' as never } },
+			});
+
+			expect(await frameVideo()).toEqual({ url: '/private-assets/loop/loop-2', fit: 'contain', opacity: 0.6, playbackRate: 2, loop: false });
+		});
+
+		it('plays a Remote Media URL Frame video as given', async () => {
+			mockConfig.value = frameWith({ mediaBackground: { ...loopVideo, source: { kind: 'url', url: '/video/loop.mp4' } } });
+
+			expect(await frameVideo()).toMatchObject({ url: '/video/loop.mp4' });
+		});
+
+		it('plays nothing for a disabled Frame video', async () => {
+			mockConfig.value = frameWith({ mediaBackground: { ...loopVideo, enabled: false, source: { kind: 'url', url: '/video/loop.mp4' } } });
+
+			expect(await frameVideo()).toBeUndefined();
+		});
+	});
+
 	describe('library fonts', () => {
 		/**
 		 * A `FontFace` stub that records every family registered, with a gate a test can
@@ -864,7 +920,7 @@ describe('featureMatchOverlayDisplay', () => {
 			if (backgroundColor !== undefined)
 				config.layout.frame.backgroundColor = backgroundColor;
 			if (backgroundImage)
-				config.layout.frame.backgroundImage = backgroundImage as never;
+				config.layout.frame.backgroundImage = { kind: 'asset', ...backgroundImage } as never;
 			return config;
 		}
 

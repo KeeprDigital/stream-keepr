@@ -263,11 +263,22 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		// Named as well as iterated. Iterating proves each listed mode is equipped, but
 		// only naming the list makes dropping or renaming a member fail here rather than
 		// pass quietly with one mode fewer.
-		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual(['feature-match-overlay', 'broadcast-graphics', 'background']);
+		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual([
+			'feature-match-overlay',
+			'broadcast-graphics',
+			'background',
+			// Every plain overlay mode, for its own Background Layer stack (#580).
+			'card',
+			'deck',
+			'standings',
+			'topCut',
+			'metagame',
+			'player-history',
+		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
-			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z]+\.$/);
+			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z][\w-]*(?:\.[a-z]\w*)*\.$/i);
 		}
 
 		// The other half of "exactly", derived from every Screen Mode there is rather

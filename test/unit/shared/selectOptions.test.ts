@@ -9,7 +9,6 @@ import {
 	GAME_SELECT_OPTIONS,
 	HORIZONTAL_ALIGN_SELECT_OPTIONS,
 	POSITION_FORMAT_SELECT_OPTIONS,
-	QUANTITY_POSITION_SELECT_OPTIONS,
 	QUANTITY_SIZE_SELECT_OPTIONS,
 	RECORD_SEPARATOR_SELECT_OPTIONS,
 	SCREEN_COLOR_MODE_SELECT_OPTIONS,
@@ -60,13 +59,6 @@ describe('selectOptions', () => {
 		expect(values).toEqual(['small', 'medium', 'large']);
 	});
 
-	it('qUANTITY_POSITION_SELECT_OPTIONS has 8 positions', () => {
-		expect(QUANTITY_POSITION_SELECT_OPTIONS).toHaveLength(8);
-		const values = QUANTITY_POSITION_SELECT_OPTIONS.map(o => o.value);
-		expect(values).toContain('top-left');
-		expect(values).toContain('bottom-right');
-	});
-
 	it('qUANTITY_SIZE_SELECT_OPTIONS has small, medium, large', () => {
 		const values = QUANTITY_SIZE_SELECT_OPTIONS.map(o => o.value);
 		expect(values).toEqual(['small', 'medium', 'large']);
@@ -102,7 +94,6 @@ describe('selectOptions', () => {
 			...SCREEN_MODE_SELECT_OPTIONS,
 			...CARD_ANIMATION_SPEED_SELECT_OPTIONS,
 			...DECK_CARD_SIZE_SELECT_OPTIONS,
-			...QUANTITY_POSITION_SELECT_OPTIONS,
 			...QUANTITY_SIZE_SELECT_OPTIONS,
 			...DECK_BOARD_VIEW_SELECT_OPTIONS,
 			...SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
