@@ -43,6 +43,7 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 }));
 mockNuxtImport('useEventStore', () => () => ({
 	event: mockEvent.value,
+	displayEvent: mockEvent.value,
 	$reset: vi.fn(),
 }));
 

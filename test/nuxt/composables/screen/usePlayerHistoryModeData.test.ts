@@ -82,14 +82,14 @@ describe('usePlayerHistoryModeData', () => {
 		scopes.splice(0).forEach(scope => scope.stop());
 	});
 
-	it('reads the configured player\'s match history from the event', async () => {
+	it('reads the configured player\'s match history through the Screen', async () => {
 		mutableConfig.playerId = 7;
 		mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
 
 		const { player, pageData, isEmpty, error } = makePlayerHistoryModeData();
 		await flushPromises();
 
-		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/7/match-history');
+		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/player-history', expect.anything());
 		expect(player.value).toEqual(mockPlayer);
 		expect(pageData.value).toHaveLength(1);
 		expect(pageData.value[0]!.opponentName).toBe('Nadia Rivers');
@@ -117,7 +117,7 @@ describe('usePlayerHistoryModeData', () => {
 		expect(mockFetch).not.toHaveBeenCalled();
 	});
 
-	it('refetches when the selected player changes', async () => {
+	it('re-reads when the selected player changes', async () => {
 		mutableConfig.playerId = 7;
 		mockFetch.mockResolvedValue({ player: mockPlayer, history: [historyEntry()] });
 
@@ -127,8 +127,10 @@ describe('usePlayerHistoryModeData', () => {
 		mutableConfig.playerId = 9;
 		await flushPromises();
 
+		// The server derives the Player from the saved configuration, so a change
+		// is a second read of the same Screen resource.
 		expect(mockFetch).toHaveBeenCalledTimes(2);
-		expect(mockFetch).toHaveBeenLastCalledWith('/api/events/1/players/9/match-history');
+		expect(mockFetch).toHaveBeenLastCalledWith('/api/screen-output/events/1/screens/1/player-history', expect.anything());
 	});
 
 	it('is not empty while the first load is in flight', async () => {

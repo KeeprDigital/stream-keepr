@@ -20,7 +20,12 @@ const {
 } = usePlayerFeatureMatchData(() => props.matchId, () => props.playerSide);
 
 const playerControls = usePlayerControls(() => props.matchId, () => props.playerSide);
-const { availableCounterTypes } = usePlayerDeckCounters(() => props.matchId, () => props.playerSide);
+const outputReads = useScreenOutputReads();
+const { availableCounterTypes } = usePlayerDeckCounters(
+	() => props.matchId,
+	() => props.playerSide,
+	playerId => outputReads.playerDecks(playerId),
+);
 
 const {
 	showName,

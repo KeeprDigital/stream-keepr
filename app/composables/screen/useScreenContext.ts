@@ -3,7 +3,7 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import type { ScreenCardDataHealth } from '~/types/screen';
-import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 export interface ScreenContext {
 	/** The active screen object */
@@ -66,11 +66,5 @@ export function useScreenContext(): ScreenContext {
 export function useScreenModeConfig<M extends ScreenMode>(mode: M): ComputedRef<ModeConfigTypeMap[M]> {
 	const { screen } = useScreenContext();
 
-	return computed<ModeConfigTypeMap[M]>(() => {
-		const modeConfigs = (screen.value?.modeConfigs ?? {});
-		return {
-			...getDefaultConfigForMode(mode),
-			...modeConfigs[mode],
-		};
-	});
+	return computed<ModeConfigTypeMap[M]>(() => resolveScreenModeConfig(screen.value?.modeConfigs, mode));
 }

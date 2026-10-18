@@ -42,6 +42,7 @@ const mockEventData = ref(createMockEvent({
 mockNuxtImport('useEventStore', () => () => ({
 	eventId: 1,
 	event: mockEventData.value,
+	displayEvent: mockEventData.value,
 }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
