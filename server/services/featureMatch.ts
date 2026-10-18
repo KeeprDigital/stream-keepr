@@ -1,15 +1,14 @@
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { DbFeatureMatch, DbFeatureMatchSession } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
+import { chunkJsonRows, observedValue, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
@@ -187,15 +186,18 @@ export async function buildClearImportedMatchDataQueries(
 }
 
 /**
- * The equality a compare-and-swap guard needs over nullable columns: `eq`
- * compiles `= NULL`, which SQLite answers false for every row, so a guard built
- * with it alone would report every unpaired Slot as concurrently modified.
+ * A Slot row still holds the pairing identity and active Feature Match Session
+ * pointer it was read with: what a decision computed from that read depends on.
  */
-function observedValue<TColumn extends SQLiteColumn>(
-	column: TColumn,
-	value: TColumn['_']['data'] | null,
-) {
-	return value === null ? isNull(column) : eq(column, value);
+export function observedSlotPairing(slot: DbFeatureMatch) {
+	return and(
+		observedValue(featureMatches.matchId, slot.matchId),
+		observedValue(featureMatches.externalId, slot.externalId),
+		observedValue(featureMatches.externalSource, slot.externalSource),
+		observedValue(featureMatches.player1Id, slot.player1Id),
+		observedValue(featureMatches.player2Id, slot.player2Id),
+		observedValue(featureMatches.activeSessionId, slot.activeSessionId),
+	);
 }
 
 export function featureMatchService() {
@@ -379,12 +381,7 @@ export function featureMatchService() {
 				and(
 					eq(featureMatches.id, id),
 					eq(featureMatches.eventId, eventId),
-					observedValue(featureMatches.matchId, current.matchId),
-					observedValue(featureMatches.externalId, current.externalId),
-					observedValue(featureMatches.externalSource, current.externalSource),
-					observedValue(featureMatches.player1Id, current.player1Id),
-					observedValue(featureMatches.player2Id, current.player2Id),
-					observedValue(featureMatches.activeSessionId, current.activeSessionId),
+					observedSlotPairing(current),
 				),
 			)
 			.returning();
