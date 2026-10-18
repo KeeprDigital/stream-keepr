@@ -190,7 +190,7 @@ export async function deleteScreenWithGraphicAssetReferences(
 }
 
 /**
- * Write one graphics Screen Mode's configuration and its Graphic Asset Reference
+ * Write one referencing Screen Mode's configuration and its Graphic Asset Reference
  * index in a single atomic operation.
  *
  * Every mode that publishes references shares this one write, because the

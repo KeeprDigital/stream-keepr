@@ -401,6 +401,7 @@ What a show wants behind everything else is a composition — a colour wash over
 - **At most one animation layer per Screen**, enforced on the `layers` field in the schema: each is its own WebGL context and an OBS browser source is memory-tight. Liftable.
 - Opacity belongs to the layer, never to the stack or the renderer behind it.
 - Image and video layers take a Screen Media Source — a Graphics Asset Library reference or a Remote Media URL — whose reach ADR-0021 sets. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace; a plain overlay mode's own stack indexes under `<mode>.backgroundLayers.` (#580).
+- Which modes carry their own stack is declared once, on the Screen Mode Definition (`backgroundLayers: true`). The config field and its validation, reset preservation, the editor card, the painting, and reference indexing all derive from that declaration. Every plain overlay mode declares it, Top Cards included.
 
 ### Rejected alternatives
 

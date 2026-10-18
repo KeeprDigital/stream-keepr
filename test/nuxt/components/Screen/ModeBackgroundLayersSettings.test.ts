@@ -1,11 +1,11 @@
-import type { BackgroundLayer, MetagameModeConfig } from '~~/shared/types/screenConfig';
+import type { BackgroundLayer, ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { createMockScreen } from '../../../helpers/fixtures';
 
-const config = ref<Partial<MetagameModeConfig>>({});
+const config = ref<Partial<ModeConfigTypeMap['metagame']>>({});
 const updateConfig = vi.fn();
 const useModeConfigUpdateMock = vi.fn(() => ({
 	config: computed(() => config.value),

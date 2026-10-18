@@ -1,4 +1,5 @@
 import type { DisplayType, ScreenMode } from './types/enums';
+import { SCREEN_MODE_VALUES } from './types/enums';
 import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
@@ -35,6 +36,23 @@ export interface ScreenModeDefinition {
 	description: string;
 	containerControls?: ScreenModeContainerControls;
 	graphicsHost?: ScreenModeGraphicsHost;
+	/**
+	 * The mode carries its own optional `backgroundLayers` stack, painted behind
+	 * its content by the Screen renderer host.
+	 *
+	 * Declared here and nowhere else. The config field and its validation,
+	 * preservation across a display reset, the settings editor card, the painting,
+	 * and Graphic Asset Reference discovery — and so the Screen write path's
+	 * reference versioning and what the Screen Output may resolve — all derive
+	 * from this flag, so a mode that declares it gets every one of them.
+	 *
+	 * The rule behind who declares it: every plain overlay mode qualifies.
+	 * Control screens are operator surfaces, not program output; the Background
+	 * Screen is itself the stack; and the graphics hosts (Feature Match Overlay,
+	 * Broadcast Graphics) own their backgrounds and rely on transparent
+	 * Overlay/Key Outputs, so a host-painted layer behind them would break keying.
+	 */
+	backgroundLayers?: true;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -53,14 +71,18 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
- * Each mode declares its own display type, label, and icon.
+ * Each mode declares its own display type, label, and icon, and what it carries.
+ *
+ * Kept literal (`satisfies`, not an annotation) so the modes carrying something
+ * can be derived as a type as well as a list; `SCREEN_MODES` below is the same object
+ * widened for readers asking about any mode.
  */
-export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
+const SCREEN_MODE_DEFINITIONS = {
 	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background' },
-	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display' },
-	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view' },
-	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings' },
-	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket' },
+	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true },
+	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true },
+	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true },
+	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true },
 	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls' },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
@@ -85,40 +107,30 @@ export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = {
 			useScreenAlignment: false,
 		},
 	},
-	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown' },
-	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid' },
-	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history' },
-} as const;
+	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true },
+	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true },
+	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true },
+} as const satisfies Record<ScreenMode, ScreenModeDefinition>;
+
+export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;
 
 /** Derive the display type for a given screen mode. */
 export function getDisplayType(mode: ScreenMode): DisplayType {
 	return SCREEN_MODES[mode].displayType;
 }
 
-/**
- * The Screen Modes that carry their own optional `backgroundLayers` stack,
- * painted behind the mode's content by the Screen renderer host.
- *
- * The rule behind the list: every plain overlay mode qualifies. Control
- * screens are operator surfaces, not program output; the Background Screen is
- * itself the stack; and the graphics hosts (Feature Match Overlay, Broadcast
- * Graphics) own their backgrounds and rely on transparent Overlay/Key
- * Outputs, so a host-painted layer behind them would break keying.
- */
-export const BACKGROUND_LAYERS_CAPABLE_MODES = [
-	'card',
-	'deck',
-	'standings',
-	'topCut',
-	'metagame',
-	'player-history',
-] as const satisfies readonly ScreenMode[];
-
-export type BackgroundLayersCapableMode = typeof BACKGROUND_LAYERS_CAPABLE_MODES[number];
+/** The Screen Modes whose definition declares a Background Layer stack. */
+export type BackgroundLayersCapableMode = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { backgroundLayers: true } ? M : never;
+}[ScreenMode];
 
 export function screenModeSupportsBackgroundLayers(mode: ScreenMode): mode is BackgroundLayersCapableMode {
-	return (BACKGROUND_LAYERS_CAPABLE_MODES as readonly ScreenMode[]).includes(mode);
+	return SCREEN_MODES[mode].backgroundLayers === true;
 }
+
+/** The same modes as a list, in Screen Mode order, derived from the declaration. */
+export const BACKGROUND_LAYERS_CAPABLE_MODES: readonly BackgroundLayersCapableMode[]
+	= SCREEN_MODE_VALUES.filter(screenModeSupportsBackgroundLayers);
 
 /** Derive which generic Container controls apply to a Screen Mode. */
 export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {

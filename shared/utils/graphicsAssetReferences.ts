@@ -8,6 +8,7 @@ import type {
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
 	BackgroundLayer,
+	BackgroundLayersModeConfig,
 	BackgroundModeConfig,
 	BroadcastGraphicsModeConfig,
 	FeatureMatchLayoutConfig,
@@ -267,7 +268,7 @@ export function backgroundGraphicAssetReferences(
  */
 export function plainModeBackgroundLayerGraphicAssetReferences(
 	mode: BackgroundLayersCapableMode,
-	config: { backgroundLayers?: BackgroundLayer[] } | undefined,
+	config: BackgroundLayersModeConfig | undefined,
 ): ScreenGraphicAssetReference[] {
 	return backgroundLayerStackGraphicAssetReferences(config?.backgroundLayers, `${mode}.backgroundLayers`);
 }
@@ -300,6 +301,10 @@ function backgroundLayerStackGraphicAssetReferences(
  * Every other mode publishes none, so its configuration writes go through the
  * ordinary versioned write. A mode listed here writes its configuration and its
  * reference index in one atomic operation instead.
+ *
+ * Two kinds of member: the modes whose own content pins assets, named here, and
+ * every mode whose Screen Mode Definition declares a Background Layer stack,
+ * which joins by that declaration alone rather than by being listed twice.
  */
 export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = [
 	'feature-match-overlay',
@@ -335,12 +340,9 @@ export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
 	'feature-match-overlay': 'layout.',
 	'broadcast-graphics': 'graphics.',
 	'background': 'layers.',
-	'card': 'card.backgroundLayers.',
-	'deck': 'deck.backgroundLayers.',
-	'standings': 'standings.backgroundLayers.',
-	'topCut': 'topCut.backgroundLayers.',
-	'metagame': 'metagame.backgroundLayers.',
-	'player-history': 'player-history.backgroundLayers.',
+	...Object.fromEntries(BACKGROUND_LAYERS_CAPABLE_MODES.map(mode => [mode, `${mode}.backgroundLayers.`])) as {
+		[M in BackgroundLayersCapableMode]: `${M}.backgroundLayers.`;
+	},
 } as const satisfies Record<GraphicAssetReferencingScreenMode, string>;
 
 export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
@@ -380,7 +382,7 @@ export type GraphicAssetReferencingScreenModeConfigs = {
 	'broadcast-graphics'?: BroadcastGraphicsModeConfig;
 	'background'?: BackgroundModeConfig;
 } & {
-	[Mode in BackgroundLayersCapableMode]?: { backgroundLayers?: BackgroundLayer[] };
+	[Mode in BackgroundLayersCapableMode]?: BackgroundLayersModeConfig;
 };
 
 /**
@@ -391,8 +393,8 @@ export type GraphicAssetReferencingScreenModeConfigs = {
  * answer, and a mode added to the list above must reach every one of them or a
  * Screen Output would resolve content nothing indexed.
  *
- * Exhaustive by construction: a mode added to the list without a branch here
- * fails to compile rather than quietly reading another mode's configuration.
+ * Exhaustive by construction: every mode not branched on here is one whose
+ * definition declares a Background Layer stack, and that stack is all it pins.
  */
 export function screenModeGraphicAssetReferences(
 	mode: GraphicAssetReferencingScreenMode,
@@ -411,16 +413,9 @@ export function screenModeGraphicAssetReferences(
 			const config = modeConfigs?.background;
 			return config ? backgroundGraphicAssetReferences(config) : [];
 		}
-		case 'card':
-		case 'deck':
-		case 'standings':
-		case 'topCut':
-		case 'metagame':
-		case 'player-history':
-			return plainModeBackgroundLayerGraphicAssetReferences(mode, modeConfigs?.[mode]);
 		default: {
-			const unreachable: never = mode;
-			return unreachable;
+			const declared: BackgroundLayersCapableMode = mode;
+			return plainModeBackgroundLayerGraphicAssetReferences(declared, modeConfigs?.[declared]);
 		}
 	}
 }

@@ -242,8 +242,10 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 
 	it('gives each referencing Screen Mode a distinct, non-overlapping slot namespace', () => {
 		// Two modes sharing a prefix — or one being a prefix of the other — would make
-		// the delete scope and the output scope ambiguous.
-		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.map(graphicAssetReferenceSlotPrefix);
+		// the delete scope and the output scope ambiguous. Compared without case,
+		// because that is how SQLite's `LIKE` compares them.
+		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES
+			.map(mode => graphicAssetReferenceSlotPrefix(mode).toLowerCase());
 
 		expect(new Set(prefixes).size).toBe(prefixes.length);
 		for (const one of prefixes) {
@@ -273,12 +275,16 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'standings',
 			'topCut',
 			'metagame',
+			'top-cards',
 			'player-history',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
-			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z][\w-]*(?:\.[a-z]\w*)*\.$/i);
+			// Dotted path segments of letters and hyphens only: `%` and `_` are `LIKE`
+			// wildcards, so a prefix carrying one would scope its delete and its output
+			// to other modes' rows too.
+			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^(?:[a-z-]+\.)+$/i);
 		}
 
 		// The other half of "exactly", derived from every Screen Mode there is rather

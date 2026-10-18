@@ -44,8 +44,8 @@ import {
  *
  * **A thunk, because constructing one can fail or can be wasted.**
  * `screenOutputAssetCapabilityManagerForEvent` throws when the signing key is
- * unset (#233), and `updateModeConfig` serves all ten Screen Modes while only
- * two of them can pin a Graphic Asset Reference. Deferring construction to the
+ * unset (#233), and `updateModeConfig` serves every Screen Mode while most
+ * writes change no Graphic Asset Reference. Deferring construction to the
  * point of need is what keeps a write that never reaches the collaborator from
  * paying for it. See #247.
  */
