@@ -180,6 +180,10 @@ _Avoid_: generation counter, version guard, latest-wins map.
 A ticket for one unit of supersedable async work, checked for staleness after each await. Staleness is monotonic.
 _Avoid_: request id, generation.
 
+**Event Lifetime**:
+The span of one Event's client-side state, from the store reset that begins it to the one that ends it. Coming back to an Event begins a new one, because the Event is loaded afresh. A write's continuation — merging its answer, rolling back, follow-up reloads — runs only while the Flight for the lifetime it began in is current; the caller still receives the answer (ADR-0024).
+_Avoid_: Event session, Event generation.
+
 **Field Ownership**:
 The set of fields one action may write, derived from the change the action predicts.
 Client-side it is a scope rule: an optimistic action's merges and rollbacks write only its owned fields, and remote updates never overwrite fields another action currently owns.

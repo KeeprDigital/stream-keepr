@@ -1,4 +1,5 @@
 import type { PlayerListSummary } from '~/types';
+import type { Flight } from '~/utils/guardedSequence';
 
 interface PlayerListMembersRepository {
 	addMembers: (eventId: number, listId: number, playerIds: number[]) => Promise<{ added: number; memberCount: number }>;
@@ -12,6 +13,8 @@ interface PlayerListMembersState {
 	lists: Ref<PlayerListSummary[]>;
 	error: Ref<string | null>;
 	repository: PlayerListMembersRepository;
+	/** The Player Lists' current Event Lifetime; a write answered after it ends lands nowhere (#606). */
+	currentLifetime: () => Flight;
 }
 
 /**
@@ -74,14 +77,17 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, [...cachedIds, ...idsToAdd]);
 		}
 
+		const flight = state.currentLifetime();
 		return executeReporting(
 			async () => {
 				const result = await state.repository.addMembers(eventId, listId, idsToAdd);
-				setMemberCount(listId, result.memberCount);
+				if (flight.current)
+					setMemberCount(listId, result.memberCount);
 				return result;
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => {
 					if (index !== -1) {
 						state.lists.value[index] = { ...state.lists.value[index]!, memberCount: originalCount };
@@ -108,17 +114,20 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, cachedIds.filter(id => id !== playerId));
 		}
 
+		const flight = state.currentLifetime();
 		return executeReporting(
 			async () => {
 				const result = await state.repository.removeMember(eventId, listId, playerId);
 				if (!result.success) {
 					throw new Error('Failed to remove player from list');
 				}
-				setMemberCount(listId, result.memberCount);
+				if (flight.current)
+					setMemberCount(listId, result.memberCount);
 				return result;
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => {
 					if (index !== -1) {
 						state.lists.value[index] = { ...state.lists.value[index]!, memberCount: originalCount };
@@ -146,14 +155,17 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, cachedIds.filter(id => !removeSet.has(id)));
 		}
 
+		const flight = state.currentLifetime();
 		return executeReporting(
 			async () => {
 				const result = await state.repository.batchRemoveMembers(eventId, listId, playerIds);
-				setMemberCount(listId, result.memberCount);
+				if (flight.current)
+					setMemberCount(listId, result.memberCount);
 				return result;
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => {
 					if (index !== -1) {
 						state.lists.value[index] = { ...state.lists.value[index]!, memberCount: originalCount };
@@ -173,14 +185,17 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 			membersByListId.value.set(listId, [...playerIds]);
 		}
 
+		const flight = state.currentLifetime();
 		return executeReporting(
 			async () => {
 				const result = await state.repository.reorderMembers(eventId, listId, playerIds);
-				setMemberCount(listId, result.memberCount);
+				if (flight.current)
+					setMemberCount(listId, result.memberCount);
 				return result;
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => {
 					if (cachedIds) {
 						membersByListId.value.set(listId, cachedIds);
@@ -191,13 +206,15 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	}
 
 	async function loadListMembers(eventId: number, listId: number) {
+		const flight = state.currentLifetime();
 		return executeReporting(
 			async () => {
 				const memberIds = await state.repository.getMemberIds(eventId, listId);
-				membersByListId.value.set(listId, memberIds);
+				if (flight.current)
+					membersByListId.value.set(listId, memberIds);
 				return memberIds;
 			},
-			{ errorRef: state.error },
+			{ errorRef: state.error, flight },
 		);
 	}
 

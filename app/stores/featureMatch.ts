@@ -69,15 +69,17 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	async function createFeatureMatch(eventId: number, input: CreateFeatureMatchInput) {
+		const flight = lifecycle.currentLifetime();
 		const createdMatch = await lifecycle.create(eventId, input);
-		if (createdMatch)
+		if (createdMatch && flight.current)
 			useFeatureMatchStateStore().cacheSlotSession(createdMatch);
 		return createdMatch;
 	}
 
 	async function updateFeatureMatch(eventId: number, matchId: number, updates: UpdateFeatureMatchInput) {
+		const flight = lifecycle.currentLifetime();
 		const updated = await lifecycle.update(eventId, matchId, updates);
-		if (updated)
+		if (updated && flight.current)
 			useFeatureMatchStateStore().cacheSlotSession(updated);
 		return updated;
 	}
@@ -105,12 +107,14 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		featureMatches.value[swapIndex] = temp;
 
 		const eventId = currentEventId.value;
+		const flight = lifecycle.currentLifetime();
 		return executeReporting(
 			async () => {
 				await matchRepo.reorder(eventId, slotId, direction);
 			},
 			{
 				errorRef: error,
+				flight,
 				onError: () => {
 					featureMatches.value = snapshot;
 				},
@@ -170,6 +174,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		applyRemoteUpdated,
 		applyRemoteDeleted,
 		applyRemoteReordered,
+		currentLifetime: lifecycle.currentLifetime,
 		$reset,
 	};
 });

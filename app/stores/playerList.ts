@@ -34,7 +34,12 @@ export const usePlayerListStore = defineStore('playerList', () => {
 	const loading = lifecycle.loading;
 	const error = lifecycle.error;
 	const isLoaded = lifecycle.isLoaded;
-	memberRuntime = usePlayerListMembersRuntime({ lists, error, repository: repo });
+	memberRuntime = usePlayerListMembersRuntime({
+		lists,
+		error,
+		repository: repo,
+		currentLifetime: lifecycle.currentLifetime,
+	});
 	const membersByListId = memberRuntime.membersByListId;
 
 	// ── Actions ──
@@ -70,15 +75,17 @@ export const usePlayerListStore = defineStore('playerList', () => {
 	}
 
 	async function removeList(eventId: number, listId: number) {
+		const flight = lifecycle.currentLifetime();
 		const cachedIds = memberRuntime.clearListMembers(listId);
 		try {
 			const removed = await lifecycle.remove(eventId, listId);
-			if (removed === null)
+			if (removed === null && flight.current)
 				memberRuntime.restoreListMembers(listId, cachedIds);
 			return removed;
 		}
 		catch (err) {
-			memberRuntime.restoreListMembers(listId, cachedIds);
+			if (flight.current)
+				memberRuntime.restoreListMembers(listId, cachedIds);
 			throw err;
 		}
 	}

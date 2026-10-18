@@ -266,6 +266,25 @@ describe('useBroadcastDeckListStore', () => {
 		expect(store.details).toEqual(new Map());
 	});
 
+	it('does not cache a create response after the operator left the Event and came back to it', async () => {
+		mockRepo.list.mockResolvedValue([]);
+		await store.loadCollection(1);
+		const request = deferred<BroadcastDeckListResponse>();
+		mockRepo.create.mockReturnValue(request.promise);
+		const create = store.createList(1, { name: 'Late', sourceText: '60 Island' });
+
+		store.$reset();
+		await store.loadCollection(2);
+		store.$reset();
+		await store.loadCollection(1);
+		request.resolve(detail({ name: 'Late' }));
+		await create;
+
+		expect(store.currentEventId).toBe(1);
+		expect(store.summaries).toEqual([]);
+		expect(store.details).toEqual(new Map());
+	});
+
 	it('does not let a delayed create response overwrite a peer edit already fetched from authority', async () => {
 		mockRepo.list.mockResolvedValue([]);
 		await store.loadCollection(1);

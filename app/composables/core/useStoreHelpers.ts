@@ -1,3 +1,5 @@
+import type { Flight } from '~/utils/guardedSequence';
+
 /**
  * Shared helpers for CRUD store patterns.
  * Provides optimistic update and delete with automatic rollback,
@@ -12,6 +14,8 @@ interface OptimisticUpdateConfig<T, TUpdates extends object = Partial<T>> {
 	errorRef: Ref<string | null>;
 	entityLabel: string;
 	onSuccess?: () => void;
+	/** The lifetime `items` belongs to; once stale, neither the answer nor the rollback lands in it. */
+	flight?: Flight;
 }
 
 interface OptimisticDeleteConfig<T> {
@@ -21,6 +25,8 @@ interface OptimisticDeleteConfig<T> {
 	errorRef: Ref<string | null>;
 	entityLabel: string;
 	onSuccess?: () => void;
+	/** The lifetime `items` belongs to; once stale, neither the answer nor the rollback lands in it. */
+	flight?: Flight;
 }
 
 export function useStoreHelpers() {
@@ -33,7 +39,7 @@ export function useStoreHelpers() {
 	async function optimisticUpdate<T extends { id: number }, TUpdates extends object = Partial<T>>(
 		config: OptimisticUpdateConfig<T, TUpdates>,
 	): Promise<T | null> {
-		const { items, id, updates, apiCall, errorRef, entityLabel, onSuccess } = config;
+		const { items, id, updates, apiCall, errorRef, entityLabel, onSuccess, flight = unguarded } = config;
 
 		const index = items.value.findIndex(item => item.id === id);
 		if (index === -1) {
@@ -47,6 +53,8 @@ export function useStoreHelpers() {
 		return executeAction(
 			async () => {
 				const updated = await apiCall();
+				if (flight.stale)
+					return updated;
 				const idx = items.value.findIndex(item => item.id === id);
 				if (idx !== -1)
 					items.value[idx] = updated;
@@ -55,6 +63,7 @@ export function useStoreHelpers() {
 			},
 			{
 				errorRef,
+				flight,
 				onError: () => {
 					const idx = items.value.findIndex(item => item.id === id);
 					if (idx !== -1)
@@ -71,7 +80,7 @@ export function useStoreHelpers() {
 	async function optimisticDelete<T extends { id: number }>(
 		config: OptimisticDeleteConfig<T>,
 	): Promise<boolean | null> {
-		const { items, id, apiCall, errorRef, entityLabel, onSuccess } = config;
+		const { items, id, apiCall, errorRef, entityLabel, onSuccess, flight = unguarded } = config;
 
 		const index = items.value.findIndex(item => item.id === id);
 		if (index === -1) {
@@ -85,11 +94,13 @@ export function useStoreHelpers() {
 		return executeAction(
 			async () => {
 				await apiCall();
-				onSuccess?.();
+				if (flight.current)
+					onSuccess?.();
 				return true;
 			},
 			{
 				errorRef,
+				flight,
 				onError: () => {
 					// Re-find safe insertion point (list may have shifted during async call)
 					const insertIdx = Math.min(index, items.value.length);

@@ -657,4 +657,84 @@ describe('useScreenStore', () => {
 	});
 
 	// ── updateModeConfig (optimistic merge + null-stripping) ──
+
+	// ── Writes that outlive their Event (#606) ──
+
+	/**
+	 * A Screen write is answered for the Event it was made in. Neither another Event nor
+	 * the same Event loaded afresh since is the lifetime that answer belongs to, so it may
+	 * not add, change or put back a Screen there (ADR-0024).
+	 */
+	describe.each([
+		['Event B', [2]],
+		['Event A, loaded again since', [2, 1]],
+	])('a Screen write answered after the operator moved on to %s', (_, switches) => {
+		/** Ends on Screens 1 and 2 at the revision the write would answer with, as Event A's own are when loaded again. */
+		async function switchAway() {
+			for (const eventId of switches) {
+				store.$reset();
+				mockRepo.list.mockResolvedValueOnce([
+					createMockScreen({ id: 1, eventId, name: `One as loaded for ${eventId}`, stateVersion: 2 }),
+					createMockScreen({ id: 2, eventId, name: `Two as loaded for ${eventId}`, stateVersion: 2 }),
+				]);
+				await store.loadScreensByEventId(eventId);
+			}
+			return structuredClone(toRaw(store.screens));
+		}
+
+		it('a late create adds no Screen', async () => {
+			const create = deferred<ReturnType<typeof createMockScreen>>();
+			mockRepo.create.mockReturnValueOnce(create.promise);
+
+			const creating = store.createScreen(1, { name: 'New Screen', slug: 'new-screen', currentMode: 'background' });
+			const shown = await switchAway();
+			create.resolve(createMockScreen({ id: 3, name: 'New Screen', stateVersion: 2 }));
+			await creating;
+
+			expect(store.screens).toEqual(shown);
+		});
+
+		it('a late update changes no Screen, whether it succeeds or fails', async () => {
+			store.screens = [createMockScreen({ id: 1, name: 'One', stateVersion: 1 }), createMockScreen({ id: 2, name: 'Two', stateVersion: 1 })];
+			const succeeded = deferred<ReturnType<typeof createMockScreen>>();
+			const failed = deferred<never>();
+			mockRepo.update
+				.mockReturnValueOnce(succeeded.promise)
+				.mockReturnValueOnce(failed.promise);
+
+			const renaming = store.updateScreen(1, 1, { name: 'One renamed' });
+			const renamingOther = store.updateScreen(1, 2, { name: 'Two renamed' });
+			const shown = await switchAway();
+			succeeded.resolve(createMockScreen({ id: 1, name: 'One renamed', stateVersion: 2 }));
+			failed.reject(new Error('Update refused'));
+			await Promise.all([renaming, renamingOther]);
+
+			expect(store.screens).toEqual(shown);
+			expect(store.error).toBeNull();
+		});
+
+		it('a late failed delete puts back no Screen', async () => {
+			store.screens = [createMockScreen({ id: 3, name: 'Three', stateVersion: 1 })];
+			const remove = deferred<never>();
+			mockRepo.remove.mockReturnValueOnce(remove.promise);
+
+			const removing = store.removeScreen(1, 3);
+			const shown = await switchAway();
+			remove.reject(new Error('Delete refused'));
+			await removing;
+
+			expect(store.screens).toEqual(shown);
+			expect(store.error).toBeNull();
+		});
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}
