@@ -188,7 +188,21 @@ describe('the public surface, counted against the routes on disk', () => {
 			// The Screen lookup by slug joined it on #397 — the bootstrap an output
 			// needs before it has anything to resolve, admitted by the same bearer
 			// (or, for the operator's `embed=preview` surfaces, by their session).
+			//
+			// The reads of what one Screen publishes joined it on #604 (ADR-0022), each
+			// admitted through `requireScreenOutputRead` and derived from the Screen's
+			// saved configuration, so a capability-only output can render every mode.
 			'server/api/screen-output/events/[id]/screens/[screenId]/broadcast-deck-list.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/broadcast-graphics/live-session.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/card.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/event.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/feature-match-slots/[slotId].get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/index.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/metagame.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/player-history.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/players/[playerId]/decks.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/standings.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/top-cards.get.ts',
 			'server/api/screen-output/events/[id]/screens/slug/[slug].get.ts',
 			'server/api/screen-output/screens/[screenId]/asset-capability-session.post.ts',
 			'server/api/screen-output/screens/[screenId]/assets/[assetId]/revisions/[revisionId]/content.get.ts',

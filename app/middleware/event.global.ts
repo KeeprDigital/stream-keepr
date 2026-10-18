@@ -1,6 +1,13 @@
+import { isScreenOutputPage } from '~/modules/auth/pageGate';
 import { resetAllEventStores } from '~/utils/eventStores';
 
 export default defineNuxtRouteMiddleware(async (to) => {
+	// A Screen Output holds no Session, so the operator's Event read would refuse
+	// it and this would send program to the home page and on to sign-in (#604).
+	// The output's display session loads the Event context its capability admits.
+	if (isScreenOutputPage(to.path))
+		return;
+
 	const eventStore = useEventStore();
 	const eventId = Number.parseInt(to.params.eventId as string);
 

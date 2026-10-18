@@ -71,6 +71,22 @@ const bar: ShapeGraphicItemConfig = {
 	surfaceStyle: { fill: { type: 'solid', color: '#0077a3' }, fillOpacity: 1 },
 };
 
+/**
+ * How each rendered Screen's snapshot is read, as the Display registered it: through
+ * the Screen's capability-scoped read, never the Live Control path (#604).
+ */
+const mockSessionReaders = new Map<number, () => Promise<unknown>>();
+const liveSessionReads = vi.hoisted(() => [] as unknown[]);
+
+vi.mock('~/composables/repositories/useScreenOutputReadRepository', () => ({
+	useScreenOutputReadRepository: () => ({
+		liveSession: async (scope: unknown) => {
+			liveSessionReads.push(scope);
+			return { id: 55, sequence: 1 };
+		},
+	}),
+}));
+
 /** The authoritative playout snapshot a live Screen Output would have loaded. */
 const mockOnAirGraphicIds = ref<string[]>([]);
 const mockAcceptedInputs = ref<BroadcastGraphicsLiveState>(createInitialBroadcastGraphicsLiveState());
@@ -243,6 +259,9 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		graphic ? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value) : undefined,
 	),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
+	readSessionAsScreenOutput: (screenId: number, read: () => Promise<unknown>) => {
+		mockSessionReaders.set(screenId, read);
+	},
 }));
 
 const lowerThird: BroadcastGraphicConfig = {
@@ -432,6 +451,7 @@ describe('broadcastGraphicsDisplay', () => {
 		mockServerNow.value = 1_700_000_000_000;
 		mockSessionSequence.value = 1;
 		mockLoadSession.value = () => {};
+		mockSessionReaders.clear();
 		mockAssetCapability.value = undefined;
 		capabilitySessionRequests.length = 0;
 		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
@@ -663,9 +683,14 @@ describe('broadcastGraphicsDisplay', () => {
 		};
 		mockScreen.value = screenWithStack([lowerThird]);
 
+		mockAssetCapability.value = 'capability-token';
+
 		await mountComponent();
 
 		expect(loads).toEqual([[1, 1]]);
+		liveSessionReads.length = 0;
+		await mockSessionReaders.get(1)?.();
+		expect(liveSessionReads).toEqual([{ eventId: 1, screenId: 1, assetCapability: 'capability-token' }]);
 	});
 
 	it('never loads a playout snapshot for an embedded editor preview', async () => {

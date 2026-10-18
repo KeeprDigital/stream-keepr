@@ -54,6 +54,26 @@ export function useScreenRepository() {
 		}
 	};
 
+	/**
+	 * The active Screen re-read by id through its Screen Output path, after an
+	 * announcement (#604): by id because a slug can be renamed under an output on
+	 * program. Refused or failed alike answer `null`, as the slug lookup does.
+	 */
+	const getScreenOutputById = async (
+		eventId: number,
+		screenId: number,
+		assetCapability?: string | null,
+	): Promise<Screen | null> => {
+		try {
+			return await $fetch<Screen>(`/api/screen-output/events/${eventId}/screens/${screenId}`, {
+				headers: screenOutputCapabilityHeaders(assetCapability),
+			});
+		}
+		catch {
+			return null;
+		}
+	};
+
 	const updateModeConfig = async (
 		eventId: number,
 		screenId: number,
@@ -83,6 +103,7 @@ export function useScreenRepository() {
 		list: base.list,
 		getById,
 		getBySlug,
+		getScreenOutputById,
 		create: base.create,
 		update: base.update,
 		updateModeConfig,

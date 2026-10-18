@@ -42,6 +42,19 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		return data;
 	}
 
+	/**
+	 * Hold one Slot a Screen Output read answered (#604), with its Session, so
+	 * `featureMatch:updated` keeps it live without loading the Event's Slots.
+	 */
+	function holdFeatureMatch(slot: FeatureMatch) {
+		const index = featureMatches.value.findIndex(held => held.id === slot.id);
+		if (index === -1)
+			featureMatches.value.push(slot);
+		else
+			featureMatches.value[index] = slot;
+		useFeatureMatchStateStore().cacheSlotSession(slot);
+	}
+
 	async function getFeatureMatchById(eventId: number, matchId: number) {
 		return executeReporting(
 			async () => {
@@ -151,6 +164,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 
 		// Actions
 		loadFeatureMatchesByEventId,
+		holdFeatureMatch,
 		getFeatureMatchById,
 		createFeatureMatch,
 		updateFeatureMatch,

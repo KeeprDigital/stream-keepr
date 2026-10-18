@@ -23,6 +23,7 @@ export function usePlayerHistoryModeData() {
 	const { screen, eventId, interactive } = useScreenContext();
 	const config = useScreenModeConfig('player-history');
 	const screenStore = useScreenStore();
+	const outputReads = useScreenOutputReads();
 
 	const displayData = useBroadcastDisplayData<{ player: Player | null; rows: PlayerMatchHistoryEntry[] }>({
 		initialData: { player: null, rows: [] },
@@ -60,20 +61,18 @@ export function usePlayerHistoryModeData() {
 	});
 
 	async function load() {
-		const evtId = eventId.value;
-		const playerId = config.value.playerId;
-		if (!evtId || !playerId) {
+		if (!outputReads.scope.value || !config.value.playerId) {
 			displayData.clear();
 			return;
 		}
 
 		await displayData.refresh(async () => {
-			const data = await $fetch<{ player: Player; history: PlayerMatchHistoryEntry[] }>(`/api/events/${evtId}/players/${playerId}/match-history`);
+			const data = await outputReads.playerHistory();
 			return { player: data.player, rows: data.history };
 		}, 'Failed to load player match history');
 	}
 
-	watch(() => [eventId.value, config.value.playerId], load, { immediate: true });
+	watch(() => [outputReads.scopeKey.value, config.value.playerId], load, { immediate: true });
 
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')

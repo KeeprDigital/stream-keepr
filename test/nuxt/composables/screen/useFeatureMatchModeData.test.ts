@@ -10,8 +10,9 @@ const mockEventStore = {
 };
 
 const mockFeatureMatchStore = {
-	featureMatches: [{ id: 1, player1Data: { name: 'A' }, player2Data: { name: 'B' } }],
+	featureMatches: [] as { id: number }[],
 	loadFeatureMatchesByEventId: vi.fn(),
+	holdFeatureMatch: vi.fn(),
 	currentEventId: null as number | null,
 	isLoaded: false,
 };
@@ -20,8 +21,22 @@ const mockState = createMockFeatureMatchState();
 const mockFeatureMatchStateStore = {
 	featureMatchStates: new Map([[1, mockState]]),
 	loadState: vi.fn(),
+	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 	currentEventId: null as number | null,
 };
+
+/** The Slot each Screen Output read answers, by Slot id. */
+function slotRead(slotId: number) {
+	return {
+		slot: { id: slotId, player1Data: { name: 'A' }, player2Data: { name: 'B' }, activeSession: { id: 70 + slotId, slotId } },
+		match: null,
+		round: null,
+		phase: null,
+	};
+}
+
+const mockApiFetch = vi.hoisted(() => vi.fn());
+mockNuxtImport('$fetch', () => mockApiFetch);
 
 const mockEventId = ref<number | null>(1);
 const mockConfig = ref({ featureMatchId: 1 as number | null });
@@ -49,13 +64,20 @@ describe('useFeatureMatchModeData', () => {
 		mockEventId.value = 1;
 		mockConfig.value = { featureMatchId: 1 };
 		mockConnectionState.value = 'connected';
-		mockFeatureMatchStore.featureMatches = [{ id: 1, player1Data: { name: 'A' }, player2Data: { name: 'B' } }];
+		mockFeatureMatchStore.featureMatches = [];
 		mockFeatureMatchStore.currentEventId = null;
 		mockFeatureMatchStore.isLoaded = false;
-		mockFeatureMatchStore.loadFeatureMatchesByEventId.mockImplementation(async (eventId: number) => {
-			mockFeatureMatchStore.currentEventId = eventId;
-			mockFeatureMatchStore.isLoaded = true;
-			return mockFeatureMatchStore.featureMatches;
+		mockFeatureMatchStore.holdFeatureMatch.mockImplementation((slot: { id: number }) => {
+			mockFeatureMatchStore.featureMatches = [
+				...mockFeatureMatchStore.featureMatches.filter(held => held.id !== slot.id),
+				slot,
+			];
+		});
+		mockApiFetch.mockImplementation(async (path: string) => {
+			const slotId = Number(/feature-match-slots\/(\d+)$/.exec(path)?.[1]);
+			if (!slotId)
+				throw new Error(`unexpected request ${path}`);
+			return slotRead(slotId);
 		});
 		mockFeatureMatchStateStore.featureMatchStates = new Map([[1, mockState]]);
 		mockFeatureMatchStateStore.currentEventId = null;
@@ -95,29 +117,42 @@ describe('useFeatureMatchModeData', () => {
 		expect(match.value?.id).toBe(1);
 	});
 
-	it('loads feature match list and state when current event data is stale', async () => {
+	it('reads the Slot through its Screen and holds it, never the Event\'s Slots', async () => {
 		createComposable();
 
 		await flushPromises();
 
-		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-		expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(1, 1);
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/screen-output/events/1/screens/1/feature-match-slots/1',
+			expect.anything(),
+		);
+		expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
 	});
 
-	it('reloads state when the configured match changes', async () => {
-		mockFeatureMatchStore.currentEventId = 1;
-		mockFeatureMatchStore.isLoaded = true;
-		mockFeatureMatchStateStore.currentEventId = 1;
-
+	it('reads the newly configured Slot when the configured match changes', async () => {
 		createComposable();
 		await flushPromises();
 
-		mockFeatureMatchStateStore.loadState.mockClear();
+		mockApiFetch.mockClear();
 		mockConfig.value = { featureMatchId: 2 };
 
 		await flushPromises();
 
-		expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(1, 2);
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			'/api/screen-output/events/1/screens/1/feature-match-slots/2',
+			expect.anything(),
+		);
+	});
+
+	it('reads Session state through the Screen and never starts a Session', async () => {
+		createComposable();
+		await flushPromises();
+
+		const read = mockFeatureMatchStateStore.readSessionsAsScreenOutput.mock.calls[0]?.[0] as
+			(slotId: number) => Promise<unknown>;
+		await expect(read(1)).resolves.toEqual({ id: 71, slotId: 1 });
+		expect(mockApiFetch.mock.calls.every(([, options]) => !(options as { method?: string } | undefined)?.method)).toBe(true);
 	});
 
 	/**
@@ -135,16 +170,10 @@ describe('useFeatureMatchModeData', () => {
 			await flushPromises();
 		}
 
-		it('re-reads Session state that the ordinary loader would have skipped', async () => {
+		it('re-reads Session state through the store\'s loader', async () => {
 			createComposable();
 			await flushPromises();
 			mockFeatureMatchStateStore.loadState.mockClear();
-
-			// The precondition that makes this a real test: the ordinary loader is
-			// guarded on exactly these two facts, so a resync routed through it would
-			// fetch nothing — and the cached state is the stale thing being corrected.
-			expect(mockFeatureMatchStateStore.currentEventId).toBe(1);
-			expect(mockFeatureMatchStateStore.featureMatchStates.has(1)).toBe(true);
 
 			await suspendAndResume();
 

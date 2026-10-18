@@ -51,6 +51,9 @@ describe('useEventRealtimeSession', () => {
 
 	const eventStore = {
 		eventId: 12 as number | null,
+		// An operator page: Melee refreshes are skipped on a rendering of a Screen,
+		// which holds no operator Event (#604).
+		event: { id: 12 } as { id: number } | null,
 		applyRemoteUpdated: vi.fn(),
 		applyRemoteTalentCreated: vi.fn(),
 		applyRemoteTalentUpdated: vi.fn(),
