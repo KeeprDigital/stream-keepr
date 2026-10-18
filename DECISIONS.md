@@ -518,7 +518,7 @@ Every output that matters is Chromium: broadcast software captures a browser sou
 - **Detect non-Chromium browsers and warn** — keeps the user-agent detection this removes, to tell an operator something they can't act on mid-show.
 - **Migrate stored documents to remove the key** — five document tables and every exported package, for a key that is harmless once ignored.
 
-## ADR-0021: A Screen Output reads what its Screen publishes, through its Screen
+## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
 
 Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604)
 

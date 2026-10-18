@@ -43,7 +43,7 @@ export interface ScreenOutputRead {
  * Session does (ADR-0010's dual credential). The route then derives the resource
  * from the Screen's saved configuration, or — for the two reads whose client
  * names it — checks the name against that configuration, so a capability cannot
- * browse its Event (ADR-0021).
+ * browse its Event (ADR-0022).
  *
  * Answers are `private, no-store`: they are this Screen's current rendering and
  * must not outlive a rotation in some intermediary's cache.

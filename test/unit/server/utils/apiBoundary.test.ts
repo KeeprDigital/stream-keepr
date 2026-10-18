@@ -189,7 +189,7 @@ describe('the public surface, counted against the routes on disk', () => {
 			// needs before it has anything to resolve, admitted by the same bearer
 			// (or, for the operator's `embed=preview` surfaces, by their session).
 			//
-			// The reads of what one Screen publishes joined it on #604 (ADR-0021), each
+			// The reads of what one Screen publishes joined it on #604 (ADR-0022), each
 			// admitted through `requireScreenOutputRead` and derived from the Screen's
 			// saved configuration, so a capability-only output can render every mode.
 			'server/api/screen-output/events/[id]/screens/[screenId]/broadcast-deck-list.get.ts',

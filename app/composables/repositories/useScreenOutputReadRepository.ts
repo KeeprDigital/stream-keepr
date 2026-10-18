@@ -21,7 +21,7 @@ export interface ScreenOutputReadScope {
 }
 
 /**
- * The Screen Output read family (#604, ADR-0021): everything a rendering of a
+ * The Screen Output read family (#604, ADR-0022): everything a rendering of a
  * Screen reads, addressed through that Screen.
  *
  * Every rendering of a Screen — Screen Output, Program monitor, editor preview —

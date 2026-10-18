@@ -2,7 +2,7 @@ import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse
 import type { ArchetypeBreakdownResponse, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
 
 /**
- * The answers of the Screen Output read family (#604, ADR-0021): what one
+ * The answers of the Screen Output read family (#604, ADR-0022): what one
  * Screen publishes for its outputs to render, each derived on the server from
  * the Screen's saved configuration.
  */
