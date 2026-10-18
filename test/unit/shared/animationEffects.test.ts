@@ -293,7 +293,7 @@ describe('animationEffects catalogue', () => {
 	});
 
 	it('names every spatial param by the catalogue\'s standard', () => {
-		// One meaning per name across effects (ADR-0022, #503): `scale` for a
+		// One meaning per name across effects (ADR-0025, #503): `scale` for a
 		// field's feature size, defaulting to the designed look; `size` for a
 		// discrete element. No `zoom`, and no qualified variants of either.
 		for (const effect of ANIMATION_EFFECT_VALUES) {

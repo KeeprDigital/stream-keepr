@@ -73,7 +73,7 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
  * scenario in `scripts/graphics-acceptance/animation-effect-scenarios.mjs`.
  *
  * Spatial params follow one standard, so an operator moving between effects
- * meets one meaning per name (ADR-0022, #503):
+ * meets one meaning per name (ADR-0025, #503):
  * - `scale` sizes a repeating field's features (cells, facets, threads, fog,
  *   waves), so their count changes inversely. Label: "<Feature> scale".
  * - `size` sizes discrete elements whose count is fixed or set by another
