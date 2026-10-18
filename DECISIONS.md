@@ -400,7 +400,8 @@ What a show wants behind everything else is a composition — a colour wash over
 - The old `mediaBackground` configuration reset rather than mapping onto a video layer (small install base, as ADR-0014). New Background Screens start empty: black until configured.
 - **At most one animation layer per Screen**, enforced on the `layers` field in the schema: each is its own WebGL context and an OBS browser source is memory-tight. Liftable.
 - Opacity belongs to the layer, never to the stack or the renderer behind it.
-- Image and video layers use the standard media source shape — a Graphics Asset Library reference or a remote URL — adopted app-wide by #484. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace.
+- Image and video layers use the standard media source shape — a Graphics Asset Library reference or a remote URL — adopted app-wide by #484. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace; a plain overlay mode's own stack indexes under `<mode>.backgroundLayers.` (#580), because every such mode names the field `backgroundLayers` and the owner-slot prefix is all that keeps one mode's index rows out of another's write and output scope.
+- Which modes carry their own stack is declared once, on the Screen Mode Definition. The config field and its validation, reset preservation, the editor card, the painting, and reference indexing all derive from that declaration (#580).
 
 ### Rejected alternatives
 

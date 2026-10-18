@@ -242,8 +242,10 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 
 	it('gives each referencing Screen Mode a distinct, non-overlapping slot namespace', () => {
 		// Two modes sharing a prefix — or one being a prefix of the other — would make
-		// the delete scope and the output scope ambiguous.
-		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.map(graphicAssetReferenceSlotPrefix);
+		// the delete scope and the output scope ambiguous. Compared without case,
+		// because that is how SQLite's `LIKE` compares them.
+		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES
+			.map(mode => graphicAssetReferenceSlotPrefix(mode).toLowerCase());
 
 		expect(new Set(prefixes).size).toBe(prefixes.length);
 		for (const one of prefixes) {
@@ -263,11 +265,27 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		// Named as well as iterated. Iterating proves each listed mode is equipped, but
 		// only naming the list makes dropping or renaming a member fail here rather than
 		// pass quietly with one mode fewer.
-		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual(['feature-match-overlay', 'broadcast-graphics', 'background']);
+		// The graphics hosts and the Background Screen pin assets in their own content;
+		// the rest carry a Background Layer stack by declaration.
+		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual([
+			'feature-match-overlay',
+			'broadcast-graphics',
+			'background',
+			'card',
+			'deck',
+			'standings',
+			'topCut',
+			'metagame',
+			'top-cards',
+			'player-history',
+		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
-			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^[a-z]+\.$/);
+			// Dotted path segments of letters and hyphens only: `%` and `_` are `LIKE`
+			// wildcards, so a prefix carrying one would scope its delete and its output
+			// to other modes' rows too.
+			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^(?:[a-z-]+\.)+$/i);
 		}
 
 		// The other half of "exactly", derived from every Screen Mode there is rather

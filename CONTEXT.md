@@ -101,14 +101,14 @@ A broadcast or control surface that can show Feature Match Slot output, decks/ca
 A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, or Player History.
 
 **Screen Mode Definition**:
-The definition of a Screen Mode: its defaults, configuration shape, data preparation, rendering contract, and Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply). Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
+The definition of a Screen Mode: its defaults, configuration shape, data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and the capabilities it declares, such as carrying its own Background Layer stack. A declared capability brings all of its behaviour with it. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Background Screen**:
 A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every plain overlay mode (Card, Deck, Standings, Top Cut, Metagame, Player History) carries its own optional stack behind its content; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Animation Effect**:

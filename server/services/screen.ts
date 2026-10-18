@@ -185,17 +185,24 @@ export function screenService() {
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
 	): Promise<DbScreen | undefined> => {
-		// A graphics mode's configuration and its Graphic Asset Reference index are
-		// one write, so a Screen Output can never resolve a revision the Screen no
-		// longer publishes, or fail to resolve one it does.
+		// A referencing mode's configuration and its Graphic Asset Reference index
+		// are one write, so a Screen Output can never resolve a revision the Screen
+		// no longer publishes, or fail to resolve one it does. Deck is among them —
+		// its Background Layer stack can pin one — so the Deck source invariants'
+		// refusal has to be read on this path as well as on the versioned write.
 		if (isGraphicAssetReferencingScreenMode(mode)) {
-			return await updateScreenModeConfigWithGraphicAssetReferences({
-				id,
-				eventId,
-				mode,
-				partialConfig,
-				stateVersion,
-			});
+			try {
+				return await updateScreenModeConfigWithGraphicAssetReferences({
+					id,
+					eventId,
+					mode,
+					partialConfig,
+					stateVersion,
+				});
+			}
+			catch (error) {
+				mapDeckSourceConflict(error);
+			}
 		}
 
 		const screen = await findById(id, eventId);

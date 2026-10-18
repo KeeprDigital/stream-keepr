@@ -1,3 +1,4 @@
+import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { BackgroundModeConfig, BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
@@ -19,6 +20,7 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	BOARD_SELECTION_VALUES,
@@ -366,7 +368,7 @@ const MAX_BACKGROUND_LAYERS = 20;
 
 /**
  * One ordered Background Layer stack — the Background Screen's `layers` and
- * every plain overlay mode's own `backgroundLayers` validate identically.
+ * every declaring mode's own `backgroundLayers` validate identically.
  *
  * Painter's order: first layer is the bottom of the stack. Both rules live on
  * this array field rather than on the mode object, because a field-level rule
@@ -384,10 +386,36 @@ const backgroundLayerStackSchema = z.array(backgroundLayerSchema)
 		'A Background Layer stack carries at most one animation layer',
 	);
 
+/** The field a mode's configuration gains by declaring a Background Layer stack. */
+const BACKGROUND_LAYERS_CONFIG_SHAPE = {
+	backgroundLayers: backgroundLayerStackSchema.optional(),
+};
+
+type DeclaredModeConfigShape<M extends ScreenMode, Shape extends z.ZodRawShape>
+	= M extends BackgroundLayersCapableMode ? Shape & typeof BACKGROUND_LAYERS_CONFIG_SHAPE : Shape;
+
+/**
+ * One mode's strict config schema: the fields it writes itself, plus every field
+ * its Screen Mode Definition's declared capabilities bring.
+ *
+ * The capability fields are added here rather than spelled on each mode, so a
+ * mode that declares a Background Layer stack validates one, and a mode that
+ * does not refuses it, without either fact being restated in this file.
+ */
+function declaredModeConfigSchema<M extends ScreenMode, Shape extends z.ZodRawShape>(
+	mode: M,
+	shape: Shape,
+) {
+	const declared = screenModeSupportsBackgroundLayers(mode)
+		? { ...shape, ...BACKGROUND_LAYERS_CONFIG_SHAPE }
+		: shape;
+	return z.object(declared as DeclaredModeConfigShape<M, Shape>).strict();
+}
+
 // Per-mode config schemas
-export const backgroundModeConfigSchema = z.object({
+export const backgroundModeConfigSchema = declaredModeConfigSchema('background', {
 	layers: backgroundLayerStackSchema,
-}).strict() satisfies z.ZodType<BackgroundModeConfig>;
+}) satisfies z.ZodType<BackgroundModeConfig>;
 
 export const cardDisplayConfigSchema = z.object({
 	scale: z.number().min(0.1).max(5).optional(),
@@ -395,10 +423,10 @@ export const cardDisplayConfigSchema = z.object({
 	animationSpeed: cardAnimationSpeedSchema.optional(),
 }).strict();
 
-export const cardModeConfigSchema = cardDisplayConfigSchema.extend({
+export const cardModeConfigSchema = declaredModeConfigSchema('card', {
+	...cardDisplayConfigSchema.shape,
 	featureMatchId: z.number().int().positive().nullable().optional(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
 // One board's layout block. Both boards share the shape; visibility is the
 // `board` enum's concern, so a block carries no show/hide of its own.
@@ -412,7 +440,7 @@ const deckBoardLayoutConfigSchema = z.object({
 	stackOverlap: z.number().min(0).optional(),
 }).strict();
 
-export const deckModeConfigSchema = z.object({
+export const deckModeConfigSchema = declaredModeConfigSchema('deck', {
 	deckSource: z.discriminatedUnion('type', [
 		z.object({
 			type: z.literal('player'),
@@ -453,8 +481,7 @@ export const deckModeConfigSchema = z.object({
 	quantitySize: quantitySizeSchema.optional(),
 	quantityTextColor: z.string().max(50).optional(),
 	quantityBgColor: z.string().max(50).optional(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
 const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSchema)
 	.extend({
@@ -493,7 +520,7 @@ const playerHistoryColumnConfigSchema = z.object({
 	visible: z.boolean(),
 }).strict();
 
-export const standingsModeConfigSchema = z.object({
+export const standingsModeConfigSchema = declaredModeConfigSchema('standings', {
 	viewMode: z.enum(STANDINGS_VIEW_MODE_VALUES),
 
 	columns: z.array(standingsColumnConfigSchema).min(1).max(10),
@@ -525,15 +552,13 @@ export const standingsModeConfigSchema = z.object({
 	rotationAnchor: z.number().int().nonnegative().optional(),
 
 	animateEntries: z.boolean(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
-export const topCutModeConfigSchema = z.object({
+export const topCutModeConfigSchema = declaredModeConfigSchema('topCut', {
 	bracketSize: z.number().int().positive().optional(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
-export const matchModeConfigSchema = z.object({
+export const matchModeConfigSchema = declaredModeConfigSchema('feature-match', {
 	featureMatchId: z.number().int().positive().nullable(),
 	showNames: z.boolean(),
 	showRecords: z.boolean(),
@@ -551,9 +576,9 @@ export const matchModeConfigSchema = z.object({
 	allowLifeControls: z.boolean().optional(),
 	allowGameWinControls: z.boolean().optional(),
 	allowCounterControls: z.boolean().optional(),
-}).strict();
+});
 
-export const playerHistoryModeConfigSchema = z.object({
+export const playerHistoryModeConfigSchema = declaredModeConfigSchema('player-history', {
 	playerId: z.number().int().positive().nullable(),
 	columns: z.array(playerHistoryColumnConfigSchema).min(1).max(6),
 	showHeader: z.boolean(),
@@ -563,8 +588,7 @@ export const playerHistoryModeConfigSchema = z.object({
 	autoPageIntervalMs: z.number().int().min(3000).max(60000),
 	currentPage: z.number().int().min(1).optional(),
 	rotationAnchor: z.number().int().nonnegative().optional(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
 const featureMatchOverlayAnchorValueSchema = z.enum(FEATURE_MATCH_OVERLAY_ANCHOR_VALUES);
@@ -1740,7 +1764,7 @@ const graphicChannelConfigSchema = z.object({
  * stack of Broadcast Graphics, and the Graphic Channels its members join. The
  * Screen's canvas stays in the Screen config.
  */
-export const broadcastGraphicsModeConfigSchema = z.object({
+export const broadcastGraphicsModeConfigSchema = declaredModeConfigSchema('broadcast-graphics', {
 	// Every cap lives on the array itself rather than on this object: the
 	// mode-configuration patch schema rebuilds each mode from its field schemas,
 	// so an object-level refinement would never reach the write path the editor uses.
@@ -1797,7 +1821,7 @@ export const broadcastGraphicsModeConfigSchema = z.object({
 	// so an effect this build does not ship is refused here rather than stored and
 	// silently rendering nothing — the same vocabulary refusal the Frame applies.
 	background: broadcastGraphicsBackgroundConfigSchema.optional(),
-}).strict() satisfies z.ZodType<BroadcastGraphicsModeConfig>;
+}) satisfies z.ZodType<BroadcastGraphicsModeConfig>;
 
 /**
  * One Feature Match Layout: the Frame, its host-owned Source Items, and the
@@ -1836,13 +1860,13 @@ export const featureMatchLayoutConfigSchema = z.object({
  * schemas, so an object-level refinement would never reach the write path the
  * editor uses.
  */
-export const featureMatchOverlayModeConfigSchema = z.object({
+export const featureMatchOverlayModeConfigSchema = declaredModeConfigSchema('feature-match-overlay', {
 	featureMatchId: z.number().int().positive().nullable(),
 	presetId: featureMatchOverlayPresetIdSchema,
 	layout: featureMatchLayoutConfigSchema,
-}).strict() satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
+}) satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
-export const metagameModeConfigSchema = z.object({
+export const metagameModeConfigSchema = declaredModeConfigSchema('metagame', {
 	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),
 	scope: z.enum(METAGAME_SCOPE_VALUES),
 	topN: z.number().int().min(1).max(500),
@@ -1864,10 +1888,9 @@ export const metagameModeConfigSchema = z.object({
 	showHeader: z.boolean(),
 	headerText: z.string().max(200).optional(),
 	animateEntries: z.boolean(),
-	backgroundLayers: backgroundLayerStackSchema.optional(),
-}).strict();
+});
 
-export const topCardsModeConfigSchema = z.object({
+export const topCardsModeConfigSchema = declaredModeConfigSchema('top-cards', {
 	scope: z.enum(METAGAME_SCOPE_VALUES),
 	topN: z.number().int().min(1).max(500),
 	playerListId: z.number().int().positive().optional(),
@@ -1890,7 +1913,7 @@ export const topCardsModeConfigSchema = z.object({
 	statBadgeSize: quantitySizeSchema.optional(),
 	statBadgeTextColor: optionalCssColorSchema,
 	statBadgeBgColor: optionalCssColorSchema,
-}).strict();
+});
 
 // Map of mode name to its config schema
 export const modeConfigSchemaMap = {

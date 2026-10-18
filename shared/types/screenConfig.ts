@@ -1,4 +1,5 @@
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { BackgroundLayersCapableMode } from '../screenModes';
 import type { CardTypeBucket } from '../utils/metagame';
 import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
 import type { MediaFit } from './graphicItem';
@@ -61,7 +62,6 @@ export type DeckSource
 
 export interface DeckModeConfig {
 	deckSource: DeckSource;
-	backgroundLayers?: BackgroundLayer[];
 	/** Which boards render (#477). "Both hidden" is impossible by construction. */
 	board?: BoardSelection;
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
@@ -110,7 +110,6 @@ export interface CardDisplayConfig {
 export interface CardModeConfig extends CardDisplayConfig {
 	// Optional feature match binding (for decklist convenience, not required)
 	featureMatchId?: number | null;
-	backgroundLayers?: BackgroundLayer[];
 }
 
 export interface StandingsColumnConfig {
@@ -134,7 +133,6 @@ export interface PlayerHistoryColumnConfig {
 }
 
 export interface StandingsModeConfig {
-	backgroundLayers?: BackgroundLayer[];
 
 	// View mode
 	viewMode: StandingsViewMode;
@@ -182,7 +180,6 @@ export interface StandingsModeConfig {
 export interface TopCutModeConfig {
 	// Placeholder for top cut mode config
 	bracketSize?: number;
-	backgroundLayers?: BackgroundLayer[];
 }
 
 export interface FeatureMatchModeConfig {
@@ -214,7 +211,6 @@ export interface FeatureMatchModeConfig {
 
 export interface PlayerHistoryModeConfig {
 	playerId: number | null;
-	backgroundLayers?: BackgroundLayer[];
 	columns: PlayerHistoryColumnConfig[];
 	showHeader: boolean;
 	headerText?: string;
@@ -391,11 +387,10 @@ export interface AnimationBackgroundLayer extends BackgroundLayerBase {
  * One entry in an ordered Background Layer stack. Painter's order: the first
  * layer is the bottom of the stack.
  *
- * The Background Screen's configuration is such a stack; every plain overlay
- * mode (see `screenModeSupportsBackgroundLayers`) also carries an optional
- * `backgroundLayers` stack of its own, painted behind that mode's content. The
- * graphics hosts stay out — they own their backgrounds and their Overlay/Key
- * Outputs depend on staying transparent.
+ * The Background Screen's configuration is such a stack; every mode whose
+ * Screen Mode Definition declares one (see `ScreenModeDefinition.backgroundLayers`)
+ * also carries an optional `backgroundLayers` stack of its own, painted behind
+ * that mode's content.
  */
 export type BackgroundLayer
 	= | ColorBackgroundLayer
@@ -403,6 +398,15 @@ export type BackgroundLayer
 		| ImageBackgroundLayer
 		| VideoBackgroundLayer
 		| AnimationBackgroundLayer;
+
+/**
+ * What a mode's configuration gains by declaring a Background Layer stack. Not
+ * written on any mode's own config type: `ModeConfigTypeMap` adds it to exactly
+ * the declaring modes.
+ */
+export interface BackgroundLayersModeConfig {
+	backgroundLayers?: BackgroundLayer[];
+}
 
 /**
  * The Feature Match Overlay Frame's animation effects.
@@ -535,7 +539,6 @@ export interface BroadcastGraphicsModeConfig {
 }
 
 export interface MetagameModeConfig {
-	backgroundLayers?: BackgroundLayer[];
 
 	// View selection
 	viewMode: MetagameViewMode;
@@ -871,8 +874,14 @@ export const DEFAULT_MODE_CONFIGS = {
 	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };
 
-// Map of mode to config type
-export type ModeConfigTypeMap = typeof DEFAULT_MODE_CONFIGS;
+/**
+ * Map of mode to config type: each mode's defaults, plus the optional
+ * Background Layer stack for every mode whose definition declares one.
+ */
+export type ModeConfigTypeMap = {
+	[M in ScreenMode]: (typeof DEFAULT_MODE_CONFIGS)[M]
+		& (M extends BackgroundLayersCapableMode ? BackgroundLayersModeConfig : unknown);
+};
 
 // Type for the modeConfigs column - partial map keyed by mode
 export type ModeConfigsMap = Partial<ModeConfigTypeMap>;
@@ -898,24 +907,25 @@ type ModeResetPreservedKeysMap = {
 
 const MODE_RESET_PRESERVED_KEYS = {
 	// A layer stack is authored content with no recovery path, like the
-	// Broadcast Graphics stack: a display reset must not empty it. The same
-	// holds for every mode's own `backgroundLayers` stack.
+	// Broadcast Graphics stack: a display reset must not empty it. A mode's own
+	// `backgroundLayers` stack is the same, and is preserved for every mode that
+	// declares one without being listed here — see `getDisplayDefaultsForMode`.
 	'background': ['layers'],
-	'card': ['featureMatchId', 'backgroundLayers'],
-	'deck': ['deckSource', 'backgroundLayers'],
-	'topCut': ['backgroundLayers'],
+	'card': ['featureMatchId'],
+	'deck': ['deckSource'],
+	'topCut': [],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': ['graphics'],
-	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId', 'backgroundLayers'],
-	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter', 'backgroundLayers'],
+	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
+	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
-	'player-history': ['playerId', 'backgroundLayers'],
+	'player-history': ['playerId'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
 export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConfigTypeMap[T] {
-	return DEFAULT_MODE_CONFIGS[mode];
+	return DEFAULT_MODE_CONFIGS[mode] as ModeConfigTypeMap[T];
 }
 
 /**
@@ -931,6 +941,9 @@ export function getDisplayDefaultsForMode<T extends ScreenMode>(mode: T): Partia
 	for (const key of preservedKeys) {
 		delete display[key as string];
 	}
+	// A Background Layer stack is never a display default, whichever mode
+	// declares it, so a reset can neither empty nor replace one.
+	delete display.backgroundLayers;
 	return display as Partial<ModeConfigTypeMap[T]>;
 }
 

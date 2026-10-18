@@ -223,12 +223,13 @@ describe('screenService', () => {
 		});
 
 		it('merges config for given mode', async () => {
-			const screen = createMockScreen({ modeConfigs: { card: { text: 'Hello' } } as any });
+			// A mode that pins no Graphic Asset Reference, so the ordinary versioned write.
+			const screen = createMockScreen({ modeConfigs: { 'feature-match': { showNames: true } } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });
 			mockDb.batch.mockResolvedValue([[updatedScreen]]);
 
-			const result = await screenService().updateModeConfig(1, 1, 'card' as any, { text: 'World' });
+			const result = await screenService().updateModeConfig(1, 1, 'feature-match', { showNames: false });
 
 			expect(result).toEqual(updatedScreen);
 		});
