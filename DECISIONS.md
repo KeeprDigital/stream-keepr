@@ -548,3 +548,47 @@ Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed con
 - **Let a URL travel in a Template Package as data** — a package would then depend on a remote host the receiver never vetted, which is what `remote-resource-dependency` exists to refuse.
 - **Turn the Frame's media into a Background Layer stack** — graphics hosts own their backgrounds (ADR-0016); that is its own decision.
 - **Normalise old Frame shapes on read** — costs little, but nothing in the old shape has shipped.
+
+## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
+
+Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604)
+
+### Decision
+
+**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
+
+**A capability reaches a mode's data only while its Screen is in that mode** (`requireScreenOutputModeRead`): a Screen publishes what it is showing, not every mode it holds configuration for.
+
+**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Metagame and Top Cards the breakdown their fields describe (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
+
+- `feature-match-slots/:slotId` — a capability reaches only the Slot the current mode shows; a Session reaches any, because the Feature Match Overlay's editor preview renders a Slot not yet saved.
+- `players/:playerId/decks` — a capability reaches only the Deck mode's selected Player or the shown Slot's two Players, so it cannot read the Event's decklists ahead of their broadcast.
+
+**The Event context is an allowlist** (`SCREEN_OUTPUT_EVENT_FIELDS`): name, game, orientation, display formatting, Feature Match defaults and feature flags. A rendering holds it as `eventStore.outputEvent`; components shared with control pages read `eventStore.displayEvent`.
+
+**A rendering never changes live state by reading it.** A Slot with no Feature Match Session answers `activeSession: null` instead of the output starting one, and an expired Card is hidden locally instead of `DELETE`d (the server's own timeout clears it and announces it).
+
+**Every rendering reads this way, whatever it holds.** A Program monitor or preview with a Session takes the same paths as a capability-only output. No client chooses a path by credential.
+
+### Why
+
+The Event middleware loaded the private Event for the output page, got a 401, and sent program to `/`, then to sign-in. That was the first of many private reads: every mode's data, the Live Session snapshot and the Screen-by-id reload behind `screen:updated` were all session-only. The last swallowed its failure, so an output also silently missed every later mode change.
+
+Deriving from configuration keeps the capability's reach equal to what the Screen publishes, the same rule ADR-0010 and the Broadcast Deck List read already apply. A mismatch between a client's held configuration and the saved one self-corrects: the save announces `screen:updated`, the rendering re-reads its Screen, and its mode re-reads.
+
+### Consequences
+
+- The ordinary `/api/events/**` reads stay private. This widens the capability surface, not the Event boundary.
+- An announced active Screen is re-read by id through the Screen Output path, with the credential it was first read with — by id because a slug can be renamed under an output on program.
+- Store-wide reader hooks a rendering installs (`readActiveCardAsScreenOutput`, `readSessionsAsScreenOutput`, `readSessionAsScreenOutput`) are uninstalled when the rendering is disposed, so a control page never inherits them.
+- Deck and the Feature Match Overlay sideboard follow `player:updated` on the Event channel directly, since an output holds no roster for the message to update; this replaces their roster loads, not the wider freshness work.
+- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`, `playerStore.loadPlayersFrom`), so `player:updated` and `featureMatch:updated` keep them live without the private roster or Slot list.
+- Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
+- Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
+- The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.
+
+### Rejected alternatives
+
+- **Admit the capability on the existing `/api/events/**` reads** — the capability would reach its whole Event, decklists included, and every new private route would need a decision about it.
+- **One aggregate "mode data" read per Screen** — each mode's client would be rebuilt around a new payload, and the Live Session and Feature Match Session would lose the snapshot shapes their followers already apply.
+- **Path ids validated against the configuration everywhere** — repeats every query's validation on the server for no reach the derived form lacks.

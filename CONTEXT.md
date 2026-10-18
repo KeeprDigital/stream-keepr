@@ -154,7 +154,7 @@ A control surface's own live rendering of the Screen it drives. It composes what
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 ### Client and live-state infrastructure
 
@@ -625,6 +625,7 @@ _Avoid_: Dummy data, test data
 - Only a **Screen Output** enters its **Screen**'s presence and answers its **Screen**'s commands; a **Program monitor** or preview joins neither, so every count of what is watching a **Screen** counts outputs alone
 - A **Screen Output** carries its **Screen Output Asset Capability** in its URL; every surface handing an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders nothing at all (ADR-0010)
+- A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items

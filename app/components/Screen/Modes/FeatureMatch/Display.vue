@@ -69,7 +69,7 @@ const showOvertime = computed(() => hasOvertime.value && (config.value.showOvert
 const leftSide = computed(() => config.value.leftSidePlayer ?? 'player1');
 const rightSide = computed(() => leftSide.value === 'player1' ? 'player2' : 'player1');
 
-const isVerticalArena = computed(() => eventStore.event?.featureMatchOrientation === 'vertical');
+const isVerticalArena = computed(() => eventStore.displayEvent?.featureMatchOrientation === 'vertical');
 const showSeatLabels = computed(() => config.value.showSeatLabels ?? true);
 
 function seatLabelFor(side: PlayerSide): string | undefined {

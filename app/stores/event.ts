@@ -1,3 +1,4 @@
+import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import type {
 	CreateEventInput,
 	CreateTalentInput,
@@ -7,6 +8,7 @@ import type {
 	UpdateTalentInput,
 } from '~/types';
 import type { MessageData } from '~/types/realtime';
+import { toScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import { useEventDataResource } from '~/modules/event-data/client';
 
 export const useEventStore = defineStore('event', () => {
@@ -19,6 +21,15 @@ export const useEventStore = defineStore('event', () => {
 	const { executeReporting } = useReportingAction();
 
 	const event = ref<Event | null>(null);
+	/**
+	 * The Event context a Screen Output renders with, in place of `event` (#604).
+	 *
+	 * A rendering of a Screen — output, Program monitor or preview — never loads
+	 * the operator's Event; it holds the narrow context its Screen's read answers,
+	 * so nothing operator-only can be read off it, and `eventId` still names the
+	 * Event its realtime room and reads are scoped to.
+	 */
+	const outputEvent = ref<ScreenOutputEvent | null>(null);
 	const eventsList = ref<Event[]>([]);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
@@ -60,11 +71,14 @@ export const useEventStore = defineStore('event', () => {
 
 	const isLoaded = computed(() => event.value !== null);
 
-	const eventId = computed(() => {
-		if (!event.value)
-			return null;
-		return event.value.id;
-	});
+	const eventId = computed(() => event.value?.id ?? outputEvent.value?.id ?? null);
+
+	/**
+	 * The Event fields a surface renders with, whichever kind of surface it is:
+	 * the operator's Event on a control page, the output context on a rendering
+	 * of a Screen. Components shared by both read this rather than `event`.
+	 */
+	const displayEvent = computed<ScreenOutputEvent | null>(() => event.value ?? outputEvent.value);
 
 	function upsertTalentById(talentData: Talent) {
 		const index = event.value?.talents.findIndex(t => t.id === talentData.id) ?? -1;
@@ -90,6 +104,10 @@ export const useEventStore = defineStore('event', () => {
 		event.value = data;
 	}
 
+	function setOutputEvent(data: ScreenOutputEvent) {
+		outputEvent.value = toScreenOutputEvent(data);
+	}
+
 	function applyRemoteUpdated(data: MessageData<'event:updated'>) {
 		if (event.value && data.event.id === event.value.id) {
 			event.value = {
@@ -97,6 +115,9 @@ export const useEventStore = defineStore('event', () => {
 				...data.event,
 			};
 		}
+
+		if (outputEvent.value && data.event.id === outputEvent.value.id)
+			outputEvent.value = toScreenOutputEvent({ ...outputEvent.value, ...data.event });
 
 		const index = eventsList.value.findIndex(e => e.id === data.event.id);
 		if (index !== -1) {
@@ -399,6 +420,7 @@ export const useEventStore = defineStore('event', () => {
 		eventLoadGeneration++;
 		activeLoads.clear();
 		event.value = null;
+		outputEvent.value = null;
 		error.value = null;
 		loading.value = false;
 	}
@@ -406,6 +428,7 @@ export const useEventStore = defineStore('event', () => {
 	return {
 		// State
 		event,
+		outputEvent,
 		eventsList,
 		loading,
 		error,
@@ -413,9 +436,11 @@ export const useEventStore = defineStore('event', () => {
 		// Computed
 		isLoaded,
 		eventId,
+		displayEvent,
 
 		// Actions
 		setEvent,
+		setOutputEvent,
 		loadEvent,
 		loadEventsList,
 		createEvent,

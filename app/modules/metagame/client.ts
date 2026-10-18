@@ -1,114 +1,32 @@
 import type {
-	BoardSelection,
-	MetagameCardSortBy,
-	MetagameConversionMetric,
-	MetagameScope,
-	MetagameSortBy,
-} from '~~/shared/types/enums';
-import type {
 	ArchetypeBreakdownResponse,
 	ArchetypeDetailResponse,
 	CardBreakdownResponse,
 	CardDetailResponse,
-	MetagameQueryParams,
 	MetagameSummaryResponse,
 	TokenRequirementsResponse,
 } from '~~/shared/types/metagame';
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type {
+	MetagameArchetypeBreakdownOptions,
+	MetagameArchetypeDetailOptions,
+	MetagameCardBreakdownOptions,
+	MetagameScopeInput,
+} from '~~/shared/utils/metagameQuery';
+import {
+	buildArchetypeBreakdownQuery,
+	buildArchetypeDetailQuery,
+	buildCardBreakdownQuery,
+	buildMetagameScopeQuery,
+} from '~~/shared/utils/metagameQuery';
 
-export interface MetagameScopeInput {
-	scope: MetagameScope;
-	topN?: number;
-	minPoints?: number;
-	playerListId?: number;
-}
-
-/** Conversion target: how far a player must have made it to count as converted. */
-export interface MetagameConversionInput {
-	conversionMetric?: MetagameConversionMetric;
-	conversionThreshold?: number;
-}
-
-export interface MetagameArchetypeBreakdownOptions extends MetagameConversionInput {
-	sortBy?: MetagameSortBy;
-	limit?: number;
-}
-
-export interface MetagameCardBreakdownOptions {
-	sortBy?: MetagameCardSortBy;
-	limit?: number;
-	board?: BoardSelection;
-	archetypeId?: number;
-	/** Legacy Screen config filter name; preserved while Screen config stores names instead of ids. */
-	archetype?: string;
-	/** Card-type buckets to drop server-side, before the limit applies. */
-	excludeTypes?: CardTypeBucket[];
-}
-
-export interface MetagameArchetypeDetailOptions extends MetagameConversionInput {
-	board?: BoardSelection;
-}
-
-export function buildMetagameScopeQuery(input: MetagameScopeInput): MetagameQueryParams {
-	const query: MetagameQueryParams = { scope: input.scope };
-	if (input.scope === 'topN')
-		query.topN = input.topN;
-	if (input.scope === 'minPoints' && input.minPoints != null)
-		query.minPoints = input.minPoints;
-	if (input.scope === 'playerList' && input.playerListId != null)
-		query.playerListId = input.playerListId;
-	return query;
-}
-
-function buildConversionQuery(options: MetagameConversionInput) {
-	if (options.conversionMetric == null || options.conversionThreshold == null)
-		return {};
-
-	return {
-		conversionMetric: options.conversionMetric,
-		conversionThreshold: options.conversionThreshold,
-	};
-}
-
-function buildArchetypeBreakdownQuery(
-	scope: MetagameScopeInput,
-	options: MetagameArchetypeBreakdownOptions = {},
-) {
-	return {
-		...buildMetagameScopeQuery(scope),
-		sortBy: options.sortBy ?? 'metaShare',
-		...(options.limit != null ? { limit: options.limit } : {}),
-		...buildConversionQuery(options),
-	};
-}
-
-function buildCardBreakdownQuery(
-	scope: MetagameScopeInput,
-	options: MetagameCardBreakdownOptions = {},
-) {
-	const archetype = options.archetype?.trim();
-
-	return {
-		...buildMetagameScopeQuery(scope),
-		sortBy: options.sortBy ?? 'inclusionRate',
-		limit: options.limit ?? 50,
-		...(options.board ? { board: options.board } : {}),
-		...(options.archetypeId != null ? { archetypeId: options.archetypeId } : {}),
-		...(archetype ? { archetype } : {}),
-		...(options.excludeTypes?.length ? { excludeTypes: options.excludeTypes.join(',') } : {}),
-	};
-}
-
-function buildArchetypeDetailQuery(
-	scope: MetagameScopeInput,
-	options: MetagameArchetypeDetailOptions = {},
-) {
-	return {
-		...buildMetagameScopeQuery(scope),
-		...(options.board ? { board: options.board } : {}),
-		...buildConversionQuery(options),
-	};
-}
+export type {
+	MetagameArchetypeBreakdownOptions,
+	MetagameArchetypeDetailOptions,
+	MetagameCardBreakdownOptions,
+	MetagameConversionInput,
+	MetagameScopeInput,
+} from '~~/shared/utils/metagameQuery';
+export { buildMetagameScopeQuery } from '~~/shared/utils/metagameQuery';
 
 export function useMetagameClient() {
 	const loadSummary = (eventId: number, scope: MetagameScopeInput) => {

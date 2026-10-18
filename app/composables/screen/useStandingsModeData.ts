@@ -1,5 +1,5 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
-import type { Player } from '~/types';
+import type { Player, Round } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
 
@@ -8,17 +8,16 @@ export function useStandingsModeData() {
 	const config = useScreenModeConfig('standings');
 
 	const playerStore = usePlayerStore();
-	const playerListStore = usePlayerListStore();
-	const playerListRepo = usePlayerListRepository();
-	const roundStore = useRoundStore();
 	const screenStore = useScreenStore();
+	const outputReads = useScreenOutputReads();
 	const eventStore = useEventStore();
 
 	const displayData = useBroadcastDisplayData<null>({ initialData: null });
 	const loading = displayData.loading;
 	const error = displayData.error;
 	const roundSnapshotMap = ref<Map<number, Pick<Player, 'wins' | 'losses' | 'draws' | 'position' | 'points'>> | null>(null);
-	let roundSnapshotRequestId = 0;
+	const round = ref<Round | null>(null);
+	const watchlist = ref<{ name: string } | null>(null);
 
 	// ── Watchlist Member Tracking ──
 	const watchlistPlayerIds = ref<Set<number>>(new Set());
@@ -133,98 +132,30 @@ export function useStandingsModeData() {
 	});
 
 	// ── Data Loading ──
-	async function ensurePlayersLoaded() {
-		const evtId = eventId.value;
-		if (!evtId) {
+	/**
+	 * One Screen Output read answers everything Standings renders from, derived
+	 * on the server from the saved configuration (#604). The roster is held in
+	 * the Player store so `player:updated` keeps its rows live.
+	 */
+	async function loadStandings() {
+		const scope = outputReads.scope.value;
+		if (!scope) {
 			error.value = 'No event loaded';
 			displayData.clear();
 			return;
 		}
 
 		await displayData.refresh(async () => {
-			if (!playerStore.isLoaded) {
-				await playerStore.loadPlayersByEventId(evtId);
-			}
-
-			if (config.value.roundId && !roundStore.isLoaded) {
-				await roundStore.loadRoundsByEventId(evtId);
-			}
-
-			if (config.value.viewMode === 'watchlist' && config.value.playerListId) {
-				await loadWatchlistMembers(config.value.playerListId);
-			}
-
-			if (!playerListStore.isLoaded) {
-				await playerListStore.loadByEventId(evtId);
-			}
-
-			if (config.value.roundId) {
-				await loadRoundSnapshot(evtId, config.value.roundId);
-			}
-			else {
-				roundSnapshotRequestId++;
-				roundSnapshotMap.value = null;
-			}
-
+			const data = await outputReads.standings();
+			await playerStore.loadPlayersFrom(scope.eventId, async () => data.players);
+			round.value = data.round;
+			watchlist.value = data.watchlist;
+			watchlistPlayerIds.value = new Set(data.watchlist?.playerIds ?? []);
+			roundSnapshotMap.value = data.roundStandings
+				? new Map(data.roundStandings.map(({ playerId, ...snapshot }) => [playerId, snapshot]))
+				: null;
 			return null;
 		}, 'Failed to load standings data');
-	}
-
-	async function loadRoundSnapshot(evtId: number, roundId: number) {
-		const requestId = ++roundSnapshotRequestId;
-
-		try {
-			const data = await $fetch<{
-				standings: Array<{
-					playerId: number;
-					wins: number | null;
-					losses: number | null;
-					draws: number | null;
-					position: number | null;
-					points: number | null;
-				}>;
-			}>(`/api/events/${evtId}/standings?roundId=${roundId}`);
-
-			if (requestId !== roundSnapshotRequestId) {
-				return;
-			}
-
-			roundSnapshotMap.value = new Map(
-				data.standings.map(entry => [
-					entry.playerId,
-					{
-						wins: entry.wins,
-						losses: entry.losses,
-						draws: entry.draws,
-						position: entry.position,
-						points: entry.points,
-					},
-				]),
-			);
-		}
-		catch {
-			if (requestId !== roundSnapshotRequestId) {
-				return;
-			}
-
-			if (!roundSnapshotMap.value) {
-				roundSnapshotMap.value = new Map();
-			}
-			throw new Error('Failed to load round snapshot');
-		}
-	}
-
-	async function loadWatchlistMembers(listId: number) {
-		try {
-			const listDetail = await playerListRepo.getById(eventId.value!, listId);
-			watchlistPlayerIds.value = new Set(
-				listDetail?.members.map((m: Player) => m.id) ?? [],
-			);
-		}
-		catch {
-			watchlistPlayerIds.value = new Set();
-			error.value = 'Selected player list not found';
-		}
 	}
 
 	// ── Header Text Computation ──
@@ -232,11 +163,8 @@ export function useStandingsModeData() {
 		if (config.value.headerText)
 			return config.value.headerText;
 
-		if (config.value.roundId) {
-			const round = roundStore.getRoundById(config.value.roundId);
-			if (round) {
-				return `End of ${round.name}`;
-			}
+		if (config.value.roundId && round.value?.id === config.value.roundId) {
+			return `End of ${round.value.name}`;
 		}
 
 		switch (config.value.viewMode) {
@@ -245,8 +173,7 @@ export function useStandingsModeData() {
 			case 'slice':
 				return `Standings (${config.value.sliceStart}-${config.value.sliceEnd})`;
 			case 'watchlist': {
-				const list = playerListStore.lists.find(l => l.id === config.value.playerListId);
-				return list?.name ?? 'Players to Watch';
+				return watchlist.value?.name ?? 'Players to Watch';
 			}
 			case 'reveal':
 				return `Top ${config.value.revealCount}`;
@@ -257,7 +184,7 @@ export function useStandingsModeData() {
 
 	// ── Cell Formatting ──
 	function formatCell(player: Player, key: StandingsColumnKey): string {
-		const event = eventStore.event;
+		const event = eventStore.displayEvent;
 
 		switch (key) {
 			case 'position':
@@ -302,19 +229,9 @@ export function useStandingsModeData() {
 
 	// ── Watchers ──
 	watch(
-		() => [config.value.viewMode, config.value.playerListId, config.value.roundId],
-		() => ensurePlayersLoaded(),
+		() => [outputReads.scopeKey.value, config.value.viewMode, config.value.playerListId, config.value.roundId],
+		() => loadStandings(),
 		{ immediate: true },
-	);
-
-	// Refetch watchlist members when membership changes (via realtime)
-	watch(
-		() => playerListStore.lists.find(l => l.id === config.value.playerListId)?.memberCount,
-		() => {
-			if (config.value.viewMode === 'watchlist' && config.value.playerListId) {
-				void loadWatchlistMembers(config.value.playerListId);
-			}
-		},
 	);
 
 	return {
