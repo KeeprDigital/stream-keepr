@@ -1,3 +1,4 @@
+import type { BackgroundLayersCapableMode } from '../screenModes';
 import type {
 	GraphicFontSelection,
 	GraphicGroupChildConfig,
@@ -6,11 +7,14 @@ import type {
 } from '../types/graphics';
 import type { GraphicAssetReference } from '../types/graphicsAsset';
 import type {
+	BackgroundLayer,
 	BackgroundModeConfig,
 	BroadcastGraphicsModeConfig,
 	FeatureMatchLayoutConfig,
 	FeatureMatchOverlayModeConfig,
+	ScreenMediaSource,
 } from '../types/screenConfig';
+import { BACKGROUND_LAYERS_CAPABLE_MODES } from '../screenModes';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
@@ -38,6 +42,27 @@ export function mediaScreenGraphicAssetReference(
 		ownerSlot,
 		kind,
 	};
+}
+
+/**
+ * The exact revision a Screen Media Source pins, or null for a Remote Media URL,
+ * which is a remote dependency and never a Graphic Asset Reference (ADR-0021).
+ */
+export function screenMediaSourceReference(source: ScreenMediaSource | undefined): GraphicAssetReference | null {
+	return source?.kind === 'asset'
+		? { assetId: source.assetId, revisionId: source.revisionId }
+		: null;
+}
+
+function appendScreenMediaSourceReference(
+	references: ScreenGraphicAssetReference[],
+	source: ScreenMediaSource | undefined,
+	kind: 'image' | 'silent-video',
+	ownerSlot: string,
+) {
+	const reference = screenMediaSourceReference(source);
+	if (reference)
+		references.push(mediaScreenGraphicAssetReference(reference, kind, ownerSlot));
 }
 
 export function sameGraphicAssetReference(
@@ -154,8 +179,9 @@ function appendGraphicInputReferences(
 /**
  * Every Graphic Asset Revision one Feature Match Layout pins.
  *
- * Two sources, and only two: the Frame's background image, which is host-owned
- * capability outside the shared vocabulary, and the shared item tree — its Media
+ * Two sources, and only two: the Frame's own image and video, which are
+ * host-owned Screen Media Sources outside the shared vocabulary and publish only
+ * when library-sourced (ADR-0021), and the shared item tree — its Media
  * Graphic Items' content and its typography's library fonts. Source Items pin
  * nothing: they frame an external video source rather than carrying content, and
  * their framing style is host-owned and carries no typography at all.
@@ -173,13 +199,9 @@ export function featureMatchLayoutGraphicAssetReferences(
 	layout: FeatureMatchLayoutConfig,
 ): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
-	if (layout.frame.backgroundImage) {
-		references.push({
-			reference: layout.frame.backgroundImage,
-			ownerSlot: 'layout.frame.backgroundImage',
-			kind: 'image',
-		});
-	}
+	// A disabled Frame video still publishes, as a disabled Background Layer does.
+	appendScreenMediaSourceReference(references, layout.frame.backgroundImage, 'image', 'layout.frame.backgroundImage');
+	appendScreenMediaSourceReference(references, layout.frame.mediaBackground?.source, 'silent-video', 'layout.frame.mediaBackground.source');
 	appendSharedGraphicItemReferences(references, layout.composition.items, 'layout.composition.items');
 	appendGraphicInputReferences(references, layout.composition.inputs, 'layout.composition.inputs');
 
@@ -232,20 +254,41 @@ export function broadcastGraphicsGraphicAssetReferences(
 export function backgroundGraphicAssetReferences(
 	config: BackgroundModeConfig,
 ): ScreenGraphicAssetReference[] {
+	return backgroundLayerStackGraphicAssetReferences(config.layers, 'layers');
+}
+
+/**
+ * Every Graphic Asset Revision a plain overlay mode's own Background Layer stack
+ * pins (#580), by the same rules as the Background Screen's.
+ *
+ * Every plain mode names its stack `backgroundLayers`, so the slot is rooted at
+ * the mode as well as the field: a slot namespace shared between modes would let
+ * one mode's write clear another's rows.
+ */
+export function plainModeBackgroundLayerGraphicAssetReferences(
+	mode: BackgroundLayersCapableMode,
+	config: { backgroundLayers?: BackgroundLayer[] } | undefined,
+): ScreenGraphicAssetReference[] {
+	return backgroundLayerStackGraphicAssetReferences(config?.backgroundLayers, `${mode}.backgroundLayers`);
+}
+
+function backgroundLayerStackGraphicAssetReferences(
+	layers: readonly BackgroundLayer[] | undefined,
+	slotRoot: string,
+): ScreenGraphicAssetReference[] {
 	const references: ScreenGraphicAssetReference[] = [];
 
 	// A stored configuration is legitimately partial — PATCH writes fragments —
 	// so a config with no stack yet publishes nothing rather than throwing.
-	for (const layer of config.layers ?? []) {
+	for (const layer of layers ?? []) {
 		if (layer.type !== 'image' && layer.type !== 'video')
 			continue;
-		if (layer.source.kind !== 'asset')
-			continue;
-		references.push(mediaScreenGraphicAssetReference(
-			{ assetId: layer.source.assetId, revisionId: layer.source.revisionId },
+		appendScreenMediaSourceReference(
+			references,
+			layer.source,
 			layer.type === 'video' ? 'silent-video' : 'image',
-			`layers.${layer.id}.source`,
-		));
+			`${slotRoot}.${layer.id}.source`,
+		);
 	}
 
 	return references;
@@ -258,7 +301,12 @@ export function backgroundGraphicAssetReferences(
  * ordinary versioned write. A mode listed here writes its configuration and its
  * reference index in one atomic operation instead.
  */
-export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = ['feature-match-overlay', 'broadcast-graphics', 'background'] as const;
+export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = [
+	'feature-match-overlay',
+	'broadcast-graphics',
+	'background',
+	...BACKGROUND_LAYERS_CAPABLE_MODES,
+] as const;
 
 export type GraphicAssetReferencingScreenMode = typeof GRAPHIC_ASSET_REFERENCING_SCREEN_MODES[number];
 
@@ -272,8 +320,9 @@ export function isGraphicAssetReferencingScreenMode(mode: string): mode is Graph
  * One Screen may hold a configuration for every mode at once, so its reference
  * index holds every mode's references at once too. The owner slot is what keeps
  * them apart: each mode's slots are rooted at the top-level configuration field
- * its references are discovered from, so the prefix identifies which mode
- * published a row without a column to store it.
+ * its references are discovered from — and, for the plain modes, which all name
+ * that field `backgroundLayers`, at the mode first — so the prefix identifies
+ * which mode published a row without a column to store it.
  *
  * That makes this map load-bearing rather than descriptive. A write scopes its
  * delete to its own prefix so it cannot clear another mode's rows, and a Screen
@@ -286,6 +335,12 @@ export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
 	'feature-match-overlay': 'layout.',
 	'broadcast-graphics': 'graphics.',
 	'background': 'layers.',
+	'card': 'card.backgroundLayers.',
+	'deck': 'deck.backgroundLayers.',
+	'standings': 'standings.backgroundLayers.',
+	'topCut': 'topCut.backgroundLayers.',
+	'metagame': 'metagame.backgroundLayers.',
+	'player-history': 'player-history.backgroundLayers.',
 } as const satisfies Record<GraphicAssetReferencingScreenMode, string>;
 
 export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
@@ -320,11 +375,13 @@ export function screenOutputResolvableSlotPrefixes(
 		: [GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode]];
 }
 
-export interface GraphicAssetReferencingScreenModeConfigs {
+export type GraphicAssetReferencingScreenModeConfigs = {
 	'feature-match-overlay'?: FeatureMatchOverlayModeConfig;
 	'broadcast-graphics'?: BroadcastGraphicsModeConfig;
 	'background'?: BackgroundModeConfig;
-}
+} & {
+	[Mode in BackgroundLayersCapableMode]?: { backgroundLayers?: BackgroundLayer[] };
+};
 
 /**
  * The references one Screen Mode's configuration publishes, whichever mode it is.
@@ -354,6 +411,13 @@ export function screenModeGraphicAssetReferences(
 			const config = modeConfigs?.background;
 			return config ? backgroundGraphicAssetReferences(config) : [];
 		}
+		case 'card':
+		case 'deck':
+		case 'standings':
+		case 'topCut':
+		case 'metagame':
+		case 'player-history':
+			return plainModeBackgroundLayerGraphicAssetReferences(mode, modeConfigs?.[mode]);
 		default: {
 			const unreachable: never = mode;
 			return unreachable;

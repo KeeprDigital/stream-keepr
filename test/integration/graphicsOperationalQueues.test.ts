@@ -220,6 +220,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 			const assetId = operation.result!.assetId;
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId,
 				revisionId: operation.result!.revisionId,
 			};

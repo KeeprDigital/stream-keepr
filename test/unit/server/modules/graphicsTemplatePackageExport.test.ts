@@ -21,9 +21,13 @@ import {
 	DEFAULT_GRAPHIC_SURFACE_STYLE,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 } from '~~/shared/modules/graphics/itemDefinitions';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { TEMPLATE_PACKAGE_KINDS } from '~~/shared/types/templatePackage';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
-import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import {
+	broadcastGraphicTemplatePackageRequirements,
+	featureMatchLayoutTemplatePackageRequirements,
+} from '~~/shared/utils/templatePackageRequirements';
 import { collectStream, readStoredZipArchive } from '../../../helpers/storedZipArchive';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
@@ -435,9 +439,15 @@ describe('the Template Package export contract', () => {
 	it.each([
 		[
 			'a remote resource',
-			{ frame: { mediaBackground: { enabled: true, url: 'https://cdn.example.com/loop.mp4' } } },
+			{ frame: { mediaBackground: { enabled: true, source: { kind: 'url', url: 'https://cdn.example.com/loop.mp4' } } } },
 			'remote-resource-dependency',
-			'frame.mediaBackground.url',
+			'frame.mediaBackground.source.url',
+		],
+		[
+			'a Remote Media URL for the Frame image',
+			{ frame: { backgroundImage: { kind: 'url', url: 'https://cdn.example.com/plate.png' } } },
+			'remote-resource-dependency',
+			'frame.backgroundImage.url',
 		],
 		[
 			'a protocol-relative resource',
@@ -501,6 +511,30 @@ describe('the Template Package export contract', () => {
 				slot: 'items[0].media.source',
 			}),
 		]);
+	});
+
+	it('packages a layout whose Frame image and video are library-sourced Screen Media Sources', async () => {
+		const { library } = createExportLibrary();
+		const plate = await ingestImage(library, 'Frame plate', transparentPixelPng);
+		const loop = await ingestSilentVideo(library, 'Frame loop');
+		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
+		layout.frame.backgroundImage = { kind: 'asset', ...plate };
+		layout.frame.mediaBackground = { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG, enabled: true, source: { kind: 'asset', ...loop } };
+		const requirements = featureMatchLayoutTemplatePackageRequirements(layout);
+
+		const result = await library.exportTemplatePackage({
+			packageKind: 'sklayout',
+			template: { identity: 'template-frame-media', name: 'Frame media', document: layout },
+			assets: requirements.assets,
+			capabilities: requirements.capabilities,
+		});
+
+		expect(result.outcome).toBe('exported');
+		if (result.outcome !== 'exported')
+			return;
+		const manifest = readStoredZipArchive(await collectStream(result.package.open()))
+			.json<TemplatePackageManifest>('manifest.json');
+		expect([...manifest.packagedAssets].map(asset => asset.kind).sort()).toEqual(['image', 'silent-video']);
 	});
 
 	it('embeds every required image, silent video, and font revision', async () => {

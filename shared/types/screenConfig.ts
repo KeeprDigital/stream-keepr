@@ -3,7 +3,7 @@ import type { CardTypeBucket } from '../utils/metagame';
 import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
 import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
-import type { GraphicAssetId, GraphicAssetReference, GraphicAssetRevisionId } from './graphicsAsset';
+import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
 
@@ -243,7 +243,6 @@ export const FEATURE_MATCH_OVERLAY_ANCHOR_VALUES = [
 	'bottom-right',
 ] as const;
 export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR_VALUES[number];
-export type ScreenMediaBackgroundType = 'video';
 
 /**
  * What a Source Item declares instead of a camera.
@@ -317,10 +316,10 @@ export interface FeatureMatchSourceFramingStyle extends FeatureMatchOverlayBorde
 	glowPosition?: FeatureMatchOverlayGlowPosition;
 }
 
+/** The Feature Match Overlay Frame's own video. Always video, so it names no type. */
 export interface ScreenMediaBackgroundConfig {
 	enabled: boolean;
-	type: ScreenMediaBackgroundType;
-	url: string;
+	source: ScreenMediaSource;
 	fit: MediaFit;
 	opacity: number;
 	playbackRate: number;
@@ -328,18 +327,27 @@ export interface ScreenMediaBackgroundConfig {
 }
 
 /**
- * Where a Screen's media comes from: a Graphics Asset Library revision, or a
- * remote URL.
+ * A Screen Media Source: where a Screen's own image or video comes from — an
+ * exact Graphic Asset Revision, or a Remote Media URL (ADR-0021).
  *
- * This is the standardised media source shape the Background Screen mints and
- * the rest of the application adopts over time (#484). An asset source pins an
- * exact revision, as a media Graphic Input value does. A URL source is the escape
- * hatch the old media background always was: the application serves nothing and
- * checks nothing.
+ * Offered on Background Layers and the Feature Match Overlay Frame only; Graphic
+ * Items and Graphic Inputs stay library-only. The library arm pins an exact
+ * revision, as a media Graphic Input value does. A URL source is a remote
+ * dependency: the application serves nothing and checks nothing, and an empty
+ * URL means unset. Never `MediaSource`, which would shadow the browser global.
  */
 export type ScreenMediaSource
 	= | { kind: 'asset'; assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId }
 		| { kind: 'url'; url: string };
+
+/** A video ready to play: its Screen Media Source already resolved to a URL. */
+export interface ScreenVideoPlayback {
+	url: string;
+	fit: MediaFit;
+	opacity: number;
+	playbackRate: number;
+	loop: boolean;
+}
 
 export const BACKGROUND_LAYER_TYPE_VALUES = ['color', 'gradient', 'image', 'video', 'animation'] as const;
 export type BackgroundLayerType = typeof BACKGROUND_LAYER_TYPE_VALUES[number];
@@ -432,7 +440,7 @@ export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | '
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
 	backgroundColor: string;
 	opacity: number;
-	backgroundImage?: GraphicAssetReference;
+	backgroundImage?: ScreenMediaSource;
 	backgroundImageFit?: MediaFit;
 	mediaBackground?: ScreenMediaBackgroundConfig;
 	gradient?: string;
@@ -684,6 +692,10 @@ export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeck
 	};
 }
 
+/** Where each badge sits on a Deck Screen card until an operator moves it. */
+export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
+export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
+
 export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	deckSource: { type: 'player', playerId: null },
 	board: 'full',
@@ -707,11 +719,11 @@ export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
 	highlanderPointedCardsAccentColor: '#7c3aed',
 	highlanderPointedCardsBorderColor: undefined,
 	showHighlanderPoints: true,
-	highlanderPointsPosition: 'top-left',
+	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
 	highlanderPointsSize: 'medium',
 	highlanderPointsTextColor: '#ffffff',
 	highlanderPointsBgColor: '#7c3aed',
-	quantityPosition: 'top-right',
+	quantityPosition: DEFAULT_QUANTITY_POSITION,
 	quantitySize: 'medium',
 	quantityTextColor: '#ffffff',
 	quantityBgColor: '#7c3aed',

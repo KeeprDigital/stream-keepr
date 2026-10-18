@@ -400,7 +400,7 @@ What a show wants behind everything else is a composition — a colour wash over
 - The old `mediaBackground` configuration reset rather than mapping onto a video layer (small install base, as ADR-0014). New Background Screens start empty: black until configured.
 - **At most one animation layer per Screen**, enforced on the `layers` field in the schema: each is its own WebGL context and an OBS browser source is memory-tight. Liftable.
 - Opacity belongs to the layer, never to the stack or the renderer behind it.
-- Image and video layers use the standard media source shape — a Graphics Asset Library reference or a remote URL — adopted app-wide by #484. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace.
+- Image and video layers take a Screen Media Source — a Graphics Asset Library reference or a Remote Media URL — whose reach ADR-0021 sets. Asset-sourced layers join Graphic Asset Reference indexing under the `layers.` owner-slot namespace; a plain overlay mode's own stack indexes under `<mode>.backgroundLayers.` (#580).
 
 ### Rejected alternatives
 
@@ -517,6 +517,37 @@ Every output that matters is Chromium: broadcast software captures a browser sou
 - **Keep the block, drop only the Safari gate** — cheaper. But it kept 700 lines guarding a non-target browser, and the rest of the suite would still have tested the block without ever proving a real Safari needed it.
 - **Detect non-Chromium browsers and warn** — keeps the user-agent detection this removes, to tell an operator something they can't act on mid-show.
 - **Migrate stored documents to remove the key** — five document tables and every exported package, for a key that is harmless once ignored.
+
+## ADR-0021: A Screen Media Source is for a Screen's own media; graphics content stays library-only
+
+Accepted · 2026-10-15 · [#484](https://github.com/KeeprDigital/stream-keepr/issues/484)
+
+### Decision
+
+**A Screen Media Source — one exact Graphic Asset Revision or a Remote Media URL — is offered only where a Screen supplies its own media:** image and video Background Layers (on the Background Screen and every plain overlay mode) and the Feature Match Overlay Frame's image and video. Media Graphic Items, media Graphic Input defaults, and Broadcast Graphics Live Session media values stay Graphics Asset Library references only. Fonts are out of scope.
+
+In code it is `ScreenMediaSource` (`{ kind: 'asset', assetId, revisionId } | { kind: 'url', url }`), never `MediaSource`, which would shadow the browser global. The Frame takes it as-is: `backgroundImage` becomes a `ScreenMediaSource`, and `mediaBackground` becomes `{ enabled, source, fit, opacity, playbackRate, loop }` with no `type`, its library arm limited to silent video. One shared picker component serves every host.
+
+A Remote Media URL is HTTPS or root-relative (an application-bundled file), and the empty string means unset.
+
+### Why
+
+Background Layers are where an operator drops in whatever a show needs, including media hosted elsewhere, so they need both sources. Graphic Items and Inputs are graphics content: templates, packages, and live values are built on every persisted graphics reference pinning an exact revision and on approved remote ingestion never creating a remote dependency (CONTEXT.md invariants). A URL there would make every such Template unexportable. The ticket's "everywhere" went no further once that cost was clear.
+
+Plain `http://` is refused because an HTTPS-served Screen blocks it as mixed content, which would show a blank output with no error.
+
+### Consequences
+
+- **No old shape is accepted.** Stored Frames holding a bare `{ assetId, revisionId }` `backgroundImage` or a `mediaBackground.url` fail the schema, as do v1 `sklayout` payloads in that shape. `FEATURE_MATCH_LAYOUT_FORMAT_VERSION` and the package schema version stay 1. That is safe because nothing has shipped and ADR-0019 wipes production; local D1s holding such Frames need a reset.
+- **A Feature Match Layout with an HTTPS Remote Media URL still cannot be exported or installed** (`remote-resource-dependency`). The issue names the slot and points to the library's approved HTTPS copy. A root-relative path is not refused: it travels as data and resolves against the receiving installation, so a file that installation does not serve renders blank. Accepted, as that already held for the Frame video and the failure is a blank, not lost data. Asset-sourced Frame media exports through the existing reference walker.
+- Asset-sourced Frame media keeps its place in Graphic Asset Reference indexing (`layout.frame.*`); URL sources fabricate no reference. Plain-mode Background Layers are indexed too, each under its own `<mode>.backgroundLayers.` namespace, because every plain mode names its stack alike (#580).
+
+### Rejected alternatives
+
+- **URL everywhere, as #484 first asked** — breaks the exact-revision and no-hotlink invariants for graphics content, and makes Templates unexportable.
+- **Let a URL travel in a Template Package as data** — a package would then depend on a remote host the receiver never vetted, which is what `remote-resource-dependency` exists to refuse.
+- **Turn the Frame's media into a Background Layer stack** — graphics hosts own their backgrounds (ADR-0016); that is its own decision.
+- **Normalise old Frame shapes on read** — costs little, but nothing in the old shape has shipped.
 
 ## ADR-0023: A Realtime Subscription is held until disposed, and its Event's recovery re-attempts while one waits
 

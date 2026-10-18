@@ -1,6 +1,8 @@
 import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { BackgroundLayer, BackgroundModeConfig } from '~~/shared/types/screenConfig';
+import type { GraphicAssetReferencingScreenModeConfigs } from '~~/shared/utils/graphicsAssetReferences';
 import { describe, expect, it } from 'vitest';
+import { BACKGROUND_LAYERS_CAPABLE_MODES } from '~~/shared/screenModes';
 import {
 	backgroundGraphicAssetReferences,
 	graphicAssetReferenceSlotPrefix,
@@ -118,5 +120,45 @@ describe('backgroundGraphicAssetReferences', () => {
 		// fragments and readers complete them from defaults, so discovery must
 		// tolerate a background config with no stack rather than throwing.
 		expect(backgroundGraphicAssetReferences({} as BackgroundModeConfig)).toEqual([]);
+	});
+});
+
+describe('a plain overlay mode’s own Background Layer stack', () => {
+	// Every plain overlay mode carries its own `backgroundLayers` (#580). Its
+	// asset-sourced layers publish like the Background Screen's, or a Screen
+	// Output is never authorised to fetch them and their revisions go unprotected.
+	it.each(BACKGROUND_LAYERS_CAPABLE_MODES)('publishes %s’s asset-sourced layers under its own namespace', (mode) => {
+		const modeConfigs = {
+			[mode]: {
+				backgroundLayers: [
+					assetImageLayer('plate'),
+					{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '/plate.png' }, fit: 'cover' },
+				],
+			},
+		} as GraphicAssetReferencingScreenModeConfigs;
+
+		expect(screenModeGraphicAssetReferences(mode, modeConfigs)).toEqual([
+			{
+				reference: { assetId: 'asset-1', revisionId: 'revision-1' },
+				ownerSlot: `${mode}.backgroundLayers.plate.source`,
+				kind: 'image',
+			},
+		]);
+		expect(`${mode}.backgroundLayers.plate.source`.startsWith(graphicAssetReferenceSlotPrefix(mode))).toBe(true);
+	});
+
+	it('keeps each mode’s stack to itself, though every mode names it alike', () => {
+		// The field name is shared, so the namespace has to carry the mode: a Deck
+		// write scoping its delete to `backgroundLayers.` would clear the Card's rows.
+		const modeConfigs = {
+			card: { backgroundLayers: [assetImageLayer('plate')] },
+		} as GraphicAssetReferencingScreenModeConfigs;
+
+		expect(screenModeGraphicAssetReferences('deck', modeConfigs)).toEqual([]);
+		expect(graphicAssetReferenceSlotPrefix('card')).not.toBe(graphicAssetReferenceSlotPrefix('deck'));
+	});
+
+	it('answers nothing for a stored fragment with no stack', () => {
+		expect(screenModeGraphicAssetReferences('standings', { standings: {} } as GraphicAssetReferencingScreenModeConfigs)).toEqual([]);
 	});
 });

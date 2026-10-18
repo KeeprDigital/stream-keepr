@@ -98,7 +98,7 @@ const ISSUE_REMEDIATION = {
 	'unsupported-application-capability': 'This installation does not provide the requested application capability. Replace it with a supported one before exporting.',
 	'unexpected-graphic-asset-kind': 'The Template field requires a different media kind. Select a Graphic Asset of the expected kind.',
 	'undeclared-graphic-asset-dependency': 'Every asset a Template needs must be selected from the Graphics Asset Library. Replace the inline or undeclared value with a library selection.',
-	'remote-resource-dependency': 'A Template Package cannot depend on a remote resource. Ingest the resource into the Graphics Asset Library and select the resulting revision.',
+	'remote-resource-dependency': 'A Template Package cannot depend on a remote resource. Copy it into the Graphics Asset Library with an approved HTTPS copy and select the resulting revision.',
 	'executable-template-content': 'Template Packages are data-only. Remove the executable value before exporting.',
 	'invalid-template-document': 'The Template document must be plain data. Remove the unsupported value before exporting.',
 	'duplicate-template-slot': 'Each Template slot may declare one asset requirement. Remove the duplicate declaration.',

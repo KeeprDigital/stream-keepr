@@ -115,6 +115,7 @@ describe('screenWriteModule', () => {
 		it('rejects Graphic Asset References through a generic Screen write that cannot index them', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -207,6 +208,7 @@ describe('screenWriteModule', () => {
 		it('rejects removing indexed Graphic Asset References through the generic Screen endpoint', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -229,6 +231,7 @@ describe('screenWriteModule', () => {
 		it('allows generic Screen metadata edits that submit unchanged Graphic Asset References', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -476,6 +479,7 @@ describe('screenWriteModule', () => {
 		it('checks newly selected Graphic Asset Revisions through the library before writing', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -505,6 +509,7 @@ describe('screenWriteModule', () => {
 		it('rejects a newly selected unavailable Graphic Asset Revision before writing', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -536,6 +541,7 @@ describe('screenWriteModule', () => {
 		it('asks the library once for every changed reference and refuses with the first unselectable slot', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -633,6 +639,7 @@ describe('screenWriteModule', () => {
 		it('does not build the Graphics Asset Library when no Graphic Asset Reference changed', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-1'),
 			};
@@ -667,6 +674,7 @@ describe('screenWriteModule', () => {
 			}]);
 			const moved = structuredClone(config);
 			moved.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: graphicAssetId('asset-1'),
 				revisionId: graphicAssetRevisionId('revision-2'),
 			};
