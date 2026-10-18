@@ -395,12 +395,12 @@ type DeclaredModeConfigShape<M extends ScreenMode, Shape extends z.ZodRawShape>
 	= M extends BackgroundLayersCapableMode ? Shape & typeof BACKGROUND_LAYERS_CONFIG_SHAPE : Shape;
 
 /**
- * One mode's strict config schema: the fields it writes itself, plus every field
- * its Screen Mode Definition's declared capabilities bring.
+ * One mode's strict config schema: the fields it writes itself, plus the
+ * `backgroundLayers` field when its Screen Mode Definition declares a stack.
  *
- * The capability fields are added here rather than spelled on each mode, so a
- * mode that declares a Background Layer stack validates one, and a mode that
- * does not refuses it, without either fact being restated in this file.
+ * The field is added here rather than spelled on each mode, so a mode that
+ * declares a Background Layer stack validates one, and a mode that does not
+ * refuses it, without either fact being restated in this file.
  */
 function declaredModeConfigSchema<M extends ScreenMode, Shape extends z.ZodRawShape>(
 	mode: M,

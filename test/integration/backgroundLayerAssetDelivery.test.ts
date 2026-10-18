@@ -2,12 +2,14 @@ import type { ScreenResponse } from '~~/shared/api';
 import type {
 	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetReference,
+	GraphicAssetRetentionView,
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '../helpers/backgroundLayerModes';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 
@@ -17,26 +19,26 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
 
-/** This suite's own content: a chunk count no other suite pads with. */
-const pixelPng = Uint8Array.from(Buffer.concat([
-	basePixelPng.slice(0, -12),
-	...Array.from({ length: 130 }).fill(emptyTextChunk) as Uint8Array[],
-	basePixelPng.slice(-12),
-]));
+/** This suite's own content: chunk counts no other suite pads with. */
+function pngWithTextChunks(count: number) {
+	return Uint8Array.from(Buffer.concat([
+		basePixelPng.slice(0, -12),
+		...Array.from({ length: count }).fill(emptyTextChunk) as Uint8Array[],
+		basePixelPng.slice(-12),
+	]));
+}
 
-/**
- * Every mode whose Screen Mode Definition declares a Background Layer stack,
- * named by hand so the suite does not take the declaration's word for itself.
- */
-const MODES_WITH_A_BACKGROUND_LAYER_STACK = [
-	'card',
-	'deck',
-	'standings',
-	'topCut',
-	'metagame',
-	'top-cards',
-	'player-history',
-] as const;
+const pixelPng = pngWithTextChunks(130);
+const replacementPng = pngWithTextChunks(131);
+
+function decodeEvidence(bytes: Uint8Array) {
+	return {
+		outcome: 'decoded' as const,
+		sourceDigest: createHash('sha256').update(bytes).digest('hex'),
+		width: 1,
+		height: 1,
+	};
+}
 
 /**
  * A plain overlay mode's own Background Layer stack, end to end (#580).
@@ -82,12 +84,7 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 					idempotencyKey: `background-layer-plate-${mode}`,
 					name: `Background Layer plate (${mode})`,
 					defaultEventId: eventId,
-					browserDecodeEvidence: {
-						outcome: 'decoded',
-						sourceDigest: createHash('sha256').update(pixelPng).digest('hex'),
-						width: 1,
-						height: 1,
-					},
+					browserDecodeEvidence: decodeEvidence(pixelPng),
 					declaredByteLength: pixelPng.byteLength,
 				}),
 			},
@@ -98,6 +95,32 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 		);
 		const operation = await upload.json() as GraphicsIngestionOperation;
 		return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+	}
+
+	async function replace(mode: string, assetId: string) {
+		const initiated = await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/${assetId}/replacement-operations`,
+			{
+				method: 'POST',
+				headers: { cookie: authorCookie },
+				body: {
+					idempotencyKey: `background-layer-plate-replacement-${mode}`,
+					sourceFileName: 'replacement.png',
+					declaredMime: 'image/png',
+					browserDecodeEvidence: decodeEvidence(replacementPng),
+					declaredByteLength: replacementPng.byteLength,
+				},
+			},
+		);
+		const upload = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{
+				method: 'PUT',
+				headers: { 'cookie': authorCookie, 'content-type': 'image/png' },
+				body: replacementPng,
+			},
+		);
+		expect((await upload.json() as GraphicsIngestionOperation).result).toBeDefined();
 	}
 
 	describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('on a %s Screen', (mode) => {
@@ -164,6 +187,28 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 				{ method: 'POST', headers: { cookie: authorCookie }, body: { action: 'trash' } },
 			);
 			expect(trashed).toMatchObject({ outcome: 'in-use' });
+		});
+
+		it('keeps the pinned revision once superseded, with no pruning deadline, still on air', async () => {
+			// Trash is the only way to Purge, and it is refused above; Revision Pruning
+			// is the other reclamation, and it reaches only an unreferenced superseded
+			// revision. Superseding the pinned one is what puts it in that path.
+			await replace(mode, reference.assetId);
+
+			const view = await $fetch<GraphicAssetRetentionView>(
+				`/api/graphics-assets/${reference.assetId}/retention`,
+				{ headers: { cookie: authorCookie } },
+			);
+			expect(view.revisions).toContainEqual(expect.objectContaining({
+				revisionId: reference.revisionId,
+				retention: { policy: 'referenced', referenceCount: 1 },
+			}));
+
+			const delivered = await fetch(
+				`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
+				{ headers: { authorization: `Bearer ${capability}` } },
+			);
+			expect(delivered.status).toBe(200);
 		});
 	});
 });

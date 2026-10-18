@@ -285,11 +285,7 @@ export const GRAPHIC_ASSET_REFERENCING_SCREEN_MODES = [
 	...BACKGROUND_LAYERS_CAPABLE_MODES,
 ] as const;
 
-export type GraphicAssetReferencingScreenMode
-	= | 'feature-match-overlay'
-		| 'broadcast-graphics'
-		| 'background'
-		| BackgroundLayersCapableMode;
+export type GraphicAssetReferencingScreenMode = typeof GRAPHIC_ASSET_REFERENCING_SCREEN_MODES[number];
 
 export function isGraphicAssetReferencingScreenMode(mode: string): mode is GraphicAssetReferencingScreenMode {
 	return (GRAPHIC_ASSET_REFERENCING_SCREEN_MODES as readonly string[]).includes(mode);
@@ -314,12 +310,14 @@ export function isGraphicAssetReferencingScreenMode(mode: string): mode is Graph
  * `broadcastGraphicsAssetReferences.test.ts` asserts every discovered slot
  * against it.
  */
-export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES: Record<GraphicAssetReferencingScreenMode, string> = {
+export const GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES = {
 	'feature-match-overlay': 'layout.',
 	'broadcast-graphics': 'graphics.',
 	'background': 'layers.',
-	...Object.fromEntries(BACKGROUND_LAYERS_CAPABLE_MODES.map(mode => [mode, `${mode}.backgroundLayers.`])) as Record<BackgroundLayersCapableMode, string>,
-};
+	...Object.fromEntries(BACKGROUND_LAYERS_CAPABLE_MODES.map(mode => [mode, `${mode}.backgroundLayers.`])) as {
+		[M in BackgroundLayersCapableMode]: `${M}.backgroundLayers.`;
+	},
+} as const satisfies Record<GraphicAssetReferencingScreenMode, string>;
 
 export function graphicAssetReferenceSlotPrefix(mode: GraphicAssetReferencingScreenMode): string {
 	return GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode];

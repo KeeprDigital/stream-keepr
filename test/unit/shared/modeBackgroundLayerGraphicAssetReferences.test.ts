@@ -6,20 +6,7 @@ import {
 	graphicAssetReferenceSlotPrefix,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
-
-/**
- * Every plain overlay mode carrying its own Background Layer stack, named by hand
- * rather than read from the declaration, so a mode dropping out of it fails here.
- */
-const MODES_WITH_A_BACKGROUND_LAYER_STACK = [
-	'card',
-	'deck',
-	'standings',
-	'topCut',
-	'metagame',
-	'top-cards',
-	'player-history',
-] as const;
+import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '~~/test/helpers/backgroundLayerModes';
 
 function assetImageLayer(id: string): BackgroundLayer {
 	return {

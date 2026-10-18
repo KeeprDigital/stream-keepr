@@ -12,6 +12,7 @@ import {
 	sameScreenGraphicAssetReferences,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
+import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '~~/test/helpers/backgroundLayerModes';
 
 function reference(assetId: string, revisionId: string): GraphicAssetReference {
 	return {
@@ -271,13 +272,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'feature-match-overlay',
 			'broadcast-graphics',
 			'background',
-			'card',
-			'deck',
-			'standings',
-			'topCut',
-			'metagame',
-			'top-cards',
-			'player-history',
+			...MODES_WITH_A_BACKGROUND_LAYER_STACK,
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

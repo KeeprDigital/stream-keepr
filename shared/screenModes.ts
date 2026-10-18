@@ -71,11 +71,10 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
- * Each mode declares its own display type, label, and icon, and the capabilities
- * it carries.
+ * Each mode declares its own display type, label, and icon, and what it carries.
  *
- * Kept literal (`satisfies`, not an annotation) so a capability's modes can be
- * derived as a type as well as a list; `SCREEN_MODES` below is the same object
+ * Kept literal (`satisfies`, not an annotation) so the modes carrying something
+ * can be derived as a type as well as a list; `SCREEN_MODES` below is the same object
  * widened for readers asking about any mode.
  */
 const SCREEN_MODE_DEFINITIONS = {
