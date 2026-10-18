@@ -55,7 +55,7 @@ function featureMatchLayout(options: {
 	items?: MediaGraphicItemConfig[];
 }): FeatureMatchLayoutConfig {
 	return {
-		frame: { backgroundImage: options.backgroundImage },
+		frame: { backgroundImage: options.backgroundImage && { kind: 'asset', ...options.backgroundImage } },
 		composition: { items: options.items ?? [] },
 	} as unknown as FeatureMatchLayoutConfig;
 }

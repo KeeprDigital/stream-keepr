@@ -48,7 +48,7 @@ export const { readTemplatePackageParts, writeTemplatePackage } = await import(
 /** A complete, publishable Feature Match Layout with one pinned reference. */
 export function featureMatchLayoutReferencing({ assetId, revisionId }) {
 	const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-	config.layout.frame.backgroundImage = { assetId, revisionId };
+	config.layout.frame.backgroundImage = { kind: 'asset', assetId, revisionId };
 	return config.layout;
 }
 

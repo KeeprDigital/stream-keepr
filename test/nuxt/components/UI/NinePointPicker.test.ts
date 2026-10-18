@@ -58,6 +58,29 @@ describe('nine-point picker', () => {
 		expect(wrapper.emitted('update:modelValue')).toEqual([['top-right']]);
 	});
 
+	it('offers a disabled point but never chooses it', async () => {
+		const wrapper = mount(NinePointPicker, { global, props: { modelValue: 'top', disabledPoints: ['center'] } });
+		const centre = wrapper.get('[aria-label="Centre"]');
+		expect(centre.attributes('disabled')).toBeDefined();
+		expect(buttons(wrapper).filter(button => button.attributes('disabled') !== undefined)).toHaveLength(1);
+		await centre.trigger('click');
+		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+	});
+
+	it('moves past a disabled point to the next one in the same direction', async () => {
+		const wrapper = mount(NinePointPicker, { global, props: { modelValue: 'top', disabledPoints: ['center'] } });
+		await wrapper.get('[aria-label="Top"]').trigger('keydown', { key: 'ArrowDown' });
+		await wrapper.setProps({ modelValue: 'left' });
+		await wrapper.get('[aria-label="Left"]').trigger('keydown', { key: 'ArrowRight' });
+		expect(wrapper.emitted('update:modelValue')).toEqual([['bottom'], ['right']]);
+	});
+
+	it('stays put when only disabled points lie in that direction', async () => {
+		const wrapper = mount(NinePointPicker, { global, props: { modelValue: 'top', disabledPoints: ['center', 'bottom'] } });
+		await wrapper.get('[aria-label="Top"]').trigger('keydown', { key: 'ArrowDown' });
+		expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+	});
+
 	it('emits nothing while disabled', async () => {
 		const wrapper = mount(NinePointPicker, { global, props: { modelValue: 'center', disabled: true } });
 		await wrapper.get('[aria-label="Top right"]').trigger('click');
