@@ -484,4 +484,195 @@ describe('useEventStore', () => {
 			);
 		});
 	});
+
+	// ── Mutations that outlive their Event (#606) ──
+
+	/**
+	 * A write is answered for the Event it was made in. When the operator has moved on
+	 * — stores reset, another Event loaded — the answer still arrives, and the Event on
+	 * screen is not the one it describes. Coming back to the first Event is a new
+	 * lifetime too: it loaded fresh state of its own, so an answer from before the
+	 * switch is no more current there than it was in the other Event.
+	 */
+	describe('a mutation answered after the operator switched Events', () => {
+		async function switchTo(event: ReturnType<typeof createEventResponse>) {
+			store.$reset();
+			mockEventRepo.getById.mockResolvedValueOnce(event);
+			await store.loadEvent(event.id);
+		}
+
+		it('a late successful save of Event A leaves Event B and its ID alone', async () => {
+			const eventA = createEventResponse({ id: 1, name: 'Event A' });
+			const eventB = createEventResponse({ id: 2, name: 'Event B' });
+			store.event = eventA;
+			const save = deferred<ReturnType<typeof createEventResponse>>();
+			mockEventRepo.update.mockReturnValueOnce(save.promise);
+
+			const saving = store.updateEvent({ name: 'Event A renamed' });
+			await switchTo(eventB);
+			save.resolve({ ...eventA, name: 'Event A renamed' });
+			await saving;
+
+			expect(store.event).toEqual(eventB);
+			expect(store.eventId).toBe(2);
+		});
+
+		it('a late successful save of Event A leaves Event A, loaded again since, alone', async () => {
+			const eventA = createEventResponse({ id: 1, name: 'Event A', numFeatureMatches: 1 });
+			const reloadedA = createEventResponse({ id: 1, name: 'Event A renamed elsewhere', numFeatureMatches: 4 });
+			store.event = eventA;
+			const save = deferred<ReturnType<typeof createEventResponse>>();
+			mockEventRepo.update.mockReturnValueOnce(save.promise);
+
+			const saving = store.updateEvent({ name: 'Event A renamed', numFeatureMatches: 2 });
+			await switchTo(createEventResponse({ id: 2, name: 'Event B' }));
+			await switchTo(reloadedA);
+			save.resolve({ ...eventA, name: 'Event A renamed', numFeatureMatches: 2 });
+			await saving;
+
+			expect(store.event).toEqual(reloadedA);
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
+		});
+
+		it('a late successful save still brings Event A\'s entry in the Events list up to date', async () => {
+			const eventA = createEventResponse({ id: 1, name: 'Event A' });
+			const eventB = createEventResponse({ id: 2, name: 'Event B' });
+			store.event = eventA;
+			store.eventsList = [eventA, eventB];
+			const save = deferred<ReturnType<typeof createEventResponse>>();
+			mockEventRepo.update.mockReturnValueOnce(save.promise);
+
+			const saving = store.updateEvent({ name: 'Event A renamed' });
+			await switchTo(eventB);
+			save.resolve({ ...eventA, name: 'Event A renamed' });
+			await saving;
+
+			expect(store.eventsList.map(event => event.name)).toEqual(['Event A renamed', 'Event B']);
+		});
+
+		it('a save whose dependents settle after the switch does not push its clock settings into Event B', async () => {
+			store.event = createEventResponse({ id: 1 });
+			const slotsReload = deferred<void>();
+			mockFeatureMatchStore.loadFeatureMatchesByEventId.mockReturnValueOnce(slotsReload.promise);
+			mockEventRepo.update.mockResolvedValueOnce(createEventResponse({ id: 1, numFeatureMatches: 2 }));
+
+			const saving = store.updateEvent({ numFeatureMatches: 2, featureMatchDefaultClockType: 'countdown' });
+			await vi.waitFor(() => expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalled());
+			await switchTo(createEventResponse({ id: 2 }));
+			slotsReload.resolve();
+			await saving;
+
+			expect(mockFeatureMatchStateStore.updateAllClockSettings).not.toHaveBeenCalled();
+		});
+
+		it.each([
+			['Event B', [2]],
+			['Event A, loaded again since', [2, 1]],
+		])('a late failed save of Event A neither rolls back nor reports into %s', async (_, switches) => {
+			const eventA = createEventResponse({ id: 1, name: 'Event A' });
+			store.event = eventA;
+			const save = deferred<never>();
+			mockEventRepo.update.mockReturnValueOnce(save.promise);
+
+			const saving = store.updateEvent({ name: 'Event A renamed' });
+			let shown = eventA;
+			for (const id of switches) {
+				shown = createEventResponse({ id, name: `Event ${id} as loaded` });
+				await switchTo(shown);
+			}
+			save.reject(transportFailure({ status: 409, body: { message: 'Rounds have started' } }));
+			await saving;
+
+			expect(store.event).toEqual(shown);
+			expect(store.error).toBeNull();
+		});
+
+		it('a late Event create lists the new Event without loading it over Event B', async () => {
+			const eventB = createEventResponse({ id: 2, name: 'Event B' });
+			const created = createEventResponse({ id: 5, name: 'New Event' });
+			const create = deferred<typeof created>();
+			mockEventRepo.create.mockReturnValueOnce(create.promise);
+
+			const creating = store.createEvent({ name: 'New Event', game: 'mtg', featureMatchOrientation: 'horizontal' });
+			await switchTo(eventB);
+			create.resolve(created);
+
+			await expect(creating).resolves.toEqual(created);
+			expect(store.event).toEqual(eventB);
+			expect(store.eventsList).toContainEqual(created);
+		});
+
+		describe.each([
+			['Event B', [2]],
+			['Event A, loaded again since', [2, 1]],
+		])('talent writes answered in %s', (_, switches) => {
+			const talent = createMockTalent({ id: 10, eventId: 1, name: 'Ana' });
+
+			/** Ends on an Event, whichever it is, whose Talents are one other person. */
+			async function switchAway() {
+				let shown!: ReturnType<typeof createEventResponse>;
+				for (const id of switches) {
+					shown = createEventResponse({ id, talents: [createMockTalent({ id: 20 + id, eventId: id, name: 'Other' })] });
+					await switchTo(shown);
+				}
+				return structuredClone(shown);
+			}
+
+			it('a late Talent create adds nobody', async () => {
+				store.event = createEventResponse({ id: 1, talents: [] });
+				const create = deferred<typeof talent>();
+				mockTalentRepo.create.mockReturnValueOnce(create.promise);
+
+				const adding = store.addTalent({ name: 'Ana' });
+				const shown = await switchAway();
+				create.resolve(talent);
+
+				await expect(adding).resolves.toEqual(talent);
+				expect(store.event).toEqual(shown);
+			});
+
+			it('a late Talent update changes nobody, whether it succeeds or fails', async () => {
+				store.event = createEventResponse({ id: 1, talents: [talent] });
+				const succeeded = deferred<typeof talent>();
+				const failed = deferred<never>();
+				mockTalentRepo.update
+					.mockReturnValueOnce(succeeded.promise)
+					.mockReturnValueOnce(failed.promise);
+
+				const renaming = store.updateTalent(10, { name: 'Ana renamed' });
+				const renamingAgain = store.updateTalent(10, { name: 'Ana renamed again' });
+				const shown = await switchAway();
+				succeeded.resolve({ ...talent, name: 'Ana renamed' });
+				failed.reject(new Error('Talent update refused'));
+				await Promise.all([renaming, renamingAgain]);
+
+				expect(store.event).toEqual(shown);
+				expect(store.error).toBeNull();
+			});
+
+			it('a late failed Talent delete restores nobody', async () => {
+				store.event = createEventResponse({ id: 1, talents: [talent] });
+				const remove = deferred<never>();
+				mockTalentRepo.remove.mockReturnValueOnce(remove.promise);
+
+				const removing = store.removeTalent(10);
+				const shown = await switchAway();
+				remove.reject(new Error('Talent delete refused'));
+				await removing;
+
+				expect(store.event).toEqual(shown);
+				expect(store.error).toBeNull();
+			});
+		});
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

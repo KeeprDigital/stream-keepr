@@ -155,6 +155,103 @@ describe('event data lifecycle module', () => {
 		expect(harness.onMutation).toHaveBeenCalledTimes(3);
 	});
 
+	/**
+	 * A write is answered for the Event it was made in, and by then the collection may
+	 * follow another one — or the same Event again, loaded afresh, which is a new
+	 * lifetime of its own even though its id is the one the write named (#606).
+	 */
+	describe.each([
+		['Event B', [20]],
+		['Event A, loaded again since', [20, 10]],
+	])('a write answered after the collection moved on to %s', (_, switches) => {
+		const original = { id: 1, eventId: 10, name: 'One' };
+
+		/**
+		 * Ends on a collection that holds an item with the written item's id, as Event A's
+		 * own does when loaded again, so nothing below passes merely by missing an id.
+		 */
+		async function switchAway(harness: ReturnType<typeof createHarness>) {
+			let shown!: Item[];
+			for (const eventId of switches) {
+				shown = [{ id: 1, eventId, name: `One as loaded for ${eventId}` }];
+				harness.lifecycle.reset();
+				harness.repository.list.mockResolvedValueOnce(structuredClone(shown));
+				await harness.lifecycle.loadByEventId(eventId);
+			}
+			harness.onMutation.mockClear();
+			return shown;
+		}
+
+		it('a late create adds nothing', async () => {
+			const harness = createHarness();
+			const create = deferred<Item>();
+			harness.repository.create.mockReturnValueOnce(create.promise);
+
+			const creating = harness.lifecycle.create(10, { name: 'Two' });
+			const shown = await switchAway(harness);
+			create.resolve({ id: 2, eventId: 10, name: 'Two' });
+
+			await expect(creating).resolves.toEqual({ id: 2, eventId: 10, name: 'Two' });
+			expect(harness.lifecycle.items.value).toEqual(shown);
+			expect(harness.onMutation).not.toHaveBeenCalled();
+		});
+
+		it('a late failed create reports nothing', async () => {
+			const harness = createHarness();
+			const create = deferred<never>();
+			harness.repository.create.mockReturnValueOnce(create.promise);
+
+			const creating = harness.lifecycle.create(10, { name: 'Two' });
+			await switchAway(harness);
+			create.reject(new Error('Name already taken'));
+
+			await expect(creating).resolves.toBeNull();
+			expect(harness.lifecycle.error.value).toBeNull();
+		});
+
+		it('a late update changes nothing, whether it succeeds or fails', async () => {
+			const harness = createHarness();
+			harness.lifecycle.items.value = [original];
+			const succeeded = deferred<Item>();
+			const failed = deferred<never>();
+			harness.repository.update
+				.mockReturnValueOnce(succeeded.promise)
+				.mockReturnValueOnce(failed.promise);
+
+			const renaming = harness.lifecycle.update(10, 1, { name: 'Renamed' });
+			const renamingAgain = harness.lifecycle.update(10, 1, { name: 'Renamed again' });
+			const shown = await switchAway(harness);
+			succeeded.resolve({ ...original, name: 'Renamed' });
+			failed.reject(new Error('Update refused'));
+			await Promise.all([renaming, renamingAgain]);
+
+			expect(harness.lifecycle.items.value).toEqual(shown);
+			expect(harness.lifecycle.error.value).toBeNull();
+			expect(harness.onMutation).not.toHaveBeenCalled();
+		});
+
+		it('a late delete removes nothing and its failure restores nothing', async () => {
+			const harness = createHarness();
+			harness.lifecycle.items.value = [original, { id: 2, eventId: 10, name: 'Two' }];
+			const succeeded = deferred<unknown>();
+			const failed = deferred<never>();
+			harness.repository.remove
+				.mockReturnValueOnce(succeeded.promise)
+				.mockReturnValueOnce(failed.promise);
+
+			const removing = harness.lifecycle.remove(10, 1);
+			const removingAgain = harness.lifecycle.remove(10, 2);
+			const shown = await switchAway(harness);
+			succeeded.resolve({ success: true });
+			failed.reject(new Error('Delete refused'));
+			await Promise.all([removing, removingAgain]);
+
+			expect(harness.lifecycle.items.value).toEqual(shown);
+			expect(harness.lifecycle.error.value).toBeNull();
+			expect(harness.onMutation).not.toHaveBeenCalled();
+		});
+	});
+
 	it('resets lifecycle state and calls reset hook', async () => {
 		const harness = createHarness();
 		harness.repository.list.mockResolvedValue([{ id: 1, eventId: 10, name: 'One' }]);

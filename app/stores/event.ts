@@ -7,6 +7,7 @@ import type {
 	UpdateTalentInput,
 } from '~/types';
 import type { MessageData } from '~/types/realtime';
+import type { Flight } from '~/utils/guardedSequence';
 import { useEventDataResource } from '~/modules/event-data/client';
 
 export const useEventStore = defineStore('event', () => {
@@ -25,6 +26,14 @@ export const useEventStore = defineStore('event', () => {
 	let eventLoadGeneration = 0;
 	let listLoadGeneration = 0;
 	const activeLoads = new Set<symbol>();
+	/**
+	 * The Event Lifetime a mutation's continuation belongs to. Each reset begins a new
+	 * one, so an answer for an Event the operator has left — or left and come back to,
+	 * which loaded state of its own — is not merged into, or rolled back over, the
+	 * Event they are looking at now (#606).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 
 	function beginLoad() {
 		const token = Symbol('event-load');
@@ -165,17 +174,19 @@ export const useEventStore = defineStore('event', () => {
 	}
 
 	async function createEvent(input: CreateEventInput) {
+		const flight = lifetime;
 		return executeReporting(
 			async () => {
 				const createdEvent = await eventRepo.create(input);
 
 				eventsList.value.push(createdEvent);
 
-				setEvent(createdEvent);
+				if (flight.current)
+					setEvent(createdEvent);
 
 				return createdEvent;
 			},
-			{ loadingRef: loading, errorRef: error },
+			{ loadingRef: loading, errorRef: error, flight },
 		);
 	}
 
@@ -186,6 +197,7 @@ export const useEventStore = defineStore('event', () => {
 		}
 
 		const original = structuredClone(toRaw(event.value));
+		const flight = lifetime;
 
 		// Type-safe optimistic update for event
 		const optimisticEvent: Event = {
@@ -198,14 +210,8 @@ export const useEventStore = defineStore('event', () => {
 			async () => {
 				const updatedEvent = await eventRepo.update(original.id, updates);
 
-				if (!event.value)
-					return null;
-
-				event.value = {
-					...event.value,
-					...updatedEvent,
-				};
-
+				// The Events list outlives every Event Lifetime, so it learns the answer
+				// whichever Event is loaded now.
 				const listItemIndex = eventsList.value.findIndex(e => e.id === original.id);
 				if (listItemIndex !== -1) {
 					eventsList.value[listItemIndex] = {
@@ -214,12 +220,23 @@ export const useEventStore = defineStore('event', () => {
 					};
 				}
 
-				await syncEventDependents(original.id, updates);
+				if (flight.stale)
+					return updatedEvent;
+				if (!event.value)
+					return null;
+
+				event.value = {
+					...event.value,
+					...updatedEvent,
+				};
+
+				await syncEventDependents(original.id, updates, flight);
 
 				return event.value;
 			},
 			{
 				errorRef: error,
+				flight,
 				onError: () => {
 					event.value = original;
 				},
@@ -234,12 +251,13 @@ export const useEventStore = defineStore('event', () => {
 		}
 
 		const eventId = event.value.id;
+		const flight = lifetime;
 
 		return executeReporting(
 			async () => {
 				const createdTalent = await talentRepo.create(eventId, input);
 
-				if (!event.value)
+				if (flight.stale || !event.value)
 					return createdTalent;
 
 				// Avoid duplicates if real-time already appended
@@ -250,7 +268,7 @@ export const useEventStore = defineStore('event', () => {
 
 				return createdTalent;
 			},
-			{ errorRef: error },
+			{ errorRef: error, flight },
 		);
 	}
 
@@ -275,12 +293,13 @@ export const useEventStore = defineStore('event', () => {
 		};
 
 		const eventId = event.value.id;
+		const flight = lifetime;
 
 		return executeReporting(
 			async () => {
 				const updatedTalentData = await talentRepo.update(eventId, talentId, updates);
 
-				if (!event.value)
+				if (flight.stale || !event.value)
 					return updatedTalentData;
 
 				const idx = event.value.talents.findIndex(t => t.id === talentId);
@@ -292,6 +311,7 @@ export const useEventStore = defineStore('event', () => {
 			},
 			{
 				errorRef: error,
+				flight,
 				onError: () => {
 					if (!event.value)
 						return;
@@ -320,6 +340,7 @@ export const useEventStore = defineStore('event', () => {
 		event.value.talents.splice(index, 1);
 
 		const eventId = event.value.id;
+		const flight = lifetime;
 
 		return executeReporting(
 			async () => {
@@ -332,6 +353,7 @@ export const useEventStore = defineStore('event', () => {
 			},
 			{
 				errorRef: error,
+				flight,
 				onError: () => {
 					if (!event.value)
 						return;
@@ -351,12 +373,14 @@ export const useEventStore = defineStore('event', () => {
 	 * that changed. Uses lazy store access (Pinia-idiomatic cross-store pattern)
 	 * so the event store does not import from the other stores at the module level.
 	 */
-	async function syncEventDependents(eventId: number, updates: UpdateEventInput) {
+	async function syncEventDependents(eventId: number, updates: UpdateEventInput, flight: Flight) {
 		// Reload feature match slots when slot count changes. The realtime
 		// self-origin guard skips the server-broadcast update for the originating
 		// client, so an explicit reload is required here.
 		if (updates.numFeatureMatches !== undefined)
 			await useFeatureMatchStore().loadFeatureMatchesByEventId(eventId);
+		if (flight.stale)
+			return;
 
 		// Push updated clock settings to any already-loaded match states.
 		if (
@@ -376,6 +400,7 @@ export const useEventStore = defineStore('event', () => {
 	}
 
 	async function deleteEvent(id: number) {
+		const flight = lifetime;
 		return executeReporting(
 			async () => {
 				const result = await eventRepo.remove(id);
@@ -391,11 +416,12 @@ export const useEventStore = defineStore('event', () => {
 
 				return result;
 			},
-			{ loadingRef: loading, errorRef: error },
+			{ loadingRef: loading, errorRef: error, flight },
 		);
 	}
 
 	function $reset() {
+		lifetime = lifetimes.begin();
 		eventLoadGeneration++;
 		activeLoads.clear();
 		event.value = null;

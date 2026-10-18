@@ -56,15 +56,17 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	async function createFeatureMatch(eventId: number, input: CreateFeatureMatchInput) {
+		const lifetime = lifecycle.currentLifetime();
 		const createdMatch = await lifecycle.create(eventId, input);
-		if (createdMatch)
+		if (createdMatch && lifetime.current)
 			useFeatureMatchStateStore().cacheSlotSession(createdMatch);
 		return createdMatch;
 	}
 
 	async function updateFeatureMatch(eventId: number, matchId: number, updates: UpdateFeatureMatchInput) {
+		const lifetime = lifecycle.currentLifetime();
 		const updated = await lifecycle.update(eventId, matchId, updates);
-		if (updated)
+		if (updated && lifetime.current)
 			useFeatureMatchStateStore().cacheSlotSession(updated);
 		return updated;
 	}
@@ -98,6 +100,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 			},
 			{
 				errorRef: error,
+				flight: lifecycle.currentLifetime(),
 				onError: () => {
 					featureMatches.value = snapshot;
 				},

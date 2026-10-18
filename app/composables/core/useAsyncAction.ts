@@ -1,8 +1,17 @@
+import type { Flight } from '~/utils/guardedSequence';
+
 export interface AsyncActionOptions {
 	loadingRef?: Ref<boolean>;
 	errorRef?: Ref<string | null>;
 	onError?: (error: unknown) => void;
 	throwError?: boolean;
+	/**
+	 * The Flight the action belongs to. Once it is stale the action settles without
+	 * touching `loadingRef` or `errorRef` and without calling `onError`: the state
+	 * they describe has been superseded. The result is still returned, and a
+	 * `throwError` failure still raised, to the caller that started it.
+	 */
+	flight?: Flight;
 }
 
 export function useAsyncAction() {
@@ -15,6 +24,7 @@ export function useAsyncAction() {
 			errorRef,
 			onError,
 			throwError = false,
+			flight = unguarded,
 		} = options;
 
 		if (loadingRef)
@@ -29,11 +39,11 @@ export function useAsyncAction() {
 		catch (e) {
 			const errorMessage = e instanceof Error ? e.message : 'An error occurred';
 
-			if (errorRef) {
+			if (errorRef && flight.current) {
 				errorRef.value = errorMessage;
 			}
 
-			if (onError) {
+			if (onError && flight.current) {
 				onError(e);
 			}
 
@@ -44,7 +54,7 @@ export function useAsyncAction() {
 			return null;
 		}
 		finally {
-			if (loadingRef)
+			if (loadingRef && flight.current)
 				loadingRef.value = false;
 		}
 	};

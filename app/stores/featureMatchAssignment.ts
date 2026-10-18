@@ -26,6 +26,13 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	const error = ref<string | null>(null);
 	const currentEventId = ref<number | null>(null);
 	const roundLoads = createKeyedGuardedSequence<number>();
+	/**
+	 * The Event Lifetime a save's answer belongs to, begun afresh whenever the store
+	 * follows another Event or is reset, so a save answered after the operator moved on
+	 * — even back to the same Event — replaces nothing it now holds (#606).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 
 	const assignments = computed(() => [...assignmentsByRound.value.values()].flat());
 
@@ -39,6 +46,7 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 
 	function ensureEvent(eventId: number) {
 		if (currentEventId.value !== eventId) {
+			lifetime = lifetimes.begin();
 			roundLoads.supersedeAll();
 			assignmentsByRound.value = new Map();
 			consumedRoundIds.value = new Set();
@@ -109,15 +117,17 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	}
 
 	async function saveAssignment(eventId: number, input: SaveFeatureMatchAssignmentInput) {
+		const flight = lifetime;
 		const saved = await repo.create(eventId, input);
-		if (saved && assignmentsByRound.value.has(saved.roundId))
+		if (saved && flight.current && assignmentsByRound.value.has(saved.roundId))
 			replaceRound(saved.roundId, applySavedFeatureMatchAssignment(assignmentsForRound(saved.roundId), saved));
 		return saved;
 	}
 
 	async function updateAssignment(eventId: number, assignmentId: number, input: UpdateFeatureMatchAssignmentInput) {
+		const flight = lifetime;
 		const updated = await repo.update(eventId, assignmentId, input);
-		if (updated && assignmentsByRound.value.has(updated.roundId)) {
+		if (updated && flight.current && assignmentsByRound.value.has(updated.roundId)) {
 			replaceRound(
 				updated.roundId,
 				applyUpdatedFeatureMatchAssignment(assignmentsForRound(updated.roundId), assignmentId, updated),
@@ -182,6 +192,7 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 	}
 
 	function $reset() {
+		lifetime = lifetimes.begin();
 		roundLoads.supersedeAll();
 		roundConsumerCounts.clear();
 		for (const timer of remoteChangeTimers.values())
