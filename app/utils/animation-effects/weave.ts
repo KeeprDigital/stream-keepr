@@ -50,8 +50,8 @@ vec4 threadAt(float across, float along, float salt, float halfWidth, float time
 
 void main() {
 	// Square cells in frame-height units, one thread per cell and family.
-	vec2 p = gl_FragCoord.xy / iResolution.y * (6.0 * scale);
-	float aaCell = 6.0 * scale * 1.5 / iResolution.y;
+	vec2 p = gl_FragCoord.xy / iResolution.y * (6.0 / scale);
+	float aaCell = 6.0 / scale * 1.5 / iResolution.y;
 	float halfWidth = thickness * 0.5;
 
 	vec4 warp = threadAt(p.x, p.y, 3.7, halfWidth, iTime * 0.7, aaCell);

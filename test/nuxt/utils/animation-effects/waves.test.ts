@@ -44,18 +44,19 @@ describe('createWavesDelegate', () => {
 		expect(camera.aspect).toBeCloseTo(800 / 450);
 	});
 
-	it('positions the camera at the fork position scaled by zoom, looking at the fork target', () => {
-		const { camera } = mountDelegate({ zoom: 1 });
+	it('positions the camera at the fork position divided by zoom, looking at the fork target', () => {
 		// The fork eased the camera toward its base position divided by zoom as
 		// the pointer centred; with no pointer, that steady state is the position.
-		expect(camera.position.x).toBeCloseTo(240);
-		expect(camera.position.y).toBeCloseTo(200);
-		expect(camera.position.z).toBeCloseTo(390);
+		// Scale 1 is the pre-rebuild default zoom of 0.85 (#503).
+		const { camera } = mountDelegate({ scale: 1 });
+		expect(camera.position.x).toBeCloseTo(240 / 0.85);
+		expect(camera.position.y).toBeCloseTo(200 / 0.85);
+		expect(camera.position.z).toBeCloseTo(390 / 0.85);
 
-		const { camera: zoomed } = mountDelegate({ zoom: 2 });
-		expect(zoomed.position.x).toBeCloseTo(120);
-		expect(zoomed.position.y).toBeCloseTo(100);
-		expect(zoomed.position.z).toBeCloseTo(195);
+		const { camera: closer } = mountDelegate({ scale: 2 });
+		expect(closer.position.x).toBeCloseTo(240 / 1.7);
+		expect(closer.position.y).toBeCloseTo(200 / 1.7);
+		expect(closer.position.z).toBeCloseTo(390 / 1.7);
 	});
 
 	it('builds the 101×81 jittered grid the fork built, on a dynamic position attribute', () => {
@@ -142,15 +143,15 @@ describe('createWavesDelegate', () => {
 			expect(position.getY(index)).toBe(frozen[index]!);
 	});
 
-	it('applies colour, shininess, and zoom to the live scene without a rebuild', () => {
-		const { delegate, scene, camera, context, params } = mountDelegate({ zoom: 1 });
+	it('applies colour, shininess, and scale to the live scene without a rebuild', () => {
+		const { delegate, scene, camera, context, params } = mountDelegate({ scale: 1 });
 		const material = wavesMesh(scene).material as THREE.MeshPhongMaterial;
-		delegate.applyParams({ ...context, params: { ...params, color: '#123456', shininess: 75, zoom: 2 } });
+		delegate.applyParams({ ...context, params: { ...params, color: '#123456', shininess: 75, scale: 2 } });
 		expect(material.color.getHexString()).toBe('123456');
 		expect(material.shininess).toBe(75);
-		expect(camera.position.x).toBeCloseTo(120);
-		expect(camera.position.y).toBeCloseTo(100);
-		expect(camera.position.z).toBeCloseTo(195);
+		expect(camera.position.x).toBeCloseTo(240 / 1.7);
+		expect(camera.position.y).toBeCloseTo(200 / 1.7);
+		expect(camera.position.z).toBeCloseTo(390 / 1.7);
 	});
 
 	it('reads waveHeight and waveSpeed changes on the next frame', () => {

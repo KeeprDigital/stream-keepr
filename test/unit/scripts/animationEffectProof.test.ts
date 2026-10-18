@@ -97,8 +97,8 @@ describe('the animation effect scenario table', () => {
 		const params = (effect: string, scenario: string) =>
 			scenarios.find(entry => entry.effect === effect && entry.scenario === scenario)?.params;
 
-		expect(params('inkmap', 'min-zoom')).toEqual({ zoom: 0.5 });
-		expect(params('inkmap', 'max-zoom')).toEqual({ zoom: 3 });
+		expect(params('inkmap', 'max-scale')).toEqual({ scale: 2 });
+		expect(params('inkmap', 'min-scale')).toEqual({ scale: 0.35 });
 		expect(params('shards', 'min-intensity')).toEqual({ intensity: 0.5 });
 		expect(params('shards', 'max-intensity')).toEqual({ intensity: 2 });
 	});
@@ -154,7 +154,7 @@ describe('judging an animation effect rendering proof', () => {
 	});
 
 	it('reports a frame that compiled and rendered nothing', () => {
-		expect(codes(withScenario('shards', 'max-size', { litPixels: 0 })))
+		expect(codes(withScenario('shards', 'max-scale', { litPixels: 0 })))
 			.toContain('animation-effect-frame-unlit');
 	});
 

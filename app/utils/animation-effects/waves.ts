@@ -12,10 +12,11 @@ import { createSceneEffect } from './sceneEffect';
  * (dimmed ambience, brightened point light, added directional), which is what
  * actually rendered on air. The fork eased the camera toward its base position
  * divided by zoom as the pointer centred; with the mouse pair retired, that
- * steady state simply is the camera position, which keeps zoom meaningful with
- * no pointer to chase. The fork's base cleared the canvas to `backgroundColor`;
- * the plane leaves the frame's far corners uncovered at low zoom, so the scene
- * background carries that here.
+ * steady state simply is the camera position, which keeps the knob meaningful
+ * with no pointer to chase. The fork's `zoom` is now `scale`, renormalised so
+ * its default of 1 is the old default zoom of 0.85 (#503). The fork's base
+ * cleared the canvas to `backgroundColor`; the plane leaves the frame's far
+ * corners uncovered at low scale, so the scene background carries that here.
  */
 
 const GRID_COLUMNS = 100;
@@ -27,6 +28,8 @@ const REST_HEIGHT = -10;
 /** The fork's camera placement, its `xOffset`/`zOffset` folded in. */
 const CAMERA_POSITION = { x: 240, y: 200, z: 390 };
 const CAMERA_TARGET = { x: 140, y: -30, z: 190 };
+/** The fork's zoom that `scale: 1` reproduces: the pre-rebuild application's default. */
+const DESIGNED_ZOOM = 0.85;
 /** The fork advanced `t` in 60fps-normalised frames, and the wave phase uses it. */
 const FORK_FRAMES_PER_SECOND = 60;
 
@@ -35,7 +38,8 @@ export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams
 	let mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshPhongMaterial>;
 	let restHeights: Float32Array;
 
-	function frameCamera(camera: THREE.Camera, zoom: number) {
+	function frameCamera(camera: THREE.Camera, scale: number) {
+		const zoom = DESIGNED_ZOOM * scale;
 		camera.position.set(CAMERA_POSITION.x / zoom, CAMERA_POSITION.y / zoom, CAMERA_POSITION.z / zoom);
 		camera.lookAt(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z);
 	}
@@ -102,7 +106,7 @@ export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams
 			directional.position.set(260, 420, 180);
 			scene.add(directional);
 
-			frameCamera(camera, params.zoom);
+			frameCamera(camera, params.scale);
 		},
 
 		applyParams: ({ three, scene, camera, params }) => {
@@ -110,7 +114,7 @@ export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams
 			scene.background = new three.Color(params.backgroundColor);
 			mesh.material.color.set(params.color);
 			mesh.material.shininess = params.shininess;
-			frameCamera(camera, params.zoom);
+			frameCamera(camera, params.scale);
 		},
 
 		update: ({ elapsedSeconds }) => {

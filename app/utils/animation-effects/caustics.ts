@@ -16,11 +16,11 @@ uniform float iTime;
 uniform vec3 lightColor;
 uniform vec3 waterColor;
 uniform float intensity;
-uniform float zoom;
+uniform float scale;
 
 void main() {
 	// Square-aspect coordinates so filaments do not stretch on wide frames.
-	vec2 p = gl_FragCoord.xy / iResolution.y * 6.0 * zoom;
+	vec2 p = gl_FragCoord.xy / iResolution.y * 6.0 / scale;
 	float t = iTime;
 
 	vec2 q = p;
@@ -63,7 +63,7 @@ export default function createCausticsEffect(
 			lightColor: current.lightColor,
 			waterColor: current.waterColor,
 			intensity: current.intensity,
-			zoom: current.zoom,
+			scale: current.scale,
 		}),
 		timeScale: current => current.speed,
 	}, params);

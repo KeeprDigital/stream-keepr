@@ -6,7 +6,9 @@ import { createShaderPlaneEffect } from './shaderPlane';
 /**
  * Fog: fractal-noise domain warping, ported from the retired Vanta fork under
  * its old name. The shader is unchanged apart from dropping the mouse uniform
- * nothing fed; Animation Effects animate from elapsed time alone.
+ * nothing fed — Animation Effects animate from elapsed time alone — and
+ * dividing by `scale` where the fork multiplied by `zoom`, so a larger value
+ * draws larger features (#503).
  *
  * Noise construction after http://thebookofshaders.com/13/ (Patricio Gonzalez
  * Vivo), via the fork's fog effect.
@@ -20,7 +22,7 @@ uniform vec3 baseColor;
 uniform vec3 lowlightColor;
 uniform vec3 midtoneColor;
 uniform vec3 highlightColor;
-uniform float zoom;
+uniform float scale;
 
 float random(in vec2 _st) {
 	return fract(sin(dot(_st.xy, vec2(0.129898, 0.78233))) * 437.585453123);
@@ -65,7 +67,7 @@ float fbm(in vec2 _st) {
 void main() {
 	vec2 st = gl_FragCoord.xy / iResolution.xy * 3.;
 	st.x *= 0.7 * iResolution.x / iResolution.y; // Still keep it more landscape than square
-	st *= zoom;
+	st /= scale;
 
 	vec3 color = vec3(0.0);
 
@@ -111,7 +113,7 @@ export default function createFogEffect(
 			lowlightColor: current.lowlightColor,
 			baseColor: current.baseColor,
 			blurFactor: current.blurFactor,
-			zoom: current.zoom,
+			scale: current.scale,
 		}),
 		timeScale: current => current.speed,
 	}, params);

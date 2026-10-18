@@ -68,7 +68,7 @@ describe('animationEffects catalogue', () => {
 			backgroundColor: '#111111',
 			coverage: 0.5,
 			contours: 4,
-			zoom: 1,
+			scale: 1,
 			speed: 1,
 		});
 	});
@@ -80,7 +80,7 @@ describe('animationEffects catalogue', () => {
 			shardColor: '#312e81',
 			edgeColor: '#7dd3fc',
 			backgroundColor: '#111111',
-			size: 1,
+			scale: 1,
 			intensity: 1,
 			speed: 1,
 		});
@@ -104,10 +104,11 @@ describe('animationEffects catalogue', () => {
 	it('ports cells and ripple under the defaults the pre-rebuild application shipped', () => {
 		// The ports keep their old names and their old on-air look: defaults come
 		// from the retired editor's shared bag, not the fork's own defaultOptions.
+		// Cells' `size` of 3 is renormalised into `scale: 1` (#503).
 		expect(animationEffectDefaultParams('cells')).toEqual({
 			color1: '#008c8c',
 			color2: '#06b6d4',
-			size: 3,
+			scale: 1,
 			speed: 0.6,
 		});
 		expect(animationEffectDefaultParams('ripple')).toEqual({
@@ -147,15 +148,15 @@ describe('animationEffects catalogue', () => {
 	it('ports waves under the defaults the pre-rebuild application shipped', () => {
 		// backgroundColor survives the port even though the mesh never reads it:
 		// the fork's base cleared the canvas to it, and the water plane leaves the
-		// frame's far corners uncovered at low zoom. The zoom default is the
-		// pre-rebuild application's waves-specific fallback.
+		// frame's far corners uncovered at low scale. Scale 1 is the pre-rebuild
+		// application's waves-specific zoom fallback of 0.85 (#503).
 		expect(animationEffectDefaultParams('waves')).toEqual({
 			color: '#7c3aed',
 			backgroundColor: '#111111',
 			shininess: 30,
 			waveHeight: 20,
 			waveSpeed: 1,
-			zoom: 0.85,
+			scale: 1,
 		});
 	});
 
@@ -291,6 +292,26 @@ describe('animationEffects catalogue', () => {
 		}
 	});
 
+	it('names every spatial param by the catalogue\'s standard', () => {
+		// One meaning per name across effects (ADR-0025, #503): `scale` for a
+		// field's feature size, defaulting to the designed look; `size` for a
+		// discrete element. No `zoom`, and no qualified variants of either.
+		for (const effect of ANIMATION_EFFECT_VALUES) {
+			for (const field of animationEffectParamFields(effect)) {
+				if (field.key === 'scale') {
+					expect(field.label, `${effect}.scale`).toMatch(/^\S+ scale$/);
+					expect(field.defaultValue, `${effect}.scale`).toBe(1);
+				}
+				else if (field.key === 'size') {
+					expect(field.label, `${effect}.size`).toMatch(/^\S+ size$/);
+				}
+				else {
+					expect(field.key, effect).not.toMatch(/zoom|scale|size/i);
+				}
+			}
+		}
+	});
+
 	it('refuses a parameter no effect schema declares', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const outcome = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.safeParse({ mouseDriftEnabled: true });
@@ -343,7 +364,7 @@ describe('animation effect host unions', () => {
 		// Checked by `pnpm typecheck`: the per-effect pairing is the property a
 		// derived declaration could silently collapse into one wide union.
 		interface Rings { backgroundColor: string }
-		interface Cells { color1: string; color2: string; size: number; speed: number }
+		interface Cells { color1: string; color2: string; scale: number; speed: number }
 		expectTypeOf<'not-an-effect'>().not.toExtend<AnimationEffectName>();
 		expectTypeOf<AnimationEffectParams<'rings'>>().toEqualTypeOf<Rings>();
 		expectTypeOf<AnimationEffectParams<'cells'>>().toEqualTypeOf<Cells>();
