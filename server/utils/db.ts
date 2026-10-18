@@ -175,9 +175,9 @@ export function chunkJsonRows<T>(
 }
 
 /**
- * The equality a compare-and-swap guard needs over nullable columns: `eq`
+ * The equality a compare-and-swap guard needs over a nullable column: `eq`
  * compiles `= NULL`, which SQLite answers false for every row, so a guard built
- * with it alone would report every unpaired Slot as concurrently modified.
+ * with it alone would report every row holding a null as concurrently modified.
  */
 export function observedValue<TColumn extends SQLiteColumn>(
 	column: TColumn,

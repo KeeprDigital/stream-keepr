@@ -185,6 +185,21 @@ export async function buildClearImportedMatchDataQueries(
 	};
 }
 
+/**
+ * A Slot row still holds the pairing identity and active Feature Match Session
+ * pointer it was read with: what a decision computed from that read depends on.
+ */
+export function observedSlotPairing(slot: DbFeatureMatch) {
+	return and(
+		observedValue(featureMatches.matchId, slot.matchId),
+		observedValue(featureMatches.externalId, slot.externalId),
+		observedValue(featureMatches.externalSource, slot.externalSource),
+		observedValue(featureMatches.player1Id, slot.player1Id),
+		observedValue(featureMatches.player2Id, slot.player2Id),
+		observedValue(featureMatches.activeSessionId, slot.activeSessionId),
+	);
+}
+
 export function featureMatchService() {
 	const resolveMatchProvenance = async (eventId: number, matchId: number | null | undefined) => {
 		if (matchId == null)
@@ -366,12 +381,7 @@ export function featureMatchService() {
 				and(
 					eq(featureMatches.id, id),
 					eq(featureMatches.eventId, eventId),
-					observedValue(featureMatches.matchId, current.matchId),
-					observedValue(featureMatches.externalId, current.externalId),
-					observedValue(featureMatches.externalSource, current.externalSource),
-					observedValue(featureMatches.player1Id, current.player1Id),
-					observedValue(featureMatches.player2Id, current.player2Id),
-					observedValue(featureMatches.activeSessionId, current.activeSessionId),
+					observedSlotPairing(current),
 				),
 			)
 			.returning();

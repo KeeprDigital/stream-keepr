@@ -128,6 +128,20 @@ async function assignmentsOf(stage: Stage) {
 	});
 }
 
+async function promotionState(stage: Stage) {
+	return {
+		slots: await db.query.featureMatches.findMany({
+			where: (slots, { eq }) => eq(slots.eventId, stage.eventId),
+			orderBy: (slots, { asc }) => asc(slots.id),
+		}),
+		assignments: await assignmentsOf(stage),
+		sessions: await db.query.featureMatchSessions.findMany({
+			where: (sessions, { eq }) => eq(sessions.eventId, stage.eventId),
+			orderBy: (sessions, { asc }) => asc(sessions.id),
+		}),
+	};
+}
+
 describe('feature Match Slot Promotion against a stale plan', () => {
 	it('does not let a stale move erase a different Match promoted into its source Slot meanwhile', async () => {
 		const stage = await stageEvent();
@@ -173,7 +187,7 @@ describe('feature Match Slot Promotion against a stale plan', () => {
 	});
 });
 
-describe('feature Match Slot Promotion histories the fence admits', () => {
+describe('feature Match Slot Promotion histories that still resolve', () => {
 	it('moves a Match serially, continuing its Assignment and clearing the source Slot with a fresh Session', async () => {
 		const stage = await stageEvent();
 		const first = await promote(stage, stage.slot1, stage.matchM);
@@ -183,7 +197,7 @@ describe('feature Match Slot Promotion histories the fence admits', () => {
 
 		const moved = await promote(stage, stage.slot2, stage.matchM);
 
-		expect(moved.promotedSlot).toMatchObject({ id: stage.slot2, matchId: stage.matchM, tableNumber: 1, roundName: 'Round 1' });
+		expect(moved.promotedSlot).toMatchObject({ id: stage.slot2, matchId: stage.matchM, tableNumber: 1, roundName: 'Round 1', formatName: null });
 		expect(moved.clearedSlots).toEqual([expect.objectContaining({ id: stage.slot1, matchId: null })]);
 		expect(moved.assignment).toMatchObject({ id: first.assignment.id, slotId: stage.slot2, note: 'Watch the sideboard' });
 
@@ -218,6 +232,26 @@ describe('feature Match Slot Promotion histories the fence admits', () => {
 		]);
 	});
 
+	it('refuses the later of two simultaneous promotions of one Match into one Slot, keeping the first one\'s Session', async () => {
+		const stage = await stageEvent();
+
+		// The later plan read the Slot empty, so committing it would reset the
+		// Feature Match Session the first promotion opened.
+		let first: Awaited<ReturnType<typeof promote>> | undefined;
+		beforeNextBatch = async () => {
+			first = await promote(stage, stage.slot1, stage.matchM);
+		};
+
+		await expect(promote(stage, stage.slot1, stage.matchM)).rejects.toMatchObject({ statusCode: 409 });
+
+		const slot1 = await slotRow(stage.slot1);
+		expect(slot1?.matchId).toBe(stage.matchM);
+		expect(slot1?.activeSessionId).toBe(first!.promotedSlot.activeSessionId);
+		expect(await assignmentsOf(stage)).toEqual([
+			expect.objectContaining({ id: first!.assignment.id, slotId: stage.slot1, matchId: stage.matchM }),
+		]);
+	});
+
 	it('lets a promotion that read the committed one move the Match on, answering the first as lost', async () => {
 		const stage = await stageEvent();
 
@@ -242,17 +276,3 @@ describe('feature Match Slot Promotion histories the fence admits', () => {
 		]);
 	});
 });
-
-async function promotionState(stage: Stage) {
-	return {
-		slots: await db.query.featureMatches.findMany({
-			where: (slots, { eq }) => eq(slots.eventId, stage.eventId),
-			orderBy: (slots, { asc }) => asc(slots.id),
-		}),
-		assignments: await assignmentsOf(stage),
-		sessions: await db.query.featureMatchSessions.findMany({
-			where: (sessions, { eq }) => eq(sessions.eventId, stage.eventId),
-			orderBy: (sessions, { asc }) => asc(sessions.id),
-		}),
-	};
-}
