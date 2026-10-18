@@ -63,7 +63,7 @@ export default defineNuxtPlugin({
 		let pendingAuthorize: { eventId: number; verdict: Promise<boolean> } | null = null;
 
 		const ably = new Ably.Realtime({
-			// The first connect is `mintTokenFor`'s: `auth.authorize()` initiates
+			// The first connect is `recoverEvent`'s: `auth.authorize()` initiates
 			// the connection itself from the `initialized` state (RTC8c; verified
 			// against ably@2.27.0 on #474), so every connection attempt — first,
 			// reconnect, event switch — starts with an Event in hand and the
@@ -115,53 +115,58 @@ export default defineNuxtPlugin({
 		 * How long to wait before each re-attempt once the failure has been reported.
 		 *
 		 * The outage is no longer a blip, so the attempts back off, and the last delay
-		 * repeats for as long as a desired registration still waits on the Event: a
+		 * repeats for as long as a Realtime Subscription still waits on the Event: a
 		 * token service that comes back after an hour must still find the page's
-		 * handlers waiting, without anyone remounting it (#609).
+		 * handlers waiting, without anyone remounting it (#609, ADR-0022).
 		 */
 		const RECOVERY_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 30_000];
 
 		const tokenError = ref<Error | null>(null);
 
+		function toError(err: unknown) {
+			return err instanceof Error ? err : new Error(String(err));
+		}
+
 		/**
-		 * A desired registration not yet attached to its channel.
+		 * A Realtime Subscription not yet attached to its channel.
 		 *
 		 * It waits here for a token covering its Event, or after its channel refused an
 		 * attach, and leaves only by attaching or by its consumer disposing it. A failure
-		 * is never a reason to forget one: a forgotten registration is a handler a page
-		 * still believes is listening (#609).
+		 * is never a reason to forget one: a forgotten subscription is a handler a page
+		 * still believes is listening (#609). `attach` resolves to why the channel
+		 * refused, or to `null` once nothing is left to attach.
 		 */
-		interface PendingAttachment {
+		interface PendingSubscription {
 			readonly eventId: number | null;
-			attach: () => void;
+			attach: () => Promise<Error | null>;
 		}
 
-		const pendingAttachments = new Set<PendingAttachment>();
+		const pendingSubscriptions = new Set<PendingSubscription>();
 
-		function attachPending(predicate: (eventId: number | null) => boolean) {
-			for (const attachment of [...pendingAttachments]) {
-				if (predicate(attachment.eventId))
-					attachment.attach();
-			}
+		/** Attach whatever is pending on the matching Events: the first refusal, or `null` once all attached. */
+		async function attachPending(predicate: (eventId: number | null) => boolean) {
+			const refusals = await Promise.all(
+				[...pendingSubscriptions]
+					.filter(subscription => predicate(subscription.eventId))
+					.map(subscription => subscription.attach()),
+			);
+			return refusals.find(refusal => refusal !== null) ?? null;
 		}
 
 		/**
 		 * The one place coverage is ever claimed — the "only on success" contract
 		 * this file exists to hold (#307, #466). Every path that reaches it has a
-		 * token for the Event actually in hand, so it is also where everything
-		 * waiting on that Event attaches.
+		 * token for the Event actually in hand.
 		 */
 		function claimCoverage(eventId: number) {
 			coveredEventId = eventId;
-			tokenError.value = null;
-			attachPending(pendingEventId => pendingEventId === eventId);
 		}
 
 		function wait(ms: number) {
 			return new Promise<void>(resolve => setTimeout(resolve, ms));
 		}
 
-		/** Ends the recovery wait in progress early, so a mint nothing waits on stops now. */
+		/** Ends the recovery wait in progress early. Only `supersedeMint` and `stopRecoveryIfUnwanted` call it. */
 		let cancelRecoveryWait: (() => void) | null = null;
 
 		function recoveryWait(ms: number) {
@@ -179,125 +184,109 @@ export default defineNuxtPlugin({
 		}
 
 		/**
-		 * Mint a token covering one Event, re-attempting a failure for as long as
-		 * something desired waits on it.
-		 *
-		 * Coverage is claimed only on success, and the failure is published rather than
-		 * only logged once the quick retries are spent: a token this client cannot mint
-		 * means no realtime for the Event an operator is running, and the console is not
-		 * a surface anyone running a show is looking at. The fault then stands until the
-		 * mint lands or the last registration waiting on it is disposed.
-		 *
-		 * `reportFailure` gives the verdict to whoever cannot wait out an outage, at the
-		 * moment the fault is published; the registrations keep waiting past it.
+		 * Supersede the mint in flight, ending a recovery wait it is in now rather than
+		 * when it would have woken to find itself stale.
 		 */
-		async function mintTokenFor(
-			eventId: number,
-			flight: { readonly stale: boolean; readonly current: boolean },
-			reportFailure: () => void,
-		) {
-			const attemptMint = async () => {
-				await ably.auth.authorize();
-				if (flight.stale)
-					return false;
-				claimCoverage(eventId);
-				return true;
-			};
-
-			let failure: unknown;
-			for (const delay of [...AUTHORIZE_RETRY_DELAYS_MS, null]) {
-				if (flight.stale)
-					return false;
-
-				try {
-					return await attemptMint();
-				}
-				catch (err) {
-					failure = err;
-					if (delay !== null)
-						await wait(delay);
-				}
-			}
-
-			console.warn('Failed to authorize realtime token for event switch:', failure);
-			if (flight.current)
-				tokenError.value = failure instanceof Error ? failure : new Error(String(failure));
-			reportFailure();
-
-			// Nothing desired waits — the mint was for an action such as entering
-			// presence, which has its answer now.
-			if (!awaitsCoverage(eventId))
-				return false;
-
-			for (let attempt = 0; ; attempt++) {
-				await recoveryWait(RECOVERY_RETRY_DELAYS_MS[Math.min(attempt, RECOVERY_RETRY_DELAYS_MS.length - 1)]!);
-				if (flight.stale)
-					return false;
-				if (!awaitsCoverage(eventId))
-					break;
-
-				try {
-					return await attemptMint();
-				}
-				catch {
-					// Still down. The fault already says so, and stays standing.
-				}
-			}
-
-			// Everything that waited on this Event was disposed, so nothing is failing
-			// for anyone any more.
-			if (flight.current)
-				tokenError.value = null;
-			return false;
-		}
-
-		/** Stop the recovery in progress if nothing desired waits on its Event any more. */
-		function reviewRecovery() {
-			if (pendingAuthorize && !awaitsCoverage(pendingAuthorize.eventId))
-				cancelRecoveryWait?.();
+		function supersedeMint() {
+			coverageFlights.supersede();
+			cancelRecoveryWait?.();
 		}
 
 		/**
-		 * Ensure the token covers the given channel's Event before subscribing.
-		 * Returns `true` synchronously when already covered (so established
-		 * subscriptions stay synchronous), or the mint's verdict: `true` once it
-		 * lands, `false` once it is superseded or its quick retries are spent. An
-		 * action such as entering presence answers by that verdict; a registration
-		 * ignores it and waits for `claimCoverage`, however long the outage. Channels
-		 * that carry no Event (unrecognized shapes) need no scoping and pass through.
+		 * Bring one Event's Realtime Subscriptions up: mint a token covering it unless
+		 * one is in hand, then attach everything waiting on it — re-attempting either
+		 * for as long as something still waits.
 		 *
-		 * A mint something desired still waits on keeps re-attempting past its
-		 * verdict, so a later subscribe for the same Event joins it. An Event whose
-		 * mint did stop is deliberately not remembered as attempted: the next
-		 * subscribe mints again, which is why a failure can no longer outlive the
-		 * condition that caused it.
+		 * Coverage is claimed only on success, and the failure is published rather than
+		 * only logged once the quick retries are spent: a client that cannot receive
+		 * for the Event an operator is running has no realtime, and the console is not
+		 * a surface anyone running a show is looking at. The fault then stands until
+		 * everything waiting has attached, or the last of it is disposed.
+		 *
+		 * `giveVerdict` answers whoever cannot wait out an outage: `true` when the token
+		 * lands, `false` when the fault is published. The subscriptions wait past it.
 		 */
-		function ensureChannelCoverage(channelName: string): true | Promise<boolean> {
-			const eventId = realtimeChannelEventId(channelName);
-			if (eventId == null)
-				return true;
+		async function recoverEvent(
+			eventId: number,
+			flight: { readonly stale: boolean; readonly current: boolean },
+			giveVerdict: (covered: boolean) => void,
+		) {
+			// A recovery that stops without landing hands Ably's own re-mints (on
+			// reconnect, before expiry) back to the Event the token in hand covers. Left
+			// on this one, they would trade a working token for one that cannot be minted.
+			const stop = () => {
+				if (flight.current && coveredEventId != null)
+					activeEventId = coveredEventId;
+				return false;
+			};
 
-			// A mint for this same Event may still be in flight; wait on it instead of
-			// subscribing before the token upgrade actually lands.
-			if (pendingAuthorize?.eventId === eventId)
-				return pendingAuthorize.verdict;
+			const attempt = async () => {
+				if (coveredEventId !== eventId) {
+					await ably.auth.authorize();
+					if (flight.stale)
+						return null;
+					claimCoverage(eventId);
+					giveVerdict(true);
+				}
+				return attachPending(pendingEventId => pendingEventId === eventId);
+			};
 
-			if (eventId === coveredEventId) {
-				// Covered means a token for this Event is in hand, so whatever failed to
-				// mint for the Event the operator tried in between is no longer a fact
-				// about them. Without this, switching away and back leaves a fault
-				// standing on a client that is working perfectly. Not while that mint is
-				// still recovering, though: something desired is still waiting on it, and
-				// the fault is about that.
-				if (!pendingAuthorize)
+			for (let attemptIndex = 0; ; attemptIndex++) {
+				let failure: Error | null;
+				try {
+					failure = await attempt();
+				}
+				catch (err) {
+					failure = toError(err);
+				}
+				if (flight.stale)
+					return false;
+				if (failure === null) {
 					tokenError.value = null;
-				return true;
-			}
+					return true;
+				}
 
+				const quickDelay = AUTHORIZE_RETRY_DELAYS_MS[attemptIndex];
+				if (quickDelay !== undefined) {
+					await wait(quickDelay);
+					if (flight.stale)
+						return false;
+					continue;
+				}
+
+				if (attemptIndex === AUTHORIZE_RETRY_DELAYS_MS.length) {
+					if (coveredEventId !== eventId)
+						console.warn('Failed to authorize realtime token for event switch:', failure);
+					tokenError.value = failure;
+					giveVerdict(false);
+					// Nothing desired waits — the mint was for an action, which has its answer now.
+					if (!awaitsRecovery(eventId))
+						return stop();
+				}
+
+				const backedOff = attemptIndex - AUTHORIZE_RETRY_DELAYS_MS.length;
+				await recoveryWait(RECOVERY_RETRY_DELAYS_MS[Math.min(backedOff, RECOVERY_RETRY_DELAYS_MS.length - 1)]!);
+				if (flight.stale)
+					return false;
+				if (!awaitsRecovery(eventId)) {
+					// Everything that waited on this Event was disposed, so nothing is
+					// failing for anyone any more.
+					tokenError.value = null;
+					return stop();
+				}
+			}
+		}
+
+		/** Stop the recovery in progress if nothing desired waits on its Event any more. */
+		function stopRecoveryIfUnwanted() {
+			if (pendingAuthorize && !awaitsRecovery(pendingAuthorize.eventId))
+				cancelRecoveryWait?.();
+		}
+
+		function beginRecovery(eventId: number): Promise<boolean> {
 			activeEventId = eventId;
+			supersedeMint();
 			const flight = coverageFlights.begin();
-			// The superseded mint's recovery would only find itself stale; stop its wait now.
-			cancelRecoveryWait?.();
 			// One mint path for first connection, event switch, and recovery alike:
 			// authorize() connects a not-yet-connected client as part of the mint,
 			// so a first-connection blip heals the same way an event-switch blip does.
@@ -307,13 +296,53 @@ export default defineNuxtPlugin({
 			});
 			const pending = { eventId, verdict };
 			pendingAuthorize = pending;
-			void mintTokenFor(eventId, flight, () => giveVerdict(false))
+			void recoverEvent(eventId, flight, giveVerdict)
 				.then(giveVerdict, () => giveVerdict(false))
 				.finally(() => {
 					if (pendingAuthorize === pending)
 						pendingAuthorize = null;
 				});
 			return verdict;
+		}
+
+		/**
+		 * Ensure the token covers the given channel's Event before subscribing.
+		 * Returns `true` synchronously when already covered (so established
+		 * subscriptions stay synchronous), or the mint's verdict: `true` once it
+		 * lands, `false` once it is superseded or its quick retries are spent. A
+		 * Realtime Subscription ignores the verdict and waits to be attached by the
+		 * recovery, however long the outage. Channels that carry no Event
+		 * (unrecognized shapes) need no scoping and pass through.
+		 *
+		 * A recovery something still waits on keeps re-attempting past its verdict,
+		 * so a later subscribe for the same Event joins it. An Event whose recovery
+		 * did stop is deliberately not remembered as attempted: the next subscribe
+		 * mints again, which is why a failure can no longer outlive the condition
+		 * that caused it.
+		 */
+		function ensureChannelCoverage(channelName: string): true | Promise<boolean> {
+			const eventId = realtimeChannelEventId(channelName);
+			if (eventId == null)
+				return true;
+
+			if (eventId === coveredEventId) {
+				// Covered means a token for this Event is in hand, so whatever failed to
+				// mint for the Event the operator tried in between is no longer a fact
+				// about them. Without this, switching away and back leaves a fault
+				// standing on a client that is working perfectly. Not while a recovery is
+				// still running, though: something is still waiting on it, and the fault
+				// is about that.
+				if (!pendingAuthorize)
+					tokenError.value = null;
+				return true;
+			}
+
+			// A mint for this same Event may still be in flight; wait on it instead of
+			// subscribing before the token upgrade actually lands.
+			if (pendingAuthorize?.eventId === eventId)
+				return pendingAuthorize.verdict;
+
+			return beginRecovery(eventId);
 		}
 
 		let connectionSnapshot: RealtimeConnectionState = {
@@ -329,16 +358,28 @@ export default defineNuxtPlugin({
 		const channelSubscriptions = new Map<string, Unsubscribe>();
 		const presenceSubscriptions = new Map<string, Unsubscribe>();
 
+		/** A presence entry this client wants on a channel, whether entered yet or held. */
+		interface PresenceEntry {
+			data: RealtimePresenceData;
+			entered: boolean;
+			dispose: Unsubscribe;
+		}
+
+		const presenceEntries = new Map<string, PresenceEntry>();
+
 		let currentRoom: string | null = null;
 		let channelSubscriptionId = 0;
 		let presenceSubscriptionId = 0;
 
-		/** Whether anything desired still waits on a token for this Event: the room, or a registration. */
-		function awaitsCoverage(eventId: number) {
-			if (currentRoom != null && realtimeChannelEventId(currentRoom) === eventId)
+		/**
+		 * Whether anything still waits on this Event's recovery: the room until a token
+		 * covers it, or a Realtime Subscription not yet attached.
+		 */
+		function awaitsRecovery(eventId: number) {
+			if (eventId !== coveredEventId && currentRoom != null && realtimeChannelEventId(currentRoom) === eventId)
 				return true;
-			for (const attachment of pendingAttachments) {
-				if (attachment.eventId === eventId)
+			for (const subscription of pendingSubscriptions) {
+				if (subscription.eventId === eventId)
 					return true;
 			}
 			return false;
@@ -371,9 +412,9 @@ export default defineNuxtPlugin({
 		ably.connection.on('connected', () => {
 			updateConnectionState('connected');
 			// A channel that refused an attach while the link was down gets another go
-			// now it is back, on the token in hand: an Event it does not cover is the
-			// recovering mint's to attach.
-			attachPending(eventId => eventId == null || eventId === coveredEventId);
+			// now it is back, on the token in hand — the only retry a channel carrying
+			// no Event gets. An Event the token does not cover is its recovery's to attach.
+			void attachPending(eventId => eventId == null || eventId === coveredEventId);
 		});
 
 		ably.connection.on('suspended', (stateChange) => {
@@ -424,56 +465,106 @@ export default defineNuxtPlugin({
 			return `channel:${++channelSubscriptionId}:${channel}:${type}`;
 		}
 
-		/**
-		 * Attach one desired registration to its channel once its Event is covered.
-		 *
-		 * Until then it is pending, and `claimCoverage` attaches it: the mint that
-		 * lands may be one nothing re-registered for, so the original handler is the
-		 * one that attaches. A refused attach takes the listener off (`detach`, so the
-		 * retry cannot deliver twice) and puts the registration back to pending.
-		 * Returns the release its consumer's disposal must call, the only thing that
-		 * ends a registration (#609).
-		 */
-		function observeSubscription(
-			label: string,
-			channelName: string,
-			subscribe: () => unknown,
-			detach: () => void,
-			isActive: () => boolean,
-		): Unsubscribe {
-			const attachment: PendingAttachment = {
-				eventId: realtimeChannelEventId(channelName),
-				attach() {
-					pendingAttachments.delete(attachment);
-					if (!isActive())
-						return;
+		interface SubscriptionSpec {
+			/** Names the subscription in the warning a refused attach leaves. */
+			label: string;
+			channelName: string;
+			/** Put the listener on (or the entry in); settles with the attach. */
+			subscribe: (channel: Ably.RealtimeChannel) => unknown;
+			/** Take the listener off again. */
+			detach: (channel: Ably.RealtimeChannel) => void;
+		}
 
+		interface HeldSubscription {
+			/** The consumer's disposal: the only thing that ends a Realtime Subscription. */
+			dispose: Unsubscribe;
+			/** Resolves at the first attach's outcome, or once its Event's verdict is that it must wait. */
+			settled: Promise<void>;
+		}
+
+		/**
+		 * Hold one Realtime Subscription on a channel, attaching it once its Event is
+		 * covered.
+		 *
+		 * Until then it is pending, and its Event's recovery attaches it: the mint that
+		 * lands may be one nothing re-subscribed for, so the original handler is the one
+		 * that attaches. A refused attach leaves the listener where Ably keeps it,
+		 * because Ably re-attaches a suspended channel by itself, and puts the
+		 * subscription back to pending for its Event's recovery to retry. The retry
+		 * takes the listener off before subscribing again, so nothing is delivered
+		 * twice (#609, ADR-0022).
+		 */
+		function holdSubscription(spec: SubscriptionSpec): HeldSubscription {
+			const channel = getChannel(spec.channelName);
+			let active = true;
+			let refused = false;
+			let settle!: () => void;
+			const settled = new Promise<void>((resolve) => {
+				settle = resolve;
+			});
+
+			const subscription: PendingSubscription = {
+				eventId: realtimeChannelEventId(spec.channelName),
+				async attach() {
+					pendingSubscriptions.delete(subscription);
+					if (!active)
+						return null;
+
+					if (refused)
+						spec.detach(channel);
 					try {
-						void Promise.resolve(subscribe()).catch(handleFailure);
+						// From `failed` Ably refuses a subscribe outright; only an explicit
+						// attach recovers the channel (ably@2.29).
+						if (channel.state === 'failed')
+							await channel.attach();
+						await spec.subscribe(channel);
+						refused = false;
+						return null;
 					}
 					catch (err) {
-						handleFailure(err);
+						if (!active)
+							return null;
+
+						refused = true;
+						pendingSubscriptions.add(subscription);
+						console.warn(`Failed to subscribe to ${spec.label}:`, err);
+						// Refused on a covered Event with no recovery running: nothing else
+						// would retry it while the connection stays up.
+						const eventId = subscription.eventId;
+						if (eventId != null && eventId === coveredEventId && !pendingAuthorize)
+							void beginRecovery(eventId);
+						return toError(err);
+					}
+					finally {
+						settle();
 					}
 				},
 			};
 
-			function handleFailure(err: unknown) {
-				if (!isActive())
-					return;
-
-				detach();
-				pendingAttachments.add(attachment);
-				console.warn(`Failed to subscribe to ${label}:`, err);
+			const coverage = ensureChannelCoverage(spec.channelName);
+			if (coverage === true) {
+				void subscription.attach();
+			}
+			else {
+				pendingSubscriptions.add(subscription);
+				void coverage.then((covered) => {
+					if (!covered)
+						settle();
+				});
 			}
 
-			if (ensureChannelCoverage(channelName) === true)
-				attachment.attach();
-			else
-				pendingAttachments.add(attachment);
+			return {
+				dispose: () => {
+					if (!active)
+						return;
 
-			return () => {
-				pendingAttachments.delete(attachment);
-				reviewRecovery();
+					active = false;
+					spec.detach(channel);
+					pendingSubscriptions.delete(subscription);
+					settle();
+					stopRecoveryIfUnwanted();
+				},
+				settled,
 			};
 		}
 
@@ -489,29 +580,20 @@ export default defineNuxtPlugin({
 			roomSubscriptions.get(key)?.();
 			roomSubscriptions.delete(key);
 
-			const channel = getChannel(currentRoom);
 			const messageHandler = (message: Ably.Message) => {
 				handler(message.data, message);
 			};
 
-			let active = true;
-			const detach = () => channel.unsubscribe(type, messageHandler);
-			const release = observeSubscription(
-				`${type} on ${currentRoom}`,
-				currentRoom,
-				() => channel.subscribe(type, messageHandler),
-				detach,
-				() => active,
-			);
+			const { dispose } = holdSubscription({
+				label: `${type} on ${currentRoom}`,
+				channelName: currentRoom,
+				subscribe: channel => channel.subscribe(type, messageHandler),
+				detach: channel => channel.unsubscribe(type, messageHandler),
+			});
 
 			roomSubscriptions.set(key, () => {
-				if (!active)
-					return;
-
-				active = false;
-				detach();
+				dispose();
 				roomSubscriptions.delete(key);
-				release();
 			});
 		}
 
@@ -545,7 +627,7 @@ export default defineNuxtPlugin({
 			}
 
 			// The room left behind may have been all that waited on a recovering mint.
-			reviewRecovery();
+			stopRecoveryIfUnwanted();
 		}
 
 		function onRoom(owner: string, handlers: Partial<RealtimeRoomHandlers>) {
@@ -571,58 +653,77 @@ export default defineNuxtPlugin({
 			handler: RealtimeHandler<T>,
 		): Unsubscribe {
 			const key = channelSubscriptionKey(channelName, type);
-			const channel = getChannel(channelName);
 			const messageHandler = (message: Ably.Message) => {
 				handler(message.data, message);
 			};
 
-			let active = true;
-			const detach = () => channel.unsubscribe(type, messageHandler);
-			const release = observeSubscription(
-				`${type} on ${channelName}`,
+			const { dispose } = holdSubscription({
+				label: `${type} on ${channelName}`,
 				channelName,
-				() => channel.subscribe(type, messageHandler),
-				detach,
-				() => active,
-			);
+				subscribe: channel => channel.subscribe(type, messageHandler),
+				detach: channel => channel.unsubscribe(type, messageHandler),
+			});
 
 			const unsubscribe = () => {
-				if (!active)
-					return;
-
-				active = false;
-				detach();
+				dispose();
 				channelSubscriptions.delete(key);
-				release();
 			};
 
 			channelSubscriptions.set(key, unsubscribe);
 			return unsubscribe;
 		}
 
+		/**
+		 * Enter a channel's presence, or hold the entry until it can be entered.
+		 *
+		 * The entry is a Realtime Subscription like any other: an outage holds it, and
+		 * once its Event's token lands it enters with the latest data, so control
+		 * surfaces count the output again without it remounting. Resolves once entered
+		 * or held, never waiting out an outage, because a Screen Output stops loading
+		 * only when this returns. `leavePresence` withdraws the entry either way.
+		 */
 		async function enterPresence(channelName: string, data: RealtimePresenceData): Promise<void> {
-			const coverage = ensureChannelCoverage(channelName);
-			if (coverage !== true && !(await coverage))
-				throw new Error(`Realtime token does not cover ${channelName}`);
+			if (presenceEntries.has(channelName))
+				return updatePresence(channelName, data);
 
-			await getChannel(channelName).presence.enter(data);
+			const entry: PresenceEntry = { data, entered: false, dispose: () => {} };
+			presenceEntries.set(channelName, entry);
+			const held = holdSubscription({
+				label: `presence entry on ${channelName}`,
+				channelName,
+				subscribe: async (channel) => {
+					await channel.presence.enter(entry.data);
+					entry.entered = true;
+				},
+				// An entry has no listener; leaving is `leavePresence`'s, and only once entered.
+				detach: () => {},
+			});
+			entry.dispose = held.dispose;
+			await held.settled;
 		}
 
 		async function leavePresence(channelName: string): Promise<void> {
-			const channel = channels.get(channelName);
-			if (channel) {
-				await channel.presence.leave();
-			}
+			const entry = presenceEntries.get(channelName);
+			if (!entry)
+				return;
+
+			presenceEntries.delete(channelName);
+			entry.dispose();
+			if (entry.entered)
+				await getChannel(channelName).presence.leave();
 		}
 
 		async function updatePresence(channelName: string, data: RealtimePresenceData): Promise<void> {
-			// Only a channel this client already holds: Ably's presence.update on a
-			// fresh channel would enter it, and entering is enterPresence's job with
-			// its own coverage check.
-			const channel = channels.get(channelName);
-			if (channel) {
-				await channel.presence.update(data);
-			}
+			// Only an entry this client holds: Ably's presence.update on a channel not
+			// entered would enter it, and entering is enterPresence's job with its own
+			// coverage check. A held entry enters with whatever data is latest.
+			const entry = presenceEntries.get(channelName);
+			if (!entry)
+				return;
+
+			entry.data = data;
+			if (entry.entered)
+				await getChannel(channelName).presence.update(data);
 		}
 
 		function watchPresence<Data extends RealtimePresenceData>(
@@ -650,24 +751,20 @@ export default defineNuxtPlugin({
 				}
 			};
 
-			const releases = (['enter', 'leave', 'update'] as const).map(action => observeSubscription(
-				`presence ${action} on ${channelName}`,
+			const disposals = (['enter', 'leave', 'update'] as const).map(action => holdSubscription({
+				label: `presence ${action} on ${channelName}`,
 				channelName,
-				() => channel.presence.subscribe(action, handlePresenceChange),
-				() => channel.presence.unsubscribe(action, handlePresenceChange),
-				() => active,
-			));
+				subscribe: channel => channel.presence.subscribe(action, handlePresenceChange),
+				detach: channel => channel.presence.unsubscribe(action, handlePresenceChange),
+			}).dispose);
 
 			const unsubscribe = () => {
 				if (!active)
 					return;
 
 				active = false;
-				channel.presence.unsubscribe('enter', handlePresenceChange);
-				channel.presence.unsubscribe('leave', handlePresenceChange);
-				channel.presence.unsubscribe('update', handlePresenceChange);
+				disposals.forEach(dispose => dispose());
 				presenceSubscriptions.delete(key);
-				releases.forEach(release => release());
 			};
 
 			presenceSubscriptions.set(key, unsubscribe);
@@ -680,10 +777,12 @@ export default defineNuxtPlugin({
 			unsubscribeMapEntries(roomSubscriptions);
 			unsubscribeMapEntries(channelSubscriptions);
 			unsubscribeMapEntries(presenceSubscriptions);
+			for (const entry of presenceEntries.values())
+				entry.dispose();
+			presenceEntries.clear();
 			roomHandlers.clear();
 			currentRoom = null;
-			coverageFlights.supersede();
-			cancelRecoveryWait?.();
+			supersedeMint();
 
 			for (const channel of channels.values()) {
 				try {

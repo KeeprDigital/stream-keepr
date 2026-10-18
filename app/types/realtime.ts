@@ -55,9 +55,9 @@ export interface RealtimeTransport {
 	 *
 	 * Set only after the mint's own retries are exhausted, so a network blip during
 	 * an Event switch never puts a fault in front of anyone. It then stands while
-	 * the transport keeps re-attempting for the registrations still waiting, and
-	 * clears when a mint lands and they attach, or when the last of them is
-	 * disposed (#609, ADR-0021).
+	 * the transport keeps re-attempting for the Realtime Subscriptions still
+	 * waiting, and clears only once they have all attached, or when the last of
+	 * them is disposed (#609, ADR-0022).
 	 */
 	readonly tokenError: Error | null;
 	setRoom: (room: string | null) => void;
@@ -68,13 +68,19 @@ export interface RealtimeTransport {
 		type: T,
 		handler: RealtimeHandler<T>,
 	) => () => void;
+	/**
+	 * Enter a channel's presence, or hold the entry through a failure and enter it
+	 * once the channel's Event recovers (ADR-0022). Resolves once entered or held,
+	 * never waiting out an outage.
+	 */
 	enterPresence: (channel: string, data: RealtimePresenceData) => Promise<void>;
+	/** Withdraw the entry: leave if entered, and never enter if still held. */
 	leavePresence: (channel: string) => Promise<void>;
 	/**
-	 * Replace the presence data this client already entered a channel with.
-	 * Only meaningful on a channel this client has entered: the transport treats
-	 * an update on an unentered channel as an enter, so callers gate on having
-	 * entered rather than relying on the transport to refuse.
+	 * Replace the presence data this client entered a channel with — or, for a held
+	 * entry, the data it will enter with. A no-op on a channel with no entry: Ably
+	 * treats an update on an unentered channel as an enter, which is
+	 * `enterPresence`'s job.
 	 */
 	updatePresence: (channel: string, data: RealtimePresenceData) => Promise<void>;
 	/**
