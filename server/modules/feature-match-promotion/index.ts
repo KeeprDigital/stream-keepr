@@ -6,7 +6,7 @@ import { eventDataPublicationModule } from '~~/server/modules/event-data-publica
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { buildAssignmentDisplacementGuardQuery, buildUpsertAssignmentQueries, featureMatchAssignmentService, isAssignmentDisplacementGuardViolation } from '~~/server/services/featureMatchAssignment';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { buildMatchPromotionPlan, matchService } from '~~/server/services/match';
+import { buildMatchPromotionPlan, isMatchPromotionPlanStaleViolation, matchService } from '~~/server/services/match';
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { StateConflictError } from '~~/server/utils/errors';
 import { hasExactNoteDiscardConfirmation, throwFeatureMatchNoteDiscardRequired } from '~~/server/utils/featureMatchNoteDiscard';
@@ -123,13 +123,13 @@ export function featureMatchPromotionModule() {
 			await db.batch(batchQueries as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 		}
 		catch (error) {
-			// The single-Slot invariant is enforced by a unique index rather than by
-			// the plan alone, so a promotion that lost to a concurrent one arrives
-			// here as a constraint violation — and, because the batch is one
+			// The plan is computed from reads, so a promotion that lost to a
+			// concurrent one arrives here as its plan fence, or the one-Slot-per-Match
+			// index behind it, aborting the batch — and, because the batch is one
 			// transaction, with none of its own writes committed. Naming it a
 			// conflict is what turns an operator's simultaneous promotion into a
 			// `409` they can act on instead of a `500`.
-			if (isDuplicateSlotMatchViolation(error))
+			if (isDuplicateSlotMatchViolation(error) || isMatchPromotionPlanStaleViolation(error))
 				throw new StateConflictError('Feature match slot', slotId);
 			if (!isAssignmentDisplacementGuardViolation(error))
 				throw error;

@@ -9,8 +9,8 @@
  */
 
 import type { SQL } from 'drizzle-orm';
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { getTableColumns, sql } from 'drizzle-orm';
+import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 export const D1_MAX_PARAMS = 100;
 
@@ -172,4 +172,16 @@ export function chunkJsonRows<T>(
 		chunks.push(`[${entries.join(',')}]`);
 
 	return chunks;
+}
+
+/**
+ * The equality a compare-and-swap guard needs over nullable columns: `eq`
+ * compiles `= NULL`, which SQLite answers false for every row, so a guard built
+ * with it alone would report every unpaired Slot as concurrently modified.
+ */
+export function observedValue<TColumn extends SQLiteColumn>(
+	column: TColumn,
+	value: TColumn['_']['data'] | null,
+) {
+	return value === null ? isNull(column) : eq(column, value);
 }

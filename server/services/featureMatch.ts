@@ -1,15 +1,14 @@
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { DbFeatureMatch, DbFeatureMatchSession } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { forgetAggregateReceipts } from '~~/server/modules/live-state';
 import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
+import { chunkJsonRows, observedValue, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
@@ -184,18 +183,6 @@ export async function buildClearImportedMatchDataQueries(
 		],
 		clearedSlotCount: importedSlots.length,
 	};
-}
-
-/**
- * The equality a compare-and-swap guard needs over nullable columns: `eq`
- * compiles `= NULL`, which SQLite answers false for every row, so a guard built
- * with it alone would report every unpaired Slot as concurrently modified.
- */
-function observedValue<TColumn extends SQLiteColumn>(
-	column: TColumn,
-	value: TColumn['_']['data'] | null,
-) {
-	return value === null ? isNull(column) : eq(column, value);
 }
 
 export function featureMatchService() {
