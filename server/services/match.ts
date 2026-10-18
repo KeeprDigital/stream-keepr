@@ -1,11 +1,13 @@
+import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbFeatureMatch, DbMatch } from '~~/server/db/schema';
 import type { CreateMatchInput, PlayerSlotData, UpdateMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
-import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { featureMatches, matches, rounds } from '~~/server/db/schema';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { observedSlotPairing } from '~~/server/services/featureMatch';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
 export type MatchUpsertInput = Omit<CreateMatchInput, 'player1Data' | 'player2Data'> & {
@@ -87,6 +89,64 @@ export interface MatchPromotionPlan {
 }
 
 /**
+ * Abort a promotion batch whose plan has gone stale: a Slot it read no longer
+ * holds the pairing, active Feature Match Session or version it read, or a Slot
+ * it did not read now holds the Match. The deliberately invalid insert trips the NOT NULL constraint
+ * `isMatchPromotionPlanStaleViolation()` recognises, rolling the whole batch
+ * back before any of its writes.
+ */
+function buildPromotionPlanFenceQuery(
+	eventId: number,
+	observedSlots: DbFeatureMatch[],
+	unobservedHolderWhere: SQL | undefined,
+): BatchItem<'sqlite'> {
+	const now = Date.now();
+	const staleObservedSlots = observedSlots.map(slot => sql`not exists (
+		select 1
+		from ${featureMatches}
+		where ${and(
+			eq(featureMatches.id, slot.id),
+			eq(featureMatches.eventId, eventId),
+			observedSlotPairing(slot),
+			eq(featureMatches.updatedAt, slot.updatedAt),
+		)}
+	)`);
+	const unobservedHolder = sql`exists (
+		select 1
+		from ${featureMatches}
+		where ${unobservedHolderWhere}
+	)`;
+
+	return db.insert(featureMatches).select(selectForInsert(featureMatches, {
+		id: sql`null`,
+		// The null event_id is the mechanism: it trips the NOT NULL constraint
+		// isMatchPromotionPlanStaleViolation() recognises, aborting the batch.
+		eventId: sql`null`,
+		matchId: sql`null`,
+		externalId: sql`null`,
+		externalSource: sql`null`,
+		tableNumber: sql`null`,
+		roundName: sql`null`,
+		formatName: sql`null`,
+		player1Id: sql`null`,
+		player2Id: sql`null`,
+		player1Data: sql`null`,
+		player2Data: sql`null`,
+		bestOf: sql`0`,
+		sortOrder: sql`0`,
+		playerDisplayMode: sql`'score'`,
+		activeSessionId: sql`null`,
+		createdAt: sql`${now}`,
+		updatedAt: sql`${now}`,
+	}, sql`where ${sql.join([...staleObservedSlots, unobservedHolder], sql` or `)}`));
+}
+
+export function isMatchPromotionPlanStaleViolation(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : '';
+	return message.includes('NOT NULL constraint failed: feature_match_slots.event_id');
+}
+
+/**
  * Build the write statements that promote a Match into a Feature Match Slot
  * without executing them, so promotion can persist the Slot mutation, its
  * Assignment and the Session resets in one atomic D1 batch.
@@ -97,14 +157,19 @@ export interface MatchPromotionPlan {
  * batch clears is identical to the set the caller seeds Sessions for — no
  * cleared Slot can escape the batch without a fresh Session.
  *
- * That equality is why the clear is deliberately not guarded on the identity it
- * read. The Session seeds are computed here, from these rows, and a batch
- * cannot branch: a guard that spared a Slot which had moved on would still
- * reset that Slot's Session from the cleared values, leaving a Slot that holds
- * one Match beside a Session snapshotted from none. The invariant this plan
- * cannot express on its own — that no second Slot holds the Match — is enforced
- * by `feature_match_slots_match_unique_idx` instead, which aborts the whole
- * batch rather than letting a losing promotion commit half of itself.
+ * Everything the batch writes is therefore computed from rows read before it
+ * runs, and another promotion can commit in between: moving the Match out of a
+ * duplicate Slot and promoting a different Match in, which a clear by id would
+ * then erase (#605). A batch cannot branch, so guarding the clear alone would
+ * still reset that Slot's Feature Match Session from the stale row. The first statement
+ * instead fences the whole plan on the pre-state it read — every Slot it read
+ * still holds the pairing, Session and version it read, and no Slot it did not
+ * read holds the Match — and aborts the batch, all or nothing, when it does not.
+ * That includes two promotions of one Match into one Slot that both read it
+ * empty: the later is refused rather than resetting the Feature Match Session
+ * the first opened.
+ * The unique index `feature_match_slots_match_unique_idx` stays behind it as
+ * the last word on a Match occupying one Slot.
  */
 export async function buildMatchPromotionPlan(
 	eventId: number,
@@ -136,6 +201,9 @@ export async function buildMatchPromotionPlan(
 		.from(featureMatches)
 		.where(duplicateWhere);
 	const clearedSlotIds = duplicateSlots.map(slot => slot.id);
+	const unobservedHolderWhere = clearedSlotIds.length > 0
+		? and(duplicateWhere, notInArray(featureMatches.id, clearedSlotIds))
+		: duplicateWhere;
 
 	const clearedValues = {
 		matchId: null,
@@ -165,7 +233,9 @@ export async function buildMatchPromotionPlan(
 	const clearedSlots: DbFeatureMatch[] = duplicateSlots.map(slot => ({ ...slot, ...clearedValues, updatedAt: now }));
 	const promotedSlot: DbFeatureMatch = { ...targetSlot, ...promotedValues, updatedAt: now };
 
-	const queries: BatchItem<'sqlite'>[] = [];
+	const queries: BatchItem<'sqlite'>[] = [
+		buildPromotionPlanFenceQuery(eventId, [targetSlot, ...duplicateSlots], unobservedHolderWhere),
+	];
 	if (clearedSlotIds.length > 0) {
 		queries.push(db
 			.update(featureMatches)

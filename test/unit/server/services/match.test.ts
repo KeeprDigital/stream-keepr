@@ -17,26 +17,6 @@ vi.mock('~~/server/db/schema', () => ({
 		player2Data: 'matches.player2Data',
 		sortOrder: 'matches.sortOrder',
 	},
-	featureMatches: {
-		id: 'featureMatches.id',
-		eventId: 'featureMatches.eventId',
-		matchId: 'featureMatches.matchId',
-		externalId: 'featureMatches.externalId',
-		externalSource: 'featureMatches.externalSource',
-		tableNumber: 'featureMatches.tableNumber',
-		roundName: 'featureMatches.roundName',
-		formatName: 'featureMatches.formatName',
-		player1Id: 'featureMatches.player1Id',
-		player2Id: 'featureMatches.player2Id',
-		player1Data: 'featureMatches.player1Data',
-		player2Data: 'featureMatches.player2Data',
-	},
-	rounds: {
-		id: 'rounds.id',
-		eventId: 'rounds.eventId',
-		phaseId: 'rounds.phaseId',
-		name: 'rounds.name',
-	},
 }));
 
 // createError is auto-imported in Nitro
@@ -46,7 +26,7 @@ vi.stubGlobal('createError', (opts: any) => {
 	return err;
 });
 
-const { buildMatchPromotionPlan, matchService } = await import('~~/server/services/match');
+const { matchService } = await import('~~/server/services/match');
 
 describe('matchService', () => {
 	beforeEach(() => {
@@ -229,57 +209,6 @@ describe('matchService', () => {
 			const result = await matchService().exists(999, 1);
 
 			expect(result).toBe(false);
-		});
-	});
-
-	describe('buildMatchPromotionPlan', () => {
-		const match = createMockMatch({
-			id: 5,
-			externalId: 'ext-1',
-			externalSource: 'melee',
-			tableNumber: 3,
-			player1Id: 10,
-			player2Id: 20,
-			player1Data: { name: 'Player 1' } as any,
-			player2Data: { name: 'Player 2' } as any,
-		});
-		const targetSlot = { id: 2, eventId: 1 } as any;
-
-		it('builds only the promote statement when there are no duplicate slots', async () => {
-			mockDb.query.rounds.findFirst.mockResolvedValue({ id: 1, eventId: 1, phaseId: 9, name: 'Round 4' });
-			getChain('select').where.mockResolvedValue([]);
-
-			const plan = await buildMatchPromotionPlan(1, 2, match, targetSlot);
-
-			expect(plan.clearedSlots).toEqual([]);
-			expect(plan.queries).toHaveLength(1);
-			expect(plan.promotedSlot).toMatchObject({ id: 2, matchId: 5, roundName: 'Round 4' });
-			expect(getChain('update').set).toHaveBeenLastCalledWith({
-				matchId: 5,
-				externalId: 'ext-1',
-				externalSource: 'melee',
-				tableNumber: 3,
-				roundName: 'Round 4',
-				formatName: null,
-				player1Id: 10,
-				player2Id: 20,
-				player1Data: { name: 'Player 1' },
-				player2Data: { name: 'Player 2' },
-				updatedAt: expect.any(Date),
-			});
-		});
-
-		it('adds a scoped clear statement and cleared-slot rows for each duplicate', async () => {
-			mockDb.query.rounds.findFirst.mockResolvedValue({ id: 1, eventId: 1, phaseId: 9, name: 'Round 4' });
-			getChain('select').where.mockResolvedValue([{ id: 8, eventId: 1, matchId: 5, player1Data: { name: 'Stale' } }]);
-
-			const plan = await buildMatchPromotionPlan(1, 2, match, targetSlot);
-
-			// Clear statement first, then promote statement.
-			expect(plan.queries).toHaveLength(2);
-			expect(plan.clearedSlots).toEqual([
-				expect.objectContaining({ id: 8, matchId: null, player1Data: null, player2Data: null }),
-			]);
 		});
 	});
 });

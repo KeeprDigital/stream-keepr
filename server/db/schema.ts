@@ -379,7 +379,8 @@ export const featureMatchSlots = sqliteTable('feature_match_slots', {
 	uniqueIndex('feature_match_slots_external_unique_idx').on(table.eventId, table.externalId, table.externalSource),
 	// A Match occupies at most one Slot. Promotion clears the duplicates it read
 	// before promoting, but two operators promoting one Match to two Slots at
-	// once each read no duplicate, so only the database can be the arbiter.
+	// once each read no duplicate, so only the database can be the arbiter. The
+	// promotion's plan fence refuses the later commit first; this is the last word.
 	// Partial because an unoccupied Slot carries no Match and any number of them
 	// may exist at once.
 	uniqueIndex('feature_match_slots_match_unique_idx').on(table.eventId, table.matchId).where(sql`${table.matchId} is not null`),
