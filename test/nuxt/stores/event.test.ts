@@ -602,6 +602,38 @@ describe('useEventStore', () => {
 			expect(store.eventsList).toContainEqual(created);
 		});
 
+		it('a late Event create the Events list already loaded is listed once', async () => {
+			const created = createEventResponse({ id: 5, name: 'New Event' });
+			const create = deferred<typeof created>();
+			mockEventRepo.create.mockReturnValueOnce(create.promise);
+
+			const creating = store.createEvent({ name: 'New Event', game: 'mtg', featureMatchOrientation: 'horizontal' });
+			await switchTo(createEventResponse({ id: 2, name: 'Event B' }));
+			mockEventRepo.list.mockResolvedValueOnce([createEventResponse({ id: 2, name: 'Event B' }), created]);
+			await store.loadEventsList();
+			create.resolve(created);
+			await creating;
+
+			expect(store.eventsList.map(event => event.id)).toEqual([2, 5]);
+		});
+
+		it('a delete answered after leaving and coming back to the deleted Event still clears it, because it is gone', async () => {
+			const eventA = createEventResponse({ id: 1, name: 'Event A' });
+			store.event = eventA;
+			store.eventsList = [eventA];
+			const remove = deferred<{ success: true }>();
+			mockEventRepo.remove.mockReturnValueOnce(remove.promise);
+
+			const deleting = store.deleteEvent(1);
+			await switchTo(createEventResponse({ id: 2 }));
+			await switchTo(createEventResponse({ id: 1, name: 'Event A as loaded again' }));
+			remove.resolve({ success: true });
+			await deleting;
+
+			expect(store.event).toBeNull();
+			expect(store.eventsList).toEqual([]);
+		});
+
 		describe.each([
 			['Event B', [2]],
 			['Event A, loaded again since', [2, 1]],

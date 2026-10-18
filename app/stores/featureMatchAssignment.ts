@@ -1,4 +1,5 @@
 import type { FeatureMatchAssignment, SaveFeatureMatchAssignmentInput, UpdateFeatureMatchAssignmentInput } from '~/types';
+import type { Flight } from '~/utils/guardedSequence';
 import { applySavedFeatureMatchAssignment, applyUpdatedFeatureMatchAssignment } from '~/modules/feature-match-assignment/collection';
 
 interface AssignmentMessage {
@@ -187,6 +188,11 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 		}
 	}
 
+	/** The current Event Lifetime, for a workflow whose answer lands here after it awaits. */
+	function currentLifetime(): Flight {
+		return lifetime;
+	}
+
 	function isRemoteChanged(assignmentId: number): boolean {
 		return remoteChangedAssignmentIds.value.has(assignmentId);
 	}
@@ -224,6 +230,7 @@ export const useFeatureMatchAssignmentStore = defineStore('featureMatchAssignmen
 		applyRemoteUpdated,
 		applyRemoteDeleted,
 		isRemoteChanged,
+		currentLifetime,
 		$reset,
 	};
 });

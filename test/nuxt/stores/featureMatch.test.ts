@@ -24,7 +24,15 @@ mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string,
 	ablyCallbacks[storeName] = callbacks;
 });
 
+const mockAssignmentRepo = {
+	listByRound: vi.fn(),
+	create: vi.fn(),
+	update: vi.fn(),
+	remove: vi.fn(),
+};
+
 mockNuxtImport('useFeatureMatchRepository', () => () => mockRepo);
+mockNuxtImport('useFeatureMatchAssignmentRepository', () => () => mockAssignmentRepo);
 mockNuxtImport('useRealtime', () => () => mockAbly);
 
 /*
@@ -373,6 +381,40 @@ describe('useFeatureMatchStore', () => {
 
 			expect(store.featureMatches).toEqual(shown);
 			expect(store.error).toBeNull();
+		});
+
+		it('a late Slot Promotion changes no Slot and no Assignment', async () => {
+			const assignments = useFeatureMatchAssignmentStore();
+			assignments.$reset();
+			const promotion = deferred<unknown>();
+			mockRepo.promoteMatch.mockReturnValueOnce(promotion.promise);
+
+			const promoting = useFeatureMatchPromotion().promote({ eventId: 1, roundId: 10, slotId: 1, matchId: 7 });
+			const shown = await switchAway();
+			const eventId = switches.at(-1)!;
+			const loadedAssignments = [{
+				id: 9,
+				eventId,
+				roundId: 10,
+				slotId: 2,
+				matchId: 8,
+				note: 'Loaded since',
+				createdAt: new Date('2026-01-01T00:00:00Z'),
+				updatedAt: new Date('2026-01-01T00:00:00Z'),
+			}];
+			assignments.$reset();
+			assignments.consumeRound(eventId, 10);
+			mockAssignmentRepo.listByRound.mockResolvedValueOnce(structuredClone(loadedAssignments));
+			await assignments.loadAssignments(eventId, 10);
+			promotion.resolve({
+				promotedSlot: createMockFeatureMatch({ id: 1, matchId: 7 }),
+				clearedSlots: [createMockFeatureMatch({ id: 2, matchId: null })],
+				assignment: { ...loadedAssignments[0]!, eventId: 1, slotId: 1, matchId: 7, note: null },
+			});
+			await promoting;
+
+			expect(store.featureMatches).toEqual(shown);
+			expect(assignments.assignmentsForRound(10)).toEqual(loadedAssignments);
 		});
 	});
 

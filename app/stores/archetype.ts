@@ -37,22 +37,22 @@ export const useArchetypeStore = defineStore('archetype', () => {
 	}
 
 	async function createArchetype(eventId: number, input: CreateArchetypeInput) {
-		const lifetime = lifecycle.currentLifetime();
+		const flight = lifecycle.currentLifetime();
 		const created = await lifecycle.create(eventId, input);
-		if (created && lifetime.current)
+		if (created && flight.current)
 			invalidateMetagame();
 		return created;
 	}
 
 	async function updateArchetype(eventId: number, archetypeId: number, input: UpdateArchetypeInput) {
-		const lifetime = lifecycle.currentLifetime();
+		const flight = lifecycle.currentLifetime();
 		const updated = await lifecycle.update(eventId, archetypeId, input);
-		if (updated && lifetime.current) {
+		if (updated && flight.current) {
 			usePlayerDeckStore().applyArchetypeUpdated(updated);
 			await Promise.allSettled([
 				useFeatureMatchStore().loadFeatureMatchesByEventId(eventId),
 			]);
-			if (lifetime.current)
+			if (flight.current)
 				invalidateMetagame();
 		}
 		return updated;
@@ -67,14 +67,14 @@ export const useArchetypeStore = defineStore('archetype', () => {
 	 * to arrive as the sentence saying so rather than as a status line (#262).
 	 */
 	async function setKeyCards(eventId: number, archetypeId: number, cardNames: string[]) {
-		const lifetime = lifecycle.currentLifetime();
+		const flight = lifecycle.currentLifetime();
 		return executeReporting(
 			async () => {
 				const result = await $fetch<{ keyCards: Array<{ id: number; name: string; game: string; scryfallId: string | null; cardType: string | null; colors: string | null; cmc: number | null; manaCost: string | null }> }>(
 					`/api/events/${eventId}/archetypes/${archetypeId}/cards`,
 					{ method: 'PATCH', body: { cardNames }, headers: apiHeaders.getHeaders() },
 				);
-				if (lifetime.stale)
+				if (flight.stale)
 					return result.keyCards;
 				// Update local archetype with new key cards
 				const index = archetypes.value.findIndex(a => a.id === archetypeId);
@@ -84,19 +84,19 @@ export const useArchetypeStore = defineStore('archetype', () => {
 				invalidateMetagame();
 				return result.keyCards;
 			},
-			{ errorRef: error, throwError: true, flight: lifetime },
+			{ errorRef: error, throwError: true, flight },
 		);
 	}
 
 	async function removeArchetype(eventId: number, archetypeId: number) {
-		const lifetime = lifecycle.currentLifetime();
+		const flight = lifecycle.currentLifetime();
 		const removed = await lifecycle.remove(eventId, archetypeId);
-		if (removed && lifetime.current) {
+		if (removed && flight.current) {
 			usePlayerDeckStore().applyArchetypeDeleted(archetypeId);
 			await Promise.allSettled([
 				useFeatureMatchStore().loadFeatureMatchesByEventId(eventId),
 			]);
-			if (lifetime.current)
+			if (flight.current)
 				invalidateMetagame();
 		}
 		return removed;

@@ -9,6 +9,13 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 	const isLoaded = ref(false);
 	const apiHeaders = useApiHeaders();
 	const deckCache = usePlayerDeckCache();
+	/**
+	 * The Event Lifetime a review's answer belongs to, begun afresh by each reset, so a
+	 * review answered after the operator moved on — even back to this Event — retags
+	 * nothing and reloads nothing there (ADR-0024).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 
 	async function loadByEventId(eventId: number) {
 		loading.value = true;
@@ -31,7 +38,10 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 	}
 
 	async function reviewDeck(eventId: number, playerId: number, deckId: number, archetypeId: number) {
+		const flight = lifetime;
 		const result = await deckCache.reviewDeck(eventId, playerId, deckId, archetypeId);
+		if (flight.stale)
+			return result;
 		const deckIndex = decks.value.findIndex(deck => deck.id === deckId);
 		if (deckIndex !== -1)
 			decks.value[deckIndex] = result.deck;
@@ -101,6 +111,7 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 	}
 
 	function $reset() {
+		lifetime = lifetimes.begin();
 		decks.value = [];
 		loading.value = false;
 		error.value = null;

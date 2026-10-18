@@ -75,16 +75,16 @@ export const usePlayerListStore = defineStore('playerList', () => {
 	}
 
 	async function removeList(eventId: number, listId: number) {
-		const lifetime = lifecycle.currentLifetime();
+		const flight = lifecycle.currentLifetime();
 		const cachedIds = memberRuntime.clearListMembers(listId);
 		try {
 			const removed = await lifecycle.remove(eventId, listId);
-			if (removed === null && lifetime.current)
+			if (removed === null && flight.current)
 				memberRuntime.restoreListMembers(listId, cachedIds);
 			return removed;
 		}
 		catch (err) {
-			if (lifetime.current)
+			if (flight.current)
 				memberRuntime.restoreListMembers(listId, cachedIds);
 			throw err;
 		}

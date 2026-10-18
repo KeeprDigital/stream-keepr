@@ -99,6 +99,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	const pendingModeConfigWrites = new Map<string, PendingModeConfigWrite>();
 	const writeQueue = createKeyedQueue();
 	const writeFlights = createKeyedGuardedSequence();
+	/**
+	 * The Event Lifetime a create, update or delete belongs to, begun afresh by each
+	 * reset, so its answer or rollback never lands in a later lifetime — even one of the
+	 * same Event (ADR-0024).
+	 */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 
 	function cacheScreen(screen: Screen) {
 		const index = state.screens.value.findIndex(existing => existing.id === screen.id);
@@ -138,11 +145,11 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		}
 	}
 
-	/** Re-fetch a screen from the API and update local Screen caches. */
-	function makeRefreshScreen(eventId: number, screenId: number) {
+	/** Re-fetch a screen from the API and update local Screen caches, while `flight` is current. */
+	function makeRefreshScreen(eventId: number, screenId: number, flight: Flight) {
 		return async () => {
 			const freshScreen = await screenRepo.getById(eventId, screenId);
-			if (freshScreen)
+			if (freshScreen && flight.current)
 				cacheScreen(freshScreen);
 		};
 	}
@@ -174,14 +181,15 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * id is not an answer to it.
 	 */
 	async function createScreen(eventId: number, input: CreateScreenInput) {
+		const flight = lifetime;
 		return state.executeAction(
 			async () => {
 				const createdScreen = await screenRepo.create(eventId, input);
-				if (!isSupersededByCache(createdScreen))
+				if (flight.current && !isSupersededByCache(createdScreen))
 					cacheScreen(createdScreen);
 				return createdScreen;
 			},
-			{ errorRef: state.error },
+			{ errorRef: state.error, flight },
 		);
 	}
 
@@ -200,7 +208,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			...updates,
 		};
 
-		const refreshScreen = makeRefreshScreen(eventId, screenId);
+		const flight = lifetime;
+		const refreshScreen = makeRefreshScreen(eventId, screenId, flight);
 
 		return state.executeAction(
 			async () => {
@@ -212,11 +221,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 					},
 					refreshScreen,
 				);
-				cacheScreen(updatedScreenData);
+				if (flight.current)
+					cacheScreen(updatedScreenData);
 				return updatedScreenData;
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => cacheScreen(original),
 			},
 		);
@@ -227,12 +238,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function flushModeConfigWrites() {
+		const flushLifetime = lifetime;
 		const entries = [...pendingModeConfigWrites.entries()];
 		pendingModeConfigWrites.clear();
 		for (const [key, entry] of entries) {
 			void writeQueue.enqueue(key, () => state.executeAction(
 				async () => {
-					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId);
+					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId, flushLifetime);
 					const updated = await withConflictRetry(
 						() => {
 							const screen = state.screens.value.find(s => s.id === entry.screenId);
@@ -260,12 +272,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	const modeConfigWriteDebounce = createCancelableDebounce(flushModeConfigWrites, 300, 1000);
 
 	function flushScreenConfigWrites() {
+		const flushLifetime = lifetime;
 		const entries = [...pendingScreenConfigWrites.entries()];
 		pendingScreenConfigWrites.clear();
 		for (const [key, entry] of entries) {
 			void writeQueue.enqueue(key, () => state.executeAction(
 				async () => {
-					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId);
+					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId, flushLifetime);
 					const updated = await withConflictRetry(
 						() => {
 							const screen = state.screens.value.find(s => s.id === entry.screenId);
@@ -366,6 +379,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 		const removed = state.screens.value[index]!;
 		state.screens.value.splice(index, 1);
+		const flight = lifetime;
 
 		return state.executeAction(
 			async () => {
@@ -376,6 +390,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			},
 			{
 				errorRef: state.error,
+				flight,
 				onError: () => {
 					const idx = state.screens.value.findIndex(s => s.id === screenId);
 					if (idx === -1) {
@@ -618,6 +633,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		pendingModeConfigWrites.clear();
 		pendingScreenConfigWrites.clear();
 		writeFlights.supersedeAll();
+		lifetime = lifetimes.begin();
 		remoteScreenLoads.supersedeAll();
 		unsubscribeFromAllPresence();
 		state.screens.value = [];

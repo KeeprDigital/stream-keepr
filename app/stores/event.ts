@@ -179,7 +179,10 @@ export const useEventStore = defineStore('event', () => {
 			async () => {
 				const createdEvent = await eventRepo.create(input);
 
-				eventsList.value.push(createdEvent);
+				// The Events list outlives every Event Lifetime, and a list load since may
+				// already hold the new Event.
+				if (!eventsList.value.some(e => e.id === createdEvent.id))
+					eventsList.value.push(createdEvent);
 
 				if (flight.current)
 					setEvent(createdEvent);
@@ -190,6 +193,10 @@ export const useEventStore = defineStore('event', () => {
 		);
 	}
 
+	/**
+	 * Answers with the merged Event, or — when the save is answered after its Event
+	 * Lifetime ended — with the server's answer alone, merged into nothing.
+	 */
 	async function updateEvent(updates: UpdateEventInput) {
 		if (!event.value) {
 			error.value = 'No event loaded';
@@ -399,6 +406,10 @@ export const useEventStore = defineStore('event', () => {
 		}
 	}
 
+	/**
+	 * The reset is decided by id rather than by Event Lifetime: an Event the operator
+	 * came back to since is still the Event that no longer exists.
+	 */
 	async function deleteEvent(id: number) {
 		const flight = lifetime;
 		return executeReporting(
