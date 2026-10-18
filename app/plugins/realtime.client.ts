@@ -117,7 +117,7 @@ export default defineNuxtPlugin({
 		 * The outage is no longer a blip, so the attempts back off, and the last delay
 		 * repeats for as long as a Realtime Subscription still waits on the Event: a
 		 * token service that comes back after an hour must still find the page's
-		 * handlers waiting, without anyone remounting it (#609, ADR-0022).
+		 * handlers waiting, without anyone remounting it (#609, ADR-0023).
 		 */
 		const RECOVERY_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 30_000];
 
@@ -492,7 +492,7 @@ export default defineNuxtPlugin({
 		 * because Ably re-attaches a suspended channel by itself, and puts the
 		 * subscription back to pending for its Event's recovery to retry. The retry
 		 * takes the listener off before subscribing again, so nothing is delivered
-		 * twice (#609, ADR-0022).
+		 * twice (#609, ADR-0023).
 		 */
 		function holdSubscription(spec: SubscriptionSpec): HeldSubscription {
 			const channel = getChannel(spec.channelName);

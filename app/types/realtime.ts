@@ -57,7 +57,7 @@ export interface RealtimeTransport {
 	 * an Event switch never puts a fault in front of anyone. It then stands while
 	 * the transport keeps re-attempting for the Realtime Subscriptions still
 	 * waiting, and clears only once they have all attached, or when the last of
-	 * them is disposed (#609, ADR-0022).
+	 * them is disposed (#609, ADR-0023).
 	 */
 	readonly tokenError: Error | null;
 	setRoom: (room: string | null) => void;
@@ -70,7 +70,7 @@ export interface RealtimeTransport {
 	) => () => void;
 	/**
 	 * Enter a channel's presence, or hold the entry through a failure and enter it
-	 * once the channel's Event recovers (ADR-0022). Resolves once entered or held,
+	 * once the channel's Event recovers (ADR-0023). Resolves once entered or held,
 	 * never waiting out an outage.
 	 */
 	enterPresence: (channel: string, data: RealtimePresenceData) => Promise<void>;

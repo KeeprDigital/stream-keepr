@@ -157,7 +157,7 @@ The client-side access path for Event-scoped data such as Players, Phases, Round
 The client-side subscription for Event messages.
 
 **Realtime Subscription**:
-A consumer's standing request to the realtime transport: a room handler, a channel handler, a presence watch, or a presence entry. The transport holds it from creation until its consumer disposes it, attaching it whenever its **Event** is covered; no failure ends one (ADR-0022).
+A consumer's standing request to the realtime transport: a room handler, a channel handler, a presence watch, or a presence entry. The transport holds it from creation until its consumer disposes it, attaching it whenever its **Event** is covered; no failure ends one (ADR-0023).
 _Avoid_: registration.
 
 **Reconnect Resync**:
@@ -618,7 +618,7 @@ _Avoid_: Dummy data, test data
 - Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**; a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
 - A **Screen Output** whose realtime link is disconnected holds its last accepted rendering rather than blanking
 - A client that cannot mint a realtime token for its **Event** re-attempts, and reports a persistent failure where an operator can see it
-- A **Realtime Subscription** outlives any token or transport failure until its consumer disposes it; once its **Event** recovers, the original handler receives again — and a held presence entry enters — without a remount (ADR-0022)
+- A **Realtime Subscription** outlives any token or transport failure until its consumer disposes it; once its **Event** recovers, the original handler receives again — and a held presence entry enters — without a remount (ADR-0023)
 - Only a **Screen Output** enters its **Screen**'s presence and answers its **Screen**'s commands; a **Program monitor** or preview joins neither, so every count of what is watching a **Screen** counts outputs alone
 - A **Screen Output** carries its **Screen Output Asset Capability** in its URL; every surface handing an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders nothing at all (ADR-0010)
