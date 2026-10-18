@@ -10,20 +10,11 @@ import {
 	deleteScreenWithGraphicAssetReferences,
 	updateScreenModeConfigWithGraphicAssetReferences,
 } from '~~/server/modules/screen-graphic-asset-references';
-import { ScreenDeckSourceConflictError, StateConflictError } from '~~/server/utils/errors';
+import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
 
 export function screenService() {
-	function mapDeckSourceConflict(error: unknown): never {
-		let failure: unknown = error;
-		while (failure && typeof failure === 'object') {
-			if (String((failure as { message?: unknown }).message).includes('SCREEN_DECK_SOURCE_CONFLICT'))
-				throw new ScreenDeckSourceConflictError();
-			failure = (failure as { cause?: unknown }).cause;
-		}
-		throw error;
-	}
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {
 		return await db.query.screens.findFirst({
 			where: and(

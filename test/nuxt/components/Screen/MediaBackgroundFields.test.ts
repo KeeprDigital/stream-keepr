@@ -28,7 +28,7 @@ const global = {
 	},
 };
 
-const media = { enabled: true, type: 'video' as const, url: '/loop.mp4', fit: 'cover' as const, opacity: 0.5, playbackRate: 2, loop: true };
+const media = { enabled: true, source: { kind: 'url' as const, url: '/loop.mp4' }, fit: 'cover' as const, opacity: 0.5, playbackRate: 2, loop: true };
 
 function numberField(wrapper: ReturnType<typeof mount>, testId: string) {
 	return wrapper.findAllComponents(UInputNumberStub).find(input => input.attributes('data-testid') === testId)!;
@@ -36,7 +36,7 @@ function numberField(wrapper: ReturnType<typeof mount>, testId: string) {
 
 describe('media background fields', () => {
 	it('offers the shared fit, opacity, and playback fields once the video is on', () => {
-		const wrapper = mount(MediaBackgroundFields, { global, props: { media } });
+		const wrapper = mount(MediaBackgroundFields, { global, props: { media, eventId: 7 } });
 
 		for (const testId of ['media-fit', 'media-opacity', 'media-playback-rate', 'media-loop'])
 			expect(wrapper.find(`[data-testid="${testId}"]`).exists(), testId).toBe(true);
@@ -44,7 +44,7 @@ describe('media background fields', () => {
 	});
 
 	it('returns a cleared opacity or playback rate to its default rather than to zero', async () => {
-		const wrapper = mount(MediaBackgroundFields, { global, props: { media } });
+		const wrapper = mount(MediaBackgroundFields, { global, props: { media, eventId: 7 } });
 
 		numberField(wrapper, 'media-opacity').vm.$emit('update:modelValue', null);
 		await flushPromises();

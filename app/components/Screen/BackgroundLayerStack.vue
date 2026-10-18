@@ -2,8 +2,10 @@
 import type { CSSProperties } from 'vue';
 import type { AnimationEffectRenderPlan } from '~~/shared/animationEffects';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import type { BackgroundLayer, ScreenMediaBackgroundConfig, ScreenMediaSource } from '~~/shared/types/screenConfig';
+import type { BackgroundLayer, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan, parseAnimationEffectSelection } from '~~/shared/animationEffects';
+import { screenMediaSourceReference } from '~~/shared/utils/graphicsAssetReferences';
+import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 
 /**
  * One rendered Background Layer stack, filling the nearest positioned ancestor.
@@ -20,29 +22,16 @@ const props = defineProps<{
 
 const enabledLayers = computed(() => props.layers.filter(layer => layer.enabled));
 
-function assetReference(source: ScreenMediaSource): GraphicAssetReference | null {
-	return source.kind === 'asset'
-		? { assetId: source.assetId, revisionId: source.revisionId }
-		: null;
-}
-
 const assetReferences = computed<GraphicAssetReference[]>(() =>
 	enabledLayers.value.flatMap((layer) => {
 		if (layer.type !== 'image' && layer.type !== 'video')
 			return [];
-		const reference = assetReference(layer.source);
+		const reference = screenMediaSourceReference(layer.source);
 		return reference ? [reference] : [];
 	}),
 );
 
 const { contentUrl } = useScreenGraphicAssetContentUrls(assetReferences);
-
-function sourceUrl(source: ScreenMediaSource): string {
-	if (source.kind === 'url')
-		return source.url;
-	const reference = assetReference(source);
-	return reference ? contentUrl(reference) : '';
-}
 
 /**
  * One rendered layer, everything already decided: media URLs resolved, the
@@ -55,7 +44,7 @@ interface BackgroundLayerView {
 	style: CSSProperties;
 	imageUrl?: string;
 	imageFit?: CSSProperties['objectFit'];
-	media?: ScreenMediaBackgroundConfig;
+	video?: ScreenVideoPlayback;
 	animation?: AnimationEffectRenderPlan;
 }
 
@@ -72,16 +61,14 @@ function layerView(layer: BackgroundLayer): BackgroundLayerView {
 			view.style.backgroundImage = layer.gradient;
 			break;
 		case 'image':
-			view.imageUrl = sourceUrl(layer.source);
+			view.imageUrl = screenMediaSourceUrl(layer.source, contentUrl);
 			view.imageFit = layer.fit;
 			break;
 		case 'video':
 			// Opacity stays on the layer wrapper — the layer owns it, so the
 			// shared media background renders at full opacity inside it.
-			view.media = {
-				enabled: true,
-				type: 'video',
-				url: sourceUrl(layer.source),
+			view.video = {
+				url: screenMediaSourceUrl(layer.source, contentUrl),
 				fit: layer.fit,
 				opacity: 1,
 				playbackRate: layer.playbackRate,
@@ -119,8 +106,8 @@ const layerViews = computed(() => enabledLayers.value.map(layerView));
 				aria-hidden="true"
 			>
 			<ScreenMediaBackground
-				v-else-if="view.media"
-				:media="view.media"
+				v-else-if="view.video"
+				:video="view.video"
 			/>
 			<ScreenAnimationEffectSurface
 				v-else-if="view.animation"
