@@ -18,7 +18,7 @@ mockNuxtImport('useScreenGraphicAssetContentUrls', () => () => ({
 
 const MediaBackgroundStub = defineComponent({
 	props: {
-		media: { type: Object, required: true },
+		video: { type: Object, required: true },
 	},
 	template: '<div data-testid="media-background" />',
 });
@@ -154,11 +154,9 @@ describe('screenModesBackgroundDisplay', () => {
 		};
 
 		const wrapper = await mountComponent();
-		const media = wrapper.getComponent(MediaBackgroundStub).props('media');
+		const video = wrapper.getComponent(MediaBackgroundStub).props('video');
 
-		expect(media).toMatchObject({
-			enabled: true,
-			type: 'video',
+		expect(video).toEqual({
 			url: '/loops/rain.mp4',
 			fit: 'fill',
 			playbackRate: 1.5,

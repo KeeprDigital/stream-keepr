@@ -101,7 +101,7 @@ describe('template Package export through the API boundary', () => {
 			revisionId: operation.result!.revisionId,
 		};
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = reference;
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
 		// The preset's Text Graphic Items already name an application font, so one
 		// package proves both halves of the rule: declared capability, embedded asset.
 		await $fetch(
@@ -147,7 +147,7 @@ describe('template Package export through the API boundary', () => {
 			'template.json',
 		].sort());
 		const template = archive.json<{ frame: { backgroundImage: unknown }; sources: unknown[]; composition: { items: unknown[] } }>('template.json');
-		expect(template.frame.backgroundImage).toEqual(reference);
+		expect(template.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
 		// A Template is not Screen live state: no Feature Match assignment travels.
 		expect(archive.text('template.json')).not.toContain('featureMatchId');
 		// Application-owned typography is declared, never duplicated as bytes.
@@ -176,6 +176,7 @@ describe('template Package export through the API boundary', () => {
 		});
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: operation.result!.assetId,
 			revisionId: 'revision-that-never-existed',
 		} as never;

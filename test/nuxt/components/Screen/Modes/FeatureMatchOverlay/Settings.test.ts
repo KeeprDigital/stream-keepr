@@ -218,6 +218,7 @@ describe('featureMatchOverlaySettings', () => {
 
 	it('visibly blocks output actions while an exact Graphic Asset Reference is missing', async () => {
 		mockConfig.value.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: 'missing-asset',
 			revisionId: 'missing-revision',
 		} as never;
@@ -234,6 +235,7 @@ describe('featureMatchOverlaySettings', () => {
 
 	it('retries unavailable Graphic Asset Content without changing the pinned reference', async () => {
 		mockConfig.value.layout.frame.backgroundImage = {
+			kind: 'asset',
 			assetId: 'temporarily-unavailable-asset',
 			revisionId: 'pinned-revision',
 		} as never;
@@ -252,6 +254,7 @@ describe('featureMatchOverlaySettings', () => {
 		expect(mockApiFetch).toHaveBeenCalledTimes(requestsBeforeRetry + 1);
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-publication-blocked')).toBe('false');
 		expect(mockConfig.value.layout.frame.backgroundImage).toEqual({
+			kind: 'asset',
 			assetId: 'temporarily-unavailable-asset',
 			revisionId: 'pinned-revision',
 		});

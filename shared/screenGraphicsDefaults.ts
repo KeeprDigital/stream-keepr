@@ -16,8 +16,7 @@ import type { BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimati
 
 export const DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG: ScreenMediaBackgroundConfig = {
 	enabled: false,
-	type: 'video',
-	url: '',
+	source: { kind: 'url', url: '' },
 	fit: 'cover',
 	opacity: 1,
 	playbackRate: 1,

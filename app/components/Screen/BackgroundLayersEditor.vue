@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
-import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { BackgroundLayer, BackgroundLayerType, ScreenMediaSource } from '~~/shared/types/screenConfig';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import { BACKGROUND_LAYER_TYPE_VALUES } from '~~/shared/types/screenConfig';
@@ -31,11 +30,6 @@ const LAYER_TYPE_LABELS: Record<BackgroundLayerType, string> = {
 	video: 'Video',
 	animation: 'Animation',
 };
-
-const SOURCE_KIND_OPTIONS = [
-	{ label: 'Asset library', value: 'asset' },
-	{ label: 'Remote URL', value: 'url' },
-];
 
 const addLayerType = ref<BackgroundLayerType>('color');
 
@@ -99,55 +93,9 @@ function patchLayerMedia(id: string, patch: MediaFieldsPatch) {
 	patchLayer(id, resolveMediaFieldsPatch(patch) as Partial<BackgroundLayer>);
 }
 
-function updateSource(layer: BackgroundLayer & { type: 'image' | 'video' }, source: ScreenMediaSource) {
-	patchLayer(layer.id, { source });
-}
-
-/**
- * Which source kind each media layer's editor is showing, held as UI state
- * rather than written through: an asset source without a picked revision is not
- * a storable value (the schema requires the ids), so switching to the library
- * only changes what the row offers until an asset is actually chosen. Switching
- * to URL starts over — a reference and a URL are different choices, not two
- * spellings of one.
- */
-const sourceKindDrafts = ref<Record<string, 'asset' | 'url'>>({});
-
-function sourceKind(layer: BackgroundLayer & { type: 'image' | 'video' }): 'asset' | 'url' {
-	return sourceKindDrafts.value[layer.id] ?? layer.source.kind;
-}
-
-function selectSourceKind(layer: BackgroundLayer & { type: 'image' | 'video' }, kind: 'asset' | 'url') {
-	sourceKindDrafts.value = { ...sourceKindDrafts.value, [layer.id]: kind };
-	if (kind === 'url' && layer.source.kind !== 'url')
-		updateSource(layer, { kind: 'url', url: '' });
-}
-
-function selectAssetSource(
-	layer: BackgroundLayer & { type: 'image' | 'video' },
-	reference: GraphicAssetReference,
-) {
-	updateSource(layer, {
-		kind: 'asset',
-		assetId: reference.assetId,
-		revisionId: reference.revisionId,
-	});
-}
-
-/**
- * Only the picker's Clear reaches the configuration through this event: a
- * choose also fires `select`, which is the write, and a second write from here
- * would race it.
- */
-function clearAssetSource(layer: BackgroundLayer & { type: 'image' | 'video' }, reference: GraphicAssetReference | undefined) {
-	if (reference === undefined)
-		updateSource(layer, { kind: 'url', url: '' });
-}
-
-function sourceReference(layer: BackgroundLayer & { type: 'image' | 'video' }): GraphicAssetReference | undefined {
-	return layer.source.kind === 'asset' && layer.source.assetId
-		? { assetId: layer.source.assetId, revisionId: layer.source.revisionId }
-		: undefined;
+/** A layer's source is required, so a cleared choice stores an unset URL. */
+function updateSource(id: string, source: ScreenMediaSource | null) {
+	patchLayer(id, { source: source ?? { kind: 'url', url: '' } });
 }
 
 function updateAnimationSelection(id: string, selection: AnimationEffectSelection) {
@@ -236,36 +184,13 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 				</UFormField>
 
 				<template v-if="layer.type === 'image' || layer.type === 'video'">
-					<UFormField label="Source">
-						<USelect
-							:model-value="sourceKind(layer)"
-							:items="SOURCE_KIND_OPTIONS"
-							value-key="value"
-							size="sm"
-							class="w-full"
-							@update:model-value="selectSourceKind(layer, $event as 'asset' | 'url')"
-						/>
-					</UFormField>
-
-					<UFormField v-if="sourceKind(layer) === 'url'" label="Media URL">
-						<UInput
-							:model-value="layer.source.kind === 'url' ? layer.source.url : ''"
-							placeholder="https://example.com/background.mp4"
-							size="sm"
-							class="w-full"
-							@update:model-value="updateSource(layer, { kind: 'url', url: String($event) })"
-						/>
-					</UFormField>
-					<UFormField v-else :label="layer.type === 'video' ? 'Video asset' : 'Image asset'">
-						<GraphicsAssetFocusPicker
-							:model-value="sourceReference(layer)"
-							:event-id="eventId"
-							:field-label="layer.type === 'video' ? 'Video asset' : 'Image asset'"
-							:asset-kind="layer.type === 'video' ? 'silent-video' : 'image'"
-							@select="(_asset, reference) => selectAssetSource(layer, reference)"
-							@update:model-value="clearAssetSource(layer, $event)"
-						/>
-					</UFormField>
+					<ScreenMediaSourceField
+						:model-value="layer.source"
+						:event-id="eventId"
+						:asset-kind="layer.type === 'video' ? 'silent-video' : 'image'"
+						:label="layer.type === 'video' ? 'Video asset' : 'Image asset'"
+						@update:model-value="updateSource(layer.id, $event)"
+					/>
 
 					<GraphicsMediaFields
 						:media="layer"

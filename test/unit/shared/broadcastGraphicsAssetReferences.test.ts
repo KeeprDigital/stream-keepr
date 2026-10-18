@@ -12,7 +12,6 @@ import {
 	sameScreenGraphicAssetReferences,
 	screenModeGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
-import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '~~/test/helpers/backgroundLayerModes';
 
 function reference(assetId: string, revisionId: string): GraphicAssetReference {
 	return {
@@ -266,13 +265,18 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 		// Named as well as iterated. Iterating proves each listed mode is equipped, but
 		// only naming the list makes dropping or renaming a member fail here rather than
 		// pass quietly with one mode fewer.
-		// The graphics hosts and the Background Screen pin assets in their own content;
-		// the rest carry a Background Layer stack by declaration.
 		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual([
 			'feature-match-overlay',
 			'broadcast-graphics',
 			'background',
-			...MODES_WITH_A_BACKGROUND_LAYER_STACK,
+			// Every plain overlay mode, for its own Background Layer stack (#580).
+			'card',
+			'deck',
+			'standings',
+			'topCut',
+			'metagame',
+			'top-cards',
+			'player-history',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

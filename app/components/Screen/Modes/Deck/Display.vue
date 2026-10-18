@@ -2,7 +2,7 @@
 import type { DeckCardSize, QuantityPosition } from '~~/shared/types/enums';
 import type { ResolvedDeckBoardLayout, ScreenConfig } from '~~/shared/types/screenConfig';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 
@@ -207,22 +207,22 @@ function gridCardSizeClass(layout: ResolvedDeckBoardLayout) {
 // Quantity badge position styles
 const BADGE_POSITION_CLASSES: Record<QuantityPosition, string> = {
 	'top-left': '-top-1 -left-1',
-	'top-center': '-top-1 left-1/2 -translate-x-1/2',
+	'top': '-top-1 left-1/2 -translate-x-1/2',
 	'top-right': '-top-1 -right-1',
-	'left-center': 'top-1/2 -left-1 -translate-y-1/2',
-	'right-center': 'top-1/2 -right-1 -translate-y-1/2',
+	'left': 'top-1/2 -left-1 -translate-y-1/2',
+	'right': 'top-1/2 -right-1 -translate-y-1/2',
 	'bottom-left': '-bottom-1 -left-1',
-	'bottom-center': '-bottom-1 left-1/2 -translate-x-1/2',
+	'bottom': '-bottom-1 left-1/2 -translate-x-1/2',
 	'bottom-right': '-bottom-1 -right-1',
 };
 
 const quantityPositionClass = computed(() => {
-	const pos: QuantityPosition = config.value.quantityPosition ?? 'top-right';
+	const pos: QuantityPosition = config.value.quantityPosition ?? DEFAULT_QUANTITY_POSITION;
 	return BADGE_POSITION_CLASSES[pos];
 });
 
 const highlanderPointsPositionClass = computed(() => {
-	const pos: QuantityPosition = config.value.highlanderPointsPosition ?? 'top-left';
+	const pos: QuantityPosition = config.value.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION;
 	return BADGE_POSITION_CLASSES[pos];
 });
 

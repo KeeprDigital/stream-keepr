@@ -188,6 +188,7 @@ describe('screenService', () => {
 		it('guards the Screen update with every exact Graphic Asset Reference precondition', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame.backgroundImage = {
+				kind: 'asset',
 				assetId: testGraphicAssetId('asset-1'),
 				revisionId: testGraphicAssetRevisionId('revision-1'),
 			};
@@ -223,7 +224,7 @@ describe('screenService', () => {
 		});
 
 		it('merges config for given mode', async () => {
-			// A mode that pins no Graphic Asset Reference, so the ordinary versioned write.
+			// A mode that pins no Graphic Asset, so its write is the plain versioned one.
 			const screen = createMockScreen({ modeConfigs: { 'feature-match': { showNames: true } } as any });
 			mockDb.query.screens.findFirst.mockResolvedValue(screen);
 			const updatedScreen = createMockScreen({ stateVersion: 1 });

@@ -334,11 +334,11 @@ export function screenWriteModule() {
 					item.reference,
 				));
 			// The library is built only once a reference this write actually changes
-			// has been found — a write that changes no reference asks it nothing —
-			// and it is asked exactly once whatever the save's size: one selectability
-			// question per changed reference was one remote catalogue round-trip each,
-			// which is what put the documented-cap save at ~90 s on deployed remote
-			// D1 (#374).
+			// has been found — most writes change no reference at all, and a write
+			// that changes no reference asks it nothing — and it is asked
+			// exactly once whatever the save's size: one selectability question per
+			// changed reference was one remote catalogue round-trip each, which is
+			// what put the documented-cap save at ~90 s on deployed remote D1 (#374).
 			if (changed.length > 0) {
 				const statuses = await graphicsAssets().inspectGraphicAssetRevisions({
 					references: changed.map(item => ({
