@@ -592,3 +592,35 @@ Deriving from configuration keeps the capability's reach equal to what the Scree
 - **Admit the capability on the existing `/api/events/**` reads** — the capability would reach its whole Event, decklists included, and every new private route would need a decision about it.
 - **One aggregate "mode data" read per Screen** — each mode's client would be rebuilt around a new payload, and the Live Session and Feature Match Session would lose the snapshot shapes their followers already apply.
 - **Path ids validated against the configuration everywhere** — repeats every query's validation on the server for no reach the derived form lacks.
+
+## ADR-0023: A Realtime Subscription is held until disposed, and its Event's recovery re-attempts while one waits
+
+Accepted · 2026-10-18 · #609
+
+### Decision
+
+**The realtime transport (`app/plugins/realtime.client.ts`) never forgets a Realtime Subscription on failure.** A room handler, channel handler, presence watch or presence entry that cannot attach stays pending. It might be waiting on a token for its Event, or its channel might have refused the attach. Its Event's recovery attaches it from the transport's own records, and the connection coming back retries it too. Only the consumer's disposal ends it.
+
+**One recovery per Event: mint if no token covers it, then attach everything waiting.** The quick retries (250 ms to 4 s) run first. The fault (`tokenError`) is published when they are spent. Then the recovery backs off (5, 10, 20 s) and settles at one attempt every 30 s, with no attempt limit. It succeeds only once everything waiting has attached, so the fault stands until then. A token in hand is not yet a show receiving. It stops when a recovery for another Event supersedes it, or when the last waiting subscription is disposed. Disposal clears the fault at once, since nothing is failing for anyone any more. A recovery that stops without landing points Ably's own re-mints (on reconnect, before expiry) back at the Event the token in hand covers.
+
+**A refused attach keeps its listener.** Ably re-attaches a suspended channel by itself, and the listener must still be there when it does. A retry takes the listener off before subscribing again, so nothing is delivered twice. A `failed` channel is attached explicitly first, because ably@2.29 refuses a subscribe on one. A refusal on a covered Event starts a recovery if none is running, because nothing else retries it while the connection stays up.
+
+**`enterPresence` holds its entry instead of failing.** It resolves once entered or once held, never waiting out an outage, because a Screen Output stops loading only when it returns. A held entry enters with its latest data once its Event recovers. `leavePresence` withdraws it either way.
+
+### Why
+
+The fix for #307 made a failed mint retry and report, but exhaustion still unsubscribed every waiting subscription. A later subscribe could restore coverage and clear the fault, yet the page's own handlers were gone. With no later subscribe, nothing even re-attempted. Coverage came back with nothing listening, and only a remount recovered. Presence was the same: a Screen Output whose entry failed was never counted again. #590 and #601 work above the transport and cannot restore what it has forgotten.
+
+### Consequences
+
+- Issue #609 asks for retries that are "bounded/backed off". Here that means bounded in rate, not in count: an attempt limit would leave a restored service with nothing listening.
+- A page left open through a long outage makes one attempt every 30 s for as long as something waits. That cost buys a show that recovers without anyone touching the page.
+- A subscribe on the Event the token still covers no longer clears the fault while a recovery for another Event is still running.
+- A refused attach on a covered Event now publishes the fault once its quick retries are spent. Before, it was only a console warning.
+- The token covers one Event at a time. A subscription left undisposed on an Event the client has moved away from stays pending. It attaches only if that Event is recovered again.
+
+### Rejected alternatives
+
+- **A bounded number of recovery attempts.** It brings back the failure this removes: after the last attempt, a restored service finds nothing listening.
+- **Re-register from above the transport** (#590, #601). That would need every consumer to know about token outages and remount, and the transport is the layer that knows a subscription exists.
+- **`enterPresence` waiting for the token.** It would hold a Screen Output's load for the length of the outage.
