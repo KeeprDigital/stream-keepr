@@ -45,8 +45,11 @@ async function getMigrationFiles() {
 		.toSorted();
 }
 
-/** Apply every checked-in migration before the Nuxt test server can open D1. */
-export async function prepareIntegrationD1(persistDir?: string) {
+/**
+ * Apply every checked-in migration before the Nuxt test server can open D1, then
+ * start its Event ids at `firstEventId` (see `integrationEventIdBlocks`).
+ */
+export async function prepareIntegrationD1(persistDir?: string, { firstEventId }: { firstEventId?: number } = {}) {
 	const expectedMigrations = await getMigrationFiles();
 	if (expectedMigrations.length === 0)
 		throw new Error('Integration D1 migration chain is empty');
@@ -83,6 +86,14 @@ export async function prepareIntegrationD1(persistDir?: string) {
 
 		if (missingMigrations.length > 0) {
 			throw new Error(`Integration D1 migration chain is incomplete; missing: ${missingMigrations.join(', ')}`);
+		}
+
+		if (firstEventId !== undefined) {
+			await database.batch([
+				database.prepare('DELETE FROM sqlite_sequence WHERE name = \'events\''),
+				database.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (\'events\', MAX(?, (SELECT COALESCE(MAX(id), 0) FROM events)))')
+					.bind(firstEventId - 1),
+			]);
 		}
 	}, persistDir === undefined ? undefined : resolveIntegrationWranglerPersistDir(process.cwd(), persistDir));
 }

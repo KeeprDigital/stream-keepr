@@ -29,6 +29,34 @@ export function integrationServerCount(env: NodeJS.ProcessEnv = process.env): nu
 	return Math.max(1, Math.min(4, Math.floor(availableParallelism() / 3)));
 }
 
+/** Event ids one server may mint; no test file creates anywhere near this many Events. */
+export const INTEGRATION_EVENT_ID_BLOCK_SIZE = 1_000_000;
+const INTEGRATION_EVENT_ID_BLOCKS = Math.floor((2 ** 31 - 1) / INTEGRATION_EVENT_ID_BLOCK_SIZE) - 1;
+
+/**
+ * The first Event id each of `count` servers mints, one disjoint block apiece (#630).
+ *
+ * Every server owns its own D1, but all of them publish to one Ably app, and an
+ * Event's channels (`event:<id>`, `screen:<id>:*`) are named by its id alone. Left
+ * to count from 1, two servers both create Event 17 and a test listening on
+ * `event:17` receives the other file's publications. The run's blocks are
+ * consecutive from a random start, not from slot 1, so another run on the same
+ * Ably app (a second worktree, CI) is unlikely to land on them either. Block 0
+ * is never drawn, and every id stays a positive int32 like the small ids a
+ * production database mints. `random` returns [0, 1), as `Math.random` does.
+ */
+export function integrationEventIdBlocks(count: number, random: () => number = Math.random): number[] {
+	if (count > INTEGRATION_EVENT_ID_BLOCKS)
+		throw new Error(`Cannot give ${count} integration servers disjoint Event ids; at most ${INTEGRATION_EVENT_ID_BLOCKS}`);
+	const blocks = new Set<number>();
+	let block = 1 + Math.floor(random() * INTEGRATION_EVENT_ID_BLOCKS);
+	while (blocks.size < count) {
+		blocks.add(block);
+		block = block % INTEGRATION_EVENT_ID_BLOCKS + 1;
+	}
+	return [...blocks].map(drawn => drawn * INTEGRATION_EVENT_ID_BLOCK_SIZE);
+}
+
 /** The state directory of the `slot`th server (1-based), matching `VITEST_POOL_ID`. */
 export function integrationServerPersistDir(slot: number): string {
 	return `${DEFAULT_INTEGRATION_WRANGLER_PERSIST_DIR}-${slot}`;

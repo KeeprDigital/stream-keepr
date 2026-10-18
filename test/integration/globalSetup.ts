@@ -7,6 +7,7 @@ import { prepareIntegrationD1 } from './integrationD1';
 import { freePorts, INTEGRATION_SERVER_LIST_ENV, startIntegrationServer } from './servers';
 import {
 	announceIntegrationMode,
+	integrationEventIdBlocks,
 	integrationServerCount,
 	integrationServerPersistDir,
 	resetIntegrationWranglerState,
@@ -35,9 +36,9 @@ async function assertIntegrationServerReady(server: IntegrationServer) {
 	}
 }
 
-async function startReadyServer(persistDir: string, port: number): Promise<IntegrationServer> {
+async function startReadyServer(persistDir: string, port: number, firstEventId: number): Promise<IntegrationServer> {
 	await resetIntegrationWranglerState(persistDir);
-	await prepareIntegrationD1(persistDir);
+	await prepareIntegrationD1(persistDir, { firstEventId });
 	const server = await startIntegrationServer({ persistDir, env: integrationServerEnv, port });
 	try {
 		await assertIntegrationServerReady(server);
@@ -50,7 +51,8 @@ async function startReadyServer(persistDir: string, port: number): Promise<Integ
 }
 
 /**
- * Start one server per test worker, each over its own database.
+ * Start one server per test worker, each over its own database and minting
+ * Event ids from its own block.
  *
  * Test files share library-wide state, so a server serves one file at a time;
  * `selectServer.ts` pins each worker to the server matching its pool id.
@@ -61,7 +63,9 @@ async function startIntegrationServers(): Promise<IntegrationServer[]> {
 		(_, index) => integrationServerPersistDir(index + 1),
 	);
 	const ports = await freePorts(persistDirs.length);
-	const started = await Promise.allSettled(persistDirs.map((persistDir, index) => startReadyServer(persistDir, ports[index]!)));
+	const firstEventIds = integrationEventIdBlocks(persistDirs.length);
+	const started = await Promise.allSettled(persistDirs.map((persistDir, index) =>
+		startReadyServer(persistDir, ports[index]!, firstEventIds[index]!)));
 	const servers = started.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
 	const failed = started.find(result => result.status === 'rejected');
 	if (failed) {
