@@ -205,6 +205,26 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		expect(resolution.status).toBe(200);
 	});
 
+	it('saves a Slot alone onto a Screen whose layout was never saved (#625)', async () => {
+		const fresh = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Fresh Overlay', slug: 'fresh-overlay', currentMode: 'feature-match-overlay' },
+		});
+		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
+			method: 'POST',
+			body: { bestOf: 3 },
+		});
+
+		const updated = await $fetch(
+			`/api/events/${eventId}/screens/${fresh.id}/config/feature-match-overlay`,
+			{ method: 'PATCH', body: { featureMatchId: slot.id } },
+		);
+
+		expect(updated.modeConfigs!['feature-match-overlay']!.featureMatchId).toBe(slot.id);
+		const reread = await $fetch(`/api/events/${eventId}/screens/${fresh.id}`);
+		expect(reread.modeConfigs!['feature-match-overlay']!.featureMatchId).toBe(slot.id);
+	});
+
 	it('removes every authoritative usage row when the owning Screen is deleted', async () => {
 		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
 		await expect($fetch<GraphicAssetUsage[]>(

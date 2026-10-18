@@ -16,6 +16,7 @@ import type {
 	ScreenMediaSource,
 } from '../types/screenConfig';
 import { BACKGROUND_LAYERS_CAPABLE_MODES } from '../screenModes';
+import { resolveScreenModeConfig } from '../types/screenConfig';
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
@@ -377,12 +378,13 @@ export function screenOutputResolvableSlotPrefixes(
 		: [GRAPHIC_ASSET_REFERENCE_SLOT_PREFIXES[mode]];
 }
 
+/** Stored mode configurations, as the write path holds them: each one a fragment. */
 export type GraphicAssetReferencingScreenModeConfigs = {
-	'feature-match-overlay'?: FeatureMatchOverlayModeConfig;
-	'broadcast-graphics'?: BroadcastGraphicsModeConfig;
-	'background'?: BackgroundModeConfig;
+	'feature-match-overlay'?: Partial<FeatureMatchOverlayModeConfig>;
+	'broadcast-graphics'?: Partial<BroadcastGraphicsModeConfig>;
+	'background'?: Partial<BackgroundModeConfig>;
 } & {
-	[Mode in BackgroundLayersCapableMode]?: BackgroundLayersModeConfig;
+	[Mode in BackgroundLayersCapableMode]?: Partial<BackgroundLayersModeConfig>;
 };
 
 /**
@@ -395,24 +397,23 @@ export type GraphicAssetReferencingScreenModeConfigs = {
  *
  * Exhaustive by construction: every mode not branched on here is one whose
  * definition declares a Background Layer stack, and that stack is all it pins.
+ *
+ * A stored fragment is completed through `resolveScreenModeConfig`, the same
+ * resolution a rendering of the mode reads, so a Screen is indexed for exactly
+ * what it publishes. A Screen whose layout was never saved therefore publishes
+ * its default layout, which pins nothing, rather than failing the save (#625).
  */
 export function screenModeGraphicAssetReferences(
 	mode: GraphicAssetReferencingScreenMode,
 	modeConfigs: GraphicAssetReferencingScreenModeConfigs | null | undefined,
 ): ScreenGraphicAssetReference[] {
 	switch (mode) {
-		case 'feature-match-overlay': {
-			const config = modeConfigs?.['feature-match-overlay'];
-			return config ? featureMatchOverlayGraphicAssetReferences(config) : [];
-		}
-		case 'broadcast-graphics': {
-			const config = modeConfigs?.['broadcast-graphics'];
-			return config ? broadcastGraphicsGraphicAssetReferences(config) : [];
-		}
-		case 'background': {
-			const config = modeConfigs?.background;
-			return config ? backgroundGraphicAssetReferences(config) : [];
-		}
+		case 'feature-match-overlay':
+			return featureMatchOverlayGraphicAssetReferences(resolveScreenModeConfig(modeConfigs, mode));
+		case 'broadcast-graphics':
+			return broadcastGraphicsGraphicAssetReferences(resolveScreenModeConfig(modeConfigs, mode));
+		case 'background':
+			return backgroundGraphicAssetReferences(resolveScreenModeConfig(modeConfigs, mode));
 		default: {
 			const declared: BackgroundLayersCapableMode = mode;
 			return plainModeBackgroundLayerGraphicAssetReferences(declared, modeConfigs?.[declared]);

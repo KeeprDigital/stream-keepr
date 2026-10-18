@@ -898,6 +898,13 @@ export type ModeConfigTypeMap = {
 // Type for the modeConfigs column - partial map keyed by mode
 export type ModeConfigsMap = Partial<ModeConfigTypeMap>;
 
+/**
+ * Mode configurations as stored: each one a fragment, because a
+ * mode-configuration PATCH writes fragments. `resolveScreenModeConfig`
+ * completes one from its mode's defaults.
+ */
+export type StoredModeConfigs = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]> };
+
 // ─── Nullable config types (for reset / clear-to-default operations) ───
 // Sending `null` for a field means "delete this key from stored config".
 export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] | null };
@@ -947,7 +954,7 @@ export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConf
  * resource a Screen publishes (#604).
  */
 export function resolveScreenModeConfig<T extends ScreenMode>(
-	modeConfigs: ModeConfigsMap | null | undefined,
+	modeConfigs: StoredModeConfigs | null | undefined,
 	mode: T,
 ): ModeConfigTypeMap[T] {
 	return {
