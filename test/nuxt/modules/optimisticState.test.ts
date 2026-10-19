@@ -117,6 +117,45 @@ describe('optimistic-state module', () => {
 		});
 	});
 
+	describe('settling while other work claims the same field', () => {
+		it('a result leaves a field a newer pending edit claims, and writes the rest it owns', async () => {
+			let resolveApi!: (state: SlotState) => void;
+			const { stateMap, enqueue, run } = createTestSetup();
+
+			void run('both', 1, current => ({ ...current, life1: 25, life2: 25 }), () =>
+				new Promise<SlotState>((resolve) => {
+					resolveApi = resolve;
+				}));
+			enqueue('life-1', 1, current => ({ ...current, life1: current.life1 - 1 }), () => ({ life1: 24 }));
+			expect(stateMap.value.get(1)).toEqual({ life1: 24, life2: 25, clockMs: 100 });
+
+			// The older action settles with a state that predates the pending tap.
+			resolveApi({ life1: 25, life2: 26, clockMs: 100 });
+			await flushPromises();
+
+			expect(stateMap.value.get(1)).toEqual({ life1: 24, life2: 26, clockMs: 100 });
+		});
+
+		it('a rollback takes its failed prediction back even from a field newer work claims', async () => {
+			let rejectApi!: (error: Error) => void;
+			const { stateMap, enqueue, run } = createTestSetup();
+
+			const settled = run('both', 1, current => ({ ...current, life1: 25, life2: 25 }), () =>
+				new Promise<SlotState>((_resolve, reject) => {
+					rejectApi = reject;
+				}));
+			enqueue('life-1', 1, current => ({ ...current, life1: current.life1 - 1 }), () => ({ life1: 24 }));
+
+			rejectApi(new Error('network error'));
+			await settled;
+			await flushPromises();
+
+			// The failed prediction must leave the screen; the pending tap's own answer
+			// restores what it changed.
+			expect(stateMap.value.get(1)).toEqual({ life1: 20, life2: 20, clockMs: 100 });
+		});
+	});
+
 	describe('reporting a refused prediction', () => {
 		/*
 		 * A rolled-back optimistic action is where the words matter most: the operator

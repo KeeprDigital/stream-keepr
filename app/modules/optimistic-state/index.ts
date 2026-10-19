@@ -51,10 +51,15 @@ interface OwnershipOptions<S> {
 	serverOwns?: readonly (keyof S)[];
 }
 
-interface TargetState<S> {
+interface Claim {
+	/** Identifies this claim among the entity's live claims. */
+	token: object;
+	release: () => void;
+}
+
+interface TargetState<S> extends Claim {
 	snapshot: S;
 	owned: Set<keyof S>;
-	release: () => void;
 }
 
 /**
@@ -62,8 +67,9 @@ interface TargetState<S> {
  *
  * Every optimistic action owns exactly the fields its predicted change
  * touches (plus any declared `serverOwns` slice). Flush results and
- * rollbacks write only owned fields, and remote state applied while work
- * is pending or in flight never overwrites another action's owned fields.
+ * rollbacks write only owned fields. Neither a flush result nor remote state
+ * applied while work is pending or in flight overwrites a field another
+ * action still owns: that action's own answer writes it.
  * All batches and actions created from one instance share the same
  * ownership claims, so `applyRemote` merges around every live edit.
  */
@@ -84,7 +90,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 	// target or in-flight action, released when the work settles.
 	const claims = new Map<number, Map<object, ReadonlySet<keyof S>>>();
 
-	function claim(id: number, owned: ReadonlySet<keyof S>): () => void {
+	function claim(id: number, owned: ReadonlySet<keyof S>): Claim {
 		const token = {};
 		let forId = claims.get(id);
 		if (!forId) {
@@ -92,16 +98,22 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 			claims.set(id, forId);
 		}
 		forId.set(token, owned);
-		return () => {
-			forId!.delete(token);
-			if (forId!.size === 0)
-				claims.delete(id);
+		return {
+			token,
+			release: () => {
+				forId!.delete(token);
+				if (forId!.size === 0)
+					claims.delete(id);
+			},
 		};
 	}
 
-	function ownedFieldsFor(id: number): Set<keyof S> {
+	/** Fields live work owns for an entity, leaving out one claim's own. */
+	function ownedFieldsFor(id: number, except?: object): Set<keyof S> {
 		const union = new Set<keyof S>();
-		for (const owned of claims.get(id)?.values() ?? []) {
+		for (const [token, owned] of claims.get(id) ?? []) {
+			if (token === except)
+				continue;
 			for (const field of owned)
 				union.add(field);
 		}
@@ -129,6 +141,17 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 	function mergeIntoState(id: number, source: S, owned: ReadonlySet<keyof S>) {
 		const live = options.stateMap.value.get(id);
 		options.stateMap.value.set(id, live ? mergeOwned(live, source, owned) : source);
+	}
+
+	/**
+	 * Settle one claim's owned fields from its answer. A field another live claim
+	 * also owns keeps its local value: that work is newer than this answer or
+	 * still to be answered, and its own answer writes the field. A rollback does
+	 * not wait like this — a failed prediction leaves the screen at once.
+	 */
+	function settleIntoState(id: number, answer: S, target: TargetState<S>) {
+		const others = ownedFieldsFor(id, target.token);
+		mergeIntoState(id, answer, new Set([...target.owned].filter(field => !others.has(field))));
 	}
 
 	function resultFor(result: FlushResult<S>, id: number): S | undefined {
@@ -188,7 +211,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 							for (const [id, target] of targets) {
 								const state = resultFor(result, id);
 								if (state !== undefined)
-									mergeIntoState(id, state, target.owned);
+									settleIntoState(id, state, target);
 							}
 						}
 						return result;
@@ -254,9 +277,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 						target.owned.add(field);
 				}
 				else {
-					const targetState: TargetState<S> = { snapshot: current, owned, release: () => {} };
-					targetState.release = claim(id, targetState.owned);
-					entry.targets.set(id, targetState);
+					entry.targets.set(id, { snapshot: current, owned, ...claim(id, owned) });
 				}
 			}
 
@@ -313,7 +334,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 				continue;
 			options.stateMap.value.set(id, optimistic);
 			const owned = deriveOwnership(current, optimistic, ownership?.serverOwns);
-			applied.set(id, { snapshot: current, owned, release: claim(id, owned) });
+			applied.set(id, { snapshot: current, owned, ...claim(id, owned) });
 		}
 
 		if (applied.size === 0)
@@ -328,7 +349,7 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 				for (const [id, target] of applied) {
 					const state = resultFor(result, id);
 					if (state !== undefined)
-						mergeIntoState(id, state, target.owned);
+						settleIntoState(id, state, target);
 				}
 				return result;
 			},
