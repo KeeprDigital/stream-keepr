@@ -1,4 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 /**
  * Keeping one client's view of a Broadcast Graphics Live Session honest across a
@@ -10,7 +11,7 @@ import type { MaybeRefOrGetter } from 'vue';
  * nothing tells the client it fell behind — a Live Control would show a stack that
  * is minutes out of date and an operator would take the wrong graphic off air.
  *
- * So reconnection is itself a reason to reload, exactly as a sequence gap is. This
+ * So losing continuity is itself a reason to reload, exactly as a sequence gap is. This
  * owns that rule for both readers of a Live Session: the Live workspace and every
  * Screen Output. The rule itself, and what a disconnection deliberately does not
  * do, now live in `useReconnectResync`, which every other realtime-fed surface
@@ -38,7 +39,10 @@ export function useBroadcastGraphicsLiveSessionSync(
 		{ immediate: true },
 	);
 
-	const { disconnected } = useReconnectResync(reload);
+	const { disconnected } = useReconnectResync(reload, () => {
+		const event = toValue(eventId);
+		return event ? eventRealtimeChannel(event) : null;
+	});
 
 	return { disconnected, reload };
 }

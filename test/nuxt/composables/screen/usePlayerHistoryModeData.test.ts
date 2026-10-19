@@ -3,6 +3,7 @@ import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHist
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 const defaultConfig = {
 	playerId: null as number | null,
@@ -28,6 +29,7 @@ const mockScreenStore = { updateModeConfig: vi.fn() };
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 type Handler = (message: Record<string, unknown>) => void;
 const channelHandlers = new Map<string, Set<Handler>>();
+const continuity = createContinuitySignal();
 const mockRealtime = reactive({
 	connectionState: 'connected',
 	tokenError: null as Error | null,
@@ -38,6 +40,7 @@ const mockRealtime = reactive({
 		channelHandlers.get(key)!.add(handler);
 		return () => channelHandlers.get(key)!.delete(handler);
 	},
+	onContinuityLost: continuity.onContinuityLost,
 });
 
 /** An Event message, as the Event channel delivers it. */
@@ -393,13 +396,14 @@ describe('usePlayerHistoryModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
 
-		it('shows a result missed while disconnected once it reconnects', async () => {
+		it('shows a result missed while disconnected once its channel is attached again', async () => {
 			const { pageData, formatOutcome } = await showingPendingHistory();
 
 			mockRealtime.connectionState = 'disconnected';
 			await nextTick();
 			mockFetch.mockResolvedValue({ player: mockPlayer, history: [recorded] });
 			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);

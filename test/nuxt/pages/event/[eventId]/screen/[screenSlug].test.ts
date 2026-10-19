@@ -70,7 +70,7 @@ vi.mock('~/composables/repositories/useScreenOutputReadRepository', () => ({
 }));
 
 vi.mock('~/composables/core/useRealtime', () => {
-	const transport = { connectionId: 'connection-1', connectionState: 'connected' };
+	const transport = { connectionId: 'connection-1', connectionState: 'connected', onContinuityLost: () => () => {} };
 	return {
 		useRealtime: () => transport,
 		tryUseRealtime: () => transport,

@@ -619,6 +619,7 @@ The fix for #307 made a failed mint retry and report, but exhaustion still unsub
 - A subscribe on the Event the token still covers no longer clears the fault while a recovery for another Event is still running.
 - A refused attach on a covered Event now publishes the fault once its quick retries are spent. Before, it was only a console warning.
 - The token covers one Event at a time. A subscription left undisposed on an Event the client has moved away from stays pending. It attaches only if that Event is recovered again.
+- Reconnect Resync no longer re-reads on the connection coming back, because channels reattach only after it and `attachPending` runs at that same moment: a read answered first missed whatever was published before the channel listened again (#641). The transport signals each channel attached again having lost continuity (`onContinuityLost`: Ably's attach with `resumed: false`, or a first attach the connection dropped before), and the resync re-reads off that. A channel lost while the connection stays up resyncs too; a resumed reattach does not.
 
 ### Rejected alternatives
 

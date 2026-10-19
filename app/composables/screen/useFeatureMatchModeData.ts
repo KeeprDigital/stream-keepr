@@ -1,5 +1,6 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatch } from '~/types';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 export function useFeatureMatchModeData() {
 	const { eventId } = useScreenContext();
@@ -78,7 +79,7 @@ export function useFeatureMatchModeData() {
 			return;
 
 		void featureMatchStateStore.loadState(evtId, matchId);
-	});
+	}, () => eventId.value ? eventRealtimeChannel(eventId.value) : null);
 
 	return {
 		config,

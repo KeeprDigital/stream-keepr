@@ -385,14 +385,65 @@ export default defineNuxtPlugin({
 			return false;
 		}
 
+		/**
+		 * Whether each channel's message continuity has held since this client first
+		 * asked for it: `unstarted` until its first attach, `held` once attached, and
+		 * `lost` for one the connection dropped before it ever attached.
+		 */
+		const continuity = new Map<string, 'unstarted' | 'held' | 'lost'>();
+		const continuityLostHandlers = new Map<string, Set<() => void>>();
+
+		/**
+		 * Ably reports an attach that did not resume continuity as `attached` from any
+		 * other state, or as `update` on a channel still attached (RTL12). Either way,
+		 * whatever was published since continuity broke was never delivered, and only
+		 * now is anything listening for what comes next. A first attach on an unbroken
+		 * connection missed nothing anyone had yet.
+		 */
+		function watchContinuity(channelName: string, channel: Ably.RealtimeChannel) {
+			continuity.set(channelName, 'unstarted');
+			const onAttached = (stateChange: Ably.ChannelStateChange) => {
+				const before = continuity.get(channelName);
+				continuity.set(channelName, 'held');
+				if (stateChange.resumed || before === 'unstarted')
+					return;
+				for (const handler of [...continuityLostHandlers.get(channelName) ?? []])
+					handler();
+			};
+			channel.on('attached', onAttached);
+			channel.on('update', onAttached);
+		}
+
 		function getChannel(channelName: string): Ably.RealtimeChannel {
 			if (!channels.has(channelName)) {
-				channels.set(channelName, ably.channels.get(channelName));
+				const channel = ably.channels.get(channelName);
+				watchContinuity(channelName, channel);
+				channels.set(channelName, channel);
 			}
 			return channels.get(channelName)!;
 		}
 
+		/** Call `handler` each time `channelName` is attached again after losing message continuity. */
+		function onContinuityLost(channelName: string, handler: () => void): Unsubscribe {
+			getChannel(channelName);
+			if (!continuityLostHandlers.has(channelName))
+				continuityLostHandlers.set(channelName, new Set());
+			const handlers = continuityLostHandlers.get(channelName)!;
+			handlers.add(handler);
+			return () => {
+				handlers.delete(handler);
+			};
+		}
+
 		function updateConnectionState(state: Ably.ConnectionState, err?: Error | null) {
+			// A channel not yet attached when the link dropped has missed whatever was
+			// published meanwhile, so its first attach is a loss like any other.
+			if (state === 'disconnected' || state === 'suspended' || state === 'failed') {
+				for (const [channelName, held] of continuity) {
+					if (held === 'unstarted')
+						continuity.set(channelName, 'lost');
+				}
+			}
 			connectionSnapshot = {
 				isConnected: state === 'connected',
 				connectionState: state,
@@ -793,6 +844,8 @@ export default defineNuxtPlugin({
 				}
 			}
 			channels.clear();
+			continuity.clear();
+			continuityLostHandlers.clear();
 
 			void disconnect();
 		}
@@ -811,6 +864,7 @@ export default defineNuxtPlugin({
 					onRoom,
 					offRoom,
 					onChannel,
+					onContinuityLost,
 					enterPresence,
 					leavePresence,
 					updatePresence,

@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 
 const mockEventStore = { event: null, displayEvent: null };
@@ -34,8 +35,11 @@ function slotRead(slotId: number) {
 	};
 }
 
+const continuity = createContinuitySignal();
+
 mockNuxtImport('tryUseRealtime', () => () => ({
 	get connectionState() { return mockConnectionState.value; },
+	onContinuityLost: continuity.onContinuityLost,
 }));
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
@@ -345,6 +349,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 			mockConnectionState.value = 'suspended';
 			await nextTick();
 			mockConnectionState.value = 'connected';
+			continuity.reattach('event:7');
 			await nextTick();
 			await flushPromises();
 		}

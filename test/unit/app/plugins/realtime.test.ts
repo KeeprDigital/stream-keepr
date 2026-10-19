@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MessageHandler = (message: { data: unknown }) => void;
 type PresenceHandler = () => void;
+type StateListener = (change: { resumed: boolean }) => void;
 
 class MockChannel {
 	publish = vi.fn().mockResolvedValue(undefined);
@@ -9,8 +10,38 @@ class MockChannel {
 	/** Only `failed` changes anything here: ably@2.29 refuses a subscribe on a failed channel until it is attached again. */
 	state = 'initialized';
 	attach = vi.fn(async () => {
-		this.state = 'attached';
+		this.attached(false);
 	});
+
+	private stateListeners = new Map<string, StateListener[]>();
+
+	on = vi.fn((event: string, listener: StateListener) => {
+		this.stateListeners.set(event, [...(this.stateListeners.get(event) ?? []), listener]);
+	});
+
+	/**
+	 * An ATTACHED from Ably, as ably@2.29 reports one: `attached` from any other
+	 * state, and from `attached` an `update` — only when continuity was lost.
+	 */
+	attached(resumed: boolean) {
+		if (this.state === 'attached') {
+			if (!resumed)
+				this.emitState('update', resumed);
+			return;
+		}
+		this.state = 'attached';
+		this.emitState('attached', resumed);
+	}
+
+	suspend() {
+		this.state = 'suspended';
+		this.emitState('suspended', false);
+	}
+
+	private emitState(event: string, resumed: boolean) {
+		for (const listener of this.stateListeners.get(event) ?? [])
+			listener({ resumed });
+	}
 
 	/** Arrays, as Ably's emitter keeps them: a listener added twice is called twice. */
 	private handlers = new Map<string, MessageHandler[]>();
@@ -898,6 +929,84 @@ describe('realtime plugin', () => {
 			await vi.advanceTimersByTimeAsync(5 * 60_000);
 
 			expect(authorize).toHaveBeenCalledTimes(10);
+		});
+	});
+
+	describe('a channel\'s lost continuity', () => {
+		async function attachedChannel() {
+			const realtime = await createTransport();
+			const lost = vi.fn();
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			realtime.onContinuityLost('event:7', lost);
+			await settle();
+			connectionHandlers.get('connected')?.();
+			const channel = channels.get('event:7')!;
+			channel.attached(false);
+			return { realtime, lost, channel };
+		}
+
+		it('is signalled once the channel is attached again, not when the connection comes back', async () => {
+			const { lost, channel } = await attachedChannel();
+			expect(lost).not.toHaveBeenCalled();
+
+			connectionHandlers.get('suspended')?.({ reason: 'offline' });
+			channel.suspend();
+			connectionHandlers.get('connected')?.();
+			expect(lost).not.toHaveBeenCalled();
+
+			channel.attached(false);
+			expect(lost).toHaveBeenCalledOnce();
+		});
+
+		it('is signalled for a channel-only loss while the connection stays up', async () => {
+			const { lost, channel } = await attachedChannel();
+
+			channel.attached(false);
+
+			expect(lost).toHaveBeenCalledOnce();
+		});
+
+		it('is not signalled for a reattach that resumed, because nothing was missed', async () => {
+			const { lost, channel } = await attachedChannel();
+
+			connectionHandlers.get('suspended')?.({ reason: 'offline' });
+			channel.suspend();
+			connectionHandlers.get('connected')?.();
+			channel.attached(true);
+
+			expect(lost).not.toHaveBeenCalled();
+		});
+
+		it('is signalled for a first attach the connection dropped before, but not for one on an unbroken connection', async () => {
+			const realtime = await createTransport();
+			const lostBefore = vi.fn();
+			const unbroken = vi.fn();
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			realtime.onContinuityLost('event:7', lostBefore);
+			await settle();
+
+			connectionHandlers.get('disconnected')?.({ reason: 'offline' });
+			connectionHandlers.get('connected')?.();
+			channels.get('event:7')!.attached(false);
+			expect(lostBefore).toHaveBeenCalledOnce();
+
+			realtime.onChannel('screen:7:2', 'screen:command:debug', vi.fn());
+			realtime.onContinuityLost('screen:7:2', unbroken);
+			await settle();
+			channels.get('screen:7:2')!.attached(false);
+			expect(unbroken).not.toHaveBeenCalled();
+		});
+
+		it('stops being signalled once its handler is disposed', async () => {
+			const { realtime, lost, channel } = await attachedChannel();
+			const other = vi.fn();
+			const dispose = realtime.onContinuityLost('event:7', other);
+
+			dispose();
+			channel.attached(false);
+
+			expect(other).not.toHaveBeenCalled();
+			expect(lost).toHaveBeenCalledOnce();
 		});
 	});
 
