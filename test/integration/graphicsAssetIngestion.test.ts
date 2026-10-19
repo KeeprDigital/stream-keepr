@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { expectResponseStatus } from './responseStatus';
 
 /** Filled with the graphics author session cookie, the only author identity. */
 const authorHeaders: Record<string, string> = {};
@@ -371,7 +372,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/1`,
 			{ method: 'PUT', headers: authorHeaders, body: firstPart },
 		);
-		expect(firstResponse.status).toBe(200);
+		await expectResponseStatus(firstResponse, 200);
 		// Simulate an ambiguous success: the caller loses the response body and
 		// must recover solely from the server's durable checkpoint.
 		await firstResponse.body?.cancel();
@@ -400,14 +401,14 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/1`,
 			{ method: 'PUT', headers: authorHeaders, body: firstPart },
 		);
-		expect(duplicateResponse.status).toBe(200);
+		await expectResponseStatus(duplicateResponse, 200);
 		await expect(duplicateResponse.json()).resolves.toEqual(reconnected);
 
 		const finalResponse = await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/2`,
 			{ method: 'PUT', headers: authorHeaders, body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES) },
 		);
-		expect(finalResponse.status).toBe(200);
+		await expectResponseStatus(finalResponse, 200);
 		const ready = await finalResponse.json() as GraphicsIngestionOperation;
 		expect(ready.transferredByteLength).toBe(bytes.byteLength);
 

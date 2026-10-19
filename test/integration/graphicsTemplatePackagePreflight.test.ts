@@ -15,6 +15,8 @@ import {
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
+import { expectResponseStatus } from './responseStatus';
+import { throughTransientUnavailability } from './transientUnavailability';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -124,15 +126,17 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 	const transfer = started.transfer!;
 	for (let partNumber = 1; partNumber <= transfer.partCount; partNumber += 1) {
 		const offset = (partNumber - 1) * transfer.partByteLength;
-		const response = await fetch(
+		// A part is re-sent through the library's transient 503, as the production
+		// client would (#633): this suite is about preflight, not the store staying up.
+		const response = await throughTransientUnavailability(() => fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/${partNumber}`,
 			{
 				method: 'PUT',
 				headers: authorHeaders,
 				body: archive.slice(offset, Math.min(archive.byteLength, offset + transfer.partByteLength)),
 			},
-		);
-		expect(response.status).toBe(200);
+		), { attempts: transfer.maximumPartAttempts });
+		await expectResponseStatus(response, 200);
 	}
 	return await $fetch<GraphicsIngestionOperation>(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/complete`,
