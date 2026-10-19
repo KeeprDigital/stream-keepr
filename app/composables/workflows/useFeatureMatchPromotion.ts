@@ -13,7 +13,10 @@ interface PromoteFeatureMatchInput {
  * Client-side Feature Match Slot Promotion workflow.
  *
  * Calls the server-side promotion seam and applies the returned Slot and
- * Assignment changes to local Event Data stores without broad reloads.
+ * Assignment changes to local Event Data stores without broad reloads. Each
+ * returned Slot is a write's answer, so its Session passes the Live State
+ * Follower's command-result decision: an answer overtaken by a newer
+ * promotion or clearing of that Slot is refused, Assignment included.
  */
 export function useFeatureMatchPromotion() {
 	const featureMatchRepo = useFeatureMatchRepository();
@@ -56,13 +59,16 @@ export function useFeatureMatchPromotion() {
 			}
 		}
 
+		// An answer overtaken by a newer promotion or clearing of the promoted Slot
+		// carries an Assignment that promotion has already moved on.
+		let promotedSlotCurrent = true;
 		if (slotsFlight.current) {
 			for (const featureMatch of result.clearedSlots)
-				featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch });
-			featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch: result.promotedSlot });
+				featureMatchStore.applySavedSlot(featureMatch);
+			promotedSlotCurrent = featureMatchStore.applySavedSlot(result.promotedSlot);
 		}
 
-		if (assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
+		if (promotedSlotCurrent && assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
 			assignmentStore.applySavedAssignment(result.assignment);
 
 		return result;

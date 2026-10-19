@@ -109,14 +109,24 @@ describe('a notification', () => {
 		expect(held.has('screen')).toBe(false);
 	});
 
-	it('from a different epoch is answered by reloading', () => {
+	it('from an ended epoch is ignored, whatever its sequence', () => {
 		const { held, follower } = harness();
 		follower.acceptSnapshot(snapshot({ id: 2, sequence: 3, words: ['a'] }));
 
 		const outcome = follower.notify('screen', { sessionId: 1, sequence: 4, added: ['old epoch'] });
 
-		expect(outcome).toBe('reload');
+		expect(outcome).toBe('ignored');
 		expect(held.get('screen')).toMatchObject({ id: 2, sequence: 3, words: ['a'] });
+	});
+
+	it('from a newer epoch is answered by reloading', () => {
+		const { held, follower } = harness();
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 3, words: ['a'] }));
+
+		const outcome = follower.notify('screen', { sessionId: 2, sequence: 1, added: ['new epoch'] });
+
+		expect(outcome).toBe('reload');
+		expect(held.get('screen')).toMatchObject({ id: 1, sequence: 3, words: ['a'] });
 	});
 
 	it('to a held state that takes no difference reloads, even when it repeats a sequence', () => {
@@ -130,20 +140,20 @@ describe('a notification', () => {
 });
 
 describe('a command result', () => {
-	it('newer than what is held replaces it and is answered', () => {
+	it('newer than what is held is accepted and held', () => {
 		const { held, follower } = harness();
 		follower.acceptSnapshot(snapshot({ sequence: 3, words: ['a'] }));
 		const result = snapshot({ sequence: 5, words: ['a', 'b', 'c'] });
 
-		expect(follower.acceptCommandResult(result)).toBe(result);
+		expect(follower.acceptCommandResult(result)).toEqual({ accepted: true, held: result, epochEnded: false });
 		expect(held.get('screen')).toBe(result);
 	});
 
-	it('for a key nothing is held for is held', () => {
+	it('for a key nothing is held for is accepted and held', () => {
 		const { held, follower } = harness();
 		const result = snapshot({ sequence: 2, words: ['a'] });
 
-		expect(follower.acceptCommandResult(result)).toBe(result);
+		expect(follower.acceptCommandResult(result)).toEqual({ accepted: true, held: result, epochEnded: false });
 		expect(held.get('screen')).toBe(result);
 	});
 
@@ -152,7 +162,7 @@ describe('a command result', () => {
 		const newer = snapshot({ sequence: 5, words: ['a', 'b'] });
 		follower.acceptSnapshot(newer);
 
-		expect(follower.acceptCommandResult(snapshot({ sequence: 4, words: ['a'] }))).toBe(newer);
+		expect(follower.acceptCommandResult(snapshot({ sequence: 4, words: ['a'] }))).toEqual({ accepted: false, held: newer, epochEnded: false });
 		expect(held.get('screen')).toBe(newer);
 	});
 
@@ -161,8 +171,99 @@ describe('a command result', () => {
 		const current = snapshot({ id: 2, sequence: 1, words: [] });
 		follower.acceptSnapshot(current);
 
-		expect(follower.acceptCommandResult(snapshot({ id: 1, sequence: 9, words: ['ended'] }))).toBe(current);
+		expect(follower.acceptCommandResult(snapshot({ id: 1, sequence: 9, words: ['ended'] }))).toEqual({ accepted: false, held: current, epochEnded: true });
 		expect(held.get('screen')).toBe(current);
+	});
+
+	it('from a newer epoch is accepted, whatever its sequence', () => {
+		const { held, follower } = harness();
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 9, words: ['ended'] }));
+		const result = snapshot({ id: 2, sequence: 1, words: [] });
+
+		expect(follower.acceptCommandResult(result)).toEqual({ accepted: true, held: result, epochEnded: false });
+		expect(held.get('screen')).toBe(result);
+	});
+});
+
+describe('a snapshot read elsewhere', () => {
+	it('newer than what is held is held', () => {
+		const { held, follower } = harness();
+		follower.acceptSnapshot(snapshot({ sequence: 3 }));
+		const read = snapshot({ sequence: 4, words: ['a'] });
+
+		expect(follower.acceptRead(read)).toEqual({ accepted: true, held: read, epochEnded: false });
+		expect(held.get('screen')).toBe(read);
+	});
+
+	it('older than what is held is refused, and says whether its epoch has ended', () => {
+		const { held, follower } = harness();
+		const current = snapshot({ id: 2, sequence: 3 });
+		follower.acceptSnapshot(current);
+
+		expect(follower.acceptRead(snapshot({ id: 2, sequence: 2 }))).toEqual({ accepted: false, held: current, epochEnded: false });
+		expect(follower.acceptRead(snapshot({ id: 1, sequence: 9 }))).toEqual({ accepted: false, held: current, epochEnded: true });
+		expect(held.get('screen')).toBe(current);
+	});
+
+	it('does not supersede a load in flight, which may answer something newer', async () => {
+		const { held, follower } = harness();
+		follower.acceptSnapshot(snapshot({ sequence: 3 }));
+		const reading = deferred<Snapshot>();
+		const load = follower.load('screen', () => reading.promise);
+
+		follower.acceptRead(snapshot({ sequence: 4, words: ['read'] }));
+		reading.resolve(snapshot({ sequence: 5, words: ['loaded'] }));
+
+		await expect(load).resolves.toMatchObject({ sequence: 5 });
+		expect(held.get('screen')).toMatchObject({ sequence: 5, words: ['loaded'] });
+	});
+});
+
+describe('a notification carrying its whole snapshot', () => {
+	function wholeSnapshotHarness() {
+		const held = new Map<string, Snapshot>();
+		const follower = createLiveStateFollower<string, Snapshot, Notification & { words: string[] }>({
+			keyOf: state => state.key,
+			held: key => held.get(key),
+			applyState: state => held.set(state.key, state),
+			withDifference: (state, notification) => ({ ...state, sequence: notification.sequence, words: notification.words }),
+			forget: key => held.delete(key),
+			snapshotOf: notification => snapshot({ id: notification.sessionId, sequence: notification.sequence, words: notification.words }),
+		});
+		return { held, follower };
+	}
+
+	it('from a newer epoch is held without a reload', () => {
+		const { held, follower } = wholeSnapshotHarness();
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 7, words: ['ended'] }));
+
+		const outcome = follower.notify('screen', { sessionId: 2, sequence: 1, words: ['started'] });
+
+		expect(outcome).toBe('applied');
+		expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1, words: ['started'] });
+	});
+
+	it('from an ended epoch is ignored', () => {
+		const { held, follower } = wholeSnapshotHarness();
+		follower.acceptSnapshot(snapshot({ id: 2, sequence: 1, words: ['current'] }));
+
+		const outcome = follower.notify('screen', { sessionId: 1, sequence: 8, words: ['ended'] });
+
+		expect(outcome).toBe('ignored');
+		expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1, words: ['current'] });
+	});
+
+	it('from a newer epoch supersedes a load in flight', async () => {
+		const { held, follower } = wholeSnapshotHarness();
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 7 }));
+		const read = deferred<Snapshot>();
+		const load = follower.load('screen', () => read.promise);
+
+		follower.notify('screen', { sessionId: 2, sequence: 1, words: ['started'] });
+		read.resolve(snapshot({ id: 1, sequence: 7 }));
+
+		await expect(load).resolves.toMatchObject({ id: 2 });
+		expect(held.get('screen')).toMatchObject({ id: 2 });
 	});
 });
 
@@ -200,6 +301,26 @@ describe('a load', () => {
 		read.resolve(snapshot());
 
 		await expect(load).resolves.toBeNull();
+		expect(held.has('screen')).toBe(false);
+	});
+
+	it('answering something older than what is held leaves it, and answers what is held', async () => {
+		const { held, follower } = harness();
+		const reading = deferred<Snapshot>();
+		const load = follower.load('screen', () => reading.promise);
+		const newer = snapshot({ sequence: 6, words: ['read'] });
+		follower.acceptRead(newer);
+
+		reading.resolve(snapshot({ sequence: 5, words: ['loaded'] }));
+
+		await expect(load).resolves.toBe(newer);
+		expect(held.get('screen')).toBe(newer);
+	});
+
+	it('that finds nothing holds nothing, and answers what is held', async () => {
+		const { held, follower } = harness();
+
+		await expect(follower.load('screen', async () => null)).resolves.toBeNull();
 		expect(held.has('screen')).toBe(false);
 	});
 

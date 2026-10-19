@@ -7,7 +7,7 @@ const mockRepo = {
 	promoteMatch: vi.fn(),
 };
 const mockFeatureMatchStore = {
-	applyRemoteUpdated: vi.fn(),
+	applySavedSlot: vi.fn(() => true),
 	currentLifetime: () => ({ stale: false, current: true }),
 };
 const mockModalOpen = vi.fn();
@@ -166,16 +166,8 @@ describe('useFeatureMatchPromotion', () => {
 		});
 
 		expect(mockRepo.promoteMatch).toHaveBeenCalledWith(1, 2, 7);
-		expect(mockFeatureMatchStore.applyRemoteUpdated).toHaveBeenNthCalledWith(1, {
-			eventId: 1,
-			timestamp: expect.any(Number),
-			featureMatch: clearedSlot,
-		});
-		expect(mockFeatureMatchStore.applyRemoteUpdated).toHaveBeenNthCalledWith(2, {
-			eventId: 1,
-			timestamp: expect.any(Number),
-			featureMatch: promotedSlot,
-		});
+		expect(mockFeatureMatchStore.applySavedSlot).toHaveBeenNthCalledWith(1, clearedSlot);
+		expect(mockFeatureMatchStore.applySavedSlot).toHaveBeenNthCalledWith(2, promotedSlot);
 		expect(mockAssignmentStore.applySavedAssignment).toHaveBeenCalledWith(assignment);
 		expect(result).toBe(response);
 	});
