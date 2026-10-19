@@ -120,6 +120,39 @@ describe('the R2 Graphic Asset object-store adapter', () => {
 		expect(outcome).toMatchObject({ outcome: 'created', object: { identity } });
 	});
 
+	it('says what R2 threw when a multipart part becomes an outage (#633)', async () => {
+		// A part PUT answered 503 under `pnpm verify` and nothing anywhere said
+		// why: the adapter turned R2's rejection into `unavailable` and dropped it.
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const identity = graphicsObjectIdentity('staging/operation/multipart');
+		const uploadPart = vi.fn().mockRejectedValue(Object.assign(
+			new Error('We encountered an internal error. Please try again.'),
+			{ code: 10001 },
+		));
+		const store = createR2StagingGraphicsObjectStore({
+			resumeMultipartUpload: vi.fn().mockReturnValue({ uploadId: 'upload-1', uploadPart }),
+		} as unknown as R2Bucket);
+
+		const outcome = await store.uploadPart({
+			upload: { identity, uploadId: 'upload-1' as never },
+			partNumber: 1,
+			bytes: createBoundedByteStream(new TextEncoder().encode('first'), {
+				byteLength: 5,
+				maximumByteLength: 5,
+			}),
+		});
+
+		expect(outcome).toMatchObject({ outcome: 'unavailable' });
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(warn.mock.calls[0]![0] as string)).toEqual({
+			message: 'graphics_object_store_unavailable',
+			operation: 'uploadPart',
+			errorName: 'Error',
+			errorCode: 10001,
+			reason: 'We encountered an internal error. Please try again.',
+		});
+	});
+
 	it('reads a gone multipart upload as reclaimed and every other refusal as an outage', async () => {
 		const identity = graphicsObjectIdentity('staging/operation/multipart');
 		async function abortAgainst(rejection: unknown) {

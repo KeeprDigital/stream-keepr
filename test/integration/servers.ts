@@ -27,6 +27,11 @@ const LOG_LINES_KEPT = 200;
 /** Each server's whole output, one file per persist directory, kept after the run. */
 const logDirectory = fileURLToPath(new URL('../../node_modules/.cache/integration-servers/', import.meta.url));
 
+/** Where the server over `persistDir` writes its output; `./serverLogWindow.ts` reads it back. */
+export function integrationServerLogPath(persistDir: string): string {
+	return `${logDirectory}${basename(persistDir)}.log`;
+}
+
 export interface IntegrationServer {
 	/** The origin with a trailing slash, as `@nuxt/test-utils`' `url('/')` gives it. */
 	url: string;
@@ -140,7 +145,7 @@ export async function startIntegrationServer(
 	running.add(child);
 	child.once('exit', () => running.delete(child));
 	mkdirSync(logDirectory, { recursive: true });
-	const logFile = createWriteStream(`${logDirectory}${basename(persistDir)}.log`);
+	const logFile = createWriteStream(integrationServerLogPath(persistDir));
 	child.once('close', () => logFile.end());
 	for (const stream of [child.stdout, child.stderr]) {
 		stream?.setEncoding('utf8');
