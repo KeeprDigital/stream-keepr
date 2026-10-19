@@ -45,6 +45,30 @@ function retryCanChangeTheAnswer(caught: unknown): boolean {
 		return true;
 	return status === 408 || status === 429 || status >= 500;
 }
+
+const FIRST_RETRY_INTERVAL_MS = 1_000;
+const MAXIMUM_RETRY_INTERVAL_MS = 30_000;
+
+/**
+ * How long to wait before re-sending a part that failed for the `attempt`th
+ * time (#639). The library counts a part's attempts itself, so a re-send the
+ * moment it failed spends the allowance a store blip of a second or two would
+ * have outlived. Its transient refusal names the interval in `retry-after`; a
+ * failure that names none backs off, doubling from a second. Either way each
+ * wait has a ceiling, so a large `retry-after` cannot stall a transfer
+ * indefinitely.
+ */
+function retryInterval(caught: unknown, attempt: number): number {
+	const retryAfterSeconds = failureRetryAfterSeconds(caught);
+	const interval = retryAfterSeconds === undefined
+		? FIRST_RETRY_INTERVAL_MS * 2 ** (attempt - 1)
+		: retryAfterSeconds * 1_000;
+	return Math.min(interval, MAXIMUM_RETRY_INTERVAL_MS);
+}
+
+function wait(milliseconds: number): Promise<void> {
+	return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
 export function useGraphicsIngestionTransfer(options: {
 	/**
 	 * Observes every operation snapshot the transfer learns along the way: the
@@ -161,6 +185,7 @@ export function useGraphicsIngestionTransfer(options: {
 						) {
 							throw caught;
 						}
+						await wait(retryInterval(caught, attempt));
 					}
 				}
 			}

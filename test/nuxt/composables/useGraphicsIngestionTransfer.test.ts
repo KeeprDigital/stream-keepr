@@ -1,6 +1,6 @@
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { requestsMadeTo, sourceOfByteLength } from '~~/test/helpers/ingestionTransferRequests';
 
@@ -39,7 +39,61 @@ function transferFacts(partCount: number, heldPartNumbers: number[] = []) {
 	};
 }
 
+/**
+ * The library's transient refusal as `$fetch` rejects with it: a 503 whose
+ * response names, in `retry-after`, how long to wait before asking again.
+ */
+function unavailable(retryAfter: string) {
+	return Object.assign(new Error('Service Unavailable'), {
+		statusCode: 503,
+		response: { headers: new Headers({ 'retry-after': retryAfter }) },
+	});
+}
+
 const requests = () => requestsMadeTo(mockFetch);
+
+/**
+ * Runs a transfer that waits between part attempts without spending real time
+ * on the waits: fake timers are installed before it starts and run until it
+ * settles.
+ */
+async function throughEveryWait<T>(start: () => Promise<T>): Promise<T> {
+	vi.useFakeTimers();
+	try {
+		const settled = start().then(
+			value => ({ value }),
+			(error: unknown) => ({ error }),
+		);
+		await vi.runAllTimersAsync();
+		const outcome = await settled;
+		if ('error' in outcome)
+			throw outcome.error;
+		return outcome.value;
+	}
+	finally {
+		vi.useRealTimers();
+	}
+}
+
+/**
+ * A two-part transfer whose part 2 is refused with `failure` the first
+ * `refusals` times it is sent, and accepted after.
+ */
+function refusingPartTwo(refusals: number, failure: () => unknown) {
+	let refused = 0;
+	mockFetch.mockImplementation(async (path: string) => {
+		if (path.endsWith('/multipart'))
+			return operation({ transfer: transferFacts(2) });
+		if (path.endsWith('/multipart/parts/2') && refused++ < refusals)
+			throw failure();
+		return operation({ stage: 'completed' });
+	});
+}
+
+/** How many times part 2 has been sent so far. */
+function partTwoSends(): number {
+	return requests().filter(request => request.endsWith('/multipart/parts/2')).length;
+}
 
 /** The length of each part sent, in the order it was sent. */
 function partSizes(): number[] {
@@ -146,13 +200,12 @@ describe('useGraphicsIngestionTransfer', () => {
 			return operation();
 		});
 
-		await expect(useGraphicsIngestionTransfer().transfer(
+		await expect(throughEveryWait(() => useGraphicsIngestionTransfer().transfer(
 			operation(),
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
-		)).rejects.toThrow('Connection reset');
+		))).rejects.toThrow('Connection reset');
 
-		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
-			.toHaveLength(3);
+		expect(partTwoSends()).toBe(3);
 		// A transfer that never finished sending must not be completed.
 		expect(requests()).not.toContain(`POST ${ingestion}/operation-1/multipart/complete`);
 	});
@@ -178,8 +231,7 @@ describe('useGraphicsIngestionTransfer', () => {
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
 		)).rejects.toThrow('This browser is no longer signed in');
 
-		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
-			.toHaveLength(1);
+		expect(partTwoSends()).toBe(1);
 		expect(requests()).not.toContain(`POST ${ingestion}/operation-1/multipart/complete`);
 	});
 
@@ -203,8 +255,7 @@ describe('useGraphicsIngestionTransfer', () => {
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
 		)).rejects.toThrow('Payload Too Large');
 
-		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
-			.toHaveLength(1);
+		expect(partTwoSends()).toBe(1);
 		expect(requests()).not.toContain(`POST ${ingestion}/operation-1/multipart/complete`);
 	});
 
@@ -217,13 +268,80 @@ describe('useGraphicsIngestionTransfer', () => {
 			return operation();
 		});
 
-		await expect(useGraphicsIngestionTransfer().transfer(
+		await expect(throughEveryWait(() => useGraphicsIngestionTransfer().transfer(
 			operation(),
 			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
-		)).rejects.toThrow(`Refused with ${status}`);
+		))).rejects.toThrow(`Refused with ${status}`);
 
-		expect(requests().filter(request => request.endsWith('/multipart/parts/2')))
-			.toHaveLength(3);
+		expect(partTwoSends()).toBe(3);
+	});
+
+	/**
+	 * The library counts a part's attempts itself (#639): a part re-sent the
+	 * moment it failed spends the allowance a store blip of a second or two
+	 * would have outlived. So a re-send waits first.
+	 */
+	describe('waiting before re-sending a part', () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		const transferTwoParts = () => useGraphicsIngestionTransfer().transfer(
+			operation(),
+			sourceOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1),
+		);
+
+		it('waits the interval the library names in retry-after', async () => {
+			refusingPartTwo(1, () => unavailable('5'));
+
+			const pending = transferTwoParts();
+
+			await vi.advanceTimersByTimeAsync(4_999);
+			expect(partTwoSends()).toBe(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(partTwoSends()).toBe(2);
+			expect((await pending).stage).toBe('completed');
+		});
+
+		/**
+		 * A failure that names no interval — a lost connection, a 503 that is not
+		 * the library's — still gets one: each re-send of a part waits twice as
+		 * long as the last, starting at a second.
+		 */
+		it('backs off when the failure names no interval', async () => {
+			refusingPartTwo(2, () => new Error('Connection reset'));
+
+			const pending = transferTwoParts();
+
+			await vi.advanceTimersByTimeAsync(999);
+			expect(partTwoSends()).toBe(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(partTwoSends()).toBe(2);
+			await vi.advanceTimersByTimeAsync(1_999);
+			expect(partTwoSends()).toBe(2);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(partTwoSends()).toBe(3);
+			expect((await pending).stage).toBe('completed');
+		});
+
+		/**
+		 * An author watching a transfer is not served by one that sits silent for
+		 * an hour because a response said so: each wait has a ceiling.
+		 */
+		it('waits no longer than thirty seconds, whatever retry-after asks', async () => {
+			refusingPartTwo(1, () => unavailable('3600'));
+
+			const pending = transferTwoParts();
+
+			await vi.advanceTimersByTimeAsync(29_999);
+			expect(partTwoSends()).toBe(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(partTwoSends()).toBe(2);
+			expect((await pending).stage).toBe('completed');
+		});
 	});
 
 	/**
