@@ -125,8 +125,8 @@ export function featureMatchOverlayFrameContentMaskStyle(
 	};
 }
 
-/** A Source Item paints a border with no colour of its own white. */
-const SOURCE_ITEM_UNSET_BORDER_COLOUR = '#ffffff';
+/** A Source Item paints a border with no colour of its own white; the Frame paints none. */
+export const SOURCE_ITEM_UNSET_BORDER_COLOUR = '#ffffff';
 
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
@@ -260,6 +260,20 @@ function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSo
 	};
 }
 
+/** One canvas edge of the Frame's border as an SVG line, in canvas coordinates. */
+export function frameBorderLine(side: FeatureMatchOverlayBorderSide, width: number, height: number) {
+	switch (side) {
+		case 'Top':
+			return { x1: 0, y1: 0, x2: width, y2: 0 };
+		case 'Right':
+			return { x1: width, y1: 0, x2: width, y2: height };
+		case 'Bottom':
+			return { x1: 0, y1: height, x2: width, y2: height };
+		case 'Left':
+			return { x1: 0, y1: 0, x2: 0, y2: height };
+	}
+}
+
 function frameImagePreserveAspectRatio(fit: FeatureMatchOverlayModeConfig['layout']['frame']['backgroundImageFit']) {
 	switch (fit) {
 		case 'contain':
@@ -295,12 +309,7 @@ function frameBorder(
 		stroke: paintColour(output, color),
 		strokeWidth: frame.borderWidth ?? 1,
 		sides: FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(frame, side)),
-		glow: flood && {
-			filterId: glowFilterId,
-			stdDeviation: flood.stdDeviation,
-			floodColor: flood.color,
-			floodOpacity: flood.opacity,
-		},
+		glow: flood && { filterId: glowFilterId, ...flood },
 	};
 }
 

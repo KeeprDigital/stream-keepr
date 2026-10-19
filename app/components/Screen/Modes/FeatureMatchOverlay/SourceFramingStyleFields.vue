@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
+import { SOURCE_ITEM_UNSET_BORDER_COLOUR } from '~/modules/feature-match-overlay/renderModel';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 
@@ -66,7 +67,7 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 
 		<GraphicsBorderGlowFields
 			border-label="Border"
-			v-bind="borderGlowFieldsValue(style, '#ffffff')"
+			v-bind="borderGlowFieldsValue(style, SOURCE_ITEM_UNSET_BORDER_COLOUR)"
 			per-side
 			glow-position
 			glow-gated-on-border

@@ -7,8 +7,7 @@
  * nothing cannot talk itself into a pass.
  */
 
-import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
+import { bundleAcceptancePage } from './bundle.mjs';
 import { AcceptanceFailure } from './evidence.mjs';
 import {
 	KEY_MATTE_PROOF_CONTROL,
@@ -27,8 +26,6 @@ export const KEY_MATTE_PROOF_VIEWPORT = Object.freeze({
 	height: KEY_MATTE_PROOF_SCENE.height,
 });
 
-const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
-
 /**
  * Bundle the page from the application's own render models, so the paint
  * measured is the paint a Screen Output draws: a change to
@@ -36,23 +33,14 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
  * rasterises.
  */
 export async function bundleKeyMattePage() {
-	const built = await build({
-		entryPoints: [fileURLToPath(new URL('./key-matte-page.mjs', import.meta.url))],
-		bundle: true,
-		write: false,
-		format: 'iife',
-		platform: 'browser',
-		target: 'chrome120',
-		alias: { '~~': repositoryRoot, '~': `${repositoryRoot}app` },
-		logLevel: 'silent',
-	}).catch(() => {
-		throw new AcceptanceFailure('key-matte-bundle-failed');
-	});
-	const [output] = built.outputFiles ?? [];
-	if (!output)
-		throw new AcceptanceFailure('key-matte-bundle-failed');
-	return output.text;
+	return await bundleAcceptancePage(new URL('./key-matte-page.mjs', import.meta.url), 'key-matte-bundle-failed');
 }
+
+/**
+ * Four small scenes on a software rasteriser settle in well under a second; the
+ * ceiling is for a cold Chromium on a loaded CI box.
+ */
+export const KEY_MATTE_PROOF_TIMEOUT_MS = 30_000;
 
 /** A transparent page, so the Overlay Output's screenshot keeps its alpha. */
 export function keyMatteProofPage() {
@@ -80,13 +68,14 @@ async function evaluate(page, expression) {
 
 /**
  * Draw every scene as the Overlay Output and then as the Key Output, screenshot
- * each, and have the page measure the pair.
+ * each, and have the page measure the pair. A page that throws while drawing or
+ * measuring raises `key-matte-page-failed`, which the harness reports.
  *
  * The screenshots are the compositor's own pixels: a CSS filter or an SVG filter
  * is only evidence once Chromium has painted it. The default background is made
  * transparent so the Overlay capture carries the alpha the Key Output must equal.
  */
-export async function observeKeyMatte(page, { timeoutMs = 30_000 } = {}) {
+export async function observeKeyMatte(page, { timeoutMs = KEY_MATTE_PROOF_TIMEOUT_MS } = {}) {
 	const { width, height } = KEY_MATTE_PROOF_VIEWPORT;
 	await page.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
 	await page.command('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
@@ -126,7 +115,7 @@ export function judgeKeyMatteScene(scene, floors = KEY_MATTE_PROOF_FLOORS) {
 	if (!(scene.greyPixels >= floors.minGreyPixels))
 		failures.push({ code: 'key-matte-glow-not-grey', detail: { scene: scene.name, measured: scene.greyPixels } });
 	if (!(scene.maxChroma <= floors.maxChroma))
-		failures.push({ code: 'key-matte-not-greyscale', detail: { scene: scene.name, measured: scene.maxChroma } });
+		failures.push({ code: 'key-matte-not-grayscale', detail: { scene: scene.name, measured: scene.maxChroma } });
 	return failures;
 }
 

@@ -9,7 +9,7 @@ export const KEY_MATTE_PROOF_SCENE = Object.freeze({ width: 240, height: 160 });
 
 /**
  * One scene per glow host: a Graphic Item through the shared compositor, and the
- * Feature Match Overlay's host-owned Source Item and Frame. The last is the
+ * Feature Match Overlay's host-owned Source Item and Frame. After them, the
  * planted control: a Source Item whose Key Output withholds its glow, as every
  * Feature Match Overlay Key Output did before #599. It must fail.
  */

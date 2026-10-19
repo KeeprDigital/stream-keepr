@@ -4,7 +4,7 @@ import { KEY_MATTE_PROOF_CONTROL, KEY_MATTE_PROOF_HOSTS } from '../../../scripts
 
 /** One host scene as the page publishes it, healthy by default. */
 function scene(name: string, overrides: Record<string, unknown> = {}) {
-	return { name, maxMatteError: 0, greyPixels: 5000, maxChroma: 0, overlayCoverage: 20000, ...overrides };
+	return { name, maxMatteError: 0, greyPixels: 5000, maxChroma: 0, ...overrides };
 }
 
 /** A run in which every host keys its glow and the planted control misses it. */
@@ -38,7 +38,7 @@ describe('judging a Key matte rendering proof', () => {
 
 	it('fails a matte that carries colour', () => {
 		expect(judgeKeyMatteReport(healthyReport({ 'graphic-item-glow': { maxChroma: 40 } })))
-			.toEqual([{ code: 'key-matte-not-greyscale', detail: { scene: 'graphic-item-glow', measured: 40 } }]);
+			.toEqual([{ code: 'key-matte-not-grayscale', detail: { scene: 'graphic-item-glow', measured: 40 } }]);
 	});
 
 	it('fails a measurement the page did not publish rather than reading it as a pass', () => {

@@ -151,6 +151,29 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(shadow.attributes()).toMatchObject({ 'stdDeviation': '6', 'flood-color': '#ffffff', 'flood-opacity': '0.5' });
 		});
 
+		it('draws a Source Item glow in the Key Output too', async () => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.sources = [{
+				id: 'glowing',
+				label: 'Glowing',
+				visible: true,
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 200,
+				sourceRole: 'main',
+				frameCutout: false,
+				framingStyle: { borderVisible: true, borderColor: '#0077a3', borderWidth: 4, glowSize: 10, glowOpacity: 0.5 },
+			}];
+			mockConfig.value = config;
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.feature-match-overlay__source-glow').attributes('style'))
+				.toContain('drop-shadow(0 0 10px #ffffff80)');
+		});
+
 		it('never covers the host-owned layer with a backdrop of its own', async () => {
 			// The composed tree is mounted above the Frame and the Source Items. A Fill
 			// or Key Output's black backdrop painted here would

@@ -50,7 +50,7 @@ An enclosing element appears only for a second wipe, or for a phase that moves e
 
 Exit interrupting an update, or interrupting on-screen cycling, is not a position on the enter/exit axis, so #70's reversal cannot express it — both are a second phase at the same instant. A single-phase projection forced the compositor to pick one, and every pick snapped.
 
-The Key Output survives: its rule is that every painted element is pure white at its own alpha with no blend modes or filters. Composition uses no property beyond the `opacity`, `transform` and `mask-image` animation already used — nested opacity multiplies alpha, nested masks multiply alpha, a transform moves paint without changing it — so nothing new paints. The guard in `graphicsRenderModel.test.ts` walks the new elements.
+The Key Output survives: its rule is that every painted element is pure white at its own alpha with no blend modes, and no filter but a glow's plain source-over drop shadow (ADR-0026). Composition uses no property beyond the `opacity`, `transform` and `mask-image` animation already used — nested opacity multiplies alpha, nested masks multiply alpha, a transform moves paint without changing it — so nothing new paints. The guard in `graphicsRenderModel.test.ts` walks the new elements.
 
 ### Consequences
 
@@ -691,3 +691,27 @@ The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two 
 - **`zoom` for sample-domain scale, `size` for element scale** (#503's example) — splits on shader maths rather than what the operator sees, and "zoom" suggests a camera that only waves has.
 - **One name for every spatial knob** — ember needs both a density and a size, so "how big" and "how many" must stay distinct.
 - **Pixel-level direction tests** — the renderer harness could prove direction, but the cost outweighs a rule a reviewer checks against the docblock.
+
+## ADR-0026: The Key Output keys every glow at its own opacity
+
+Accepted · 2026-10-17 · [#599](https://github.com/KeeprDigital/stream-keepr/issues/599)
+
+### Decision
+
+**A glow is composed opacity, so the Key Output paints it like any other paint: white at the glow's own opacity.** That holds for every glow host — a Graphic Item's Graphic Surface Style, a Source Item's framing, and the Feature Match Overlay Frame's border. One module, `app/modules/screen/outputPaint.ts`, owns the Fill-versus-Key paint rules both render models use: a colour at an opacity, a glow on each output, and the flat hosts' glow defaults (the border colour, at three-quarter opacity). The Frame's paint is decided in the pure Feature Match Overlay render model, not its display. `pnpm accept key-matte` rasterises each host in Chromium and requires the Key matte to equal the Overlay alpha.
+
+### Why
+
+Graphic Item glow already reached the Key Output, but Source Item and Frame glow were withheld from it, so the Fill Output showed a glow the Key matte cut away: on air, a glow keyed against black. A glow is a drop shadow composited source-over, so white at its opacity accumulates into the matte by the same identity as every other element.
+
+### Consequences
+
+- A half-opaque glow is grey in the matte.
+- A Frame border with no colour paints nothing in the Key Output either, as in the Fill Output.
+- A colour that carries its own alpha (`rgba()`, eight-digit hex, `transparent`) still keys at the authored opacity alone; the pickers write opaque hex, so the matte matches what they author.
+- The raw CSS Frame gradient stays host-owned and paints in colour only; the Key Output keys the Frame through its white fill.
+
+### Rejected alternatives
+
+- **Keep withholding host glow from the Key Output** — the Fill/Key mismatch is the defect.
+- **Key every glow opaque white** — overstates a partial glow, so the matte would no longer match the Fill Output.

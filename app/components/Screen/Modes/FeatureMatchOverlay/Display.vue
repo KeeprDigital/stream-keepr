@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
-import type { FeatureMatchOverlayBorderSide } from '~/modules/feature-match-overlay/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import {
@@ -17,7 +16,7 @@ import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
-import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
+import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
 import {
@@ -173,22 +172,6 @@ const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
 const frame = computed(() => renderModel.value.frame);
 const frameBorder = computed(() => frame.value.border);
 const frameGlow = computed(() => frameBorder.value?.glow);
-
-/** One canvas edge as an SVG line, in the canvas's own coordinates. */
-function frameBorderLine(side: FeatureMatchOverlayBorderSide) {
-	const width = canvasWidth.value;
-	const height = canvasHeight.value;
-	switch (side) {
-		case 'Top':
-			return { x1: 0, y1: 0, x2: width, y2: 0 };
-		case 'Right':
-			return { x1: width, y1: 0, x2: width, y2: height };
-		case 'Bottom':
-			return { x1: 0, y1: height, x2: width, y2: height };
-		case 'Left':
-			return { x1: 0, y1: 0, x2: 0, y2: height };
-	}
-}
 
 function guideStyle(item: { x: number; y: number; width: number; height: number }) {
 	return renderModel.value.rectStyle(item);
@@ -440,7 +423,7 @@ onBeforeUnmount(() => {
 				<line
 					v-for="side in frameBorder.sides"
 					:key="side"
-					v-bind="frameBorderLine(side)"
+					v-bind="frameBorderLine(side, canvasWidth, canvasHeight)"
 				/>
 			</g>
 		</svg>

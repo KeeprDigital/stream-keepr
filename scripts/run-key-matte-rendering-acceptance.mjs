@@ -16,8 +16,7 @@
  */
 
 import process from 'node:process';
-import { driveChromiumPage, serveAcceptanceRoutes } from './graphics-acceptance/chromium.mjs';
-import { AcceptanceFailure } from './graphics-acceptance/evidence.mjs';
+import { serveAcceptanceRoutes, withChromiumPage } from './graphics-acceptance/chromium.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
 	bundleKeyMattePage,
@@ -49,29 +48,24 @@ export async function main(argv = process.argv) {
 				[KEY_MATTE_PROOF_SCRIPT_PATH]: async () => ({ body: script, type: 'text/javascript; charset=utf-8' }),
 			});
 			try {
-				let observed;
-				try {
-					observed = await driveChromiumPage(
-						{ url: `${local.origin}${KEY_MATTE_PROOF_PAGE_PATH}` },
-						page => observeKeyMatte(page),
-					);
-				}
-				catch (error) {
-					if (error instanceof AcceptanceFailure)
-						observed = { outcome: 'failed' };
-					else
-						throw error;
-				}
+				// A page that throws mid-run raises its own code from inside the
+				// observation; what is left is no browser to drive, or a page that
+				// never said it was ready.
+				const observed = await withChromiumPage(
+					{ url: `${local.origin}${KEY_MATTE_PROOF_PAGE_PATH}` },
+					page => observeKeyMatte(page),
+				);
 				if (observed.outcome !== 'passed') {
 					const outcomes = {
 						'unavailable': 'browser-driver-unavailable',
-						'failed': 'key-matte-page-failed',
 						'timed-out': 'browser-acceptance-timed-out',
 					};
 					record([{ code: outcomes[observed.outcome] ?? 'browser-acceptance-failed', detail: { page: HARNESS } }]);
 					return { mode: 'local' };
 				}
 
+				// A report that will not parse is the page failing to publish one; its
+				// text is never read, so nothing page-authored reaches the evidence line.
 				let report;
 				try {
 					report = JSON.parse(observed.value);

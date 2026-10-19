@@ -128,7 +128,7 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	'key-matte-scene-missing',
 	'key-matte-diverges-from-fill',
 	'key-matte-glow-not-grey',
-	'key-matte-not-greyscale',
+	'key-matte-not-grayscale',
 	// The planted unkeyed glow passed, so the comparison cannot see a glow
 	// missing from the Key Output and no pass in the run means anything.
 	'key-matte-checks-not-biting',

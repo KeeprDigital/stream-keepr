@@ -16,7 +16,7 @@
 
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
+import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
 import { resolveGraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import { KEY_MATTE_PROOF_SCENE, KEY_MATTE_PROOF_SCENES } from './key-matte-scenarios.mjs';
 
@@ -171,16 +171,8 @@ function drawFrame(stage, output) {
 			'stroke-width': frame.border.strokeWidth,
 			'filter': glow ? `url(#${glow.filterId})` : undefined,
 		});
-		const lines = {
-			Top: [0, 0, SCENE_WIDTH, 0],
-			Right: [SCENE_WIDTH, 0, SCENE_WIDTH, SCENE_HEIGHT],
-			Bottom: [0, SCENE_HEIGHT, SCENE_WIDTH, SCENE_HEIGHT],
-			Left: [0, 0, 0, SCENE_HEIGHT],
-		};
-		for (const side of frame.border.sides) {
-			const [x1, y1, x2, y2] = lines[side];
-			group.append(element('line', {}, { x1, y1, x2, y2 }));
-		}
+		for (const side of frame.border.sides)
+			group.append(element('line', {}, frameBorderLine(side, SCENE_WIDTH, SCENE_HEIGHT)));
 		svg.append(group);
 	}
 	stage.append(svg);
@@ -241,7 +233,6 @@ async function measure(overlayPng, keyPng) {
 		let maxMatteError = 0;
 		let greyPixels = 0;
 		let maxChroma = 0;
-		let overlayCoverage = 0;
 		for (let y = 0; y < SCENE_HEIGHT; y++) {
 			for (let x = index * SCENE_WIDTH; x < (index + 1) * SCENE_WIDTH; x++) {
 				const at = ((y * overlay.width) + x) * 4;
@@ -251,11 +242,9 @@ async function measure(overlayPng, keyPng) {
 				maxChroma = Math.max(maxChroma, Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
 				if (r > 0 && r < 255)
 					greyPixels++;
-				if (alpha > 0)
-					overlayCoverage++;
 			}
 		}
-		return { name, maxMatteError, greyPixels, maxChroma, overlayCoverage };
+		return { name, maxMatteError, greyPixels, maxChroma };
 	});
 	return JSON.stringify({ scenes });
 }

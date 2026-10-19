@@ -105,12 +105,12 @@ export function glowDropShadow(output: ScreenOutput, glow: GlowPaint | undefined
 export function glowFlood(
 	output: ScreenOutput,
 	glow: GlowPaint | undefined,
-): { stdDeviation: number; color: string; opacity: number } | undefined {
+): { stdDeviation: number; floodColor: string; floodOpacity: number } | undefined {
 	if (!paintsGlow(glow))
 		return undefined;
 	return {
 		stdDeviation: Math.max(0.1, glow.size / 2),
-		color: paintColour(output, glow.color),
-		opacity: clampOpacity(glow.opacity),
+		floodColor: paintColour(output, glow.color),
+		floodOpacity: clampOpacity(glow.opacity),
 	};
 }

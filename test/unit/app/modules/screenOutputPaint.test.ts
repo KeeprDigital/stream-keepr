@@ -65,8 +65,8 @@ describe('screen output paint', () => {
 		});
 
 		it('paints an SVG drop-shadow flood the same way, its blur half the CSS radius', () => {
-			expect(glowFlood('overlay', glow)).toEqual({ stdDeviation: 10, color: '#ff51c7', opacity: 0.5 });
-			expect(glowFlood('key', glow)).toEqual({ stdDeviation: 10, color: '#ffffff', opacity: 0.5 });
+			expect(glowFlood('overlay', glow)).toEqual({ stdDeviation: 10, floodColor: '#ff51c7', floodOpacity: 0.5 });
+			expect(glowFlood('key', glow)).toEqual({ stdDeviation: 10, floodColor: '#ffffff', floodOpacity: 0.5 });
 		});
 
 		it('paints nothing for a glow without size or opacity', () => {
