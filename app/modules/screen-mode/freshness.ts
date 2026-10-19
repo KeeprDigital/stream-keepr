@@ -30,7 +30,7 @@ export interface ScreenModeFreshnessOptions<T> {
 	 * What the mode reads, as one comparable value; `null` while it selects
 	 * nothing, which clears what it holds. A change re-reads.
 	 */
-	source: () => string | number | null;
+	source: () => string | null;
 	/** The authoritative read. Realtime messages only say when to repeat it. */
 	read: () => Promise<T>;
 	initialData: T;
@@ -51,8 +51,9 @@ export interface ScreenModeFreshnessOptions<T> {
  *   what it holds, heard on the Event channel itself because an output holds
  *   no roster or Event Data collection for a store to update (#604);
  * - **degraded refetch** — on a slow cadence while realtime cannot deliver:
- *   disconnected, or connected with its Event's subscriptions waiting on a
- *   token (ADR-0023);
+ *   disconnected, or connected with subscriptions waiting on a token for the
+ *   one Event the transport covers (ADR-0023). It re-reads, never
+ *   re-registers: holding subscriptions through an outage is the transport's;
  * - **Reconnect Resync** — once on coming back from either, because what was
  *   published meanwhile is gone.
  *
@@ -133,10 +134,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	watch(() => disconnected.value || waitingOnToken.value, (degraded) => {
 		stopCadence();
 		if (degraded) {
-			cadence = setInterval(() => {
-				if (options.source() != null)
-					queueRefresh();
-			}, SCREEN_MODE_DEGRADED_REFETCH_MS);
+			cadence = setInterval(queueRefresh, SCREEN_MODE_DEGRADED_REFETCH_MS);
 		}
 	}, { immediate: true });
 

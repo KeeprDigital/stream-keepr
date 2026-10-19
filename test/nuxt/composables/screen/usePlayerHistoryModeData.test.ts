@@ -387,6 +387,10 @@ describe('usePlayerHistoryModeData', () => {
 			deliver('player:updated', { player: { id: 2 } });
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
+
+			deliver('player:deleted', { playerId: 7 });
+			await flushPromises();
+			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
 
 		it('shows a result missed while disconnected once it reconnects', async () => {

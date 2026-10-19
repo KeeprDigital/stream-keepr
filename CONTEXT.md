@@ -173,7 +173,7 @@ The client-side module owning the invariant "coming back from a disconnection is
 _Avoid_: reconnect handler, resubscribe hook.
 
 **Screen Mode Data Freshness**:
-The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its Event's subscriptions waiting on a token), and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.
+The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Guarded Sequence**:

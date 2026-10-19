@@ -1,5 +1,5 @@
 import type { EffectScope } from 'vue';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
+import type { ScreenModeDependencies, ScreenModeFreshnessTransport } from '~/modules/screen-mode/freshness';
 import type { RealtimeTransport } from '~/types/realtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,12 +53,12 @@ function harness(dependsOn: ScreenModeDependencies<Held> = {}) {
 	scopes.push(scope);
 	const freshness = scope.run(() => useScreenModeFreshness<Held>({
 		eventId,
-		source: () => selection.value,
+		source: () => selection.value === null ? null : String(selection.value),
 		read,
 		initialData: { ids: [], label: 'none' },
 		errorMessage: 'Failed to read',
 		dependsOn,
-		realtime: realtime.transport as unknown as RealtimeTransport,
+		realtime: realtime.transport as unknown as ScreenModeFreshnessTransport,
 	}))!;
 	return { ...realtime, eventId, selection, read, freshness, scope };
 }

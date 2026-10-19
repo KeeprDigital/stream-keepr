@@ -40,10 +40,12 @@ function playerHistoryDependencies(playerId: () => number | null): ScreenModeDep
 	const holdsMatch = (held: PlayerHistory, matchId: number) => held.rows.some(row => row.id === matchId);
 	const holdsRound = (held: PlayerHistory, roundId: number) => held.rows.some(row => row.roundId === roundId);
 	const holdsOpponent = (held: PlayerHistory, id: number) => held.rows.some(row => row.opponentId === id);
+	// An opponent's deck name may come from their Archetype.
+	const showsOpponentDeck = (_message: unknown, held: PlayerHistory) => held.rows.some(row => row.opponentDeckName != null);
 
 	return {
 		'player:updated': ({ player }, held) => player.id === playerId() || holdsOpponent(held, player.id),
-		'player:deleted': ({ playerId: id }, held) => holdsOpponent(held, id),
+		'player:deleted': ({ playerId: id }, held) => id === playerId() || holdsOpponent(held, id),
 		'match:created': ({ match }) => involvesPlayer(match),
 		'match:updated': ({ match }, held) => involvesPlayer(match) || holdsMatch(held, match.id),
 		'match:deleted': ({ matchId }, held) => holdsMatch(held, matchId),
@@ -52,8 +54,8 @@ function playerHistoryDependencies(playerId: () => number | null): ScreenModeDep
 		'round:matchesRefreshed': true,
 		'phase:updated': true,
 		'phase:deleted': true,
-		'archetype:updated': (_message, held) => held.rows.some(row => row.opponentDeckName != null),
-		'archetype:deleted': (_message, held) => held.rows.some(row => row.opponentDeckName != null),
+		'archetype:updated': showsOpponentDeck,
+		'archetype:deleted': showsOpponentDeck,
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
 		'melee:roundSynced': true,
