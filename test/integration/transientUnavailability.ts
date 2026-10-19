@@ -1,19 +1,20 @@
 /**
  * Re-send a request the server answered as temporarily unavailable (#633).
  *
- * The library answers 503 with `retry-after` only for
+ * On the Graphics Asset routes, 503 with `retry-after` is
  * `graphics-asset-library-unavailable` (`rethrowGraphicsAssetApiError`): a store
- * it could not reach right now. For a multipart part that is a documented
- * transient — the part is checkpointed as failed and may be sent again, up to
- * the transfer's `maximumPartAttempts` — and `useGraphicsIngestionTransfer`
- * re-sends it. A part PUT once answered 503 under `pnpm verify` and failed a
- * preflight suite that was about something else; seven further full runs never
- * repeated it, so the suite now does what the production client does.
+ * the library could not reach right now. For a multipart part that is a
+ * documented transient — the part is checkpointed as failed and may be sent
+ * again, up to the transfer's `maximumPartAttempts`. A part PUT once answered
+ * 503 under `pnpm verify` and failed a preflight suite that was about something
+ * else; seven further full runs never repeated it.
  *
- * Only that answer is retried. A 503 without `retry-after` is not the library's,
- * and any other status is a verdict a second send would not change. The last
- * answer is returned whatever it is, so the caller's status assertion reports
- * its body.
+ * This is a narrower form of `useGraphicsIngestionTransfer`'s retry, which
+ * re-sends at once on any 5xx, 408, 429 or transport failure. Only a 503 that
+ * asks to be retried is retried here, after the interval it names: a 503
+ * without `retry-after` (the dev server's own) is not the library's transient,
+ * and must stay visible. The last answer is returned whatever it is, so the
+ * caller's status assertion reports its body.
  *
  * The request arrives as a thunk because a body may have to be built again, as in
  * `./transportRetry`. Its own module, importing nothing, so it can be tested.

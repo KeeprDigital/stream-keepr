@@ -126,8 +126,8 @@ async function receivePackageInParts(archive: Uint8Array, options: { fileName?: 
 	const transfer = started.transfer!;
 	for (let partNumber = 1; partNumber <= transfer.partCount; partNumber += 1) {
 		const offset = (partNumber - 1) * transfer.partByteLength;
-		// A part is re-sent through a transient 503 as the production client does
-		// (#633): this suite is about preflight, not about the store staying up.
+		// A part is re-sent through the library's transient 503, as the production
+		// client would (#633): this suite is about preflight, not the store staying up.
 		const response = await throughTransientUnavailability(() => fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart/parts/${partNumber}`,
 			{
