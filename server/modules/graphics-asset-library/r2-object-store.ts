@@ -62,7 +62,7 @@ function isMissingMultipartUpload(error: unknown): boolean {
  * (#633). The outcome deliberately carries no cause — callers branch on it and
  * nothing more — so this catch is the last place the refusal exists.
  */
-function unavailableAfter(operation: string, error: unknown) {
+function loggedUnavailable(operation: keyof GraphicsStagingObjectStore, error: unknown) {
 	logGraphicsStoreFailure('graphics_object_store_unavailable', { operation }, error);
 	return unavailableObjectStoreOutcome();
 }
@@ -85,7 +85,7 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				return { outcome: 'healthy' as const };
 			}
 			catch (error) {
-				return unavailableAfter('checkHealth', error);
+				return loggedUnavailable('checkHealth', error);
 			}
 		},
 		async readMetadata(identity: GraphicsObjectIdentity) {
@@ -96,7 +96,7 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 					: { outcome: 'missing' as const };
 			}
 			catch (error) {
-				return unavailableAfter('readMetadata', error);
+				return loggedUnavailable('readMetadata', error);
 			}
 		},
 		async read(identity: GraphicsObjectIdentity, requestedRange?: { offset: number; length: number }) {
@@ -124,7 +124,7 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				};
 			}
 			catch (error) {
-				return unavailableAfter('read', error);
+				return loggedUnavailable('read', error);
 			}
 		},
 		async list(input: { prefix?: string; cursor?: string; limit?: number } = {}) {
@@ -147,7 +147,7 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				};
 			}
 			catch (error) {
-				return unavailableAfter('list', error);
+				return loggedUnavailable('list', error);
 			}
 		},
 		async delete(identity: GraphicsObjectIdentity) {
@@ -160,7 +160,7 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				return { outcome: 'deleted' as const };
 			}
 			catch (error) {
-				return unavailableAfter('delete', error);
+				return loggedUnavailable('delete', error);
 			}
 		},
 	};
@@ -211,7 +211,7 @@ async function createImmutable(
 	}
 	catch (error) {
 		rethrowGraphicsObjectInputError(error);
-		return unavailableAfter('createImmutable', error);
+		return loggedUnavailable('createImmutable', error);
 	}
 }
 
@@ -253,7 +253,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				};
 			}
 			catch (error) {
-				return unavailableAfter('beginMultipart', error);
+				return loggedUnavailable('beginMultipart', error);
 			}
 		},
 		async resumeMultipart(identity, uploadId) {
@@ -268,7 +268,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				};
 			}
 			catch (error) {
-				return unavailableAfter('resumeMultipart', error);
+				return loggedUnavailable('resumeMultipart', error);
 			}
 		},
 		async uploadPart(input) {
@@ -304,7 +304,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 			}
 			catch (error) {
 				rethrowGraphicsObjectInputError(error);
-				return unavailableAfter('uploadPart', error);
+				return loggedUnavailable('uploadPart', error);
 			}
 		},
 		async completeMultipart(input) {
@@ -321,7 +321,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 				return { outcome: 'created', object: mapR2Object(object) };
 			}
 			catch (error) {
-				return unavailableAfter('completeMultipart', error);
+				return loggedUnavailable('completeMultipart', error);
 			}
 		},
 		async abortMultipart(uploadIdentity) {
@@ -333,7 +333,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 			catch (error) {
 				return isMissingMultipartUpload(error)
 					? { outcome: 'missing' }
-					: unavailableAfter('abortMultipart', error);
+					: loggedUnavailable('abortMultipart', error);
 			}
 		},
 	};

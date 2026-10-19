@@ -217,7 +217,14 @@ Gotchas:
 - **A failed integration test prints its requests.** The
   `[integration] requests during "…"` block lists each request with its time;
   on a timeout, the one marked `never returned` is the stall. It names the
-  route, not the step inside it, and a `beforeAll` stall prints nothing.
+  route, not the step inside it, and a `beforeAll` stall prints nothing. The
+  `[integration] server log during "…"` block beneath it is what that test's
+  server logged meanwhile (the last 40 lines): a refusal's
+  `api_request_failed` line, and for a Graphics Asset 503 the
+  `graphics_object_store_unavailable` or `graphics_catalogue_unavailable` line
+  saying what R2 or D1 threw. The full log is
+  `node_modules/.cache/integration-servers/<server>.log`, overwritten by the
+  next run.
 - **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
   timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
   Re-run the single file, then the suite with `--no-file-parallelism`, before

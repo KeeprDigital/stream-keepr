@@ -24,7 +24,7 @@ function byteLengthOf(path: string): number {
  * side with it.
  *
  * Synchronous and total: it runs inside a failure report, which must say what it
- * can rather than fail itself. Imports only `node:fs`, so
+ * can rather than fail itself. Imports only Node built-ins, so
  * `test/unit/integration/serverLogWindow.test.ts` can pin it without a server.
  */
 export function createServerLogWindow(path: string, options: { maximumLines?: number } = {}) {
