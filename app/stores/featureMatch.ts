@@ -37,22 +37,24 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		if (data) {
 			const stateStore = useFeatureMatchStateStore();
 			for (const match of data)
-				stateStore.cacheSlotSession(match);
+				stateStore.offerSlotSession(match);
 		}
 		return data;
 	}
 
 	/**
 	 * Hold one Slot a Screen Output read answered (#604), with its Session, so
-	 * `featureMatch:updated` keeps it live without loading the Event's Slots.
+	 * `featureMatch:updated` keeps it live without loading the Event's Slots. A
+	 * read whose Session's epoch has ended is left behind whole.
 	 */
 	function holdFeatureMatch(slot: FeatureMatch) {
+		if (!useFeatureMatchStateStore().offerSlotSession(slot))
+			return;
 		const index = featureMatches.value.findIndex(held => held.id === slot.id);
 		if (index === -1)
 			featureMatches.value.push(slot);
 		else
 			featureMatches.value[index] = slot;
-		useFeatureMatchStateStore().cacheSlotSession(slot);
 	}
 
 	async function getFeatureMatchById(eventId: number, matchId: number) {
@@ -72,7 +74,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		const flight = lifecycle.currentLifetime();
 		const createdMatch = await lifecycle.create(eventId, input);
 		if (createdMatch && flight.current)
-			useFeatureMatchStateStore().cacheSlotSession(createdMatch);
+			useFeatureMatchStateStore().offerSlotSession(createdMatch);
 		return createdMatch;
 	}
 
@@ -80,7 +82,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		const flight = lifecycle.currentLifetime();
 		const updated = await lifecycle.update(eventId, matchId, updates);
 		if (updated && flight.current)
-			useFeatureMatchStateStore().cacheSlotSession(updated);
+			useFeatureMatchStateStore().offerSlotSession(updated);
 		return updated;
 	}
 
@@ -126,12 +128,29 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	function applyRemoteCreated(data: MessageData<'featureMatch:created'>) {
 		lifecycle.applyRemoteCreated(data.featureMatch);
 		featureMatches.value.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-		useFeatureMatchStateStore().cacheSlotSession(data.featureMatch);
+		useFeatureMatchStateStore().offerSlotSession(data.featureMatch);
 	}
 
+	/**
+	 * A Slot's Session orders it: an announcement carrying a Session from an epoch
+	 * this client has already seen end was read before a newer promotion or
+	 * clearing, and is left behind whole (#591).
+	 */
 	function applyRemoteUpdated(data: MessageData<'featureMatch:updated'>) {
-		lifecycle.applyRemoteUpdated(data.featureMatch);
-		useFeatureMatchStateStore().cacheSlotSession(data.featureMatch);
+		if (useFeatureMatchStateStore().offerSlotSession(data.featureMatch))
+			lifecycle.applyRemoteUpdated(data.featureMatch);
+	}
+
+	/**
+	 * Hold a Slot a write answered, its Session as that write's command result.
+	 * Answers whether the Slot was current; one overtaken by a newer promotion or
+	 * clearing is left behind whole, as an announcement would be.
+	 */
+	function applySavedSlot(slot: FeatureMatch): boolean {
+		if (!useFeatureMatchStateStore().settleSlotCommandResult(slot))
+			return false;
+		lifecycle.applyRemoteUpdated(slot);
+		return true;
 	}
 
 	function applyRemoteDeleted(data: MessageData<'featureMatch:deleted'>) {
@@ -172,6 +191,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		reorderFeatureMatch,
 		applyRemoteCreated,
 		applyRemoteUpdated,
+		applySavedSlot,
 		applyRemoteDeleted,
 		applyRemoteReordered,
 		currentLifetime: lifecycle.currentLifetime,

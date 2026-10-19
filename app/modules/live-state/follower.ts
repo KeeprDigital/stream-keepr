@@ -12,12 +12,17 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * - a notification at the held sequence or before it is a duplicate, and is dropped;
  * - a notification past the next sequence is a gap, and a notification offering no
  *   difference is one this client cannot follow — both are answered by reloading;
- * - anything from a different epoch (another aggregate id) than the one held is
- *   never applied: a command result is refused, a notification reloads;
+ * - epochs are ordered by aggregate id, which only grows: nothing from an older
+ *   epoch than the one held is applied, and a notification from a newer one
+ *   reloads unless it carries its whole snapshot;
  * - a command result older than what is held is refused, and what is held answers;
  * - loads are Flights from a keyed Guarded Sequence: a later load, and any newer
  *   write, supersedes an earlier load, so the load issued first and answered last
- *   cannot win by arriving late (#308);
+ *   cannot win by arriving late (#308); a load answering something behind what is
+ *   held leaves it;
+ * - a snapshot read elsewhere (carried by another resource) is held only when it
+ *   is not behind, and supersedes nothing: it was read at some moment, not
+ *   produced after everything in flight;
  * - Reconnect Resync re-reads through `load`, which never clears what is held.
  *
  * The feature supplies only where it keeps a snapshot and how to apply a full
@@ -26,7 +31,10 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * I/O, no timers, no Vue reactivity.
  */
 
-/** What every followed snapshot carries: its epoch (the aggregate id) and position in the order. */
+/**
+ * What every followed snapshot carries: its epoch (the aggregate id, which only
+ * grows, so a later epoch has a larger one) and position in the order.
+ */
 export interface LiveStateSnapshot {
 	id: number;
 	sequence: number;
@@ -41,6 +49,17 @@ export interface LiveStateNotification {
 
 /** What a notification did: moved the held snapshot, changed nothing, or left it behind. */
 export type LiveStateNotificationOutcome = 'applied' | 'ignored' | 'reload';
+
+/**
+ * Whether an offered snapshot moved the held one forward. Either way `held` is
+ * what is held now: the offered snapshot, or the newer one that refused it.
+ */
+export interface LiveStateOfferOutcome<S> {
+	accepted: boolean;
+	held: S;
+	/** Refused because the offered snapshot's epoch has ended, not only its sequence passed. */
+	epochEnded: boolean;
+}
 
 export interface LiveStateFollowerOptions<K, S extends LiveStateSnapshot, N extends LiveStateNotification> {
 	keyOf: (snapshot: S) => K;
@@ -60,6 +79,12 @@ export interface LiveStateFollowerOptions<K, S extends LiveStateSnapshot, N exte
 	 * not reloads on every notification, repeated sequences included.
 	 */
 	acceptsDifferences?: (held: S) => boolean;
+	/**
+	 * The whole snapshot a notification carries, for a feature whose
+	 * notifications carry one. A notification from a newer epoch is then held
+	 * as it stands instead of answered by reloading.
+	 */
+	snapshotOf?: (notification: N) => S;
 }
 
 export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extends LiveStateNotification>(
@@ -87,34 +112,60 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 * is held instead of what it read: its caller mirrors the answer, so handing
 	 * back the losing snapshot would put it on screen by the other door.
 	 */
-	async function load(key: K, read: () => Promise<S>): Promise<S | null> {
+	async function load(key: K, read: () => Promise<S | null>): Promise<S | null> {
 		const flight = loads.begin(key);
 		const snapshot = await read();
-		if (flight.stale)
-			return options.held(key) ?? null;
+		const known = options.held(key);
+		if (flight.stale || !snapshot || (known && isBehind(snapshot, known)))
+			return known ?? null;
 		options.applyState(snapshot);
 		return snapshot;
+	}
+
+	/** Whether a snapshot is behind what is held: from an older epoch, or older in the same one. */
+	function isBehind(snapshot: S, known: S) {
+		return snapshot.id < known.id || (snapshot.id === known.id && snapshot.sequence < known.sequence);
 	}
 
 	/**
 	 * Hold a command's result unless it would move what is held backwards.
 	 * Command requests may overlap: a late answer cannot move one epoch backwards,
-	 * and an answer from an ended epoch cannot replace the current one at all.
+	 * and an answer from an ended epoch cannot replace the current one at all. An
+	 * answer from a newer epoch is the server saying the held one has ended.
 	 */
-	function acceptCommandResult(snapshot: S): S {
+	function acceptCommandResult(snapshot: S): LiveStateOfferOutcome<S> {
+		return offer(snapshot, acceptSnapshot);
+	}
+
+	/**
+	 * Hold a snapshot read elsewhere — carried by another resource's read or
+	 * announcement — unless it would move what is held backwards. It supersedes no
+	 * load: it was read at some moment, and a load in flight may answer newer.
+	 */
+	function acceptRead(snapshot: S): LiveStateOfferOutcome<S> {
+		return offer(snapshot, options.applyState);
+	}
+
+	function offer(snapshot: S, hold: (snapshot: S) => void): LiveStateOfferOutcome<S> {
 		const known = options.held(options.keyOf(snapshot));
-		if (known && (known.id !== snapshot.id || known.sequence > snapshot.sequence))
-			return known;
-		acceptSnapshot(snapshot);
-		return snapshot;
+		if (known && isBehind(snapshot, known))
+			return { accepted: false, held: known, epochEnded: snapshot.id < known.id };
+		hold(snapshot);
+		return { accepted: true, held: snapshot, epochEnded: false };
 	}
 
 	function notify(key: K, notification: N): LiveStateNotificationOutcome {
 		const known = options.held(key);
-		// Nothing held, or a different epoch entirely: only the snapshot can say
-		// which epoch this client should be following.
-		if (!known || known.id !== notification.sessionId)
-			return 'reload';
+		if (known && notification.sessionId < known.id)
+			return 'ignored';
+		// Nothing held, or a newer epoch: only a snapshot can say what this client
+		// should now be following, so one the notification carries will do.
+		if (!known || known.id !== notification.sessionId) {
+			if (!options.snapshotOf)
+				return 'reload';
+			acceptSnapshot(options.snapshotOf(notification));
+			return 'applied';
+		}
 		if (options.acceptsDifferences && !options.acceptsDifferences(known))
 			return 'reload';
 		if (notification.sequence <= known.sequence)
@@ -148,5 +199,5 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 		loads.supersedeAll();
 	}
 
-	return { acceptSnapshot, acceptCommandResult, load, notify, end, reset };
+	return { acceptSnapshot, acceptCommandResult, acceptRead, load, notify, end, reset };
 }
