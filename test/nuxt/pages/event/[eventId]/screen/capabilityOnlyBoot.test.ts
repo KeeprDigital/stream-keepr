@@ -2,6 +2,7 @@ import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRouter } from '#app';
+import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useCardStore } from '~/stores/card';
 import { useScreenStore } from '~/stores/screen';
 import { resetAllEventStores } from '~/utils/eventStores';
@@ -34,19 +35,35 @@ mockNuxtImport('$fetch', () => async (path: string, options: { headers?: Record<
 	const answer = api.answers.get(path);
 	if (!path.startsWith('/api/screen-output/') || authorization !== `Bearer ${capability}` || !answer)
 		throw unauthorized(path);
-	return structuredClone(answer());
+	const value = answer();
+	return value instanceof Promise ? value : structuredClone(value);
 });
 
-vi.mock('~/composables/core/useRealtime', () => {
-	const transport = {
+vi.mock('~/composables/core/useRealtime', async () => {
+	const { reactive } = await import('vue');
+	type Handler = (message: Record<string, unknown>) => void;
+	const handlers = new Map<string, Set<Handler>>();
+	const transport = reactive({
 		connectionId: 'connection-1',
 		connectionState: 'connected',
+		tokenError: null,
 		onRoom: () => {},
 		offRoom: () => {},
 		setRoom: () => {},
-		onChannel: () => () => {},
+		onChannel: (channel: string, type: string, handler: Handler) => {
+			const key = `${channel}|${type}`;
+			if (!handlers.has(key))
+				handlers.set(key, new Set());
+			handlers.get(key)!.add(handler);
+			return () => handlers.get(key)!.delete(handler);
+		},
 		watchPresence: () => () => {},
-	};
+		/** Deliver one message to whoever listens on its channel, as the transport would. */
+		deliver: (channel: string, type: string, message: Record<string, unknown>) => {
+			for (const handler of handlers.get(`${channel}|${type}`) ?? [])
+				handler(message);
+		},
+	});
 	return {
 		useRealtime: () => transport,
 		tryUseRealtime: () => transport,
@@ -75,11 +92,12 @@ function screen(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-function history(name: string) {
+function history(name: string, result: Record<string, unknown> = {}) {
 	return {
 		player: { id: 11, eventId: 42, name, updatedAt: '2026-10-17T00:00:00.000Z' },
 		history: [{
 			id: 1,
+			roundId: 31,
 			roundName: 'Round 1',
 			roundNumber: 1,
 			phaseName: 'Swiss',
@@ -94,8 +112,27 @@ function history(name: string) {
 			gameDraws: 0,
 			hasResult: true,
 			resultString: null,
+			...result,
 		}],
 	};
+}
+
+const pendingResult = { outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null };
+const recordedLoss = { outcome: 'loss', hasResult: true, playerGameWins: 1, opponentGameWins: 2 };
+
+/** The output's stand-in transport, with a hand to deliver Event messages. */
+function realtime() {
+	return tryUseRealtime() as unknown as {
+		connectionState: string;
+		deliver: (channel: string, type: string, message: Record<string, unknown>) => void;
+	};
+}
+
+async function settleUntil(ready: () => boolean) {
+	for (let round = 0; round < 100 && !ready(); round++) {
+		await flushPromises();
+		await new Promise(resolve => setTimeout(resolve, 5));
+	}
 }
 
 const outputEvent = {
@@ -133,6 +170,7 @@ describe('a capability-only Screen Output', () => {
 			['/api/screen-output/events/42/screens/7/player-history', () => history('First Player')],
 		]);
 		resetAllEventStores();
+		realtime().connectionState = 'connected';
 	});
 
 	afterEach(() => {
@@ -167,6 +205,49 @@ describe('a capability-only Screen Output', () => {
 		}
 
 		expect(wrapper.text()).toContain('Changed Header');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	it('follows a Match result recorded elsewhere, with no operator surface open', async () => {
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Pending'),
+		);
+		const screenReads = api.requests.filter(request => request.path === '/api/screen-output/events/42/screens/7').length;
+
+		// Another browser records the result: Event, Player and Screen configuration
+		// are unchanged, so nothing but the Match notification says to re-read.
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
+		realtime().deliver('event:42', 'match:updated', {
+			eventId: 42,
+			match: { id: 1, eventId: 42, roundId: 31, player1Id: 12, player2Id: 11, hasResult: true },
+		});
+		await settleUntil(() => wrapper.text().includes('LOSS'));
+
+		expect(wrapper.text()).toContain('LOSS');
+		expect(api.requests.filter(request => request.path === '/api/screen-output/events/42/screens/7')).toHaveLength(screenReads);
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	it('shows a result missed while disconnected once it reconnects', async () => {
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Pending'),
+		);
+
+		realtime().connectionState = 'suspended';
+		await flushPromises();
+		// Published while suspended, so never delivered. The page's own Screen
+		// re-read is held back, so no configuration replacement can stand in for
+		// the mode's resync.
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
+		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
+		realtime().connectionState = 'connected';
+		await settleUntil(() => wrapper.text().includes('LOSS'));
+
+		expect(wrapper.text()).toContain('LOSS');
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
