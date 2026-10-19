@@ -120,6 +120,18 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// whole run worthless: a check that cannot catch a shader that does not
 	// compile cannot catch one that renders black either.
 	'animation-effect-checks-not-biting',
+	// Key matte rendering (#599). The Key Output's luminance strayed from the
+	// Overlay Output's alpha — so from the Fill Output it keys — a half-opaque
+	// glow was not grey in it, or it carried colour.
+	'key-matte-bundle-failed',
+	'key-matte-page-failed',
+	'key-matte-scene-missing',
+	'key-matte-diverges-from-fill',
+	'key-matte-glow-not-grey',
+	'key-matte-not-greyscale',
+	// The planted unkeyed glow passed, so the comparison cannot see a glow
+	// missing from the Key Output and no pass in the run means anything.
+	'key-matte-checks-not-biting',
 	// Harness plumbing.
 	'harness-precondition-unmet',
 	'harness-installation-unreachable',

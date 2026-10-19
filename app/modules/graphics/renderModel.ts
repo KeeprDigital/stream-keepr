@@ -104,7 +104,10 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  *   Output filters its decoded pixels to pure white while leaving every alpha
  *   value exactly as decoded. Element `opacity` then multiplies through, so a
  *   half-opaque media item accumulates like a half-opaque fill.
- *   contributes its alpha as white.
+ *
+ * The colour, opacity, and glow rules are `~/modules/screen/outputPaint.ts`,
+ * shared with the Feature Match Overlay's Frame and Source Items, and
+ * `pnpm accept key-matte` rasterises them in Chromium.
  *
  * ## Graphic Animation, and why it keeps the matte
  *

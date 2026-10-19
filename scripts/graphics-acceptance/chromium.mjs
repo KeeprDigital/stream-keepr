@@ -356,6 +356,19 @@ export async function observeChromiumValue({
 	});
 }
 
+/**
+ * Open a page in the first available local Chromium and hand `observe` its
+ * DevTools session, for a harness that drives the page itself — a screenshot,
+ * an emulation override — rather than polling one expression. Resolves to
+ * whatever `observe` returns, or `{ outcome: 'unavailable' }` with no browser.
+ *
+ * @param {{ url: string, extraArgs?: string[] }} target
+ * @param {(page: { command: (method: string, params?: object) => Promise<any> }) => Promise<any>} observe
+ */
+export async function driveChromiumPage({ url, extraArgs = [] }, observe) {
+	return await withChromiumPage({ url, extraArgs }, observe);
+}
+
 /** Run one observation against the first available local Chromium. */
 async function withChromiumPage({ url, extraArgs = [], cookies }, observe) {
 	for (const candidate of chromiumCandidates()) {
