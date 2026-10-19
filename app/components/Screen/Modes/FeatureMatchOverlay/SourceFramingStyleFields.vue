@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import { borderGlowFieldsValue, borderGlowStyleUpdates } from '~/modules/feature-match-overlay/borderGlow';
+import { SOURCE_ITEM_UNSET_BORDER_COLOUR } from '~/modules/feature-match-overlay/renderModel';
 import FeatureMatchOverlayBackgroundFields from './BackgroundFields.vue';
 import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
 
@@ -9,8 +10,8 @@ import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
  *
  * Only what a Source Item paints: a background wash behind the video area,
  * per-corner radii, and, through the shared border and glow fields, a per-side
- * border and a glow. Colours are hex only, because the renderer applies the glow
- * opacity to a hex colour.
+ * border and a glow. Its pickers offer hex colours; the renderer keeps the
+ * opacity of any stored colour (`~/modules/screen/outputPaint.ts`).
  *
  * The shared Graphic Surface Style has no per-side border by design — a composed
  * rule-preset Shape Graphic Item replaces it there — but the Frame and its Source
@@ -66,7 +67,7 @@ function updateBackground(updates: { color?: string; gradient?: string; opacity?
 
 		<GraphicsBorderGlowFields
 			border-label="Border"
-			v-bind="borderGlowFieldsValue(style, '#ffffff')"
+			v-bind="borderGlowFieldsValue(style, SOURCE_ITEM_UNSET_BORDER_COLOUR)"
 			per-side
 			glow-position
 			glow-gated-on-border

@@ -356,8 +356,14 @@ export async function observeChromiumValue({
 	});
 }
 
-/** Run one observation against the first available local Chromium. */
-async function withChromiumPage({ url, extraArgs = [], cookies }, observe) {
+/**
+ * Run one observation against the first available local Chromium: open the page
+ * and hand `observe` its DevTools session. Exported for a harness that drives the
+ * page itself — a screenshot, an emulation override — rather than polling one
+ * expression. Resolves to whatever `observe` returns, or
+ * `{ outcome: 'unavailable' }` with no browser.
+ */
+export async function withChromiumPage({ url, extraArgs = [], cookies }, observe) {
 	for (const candidate of chromiumCandidates()) {
 		const browser = await launch(candidate, extraArgs);
 		if (!browser)

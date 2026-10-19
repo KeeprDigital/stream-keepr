@@ -124,6 +124,7 @@ jobs:
       - run: pnpm accept silent-video
       - run: pnpm accept fonts
       - run: pnpm accept animation-effects
+      - run: pnpm accept key-matte
 
   worker-guard:
     name: Build, wrangler dry run, and Worker smoke

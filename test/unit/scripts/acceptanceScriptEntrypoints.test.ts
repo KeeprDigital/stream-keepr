@@ -17,6 +17,7 @@ const SCRIPTS: ReadonlyArray<readonly [script: string, harness: string, args?: s
 	['run-font-browser-acceptance', 'static-font-v1'],
 	['run-graphics-delivery-acceptance', 'graphics-delivery-v1'],
 	['run-graphics-package-acceptance', 'graphics-package-v1'],
+	['run-key-matte-rendering-acceptance', 'key-matte-v1'],
 	['run-still-image-ingestion-acceptance', 'still-image-ingestion-v1'],
 ];
 

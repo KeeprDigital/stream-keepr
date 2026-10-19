@@ -53,6 +53,7 @@ export const GATES = {
 	'accept:silent-video': { command: ['run', 'accept', 'silent-video'], after: ['accept:still-images'] },
 	'accept:fonts': { command: ['run', 'accept', 'fonts'], after: ['accept:silent-video'] },
 	'accept:animation-effects': { command: ['run', 'accept', 'animation-effects'], after: ['accept:fonts'] },
+	'accept:key-matte': { command: ['run', 'accept', 'key-matte'], after: ['accept:animation-effects'] },
 	'build': {
 		command: ['run', 'build'],
 		after: ['prepare'],

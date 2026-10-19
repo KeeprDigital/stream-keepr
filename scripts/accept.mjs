@@ -48,6 +48,12 @@ export const HARNESSES = {
 		needs: 'Chrome/Chromium',
 		deployed: false,
 	},
+	'key-matte': {
+		script: ['run-key-matte-rendering-acceptance.mjs'],
+		proves: 'Every glow host keys into the Key Output at its own opacity, matching the Fill Output',
+		needs: 'Chrome/Chromium',
+		deployed: false,
+	},
 	'still-image-ingestion': {
 		script: ['run-still-image-ingestion-acceptance.mjs'],
 		proves: 'JPEG and WebP ingestion decodes on workerd',

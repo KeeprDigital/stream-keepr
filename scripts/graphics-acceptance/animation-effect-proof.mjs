@@ -12,8 +12,6 @@
  * the thing it is measuring.
  */
 
-import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 import {
 	ANIMATION_EFFECT_PROOF_CONTROL,
 	ANIMATION_EFFECT_PROOF_FLOORS,
@@ -23,7 +21,7 @@ import {
 	animationEffectProofScenarios,
 	animationEffectSettleScenarios,
 } from './animation-effect-scenarios.mjs';
-import { AcceptanceFailure } from './evidence.mjs';
+import { bundleAcceptancePage } from './bundle.mjs';
 
 export const ANIMATION_EFFECT_PROOF_PAGE_PATH = '/_acceptance/animation-effect-v1.html';
 export const ANIMATION_EFFECT_PROOF_SCRIPT_PATH = '/_acceptance/animation-effect-v1.js';
@@ -46,8 +44,6 @@ export const SWIFTSHADER_ARGS = Object.freeze([
 	'--enable-unsafe-swiftshader',
 ]);
 
-const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
-
 /**
  * Bundle the page that mounts the effects, from the application's own sources.
  *
@@ -56,29 +52,12 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
  * schemas exactly as a Screen Output does, so an effect edited in
  * `app/utils/animation-effects` is the effect measured here, and an effect added
  * to the catalogue arrives in the run without anything being registered twice.
- *
- * esbuild is the whole toolchain, because the alternative is standing up Nuxt to
- * serve four hundred lines of test page.
  */
 export async function bundleAnimationEffectPage() {
-	const built = await build({
-		entryPoints: [fileURLToPath(new URL('./animation-effect-page.mjs', import.meta.url))],
-		bundle: true,
-		write: false,
-		format: 'iife',
-		platform: 'browser',
-		// The browser is the one this run launches, so the output only has to
-		// parse there and nothing is transpiled down for older engines.
-		target: 'chrome120',
-		alias: { '~~': repositoryRoot, '~': `${repositoryRoot}app` },
-		logLevel: 'silent',
-	}).catch(() => {
-		throw new AcceptanceFailure('animation-effect-bundle-failed');
-	});
-	const [output] = built.outputFiles ?? [];
-	if (!output)
-		throw new AcceptanceFailure('animation-effect-bundle-failed');
-	return output.text;
+	return await bundleAcceptancePage(
+		new URL('./animation-effect-page.mjs', import.meta.url),
+		'animation-effect-bundle-failed',
+	);
 }
 
 /**

@@ -45,6 +45,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
+import { clampOpacity, glowDropShadow, paintColour } from '~/modules/screen/outputPaint';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
 /**
@@ -103,7 +104,10 @@ import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
  *   Output filters its decoded pixels to pure white while leaving every alpha
  *   value exactly as decoded. Element `opacity` then multiplies through, so a
  *   half-opaque media item accumulates like a half-opaque fill.
- *   contributes its alpha as white.
+ *
+ * The colour, opacity, and glow rules are `~/modules/screen/outputPaint.ts`,
+ * shared with the Feature Match Overlay's Frame and Source Items, and
+ * `pnpm accept key-matte` rasterises them in Chromium.
  *
  * ## Graphic Animation, and why it keeps the matte
  *
@@ -675,36 +679,6 @@ function rectStyle(rect: GraphicRect): CSSProperties {
 	};
 }
 
-function clampOpacity(value: number): number {
-	return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
-}
-
-const HEX_COLOUR = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i;
-
-/**
- * A colour at an alpha, as one CSS value. A Key Output always resolves white, so
- * every painted element keeps the alpha-matte identity.
- */
-function alphaColour(output: ScreenOutput, colour: string, opacity: number): string {
-	const alpha = clampOpacity(opacity);
-	const channel = Math.round(alpha * 255).toString(16).padStart(2, '0');
-
-	if (output === 'key')
-		return `#ffffff${channel}`;
-	if (alpha >= 1)
-		return colour;
-
-	const hex = HEX_COLOUR.exec(colour.trim());
-	if (hex)
-		return `#${hex[1]}${hex[2]}${hex[3]}${channel}`.toLowerCase();
-	return `color-mix(in srgb, ${colour} ${Math.round(alpha * 100)}%, transparent)`;
-}
-
-/** A Key Output paints opacity, never colour. */
-function paintColour(output: ScreenOutput, colour: string): string {
-	return output === 'key' ? '#ffffff' : colour;
-}
-
 /**
  * A gradient angle projected onto the surface's own bounding box, in the CSS
  * convention: zero degrees points up, ninety degrees points right.
@@ -805,10 +779,7 @@ function surfaceDescriptor(
 
 /** A glow is a drop-shadow of the element's own painted alpha. */
 function glowFilter(output: ScreenOutput, style: GraphicSurfaceStyle | undefined): string | undefined {
-	const glow = style?.glow;
-	if (!glow || glow.size <= 0 || clampOpacity(glow.opacity) <= 0)
-		return undefined;
-	return `drop-shadow(0 0 ${glow.size}px ${alphaColour(output, glow.color, glow.opacity)})`;
+	return glowDropShadow(output, style?.glow);
 }
 
 function transformOrigin(anchor: GraphicAnchorPoint | undefined): string {
