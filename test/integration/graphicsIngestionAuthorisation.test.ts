@@ -7,6 +7,7 @@ import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetC
 import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { anotherBrowser, anotherUser } from './identities';
+import { expectResponseStatus } from './responseStatus';
 
 /**
  * Who a Graphics Ingestion Operation belongs to, proved through the real routes.
@@ -508,7 +509,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 					body: bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES),
 				},
 			);
-			expect(firstPart.status).toBe(200);
+			await expectResponseStatus(firstPart, 200);
 		});
 
 		it('refuses the next part rather than accepting it from nobody', async () => {
@@ -580,7 +581,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
 				},
 			);
-			expect(finalPart.status).toBe(200);
+			await expectResponseStatus(finalPart, 200);
 
 			const completion = await fetch(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/complete`,
