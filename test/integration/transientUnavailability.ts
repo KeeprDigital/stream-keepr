@@ -13,8 +13,8 @@
  * re-sends on any 5xx, 408, 429 or transport failure, after `retry-after` or a
  * backoff (#639). Only a 503 that asks to be retried is retried here, after the
  * interval it names: a 503 without `retry-after` (the dev server's own) is not
- * the library's transient, and must stay visible. The last answer is returned whatever it is, so the
- * caller's status assertion reports its body.
+ * the library's transient, and must stay visible. The last answer is returned
+ * whatever it is, so the caller's status assertion reports its body.
  *
  * The request arrives as a thunk because a body may have to be built again, as in
  * `./transportRetry`. Its own module, importing nothing, so it can be tested.
