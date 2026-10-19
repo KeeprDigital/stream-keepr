@@ -1,5 +1,4 @@
 import type { MaybeRefOrGetter } from 'vue';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 /**
  * Keeping one client's view of a Broadcast Graphics Live Session honest across a
@@ -39,10 +38,7 @@ export function useBroadcastGraphicsLiveSessionSync(
 		{ immediate: true },
 	);
 
-	const { disconnected } = useReconnectResync(reload, () => {
-		const event = toValue(eventId);
-		return event ? eventRealtimeChannel(event) : null;
-	});
+	const { disconnected } = useReconnectResync(reload, eventId);
 
 	return { disconnected, reload };
 }

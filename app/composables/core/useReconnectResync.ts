@@ -1,5 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { RealtimeTransport } from '~/types/realtime';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 /**
  * Reloading authoritative state after this client has been out of touch.
@@ -19,7 +20,7 @@ import type { RealtimeTransport } from '~/types/realtime';
  *
  * ## When it re-reads
  *
- * Once the channel the consumer follows is attached again having lost
+ * Once the Event channel the consumer listens on is attached again having lost
  * continuity, not when the connection comes back. Ably reattaches channels only
  * after the connection is back, so a read sent then can be answered before
  * anything listens again, and a change published in between is in neither the
@@ -27,9 +28,9 @@ import type { RealtimeTransport } from '~/types/realtime';
  * the channel alone while the connection stays up, and stays quiet when the
  * reattach resumed, because then nothing was missed.
  *
- * A consumer following no channel has missed no message, but may hold nothing at
- * all: a Screen Output whose load failed has no Screen to follow yet. For it, the
- * connection coming back is still the retry.
+ * A consumer listening on no Event has missed no message, but may hold nothing at
+ * all: a Screen Output whose load failed has no Screen to listen for yet. For it,
+ * the connection coming back is still the retry.
  *
  * ## What it deliberately does not do on a disconnection
  *
@@ -42,8 +43,8 @@ import type { RealtimeTransport } from '~/types/realtime';
  */
 export function useReconnectResync(
 	resync: () => void,
-	/** The channel the consumer listens on, or nothing while it follows none. */
-	channel: MaybeRefOrGetter<string | null | undefined>,
+	/** The Event whose channel the consumer listens on, or nothing while it listens on none. */
+	eventId: MaybeRefOrGetter<number | null | undefined>,
 	/**
 	 * The transport to watch. Defaulted rather than always resolved, because the
 	 * Screen Output's display session is handed its transport rather than looking
@@ -67,16 +68,16 @@ export function useReconnectResync(
 			|| realtime.connectionState === 'closed';
 	});
 
-	watch(() => toValue(channel), (followed, _, onCleanup) => {
-		if (realtime && followed)
-			onCleanup(realtime.onContinuityLost(followed, resync));
+	watch(() => toValue(eventId), (listenedOn, _, onCleanup) => {
+		if (realtime && listenedOn)
+			onCleanup(realtime.onContinuityLost(eventRealtimeChannel(listenedOn), resync));
 	}, { immediate: true });
 
-	// Only the transition back to connected, and only while following nothing.
+	// Only the transition back to connected, and only while listening on nothing.
 	// Watching this rather than every connection state keeps a `connecting` →
 	// `connected` flap from firing a reload on top of the one the mount already did.
 	watch(disconnected, (isDisconnected, wasDisconnected) => {
-		if (wasDisconnected && !isDisconnected && !toValue(channel))
+		if (wasDisconnected && !isDisconnected && !toValue(eventId))
 			resync();
 	});
 

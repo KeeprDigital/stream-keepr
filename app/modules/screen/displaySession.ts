@@ -4,7 +4,6 @@ import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import {
 	parseScreenEmbed,
 	parseScreenOutput,
@@ -372,13 +371,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		void screenStore.refreshActiveScreen(evtId, slug, assetCapability.value);
 	}
 
-	// An output on program follows its Screen through the Event channel. One
-	// showing nothing follows nothing yet, so the connection coming back retries it.
-	useReconnectResync(
-		resyncActiveScreen,
-		() => screenStore.activeScreen ? eventRealtimeChannel(resolveEventId()) : null,
-		realtime,
-	);
+	// An output on program hears its Screen's announcements on the Event channel.
+	// One showing nothing listens for none yet, so the connection coming back
+	// retries it.
+	useReconnectResync(resyncActiveScreen, () => screenStore.activeScreen ? resolveEventId() : null, realtime);
 
 	onMounted(async () => {
 		await loadActiveScreen(screenSlug.value);

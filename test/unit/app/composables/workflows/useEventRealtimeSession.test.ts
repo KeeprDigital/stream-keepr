@@ -397,8 +397,8 @@ describe('useEventRealtimeSession', () => {
 		await startSession();
 
 		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), realtime);
-		const [resync, channel] = useReconnectResync.mock.calls[0]!;
-		expect(channel()).toBe('event:12');
+		const [resync, eventId] = useReconnectResync.mock.calls[0]!;
+		expect(eventId()).toBe(12);
 		resync();
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();

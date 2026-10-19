@@ -169,7 +169,7 @@ A consumer's standing request to the realtime transport: a room handler, a chann
 _Avoid_: registration.
 
 **Reconnect Resync**:
-The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the channel its consumer follows is attached again having lost continuity, not when the connection comes back, so nothing published in between falls into neither the read nor a message; a reattach that resumed missed nothing and does not re-read. A consumer following no channel yet re-reads when the connection comes back instead. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
+The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the Event channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). A consumer listening on no Event yet re-reads when the connection comes back instead. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
 _Avoid_: reconnect handler, resubscribe hook.
 
 **Screen Mode Data Freshness**:

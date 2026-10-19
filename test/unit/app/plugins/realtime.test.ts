@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computed, effectScope, ref, toValue, watch } from 'vue';
 
 type MessageHandler = (message: { data: unknown }) => void;
 type PresenceHandler = () => void;
@@ -146,7 +147,12 @@ vi.mock('ably', () => ({
 
 vi.stubGlobal('defineNuxtPlugin', vi.fn(handler => handler));
 vi.stubGlobal('randomUuid', vi.fn(() => 'uuid-1'));
-vi.stubGlobal('ref', vi.fn(value => ({ value })));
+// Vue's own, so the connection state the transport exposes is as reactive as it
+// is in the app, for the module that watches it.
+vi.stubGlobal('ref', ref);
+vi.stubGlobal('computed', computed);
+vi.stubGlobal('watch', watch);
+vi.stubGlobal('toValue', toValue);
 vi.stubGlobal('$fetch', vi.fn());
 /**
  * `location.hash` is where a Screen Output keeps its Screen Output Asset
@@ -997,6 +1003,21 @@ describe('realtime plugin', () => {
 			expect(unbroken).not.toHaveBeenCalled();
 		});
 
+		it('is signalled for the first attach of a channel first asked for during an outage', async () => {
+			const realtime = await createTransport();
+			const lost = vi.fn();
+			connectionHandlers.get('connected')?.();
+			connectionHandlers.get('suspended')?.({ reason: 'offline' });
+
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			realtime.onContinuityLost('event:7', lost);
+			await settle();
+			connectionHandlers.get('connected')?.();
+			channels.get('event:7')!.attached(false);
+
+			expect(lost).toHaveBeenCalledOnce();
+		});
+
 		it('stops being signalled once its handler is disposed', async () => {
 			const { realtime, lost, channel } = await attachedChannel();
 			const other = vi.fn();
@@ -1008,6 +1029,40 @@ describe('realtime plugin', () => {
 			expect(other).not.toHaveBeenCalled();
 			expect(lost).toHaveBeenCalledOnce();
 		});
+	});
+
+	it('closes the race Reconnect Resync had with the channel reattaching (#641)', async () => {
+		// The transport as it runs, with the module that re-reads through it. Before,
+		// the re-read went out on the connection coming back and was answered before
+		// the channel attached, so a change published in between was in neither.
+		const { useReconnectResync } = await import('~~/app/composables/core/useReconnectResync');
+		const realtime = await createTransport();
+		let server = 'before the drop';
+		let shown = server;
+		realtime.onChannel('event:7', 'screen:updated', (data: { label: string }) => {
+			shown = data.label;
+		});
+		const scope = effectScope();
+		scope.run(() => useReconnectResync(() => {
+			shown = server;
+		}, 7, realtime));
+		await settle();
+		connectionHandlers.get('connected')?.();
+		const channel = channels.get('event:7')!;
+		channel.attached(false);
+
+		connectionHandlers.get('suspended')?.({ reason: 'offline' });
+		channel.suspend();
+		await settle();
+		connectionHandlers.get('connected')?.();
+		await settle();
+		// Published once the connection is back but before the channel listens again.
+		server = 'published before the attach';
+		channel.attached(false);
+		await settle();
+
+		expect(shown).toBe('published before the attach');
+		scope.stop();
 	});
 
 	it('does not expose authorizeForEvent — token scope is owned by the transport', async () => {

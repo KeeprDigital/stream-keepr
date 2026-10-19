@@ -386,12 +386,20 @@ export default defineNuxtPlugin({
 		}
 
 		/**
-		 * Whether each channel's message continuity has held since this client first
-		 * asked for it: `unstarted` until its first attach, `held` once attached, and
-		 * `lost` for one the connection dropped before it ever attached.
+		 * Each channel's message continuity, and who to tell once it is attached again
+		 * having lost it. `unstarted` until the channel's first attach, `held` once
+		 * attached, and `lost` for one the connection dropped before it ever attached.
 		 */
-		const continuity = new Map<string, 'unstarted' | 'held' | 'lost'>();
-		const continuityLostHandlers = new Map<string, Set<() => void>>();
+		interface ChannelContinuity {
+			state: 'unstarted' | 'held' | 'lost';
+			readonly onLost: Set<() => void>;
+		}
+
+		const continuity = new Map<string, ChannelContinuity>();
+
+		function isOutOfTouch(state: Ably.ConnectionState) {
+			return state === 'disconnected' || state === 'suspended' || state === 'failed';
+		}
 
 		/**
 		 * Ably reports an attach that did not resume continuity as `attached` from any
@@ -401,13 +409,17 @@ export default defineNuxtPlugin({
 		 * connection missed nothing anyone had yet.
 		 */
 		function watchContinuity(channelName: string, channel: Ably.RealtimeChannel) {
-			continuity.set(channelName, 'unstarted');
+			const watched: ChannelContinuity = {
+				state: isOutOfTouch(connectionSnapshot.connectionState) ? 'lost' : 'unstarted',
+				onLost: new Set(),
+			};
+			continuity.set(channelName, watched);
 			const onAttached = (stateChange: Ably.ChannelStateChange) => {
-				const before = continuity.get(channelName);
-				continuity.set(channelName, 'held');
+				const before = watched.state;
+				watched.state = 'held';
 				if (stateChange.resumed || before === 'unstarted')
 					return;
-				for (const handler of [...continuityLostHandlers.get(channelName) ?? []])
+				for (const handler of [...watched.onLost])
 					handler();
 			};
 			channel.on('attached', onAttached);
@@ -423,25 +435,22 @@ export default defineNuxtPlugin({
 			return channels.get(channelName)!;
 		}
 
-		/** Call `handler` each time `channelName` is attached again after losing message continuity. */
 		function onContinuityLost(channelName: string, handler: () => void): Unsubscribe {
 			getChannel(channelName);
-			if (!continuityLostHandlers.has(channelName))
-				continuityLostHandlers.set(channelName, new Set());
-			const handlers = continuityLostHandlers.get(channelName)!;
-			handlers.add(handler);
+			const { onLost } = continuity.get(channelName)!;
+			onLost.add(handler);
 			return () => {
-				handlers.delete(handler);
+				onLost.delete(handler);
 			};
 		}
 
 		function updateConnectionState(state: Ably.ConnectionState, err?: Error | null) {
 			// A channel not yet attached when the link dropped has missed whatever was
 			// published meanwhile, so its first attach is a loss like any other.
-			if (state === 'disconnected' || state === 'suspended' || state === 'failed') {
-				for (const [channelName, held] of continuity) {
-					if (held === 'unstarted')
-						continuity.set(channelName, 'lost');
+			if (isOutOfTouch(state)) {
+				for (const watched of continuity.values()) {
+					if (watched.state === 'unstarted')
+						watched.state = 'lost';
 				}
 			}
 			connectionSnapshot = {
@@ -845,7 +854,6 @@ export default defineNuxtPlugin({
 			}
 			channels.clear();
 			continuity.clear();
-			continuityLostHandlers.clear();
 
 			void disconnect();
 		}

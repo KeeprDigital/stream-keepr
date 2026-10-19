@@ -1,7 +1,6 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatch, Match, Phase, Round } from '~/types';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { isFeatureMatchOverlayPreviewConfigMessage } from '~/modules/feature-match-overlay/previewMessages';
 
 export function useFeatureMatchOverlayModeData() {
@@ -121,7 +120,7 @@ export function useFeatureMatchOverlayModeData() {
 			return;
 
 		void featureMatchStateStore.loadState(evtId, matchId);
-	}, () => eventId.value ? eventRealtimeChannel(eventId.value) : null);
+	}, eventId);
 
 	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.displayEvent), usesSampleDataset, loading, error };
 }

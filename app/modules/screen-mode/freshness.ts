@@ -116,11 +116,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	}, { immediate: true });
 
 	// Reconnect Resync, and its twin for subscriptions that waited on a token.
-	const { disconnected } = useReconnectResync(
-		queueRefresh,
-		() => options.eventId.value ? eventRealtimeChannel(options.eventId.value) : null,
-		realtime,
-	);
+	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime);
 	const waitingOnToken = computed(() => !!realtime?.tokenError);
 	watch(waitingOnToken, (waiting, wasWaiting) => {
 		if (wasWaiting && !waiting)

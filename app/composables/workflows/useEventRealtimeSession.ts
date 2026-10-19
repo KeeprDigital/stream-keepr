@@ -24,7 +24,7 @@ export function useEventRealtimeSession() {
 			featureMatchAssignmentStore.reloadConsumedRounds(),
 			broadcastDeckListStore.reloadAuthoritativeState(),
 		]);
-	}, () => eventStore.eventId ? eventRealtimeChannel(eventStore.eventId) : null, realtime);
+	}, () => eventStore.eventId, realtime);
 
 	watch(
 		() => eventStore.eventId,

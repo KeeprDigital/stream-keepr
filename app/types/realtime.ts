@@ -70,11 +70,8 @@ export interface RealtimeTransport {
 	) => () => void;
 	/**
 	 * Call `handler` each time `channel` is attached again having lost message
-	 * continuity: Ably's attach with `resumed: false`, whether the connection
-	 * dropped or only the channel did. A first attach is a loss only when the
-	 * connection dropped before it. Not when the connection comes back: channels
-	 * reattach after that, and a read answered in between misses whatever is
-	 * published before anything listens again (#641).
+	 * continuity, whether the connection dropped or only the channel did. A first
+	 * attach is a loss only when the connection dropped before it (ADR-0023).
 	 */
 	onContinuityLost: (channel: string, handler: () => void) => () => void;
 	/**
