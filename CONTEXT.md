@@ -194,6 +194,10 @@ _Avoid_: owns array, field mask, declared ownership.
 The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." It owns monotonic sequencing, compare-and-swap protection, Command Receipts, and the decision to announce a committed command; reducers, merge policies, and notification content stay with the feature.
 _Avoid_: event store, event sourcing, command bus, write-ahead log.
 
+**Live State Follower**:
+The client-side module owning the client half of Sequenced Live State: whether what arrives for a followed live aggregate moves the held snapshot forward. It drops a duplicate notification, refuses a command result from an older sequence or a different epoch, answers a gap, a different epoch or a notification with no difference by reloading, and supersedes overlapping loads as Flights. Its load is what Reconnect Resync re-reads through; it never clears what is held. The feature supplies only where it holds a snapshot and how to apply a full state or a difference.
+_Avoid_: sequence guard, live session sync, client event store.
+
 **Command Receipt**:
 The record that one command ID was already accepted for a live aggregate, holding the command's canonical content so a retry is answered with the current authoritative snapshot and a reused ID with different content is rejected. Retained for a bounded window, not as history.
 _Avoid_: event row, command log, audit record, idempotency key.

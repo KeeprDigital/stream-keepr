@@ -14,7 +14,6 @@ import type { GraphicSourceSelectionsState } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type {
 	BroadcastGraphicsCommand,
-	BroadcastGraphicsCommandResult,
 	BroadcastGraphicsLiveSessionResponse,
 } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type {
@@ -48,17 +47,18 @@ import {
 	socialProfileProjectionValues,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
+import { createLiveStateFollower } from '~/modules/live-state/follower';
 import { broadcastGraphicsCommandRefusal } from '~/utils/broadcastGraphicsCommandRefusal';
 
 /**
  * Client-side Broadcast Graphics playout state, per Screen.
  *
- * The snapshot loaded from the server is the only authority here: a playout
- * command's result and a reloaded snapshot are written straight in, and a
- * realtime notification is trusted only while it continues the sequence this
- * client already holds. A gap means this client fell behind, so it reloads the
- * authoritative snapshot rather than guessing what it missed. That is what makes
- * a reconnecting Live Control and a reconnecting Screen Output converge on the
+ * The snapshot loaded from the server is the only authority here, and every
+ * decision about whether something arriving moves it forward — a command's
+ * result, a reloaded snapshot, a realtime notification, an ended epoch — is the
+ * Live State Follower's. A client that falls behind reloads the authoritative
+ * snapshot rather than guessing what it missed. That is what makes a
+ * reconnecting Live Control and a reconnecting Screen Output converge on the
  * same state.
  *
  * A notification carries the difference one command made, not the live state it
@@ -92,13 +92,43 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	const clockSynchronized = computed(() => isClockSynced.value);
 	const sessions = ref<Map<number, BroadcastGraphicsLiveSessionResponse>>(new Map());
 	/**
-	 * Snapshot loads in flight, one Screen at a time.
+	 * Follows each Screen's Live Session, one Screen at a time.
 	 *
 	 * Keyed by Screen because that is how the cache above is keyed: an operator
-	 * working two Screens has two independent orders, and superseding across them
-	 * would drop a load nothing had overtaken.
+	 * working two Screens has two independent orders.
 	 */
-	const sessionLoads = createKeyedGuardedSequence<number>();
+	const follower = createLiveStateFollower<
+		number,
+		BroadcastGraphicsLiveSessionResponse,
+		MessageData<'broadcastGraphicsLiveSession:commandApplied'>
+	>({
+		keyOf: session => session.screenId,
+		held: screenId => sessions.value.get(screenId),
+		applyState: (session) => {
+			sessions.value.set(session.screenId, session);
+		},
+		withDifference: (known, data) => data.change
+			? {
+					...known,
+					sequence: data.sequence,
+					currentState: changedBroadcastGraphicsLiveState(known.currentState, data.change),
+					updatedAt: new Date(data.timestamp),
+				}
+			: undefined,
+		forget: (screenId) => {
+			sessions.value.delete(screenId);
+		},
+		// While a recovery fault is held, no notification may be applied in place.
+		// The fault is a property of the durable state and no notification carries it,
+		// so patching incrementally would advance the sequence while leaving the fault
+		// asserted forever. That is the worst possible reading for an operator: the
+		// colleague's Take has recovered the session and put graphics on air, and this
+		// client would still be showing "nothing is on air, take something" over a
+		// live show. The snapshot carries both facts together, so
+		// reloading is the only answer that keeps them consistent. It costs one fetch
+		// per client per incident, because the first accepted command clears the fault.
+		acceptsDifferences: known => !known.recoveryFault,
+	});
 	const error = ref<string | null>(null);
 	/**
 	 * The domain refusal `error` is currently reporting, when what it is reporting is
@@ -500,37 +530,6 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return { current, outgoing };
 	}
 
-	function storeSession(session: BroadcastGraphicsLiveSessionResponse) {
-		sessions.value.set(session.screenId, session);
-	}
-
-	/**
-	 * Write a snapshot this client knows to be the newest thing it holds.
-	 *
-	 * Every caller here is answering with state the server produced *after* whatever
-	 * a load in flight will answer with — a command's result, the reload a restated
-	 * command was based on, a fresh epoch, a notification merged onto what is held.
-	 * So each supersedes the Screen's pending load rather than merely racing it:
-	 * without that, the load issued first and answered last wins by arriving late,
-	 * which is exactly how an epoch-end reload came to overwrite an operator's Take
-	 * and show a graphic off air while it was on program (#308).
-	 */
-	function cacheSession(session: BroadcastGraphicsLiveSessionResponse) {
-		sessionLoads.supersede(session.screenId);
-		storeSession(session);
-	}
-
-	function cacheCommandResult(result: BroadcastGraphicsCommandResult): BroadcastGraphicsLiveSessionResponse {
-		const cached = sessions.value.get(result.screenId);
-		// Command requests may overlap. A late answer cannot move one epoch backwards,
-		// and an answer from an ended epoch cannot replace the current epoch at all.
-		if (cached && (cached.id !== result.session.id || cached.sequence > result.session.sequence))
-			return cached;
-
-		cacheSession(result.session);
-		return result.session;
-	}
-
 	/**
 	 * Screens this client renders rather than controls, and how it reads each one's
 	 * snapshot: through the Screen's capability-scoped read, because a Screen
@@ -555,22 +554,14 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	/**
 	 * Load one Screen's authoritative snapshot.
 	 *
-	 * The answer a superseded load returns is the snapshot that superseded it, not
-	 * the one it fetched: its caller mirrors the answer into its own state, so
-	 * handing back the losing snapshot would put it on screen by the other door.
+	 * A load superseded while in flight answers what is held, not what it fetched.
 	 */
 	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		refusal.value = null;
-		const flight = sessionLoads.begin(screenId);
-		return await executeReporting(
-			async () => {
-				const session = await fetchSession(eventId, screenId);
-				if (flight.stale)
-					return sessions.value.get(screenId) ?? null;
-				storeSession(session);
-				return session;
-			},
-		);
+		// Begun here rather than inside the reporting wrapper, so the Flight is taken
+		// in this call's order however that wrapper schedules its action.
+		const loading = follower.load(screenId, () => fetchSession(eventId, screenId));
+		return await executeReporting(() => loading);
 	}
 
 	/**
@@ -597,7 +588,8 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		pending.value.set(pendingKey, (pending.value.get(pendingKey) ?? 0) + 1);
 
 		async function deliverTo(sessionId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
-			return cacheCommandResult(await repository.sendCommand(eventId, screenId, sessionId, command));
+			const result = await repository.sendCommand(eventId, screenId, sessionId, command);
+			return follower.acceptCommandResult(result.session);
 		}
 
 		/**
@@ -662,7 +654,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 							throw failure;
 
 						const current = await repository.getSession(eventId, screenId);
-						cacheSession(current);
+						follower.acceptSnapshot(current);
 
 						try {
 							return await deliverTo(current.id);
@@ -841,7 +833,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		return await executeReporting(
 			async () => {
 				const session = await repository.resetSession(eventId, screenId);
-				cacheSession(session);
+				follower.acceptSnapshot(session);
 				forgetRefusedInputs(screenId);
 				return session;
 			},
@@ -851,20 +843,16 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	/**
 	 * A Screen's playout epoch has been replaced.
 	 *
-	 * Nothing here is applied: everything this client holds for that Screen belongs
-	 * to the epoch that ended, so the snapshot is the only thing that can say what
-	 * the show looks like now. A client holding nothing for the Screen has nothing to
-	 * correct and deliberately does not open an epoch just to hear about one ending.
+	 * Nothing here is applied: the follower drops what this client held for the
+	 * ended epoch before the reload, because that state may have graphics on air,
+	 * and if the reload fails — the Screen has left Broadcast Graphics mode, which is
+	 * one of the ways an epoch ends — keeping it would leave every output rendering a
+	 * show that is over.
 	 */
 	async function applyEpochEnded(data: MessageData<'broadcastGraphicsLiveSession:epochEnded'>) {
-		if (!sessions.value.has(data.screenId))
+		if (follower.end(data.screenId) !== 'reload')
 			return;
 
-		// Dropped before the reload rather than after it. The ended epoch's state may
-		// have graphics on air, and if the reload fails — the Screen has left Broadcast
-		// Graphics mode, which is one of the ways an epoch ends — keeping it cached
-		// would leave every output rendering a show that is over.
-		sessions.value.delete(data.screenId);
 		forgetRefusedInputs(data.screenId);
 		await loadSession(data.eventId, data.screenId);
 	}
@@ -1088,59 +1076,22 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		});
 	}
 
+	/**
+	 * A colleague's accepted command, or one this client fell behind on.
+	 *
+	 * A notification that carries no change still advanced the order, which happens
+	 * when the difference was too large to deliver and when a recognised retry was
+	 * answered with a snapshot newer than the command it replayed. Either way the
+	 * snapshot is the only thing that can say what the show looks like now — the
+	 * same answer a sequence gap already gets.
+	 */
 	async function applyRemoteCommand(data: MessageData<'broadcastGraphicsLiveSession:commandApplied'>) {
-		const known = sessions.value.get(data.screenId);
-
-		// Nothing loaded, or a different epoch entirely: the snapshot is the only
-		// thing that can say which epoch this client should be following.
-		if (!known || known.id !== data.sessionId) {
+		if (follower.notify(data.screenId, data) === 'reload')
 			await loadSession(data.eventId, data.screenId);
-			return;
-		}
-
-		// While a recovery fault is held, no notification may be applied in place.
-		// The fault is a property of the durable state and no notification carries it,
-		// so patching incrementally would advance the sequence while leaving the fault
-		// asserted forever. That is the worst possible reading for
-		// an operator: the colleague's Take has recovered the session and put graphics
-		// on air, and this client would still be showing "nothing is on air, take
-		// something" over a live show. The snapshot carries both facts together, so
-		// reloading is the only answer that keeps them consistent. It costs one fetch
-		// per client per incident, because the first accepted command clears the fault.
-		if (known.recoveryFault) {
-			await loadSession(data.eventId, data.screenId);
-			return;
-		}
-
-		if (data.sequence <= known.sequence)
-			return;
-
-		if (data.sequence > known.sequence + 1) {
-			await loadSession(data.eventId, data.screenId);
-			return;
-		}
-
-		// A notification that carries no change is not one to ignore: the order did
-		// advance, and this client cannot say to what. That happens when the difference
-		// was too large to deliver and when a recognised retry was answered with a
-		// snapshot newer than the command it replayed. Either way the snapshot is the
-		// only thing that can say what the show looks like now — the same answer a
-		// sequence gap already gets.
-		if (!data.change) {
-			await loadSession(data.eventId, data.screenId);
-			return;
-		}
-
-		cacheSession({
-			...known,
-			sequence: data.sequence,
-			currentState: changedBroadcastGraphicsLiveState(known.currentState, data.change),
-			updatedAt: new Date(data.timestamp),
-		});
 	}
 
 	function $reset() {
-		sessionLoads.supersedeAll();
+		follower.reset();
 		sessions.value.clear();
 		pending.value.clear();
 		supersededInputs.value.clear();
