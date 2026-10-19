@@ -26,8 +26,28 @@ const mockEventId = ref<number | null>(1);
 const mockInteractive = ref(false);
 const mockScreenStore = { updateModeConfig: vi.fn() };
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+type Handler = (message: Record<string, unknown>) => void;
+const channelHandlers = new Map<string, Set<Handler>>();
+const mockRealtime = reactive({
+	connectionState: 'connected',
+	tokenError: null as Error | null,
+	onChannel: (channel: string, type: string, handler: Handler) => {
+		const key = `${channel}|${type}`;
+		if (!channelHandlers.has(key))
+			channelHandlers.set(key, new Set());
+		channelHandlers.get(key)!.add(handler);
+		return () => channelHandlers.get(key)!.delete(handler);
+	},
+});
+
+/** An Event message, as the Event channel delivers it. */
+function deliver(type: string, payload: Record<string, unknown>) {
+	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
+		handler({ eventId: 1, ...payload });
+}
 
 mockNuxtImport('$fetch', () => mockFetch);
+mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref({ id: 1, name: 'Test' }),
@@ -39,6 +59,7 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig))
 function historyEntry(overrides: Partial<PlayerMatchHistoryEntry> = {}): PlayerMatchHistoryEntry {
 	return {
 		id: 1,
+		roundId: 31,
 		roundName: 'Round 1',
 		roundNumber: 1,
 		phaseName: 'Swiss',
@@ -73,6 +94,8 @@ describe('usePlayerHistoryModeData', () => {
 		Object.assign(mutableConfig, defaultConfig, { columns: defaultConfig.columns.map(column => ({ ...column })) });
 		mockEventId.value = 1;
 		mockInteractive.value = false;
+		mockRealtime.connectionState = 'connected';
+		mockRealtime.tokenError = null;
 		mockFetch.mockReset();
 		mockScreenStore.updateModeConfig.mockReset();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -269,5 +292,114 @@ describe('usePlayerHistoryModeData', () => {
 		await flushPromises();
 
 		expect(pageData.value.map(row => row.roundName)).toEqual(['Round 3']);
+	});
+
+	describe('freshness', () => {
+		// The Event, the selected Player and the Screen configuration are held
+		// constant throughout: only Event Data changes under the output (#601).
+		const pending = historyEntry({ outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null, resultString: null });
+		const recorded = historyEntry({ outcome: 'win', hasResult: true, playerGameWins: 2, opponentGameWins: 0 });
+
+		async function showingPendingHistory() {
+			mutableConfig.playerId = 7;
+			mockFetch.mockResolvedValue({ player: mockPlayer, history: [pending] });
+			const data = makePlayerHistoryModeData();
+			await flushPromises();
+			expect(data.formatOutcome(data.pageData.value[0]!)).toBe('Pending');
+			mockFetch.mockClear();
+			return data;
+		}
+
+		function match(overrides: Record<string, unknown> = {}) {
+			return { id: 1, roundId: 31, player1Id: 7, player2Id: 2, ...overrides };
+		}
+
+		it('shows a Match result recorded elsewhere', async () => {
+			const { pageData, formatOutcome } = await showingPendingHistory();
+			mockFetch.mockResolvedValue({ player: mockPlayer, history: [recorded] });
+
+			deliver('match:updated', { match: match({ hasResult: true }) });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2-0');
+		});
+
+		it('picks up a new Match for the selected Player', async () => {
+			await showingPendingHistory();
+
+			deliver('match:created', { match: match({ id: 5, roundId: 32, player1Id: 3, player2Id: 7 }) });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it('drops a held Match that is deleted or re-paired away from the Player', async () => {
+			await showingPendingHistory();
+
+			deliver('match:deleted', { matchId: 1 });
+			await flushPromises();
+			deliver('match:updated', { match: match({ player1Id: 3, player2Id: 4 }) });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it('ignores Matches that are neither held nor the Player\'s', async () => {
+			await showingPendingHistory();
+
+			deliver('match:updated', { match: match({ id: 9, player1Id: 3, player2Id: 4 }) });
+			deliver('match:deleted', { matchId: 9 });
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
+		});
+
+		it('re-reads when a held Round changes, and not for another Round', async () => {
+			await showingPendingHistory();
+
+			deliver('round:updated', { round: { id: 40 } });
+			deliver('round:deleted', { roundId: 40 });
+			await flushPromises();
+			expect(mockFetch).not.toHaveBeenCalled();
+
+			deliver('round:updated', { round: { id: 31 } });
+			await flushPromises();
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+
+			deliver('round:matchesRefreshed', { roundId: 40, matchCount: 8, created: 1, updated: 0, staleDeleted: 0 });
+			await flushPromises();
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it('follows an edit to the selected Player\'s record or an opponent\'s, and no one else\'s', async () => {
+			const { player } = await showingPendingHistory();
+			mockFetch.mockResolvedValue({ player: { ...mockPlayer, wins: 13 }, history: [pending] });
+
+			deliver('player:updated', { player: { id: 5 } });
+			await flushPromises();
+			expect(mockFetch).not.toHaveBeenCalled();
+
+			deliver('player:updated', { player: { id: 7 } });
+			await flushPromises();
+			expect(player.value?.wins).toBe(13);
+
+			deliver('player:updated', { player: { id: 2 } });
+			await flushPromises();
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it('shows a result missed while disconnected once it reconnects', async () => {
+			const { pageData, formatOutcome } = await showingPendingHistory();
+
+			mockRealtime.connectionState = 'disconnected';
+			await nextTick();
+			mockFetch.mockResolvedValue({ player: mockPlayer, history: [recorded] });
+			mockRealtime.connectionState = 'connected';
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2-0');
+		});
 	});
 });

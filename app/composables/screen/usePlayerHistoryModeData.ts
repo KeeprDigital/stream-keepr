@@ -1,8 +1,12 @@
+import type { MatchResponse } from '~~/shared/api';
+import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
 
 export interface PlayerMatchHistoryEntry {
 	id: number;
+	roundId: number;
 	roundName: string;
 	roundNumber: number;
 	phaseName: string;
@@ -19,19 +23,68 @@ export interface PlayerMatchHistoryEntry {
 	resultString: string | null;
 }
 
+interface PlayerHistory {
+	player: Player | null;
+	rows: PlayerMatchHistoryEntry[];
+}
+
+/**
+ * The Event Data a Player's match history is read from: the Player and their
+ * opponents, their Matches, those Matches' Rounds and Phases, and the
+ * opponents' Archetypes. Phases and Melee syncs are rare and not identified in
+ * a history row, so any of them re-reads.
+ */
+function playerHistoryDependencies(playerId: () => number | null): ScreenModeDependencies<PlayerHistory> {
+	const involvesPlayer = (match: MatchResponse) =>
+		match.player1Id === playerId() || match.player2Id === playerId();
+	const holdsMatch = (held: PlayerHistory, matchId: number) => held.rows.some(row => row.id === matchId);
+	const holdsRound = (held: PlayerHistory, roundId: number) => held.rows.some(row => row.roundId === roundId);
+	const holdsOpponent = (held: PlayerHistory, id: number) => held.rows.some(row => row.opponentId === id);
+
+	return {
+		'player:updated': ({ player }, held) => player.id === playerId() || holdsOpponent(held, player.id),
+		'player:deleted': ({ playerId: id }, held) => holdsOpponent(held, id),
+		'match:created': ({ match }) => involvesPlayer(match),
+		'match:updated': ({ match }, held) => involvesPlayer(match) || holdsMatch(held, match.id),
+		'match:deleted': ({ matchId }, held) => holdsMatch(held, matchId),
+		'round:updated': ({ round }, held) => holdsRound(held, round.id),
+		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId),
+		'round:matchesRefreshed': true,
+		'phase:updated': true,
+		'phase:deleted': true,
+		'archetype:updated': (_message, held) => held.rows.some(row => row.opponentDeckName != null),
+		'archetype:deleted': (_message, held) => held.rows.some(row => row.opponentDeckName != null),
+		'melee:dataReset': true,
+		'melee:structureSynced': true,
+		'melee:roundSynced': true,
+		'melee:playersSynced': true,
+		'melee:decklistsSynced': true,
+	};
+}
+
 export function usePlayerHistoryModeData() {
 	const { screen, eventId, interactive } = useScreenContext();
 	const config = useScreenModeConfig('player-history');
 	const screenStore = useScreenStore();
 	const outputReads = useScreenOutputReads();
 
-	const displayData = useBroadcastDisplayData<{ player: Player | null; rows: PlayerMatchHistoryEntry[] }>({
+	const freshness = useScreenModeFreshness<PlayerHistory>({
+		eventId,
+		source: () => outputReads.scopeKey.value && config.value.playerId
+			? `${outputReads.scopeKey.value}:${config.value.playerId}`
+			: null,
+		read: async () => {
+			const data = await outputReads.playerHistory();
+			return { player: data.player, rows: data.history };
+		},
 		initialData: { player: null, rows: [] },
+		errorMessage: 'Failed to load player match history',
+		dependsOn: playerHistoryDependencies(() => config.value.playerId),
 	});
-	const loading = displayData.loading;
-	const error = displayData.error;
-	const player = computed(() => displayData.data.value.player);
-	const rows = computed(() => displayData.data.value.rows);
+	const loading = freshness.loading;
+	const error = freshness.error;
+	const player = computed(() => freshness.data.value.player);
+	const rows = computed(() => freshness.data.value.rows);
 
 	const headerText = computed(() => config.value.headerText || (player.value ? `${player.value.name} Match History` : 'Player Match History'));
 	const isEmpty = computed(() => !loading.value && (!config.value.playerId || rows.value.length === 0));
@@ -59,20 +112,6 @@ export function usePlayerHistoryModeData() {
 			}
 		},
 	});
-
-	async function load() {
-		if (!outputReads.scope.value || !config.value.playerId) {
-			displayData.clear();
-			return;
-		}
-
-		await displayData.refresh(async () => {
-			const data = await outputReads.playerHistory();
-			return { player: data.player, rows: data.history };
-		}, 'Failed to load player match history');
-	}
-
-	watch(() => [outputReads.scopeKey.value, config.value.playerId], load, { immediate: true });
 
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')
