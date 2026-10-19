@@ -228,22 +228,30 @@ describe('the Feature Match Session client following its aggregate', () => {
 			expect(rendered().player1.cardsKept).toBe(6);
 		});
 
-		it('across a Session epoch change renders the new Session, keeping a newer pending edit', async () => {
+		it('across a Session epoch change keeps a newer pending edit to the same Player, then renders the new Session', async () => {
 			store.cacheSession(session(500, 0, state()));
 			const cards = deferred<ReturnType<typeof commandResult>>();
-			mockRepo.updatePlayerFeatureMatchState.mockReturnValueOnce(cards.promise);
+			mockRepo.updatePlayerFeatureMatchState
+				.mockReturnValueOnce(cards.promise)
+				.mockResolvedValueOnce(commandResult(600, 2, state({ life1: 28, life2: 30 })));
 
 			void store.setCardsKept(EVENT_ID, SLOT_ID, 'player1', 6);
-			store.adjustLife(EVENT_ID, SLOT_ID, 'player2', -2);
+			store.adjustLife(EVENT_ID, SLOT_ID, 'player1', -2);
 			// The Slot's Session is replaced while both are outstanding.
 			await store.applyRemoteSessionEvent(notification(600, 1, state({ life1: 30, life2: 30 })));
 			cards.resolve(commandResult(500, 1, state({ cardsKept1: 6 })));
 			await flushPromises();
 
 			expect(store.sessionIdBySlotId.get(SLOT_ID)).toBe(600);
-			expect(rendered().player1.lifeTotal).toBe(30);
-			expect(rendered().player1.cardsKept).toBe(state({ life1: 30 }).player1.cardsKept);
-			expect(rendered().player2.lifeTotal).toBe(18);
+			expect(rendered().player1.lifeTotal).toBe(18);
+			expect(rendered().player2.lifeTotal).toBe(30);
+
+			// The pending life change lands in the new Session.
+			await vi.advanceTimersByTimeAsync(300);
+			await flushPromises();
+
+			expect(rendered().player1).toEqual(state({ life1: 28 }).player1);
+			expect(store.sessionSequenceBySlotId.get(SLOT_ID)).toBe(2);
 		});
 	});
 });

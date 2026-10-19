@@ -56,16 +56,18 @@ export function useFeatureMatchPromotion() {
 			}
 		}
 
-		// A command's answer, not a realtime message: each Slot's Session passes the
-		// Live State Follower, so an answer overtaken by a concurrent promotion this
-		// client already applied cannot put the Match back (#574).
+		// A command's answer, not a realtime message: each Slot's Feature Match Session
+		// passes the Live State Follower, so an answer overtaken by a concurrent
+		// promotion this client already applied cannot put the Match back (#574). Nor
+		// can its Assignment, which is as old as the Slot it was saved with.
+		let overtaken = false;
 		if (slotsFlight.current) {
 			for (const featureMatch of result.clearedSlots)
 				featureMatchStore.applySavedFeatureMatch(featureMatch);
-			featureMatchStore.applySavedFeatureMatch(result.promotedSlot);
+			overtaken = !featureMatchStore.applySavedFeatureMatch(result.promotedSlot);
 		}
 
-		if (assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
+		if (!overtaken && assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
 			assignmentStore.applySavedAssignment(result.assignment);
 
 		return result;

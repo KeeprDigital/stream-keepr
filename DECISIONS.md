@@ -692,7 +692,7 @@ The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two 
 - **One name for every spatial knob** — ember needs both a density and a size, so "how big" and "how many" must stay distinct.
 - **Pixel-level direction tests** — the renderer harness could prove direction, but the cost outweighs a rule a reviewer checks against the docblock.
 
-## ADR-0026: A Feature Match Session client renders the Session its follower holds
+## ADR-0026: The Feature Match Session client renders the Feature Match Session its follower holds
 
 Accepted · 2026-10-19 · [#591](https://github.com/KeeprDigital/stream-keepr/issues/591)
 
@@ -700,10 +700,10 @@ Accepted · 2026-10-19 · [#591](https://github.com/KeeprDigital/stream-keepr/is
 
 The Feature Match Session store follows each Slot's Session through the **Live State Follower**. Every Session it holds passes the follower first: a command's answer, a load, a notification, a Slot carrying its Session, and a **Feature Match Slot Promotion**'s answer.
 
-- **A Slot's epochs ascend.** Sessions use `AUTOINCREMENT` ids, never reused, and a closed Session is never reopened. So the greater id is the newer Session: a later one replaces the held one, and an earlier one is dropped, not reloaded.
+- **A Slot's epochs ascend.** Feature Match Sessions use `AUTOINCREMENT` ids, never reused, and a closed one is never reopened. So the greater id is the newer Feature Match Session: a later one replaces the held one, and an earlier one is dropped, not reloaded.
 - **A notification carries the whole Session state.** One opening a later Session, or arriving with nothing held, is followed without a reload.
 - **Settling optimistic work renders the held Session**, through the optimistic-state module's `authority`, not the work's own answer or snapshot. A field that newer live work still owns keeps its local value until the last owner settles.
-- **A Slot whose Session the follower refuses as replaced is not applied either.** Its record describes the Slot as it was before.
+- **An updated Slot whose Session the follower refuses as replaced is not applied either**, nor is a promotion's Assignment saved with it. This covers `featureMatch:updated` and a Slot Promotion's answer; a whole-Event Slot load, a create, and a Screen Output's read still apply the Slot record as read.
 
 ### Why
 

@@ -7,7 +7,7 @@ const mockRepo = {
 	promoteMatch: vi.fn(),
 };
 const mockFeatureMatchStore = {
-	applySavedFeatureMatch: vi.fn(),
+	applySavedFeatureMatch: vi.fn(() => true),
 	currentLifetime: () => ({ stale: false, current: true }),
 };
 const mockModalOpen = vi.fn();

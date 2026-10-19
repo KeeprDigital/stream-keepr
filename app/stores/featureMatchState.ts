@@ -238,8 +238,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	}
 
 	/**
-	 * Server-only update (no optimistic prediction). The answer reaches the
-	 * screen through the follower, merged around concurrent edits' pending fields.
+	 * Server-only update (no optimistic prediction), run only for a Slot this
+	 * client holds state for. The caller offers the answer to the follower, which
+	 * renders it merged around concurrent edits' pending fields.
 	 */
 	function withServerUpdate(
 		matchId: number,

@@ -138,11 +138,13 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	 * Feature Match Slot Promotion's promoted and cleared Slots, or another's
 	 * announced. Its Session passes the Live State Follower first: a Slot carrying a
 	 * Session the Slot has since replaced is itself from before what is held, and is
-	 * not put back over it.
+	 * not put back over it. Answers whether the Slot was applied.
 	 */
-	function applySavedFeatureMatch(slot: FeatureMatch) {
-		if (useFeatureMatchStateStore().cacheSlotSession(slot))
-			lifecycle.applyRemoteUpdated(slot);
+	function applySavedFeatureMatch(slot: FeatureMatch): boolean {
+		if (!useFeatureMatchStateStore().cacheSlotSession(slot))
+			return false;
+		lifecycle.applyRemoteUpdated(slot);
+		return true;
 	}
 
 	function applyRemoteDeleted(data: MessageData<'featureMatch:deleted'>) {

@@ -22,7 +22,7 @@ const mockRepo = {
 };
 const mockAssignmentStore = {
 	currentEventId: 1 as number | null,
-	assignmentsByRound: new Map<number, unknown[]>(),
+	assignmentsByRound: new Map<number, unknown[]>([[3, []]]),
 	applySavedAssignment: vi.fn(),
 	currentLifetime: () => ({ stale: false, current: true }),
 };
@@ -149,6 +149,23 @@ describe('a simultaneous Slot Promotion race, on the promoting client', () => {
 
 			expect(held(SLOT_A)).toEqual({ matchId: null, sessionId: 620 });
 			expect(held(SLOT_B)).toEqual({ matchId: MATCH_ID, sessionId: 701 });
+		});
+
+		it('an answer the other promotion overtook does not save its Assignment either', async () => {
+			mockRepo.promoteMatch.mockResolvedValue(answer);
+
+			otherPromotionArrives(moved);
+			await promoteIntoSlotA();
+
+			expect(mockAssignmentStore.applySavedAssignment).not.toHaveBeenCalled();
+		});
+
+		it('an answer arriving first saves its Assignment', async () => {
+			mockRepo.promoteMatch.mockResolvedValue(answer);
+
+			await promoteIntoSlotA();
+
+			expect(mockAssignmentStore.applySavedAssignment).toHaveBeenCalledWith(answer.assignment);
 		});
 	});
 });
