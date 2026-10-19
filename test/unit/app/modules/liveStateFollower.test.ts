@@ -1,4 +1,4 @@
-import type { LiveStateNotification } from '~~/app/modules/live-state/follower';
+import type { LiveStateFollowerOptions, LiveStateNotification } from '~~/app/modules/live-state/follower';
 import { describe, expect, it } from 'vitest';
 import { createLiveStateFollower } from '~~/app/modules/live-state/follower';
 
@@ -32,7 +32,7 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 
-function harness() {
+function harness(options: Partial<LiveStateFollowerOptions<string, Snapshot, Notification>> = {}) {
 	const held = new Map<string, Snapshot>();
 	const follower = createLiveStateFollower<string, Snapshot, Notification>({
 		keyOf: state => state.key,
@@ -43,6 +43,7 @@ function harness() {
 			: undefined,
 		forget: key => held.delete(key),
 		acceptsDifferences: state => !state.faulted,
+		...options,
 	});
 	return { held, follower };
 }
@@ -203,6 +204,13 @@ describe('a load', () => {
 		expect(held.has('screen')).toBe(false);
 	});
 
+	it('that finds nothing holds nothing, and answers nothing', async () => {
+		const { held, follower } = harness();
+
+		await expect(follower.load('screen', async () => null)).resolves.toBeNull();
+		expect(held.has('screen')).toBe(false);
+	});
+
 	it('for one key is not superseded by a load for another', async () => {
 		const { held, follower } = harness();
 		const read = deferred<Snapshot>();
@@ -295,5 +303,70 @@ describe('a reconnect', () => {
 
 		await expect(resync).resolves.toMatchObject({ sequence: 7 });
 		expect(held.get('screen')).toMatchObject({ sequence: 7, words: ['taken'] });
+	});
+});
+
+describe('where epochs ascend', () => {
+	it('a command result from a later epoch is held', () => {
+		const { held, follower } = harness({ epochsAscend: true });
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 9, words: ['ended'] }));
+		const result = snapshot({ id: 2, sequence: 1 });
+
+		expect(follower.acceptCommandResult(result)).toBe(result);
+		expect(held.get('screen')).toBe(result);
+	});
+
+	it('a notification from an earlier epoch is dropped rather than reloaded', () => {
+		const { held, follower } = harness({ epochsAscend: true });
+		follower.acceptSnapshot(snapshot({ id: 2, sequence: 1 }));
+
+		const outcome = follower.notify('screen', { sessionId: 1, sequence: 9, added: ['ended'] });
+
+		expect(outcome).toBe('ignored');
+		expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1, words: [] });
+	});
+
+	it('a notification from a later epoch is answered by reloading', () => {
+		const { held, follower } = harness({ epochsAscend: true });
+		follower.acceptSnapshot(snapshot({ id: 1, sequence: 4 }));
+
+		expect(follower.notify('screen', { sessionId: 2, sequence: 1, added: ['new'] })).toBe('reload');
+		expect(held.get('screen')).toMatchObject({ id: 1, sequence: 4 });
+	});
+
+	describe('with notifications that carry the whole state', () => {
+		const wholeState = (notification: Notification) => snapshot({
+			id: notification.sessionId,
+			sequence: notification.sequence,
+			words: notification.added ?? [],
+		});
+
+		it('one from a later epoch is held without reloading', () => {
+			const { held, follower } = harness({ epochsAscend: true, wholeState });
+			follower.acceptSnapshot(snapshot({ id: 1, sequence: 4, words: ['ended'] }));
+
+			expect(follower.notify('screen', { sessionId: 2, sequence: 1, added: ['new'] })).toBe('applied');
+			expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1, words: ['new'] });
+		});
+
+		it('one for a key nothing is held for is held without reloading', () => {
+			const { held, follower } = harness({ epochsAscend: true, wholeState });
+
+			expect(follower.notify('screen', { sessionId: 2, sequence: 1, added: ['new'] })).toBe('applied');
+			expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1, words: ['new'] });
+		});
+
+		it('supersedes a load in flight when it opens an epoch', async () => {
+			const { held, follower } = harness({ epochsAscend: true, wholeState });
+			follower.acceptSnapshot(snapshot({ id: 1, sequence: 4 }));
+			const read = deferred<Snapshot>();
+			const load = follower.load('screen', () => read.promise);
+
+			follower.notify('screen', { sessionId: 2, sequence: 1, added: ['new'] });
+			read.resolve(snapshot({ id: 1, sequence: 5 }));
+
+			await expect(load).resolves.toMatchObject({ id: 2 });
+			expect(held.get('screen')).toMatchObject({ id: 2, sequence: 1 });
+		});
 	});
 });

@@ -13,7 +13,10 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * - a notification past the next sequence is a gap, and a notification offering no
  *   difference is one this client cannot follow — both are answered by reloading;
  * - anything from a different epoch (another aggregate id) than the one held is
- *   never applied: a command result is refused, a notification reloads;
+ *   never applied: a command result is refused, a notification reloads. Where a
+ *   feature's epochs ascend, a later epoch replaces the held one and an earlier
+ *   one is simply dropped; a notification carrying its whole state then opens a
+ *   later epoch, or starts following a key, without a reload;
  * - a command result older than what is held is refused, and what is held answers;
  * - loads are Flights from a keyed Guarded Sequence: a later load, and any newer
  *   write, supersedes an earlier load, so the load issued first and answered last
@@ -60,6 +63,19 @@ export interface LiveStateFollowerOptions<K, S extends LiveStateSnapshot, N exte
 	 * not reloads on every notification, repeated sequences included.
 	 */
 	acceptsDifferences?: (held: S) => boolean;
+	/**
+	 * Whether a key's epochs only ever begin later with a greater id, so that
+	 * of two epochs the greater id is the newer. Without it, any epoch other than
+	 * the held one is merely different, and only a reload can say which to follow.
+	 */
+	epochsAscend?: boolean;
+	/**
+	 * The snapshot a notification carries whole, for a feature whose notifications
+	 * carry their state rather than a difference. One opening a later epoch, or
+	 * arriving while nothing is held, is then held without a reload: it says both
+	 * which epoch to follow and where in it.
+	 */
+	wholeState?: (notification: N) => S | undefined;
 }
 
 export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extends LiveStateNotification>(
@@ -70,6 +86,11 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 * superseding across them would drop a load nothing had overtaken.
 	 */
 	const loads = createKeyedGuardedSequence<K>();
+
+	/** Whether one epoch is known to have begun after another. */
+	function isLaterEpoch(id: number, than: number): boolean {
+		return !!options.epochsAscend && id > than;
+	}
 
 	/**
 	 * Hold a snapshot known to be the newest thing this client has: the server
@@ -85,13 +106,16 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 * Read one key's authoritative snapshot and hold it, unless something newer
 	 * superseded the read while it was in flight. A superseded load answers what
 	 * is held instead of what it read: its caller mirrors the answer, so handing
-	 * back the losing snapshot would put it on screen by the other door.
+	 * back the losing snapshot would put it on screen by the other door. A read
+	 * that finds nothing to follow holds nothing.
 	 */
-	async function load(key: K, read: () => Promise<S>): Promise<S | null> {
+	async function load(key: K, read: () => Promise<S | null>): Promise<S | null> {
 		const flight = loads.begin(key);
 		const snapshot = await read();
 		if (flight.stale)
 			return options.held(key) ?? null;
+		if (!snapshot)
+			return null;
 		options.applyState(snapshot);
 		return snapshot;
 	}
@@ -103,7 +127,7 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 */
 	function acceptCommandResult(snapshot: S): S {
 		const known = options.held(options.keyOf(snapshot));
-		if (known && (known.id !== snapshot.id || known.sequence > snapshot.sequence))
+		if (known && (known.id === snapshot.id ? known.sequence > snapshot.sequence : !isLaterEpoch(snapshot.id, known.id)))
 			return known;
 		acceptSnapshot(snapshot);
 		return snapshot;
@@ -111,6 +135,16 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 
 	function notify(key: K, notification: N): LiveStateNotificationOutcome {
 		const known = options.held(key);
+		// An epoch known to have ended says nothing about the one held.
+		if (known && isLaterEpoch(known.id, notification.sessionId))
+			return 'ignored';
+		if (!known || isLaterEpoch(notification.sessionId, known.id)) {
+			const opened = options.wholeState?.(notification);
+			if (opened) {
+				acceptSnapshot(opened);
+				return 'applied';
+			}
+		}
 		// Nothing held, or a different epoch entirely: only the snapshot can say
 		// which epoch this client should be following.
 		if (!known || known.id !== notification.sessionId)

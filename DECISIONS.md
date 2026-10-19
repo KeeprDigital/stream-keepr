@@ -691,3 +691,32 @@ The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two 
 - **`zoom` for sample-domain scale, `size` for element scale** (#503's example) — splits on shader maths rather than what the operator sees, and "zoom" suggests a camera that only waves has.
 - **One name for every spatial knob** — ember needs both a density and a size, so "how big" and "how many" must stay distinct.
 - **Pixel-level direction tests** — the renderer harness could prove direction, but the cost outweighs a rule a reviewer checks against the docblock.
+
+## ADR-0026: A Feature Match Session client renders the Session its follower holds
+
+Accepted · 2026-10-19 · [#591](https://github.com/KeeprDigital/stream-keepr/issues/591)
+
+### Decision
+
+The Feature Match Session store follows each Slot's Session through the **Live State Follower**. Every Session it holds passes the follower first: a command's answer, a load, a notification, a Slot carrying its Session, and a **Feature Match Slot Promotion**'s answer.
+
+- **A Slot's epochs ascend.** Sessions use `AUTOINCREMENT` ids, never reused, and a closed Session is never reopened. So the greater id is the newer Session: a later one replaces the held one, and an earlier one is dropped, not reloaded.
+- **A notification carries the whole Session state.** One opening a later Session, or arriving with nothing held, is followed without a reload.
+- **Settling optimistic work renders the held Session**, through the optimistic-state module's `authority`, not the work's own answer or snapshot. A field that newer live work still owns keeps its local value until the last owner settles.
+- **A Slot whose Session the follower refuses as replaced is not applied either.** Its record describes the Slot as it was before.
+
+### Why
+
+Review F04: Show sideboards (sequence 1) answered after a life change (sequence 2), and its whole-Player merge put life back to 20 and the sequence back to 1. Field Ownership is per top-level key, so guarding only the sequence bookkeeping would have left the stale merge. #577 had the server re-read state because the promoting client had no guard; the client now carries one.
+
+### Consequences
+
+- An accepted command answer now renders the fields no live work owns, not only its own. Pending edits are protected by their claims, as with any remote state.
+- A notification from an earlier Session no longer replaces a later one.
+- `updateAllClockSettings` writes display-only clock settings the server never holds. Any accepted Session now overwrites them, where before only a remote event or a clock command did.
+
+### Rejected alternatives
+
+- **Guard `cacheSession` only** — leaves the optimistic merge rendering the older answer (F04).
+- **Reload on every notification from another Session** — the follower's default. It costs every output a round trip on the on-air path, which ADR-0004 rejects, when the notification already carries the whole state.
+- **Order Sessions by `createdAt`** — millisecond ties are possible. Ids are strictly ordered.

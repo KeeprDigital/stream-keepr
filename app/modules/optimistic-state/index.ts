@@ -31,6 +31,13 @@ interface OptimisticStateOptions<S> {
 	stateMap: Ref<Map<number, S>>;
 	/** Error ref for error reporting */
 	errorRef: Ref<string | null>;
+	/**
+	 * The newest state the server is known to hold for an entity, when something
+	 * follows it. Settling work then renders this rather than the work's own answer
+	 * or snapshot: an answer that arrives late, or a failure across a new epoch,
+	 * cannot render anything older than what is already known.
+	 */
+	authority?: (id: number) => S | undefined;
 }
 
 interface BatchOptions<S, P> {
@@ -65,7 +72,10 @@ interface TargetState<S> {
  * rollbacks write only owned fields, and remote state applied while work
  * is pending or in flight never overwrites another action's owned fields.
  * All batches and actions created from one instance share the same
- * ownership claims, so `applyRemote` merges around every live edit.
+ * ownership claims, so `applyRemote` merges around every live edit, and
+ * settling one piece of work never overwrites a field newer work still owns.
+ * Given an `authority`, settling renders the newest state known to be held
+ * rather than the work's own answer or snapshot.
  */
 export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 	/**
@@ -99,9 +109,12 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		};
 	}
 
-	function ownedFieldsFor(id: number): Set<keyof S> {
+	/** Fields live work owns for an entity, other than the claim `except`. */
+	function ownedFieldsFor(id: number, except?: ReadonlySet<keyof S>): Set<keyof S> {
 		const union = new Set<keyof S>();
 		for (const owned of claims.get(id)?.values() ?? []) {
+			if (owned === except)
+				continue;
 			for (const field of owned)
 				union.add(field);
 		}
@@ -119,16 +132,31 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		return owned;
 	}
 
-	function mergeOwned(live: S, source: S, owned: ReadonlySet<keyof S>): S {
+	function mergeOwned(live: S, source: S, owned: Iterable<keyof S>): S {
 		const merged = { ...live };
 		for (const field of owned)
 			merged[field] = source[field];
 		return merged;
 	}
 
-	function mergeIntoState(id: number, source: S, owned: ReadonlySet<keyof S>) {
+	function mergeIntoState(id: number, source: S, owned: Iterable<keyof S>) {
 		const live = options.stateMap.value.get(id);
 		options.stateMap.value.set(id, live ? mergeOwned(live, source, owned) : source);
+	}
+
+	/**
+	 * Settle one target's work: its owned fields take the authority where there is
+	 * one, else `fallback` (the work's answer, or its rollback baseline). A field
+	 * other live work still owns keeps its local value, so settling an older
+	 * command never overwrites a newer edit still pending; the last work owning a
+	 * field to settle renders it.
+	 */
+	function settle(id: number, owned: ReadonlySet<keyof S>, fallback: S | undefined) {
+		const source = options.authority?.(id) ?? fallback;
+		if (source === undefined)
+			return;
+		const others = ownedFieldsFor(id, owned);
+		mergeIntoState(id, source, [...owned].filter(field => !others.has(field)));
 	}
 
 	function resultFor(result: FlushResult<S>, id: number): S | undefined {
@@ -185,11 +213,8 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 						const result = await batchOptions.flush(flushEntry, controls);
 						// Only apply the server response if no newer batch has started
 						if (flight.current) {
-							for (const [id, target] of targets) {
-								const state = resultFor(result, id);
-								if (state !== undefined)
-									mergeIntoState(id, state, target.owned);
-							}
+							for (const [id, target] of targets)
+								settle(id, target.owned, resultFor(result, id));
 						}
 						return result;
 					},
@@ -200,10 +225,8 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 							// Confirmed mid-flush progress (commit) is kept; only work past
 							// the last committed state rolls back to the snapshot.
 							if (flight.current) {
-								for (const [id, target] of targets) {
-									const baseline = resultFor(committed, id) ?? target.snapshot;
-									mergeIntoState(id, baseline, target.owned);
-								}
+								for (const [id, target] of targets)
+									settle(id, target.owned, resultFor(committed, id) ?? target.snapshot);
 							}
 						},
 					},
@@ -325,18 +348,15 @@ export function createOptimisticState<S>(options: OptimisticStateOptions<S>) {
 		const promise = executeReporting(
 			async () => {
 				const result = await apiCall();
-				for (const [id, target] of applied) {
-					const state = resultFor(result, id);
-					if (state !== undefined)
-						mergeIntoState(id, state, target.owned);
-				}
+				for (const [id, target] of applied)
+					settle(id, target.owned, resultFor(result, id));
 				return result;
 			},
 			{
 				errorRef: options.errorRef,
 				onError: () => {
 					for (const [id, target] of applied)
-						mergeIntoState(id, target.snapshot, target.owned);
+						settle(id, target.owned, target.snapshot);
 				},
 			},
 		);

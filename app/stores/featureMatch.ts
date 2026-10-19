@@ -130,8 +130,19 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	function applyRemoteUpdated(data: MessageData<'featureMatch:updated'>) {
-		lifecycle.applyRemoteUpdated(data.featureMatch);
-		useFeatureMatchStateStore().cacheSlotSession(data.featureMatch);
+		applySavedFeatureMatch(data.featureMatch);
+	}
+
+	/**
+	 * Hold a Slot an accepted write answered with — this client's own, such as a
+	 * Feature Match Slot Promotion's promoted and cleared Slots, or another's
+	 * announced. Its Session passes the Live State Follower first: a Slot carrying a
+	 * Session the Slot has since replaced is itself from before what is held, and is
+	 * not put back over it.
+	 */
+	function applySavedFeatureMatch(slot: FeatureMatch) {
+		if (useFeatureMatchStateStore().cacheSlotSession(slot))
+			lifecycle.applyRemoteUpdated(slot);
 	}
 
 	function applyRemoteDeleted(data: MessageData<'featureMatch:deleted'>) {
@@ -172,6 +183,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		reorderFeatureMatch,
 		applyRemoteCreated,
 		applyRemoteUpdated,
+		applySavedFeatureMatch,
 		applyRemoteDeleted,
 		applyRemoteReordered,
 		currentLifetime: lifecycle.currentLifetime,

@@ -10,6 +10,7 @@ import type { MessageData } from '~/types/realtime';
 import { applyClockAdjustment, applyFeatureMatchOvertimeStep, applyFeatureMatchTurnStep, otherFeatureMatchPlayer } from '~~/shared/modules/feature-match-session';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/client';
+import { createLiveStateFollower } from '~/modules/live-state/follower';
 import { createOptimisticState } from '~/modules/optimistic-state';
 
 export const useFeatureMatchStateStore = defineStore('featureMatchState', () => {
@@ -31,10 +32,76 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	// One ownership core for every batched, immediate, and bulk edit: Field
 	// Ownership is derived from each action's optimistic diff, and remote or
 	// server-authoritative full states merge around whatever is still pending.
+	// Settling work renders the Session the follower below holds, so an answer
+	// the follower refused as older never reaches the screen by this door.
 	const optimistic = createOptimisticState<FeatureMatchState>({
 		stateMap: featureMatchStates,
 		errorRef: error,
+		authority: slotId => heldSession(slotId)?.currentState,
 	});
+
+	// ──────────────── Live State Follower ────────────────
+	/**
+	 * Follows each Slot's Feature Match Session, one Slot at a time. Every Session
+	 * this store holds — a command's answer, a load, a notification, a Slot carrying
+	 * its Session, a Slot Promotion's answer — passes the follower first, so none
+	 * can move a Slot backwards: not to an older sequence, and not to a Session the
+	 * Slot has since replaced. A Slot's Sessions are created one after another with
+	 * ascending ids, and a notification carries the Session's whole state, so a
+	 * notification opening a later Session is followed without a reload.
+	 */
+	const follower = createLiveStateFollower<
+		number,
+		FeatureMatchSessionResponse,
+		MessageData<'featureMatchSession:eventApplied'>
+	>({
+		keyOf: session => session.slotId,
+		held: heldSession,
+		applyState: holdSession,
+		withDifference: (known, data) => sessionFromNotification(data, known),
+		wholeState: data => sessionFromNotification(data),
+		forget: (slotId) => {
+			sessionIdBySlotId.value.delete(slotId);
+			sessionSequenceBySlotId.value.delete(slotId);
+		},
+		epochsAscend: true,
+	});
+
+	function heldSession(slotId: number): FeatureMatchSessionResponse | undefined {
+		const sessionId = sessionIdBySlotId.value.get(slotId);
+		return sessionId === undefined ? undefined : featureMatchSessions.value.get(sessionId);
+	}
+
+	/**
+	 * Hold a Session the follower accepted. Its state merges around any pending or
+	 * in-flight local edit's Field Ownership instead of overwriting the whole state.
+	 */
+	function holdSession(session: FeatureMatchSessionResponse) {
+		featureMatchSessions.value.set(session.id, session);
+		sessionIdBySlotId.value.set(session.slotId, session.id);
+		sessionSequenceBySlotId.value.set(session.slotId, session.sequence);
+		optimistic.applyRemote(session.slotId, session.currentState);
+	}
+
+	/** The Session a notification describes, keeping what only the Session record knows. */
+	function sessionFromNotification(
+		data: MessageData<'featureMatchSession:eventApplied'>,
+		known?: FeatureMatchSessionResponse,
+	): FeatureMatchSessionResponse {
+		const timestamp = new Date(data.timestamp);
+		return {
+			id: data.sessionId,
+			eventId: data.eventId,
+			slotId: data.slotId,
+			status: known?.status ?? 'active',
+			sourceSnapshot: data.sourceSnapshot,
+			currentState: data.currentState,
+			sequence: data.sequence,
+			closedAt: known?.closedAt ?? null,
+			createdAt: known?.createdAt ?? timestamp,
+			updatedAt: timestamp,
+		};
+	}
 
 	// Player state batch (life totals, counters)
 	interface PlayerBatchPayload {
@@ -61,12 +128,12 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			if (entry.payload.hasCounterUpdate) {
 				apiUpdate.counters = entry.payload.latestCounters;
 			}
-			return cacheCommandResult(await repo.updatePlayerFeatureMatchState(
+			return acceptCommandResult(await repo.updatePlayerFeatureMatchState(
 				entry.payload.eventId,
 				entry.payload.matchId,
 				entry.payload.player,
 				apiUpdate,
-			), { skipStateWrite: true });
+			));
 		},
 	});
 
@@ -77,7 +144,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		totalDeltaMs: number;
 	}
 	const clockAdjustBatch = optimistic.batch<ClockAdjustPayload>({
-		flush: async entry => cacheCommandResult(await repo.adjustClock(entry.payload.eventId, entry.payload.matchId, entry.payload.totalDeltaMs), { skipStateWrite: true }),
+		flush: async entry => acceptCommandResult(await repo.adjustClock(entry.payload.eventId, entry.payload.matchId, entry.payload.totalDeltaMs)),
 	});
 
 	// Turn + overtime step batch. Both actions are user-clickable at the same time
@@ -98,14 +165,14 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			let latest: FeatureMatchState | undefined;
 			if (entry.payload.turnDelta !== 0) {
 				const result = await repo.stepTurn(entry.payload.eventId, entry.payload.matchId, entry.payload.turnDelta);
-				latest = cacheCommandResult(result, { skipStateWrite: true });
+				latest = acceptCommandResult(result);
 				// If the overtime step below fails, rollback keeps this confirmed
 				// turn step instead of reverting the whole batch.
 				controls.commit(latest);
 			}
 			if (entry.payload.overtimeDelta !== 0) {
 				const result = await repo.stepOvertime(entry.payload.eventId, entry.payload.matchId, entry.payload.overtimeDelta);
-				latest = cacheCommandResult(result, { skipStateWrite: true });
+				latest = acceptCommandResult(result);
 			}
 			// Net-zero batch (or both deltas cancelled out) — skip API calls entirely.
 			return latest ?? featureMatchStates.value.get(entry.id) ?? entry.snapshot;
@@ -129,7 +196,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	function cacheBulkUpdates(updates: FeatureMatchCommandStateResult[] | undefined): ReadonlyMap<number, FeatureMatchState> {
 		const states = new Map<number, FeatureMatchState>();
 		for (const update of updates ?? [])
-			states.set(update.session.slotId, cacheSessionOnly(update));
+			states.set(update.session.slotId, acceptCommandResult(update));
 		return states;
 	}
 
@@ -143,68 +210,36 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	// ──────────────── Internal Helpers ────────────────
 
 	/**
-	 * @param session - Session response to cache.
-	 * @param options - Optional behavior flags.
-	 * @param options.skipStateWrite - When true, updates session/sequence bookkeeping only
-	 *   and leaves `featureMatchStates` untouched. Used by the batched-update flushes below,
-	 *   which merge their own field-scoped slice of the result via `applyResult` instead
-	 *   — writing the full state here would race ahead of that merge and clobber
-	 *   concurrent edits still pending under another batch key for the same match.
+	 * Offer a Session read or answered elsewhere. The follower holds it unless it
+	 * is older than what is held; either way, what is held is answered.
 	 */
-	function cacheSession(session: FeatureMatchSessionResponse, options?: { skipStateWrite?: boolean }) {
-		featureMatchSessions.value.set(session.id, session);
-		sessionIdBySlotId.value.set(session.slotId, session.id);
-		sessionSequenceBySlotId.value.set(session.slotId, session.sequence);
-		if (!options?.skipStateWrite)
-			featureMatchStates.value.set(session.slotId, session.currentState);
-	}
-
-	function cacheSlotSession(slot: { activeSession?: FeatureMatchSessionResponse | null }) {
-		if (slot.activeSession) {
-			cacheSession(slot.activeSession, { skipStateWrite: true });
-			optimistic.applyRemote(slot.activeSession.slotId, slot.activeSession.currentState);
-		}
-	}
-
-	function cacheCommandResult(result: FeatureMatchCommandStateResult, options?: { skipStateWrite?: boolean }): FeatureMatchState {
-		cacheSession(result.session, options);
-		return result.featureMatchState;
+	function cacheSession(session: FeatureMatchSessionResponse): FeatureMatchSessionResponse {
+		return follower.acceptCommandResult(session);
 	}
 
 	/**
-	 * Session-bookkeeping-only variant for ownership-scoped actions: the
-	 * optimistic-state module merges its owned slice of the returned state
-	 * itself, so writing the full state here would clobber concurrent edits
-	 * pending under other actions.
+	 * Offer the Session a Slot carries. Answers false when the Slot itself is from
+	 * before what this client holds — its Session is one the Slot has since
+	 * replaced — so the caller does not put that older Slot on screen either.
 	 */
-	function cacheSessionOnly(result: FeatureMatchCommandStateResult): FeatureMatchState {
-		return cacheCommandResult(result, { skipStateWrite: true });
-	}
-
-	function cacheRemoteSessionEvent(data: MessageData<'featureMatchSession:eventApplied'>) {
-		const existing = featureMatchSessions.value.get(data.sessionId);
-		const timestamp = new Date(data.timestamp);
-		cacheSession({
-			id: data.sessionId,
-			eventId: data.eventId,
-			slotId: data.slotId,
-			status: existing?.status ?? 'active',
-			sourceSnapshot: data.sourceSnapshot,
-			currentState: data.currentState,
-			sequence: data.sequence,
-			closedAt: existing?.closedAt ?? null,
-			createdAt: existing?.createdAt ?? timestamp,
-			updatedAt: timestamp,
-		}, { skipStateWrite: true });
-		// Remote state merges around any pending or in-flight local edit's
-		// Field Ownership instead of overwriting the whole state.
-		optimistic.applyRemote(data.slotId, data.currentState);
+	function cacheSlotSession(slot: { activeSession?: FeatureMatchSessionResponse | null }): boolean {
+		if (!slot.activeSession)
+			return true;
+		return cacheSession(slot.activeSession).id === slot.activeSession.id;
 	}
 
 	/**
-	 * Server-only update (no optimistic prediction). The full server state
-	 * still applies through the ownership merge so it cannot clobber a
-	 * concurrent edit's pending fields.
+	 * A command's answer, through the follower's monotonic decision: the state it
+	 * answers is the newest the server is known to hold, never an older one that
+	 * happened to arrive later.
+	 */
+	function acceptCommandResult(result: FeatureMatchCommandStateResult): FeatureMatchState {
+		return cacheSession(result.session).currentState;
+	}
+
+	/**
+	 * Server-only update (no optimistic prediction). The answer reaches the
+	 * screen through the follower, merged around concurrent edits' pending fields.
 	 */
 	function withServerUpdate(
 		matchId: number,
@@ -214,14 +249,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		if (!current)
 			return null;
 
-		return executeReporting(
-			async () => {
-				const state = await apiCall();
-				optimistic.applyRemote(matchId, state);
-				return state;
-			},
-			{ errorRef: error },
-		);
+		return executeReporting(apiCall, { errorRef: error });
 	}
 
 	// ──────────────── State Management ────────────────
@@ -244,26 +272,23 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		};
 	}
 
+	/**
+	 * Read one Slot's Session and hold it. Overlapping loads for a Slot are Flights:
+	 * the one issued later wins, whichever answers last.
+	 */
 	async function loadState(eventId: number, matchId: number) {
 		currentEventId.value = eventId;
 		return executeReporting(
 			async () => {
-				if (screenOutputRead) {
-					const session = await screenOutputRead(matchId);
-					if (!session)
-						return null;
-					cacheSession(session, { skipStateWrite: true });
-					optimistic.applyRemote(matchId, session.currentState);
-					return session.currentState;
-				}
-
-				const session = await repo.ensureSession(eventId, matchId);
-				if (!session)
-					throw new Error('Feature match session not found');
-				cacheSession(session, { skipStateWrite: true });
-				const state = session.currentState;
-				optimistic.applyRemote(matchId, state);
-				return state;
+				const session = await follower.load(matchId, async () => {
+					if (screenOutputRead)
+						return screenOutputRead(matchId);
+					const ensured = await repo.ensureSession(eventId, matchId);
+					if (!ensured)
+						throw new Error('Feature match session not found');
+					return ensured;
+				});
+				return session?.currentState ?? null;
 			},
 			{ loadingRef: loading, errorRef: error },
 		);
@@ -297,7 +322,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 						: current.overtime,
 				};
 			},
-			() => repo.updateState(eventId, matchId, update).then(cacheSessionOnly),
+			() => repo.updateState(eventId, matchId, update).then(acceptCommandResult),
 		);
 	}
 
@@ -311,7 +336,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				...current,
 				clock: { ...current.clock, isRunning: true, lastStartedAt: getServerTime() },
 			}),
-			() => repo.startClock(eventId, matchId).then(cacheSessionOnly),
+			() => repo.startClock(eventId, matchId).then(acceptCommandResult),
 		);
 	}
 
@@ -337,7 +362,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 					},
 				};
 			},
-			() => repo.pauseClock(eventId, matchId).then(cacheSessionOnly),
+			() => repo.pauseClock(eventId, matchId).then(acceptCommandResult),
 		);
 	}
 
@@ -350,7 +375,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				clock: { ...current.clock, elapsedMs: 0, isRunning: false, lastStartedAt: null },
 				overtime: undefined,
 			}),
-			() => repo.resetClock(eventId, matchId).then(cacheSessionOnly),
+			() => repo.resetClock(eventId, matchId).then(acceptCommandResult),
 			// `overtime` may already be unset — the server still clears it on reset.
 			{ serverOwns: ['overtime'] },
 		);
@@ -364,7 +389,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				...current,
 				clock: { ...current.clock, elapsedMs: 0, isRunning: true, lastStartedAt: getServerTime() },
 			}),
-			() => repo.restartClock(eventId, matchId).then(cacheSessionOnly),
+			() => repo.restartClock(eventId, matchId).then(acceptCommandResult),
 		);
 	}
 
@@ -392,7 +417,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				...current,
 				clock: applyClockAdjustment(current.clock, getServerTime(), { targetDisplayMs: targetMs }),
 			}),
-			() => repo.setClock(eventId, matchId, targetMs).then(cacheSessionOnly),
+			() => repo.setClock(eventId, matchId, targetMs).then(acceptCommandResult),
 		);
 	}
 
@@ -539,7 +564,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				...current,
 				[player]: { ...current[player], cardsKept },
 			}),
-			() => repo.updatePlayerFeatureMatchState(eventId, matchId, player, { cardsKept }).then(cacheSessionOnly),
+			() => repo.updatePlayerFeatureMatchState(eventId, matchId, player, { cardsKept }).then(acceptCommandResult),
 		);
 	}
 
@@ -560,7 +585,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			() => repo.updateState(eventId, matchId, {
 				player1: { sideboardRevealed: revealed },
 				player2: { sideboardRevealed: revealed },
-			}).then(cacheSessionOnly),
+			}).then(acceptCommandResult),
 		);
 	}
 
@@ -569,7 +594,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`turnNumber:${matchId}`,
 			matchId,
 			current => ({ ...current, turnNumber }),
-			() => repo.updateState(eventId, matchId, { turnNumber }).then(cacheSessionOnly),
+			() => repo.updateState(eventId, matchId, { turnNumber }).then(acceptCommandResult),
 			// The server treats an explicit turn number as owning the field even
 			// when it matches the current value.
 			{ serverOwns: ['turnNumber'] },
@@ -581,7 +606,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`firstPlayer:${matchId}`,
 			matchId,
 			current => ({ ...current, firstPlayer: player, activePlayer: player, turnNumber: 1 }),
-			() => repo.updateState(eventId, matchId, { firstPlayer: player, activePlayer: player, turnNumber: 1 }).then(cacheSessionOnly),
+			() => repo.updateState(eventId, matchId, { firstPlayer: player, activePlayer: player, turnNumber: 1 }).then(acceptCommandResult),
 			{ serverOwns: ['firstPlayer', 'activePlayer', 'turnNumber'] },
 		);
 	}
@@ -597,7 +622,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`firstPlayer:${matchId}`,
 			matchId,
 			state => ({ ...state, firstPlayer: newFirstPlayer }),
-			() => repo.updateState(eventId, matchId, { firstPlayer: newFirstPlayer }).then(cacheSessionOnly),
+			() => repo.updateState(eventId, matchId, { firstPlayer: newFirstPlayer }).then(acceptCommandResult),
 		);
 	}
 
@@ -633,7 +658,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`activePlayer:${matchId}`,
 			matchId,
 			current => ({ ...current, activePlayer: player }),
-			() => repo.updateState(eventId, matchId, { activePlayer: player }).then(cacheSessionOnly),
+			() => repo.updateState(eventId, matchId, { activePlayer: player }).then(acceptCommandResult),
 		);
 	}
 
@@ -647,7 +672,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	) {
 		return withServerUpdate(
 			matchId,
-			() => repo.recordGameWin(eventId, matchId, player, options).then(cacheSessionOnly),
+			() => repo.recordGameWin(eventId, matchId, player, options).then(acceptCommandResult),
 		);
 	}
 
@@ -659,14 +684,14 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	) {
 		return withServerUpdate(
 			matchId,
-			() => repo.undoGameWin(eventId, matchId, player, options).then(cacheSessionOnly),
+			() => repo.undoGameWin(eventId, matchId, player, options).then(acceptCommandResult),
 		);
 	}
 
 	function resetMatch(eventId: number, matchId: number, options: FeatureMatchResetOptions) {
 		return withServerUpdate(
 			matchId,
-			() => repo.resetMatch(eventId, matchId, options).then(cacheSessionOnly),
+			() => repo.resetMatch(eventId, matchId, options).then(acceptCommandResult),
 		);
 	}
 
@@ -680,7 +705,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				...current,
 				overtime: { active: true, turnsRemaining: totalTurns, totalTurns },
 			}),
-			() => repo.startOvertime(eventId, matchId, totalTurns).then(cacheSessionOnly),
+			() => repo.startOvertime(eventId, matchId, totalTurns).then(acceptCommandResult),
 		);
 	}
 
@@ -732,7 +757,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				const swappedFirst = current.firstPlayer ? otherFeatureMatchPlayer(current.firstPlayer) : current.firstPlayer;
 				return { ...current, player1: current.player2, player2: current.player1, activePlayer: swappedActive, firstPlayer: swappedFirst };
 			},
-			() => repo.swapPlayers(eventId, matchId).then(cacheSessionOnly),
+			() => repo.swapPlayers(eventId, matchId).then(acceptCommandResult),
 		);
 	}
 
@@ -754,23 +779,8 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	// ──────────────── Realtime Handlers ────────────────
 
 	async function applyRemoteSessionEvent(data: MessageData<'featureMatchSession:eventApplied'>) {
-		const knownSessionId = sessionIdBySlotId.value.get(data.slotId);
-		const knownSequence = sessionSequenceBySlotId.value.get(data.slotId) ?? 0;
-
-		if (knownSessionId && knownSessionId !== data.sessionId) {
-			cacheRemoteSessionEvent(data);
-			return;
-		}
-
-		if (knownSequence && data.sequence <= knownSequence)
-			return;
-
-		if (knownSequence && data.sequence > knownSequence + 1) {
+		if (follower.notify(data.slotId, data) === 'reload')
 			await loadState(data.eventId, data.slotId);
-			return;
-		}
-
-		cacheRemoteSessionEvent(data);
 	}
 
 	// ──────────────── Reset ────────────────
@@ -782,6 +792,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		turnBatch.reset();
 		bulkAdjustBatch.reset();
 		optimistic.reset();
+		follower.reset();
 
 		// Clear reactive state
 		featureMatchStates.value.clear();

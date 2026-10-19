@@ -365,4 +365,101 @@ describe('optimistic-state module', () => {
 			expect(stateMap.value.get(2)).toEqual({ life1: 20, life2: 20, clockMs: 200 });
 		});
 	});
+	describe('settling against an authority', () => {
+		/**
+		 * The authority stands in for a Live State Follower: an API call that answers
+		 * offers its result to it, and it keeps whichever is newer. A refused result
+		 * leaves the authority on the newer state.
+		 */
+		function createAuthoritySetup(initial: SlotState) {
+			const stateMap = ref(new Map<number, SlotState>([[1, { ...initial }]]));
+			const errorRef = ref<string | null>(null);
+			const held = new Map<number, { sequence: number; state: SlotState }>([[1, { sequence: 0, state: { ...initial } }]]);
+			const optimistic = createOptimisticState<SlotState>({
+				stateMap,
+				errorRef,
+				authority: id => held.get(id)?.state,
+			});
+			function answer(sequence: number, state: SlotState) {
+				const known = held.get(1)!;
+				if (sequence > known.sequence)
+					held.set(1, { sequence, state });
+				return held.get(1)!.state;
+			}
+			function deferred() {
+				let resolve!: () => void;
+				let reject!: (cause: unknown) => void;
+				const promise = new Promise<void>((done, fail) => {
+					resolve = done;
+					reject = fail;
+				});
+				return { promise, resolve, reject };
+			}
+			return { stateMap, held, optimistic, answer, deferred };
+		}
+
+		it('an older answer settling after a newer one renders the newer, not its own', async () => {
+			const { stateMap, optimistic, answer, deferred } = createAuthoritySetup({ life1: 20, life2: 20, clockMs: 100 });
+			// Reveal-like: one action owning both players, accepted first (sequence 1).
+			const reveal = deferred();
+			void optimistic.run('reveal', 1, current => ({ ...current, life2: 0 }), () =>
+				reveal.promise.then(() => answer(1, { life1: 20, life2: 0, clockMs: 100 })), { serverOwns: ['life1'] });
+			// Life-like: owning the first player, accepted second (sequence 2), answered first.
+			const life = deferred();
+			void optimistic.run('life', 1, current => ({ ...current, life1: 19 }), () =>
+				life.promise.then(() => answer(2, { life1: 19, life2: 0, clockMs: 100 })));
+
+			life.resolve();
+			await flushPromises();
+			reveal.resolve();
+			await flushPromises();
+
+			expect(stateMap.value.get(1)).toEqual({ life1: 19, life2: 0, clockMs: 100 });
+		});
+
+		it('settling an older command keeps a newer pending edit to the same field', async () => {
+			const { stateMap, optimistic, answer, deferred } = createAuthoritySetup({ life1: 20, life2: 20, clockMs: 100 });
+			const { enqueue } = optimistic.batch<{ life1: number }>({
+				flush: async entry => answer(2, { life1: entry.payload.life1, life2: 20, clockMs: 100 }),
+				debounceMs: 100,
+				maxWaitMs: 500,
+			});
+			const first = deferred();
+			void optimistic.run('first', 1, current => ({ ...current, life1: 19 }), () =>
+				first.promise.then(() => answer(1, { life1: 19, life2: 20, clockMs: 100 })));
+			enqueue('life', 1, current => ({ ...current, life1: 18 }), () => ({ life1: 18 }));
+
+			first.resolve();
+			await flushPromises();
+
+			expect(stateMap.value.get(1)?.life1).toBe(18);
+
+			await vi.advanceTimersByTimeAsync(100);
+			await flushPromises();
+
+			expect(stateMap.value.get(1)?.life1).toBe(18);
+		});
+
+		it('a failure across a new epoch renders the new epoch, keeping a pending edit', async () => {
+			const { stateMap, held, optimistic, deferred } = createAuthoritySetup({ life1: 20, life2: 20, clockMs: 100 });
+			const { enqueue } = optimistic.batch<{ life2: number }>({
+				flush: () => new Promise(() => {}),
+				debounceMs: 100,
+				maxWaitMs: 500,
+			});
+			const refused = deferred();
+			void optimistic.run('life', 1, current => ({ ...current, life1: 19 }), () =>
+				refused.promise.then(() => held.get(1)!.state));
+			enqueue('other', 1, current => ({ ...current, life2: 17 }), () => ({ life2: 17 }));
+
+			// The Session is replaced: a new epoch starts every field afresh.
+			const fresh = { life1: 40, life2: 40, clockMs: 0 };
+			held.set(1, { sequence: 1, state: fresh });
+			optimistic.applyRemote(1, fresh);
+			refused.reject(new Error('Session ended'));
+			await flushPromises();
+
+			expect(stateMap.value.get(1)).toEqual({ life1: 40, life2: 17, clockMs: 0 });
+		});
+	});
 });

@@ -56,10 +56,13 @@ export function useFeatureMatchPromotion() {
 			}
 		}
 
+		// A command's answer, not a realtime message: each Slot's Session passes the
+		// Live State Follower, so an answer overtaken by a concurrent promotion this
+		// client already applied cannot put the Match back (#574).
 		if (slotsFlight.current) {
 			for (const featureMatch of result.clearedSlots)
-				featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch });
-			featureMatchStore.applyRemoteUpdated({ eventId, timestamp: Date.now(), featureMatch: result.promotedSlot });
+				featureMatchStore.applySavedFeatureMatch(featureMatch);
+			featureMatchStore.applySavedFeatureMatch(result.promotedSlot);
 		}
 
 		if (assignmentsFlight.current && assignmentStore.currentEventId === eventId && assignmentStore.assignmentsByRound.has(roundId))
