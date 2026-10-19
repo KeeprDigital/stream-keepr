@@ -4,7 +4,7 @@ import type {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
 	createInMemoryGraphicsAssetCatalogue,
@@ -255,6 +255,51 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 				completedParts: [{ partNumber: 1 }],
 			},
 		});
+	});
+
+	it('says what the catalogue threw when a part meets an unreachable checkpoint (#633)', async () => {
+		// The library answers a catalogue throw with its own sentence, rightly, but
+		// the D1 error itself reached no log line: a 503 part upload could not be
+		// told apart from an R2 refusal or a lost claim race.
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		let checkpointReachable = true;
+		const library = createGraphicsAssetLibrary({
+			catalogue: {
+				...catalogue,
+				async getGraphicAssetMultipartState(...input) {
+					if (!checkpointReachable)
+						throw new Error('D1_ERROR: database is locked: SQLITE_BUSY');
+					return await catalogue.getGraphicAssetMultipartState(...input);
+				},
+			},
+			staging: createInMemoryStagingGraphicsObjectStore(),
+			canonical: createInMemoryCanonicalGraphicsObjectStore(),
+			now: () => new Date('2026-07-28T01:00:00.000Z'),
+		});
+		const operation = await initiateLargeTransfer(library, 'unreachable-checkpoint');
+		checkpointReachable = false;
+		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
+
+		await expect(library.uploadGraphicAssetMultipartPart({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+			partNumber: 1,
+			bytes: createBoundedByteStream(firstPart, {
+				byteLength: firstPart.byteLength,
+				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			}),
+		})).rejects.toMatchObject({
+			code: 'graphics-asset-library-unavailable',
+			message: 'Graphics multipart checkpoint is temporarily unavailable',
+		});
+		expect(warn.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual([{
+			message: 'graphics_catalogue_unavailable',
+			refusal: 'Graphics multipart checkpoint is temporarily unavailable',
+			errorName: 'Error',
+			errorCode: null,
+			reason: 'D1_ERROR: database is locked: SQLITE_BUSY',
+		}]);
 	});
 
 	it('bounds retries per part and aborts multipart state idempotently on cancellation', async () => {

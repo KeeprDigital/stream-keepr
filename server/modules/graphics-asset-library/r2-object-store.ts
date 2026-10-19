@@ -16,6 +16,7 @@ import {
 	validateMultipartPartNumber,
 	validateRequestedRange,
 } from './object-store';
+import { logGraphicsStoreFailure } from './store-failure-log';
 
 /**
  * R2's code for this condition — S3's `NoSuchUpload`. What is *not* established
@@ -56,6 +57,16 @@ function isMissingMultipartUpload(error: unknown): boolean {
 		&& (error as { message: string }).message.includes(R2_NO_SUCH_UPLOAD_MESSAGE);
 }
 
+/**
+ * The outage an R2 refusal is answered as, with what R2 threw logged beside it
+ * (#633). The outcome deliberately carries no cause — callers branch on it and
+ * nothing more — so this catch is the last place the refusal exists.
+ */
+function loggedUnavailable(operation: keyof GraphicsStagingObjectStore, error: unknown) {
+	logGraphicsStoreFailure('graphics_object_store_unavailable', { operation }, error);
+	return unavailableObjectStoreOutcome();
+}
+
 function mapR2Object(object: R2Object): GraphicsObjectMetadata {
 	return {
 		identity: graphicsObjectIdentity(object.key),
@@ -73,8 +84,8 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				await bucket.head('.stream-keepr-health');
 				return { outcome: 'healthy' as const };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('checkHealth', error);
 			}
 		},
 		async readMetadata(identity: GraphicsObjectIdentity) {
@@ -84,8 +95,8 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 					? { outcome: 'available' as const, object: mapR2Object(object) }
 					: { outcome: 'missing' as const };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('readMetadata', error);
 			}
 		},
 		async read(identity: GraphicsObjectIdentity, requestedRange?: { offset: number; length: number }) {
@@ -112,8 +123,8 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 					},
 				};
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('read', error);
 			}
 		},
 		async list(input: { prefix?: string; cursor?: string; limit?: number } = {}) {
@@ -135,8 +146,8 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 					},
 				};
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('list', error);
 			}
 		},
 		async delete(identity: GraphicsObjectIdentity) {
@@ -148,8 +159,8 @@ function createR2ObjectStoreAccess(bucket: R2Bucket) {
 				await bucket.delete(identity);
 				return { outcome: 'deleted' as const };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('delete', error);
 			}
 		},
 	};
@@ -200,7 +211,7 @@ async function createImmutable(
 	}
 	catch (error) {
 		rethrowGraphicsObjectInputError(error);
-		return unavailableObjectStoreOutcome();
+		return loggedUnavailable('createImmutable', error);
 	}
 }
 
@@ -241,8 +252,8 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 					},
 				};
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('beginMultipart', error);
 			}
 		},
 		async resumeMultipart(identity, uploadId) {
@@ -256,8 +267,8 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 					},
 				};
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('resumeMultipart', error);
 			}
 		},
 		async uploadPart(input) {
@@ -293,7 +304,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 			}
 			catch (error) {
 				rethrowGraphicsObjectInputError(error);
-				return unavailableObjectStoreOutcome();
+				return loggedUnavailable('uploadPart', error);
 			}
 		},
 		async completeMultipart(input) {
@@ -309,8 +320,8 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 					})));
 				return { outcome: 'created', object: mapR2Object(object) };
 			}
-			catch {
-				return unavailableObjectStoreOutcome();
+			catch (error) {
+				return loggedUnavailable('completeMultipart', error);
 			}
 		},
 		async abortMultipart(uploadIdentity) {
@@ -322,7 +333,7 @@ export function createR2StagingGraphicsObjectStore(bucket: R2Bucket): GraphicsSt
 			catch (error) {
 				return isMissingMultipartUpload(error)
 					? { outcome: 'missing' }
-					: unavailableObjectStoreOutcome();
+					: loggedUnavailable('abortMultipart', error);
 			}
 		},
 	};
