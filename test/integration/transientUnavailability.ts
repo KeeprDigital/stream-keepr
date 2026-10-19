@@ -10,10 +10,10 @@
  * else; seven further full runs never repeated it.
  *
  * This is a narrower form of `useGraphicsIngestionTransfer`'s retry, which
- * re-sends at once on any 5xx, 408, 429 or transport failure. Only a 503 that
- * asks to be retried is retried here, after the interval it names: a 503
- * without `retry-after` (the dev server's own) is not the library's transient,
- * and must stay visible. The last answer is returned whatever it is, so the
+ * re-sends on any 5xx, 408, 429 or transport failure, after `retry-after` or a
+ * backoff (#639). Only a 503 that asks to be retried is retried here, after the
+ * interval it names: a 503 without `retry-after` (the dev server's own) is not
+ * the library's transient, and must stay visible. The last answer is returned whatever it is, so the
  * caller's status assertion reports its body.
  *
  * The request arrives as a thunk because a body may have to be built again, as in
