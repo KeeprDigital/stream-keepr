@@ -589,7 +589,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 		async function deliverTo(sessionId: number): Promise<BroadcastGraphicsLiveSessionResponse> {
 			const result = await repository.sendCommand(eventId, screenId, sessionId, command);
-			return follower.acceptCommandResult(result.session);
+			return follower.acceptCommandResult(result.session).held;
 		}
 
 		/**
