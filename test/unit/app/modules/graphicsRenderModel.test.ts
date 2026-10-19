@@ -752,6 +752,19 @@ describe('graphicsCompositionRenderModel', () => {
 		expect(off?.style.filter).toBeUndefined();
 	});
 
+	it('keeps the opacity of a glow colour that is not hex, and paints it white at that opacity in the Key Output', () => {
+		const glowing = (output: 'fill' | 'key') => resolveGraphicsCompositionRenderModel({
+			output,
+			graphics: [graphic('a', [
+				shape('lit', { surfaceStyle: surfaceStyle({ glow: { color: 'rebeccapurple', size: 24, opacity: 0.5 } }) }),
+			])],
+			...CANVAS,
+		}).graphics[0]!.items[0]!.style.filter;
+
+		expect(glowing('fill')).toBe('drop-shadow(0 0 24px color-mix(in srgb, rebeccapurple 50%, transparent))');
+		expect(glowing('key')).toBe('drop-shadow(0 0 24px #ffffff80)');
+	});
+
 	it('gives a Text Graphic Item its own Graphic Surface Style behind its text', () => {
 		const model = resolveGraphicsCompositionRenderModel({
 			output: 'overlay',

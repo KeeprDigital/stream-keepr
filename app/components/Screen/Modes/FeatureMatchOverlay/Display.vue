@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayBorderSide } from '~/modules/feature-match-overlay/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import {
@@ -93,6 +94,7 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 	config: config.value,
 	output: resolvedOutput.value,
 	maskId: frameMaskId,
+	frameGlowFilterId,
 }));
 
 /**
@@ -167,22 +169,25 @@ const compositorRenderModel = computed(() => resolveFeatureMatchOverlayComposito
 const canvasStyle = computed(() => renderModel.value.canvasStyle);
 const sourceItems = computed(() => renderModel.value.sourceItems);
 const sourceCutouts = computed(() => renderModel.value.sourceCutouts);
-const frameImageStyle = computed(() => renderModel.value.frame.imageStyle);
-const frameImagePreserveAspectRatio = computed(() => renderModel.value.frame.imagePreserveAspectRatio);
-const frameFill = computed(() => renderModel.value.frame.fill);
-const frameHasGlow = computed(() => resolvedOutput.value !== 'key' && (config.value.layout.frame.glowSize ?? 0) > 0);
-const frameBorderFilter = computed(() => frameHasGlow.value ? `url(#${frameGlowFilterId})` : undefined);
-const frameGlowColor = computed(() => config.value.layout.frame.glowColor ?? config.value.layout.frame.borderColor ?? '#ffffff');
-const frameGlowOpacity = computed(() => config.value.layout.frame.glowOpacity ?? 0.75);
-const frameGlowStdDeviation = computed(() => Math.max(0.1, (config.value.layout.frame.glowSize ?? 0) / 2));
-const frameHasGradient = computed(() => resolvedOutput.value !== 'key' && Boolean(config.value.layout.frame.gradient?.trim()));
-const frameGradientStyle = computed(() => ({
-	background: config.value.layout.frame.gradient,
-	opacity: config.value.layout.frame.opacity,
-}));
+// Every Frame paint decision is the render model's; this component only draws it.
+const frame = computed(() => renderModel.value.frame);
+const frameBorder = computed(() => frame.value.border);
+const frameGlow = computed(() => frameBorder.value?.glow);
 
-function borderSideEnabled(style: Parameters<typeof renderModel.value.borderSideEnabled>[0], side: Parameters<typeof renderModel.value.borderSideEnabled>[1]) {
-	return renderModel.value.borderSideEnabled(style, side);
+/** One canvas edge as an SVG line, in the canvas's own coordinates. */
+function frameBorderLine(side: FeatureMatchOverlayBorderSide) {
+	const width = canvasWidth.value;
+	const height = canvasHeight.value;
+	switch (side) {
+		case 'Top':
+			return { x1: 0, y1: 0, x2: width, y2: 0 };
+		case 'Right':
+			return { x1: width, y1: 0, x2: width, y2: height };
+		case 'Bottom':
+			return { x1: 0, y1: height, x2: width, y2: height };
+		case 'Left':
+			return { x1: 0, y1: 0, x2: 0, y2: height };
+	}
 }
 
 function guideStyle(item: { x: number; y: number; width: number; height: number }) {
@@ -362,8 +367,8 @@ onBeforeUnmount(() => {
 					/>
 				</mask>
 				<filter
-					v-if="frameHasGlow"
-					:id="frameGlowFilterId"
+					v-if="frameGlow"
+					:id="frameGlow.filterId"
 					x="-20%"
 					y="-20%"
 					width="140%"
@@ -372,9 +377,9 @@ onBeforeUnmount(() => {
 					<feDropShadow
 						dx="0"
 						dy="0"
-						:stdDeviation="frameGlowStdDeviation"
-						:flood-color="frameGlowColor"
-						:flood-opacity="frameGlowOpacity"
+						:stdDeviation="frameGlow.stdDeviation"
+						:flood-color="frameGlow.floodColor"
+						:flood-opacity="frameGlow.floodOpacity"
 					/>
 				</filter>
 			</defs>
@@ -383,8 +388,8 @@ onBeforeUnmount(() => {
 				y="0"
 				:width="canvasWidth"
 				:height="canvasHeight"
-				:fill="frameFill"
-				:opacity="config.layout.frame.opacity"
+				:fill="frame.fill"
+				:opacity="frame.opacity"
 				:mask="`url(#${frameMaskId})`"
 			/>
 			<FeatureMatchOverlayFrameMedia
@@ -395,18 +400,18 @@ onBeforeUnmount(() => {
 				:output="resolvedOutput"
 			/>
 			<image
-				v-if="resolvedOutput !== 'key' && frameImageUrl"
+				v-if="frame.paintsImage && frameImageUrl"
 				:xlink:href="frameImageUrl"
 				x="0"
 				y="0"
 				:width="canvasWidth"
 				:height="canvasHeight"
-				:preserveAspectRatio="frameImagePreserveAspectRatio"
+				:preserveAspectRatio="frame.imagePreserveAspectRatio"
 				:mask="`url(#${frameMaskId})`"
-				:style="frameImageStyle"
+				:style="frame.imageStyle"
 			/>
 			<foreignObject
-				v-if="frameHasGradient"
+				v-if="frame.gradientStyle"
 				x="0"
 				y="0"
 				:width="canvasWidth"
@@ -416,7 +421,7 @@ onBeforeUnmount(() => {
 				<div
 					xmlns="http://www.w3.org/1999/xhtml"
 					class="frame-gradient"
-					:style="frameGradientStyle"
+					:style="frame.gradientStyle"
 				/>
 			</foreignObject>
 			<FeatureMatchOverlayFrameAnimation
@@ -427,38 +432,15 @@ onBeforeUnmount(() => {
 				:output="resolvedOutput"
 			/>
 			<g
-				v-if="config.layout.frame.borderVisible"
-				:stroke="resolvedOutput === 'key' ? '#fff' : config.layout.frame.borderColor"
-				:stroke-width="config.layout.frame.borderWidth"
-				:filter="frameBorderFilter"
+				v-if="frameBorder"
+				:stroke="frameBorder.stroke"
+				:stroke-width="frameBorder.strokeWidth"
+				:filter="frameGlow ? `url(#${frameGlow.filterId})` : undefined"
 			>
 				<line
-					v-if="borderSideEnabled(config.layout.frame, 'Top')"
-					x1="0"
-					y1="0"
-					:x2="canvasWidth"
-					y2="0"
-				/>
-				<line
-					v-if="borderSideEnabled(config.layout.frame, 'Right')"
-					:x1="canvasWidth"
-					y1="0"
-					:x2="canvasWidth"
-					:y2="canvasHeight"
-				/>
-				<line
-					v-if="borderSideEnabled(config.layout.frame, 'Bottom')"
-					x1="0"
-					:y1="canvasHeight"
-					:x2="canvasWidth"
-					:y2="canvasHeight"
-				/>
-				<line
-					v-if="borderSideEnabled(config.layout.frame, 'Left')"
-					x1="0"
-					y1="0"
-					x2="0"
-					:y2="canvasHeight"
+					v-for="side in frameBorder.sides"
+					:key="side"
+					v-bind="frameBorderLine(side)"
 				/>
 			</g>
 		</svg>

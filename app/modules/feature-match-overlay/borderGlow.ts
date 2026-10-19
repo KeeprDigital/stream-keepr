@@ -1,5 +1,6 @@
 import type { FeatureMatchOverlayBorderSides, FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import type { BorderFieldsValue, BorderGlowEdit, BorderSide, GlowFieldsValue } from '~/types/borderGlow';
+import { borderGlow } from '~/modules/screen/outputPaint';
 import { BORDER_SIDES } from '~/types/borderGlow';
 
 /**
@@ -21,8 +22,6 @@ const SIDE_FIELDS = {
 
 /** What the renderer paints when the field is unset. */
 const RENDERED_BORDER_WIDTH = 1;
-const RENDERED_GLOW_OPACITY = 0.75;
-const RENDERED_GLOW_COLOR = '#ffffff';
 
 /** The size a glow takes when the author switches it on. */
 const GLOW_SIZE_ON = 8;
@@ -35,8 +34,8 @@ const MIN_GLOW_SIZE = 1;
 
 /**
  * The shared fields' view of a Feature Match Overlay border and glow: what the
- * renderer paints. A border is on only while `borderVisible` is set, and a glow
- * only while it has a size; a glow without its own colour takes the border's.
+ * renderer paints. A border is on only while `borderVisible` is set; the glow is
+ * the one the renderer resolves (`borderGlow`).
  *
  * `unsetBorderColor` is the colour the host's renderer paints a border with no
  * colour of its own: a Source Item paints white, the Frame paints nothing.
@@ -45,6 +44,7 @@ export function borderGlowFieldsValue(
 	style: FeatureMatchBorderGlowStyle,
 	unsetBorderColor?: string,
 ): { border: BorderFieldsValue | null; glow: GlowFieldsValue | null } {
+	const glow = borderGlow(style);
 	return {
 		border: style.borderVisible === true
 			? {
@@ -53,14 +53,7 @@ export function borderGlowFieldsValue(
 					sides: Object.fromEntries(BORDER_SIDES.map(side => [side, style[SIDE_FIELDS[side]]])),
 				}
 			: null,
-		glow: (style.glowSize ?? 0) > 0
-			? {
-					color: style.glowColor ?? style.borderColor ?? RENDERED_GLOW_COLOR,
-					size: style.glowSize!,
-					opacity: style.glowOpacity ?? RENDERED_GLOW_OPACITY,
-					position: style.glowPosition,
-				}
-			: null,
+		glow: glow ? { ...glow, position: style.glowPosition } : null,
 	};
 }
 

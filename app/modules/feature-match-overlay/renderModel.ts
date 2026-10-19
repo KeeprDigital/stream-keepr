@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'vue';
 import type {
-	FeatureMatchOverlayBorderSides,
+	FeatureMatchOverlayFrameConfig,
 	FeatureMatchOverlayModeConfig,
 	FeatureMatchOverlayOutput,
 	FeatureMatchOverlayRect,
@@ -8,6 +8,8 @@ import type {
 	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayBorderSide } from '~/utils/featureMatchOverlayGeometry';
+import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
+import { borderGlow, colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~/modules/screen/outputPaint';
 import {
 	FEATURE_MATCH_OVERLAY_BORDER_SIDES,
 	featureMatchOverlayBorderRadiusCss,
@@ -34,14 +36,37 @@ export interface FeatureMatchOverlayRenderModelInput {
 	config: FeatureMatchOverlayModeConfig;
 	output: FeatureMatchOverlayOutput;
 	maskId?: string;
+	/** The document-unique id of the SVG filter that glows the Frame's border. */
+	frameGlowFilterId?: string;
+}
+
+/** The Frame's border glow, as the SVG `feDropShadow` its border group filters through. */
+export interface FeatureMatchOverlayFrameGlowRenderModel {
+	filterId: string;
+	stdDeviation: number;
+	floodColor: string;
+	floodOpacity: number;
+}
+
+/** The Frame's border: one stroke along each enabled canvas edge. */
+export interface FeatureMatchOverlayFrameBorderRenderModel {
+	stroke: string;
+	strokeWidth: number;
+	sides: FeatureMatchOverlayBorderSide[];
+	glow: FeatureMatchOverlayFrameGlowRenderModel | undefined;
 }
 
 export interface FeatureMatchOverlayFrameRenderModel {
 	maskId: string;
+	/** The Key Output keys an image through the white fill beneath it, never its colours. */
+	paintsImage: boolean;
 	imageStyle: CSSProperties;
 	imagePreserveAspectRatio: string;
+	/** The deliberate host-owned raw CSS gradient, painted in colour only. */
+	gradientStyle: CSSProperties | undefined;
 	fill: string;
 	opacity: number;
+	border: FeatureMatchOverlayFrameBorderRenderModel | undefined;
 }
 
 export interface FeatureMatchOverlaySourceItemRenderModel {
@@ -59,7 +84,6 @@ export interface FeatureMatchOverlayRenderModel {
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
-	borderSideEnabled: (style: FeatureMatchOverlayBorderSides, side: FeatureMatchOverlayBorderSide) => boolean;
 }
 
 /**
@@ -101,29 +125,11 @@ export function featureMatchOverlayFrameContentMaskStyle(
 	};
 }
 
+/** A Source Item paints a border with no colour of its own white. */
+const SOURCE_ITEM_UNSET_BORDER_COLOUR = '#ffffff';
+
 function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 	return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` };
-}
-
-function colorWithOpacity(output: FeatureMatchOverlayOutput, color: string | undefined, opacity: number | undefined) {
-	const fallback = color || '#000000';
-	const alpha = Math.max(0, Math.min(1, opacity ?? 1));
-	if (output === 'key') {
-		const value = Math.round(alpha * 255).toString(16).padStart(2, '0');
-		return `#ffffff${value}`;
-	}
-	if (alpha <= 0)
-		return 'transparent';
-	if (alpha >= 1)
-		return fallback;
-
-	const hex = fallback.trim();
-	const match = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex);
-	if (!match)
-		return fallback;
-
-	const [, r, g, b] = match;
-	return `rgba(${Number.parseInt(r!, 16)}, ${Number.parseInt(g!, 16)}, ${Number.parseInt(b!, 16)}, ${alpha})`;
 }
 
 function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSourceFramingStyle | undefined) {
@@ -132,16 +138,15 @@ function cssBackgroundStyle(output: FeatureMatchOverlayOutput, style: FeatureMat
 	const color = style?.backgroundColor?.trim();
 	const hasBaseColor = Boolean(color && !/^transparent$/i.test(color));
 
+	if (opacity <= 0 || !(gradient || hasBaseColor))
+		return 'transparent';
+	// A Key Output is a matte: the raw CSS gradient becomes coverage, not colour.
 	if (output === 'key')
-		return opacity > 0 && (gradient || hasBaseColor) ? colorWithOpacity(output, '#ffffff', opacity) : 'transparent';
-	if (opacity <= 0)
-		return 'transparent';
+		return colourAtOpacity(output, '#ffffff', opacity);
 	if (gradient)
-		return hasBaseColor ? `${gradient}, ${colorWithOpacity(output, color, opacity)}` : gradient;
-	if (!hasBaseColor)
-		return 'transparent';
+		return hasBaseColor ? `${gradient}, ${colourAtOpacity(output, color!, opacity)}` : gradient;
 
-	return colorWithOpacity(output, color, opacity);
+	return colourAtOpacity(output, color!, opacity);
 }
 
 function sourceGlowMaskStyle(
@@ -186,22 +191,25 @@ function sourceGlowStyles(
 	item: FeatureMatchSourceItemConfig,
 ): Pick<FeatureMatchOverlaySourceItemRenderModel, 'glowContainerStyle' | 'glowStyle'> | undefined {
 	const style = item.framingStyle;
-	const size = Math.max(0, style?.glowSize ?? 0);
-	if (output === 'key' || size <= 0 || !style?.borderVisible)
+	if (!style?.borderVisible)
+		return undefined;
+	const glow = borderGlow(style);
+	const filter = glowDropShadow(output, glow);
+	if (!glow || !filter)
 		return undefined;
 
 	const visibleSides = FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(style, side));
 	if (visibleSides.length === 0)
 		return undefined;
 
-	const color = colorWithOpacity(output, style.glowColor ?? style.borderColor ?? '#ffffff', style.glowOpacity ?? 0.75);
+	const size = glow.size;
 	const glowBorder = {
 		...style,
 		// CSS drop-shadow includes its source in the filtered result. The real
 		// Source Item covers this duplicate border, but rounded-edge antialiasing
 		// can leave subpixels visible. Matching the authored border colour keeps
 		// those edge pixels identical while the filter still paints the glow colour.
-		borderColor: style.borderColor ?? '#ffffff',
+		borderColor: style.borderColor ?? SOURCE_ITEM_UNSET_BORDER_COLOUR,
 	};
 	// A CSS drop-shadow extends beyond the element it filters. Give that result a
 	// larger local canvas so the mask can retain either half without clipping its
@@ -229,7 +237,7 @@ function sourceGlowStyles(
 			background: 'transparent',
 			...cssBorderStyle(output, glowBorder),
 			borderRadius: featureMatchOverlayBorderRadiusCss(style),
-			filter: `drop-shadow(0 0 ${size}px ${color})`,
+			filter,
 			pointerEvents: 'none',
 		},
 	};
@@ -240,7 +248,9 @@ function cssBorderStyle(output: FeatureMatchOverlayOutput, style: FeatureMatchSo
 		return { border: 'none', borderTop: 'none', borderRight: 'none', borderBottom: 'none', borderLeft: 'none' };
 	}
 
-	const border = style.borderVisible ? `${style.borderWidth ?? 1}px solid ${output === 'key' ? '#fff' : (style.borderColor ?? '#fff')}` : 'none';
+	const border = style.borderVisible
+		? `${style.borderWidth ?? 1}px solid ${paintColour(output, style.borderColor ?? SOURCE_ITEM_UNSET_BORDER_COLOUR)}`
+		: 'none';
 	return {
 		border: 'none',
 		borderTop: featureMatchOverlayBorderSideEnabled(style, 'Top') ? border : 'none',
@@ -264,6 +274,54 @@ function frameImagePreserveAspectRatio(fit: FeatureMatchOverlayModeConfig['layou
 
 function svgFillColor(color: string | undefined) {
 	return color?.trim() || 'transparent';
+}
+
+/**
+ * The Frame's border, or none. A Frame border without a colour paints nothing in
+ * the Fill Output, so the Key Output keys nothing for it either; its glow is a
+ * shadow of that stroke, so it has no glow without one.
+ */
+function frameBorder(
+	output: FeatureMatchOverlayOutput,
+	frame: FeatureMatchOverlayFrameConfig,
+	glowFilterId: string,
+): FeatureMatchOverlayFrameBorderRenderModel | undefined {
+	const color = frame.borderColor?.trim();
+	if (!frame.borderVisible || !color)
+		return undefined;
+
+	const flood = glowFlood(output, borderGlow(frame));
+	return {
+		stroke: paintColour(output, color),
+		strokeWidth: frame.borderWidth ?? 1,
+		sides: FEATURE_MATCH_OVERLAY_BORDER_SIDES.filter(side => featureMatchOverlayBorderSideEnabled(frame, side)),
+		glow: flood && {
+			filterId: glowFilterId,
+			stdDeviation: flood.stdDeviation,
+			floodColor: flood.color,
+			floodOpacity: flood.opacity,
+		},
+	};
+}
+
+function frameRenderModel(
+	output: FeatureMatchOverlayOutput,
+	frame: FeatureMatchOverlayFrameConfig,
+	ids: { maskId: string; glowFilterId: string },
+): FeatureMatchOverlayFrameRenderModel {
+	const gradient = frame.gradient?.trim();
+	return {
+		maskId: ids.maskId,
+		paintsImage: output !== 'key',
+		imageStyle: { opacity: frame.opacity },
+		imagePreserveAspectRatio: frameImagePreserveAspectRatio(frame.backgroundImageFit),
+		gradientStyle: output !== 'key' && gradient
+			? { background: frame.gradient, opacity: frame.opacity }
+			: undefined,
+		fill: output === 'key' ? paintColour(output, '#ffffff') : svgFillColor(frame.backgroundColor),
+		opacity: frame.opacity,
+		border: frameBorder(output, frame, ids.glowFilterId),
+	};
 }
 
 function sourceItemStyle(output: FeatureMatchOverlayOutput, item: FeatureMatchSourceItemConfig): CSSProperties {
@@ -304,20 +362,16 @@ export function resolveFeatureMatchOverlayRenderModel(
 			height: '100%',
 			position: 'relative',
 			overflow: 'hidden',
-			background: output === 'overlay' ? 'transparent' : '#000',
+			background: screenOutputCanvasBackground(output),
 		},
 		sourceItems,
 		sourceCutouts: sourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),
-		frame: {
+		frame: frameRenderModel(output, config.layout.frame, {
 			maskId: input.maskId ?? 'feature-match-overlay-frame-mask',
-			imageStyle: { opacity: config.layout.frame.opacity },
-			imagePreserveAspectRatio: frameImagePreserveAspectRatio(config.layout.frame.backgroundImageFit),
-			fill: output === 'key' ? '#fff' : svgFillColor(config.layout.frame.backgroundColor),
-			opacity: config.layout.frame.opacity,
-		},
+			glowFilterId: input.frameGlowFilterId ?? 'feature-match-overlay-frame-glow',
+		}),
 		rectStyle,
-		borderSideEnabled: featureMatchOverlayBorderSideEnabled,
 	};
 }

@@ -9,8 +9,8 @@ import FeatureMatchOverlayBorderRadiusControl from './BorderRadiusControl.vue';
  *
  * Only what a Source Item paints: a background wash behind the video area,
  * per-corner radii, and, through the shared border and glow fields, a per-side
- * border and a glow. Colours are hex only, because the renderer applies the glow
- * opacity to a hex colour.
+ * border and a glow. Its pickers offer hex colours; the renderer keeps the
+ * opacity of any stored colour (`~/modules/screen/outputPaint.ts`).
  *
  * The shared Graphic Surface Style has no per-side border by design — a composed
  * rule-preset Shape Graphic Item replaces it there — but the Frame and its Source

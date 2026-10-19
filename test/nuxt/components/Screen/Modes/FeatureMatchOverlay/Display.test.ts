@@ -125,6 +125,32 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(composition).toBeGreaterThan(source);
 		});
 
+		it('draws the Frame border and glow the render model resolves, in the Key Output too', async () => {
+			// What the Frame paints is decided by the render model and tested there;
+			// this pins only that the component draws what it is given.
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame = {
+				...config.layout.frame,
+				borderVisible: true,
+				borderColor: '#0077a3',
+				borderWidth: 4,
+				borderLeftVisible: false,
+				glowSize: 12,
+				glowOpacity: 0.5,
+			};
+			mockConfig.value = config;
+			mockOutputMode.value = 'key';
+
+			const wrapper = await mountComponent();
+			const border = wrapper.get('.frame-layer g[stroke]');
+			const filterId = border.attributes('filter')?.match(/^url\(#(.+)\)$/)?.[1];
+			const shadow = wrapper.get(`filter[id="${filterId}"] feDropShadow`);
+
+			expect(border.attributes('stroke')).toBe('#ffffff');
+			expect(border.findAll('line')).toHaveLength(3);
+			expect(shadow.attributes()).toMatchObject({ 'stdDeviation': '6', 'flood-color': '#ffffff', 'flood-opacity': '0.5' });
+		});
+
 		it('never covers the host-owned layer with a backdrop of its own', async () => {
 			// The composed tree is mounted above the Frame and the Source Items. A Fill
 			// or Key Output's black backdrop painted here would
