@@ -206,7 +206,7 @@ describe('the Feature Match Session client follows its aggregate', () => {
 	it('never lets a Slot carrying an older sequence move its Session backwards', async () => {
 		await store.applyRemoteSessionEvent(eventApplied(state({ life: 18 }), 1));
 
-		store.offerSlotSession({ activeSession: session(state({ life: 20 }), 0) });
+		store.offerSlotSession({ id: SLOT_ID, activeSession: session(state({ life: 20 }), 0) });
 
 		expect(rendered().player1.lifeTotal).toBe(18);
 		expect(store.sessionSequenceBySlotId.get(SLOT_ID)).toBe(1);
@@ -217,7 +217,7 @@ describe('the Feature Match Session client follows its aggregate', () => {
 		mockRepo.ensureSession.mockReturnValueOnce(loading.promise);
 
 		const load = store.loadState(EVENT_ID, SLOT_ID);
-		store.offerSlotSession({ activeSession: session(state({ life: 18 }), 4) });
+		store.offerSlotSession({ id: SLOT_ID, activeSession: session(state({ life: 18 }), 4) });
 		loading.resolve(session(state({ life: 16 }), 5));
 		await load;
 

@@ -350,6 +350,92 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
+	// ── Slot answers read before the Slot's first Session (#658) ──
+
+	/**
+	 * No server path moves a Slot from holding a Session to holding none: every
+	 * close opens its successor in the same commit (ADR-0026, ADR-0029). A Slot
+	 * read without one was read before its first Session opened, so it is behind
+	 * any Session this client holds for that Slot, and is left behind whole.
+	 */
+	describe('a Slot read without a Session', () => {
+		const stateStore = () => useFeatureMatchStateStore();
+
+		beforeEach(() => {
+			stateStore().$reset();
+		});
+
+		function announce(slot: ReturnType<typeof createMockFeatureMatch>) {
+			ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
+		}
+
+		it('an announcement does not replace a Slot holding a Session', () => {
+			const promoted = slotInEpoch(1, 501);
+			store.featureMatches = [promoted];
+			stateStore().offerSlotSession(promoted);
+
+			announce(sessionlessSlot(1, { bestOf: 5 }));
+
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('a settings answer does not replace a Slot holding a Session, and answers with it', async () => {
+			store.featureMatches = [sessionlessSlot(1)];
+			const update = deferred<ReturnType<typeof createMockFeatureMatch>>();
+			mockRepo.update.mockReturnValueOnce(update.promise);
+
+			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
+			const promoted = slotInEpoch(1, 501);
+			announce(promoted);
+			update.resolve(sessionlessSlot(1, { bestOf: 5 }));
+
+			expect(await updating).toEqual(promoted);
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('a load keeps a Slot holding a Session and applies the rest', async () => {
+			mockRepo.list.mockResolvedValueOnce([sessionlessSlot(1), sessionlessSlot(2)]);
+			await store.loadFeatureMatchesByEventId(1);
+			const load = deferred<ReturnType<typeof createMockFeatureMatch>[]>();
+			mockRepo.list.mockReturnValueOnce(load.promise);
+
+			const loading = store.loadFeatureMatchesByEventId(1);
+			const promoted = slotInEpoch(1, 501);
+			announce(promoted);
+			const stillEmpty = sessionlessSlot(2, { bestOf: 5 });
+			load.resolve([sessionlessSlot(1, { bestOf: 5 }), stillEmpty]);
+			await loading;
+
+			expect(store.featureMatches).toEqual([promoted, stillEmpty]);
+		});
+
+		it('a Screen Output read is not held over a Slot holding a Session', () => {
+			const promoted = slotInEpoch(1, 501);
+			expect(store.holdFeatureMatch(promoted)).toBe(true);
+
+			expect(store.holdFeatureMatch(sessionlessSlot(1))).toBe(false);
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('a saved Slot does not replace a Slot holding a Session', () => {
+			const promoted = slotInEpoch(1, 501);
+			store.featureMatches = [promoted];
+			stateStore().offerSlotSession(promoted);
+
+			expect(store.applySavedSlot(sessionlessSlot(1, { bestOf: 5 }))).toBe(false);
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('applies while no Session is held for the Slot', () => {
+			store.featureMatches = [sessionlessSlot(1)];
+			const edited = sessionlessSlot(1, { bestOf: 5 });
+
+			announce(edited);
+
+			expect(store.featureMatches).toEqual([edited]);
+		});
+	});
+
 	// ── Writes that outlive their Event (#606) ──
 
 	/**
@@ -496,6 +582,17 @@ function slotInEpoch(id: number, sessionId: number, overrides: Record<string, un
 			createdAt: new Date('2026-01-01T00:00:00.000Z'),
 			updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 		},
+		...overrides,
+	} as any);
+}
+
+function sessionlessSlot(id: number, overrides: Record<string, unknown> = {}) {
+	return createMockFeatureMatch({
+		id,
+		eventId: 1,
+		matchId: null,
+		activeSessionId: null,
+		activeSession: null,
 		...overrides,
 	} as any);
 }
