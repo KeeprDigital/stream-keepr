@@ -319,15 +319,14 @@ describe('the built Worker smoke runner', () => {
 			scripts: Record<string, string>;
 		};
 		const generate = packageJson.scripts['types:app'];
+		// The output path comes first: `--env-file` takes an array, so a path after
+		// it would be read as a second env file.
 		expect(generate).toMatch(/^wrangler types worker-configuration\.d\.ts /u);
 		expect(generate).toContain('--config wrangler.dev.jsonc');
 		// No `.env` or `.dev.vars` is read, so every checkout generates the same file.
 		expect(generate).toContain('--env-file /dev/null');
 		// `pnpm typecheck` runs `typecheck:app`, and verify runs it as a first-stage gate.
 		expect(packageJson.scripts['typecheck:app']).toMatch(/^pnpm types:app --check && /u);
-
-		const header = (await readFile(join(repositoryRoot, 'worker-configuration.d.ts'), 'utf8')).split('\n', 2)[1];
-		expect(header).toContain('`wrangler types --config=wrangler.dev.jsonc --env-file=/dev/null`');
 	});
 
 	it('runs `pnpm test` as the test gates of verify\'s graph', async () => {

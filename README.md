@@ -155,7 +155,7 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Touching still-image codecs or Wasm         | `pnpm accept still-image-ingestion`                                                 | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                                                                                     |
 | Touching an Animation Effect shader         | `pnpm accept animation-effects`                                                     | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, motion, and halo's trails fading out. Local only.                                                                                                     |
 | Touching Fill/Key paint or a glow           | `pnpm accept key-matte`                                                             | Draws a half-opaque glow on a Graphic Item, Source Item, and the Frame in Chromium as Overlay and Key; requires the Key matte to equal the Overlay alpha, the glow grey, and no colour. Local only.                                                                                  |
-| After bumping wrangler or changing bindings | `pnpm types:app`                                                                    | Regenerates the app's committed `worker-configuration.d.ts`; commit it. `pnpm typecheck:app` fails while it is stale. Reads no `.env` (`--env-file /dev/null`): secrets reach the app through `runtimeConfig`, not `Env`, and the file must match on every machine.                  |
+| After bumping wrangler or changing bindings | `pnpm types:app`, `pnpm types:validator`                                            | Regenerate both committed `worker-configuration.d.ts` files (the app's from `wrangler.dev.jsonc`) and commit them; `pnpm typecheck` fails while either is stale. `types:app` reads no `.env` (`--env-file /dev/null`): secrets reach the app via `runtimeConfig`, not `Env`.         |
 | Touching the silent-video validator         | `pnpm accept silent-video-validator`                                                | Needs Docker. Compile and bundle are already ordinary gates: `pnpm typecheck:validator` and `pnpm validator:dry-run`, no Docker or credentials. After changing its `wrangler.jsonc` or bumping wrangler, run `pnpm types:validator` and commit the result.                           |
 | Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                         |
 | Deploy day                                  | `pnpm accept deployed`                                                              | The six deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                       |
@@ -740,9 +740,8 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
   Its runtime and binding types are `worker-configuration.d.ts` beside it,
   generated from its `wrangler.jsonc` by `pnpm types:validator` and committed.
   Like the app's root file (`pnpm types:app`), it is checked fresh:
-  `pnpm typecheck:validator`
-  (inside `pnpm typecheck`) fails when that file is stale or the Worker does not
-  compile, and
+  `pnpm typecheck:validator` (inside `pnpm typecheck`) fails when that file is
+  stale or the Worker does not compile, and
   `pnpm validator:dry-run` bundles it as `pnpm deploy:validator` would without
   building the Container image (#618).
 - Deploying needs Docker plus Workflows and Containers enabled on the account.
