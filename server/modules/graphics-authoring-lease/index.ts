@@ -1,3 +1,4 @@
+import type { SQL } from 'drizzle-orm';
 import type {
 	GraphicsAuthoringArtifactRef,
 	GraphicsAuthoringLeaseOutcome,
@@ -5,7 +6,8 @@ import type {
 	GraphicsAuthoringLeaseRecord,
 	GraphicsAuthoringLeaseState,
 } from '~~/shared/modules/graphics-authoring-lease';
-import { and, eq, lte, or } from 'drizzle-orm';
+import { and, eq, lte, or, sql } from 'drizzle-orm';
+import { SQLiteAsyncDialect } from 'drizzle-orm/sqlite-core';
 import { db } from '~~/server/db';
 import { graphicsAuthoringLeases } from '~~/server/db/schema';
 import { sessionHolderName } from '~~/server/utils/actorNames';
@@ -61,6 +63,55 @@ export interface AcquireGraphicsAuthoringLeaseParams extends GraphicsAuthoringLe
 export interface GraphicsAuthoringLeaseAcquisition {
 	lease: GraphicsAuthoringLeaseReading;
 	outcome: GraphicsAuthoringLeaseOutcome;
+}
+
+/**
+ * A write's claim to be made for one Session, carried into the statement that
+ * commits it.
+ *
+ * `requireWritable` answers whether the Session may write *now*; a takeover can
+ * land between that answer and the commit. A fenced write re-asks the same
+ * question inside its own statement, so it commits only while no other Session
+ * holds a live lease — whatever happened in between (#607).
+ */
+export interface GraphicsAuthoringLeaseFence extends GraphicsAuthoringLeaseRef {
+	sessionId: string | undefined;
+}
+
+/**
+ * The fence as a condition: no other Session holds a live lease on the artifact.
+ *
+ * The same rule as `graphicsAuthoringLeaseAllowsWrite`, stated in SQL — an unheld
+ * or lapsed artifact admits anyone, and a Session with no id matches no holder.
+ * Built once as a Drizzle expression; `graphicsAuthoringLeaseFenceClause` renders
+ * this same expression for a raw D1 statement, so there is one spelling of it.
+ */
+export function graphicsAuthoringLeaseFenceCondition(fence: GraphicsAuthoringLeaseFence, now: number): SQL {
+	return sql`NOT EXISTS (
+		SELECT 1 FROM graphics_authoring_leases
+		WHERE artifact_kind = ${fence.artifact.kind}
+			AND artifact_id = ${fence.artifact.id}
+			AND expires_at > ${now}
+			AND holder_session_id IS NOT ${fence.sessionId ?? null}
+	)`;
+}
+
+const fenceDialect = new SQLiteAsyncDialect();
+
+/** `graphicsAuthoringLeaseFenceCondition` for a raw prepared statement. */
+export function graphicsAuthoringLeaseFenceClause(
+	fence: GraphicsAuthoringLeaseFence,
+	now: number,
+): { sql: string; params: unknown[] } {
+	return fenceDialect.sqlToQuery(graphicsAuthoringLeaseFenceCondition(fence, now));
+}
+
+function graphicsAuthoringLeaseConflict() {
+	return createError({
+		statusCode: 409,
+		statusMessage: 'Conflict',
+		message: 'Another session holds the Graphics Authoring Lease for this artifact',
+	});
 }
 
 type StoredLease = typeof graphicsAuthoringLeases.$inferSelect;
@@ -152,11 +203,7 @@ export function graphicsAuthoringLeaseModule() {
 		const state = await describe(ref, sessionId);
 		if (state.writable)
 			return;
-		throw createError({
-			statusCode: 409,
-			statusMessage: 'Conflict',
-			message: 'Another session holds the Graphics Authoring Lease for this artifact',
-		});
+		throw graphicsAuthoringLeaseConflict();
 	}
 
 	/**

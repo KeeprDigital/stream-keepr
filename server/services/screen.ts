@@ -1,11 +1,16 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen, ScreenMode } from '~~/server/db/schema';
+import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
+import {
+	graphicsAuthoringLeaseFenceCondition,
+	graphicsAuthoringLeaseModule,
+} from '~~/server/modules/graphics-authoring-lease';
 import {
 	deleteScreenWithGraphicAssetReferences,
 	updateScreenModeConfigWithGraphicAssetReferences,
@@ -103,6 +108,10 @@ export function screenService() {
 	 * Always a batch, even for the write on its own, so there is one execution path
 	 * rather than two that can drift — and so a caller with a consequence that must
 	 * not be separable from the write has somewhere to put it.
+	 *
+	 * A `leaseFence` adds the Graphics Authoring Lease to the same condition, so a
+	 * write admitted before a takeover cannot commit after it (#607). Refused by the
+	 * fence, it answers the lease's own 409 rather than a Screen conflict.
 	 */
 	const versionedWrite = async (
 		id: number,
@@ -110,6 +119,7 @@ export function screenService() {
 		data: Partial<typeof screens.$inferInsert>,
 		currentVersion: number,
 		companions: readonly BatchItem<'sqlite'>[] = [],
+		leaseFence?: GraphicsAuthoringLeaseFence,
 	): Promise<DbScreen | undefined> => {
 		let written;
 		try {
@@ -121,6 +131,7 @@ export function screenService() {
 						eq(screens.id, id),
 						eq(screens.eventId, eventId),
 						eq(screens.stateVersion, currentVersion),
+						leaseFence ? graphicsAuthoringLeaseFenceCondition(leaseFence, Date.now()) : undefined,
 					))
 					.returning(),
 				...companions,
@@ -138,6 +149,8 @@ export function screenService() {
 		if (!screen)
 			return undefined;
 
+		if (leaseFence && screen.stateVersion === currentVersion)
+			await graphicsAuthoringLeaseModule().requireWritable(leaseFence, leaseFence.sessionId);
 		throw new StateConflictError('Screen', id);
 	};
 
@@ -161,8 +174,9 @@ export function screenService() {
 		 * must not apply when this write is refused has to say so itself.
 		 */
 		companions?: readonly BatchItem<'sqlite'>[],
+		leaseFence?: GraphicsAuthoringLeaseFence,
 	): Promise<DbScreen | undefined> => {
-		return versionedWrite(id, eventId, data, stateVersion, companions);
+		return versionedWrite(id, eventId, data, stateVersion, companions, leaseFence);
 	};
 
 	const remove = async (id: number, eventId: number): Promise<boolean> => {
@@ -175,6 +189,7 @@ export function screenService() {
 		mode: ScreenMode,
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
+		leaseFence?: GraphicsAuthoringLeaseFence,
 	): Promise<DbScreen | undefined> => {
 		// A graphics mode's configuration and its Graphic Asset Reference index are
 		// one write, so a Screen Output can never resolve a revision the Screen no
@@ -186,6 +201,7 @@ export function screenService() {
 				mode,
 				partialConfig,
 				stateVersion,
+				leaseFence,
 			});
 		}
 
@@ -195,7 +211,7 @@ export function screenService() {
 
 		const mergedConfigs = mergeScreenModeConfig(screen.modeConfigs ?? {}, mode, partialConfig);
 
-		return versionedWrite(id, eventId, { modeConfigs: mergedConfigs }, stateVersion ?? screen.stateVersion);
+		return versionedWrite(id, eventId, { modeConfigs: mergedConfigs }, stateVersion ?? screen.stateVersion, [], leaseFence);
 	};
 
 	const updateScreenConfig = async (
@@ -203,6 +219,7 @@ export function screenService() {
 		eventId: number,
 		partialConfig: Record<string, unknown>,
 		stateVersion?: number,
+		leaseFence?: GraphicsAuthoringLeaseFence,
 	): Promise<DbScreen | undefined> => {
 		const screen = await findById(id, eventId);
 		if (!screen)
@@ -211,7 +228,7 @@ export function screenService() {
 		const currentConfig = (screen.screenConfig ?? {}) as ScreenConfig;
 		const mergedConfig = mergeScreenConfig(currentConfig, partialConfig);
 
-		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion);
+		return versionedWrite(id, eventId, { screenConfig: mergedConfig }, stateVersion ?? screen.stateVersion, [], leaseFence);
 	};
 
 	const slugExists = async (eventId: number, slug: string, excludeId?: number): Promise<boolean> => {

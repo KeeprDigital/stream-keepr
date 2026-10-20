@@ -138,6 +138,7 @@ describe('deck source write invariants', () => {
 
 		await expect(broadcastDeckListService().remove(list!.id, eventId, 1)).resolves.toEqual({ status: 'deleted' });
 		await expect(screenWriteModule().updateModeConfig({
+			authoringSessionId: undefined,
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',
@@ -164,6 +165,7 @@ describe('deck source write invariants', () => {
 		} as never, capability('generic-update'));
 
 		await expect(screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId: screen.id,
 			input: {
@@ -184,6 +186,7 @@ describe('deck source write invariants', () => {
 		} as never, capability('player-regression'));
 
 		const accepted = await screenWriteModule().updateModeConfig({
+			authoringSessionId: undefined,
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',
@@ -202,6 +205,7 @@ describe('deck source write invariants', () => {
 		});
 
 		await expect(screenWriteModule().updateModeConfig({
+			authoringSessionId: undefined,
 			eventId,
 			screenId: screen.id,
 			mode: 'deck',

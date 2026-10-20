@@ -5,6 +5,7 @@ import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { liveStateCommandReceipts } from '~~/server/db/schema';
 import { selectForInsert } from '~~/server/utils/db';
+import { canonicalJson } from '~~/shared/utils/canonicalJson';
 
 /**
  * How many of an aggregate's most recent commands keep a receipt.
@@ -21,18 +22,6 @@ export interface CommandReceipt {
 	commandType: string;
 	contentKey: string;
 	sequence: number;
-}
-
-function canonicalJson(value: unknown): string {
-	if (Array.isArray(value))
-		return `[${value.map(canonicalJson).join(',')}]`;
-	if (value && typeof value === 'object') {
-		return `{${Object.entries(value)
-			.toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-			.join(',')}}`;
-	}
-	return JSON.stringify(value) ?? 'undefined';
 }
 
 /**

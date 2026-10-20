@@ -1,14 +1,17 @@
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { admitScreenGraphicsEditWrite } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
@@ -17,6 +20,7 @@ import {
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { canonicalJson } from '~~/shared/utils/canonicalJson';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
@@ -58,7 +62,19 @@ interface CreateScreenParams {
 	screenOutputAssetCapabilities: Provides<Pick<ScreenOutputAssetCapabilityManager, 'prepare'>>;
 }
 
-interface UpdateScreenParams {
+/**
+ * The browser Session a write is made for, which a Graphics Authoring Lease admits
+ * or refuses (#607).
+ *
+ * Required on every operation that can edit a Screen's graphics Edit workspace,
+ * and `undefined` only where the request carries no Session: a route that forgot
+ * to say who is asking would otherwise be a write path the lease cannot see.
+ */
+interface AuthoredWrite {
+	authoringSessionId: string | undefined;
+}
+
+interface UpdateScreenParams extends AuthoredWrite {
 	eventId: number;
 	screenId: number;
 	input: UpdateScreenInput;
@@ -71,7 +87,7 @@ interface DeleteScreenParams {
 	originConnectionId?: string;
 }
 
-interface UpdateScreenConfigParams {
+interface UpdateScreenConfigParams extends AuthoredWrite {
 	eventId: number;
 	screenId: number;
 	config: Record<string, unknown>;
@@ -79,7 +95,7 @@ interface UpdateScreenConfigParams {
 	originConnectionId?: string;
 }
 
-interface UpdateModeConfigParams {
+interface UpdateModeConfigParams extends AuthoredWrite {
 	eventId: number;
 	screenId: number;
 	mode: ScreenMode;
@@ -133,6 +149,52 @@ function rejectChangedGraphicAssetReferencesOnGenericUpdate(
 	}
 }
 
+/*
+ * What a Graphics Authoring Lease protects on a Screen: its graphics Edit
+ * workspace, which is the Broadcast Graphics stack and — while the Screen is in
+ * Broadcast Graphics mode — the canvas every Broadcast Graphic is composed in.
+ * Resizing the canvas moves the frame a holder's composition was authored into,
+ * which is the harm the lease exists to prevent. Every other Screen field and
+ * every other Screen Mode stays open: live operation must not wait on an author.
+ */
+
+const CANVAS_FIELDS = ['width', 'height'] as const;
+
+function namesCanvas(config: Record<string, unknown>): boolean {
+	return CANVAS_FIELDS.some(field => config[field] !== undefined);
+}
+
+/** Compared as JSON, so a stack sent back exactly as it was read is no change. */
+function sameJson(left: unknown, right: unknown): boolean {
+	return canonicalJson(JSON.parse(JSON.stringify(left ?? null)))
+		=== canonicalJson(JSON.parse(JSON.stringify(right ?? null)));
+}
+
+/**
+ * Whether a generic Screen write edits the graphics Edit workspace.
+ *
+ * Decided by what would change rather than by which fields are present: the
+ * generic write replaces `modeConfigs` and `screenConfig` whole, and the Edit
+ * Screen dialog sends both back as it read them, so presence alone would refuse
+ * every rename while a Screen is leased.
+ */
+function genericWriteEditsWorkspace(
+	existing: { currentMode: ScreenMode; modeConfigs: ScreenResponse['modeConfigs']; screenConfig: ScreenConfig | null },
+	data: Omit<UpdateScreenInput, 'stateVersion'>,
+): boolean {
+	if (data.modeConfigs !== undefined
+		&& !sameJson(existing.modeConfigs?.['broadcast-graphics'], data.modeConfigs?.['broadcast-graphics'])) {
+		return true;
+	}
+	const inBroadcastGraphics = existing.currentMode === 'broadcast-graphics'
+		|| data.currentMode === 'broadcast-graphics';
+	if (!inBroadcastGraphics || data.screenConfig === undefined)
+		return false;
+	const current = (existing.screenConfig ?? {}) as Record<string, unknown>;
+	const next = (data.screenConfig ?? {}) as Record<string, unknown>;
+	return CANVAS_FIELDS.some(field => current[field] !== next[field]);
+}
+
 export function screenWriteModule() {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
@@ -166,11 +228,18 @@ export function screenWriteModule() {
 		});
 	}
 
-	async function updateScreen({ eventId, screenId, input, originConnectionId }: UpdateScreenParams): Promise<ScreenResponse> {
+	async function updateScreen({ eventId, screenId, input, originConnectionId, authoringSessionId }: UpdateScreenParams): Promise<ScreenResponse> {
 		const { stateVersion, ...data } = input;
 		const existingScreen = await screens.findById(screenId, eventId);
 		if (!existingScreen)
 			throw createError({ statusCode: 404, message: 'Screen not found' });
+
+		// Decided against the row just read, and the write is versioned on the
+		// client's `stateVersion`: a commit that succeeds is one against this very
+		// row, so the decision cannot be stale by the time it lands.
+		const leaseFence = genericWriteEditsWorkspace(existingScreen, data)
+			? await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId)
+			: undefined;
 
 		await validateScreenModeConfigsReferences(eventId, data.modeConfigs);
 		rejectChangedGraphicAssetReferencesOnGenericUpdate(
@@ -208,6 +277,7 @@ export function screenWriteModule() {
 			data,
 			stateVersion,
 			epochEnd?.statements,
+			leaseFence,
 		);
 
 		if (!updatedScreen) {
@@ -280,8 +350,22 @@ export function screenWriteModule() {
 		return { success: true };
 	}
 
-	async function updateScreenConfig({ eventId, screenId, config, stateVersion, originConnectionId }: UpdateScreenConfigParams): Promise<ScreenResponse> {
-		const updatedScreen = await screens.updateScreenConfig(screenId, eventId, config, stateVersion);
+	async function updateScreenConfig({ eventId, screenId, config, stateVersion, originConnectionId, authoringSessionId }: UpdateScreenConfigParams): Promise<ScreenResponse> {
+		// Only a write naming the canvas reads the Screen first. Its version then
+		// guards the commit when the client sent none, so the mode the decision
+		// was made on is the mode the write commits against.
+		let leaseFence: GraphicsAuthoringLeaseFence | undefined;
+		let expectedVersion = stateVersion;
+		if (namesCanvas(config)) {
+			const existing = await screens.findById(screenId, eventId);
+			if (!existing)
+				throw createError({ statusCode: 404, message: 'Screen not found' });
+			expectedVersion ??= existing.stateVersion;
+			if (existing.currentMode === 'broadcast-graphics')
+				leaseFence = await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId);
+		}
+
+		const updatedScreen = await screens.updateScreenConfig(screenId, eventId, config, expectedVersion, leaseFence);
 
 		if (!updatedScreen) {
 			throw createError({
@@ -297,7 +381,14 @@ export function screenWriteModule() {
 		});
 	}
 
-	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId, graphicsAssets }: UpdateModeConfigParams): Promise<ScreenResponse> {
+	async function updateModeConfig({ eventId, screenId, mode, config, stateVersion, originConnectionId, graphicsAssets, authoringSessionId }: UpdateModeConfigParams): Promise<ScreenResponse> {
+		// The Broadcast Graphics stack is the Screen's graphics Edit workspace. Live
+		// Control reaches the Screen through its own live command surface and is
+		// never admitted here.
+		const leaseFence = mode === 'broadcast-graphics'
+			? await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId)
+			: undefined;
+
 		await validateScreenModeConfigReferences(eventId, mode, config);
 
 		const existing = await screens.findById(screenId, eventId);
@@ -363,7 +454,7 @@ export function screenWriteModule() {
 			}
 		}
 
-		const updatedScreen = await screens.updateModeConfig(screenId, eventId, mode, config, stateVersion);
+		const updatedScreen = await screens.updateModeConfig(screenId, eventId, mode, config, stateVersion, leaseFence);
 
 		if (!updatedScreen) {
 			throw createError({

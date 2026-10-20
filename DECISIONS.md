@@ -772,3 +772,33 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 
 - **Re-read every loaded store on reconnect.** It is simpler, but it pays for data no mounted surface shows. It also cannot tell a consumed dataset from one that is just held.
 - **Have `useEventPageLoading` always reload on mount.** That fixes a revisit, but every page navigation would re-read lists that live-follow already keeps current.
+
+## ADR-0029: A Graphics Authoring Lease is decided by the Screen write module and fenced at the commit
+
+Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/issues/607)
+
+### Decision
+
+**The Screen write module decides which writes edit a Screen's graphics Edit workspace.** Every Screen write passes through `screenWriteModule()`, and each of its update operations takes the asking browser Session as a required `authoringSessionId`. A route only says who is asking. The protected fields are the Broadcast Graphics stack, and the canvas (`width`, `height`) while the Screen is in Broadcast Graphics mode. The mode configuration write protects the Broadcast Graphics stack. The Screen configuration write protects the canvas when it names it. The generic Screen write protects either one when it would change it.
+
+**The generic Screen write is gated by change, not by presence.** It replaces `modeConfigs` and `screenConfig` whole, and the Edit Screen dialog sends both back as it read them. A rename that carries the protected fields back unchanged stays open to every Session. The comparison ignores object key order.
+
+**The lease is checked again inside the statement that commits.** A write is admitted up front, then commits only while no other Session holds a live lease on the artifact. That condition sits in the same `WHERE` clause as the `stateVersion` guard. It is one Drizzle expression, `graphicsAuthoringLeaseFenceCondition`, and the raw D1 mode configuration write renders the same expression. A write the fence refuses answers the lease's own 409, which the client does not retry as a race.
+
+**Live Control stays outside the lease.** Live Session commands, live state reset, Screen commands, Card writes, and Screen mode changes are not admitted by it.
+
+### Why
+
+The lease was only checked at two routes. The generic Screen write reached the same stack and canvas with no lease check at all, so a second Session's write succeeded with a current `stateVersion`. A check at the door also left a window. A takeover between admission and commit let the displaced author's save land over the new holder.
+
+### Consequences
+
+- A route that edits the workspace cannot forget the lease. Leaving out `authoringSessionId` is a compile error.
+- The fence uses the server's clock at commit. A lease that lapses between admission and commit admits the write, which matches the lease's own rule.
+- Two takeovers in the same instant still both report success (see the lease module); the fence orders whichever holder the table records.
+- Feature Match Layout placement keeps its admission-only lease check. No client takes a lease on a Feature Match Overlay layout, and its mode configuration route has none.
+
+### Rejected alternatives
+
+- **Refuse the protected fields on the generic Screen write outright.** That would break the Edit Screen dialog, which sends `modeConfigs` back on every rename.
+- **Keep the admission check alone and state the race.** The fence costs one `NOT EXISTS` on a uniquely indexed row, and it closes the race outright.

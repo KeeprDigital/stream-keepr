@@ -1,6 +1,7 @@
 import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen } from '~~/server/db/schema';
+import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type {
 	GraphicAssetReferencingScreenMode,
@@ -10,6 +11,10 @@ import { and, eq, like } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
+import {
+	graphicsAuthoringLeaseFenceClause,
+	graphicsAuthoringLeaseModule,
+} from '~~/server/modules/graphics-authoring-lease';
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
@@ -206,6 +211,8 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 	mode: GraphicAssetReferencingScreenMode;
 	partialConfig: Record<string, unknown>;
 	stateVersion?: number;
+	/** Commit only while no other Session holds the Edit workspace's lease (#607). */
+	leaseFence?: GraphicsAuthoringLeaseFence;
 }): Promise<DbScreen | undefined> {
 	const screen = await findScreen(input.id, input.eventId);
 	if (!screen)
@@ -238,6 +245,9 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 	// One encoding binds the precondition and the index insert, so the set the
 	// save is refused on and the set it indexes cannot drift apart.
 	const boundFacts = boundGraphicAssetReferenceFacts(indexedReferences);
+	const fence = input.leaseFence
+		? graphicsAuthoringLeaseFenceClause(input.leaseFence, now)
+		: undefined;
 	const client = db.$client;
 	const statements: D1PreparedStatement[] = [
 		client.prepare(`
@@ -246,6 +256,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 				graphic_asset_reference_version = ?, updated_at = ?
 			WHERE id = ? AND event_id = ? AND state_version = ?
 				${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
+				${fence ? `AND ${fence.sql}` : ''}
 		`).bind(
 			JSON.stringify(mergedConfigs),
 			referenceVersion,
@@ -254,6 +265,7 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 			input.eventId,
 			expectedVersion,
 			boundFacts,
+			...(fence?.params ?? []),
 		),
 		// Scoped to this mode's own owner-slot namespace. A Screen may hold a
 		// configuration for every mode at once, so an unscoped delete would clear
@@ -322,13 +334,16 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		const current = await findScreen(input.id, input.eventId);
 		if (!current)
 			return undefined;
-		// Which of the two guards refused it, told apart so the operator is not
-		// pointed at a retry that can never succeed. The version guard is the only
-		// other clause in the statement, so a version that still stands means a
-		// reference stopped resolving — a retirement or a purge under the author's
+		// Which of the guards refused it, told apart so the operator is not pointed
+		// at a retry that can never succeed. A version that still stands means the
+		// lease fence or a reference refused it: the fence first, because a lease
+		// held by somebody else is the answer whatever the references say. Otherwise
+		// a reference stopped resolving — a retirement or a purge under the author's
 		// read — and that is a different conflict from a concurrent Screen edit,
-		// which the client's own reload-and-restate does converge on. Both are 409;
-		// only one of them is worth restating.
+		// which the client's own reload-and-restate does converge on. All are 409;
+		// only the last is worth restating.
+		if (current.stateVersion === expectedVersion && input.leaseFence)
+			await graphicsAuthoringLeaseModule().requireWritable(input.leaseFence, input.leaseFence.sessionId);
 		throw current.stateVersion === expectedVersion
 			? new StateConflictError('Graphic Asset Reference', input.id)
 			: new StateConflictError('Screen', input.id);
