@@ -161,7 +161,7 @@ export function playerUpdateModule() {
 	}: DeletePlayerParams): Promise<{ success: true }> {
 		const { deleted, clearedScreens } = await players.remove(playerId, eventId);
 
-		// Even for a Player already gone: the clear committed either way (ADR-0031).
+		// Even for a Player already gone: the clear committed either way (ADR-0032).
 		// No origin, because the deleting client never received these Screens back.
 		for (const screen of clearedScreens)
 			await publication.screenUpdated({ eventId, entity: screen });

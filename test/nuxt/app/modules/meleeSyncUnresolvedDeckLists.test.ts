@@ -18,12 +18,16 @@ const mockEventRepo = {
 const mockPlayerStore = {
 	loadPlayersByEventId: vi.fn(),
 };
+const mockMetagameStore = {
+	applyRemoteInvalidated: vi.fn(),
+};
 const mockRunRequest = vi.fn(async (action: () => Promise<unknown>) => await action());
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
+mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 mockNuxtImport('useRequestFeedback', () => () => ({ runRequest: mockRunRequest }));
 
 function unresolved(overrides: Partial<MeleeUnresolvedDeckCardResponse> = {}): MeleeUnresolvedDeckCardResponse {
@@ -234,5 +238,27 @@ describe('melee Sync unresolved Deck List module', () => {
 		expect(mockEventRepo.listUnresolvedDeckCards).toHaveBeenCalledTimes(2);
 		expect(workflow.resolveModalOpen.value).toBe(false);
 		expect(workflow.resolvingScryfallId.value).toBeNull();
+	});
+
+	it('refreshes this browser\'s Metagame pages, which its own Event message skips as self-origin (#648)', async () => {
+		mockEventRepo.listUnresolvedDeckCards.mockResolvedValue([unresolved({ id: 10 })]);
+		const workflow = useMeleeSyncUnresolvedDeckListResolution({ eventId: ref(1), isSetupComplete: ref(true) });
+		await flushAsyncWork();
+
+		await workflow.resolveUnresolvedDeckCard({ id: 'scryfall-1', name: 'Lightning Bolt', set: 'm11' });
+
+		expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+	});
+
+	it('refreshes no Metagame page when the resolution is refused', async () => {
+		mockEventRepo.listUnresolvedDeckCards.mockResolvedValue([unresolved({ id: 10 })]);
+		mockEventRepo.resolveUnresolvedDeckCard.mockRejectedValue(new Error('refused'));
+		mockRunRequest.mockImplementation(async (action: () => Promise<unknown>) => await action().catch(() => null));
+		const workflow = useMeleeSyncUnresolvedDeckListResolution({ eventId: ref(1), isSetupComplete: ref(true) });
+		await flushAsyncWork();
+
+		await workflow.resolveUnresolvedDeckCard({ id: 'scryfall-1', name: 'Lightning Bolt', set: 'm11' });
+
+		expect(mockMetagameStore.applyRemoteInvalidated).not.toHaveBeenCalled();
 	});
 });

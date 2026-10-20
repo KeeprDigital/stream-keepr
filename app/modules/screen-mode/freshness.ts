@@ -61,6 +61,12 @@ export interface ScreenModeFreshnessOptions<T> {
  * - **retry** — on the same slow cadence after the latest read failed, because
  *   the change that asked for it will not be announced again.
  *
+ * A message heard while a read is in flight asks for one follow-up once that
+ * read settles rather than superseding it, so a burst published one message at
+ * a time costs one more read per read in flight, not one per message (#650).
+ * Every other reason supersedes, as does a message heard once a read has run
+ * for the slow cadence, since a read can hang where a reason must not.
+ *
  * Every read is stale-while-revalidate: a rendering holds what it shows until a
  * newer read answers, and a failed re-read never blanks program.
  */
@@ -78,16 +84,32 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		}
 	}
 
-	function refresh() {
+	/** The read in flight: when it began, and whether a load asked for it. */
+	let reading: { since: number; load: boolean } | null = null;
+	/** Whether a message heard since the read in flight began asks for another. */
+	let followUpAsked = false;
+
+	/** Reads now, superseding any read in flight. */
+	function refresh(load = false) {
 		stopRetry();
+		followUpAsked = false;
+		reading = null;
 		const flight = reads.begin();
 		if (options.source() == null) {
 			display.clear();
 			return;
 		}
+		reading = { since: Date.now(), load };
 		void display.refresh(async () => {
 			try {
-				return await options.read();
+				const answer = await options.read();
+				// A load's answer that predates a message would only make the
+				// follow-up a second rendering of the new selection: the follow-up
+				// supersedes it, so its answer is the first shown (#567). Once,
+				// so a steady stream of messages still renders.
+				if (flight.current && followUpAsked && load)
+					refresh();
+				return answer;
 			}
 			catch (cause) {
 				// Only the latest read's failure leaves program behind.
@@ -95,7 +117,14 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 					retry = setTimeout(queueRefresh, SCREEN_MODE_REREAD_MS);
 				throw cause;
 			}
-		}, options.errorMessage);
+		}, options.errorMessage).then(() => {
+			// The answer is applied: now the follow-up can start.
+			if (flight.stale)
+				return;
+			reading = null;
+			if (followUpAsked)
+				refresh();
+		});
 	}
 
 	/** One read for however many reasons arrive together. */
@@ -109,7 +138,15 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		});
 	}
 
-	watch(options.source, refresh, { immediate: true });
+	/** One follow-up for however many messages arrive while a read is in flight. */
+	function follow() {
+		if (reading && Date.now() - reading.since < SCREEN_MODE_REREAD_MS)
+			followUpAsked = true;
+		else
+			queueRefresh();
+	}
+
+	watch(options.source, () => refresh(true), { immediate: true });
 
 	// Live-follow.
 	function touches<K extends MessageType>(type: K, message: MessageData<K>): boolean {
@@ -117,7 +154,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		if (options.source() == null || !dependency)
 			return false;
 		// What is held cannot judge a message the read in flight may predate.
-		if (dependency === true || display.loading.value)
+		if (dependency === true || reading)
 			return true;
 		return dependency(message, display.data.value);
 	}
@@ -136,7 +173,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		unsubscribers = (Object.keys(options.dependsOn) as MessageType[]).map(type =>
 			realtime.onChannel(channel, type, (message) => {
 				if (touches(type, message))
-					queueRefresh();
+					follow();
 			}));
 	}, { immediate: true });
 

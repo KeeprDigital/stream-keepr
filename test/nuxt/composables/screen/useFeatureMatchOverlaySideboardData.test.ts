@@ -53,6 +53,12 @@ function announcePlayerUpdated(player: Record<string, unknown>) {
 	call?.[2]({ eventId: 1, player });
 }
 
+/** Another browser resolved an unresolved deck card; no Player revision moves (#648). */
+function announceCardsResolved(playerIds: number[]) {
+	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'playerDeck:cardsResolved');
+	call?.[2]({ eventId: 1, deckIds: playerIds.map(id => id * 10), playerIds } as never);
+}
+
 function deckListItem(playerSide: 'player1' | 'player2', id = `deck-${playerSide}`) {
 	return { id, type: 'deck-list' as const, playerSide };
 }
@@ -313,6 +319,48 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 		expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+	});
+
+	describe('a resolved deck card, which moves no Player revision (#648)', () => {
+		beforeEach(() => {
+			mockBuildDeckListArrays.mockImplementation((cards: Array<{ name: string }>) => ({
+				mainboard: [],
+				sideboard: cards.map(card => enrichedCard(card.name, `https://img.test/${card.name}.jpg`)),
+			}));
+		});
+
+		it('re-reads a side whose Player\'s Deck Lists were rewritten, and not for another Player', async () => {
+			config.value = overlayConfig([deckListItem('player1')]);
+			match.value = slotMatch();
+			const { sideboards } = mountSideboardData();
+			await flushPromises();
+			expect(sideboards.value.player1).toEqual([{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/Duress.jpg' }]);
+
+			mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+			announceCardsResolved([9]);
+			await flushPromises();
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
+
+			announceCardsResolved([5, 9]);
+			await flushPromises();
+
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+			expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+		});
+
+		it('swaps in the rewritten sideboard even while its card data is still degraded', async () => {
+			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+			config.value = overlayConfig([deckListItem('player1')]);
+			match.value = slotMatch();
+			const { sideboards } = mountSideboardData();
+			await flushPromises();
+
+			mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+			announceCardsResolved([5]);
+			await flushPromises();
+
+			expect(sideboards.value.player1).toEqual([{ name: 'Negate', quantity: 2, imageUrl: 'https://img.test/Negate.jpg' }]);
+		});
 	});
 
 	it('re-fetches degraded card data on the shared cadence and reports health both ways', async () => {

@@ -145,6 +145,43 @@ describe('usePlayerDeckCache', () => {
 		expect(mockFetch).toHaveBeenCalledTimes(2);
 	});
 
+	it('does not cache a read that was in flight when the cache was cleared (#648)', async () => {
+		let resolveFetch!: (value: PlayerDeckCollectionResponse) => void;
+		mockFetch.mockReturnValueOnce(new Promise<PlayerDeckCollectionResponse>((resolve) => {
+			resolveFetch = resolve;
+		}));
+		mockFetch.mockResolvedValue(collection([deck({ name: 'After' })]));
+		const cache = usePlayerDeckCache();
+		const updatedAt = new Date('2026-01-01');
+
+		// Served before a resolution committed, delivered after it was announced.
+		const stale = cache.fetchDeck(1, 1, updatedAt);
+		clearPlayerDeckCache();
+		resolveFetch(collection([deck({ name: 'Before' })]));
+		await stale;
+
+		expect(cache.getCachedDeck(1)).toBeNull();
+		expect((await cache.fetchDeck(1, 1, updatedAt))?.name).toBe('After');
+	});
+
+	it('does not cache a read of a Player whose cached Deck Lists were dropped while it was in flight (#648)', async () => {
+		let resolveFetch!: (value: PlayerDeckCollectionResponse) => void;
+		mockFetch.mockReturnValueOnce(new Promise<PlayerDeckCollectionResponse>((resolve) => {
+			resolveFetch = resolve;
+		}));
+		mockFetch.mockResolvedValue(collection([deck({ name: 'After' })]));
+		const cache = usePlayerDeckCache();
+		const updatedAt = new Date('2026-01-01');
+
+		const stale = cache.fetchDeck(1, 1, updatedAt);
+		cache.clearCachedDeck(1);
+		resolveFetch(collection([deck({ name: 'Before' })]));
+		await stale;
+
+		expect(cache.getCachedDeck(1)).toBeNull();
+		expect((await cache.fetchDeck(1, 1, updatedAt))?.name).toBe('After');
+	});
+
 	it('updates cached display details after review without replacing submitted deck content', async () => {
 		const importedDeck = deck({ name: 'Imported Name', submittedName: 'Imported Name', cards: [card()] });
 		mockFetch.mockResolvedValueOnce(collection([importedDeck]));

@@ -37,6 +37,9 @@ The reserve portion of a Deck List, exchanged with Mainboard cards between games
 **Board Selection**:
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
 
+**Unresolved Deck Card**:
+A Deck List entry imported by **Melee Sync** whose name matched no known card. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031).
+
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 
@@ -177,7 +180,7 @@ The client-side module owning which Event Data this client consumes, so **Reconn
 _Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:
-The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.
+The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, and **Reconnect Resync**. A message heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Guarded Sequence**:
@@ -634,7 +637,7 @@ _Avoid_: Dummy data, test data
 - A **Screen** has exactly one current **Screen Mode**
 - A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, or one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled
 - A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the whole **Event** is the cascade exception
-- Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0031)
+- Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0032)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame
 - A graphics **Screen Output** uses one stable Screen URL with an output selection; an omitted or invalid selection renders the **Overlay Output**
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying

@@ -108,7 +108,10 @@ Stop dev servers with Ctrl-C (SIGINT) or SIGTERM. A server killed with SIGKILL
 or SIGHUP strands its `workerd` process, which then holds memory and sqlite
 locks. `pnpm dev`, `pnpm preview`, their `:bypass` variants, `pnpm
 worker:smoke`, and the integration suite reap orphans on start; `pnpm reap`
-does it on demand and only ever kills `workerd` whose parent is gone.
+does it on demand. It only ever kills `workerd` whose parent is gone and whose
+binary lives in a checkout Git lists for this repository (`git worktree list`):
+the main checkout, worktrees nested under it, and worktrees anywhere else. A
+reap from any one checkout covers them all; other repositories are untouched.
 
 ### Local auth bypass
 

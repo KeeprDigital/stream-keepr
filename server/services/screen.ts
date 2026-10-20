@@ -22,7 +22,7 @@ import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAss
 
 /**
  * Clears every Deck Source in the Event naming one of `playerIds` to no Player,
- * as a new Screen version (ADR-0031). Batch it ahead of the delete of those
+ * as a new Screen version (ADR-0032). Batch it ahead of the delete of those
  * Players: the Screen guard triggers prove a Deck Source's Player exists, so a
  * Screen left naming a deleted Player could never be written again (#651).
  */

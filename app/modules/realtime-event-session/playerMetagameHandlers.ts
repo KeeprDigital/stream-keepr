@@ -22,6 +22,10 @@ export function createPlayerMetagameRealtimeHandlers({ accept }: Options) {
 			usePlayerDeckStore().applyRemoteReviewed(data);
 			useMetagameStore().applyRemoteInvalidated();
 		}),
+		'playerDeck:cardsResolved': accept('playerDeck:cardsResolved', (data) => {
+			usePlayerDeckStore().applyRemoteCardsResolved(data);
+			useMetagameStore().applyRemoteInvalidated();
+		}),
 
 		'archetype:created': accept('archetype:created', (data) => {
 			useArchetypeStore().applyRemoteCreated(data);
