@@ -248,6 +248,54 @@ describe('useScreenModeFreshness', () => {
 		});
 	});
 
+	describe('failed read', () => {
+		it('repeats a failed read on the slow cadence while connected, until one answers', async () => {
+			vi.useFakeTimers();
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			await vi.advanceTimersByTimeAsync(0);
+
+			// The read a change asked for fails: nothing else would ask again.
+			read.mockRejectedValueOnce(new Error('unavailable')).mockRejectedValueOnce(new Error('unavailable'));
+			deliver(1, 'player:updated', {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(read).toHaveBeenCalledTimes(2);
+			expect(freshness.data.value.label).toBe('read 1');
+
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			expect(read).toHaveBeenCalledTimes(3);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			expect(read).toHaveBeenCalledTimes(4);
+			expect(freshness.data.value.label).toBe('read 4');
+
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 3);
+			expect(read).toHaveBeenCalledTimes(4);
+		});
+
+		it('does not repeat a failed read the mode has since stopped selecting', async () => {
+			vi.useFakeTimers();
+			const { read, selection } = harness();
+			read.mockRejectedValueOnce(new Error('unavailable'));
+			await vi.advanceTimersByTimeAsync(0);
+
+			selection.value = null;
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+
+		it('stops repeating when disposed', async () => {
+			vi.useFakeTimers();
+			const { read, scope } = harness();
+			read.mockRejectedValueOnce(new Error('unavailable'));
+			await vi.advanceTimersByTimeAsync(0);
+
+			scope.stop();
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+	});
+
 	describe('reconnect', () => {
 		async function dropAndComeBack(transport: ReturnType<typeof fakeTransport>['transport']) {
 			transport.connectionState = 'suspended';

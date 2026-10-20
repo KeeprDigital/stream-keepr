@@ -5,14 +5,14 @@ import type { CounterTypeConfig } from '~~/shared/types/game';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
 import type { DeckSource } from '~~/shared/types/screenConfig';
+import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 import { counterConfigsForDeckCounterTypes } from '~~/shared/utils/deckCounters';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
-import { DECK_CARD_DATA_REFETCH_MS } from '~/composables/data/useScryfallBatch';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 interface DeckDisplayState {
 	version: number;
@@ -39,12 +39,61 @@ type LoadedDeckSource
 	= { type: 'player'; playerId: number }
 		| { type: 'broadcast'; broadcastDeckListId: number };
 
-function loadedDeckSourcesMatch(left: LoadedDeckSource | undefined, right: LoadedDeckSource): boolean {
-	if (!left)
-		return false;
-	return right.type === 'player'
-		? left.type === 'player' && left.playerId === right.playerId
-		: left.type === 'broadcast' && left.broadcastDeckListId === right.broadcastDeckListId;
+/** The Deck Source a configuration selects; `null` while it selects no Player. */
+function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
+	if (source.type === 'broadcast')
+		return { type: 'broadcast', broadcastDeckListId: source.broadcastDeckListId };
+	return source.playerId === null ? null : { type: 'player', playerId: source.playerId };
+}
+
+/** One Deck Source as one comparable value. */
+function deckSourceKey(source: LoadedDeckSource): string {
+	return source.type === 'player' ? `player:${source.playerId}` : `broadcast:${source.broadcastDeckListId}`;
+}
+
+/** What one read of the selected Deck Source answers. */
+type DeckSourceRead
+	= { type: 'player'; player: Player; deck: PlayerDeckResponse | null }
+		| { type: 'broadcast'; list: BroadcastDeckListResponse };
+
+function readRevision(read: DeckSourceRead | null): number | null | undefined {
+	if (!read)
+		return undefined;
+	return read.type === 'player' ? deckSourceStamp(read.player.updatedAt) : read.list.revision;
+}
+
+/**
+ * The Event Data a Deck Source is read from. An edit to a Player's deck rolls
+ * their `updatedAt` (#483), and a Broadcast Deck List carries its revision, so
+ * an announcement at the revision already held carries nothing new. A Melee
+ * sync or a deck review changes what a Player's deck shows without one.
+ */
+function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
+	const selectedPlayerId = () => {
+		const source = selected();
+		return source?.type === 'player' ? source.playerId : null;
+	};
+	const selectedListId = () => {
+		const source = selected();
+		return source?.type === 'broadcast' ? source.broadcastDeckListId : null;
+	};
+	const showsPlayer = () => selectedPlayerId() !== null;
+	const showsArchetype = (archetypeId: number, held: DeckSourceRead | null) =>
+		held?.type === 'player' && held.deck?.archetypeId === archetypeId;
+
+	return {
+		'player:updated': ({ player }, held) =>
+			player.id === selectedPlayerId() && deckSourceStamp(player.updatedAt) !== readRevision(held),
+		'playerDeck:reviewed': ({ deck }) => deck.playerId === selectedPlayerId(),
+		// A reviewed deck shows its Archetype's name and colours.
+		'archetype:updated': ({ archetype }, held) => showsArchetype(archetype.id, held),
+		'archetype:deleted': ({ archetypeId }, held) => showsArchetype(archetypeId, held),
+		'melee:dataReset': showsPlayer,
+		'melee:playersSynced': showsPlayer,
+		'melee:decklistsSynced': showsPlayer,
+		'broadcastDeckList:updated': ({ listId, revision }, held) =>
+			listId === selectedListId() && revision !== readRevision(held),
+	};
 }
 
 function computeDeckStats(cards: Array<{ quantity: number; compartment: string; cardType: string | null }>): Array<{ type: string; count: number }> {
@@ -170,41 +219,79 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 }
 
 export function useDeckModeData() {
-	const { screen, eventId, assetCapability, cardDataHealth } = useScreenContext();
+	const { eventId, assetCapability, cardDataHealth } = useScreenContext();
 	const config = useScreenModeConfig('deck');
 
 	const outputReads = useScreenOutputReads();
 	const broadcastDeckLists = useScreenOutputBroadcastDeckListRepository();
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
-	const realtime = tryUseRealtime();
 
-	const loading = ref(false);
-	const error = ref<string | null>(null);
 	const displayedDeck = ref<DeckDisplayState | null>(null);
 	const pendingDeck = ref<DeckDisplayState | null>(null);
 	const pendingSwapVersion = ref(0);
+	const buildFailed = ref(false);
 	let deckVersion = 0;
-	let canonicalRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const selectedSource = computed(() => selectedDeckSource(config.value.deckSource));
+	const isSelected = (source: LoadedDeckSource) =>
+		!!selectedSource.value && deckSourceKey(selectedSource.value) === deckSourceKey(source);
 
 	/**
-	 * The reload-free recovery path (#465): a degraded deck re-fetches itself on
-	 * a slow cadence until a load resolves completely, the selection changes, or
+	 * The authoritative read of the selected Deck Source, through the Screen
+	 * (#604): its capability reaches the Player the Deck mode selects, and only
+	 * that Player, or the Broadcast Deck List the Screen selects.
+	 */
+	async function readDeckSource(): Promise<DeckSourceRead | null> {
+		const source = selectedSource.value;
+		const scope = outputReads.scope.value;
+		if (!source || !scope)
+			return null;
+		if (source.type === 'player') {
+			const { player, decks } = await outputReads.playerDecks(source.playerId);
+			return { type: 'player', player, deck: selectPlayerDeck(decks) ?? null };
+		}
+		const list = await broadcastDeckLists.getSelected(scope.eventId, scope.screenId, assetCapability?.value);
+		return { type: 'broadcast', list };
+	}
+
+	const freshness = useScreenModeFreshness<DeckSourceRead | null>({
+		eventId,
+		source: () => selectedSource.value && outputReads.scopeKey.value
+			? `${outputReads.scopeKey.value}:${deckSourceKey(selectedSource.value)}`
+			: null,
+		read: readDeckSource,
+		initialData: null,
+		errorMessage: 'Failed to load deck',
+		dependsOn: deckDependencies(() => selectedSource.value),
+	});
+
+	/**
+	 * The input the deck on program was last built from, or is being built from;
+	 * `key` is `null` once that build failed, so the next read builds it again.
+	 */
+	let built: { input: DeckDisplayInput; key: string | null } | null = null;
+
+	/**
+	 * The reload-free recovery path (#465): a degraded deck rebuilds itself on a
+	 * slow cadence until a build resolves completely, the selection changes, or
 	 * the surface goes away. Program keeps the degraded rendering the whole time
 	 * — the recovered deck arrives through the ordinary staged swap. Degradation
 	 * is deliberately not `error`: an output on program never blanks for missing
 	 * card images, and the report lets a control surface say so while the
-	 * broadcast output does not.
+	 * broadcast output does not. Card data is not Event Data: a rebuild re-reads
+	 * Scryfall, while the Deck Source stays fresh through the read above.
 	 */
 	const degradedRefetch = useDegradedRefetch<DeckDisplayState>({
 		refetch: () => {
-			void reloadSelectedSource();
+			if (built && isSelected(built.input.source))
+				void buildDeck(built.input);
 		},
 		// Identity is what is on program: a rebuild of the same source whose
 		// authoritative revision has not changed carries nothing new.
 		isUnchanged: (next) => {
 			const current = displayedDeck.value;
-			return loadedDeckSourcesMatch(current?.source, next.source)
-				&& current?.sourceRevision === next.sourceRevision;
+			return !!current && deckSourceKey(current.source) === deckSourceKey(next.source)
+				&& current.sourceRevision === next.sourceRevision;
 		},
 		report: (degraded) => {
 			if (cardDataHealth) {
@@ -224,39 +311,25 @@ export function useDeckModeData() {
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
+	const loading = freshness.loading;
+
+	/** Program never blanks for an error: one shows only while nothing is on air. */
+	const error = computed(() => {
+		if (displayedDeck.value)
+			return null;
+		const read = freshness.data.value;
+		if (read && !displayInput(read))
+			return 'Player has no deck list';
+		return freshness.error.value ?? (buildFailed.value ? 'Failed to load deck' : null);
+	});
 
 	onScopeDispose(() => {
-		clearCanonicalRetry();
 		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {
 			cardDataHealth.value = 'complete';
 		}
 	});
-
-	function clearDeck() {
-		clearCanonicalRetry();
-		displayedDeck.value = null;
-		pendingDeck.value = null;
-		error.value = null;
-	}
-
-	function clearCanonicalRetry() {
-		if (canonicalRetryTimer !== null) {
-			clearTimeout(canonicalRetryTimer);
-			canonicalRetryTimer = null;
-		}
-	}
-
-	function scheduleCanonicalRetry() {
-		if (degradedRefetch.keepCadence())
-			return;
-		clearCanonicalRetry();
-		canonicalRetryTimer = setTimeout(() => {
-			canonicalRetryTimer = null;
-			void reloadSelectedSource();
-		}, DECK_CARD_DATA_REFETCH_MS);
-	}
 
 	function queuePendingDeck(nextDeck: DeckDisplayState | null) {
 		pendingDeck.value = nextDeck;
@@ -266,9 +339,6 @@ export function useDeckModeData() {
 	function commitPendingDeck() {
 		displayedDeck.value = pendingDeck.value;
 		pendingDeck.value = null;
-		if (displayedDeck.value) {
-			error.value = null;
-		}
 	}
 
 	interface DeckDisplayInput {
@@ -381,8 +451,18 @@ export function useDeckModeData() {
 		};
 	}
 
+	/** What a read shows; `null` for a Player with no deck list. */
+	function displayInput(read: DeckSourceRead): DeckDisplayInput | null {
+		if (read.type === 'broadcast')
+			return broadcastDisplayInput(read.list);
+		return read.deck && read.deck.cards.length > 0 ? playerDisplayInput(read.player, read.deck) : null;
+	}
+
 	function stageLoadedDeck(nextDeck: DeckDisplayState, degraded: boolean) {
-		clearCanonicalRetry();
+		// A still-degraded rebuild of the unchanged deck keeps the rendering
+		// rather than cross-fading to an identical placeholder deck on every
+		// cadence tick. A rebuild whose source has since changed carries new
+		// cards and must still reach program.
 		if (degradedRefetch.completeLoad(degraded, nextDeck) === 'keep')
 			return;
 		if (!displayedDeck.value) {
@@ -392,189 +472,51 @@ export function useDeckModeData() {
 		queuePendingDeck(nextDeck);
 	}
 
-	async function loadPlayerDeck(playerId: number) {
+	async function buildDeck(input: DeckDisplayInput) {
 		const flight = degradedRefetch.begin();
-		clearCanonicalRetry();
-		const evtId = eventId.value;
-		if (!evtId) {
-			if (!displayedDeck.value) {
-				error.value = 'No event loaded';
-			}
-			return;
-		}
-
-		error.value = null;
-
+		const entry: NonNullable<typeof built> = { input, key: JSON.stringify(input) };
+		built = entry;
+		buildFailed.value = false;
 		try {
-			// Read through the Screen (#604): its capability reaches the Player the
-			// Deck mode selects, and only that Player.
-			const { player, decks } = await outputReads.playerDecks(playerId);
-			if (flight.stale) {
+			const { deck: nextDeck, degraded } = await buildDeckDisplayState(input);
+			if (flight.stale)
+				return;
+			if (!isSelected(input.source)) {
+				built = null;
 				return;
 			}
-
-			const deckResponse = selectPlayerDeck(decks);
-			if (!deckResponse || deckResponse.cards.length === 0) {
-				degradedRefetch.keepCadence();
-				if (!displayedDeck.value) {
-					error.value = 'Player has no deck list';
-				}
-				return;
-			}
-
-			const { deck: nextDeck, degraded } = await buildDeckDisplayState(playerDisplayInput(player, deckResponse));
-			if (flight.stale) {
-				return;
-			}
-
-			// A still-degraded re-fetch of the unchanged deck keeps the rendering
-			// rather than cross-fading to an identical placeholder deck on every
-			// cadence tick. A rebuild whose source has since changed carries new
-			// cards and must still reach program.
 			stageLoadedDeck(nextDeck, degraded);
 		}
 		catch (err) {
-			console.error('Failed to load player deck:', err);
-			if (flight.stale) {
+			console.error('Failed to build deck:', err);
+			if (flight.stale)
 				return;
-			}
-
+			entry.key = null;
+			buildFailed.value = true;
 			degradedRefetch.keepCadence();
-
-			if (!displayedDeck.value) {
-				error.value = 'Failed to load deck';
-			}
 		}
-	}
-
-	async function loadBroadcastDeck() {
-		const flight = degradedRefetch.begin();
-		clearCanonicalRetry();
-		const evtId = eventId.value;
-		const screenId = screen.value?.id;
-		if (!evtId || !screenId) {
-			if (!displayedDeck.value)
-				error.value = 'No Screen loaded';
-			scheduleCanonicalRetry();
-			return;
-		}
-
-		error.value = null;
-		try {
-			const detail = await broadcastDeckLists.getSelected(evtId, screenId, assetCapability?.value);
-			if (flight.stale)
-				return;
-			const { deck: nextDeck, degraded } = await buildDeckDisplayState(broadcastDisplayInput(detail));
-			if (flight.stale)
-				return;
-			stageLoadedDeck(nextDeck, degraded);
-		}
-		catch (err) {
-			console.error('Failed to load Broadcast Deck List:', err);
-			if (flight.stale)
-				return;
-			scheduleCanonicalRetry();
-			if (!displayedDeck.value)
-				error.value = 'Failed to load deck';
-		}
-	}
-
-	function loadSelectedSource(source: DeckSource): Promise<void> | undefined {
-		if (source.type === 'broadcast')
-			return loadBroadcastDeck();
-		if (source.playerId !== null)
-			return loadPlayerDeck(source.playerId);
-	}
-
-	function reloadSelectedSource() {
-		return loadSelectedSource(config.value.deckSource);
-	}
-
-	watch(
-		() => config.value.deckSource,
-		async (source) => {
-			const load = loadSelectedSource(source);
-			if (load) {
-				await load;
-			}
-			else {
-				clearCanonicalRetry();
-				error.value = null;
-				degradedRefetch.settle();
-				if (displayedDeck.value) {
-					queuePendingDeck(null);
-				}
-				else {
-					clearDeck();
-				}
-			}
-		},
-		{ immediate: true },
-	);
-
-	/** The revision of the selected Player's deck on program, or staged to replace it. */
-	function programRevisionFor(playerId: number): number | null | undefined {
-		const deck = pendingDeck.value ?? displayedDeck.value;
-		return deck && loadedDeckSourcesMatch(deck.source, { type: 'player', playerId })
-			? deck.sourceRevision
-			: undefined;
 	}
 
 	/**
-	 * Live-follow of the selected Player (#483): a deck edited mid-display (a Melee
-	 * re-sync, an operator edit) rolls the Player's `updatedAt` through
-	 * `player:updated`, and that revision is the deck's freshness key, so the
-	 * rebuilt deck arrives through the ordinary staged swap.
-	 *
-	 * Heard on the Event channel itself rather than through a store-held roster,
-	 * which an output cannot load (#604). A load follows any revision that differs
-	 * from program's — including one announced while the first read is still in
-	 * flight, which that read may have been served before, and one for a Player
-	 * whose deck was empty when it was selected.
+	 * Program follows what the Deck Source read answers. A read that answers the
+	 * deck already on program, or being built for it, changes nothing: the
+	 * module re-reads on every resync and degraded tick, and an unchanged deck
+	 * must not cross-fade to itself. A Player with no deck list keeps program.
 	 */
-	function followPlayerUpdate(player: Pick<Player, 'id' | 'updatedAt'>) {
-		const source = config.value.deckSource;
-		if (source.type !== 'player' || source.playerId !== player.id)
+	watch(freshness.data, (read) => {
+		if (!read) {
+			built = null;
+			degradedRefetch.settle();
+			if (displayedDeck.value)
+				queuePendingDeck(null);
+			else
+				pendingDeck.value = null;
 			return;
-		if (deckSourceStamp(player.updatedAt) !== programRevisionFor(player.id))
-			void loadPlayerDeck(player.id);
-	}
-
-	let unsubscribeFromEventUpdates: (() => void)[] = [];
-	watch(eventId, (evtId) => {
-		for (const unsubscribe of unsubscribeFromEventUpdates.splice(0))
-			unsubscribe();
-		if (!realtime || !evtId)
+		}
+		const input = displayInput(read);
+		if (!input || built?.key === JSON.stringify(input))
 			return;
-		unsubscribeFromEventUpdates = [
-			realtime.onChannel(
-				eventRealtimeChannel(evtId),
-				'broadcastDeckList:updated',
-				(message) => {
-					const source = config.value.deckSource;
-					if (source.type === 'broadcast' && source.broadcastDeckListId === message.listId)
-						void loadBroadcastDeck();
-				},
-			),
-			realtime.onChannel(
-				eventRealtimeChannel(evtId),
-				'player:updated',
-				message => followPlayerUpdate(message.player),
-			),
-		];
-	}, { immediate: true });
-
-	/**
-	 * Reconnect Resync (#307): a message published while this client was suspended
-	 * is simply gone, so coming back re-reads the selected source.
-	 */
-	useReconnectResync(() => {
-		void reloadSelectedSource();
-	}, eventId, realtime);
-
-	onScopeDispose(() => {
-		for (const unsubscribe of unsubscribeFromEventUpdates.splice(0))
-			unsubscribe();
+		void buildDeck(input);
 	});
 
 	return {

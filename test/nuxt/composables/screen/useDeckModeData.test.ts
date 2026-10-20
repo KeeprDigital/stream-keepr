@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { SCREEN_MODE_DEGRADED_REFETCH_MS } from '~/modules/screen-mode/freshness';
 
 /**
  * The server's two halves of the Screen Output Player read (#604): the Player
@@ -40,6 +41,7 @@ const mockRealtime = reactive({
 
 mockNuxtImport('useScreenOutputReads', () => () => ({
 	scope: computed(() => mockEventId.value ? { eventId: mockEventId.value, screenId: mockScreen.value.id } : null),
+	scopeKey: computed(() => mockEventId.value ? `${mockEventId.value}:${mockScreen.value.id}` : null),
 	playerDecks: mockPlayerDecks,
 }));
 mockNuxtImport('useScreenOutputBroadcastDeckListRepository', () => () => ({
@@ -181,6 +183,14 @@ function playerUpdatedHandler() {
 function broadcastUpdateHandler() {
 	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'broadcastDeckList:updated');
 	return call?.[2] as ((message: { eventId: number; listId: number; revision: number }) => void) | undefined;
+}
+
+/** Any other Event message, as the Event channel delivers it. */
+function deliver(type: string, payload: Record<string, unknown>) {
+	for (const [channel, messageType, handler] of mockOnChannel.mock.calls) {
+		if (channel === 'event:1' && messageType === type)
+			(handler as unknown as (message: Record<string, unknown>) => void)({ eventId: 1, ...payload });
+	}
 }
 
 describe('useDeckModeData', () => {
@@ -342,6 +352,24 @@ describe('useDeckModeData', () => {
 
 		result.commitPendingDeck();
 		expect(result.primaryHeader.value).toBe('New revision');
+	});
+
+	it('follows only the selected Broadcast Deck List, at a revision it does not hold', async () => {
+		mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(1, 'Feature Table'));
+		mockBroadcastDeckListId.value = 23;
+		mountDeckModeData();
+		await flushPromises();
+
+		broadcastUpdateHandler()!({ eventId: 1, listId: 24, revision: 2 });
+		broadcastUpdateHandler()!({ eventId: 1, listId: 23, revision: 1 });
+		await flushPromises();
+		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(1);
+
+		// A Player edit is not the Broadcast Deck List's.
+		playerUpdatedHandler()!({ eventId: 1, player: { id: 5, name: 'Alice', updatedAt: '2026-10-15T10:05:00.000Z' } });
+		await flushPromises();
+		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(1);
+		expect(mockPlayerDecks).not.toHaveBeenCalled();
 	});
 
 	it('keeps and retries the old Broadcast revision when the canonical selected-list read fails', async () => {
@@ -648,11 +676,11 @@ describe('useDeckModeData', () => {
 	it('reports card data health through the screen context, and settles it on teardown', async () => {
 		vi.useFakeTimers();
 		try {
-			mockReadPlayer.mockResolvedValue({
-				id: 5,
+			mockReadPlayer.mockImplementation(async (_eventId: number, playerId: number) => ({
+				id: playerId,
 				name: 'Alice',
 				gameData: { type: 'mtg', deckName: 'Azorius Control', deckColors: 'WU' },
-			});
+			}));
 			mockReadDeck.mockResolvedValue(createDeckResponse([createDeckCard()]));
 			mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
 			mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [] });
@@ -761,8 +789,8 @@ describe('useDeckModeData', () => {
 			await vi.advanceTimersByTimeAsync(0);
 			expect(result.cardDataDegraded.value).toBe(true);
 
-			// The same outage takes down the deck endpoint for one cadence tick.
-			mockReadDeck.mockRejectedValueOnce(new Error('network down'));
+			// The same outage takes down card data entirely for one cadence tick.
+			mockFetchScryfallCards.mockRejectedValueOnce(new Error('network down'));
 			await vi.advanceTimersByTimeAsync(60_000);
 			expect(result.cardDataDegraded.value).toBe(true);
 
@@ -801,7 +829,8 @@ describe('useDeckModeData', () => {
 			// The operator edits the deck mid-outage: the rebuild carries new cards
 			// and must reach program even though its card data is still degraded.
 			updatedAt = '2026-08-21T01:00:00.000Z';
-			await vi.advanceTimersByTimeAsync(60_000);
+			playerUpdatedHandler()!({ eventId: 1, player: { id: 5, name: 'Alice', updatedAt } });
+			await vi.advanceTimersByTimeAsync(0);
 			expect(result.pendingSwapVersion.value).toBe(1);
 		}
 		finally {
@@ -979,6 +1008,46 @@ describe('useDeckModeData', () => {
 			await nextTick();
 			expect(mainboardNames(result)).toEqual(['Brainstorm']);
 			expect(result.pendingSwapVersion.value).toBe(1);
+		});
+
+		it('shows a Melee decklist sync or a deck review of the selected Player', async () => {
+			mockPlayerId.value = 5;
+			mountDeckModeData();
+			await flushPromises();
+
+			deliver('melee:decklistsSynced', { playerCount: 1, deckCount: 1 });
+			await flushPromises();
+			deliver('playerDeck:reviewed', { deck: { playerId: 6 } });
+			await flushPromises();
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+
+			deliver('playerDeck:reviewed', { deck: { playerId: 5 } });
+			await flushPromises();
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
+		});
+
+		it('re-reads while disconnected without re-staging a deck that has not changed', async () => {
+			vi.useFakeTimers();
+			try {
+				mockPlayerId.value = 5;
+				const result = mountDeckModeData();
+				await vi.advanceTimersByTimeAsync(0);
+
+				mockRealtime.connectionState = 'disconnected';
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+				expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
+				expect(result.pendingSwapVersion.value).toBe(0);
+
+				// The edit lands on the next cadence read, not the next message.
+				serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+				expect(result.pendingSwapVersion.value).toBe(1);
+				result.commitPendingDeck();
+				expect(mainboardNames(result)).toEqual(['Brainstorm']);
+			}
+			finally {
+				vi.useRealTimers();
+			}
 		});
 
 		it('shows a deck imported after the Player was selected without one', async () => {
