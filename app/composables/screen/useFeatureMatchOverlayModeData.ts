@@ -28,12 +28,12 @@ export function useFeatureMatchOverlayModeData() {
 	/**
 	 * The Slot, its Session, and the Match, Round and Phase it follows come
 	 * through the Screen in one read (#604). The stores hold the Slot and its
-	 * Session, which follow through the Live State Follower (#592); the Match,
+	 * Session, which follows through the Live State Follower (#592); the Match,
 	 * Round and Phase are held here, and re-read when a message touches them.
 	 */
 	const slotData = useScreenFeatureMatchSlot<OverlaySlotContext>({
 		slotId: () => config.value.featureMatchId,
-		project: read => ({ sourceMatch: read.match, round: read.round ?? undefined, phase: read.phase ?? undefined }),
+		keep: read => ({ sourceMatch: read.match, round: read.round ?? undefined, phase: read.phase ?? undefined }),
 		initialData: { sourceMatch: null, round: undefined, phase: undefined },
 		errorMessage: 'Failed to load broadcast layout data',
 		dependsOn: {

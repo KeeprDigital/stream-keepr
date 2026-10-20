@@ -342,12 +342,19 @@ describe('a capability-only Feature Match Overlay output', () => {
 		};
 	}
 
+	/** The Round each Match the Slot can follow is played in. */
+	const roundOfMatch: Record<number, { id: number; name: string }> = {
+		300: { id: 20, name: 'Round 3' },
+		301: { id: 21, name: 'Round 4' },
+	};
+
 	/** What the Screen's Slot read answers: the Slot, its Session, and the Match, Round and Phase it follows. */
 	function slotRead(activeSession: ReturnType<typeof session>, matchId = 300) {
+		const round = roundOfMatch[matchId]!;
 		return {
 			slot: { ...createWireMockFeatureMatch({ id: 11, eventId: 42, matchId, activeSessionId: activeSession.id }), activeSession },
-			match: { id: matchId, eventId: 42, roundId: matchId - 280 },
-			round: { id: matchId - 280, eventId: 42, name: `Round ${matchId - 297}`, phaseId: 5 },
+			match: { id: matchId, eventId: 42, roundId: round.id },
+			round: { ...round, eventId: 42, phaseId: 5 },
 			phase: { id: 5, eventId: 42, name: 'Swiss' },
 		};
 	}
@@ -447,6 +454,21 @@ describe('a capability-only Feature Match Overlay output', () => {
 		expect(wrapper.text()).toContain('Life 13 · Round 4');
 		expect(held()).toEqual({ sessionId: 91, sequence: 6, lifeTotal: 13 });
 		expect(useFeatureMatchStore().featureMatches.map(slot => slot.matchId)).toEqual([301]);
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('reloads a gap in the Session\'s notifications through its Screen, never starting a Session', async () => {
+		const wrapper = await mountOverlay();
+		const slotReads = api.requests.filter(request => request.path === slotPath).length;
+
+		// Sequence 4 was missed: 5 is a gap, which only a read can close.
+		api.answers.set(slotPath, () => slotRead(session(90, 5, 16)));
+		await sessionEvent(session(90, 5, 16));
+		await settleUntil(() => wrapper.text().includes('Life 16'));
+
+		expect(wrapper.text()).toContain('Life 16 · Round 3');
+		expect(held()).toEqual({ sessionId: 90, sequence: 5, lifeTotal: 16 });
+		expect(api.requests.filter(request => request.path === slotPath)).toHaveLength(slotReads + 1);
 		expect(privateRequests()).toEqual([]);
 	});
 

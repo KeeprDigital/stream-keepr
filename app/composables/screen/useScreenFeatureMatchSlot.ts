@@ -8,10 +8,10 @@ interface ScreenFeatureMatchSlotOptions<T> {
 	/** The Slot the mode shows; `null` while it shows none. */
 	slotId: () => number | null;
 	/** What the mode keeps of a Slot read besides the Slot and its Session, which the stores hold. */
-	project: (read: ScreenOutputFeatureMatchResponse) => T;
+	keep: (read: ScreenOutputFeatureMatchResponse) => T;
 	initialData: T;
 	errorMessage: string;
-	/** The Event Data what `project` keeps depends on. The Slot and its Session follow on their own. */
+	/** The Event Data what `keep` holds depends on. The stores keep the Slot and its Session current. */
 	dependsOn?: ScreenModeDependencies<T>;
 }
 
@@ -39,6 +39,9 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 	const outputReads = useScreenOutputReads();
 	onScopeDispose(featureMatchStateStore.readSessionsAsScreenOutput(outputReads.featureMatchSession));
 
+	/** The Slot what is shown was kept from. */
+	let keptSlotId: number | null = null;
+
 	const freshness = useScreenModeFreshness<T>({
 		eventId,
 		source: () => {
@@ -46,12 +49,15 @@ export function useScreenFeatureMatchSlot<T>(options: ScreenFeatureMatchSlotOpti
 			return outputReads.scopeKey.value && slotId ? `${outputReads.scopeKey.value}:${slotId}` : null;
 		},
 		read: async (): Promise<T> => {
-			const read = await outputReads.featureMatchSlot(options.slotId()!);
+			const slotId = options.slotId()!;
+			const read = await outputReads.featureMatchSlot(slotId);
 			// A Slot read before a newer promotion or clearing is left behind whole,
-			// so nothing it says replaces what is shown.
+			// so nothing it says replaces what is shown — unless what is shown
+			// belongs to the Slot this mode has just left.
 			if (!featureMatchStore.holdFeatureMatch(read.slot))
-				return freshness.data.value;
-			return options.project(read);
+				return keptSlotId === slotId ? freshness.data.value : options.initialData;
+			keptSlotId = slotId;
+			return options.keep(read);
 		},
 		initialData: options.initialData,
 		errorMessage: options.errorMessage,

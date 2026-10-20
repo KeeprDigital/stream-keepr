@@ -116,6 +116,17 @@ function pushPreviewConfig(config: FeatureMatchOverlayModeConfig) {
 	}));
 }
 
+/** A live Screen Output on Slot 11, whose Session state is already cached. */
+function mountBoundOutput() {
+	const config = layoutNamed('saved-source');
+	config.featureMatchId = 11;
+	mockFeatureMatchStateStore.featureMatchStates = new Map([[11, {}]]);
+	return mountOverlay({
+		isPreview: ref(false),
+		screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': config } } as never),
+	});
+}
+
 describe('useFeatureMatchOverlayModeData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -280,6 +291,21 @@ describe('useFeatureMatchOverlayModeData', () => {
 			wrapper.unmount();
 		});
 
+		it('shows nothing of the Slot it left when the newly selected Slot\'s read is overtaken', async () => {
+			const { wrapper, data } = mountOverlay({ isPreview: ref(true) });
+			pushPreviewConfig(boundConfig(11));
+			await flushPromises();
+			expect(data().round.value).toMatchObject({ name: 'Round 3' });
+
+			mockFeatureMatchStore.holdFeatureMatch.mockReturnValueOnce(false);
+			pushPreviewConfig(boundConfig(12));
+			await flushPromises();
+
+			expect(data().round.value).toBeUndefined();
+			expect(data().sourceMatch.value).toBeNull();
+			wrapper.unmount();
+		});
+
 		it('reads the Slot an editor preview pushes, which its author has not saved', async () => {
 			const { wrapper } = mountOverlay({ isPreview: ref(true) });
 			await flushPromises();
@@ -352,17 +378,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 * way to find out what was missed is to ask (#307).
 	 */
 	describe('a connection that was suspended and came back', () => {
-		/** A live Screen Output on a Slot whose Session state is already cached. */
-		function mountBoundOutput() {
-			const config = layoutNamed('saved-source');
-			config.featureMatchId = 11;
-			mockFeatureMatchStateStore.featureMatchStates = new Map([[11, {}]]);
-			return mountOverlay({
-				isPreview: ref(false),
-				screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': config } } as never),
-			});
-		}
-
 		async function suspendAndResume() {
 			mockConnectionState.value = 'suspended';
 			await nextTick();
@@ -425,15 +440,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 * output, so the Event messages that change them say when to read again.
 	 */
 	describe('the Event Data the Overlay holds', () => {
-		function mountBoundOutput() {
-			const config = layoutNamed('saved-source');
-			config.featureMatchId = 11;
-			return mountOverlay({
-				isPreview: ref(false),
-				screen: ref({ id: 42, modeConfigs: { 'feature-match-overlay': config } } as never),
-			});
-		}
-
 		it('re-reads when its Slot moves to another Match', async () => {
 			const { wrapper, data } = mountBoundOutput();
 			await flushPromises();
