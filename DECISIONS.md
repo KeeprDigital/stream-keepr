@@ -794,8 +794,10 @@ The close, open and receipt-forgetting sequence was written by hand in three pla
 - A Slot write that opens a Session now re-resolves bindings twice: once for the Session and once for the Slot's own `featureMatch:updated`.
 - Every Feature Match Session transition selects its Slots through one JSON-array subquery. So a whole Event's Slots open in a handful of statements, and the Melee reset is no longer its own variant.
 - ADR-0004 is unaffected: a command's notification still carries the difference.
+- A promotion that commits but loses to a later one before its outcome is decided announces nothing (#576). That includes the new Sessions of the Slots it cleared. Peers show those Slots' previous Sessions until the next resync or Slot message. This was accepted because it needs two operators promoting the same Match within moments, and it corrects itself.
 
 ### Rejected alternatives
 
+- **Announce a lost promotion's cleared Slots' Sessions.** Peers would see part of a promotion its operator was told failed.
 - **Announce what the caller asked for.** A Melee reset that skipped a manually rebound Slot would announce a Session that never opened.
 - **Announce ended Feature Match Sessions too.** Their successor's `SessionStarted` already moves every follower past them.
