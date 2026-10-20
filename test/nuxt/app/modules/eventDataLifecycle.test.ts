@@ -252,6 +252,34 @@ describe('event data lifecycle module', () => {
 		});
 	});
 
+	it('leaves behind a loaded or answered item its store does not find current', async () => {
+		const repository = { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() };
+		const lifecycle = useEventDataLifecycle<Item, { name: string }, { name: string }>({
+			repository,
+			entityLabel: 'Item',
+			isCurrent: item => item.name !== 'Behind',
+		});
+		const held = [{ id: 1, eventId: 10, name: 'Held' }, { id: 2, eventId: 10, name: 'Held' }];
+		repository.list.mockResolvedValueOnce(held);
+		await lifecycle.loadByEventId(10);
+
+		repository.list.mockResolvedValueOnce([
+			{ id: 1, eventId: 10, name: 'Behind' },
+			{ id: 2, eventId: 10, name: 'Loaded' },
+			{ id: 3, eventId: 10, name: 'Behind' },
+		]);
+		await lifecycle.loadByEventId(10);
+		repository.update.mockResolvedValueOnce({ id: 2, eventId: 10, name: 'Behind' });
+		const answer = await lifecycle.update(10, 2, { name: 'Saving' });
+
+		expect(answer).toEqual({ id: 2, eventId: 10, name: 'Behind' });
+		expect(lifecycle.items.value).toEqual([
+			{ id: 1, eventId: 10, name: 'Held' },
+			{ id: 2, eventId: 10, name: 'Saving' },
+			{ id: 3, eventId: 10, name: 'Behind' },
+		]);
+	});
+
 	it('resets lifecycle state and calls reset hook', async () => {
 		const harness = createHarness();
 		harness.repository.list.mockResolvedValue([{ id: 1, eventId: 10, name: 'One' }]);

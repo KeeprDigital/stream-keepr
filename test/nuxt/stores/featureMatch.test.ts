@@ -289,6 +289,89 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
+	// ── Slot answers overtaken by a newer Session epoch (#635) ──
+
+	/**
+	 * A Slot's Session orders it (ADR-0026): a settings answer or a load carrying a
+	 * Session from an epoch this client has seen end was read before a newer Slot
+	 * Promotion or clearing, so that Slot is left behind whole.
+	 */
+	describe('a Slot answer read before a newer Session epoch', () => {
+		const stateStore = () => useFeatureMatchStateStore();
+
+		beforeEach(() => {
+			stateStore().$reset();
+		});
+
+		function slotInEpoch(id: number, sessionId: number, overrides: Record<string, unknown> = {}) {
+			return createMockFeatureMatch({
+				id,
+				eventId: 1,
+				matchId: sessionId,
+				activeSessionId: sessionId,
+				activeSession: {
+					id: sessionId,
+					eventId: 1,
+					slotId: id,
+					status: 'active',
+					sourceSnapshot: {},
+					currentState: createMockFeatureMatchState(),
+					sequence: 1,
+					closedAt: null,
+					createdAt: new Date('2026-01-01T00:00:00.000Z'),
+					updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+				},
+				...overrides,
+			} as any);
+		}
+
+		function announce(slot: ReturnType<typeof slotInEpoch>) {
+			ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
+		}
+
+		it('a settings answer from an ended epoch does not replace the held Slot', async () => {
+			store.featureMatches = [slotInEpoch(1, 501)];
+			stateStore().offerSlotSession(store.featureMatches[0]!);
+			const update = deferred<ReturnType<typeof slotInEpoch>>();
+			mockRepo.update.mockReturnValueOnce(update.promise);
+
+			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
+			const promoted = slotInEpoch(1, 502, { bestOf: 5 });
+			announce(promoted);
+			update.resolve(slotInEpoch(1, 501, { bestOf: 5 }));
+			await updating;
+
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('a same-epoch settings answer replaces the held Slot', async () => {
+			store.featureMatches = [slotInEpoch(1, 501)];
+			stateStore().offerSlotSession(store.featureMatches[0]!);
+			const answered = slotInEpoch(1, 501, { bestOf: 5 });
+			mockRepo.update.mockResolvedValueOnce(answered);
+
+			await store.updateFeatureMatch(1, 1, { bestOf: 5 });
+
+			expect(store.featureMatches).toEqual([answered]);
+		});
+
+		it('a load keeps a Slot held from a newer epoch and applies the rest', async () => {
+			mockRepo.list.mockResolvedValueOnce([slotInEpoch(1, 501), slotInEpoch(2, 601)]);
+			await store.loadFeatureMatchesByEventId(1);
+			const load = deferred<ReturnType<typeof slotInEpoch>[]>();
+			mockRepo.list.mockReturnValueOnce(load.promise);
+
+			const loading = store.loadFeatureMatchesByEventId(1);
+			const promoted = slotInEpoch(1, 502);
+			announce(promoted);
+			const sameEpoch = slotInEpoch(2, 601, { bestOf: 5 });
+			load.resolve([slotInEpoch(1, 501, { bestOf: 5 }), sameEpoch]);
+			await loading;
+
+			expect(store.featureMatches).toEqual([promoted, sameEpoch]);
+		});
+	});
+
 	// ── Writes that outlive their Event (#606) ──
 
 	/**
