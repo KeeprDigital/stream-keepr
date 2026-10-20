@@ -87,7 +87,8 @@ jobs:
       # run is the backstop for what the local per-file ESLint cache can miss
       # (README § Testing).
       - run: pnpm lint
-      # Includes the silent-video validator Worker's own program (#618).
+      # Includes the silent-video validator Worker's own program (#618), and
+      # fails when either committed worker-configuration.d.ts is stale.
       - run: pnpm typecheck
       # With --coverage, so the thresholds in vitest.shared.ts fail these steps
       # when coverage drops below them (#469).
