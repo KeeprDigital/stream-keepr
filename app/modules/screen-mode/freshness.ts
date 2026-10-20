@@ -61,9 +61,11 @@ export interface ScreenModeFreshnessOptions<T> {
  * - **retry** — on the same slow cadence after the latest read failed, because
  *   the change that asked for it will not be announced again.
  *
- * Only a load supersedes the read in flight. Any other reason heard meanwhile
- * asks for one follow-up once it settles, so a burst costs at most one more
- * read however many messages it publishes.
+ * A message heard while a read is in flight asks for one follow-up once that
+ * read settles rather than superseding it, so a burst published one message at
+ * a time costs one more read per read in flight, not one per message (#650).
+ * Every other reason supersedes, as does a message heard once a read has run
+ * for the slow cadence, since a read can hang where a reason must not.
  *
  * Every read is stale-while-revalidate: a rendering holds what it shows until a
  * newer read answers, and a failed re-read never blanks program.
@@ -82,28 +84,30 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		}
 	}
 
-	/** Whether a read is in flight, and whether a reason arrived since it began. */
-	let reading = false;
-	let followUp = false;
+	/** The read in flight: when it began, and whether a load asked for it. */
+	let reading: { since: number; load: boolean } | null = null;
+	/** Whether a message heard since the read in flight began asks for another. */
+	let followUpAsked = false;
 
 	/** Reads now, superseding any read in flight. */
-	function refresh() {
+	function refresh(load = false) {
 		stopRetry();
-		followUp = false;
-		reading = false;
+		followUpAsked = false;
+		reading = null;
 		const flight = reads.begin();
 		if (options.source() == null) {
 			display.clear();
 			return;
 		}
-		reading = true;
+		reading = { since: Date.now(), load };
 		void display.refresh(async () => {
 			try {
 				const answer = await options.read();
-				// With nothing on program yet, an answer that predates a reason
-				// would only make the follow-up a second rendering: it supersedes
-				// this one instead, so its answer is the first shown (#567).
-				if (flight.current && followUp && !display.hasDisplayedData.value)
+				// A load's answer that predates a message would only make the
+				// follow-up a second rendering of the new selection: the follow-up
+				// supersedes it, so its answer is the first shown (#567). Once,
+				// so a steady stream of messages still renders.
+				if (flight.current && followUpAsked && load)
 					refresh();
 				return answer;
 			}
@@ -114,23 +118,17 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 				throw cause;
 			}
 		}, options.errorMessage).then(() => {
+			// The answer is applied: now the follow-up can start.
 			if (flight.stale)
 				return;
-			reading = false;
-			if (followUp)
+			reading = null;
+			if (followUpAsked)
 				refresh();
 		});
 	}
 
-	/**
-	 * One read for however many reasons arrive together, and one follow-up for
-	 * however many arrive while a read is in flight (#650).
-	 */
+	/** One read for however many reasons arrive together. */
 	function queueRefresh() {
-		if (reading) {
-			followUp = true;
-			return;
-		}
 		if (refreshQueued)
 			return;
 		refreshQueued = true;
@@ -140,7 +138,15 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		});
 	}
 
-	watch(options.source, refresh, { immediate: true });
+	/** One follow-up for however many messages arrive while a read is in flight. */
+	function follow() {
+		if (reading && Date.now() - reading.since < SCREEN_MODE_REREAD_MS)
+			followUpAsked = true;
+		else
+			queueRefresh();
+	}
+
+	watch(options.source, () => refresh(true), { immediate: true });
 
 	// Live-follow.
 	function touches<K extends MessageType>(type: K, message: MessageData<K>): boolean {
@@ -148,7 +154,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		if (options.source() == null || !dependency)
 			return false;
 		// What is held cannot judge a message the read in flight may predate.
-		if (dependency === true || display.loading.value)
+		if (dependency === true || reading)
 			return true;
 		return dependency(message, display.data.value);
 	}
@@ -167,7 +173,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		unsubscribers = (Object.keys(options.dependsOn) as MessageType[]).map(type =>
 			realtime.onChannel(channel, type, (message) => {
 				if (touches(type, message))
-					queueRefresh();
+					follow();
 			}));
 	}, { immediate: true });
 

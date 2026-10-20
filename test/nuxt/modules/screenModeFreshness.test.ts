@@ -206,6 +206,36 @@ describe('useScreenModeFreshness', () => {
 			expect(freshness.data.value.label).toBe('after player 4');
 		});
 
+		it('renders the follow-up\'s answer when messages keep coming through a first read', async () => {
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			const shown: string[] = [];
+			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
+			deliver(1, 'player:updated', {});
+			read.mockImplementationOnce(async () => {
+				deliver(1, 'player:updated', {});
+				return { ids: [7], label: 'follow-up' };
+			});
+			await flushPromises();
+
+			// Only the load's answer is dropped: the follow-up's lands, then the next.
+			expect(shown).toEqual(['follow-up', 'read 3']);
+		});
+
+		it('supersedes a read that has hung for the slow cadence when a message is heard', async () => {
+			vi.useFakeTimers();
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			await vi.advanceTimersByTimeAsync(0);
+
+			read.mockImplementationOnce(() => new Promise(() => {}));
+			deliver(1, 'player:updated', {});
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
+			deliver(1, 'player:updated', {});
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.label).toBe('read 3');
+		});
+
 		it('still supersedes the read in flight at once on a change of selection', async () => {
 			const { read, deliver, selection, freshness } = harness({ 'player:updated': true });
 			await flushPromises();
@@ -433,6 +463,20 @@ describe('useScreenModeFreshness', () => {
 			await dropAndComeBack(transport);
 
 			expect(read).toHaveBeenCalledTimes(1);
+		});
+
+		it('supersedes the read in flight, which may predate the loss', async () => {
+			const { read, reattach, freshness } = harness();
+			await flushPromises();
+
+			read.mockImplementationOnce(() => new Promise(() => {}));
+			reattach(1);
+			await flushPromises();
+			reattach(1);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.label).toBe('read 3');
 		});
 
 		it('re-reads for a channel-only loss while the connection stays up', async () => {
