@@ -2,7 +2,7 @@
  * Post-deploy liveness probe: `pnpm deploy:verify`, the last step of
  * `pnpm run deploy`. If it fails, stop and roll back (README.md § Deploy day).
  *
- * It reads `GET <origin>/api/time` and passes only on the Worker's own clock
+ * It reads `GET <base URL>/api/time` and passes only on the Worker's own clock
  * reading: status 200, an `application/json` content type, and a body that
  * parses as `{ serverTime: <positive integer epoch milliseconds> }`. Anything
  * else fails (#617), because each of these has answered "OK" on an origin
@@ -32,7 +32,7 @@
  *   Ably or the silent-video validator. The deployed acceptance gates
  *   (`pnpm accept deployed`) are what exercise those.
  *
- * The origin defaults to production and is overridable for any explicit
+ * The base URL defaults to production and is overridable for any explicit
  * target with `STREAM_KEEPR_DEPLOY_HEALTH_URL` (#525 reuses this probe).
  */
 
@@ -40,9 +40,9 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 /** The committed production hostname (wrangler.jsonc `routes`). */
-export const DEFAULT_ORIGIN = 'https://stream.keepr.digital';
+const DEFAULT_BASE_URL = 'https://stream.keepr.digital';
 
-/** The same budget the curl probe had: one try plus three retries, 5 s apart, 15 s each. */
+/** One try plus three retries, 5 s apart, 15 s each: the budget the pre-#617 curl probe had. */
 const DEFAULT_ATTEMPTS = 4;
 const DEFAULT_RETRY_DELAY_MS = 5_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -61,21 +61,24 @@ function excerpt(text) {
 }
 
 /**
- * The probe URL for an explicit target origin. Any http(s) origin is a valid
- * target, path prefix included; anything else is refused before a request,
- * since retrying a typo would only delay the same failure.
+ * The probe URL under an explicit target base URL: any http(s) origin, path
+ * prefix included. Anything else, a query or fragment among it, is refused
+ * before a request, since retrying a typo would only delay the same failure.
  */
-function healthUrl(origin) {
+function healthUrl(baseUrl) {
 	let parsed;
 	try {
-		parsed = new URL(origin);
+		parsed = new URL(baseUrl);
 	}
 	catch {
 		parsed = undefined;
 	}
-	if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.host)
-		throw new DeployVerifyFailure(`target origin ${JSON.stringify(origin)} (STREAM_KEEPR_DEPLOY_HEALTH_URL) is not an http(s) URL.`);
-	return `${origin.replace(/\/+$/, '')}/api/time`;
+	if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.host
+		|| baseUrl.includes('?') || baseUrl.includes('#')) {
+		throw new DeployVerifyFailure(`target ${JSON.stringify(baseUrl)} (STREAM_KEEPR_DEPLOY_HEALTH_URL) is not an http(s) URL without query or fragment.`);
+	}
+	parsed.pathname = `${parsed.pathname.replace(/\/+$/, '')}/api/time`;
+	return parsed.href;
 }
 
 async function probe(url, { fetchRequest, timeoutMs, signal }) {
@@ -118,7 +121,7 @@ async function probe(url, { fetchRequest, timeoutMs, signal }) {
 }
 
 /**
- * Probe `<origin>/api/time`, retrying only what a settling promotion can
+ * Probe `<baseUrl>/api/time`, retrying only what a settling promotion can
  * answer. Resolves with the reading; rejects with a `DeployVerifyFailure`
  * (or `signal.reason` once `signal` aborts).
  *
@@ -126,7 +129,7 @@ async function probe(url, { fetchRequest, timeoutMs, signal }) {
  * production bundle itself proves it passes the probe it is deployed behind.
  *
  * @param {{
- *   origin: string,
+ *   baseUrl: string,
  *   fetchRequest?: typeof fetch,
  *   attempts?: number,
  *   retryDelayMs?: number,
@@ -135,14 +138,14 @@ async function probe(url, { fetchRequest, timeoutMs, signal }) {
  * }} options
  */
 export async function verifyDeployment({
-	origin,
+	baseUrl,
 	fetchRequest = fetch,
 	attempts = DEFAULT_ATTEMPTS,
 	retryDelayMs = DEFAULT_RETRY_DELAY_MS,
 	timeoutMs = DEFAULT_TIMEOUT_MS,
 	signal,
 }) {
-	const url = healthUrl(origin);
+	const url = healthUrl(baseUrl);
 	for (let attempt = 1; ; attempt += 1) {
 		try {
 			return await probe(url, { fetchRequest, timeoutMs, signal });
@@ -157,9 +160,9 @@ export async function verifyDeployment({
 }
 
 async function main() {
-	const origin = process.env.STREAM_KEEPR_DEPLOY_HEALTH_URL || DEFAULT_ORIGIN;
+	const baseUrl = process.env.STREAM_KEEPR_DEPLOY_HEALTH_URL || DEFAULT_BASE_URL;
 	try {
-		const { url } = await verifyDeployment({ origin });
+		const { url } = await verifyDeployment({ baseUrl });
 		console.log(`deploy:verify: ${url} answered the Worker's clock reading: liveness only. `
 			+ 'Not proven: which release is serving, or D1, auth, R2, KV, Ably and validator readiness '
 			+ '(the deployed acceptance gates cover those).');

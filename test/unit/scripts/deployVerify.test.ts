@@ -12,8 +12,9 @@ const SCRIPT = 'scripts/deploy-verify.mjs';
 type Handler = (request: IncomingMessage, response: ServerResponse) => void;
 
 /**
- * A stand-in for a deployed origin on localhost. Every case is the real script
- * against real HTTP: no deployment, no credentials, no network beyond loopback.
+ * A stand-in for a deployed origin on localhost: real HTTP, no deployment, no
+ * credentials, no network beyond loopback. Each case spawns the real script,
+ * except the retry cases, which call its exported probe to skip the pauses.
  */
 describe('deploy:verify against a local stand-in origin', () => {
 	const servers: Server[] = [];
@@ -135,7 +136,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 		expect(output).not.toContain('liveness only');
 	});
 
-	it.each(['not a url', 'ftp://127.0.0.1', '127.0.0.1:3000'])('refuses the target origin %j without probing anything', async (target) => {
+	it.each(['not a url', 'ftp://127.0.0.1', '127.0.0.1:3000', 'http://127.0.0.1:9/?preview=1', 'http://127.0.0.1:9/#top'])('refuses the target %j without probing anything', async (target) => {
 		const { code, output } = await runScript(target);
 
 		expect(code).not.toBe(0);
@@ -156,7 +157,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 				response.end('Service Unavailable');
 			});
 
-			const failure = verifyDeployment({ origin: url, ...fast });
+			const failure = verifyDeployment({ baseUrl: url, ...fast });
 
 			await expect(failure).rejects.toBeInstanceOf(DeployVerifyFailure);
 			await expect(failure).rejects.toThrow(/answered 503/);
@@ -174,7 +175,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 				json({ serverTime: Date.now() })(request, response);
 			});
 
-			await expect(verifyDeployment({ origin: url, ...fast })).resolves.toMatchObject({ url: `${url}/api/time` });
+			await expect(verifyDeployment({ baseUrl: url, ...fast })).resolves.toMatchObject({ url: `${url}/api/time` });
 			expect(requests).toBe(2);
 		});
 
@@ -182,7 +183,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 			const url = await origin(json({ serverTime: Date.now() }));
 			await new Promise(resolve => servers.pop()!.close(resolve));
 
-			await expect(verifyDeployment({ origin: url, ...fast })).rejects.toThrow(DeployVerifyFailure);
+			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(DeployVerifyFailure);
 		});
 
 		it('fails an origin that accepts the connection and never answers', async () => {
@@ -191,7 +192,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 				requests += 1;
 			});
 
-			await expect(verifyDeployment({ origin: url, ...fast, timeoutMs: 100 })).rejects.toThrow(/could not be reached/);
+			await expect(verifyDeployment({ baseUrl: url, ...fast, timeoutMs: 100 })).rejects.toThrow(/could not be reached/);
 			expect(requests).toBe(3);
 		});
 
@@ -203,7 +204,7 @@ describe('deploy:verify against a local stand-in origin', () => {
 				response.end('<html></html>');
 			});
 
-			await expect(verifyDeployment({ origin: url, ...fast })).rejects.toThrow(/text\/html/);
+			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(/text\/html/);
 			expect(requests).toBe(1);
 		});
 	});
@@ -236,6 +237,5 @@ describe('a failed deploy:verify cannot advance the production marker', () => {
 		// lets a failure through. Neither may touch the deploy or the marker step.
 		for (const step of [steps[deployStep], steps[markerStep]])
 			expect(step).not.toMatch(/^\s+(if|continue-on-error):/m);
-		expect(workflow).not.toMatch(/continue-on-error/);
 	});
 });

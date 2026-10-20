@@ -641,7 +641,7 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
  */
 async function expectDeployVerifyPasses({ origin, fetchRequest, signal }) {
 	try {
-		await verifyDeployment({ origin, fetchRequest, attempts: 1, signal });
+		await verifyDeployment({ baseUrl: origin, fetchRequest, attempts: 1, signal });
 	}
 	catch (error) {
 		if (!(error instanceof DeployVerifyFailure))
