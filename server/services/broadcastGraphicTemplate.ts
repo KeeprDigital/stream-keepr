@@ -3,6 +3,11 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { broadcastGraphicTemplates } from '~~/server/db/schema';
+import {
+	boundGraphicAssetReferenceFacts,
+	jsonElementGraphicAssetRevisionResolution,
+	REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE,
+} from '~~/server/modules/graphic-asset-reference-resolution';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -22,6 +27,13 @@ import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphic
  * statement in the batch is conditional on still reading it. A concurrent write
  * therefore either wins outright or contributes nothing, and no interleaving can
  * leave one template's document paired with another write's references.
+ *
+ * Every write, whatever it changes, also requires every reference the stored
+ * document holds to resolve: an existing revision of an active Graphic Asset whose
+ * kind fits its slot (#614). The route asks the library first, but the catalogue
+ * can change before the commit, so the row write carries the rule itself and the
+ * index insert reads the same rule from the same bound array. A template is stored
+ * with every one of its references indexed, or not at all.
  *
  * Every write also restates the document's Graphic Style Set link into its own
  * columns. They are a denormalisation of `document.styleSet` and are derived here
@@ -57,6 +69,19 @@ export class BroadcastGraphicTemplateRevisionConflict extends Error {
 }
 
 /**
+ * A reference the template's document holds stopped resolving before the write
+ * committed: its revision is gone, its asset was retired or trashed, or it is not
+ * the kind its slot needs. The route checked it moments earlier, so the catalogue
+ * moved underneath the save.
+ */
+export class BroadcastGraphicTemplateReferenceConflict extends Error {
+	constructor() {
+		super('A Graphic Asset Revision this Broadcast Graphic Template references can no longer be referenced');
+		this.name = 'BroadcastGraphicTemplateReferenceConflict';
+	}
+}
+
+/**
  * The exact revisions one template document references.
  *
  * Discovered by the same walk a Broadcast Graphics Screen's configuration is
@@ -84,19 +109,31 @@ export function broadcastGraphicTemplateService() {
 	};
 
 	/**
+	 * The reference facts one template write is refused on and indexes, bound once.
+	 *
+	 * No reference is allowed to be retired, unlike a Screen's unchanged one: a
+	 * template has no retained-reference path (#614), so every write states every
+	 * reference as if it were new.
+	 */
+	const boundReferences = (document: BroadcastGraphicConfig): string =>
+		boundGraphicAssetReferenceFacts(templateAssetReferences(document).map(item => ({
+			...item,
+			id: crypto.randomUUID(),
+			allowRetired: false,
+		})));
+
+	/**
 	 * The reference-index statements one template write publishes.
 	 *
-	 * A row is inserted only for a revision that exists, and deliberately without
-	 * the lifecycle and compatibility conditions the Screen write path applies: a
-	 * template pins revisions an author already selected, and a revision whose asset
-	 * has since been retired keeps resolving. Refusing to record it would quietly
-	 * drop the template's claim on content it still depends on, which is the opposite
-	 * of what the index is for.
+	 * The insert reads the same bound array the row write's precondition reads, under
+	 * the same resolution rule, so the row commits only when every reference resolves
+	 * and then every reference is indexed. The version guard keeps both statements a
+	 * no-op whenever the row write did not commit this write's stamp.
 	 */
 	const referenceStatements = (
 		client: typeof db.$client,
 		id: string,
-		document: BroadcastGraphicConfig,
+		references: string,
 		referenceVersion: string,
 		now: number,
 	): D1PreparedStatement[] => [
@@ -108,46 +145,44 @@ export function broadcastGraphicTemplateService() {
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
 		`).bind(id, id, referenceVersion),
-		...templateAssetReferences(document).map(item => client.prepare(`
+		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 				event_id, created_at, updated_at
 			)
-			SELECT ?, ?, ?, '${OWNER_KIND}', ?, ?, NULL, ?, ?
-			FROM graphic_asset_revisions revision
-			WHERE revision.id = ? AND revision.asset_id = ?
+			SELECT
+				json_extract(item.value, '$.id'),
+				json_extract(item.value, '$.assetId'),
+				json_extract(item.value, '$.revisionId'),
+				'${OWNER_KIND}', ?, json_extract(item.value, '$.ownerSlot'), NULL, ?, ?
+			FROM json_each(?) AS item
+			WHERE EXISTS (
+				SELECT 1
+				${jsonElementGraphicAssetRevisionResolution('item')}
+			)
 				AND EXISTS (
 					SELECT 1 FROM broadcast_graphic_templates
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
-		`).bind(
-			crypto.randomUUID(),
-			item.reference.assetId,
-			item.reference.revisionId,
-			id,
-			item.ownerSlot,
-			now,
-			now,
-			item.reference.revisionId,
-			item.reference.assetId,
-			id,
-			referenceVersion,
-		)),
+		`).bind(id, now, now, references, id, referenceVersion),
 	];
 
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
+		const references = boundReferences(input.document);
 		const client = db.$client;
 
-		await client.batch([
+		const [inserted] = await client.batch([
 			client.prepare(`
 				INSERT INTO broadcast_graphic_templates (
 					id, name, description, revision, document,
 					graphic_asset_reference_version, style_set_id, style_set_revision,
 					created_at, updated_at
 				)
-				VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+				SELECT ?, ?, ?, 1, ?, ?, ?, ?, ?, ?
+				WHERE 1 = 1
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				input.id,
 				input.name,
@@ -158,9 +193,13 @@ export function broadcastGraphicTemplateService() {
 				input.document.styleSet?.revision ?? null,
 				now,
 				now,
+				references,
 			),
-			...referenceStatements(client, input.id, input.document, referenceVersion, now),
+			...referenceStatements(client, input.id, references, referenceVersion, now),
 		]);
+
+		if (inserted?.meta.changes !== 1)
+			throw new BroadcastGraphicTemplateReferenceConflict();
 
 		const created = await findById(input.id);
 		if (!created)
@@ -192,6 +231,7 @@ export function broadcastGraphicTemplateService() {
 		const document = patch.document ?? existing.document;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
+		const references = boundReferences(document);
 		const client = db.$client;
 
 		const [updated] = await client.batch([
@@ -201,6 +241,7 @@ export function broadcastGraphicTemplateService() {
 					graphic_asset_reference_version = ?, style_set_id = ?, style_set_revision = ?,
 					updated_at = ?
 				WHERE id = ? AND revision = ?
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				patch.name ?? existing.name,
 				patch.description === undefined ? existing.description : patch.description,
@@ -211,17 +252,22 @@ export function broadcastGraphicTemplateService() {
 				now,
 				id,
 				patch.revision,
+				references,
 			),
-			...referenceStatements(client, id, document, referenceVersion, now),
+			...referenceStatements(client, id, references, referenceVersion, now),
 		]);
 
-		// Nothing written means the precondition failed: the template is still there,
-		// at a revision this writer did not expect. Its reference rows are untouched,
-		// because every one of them is conditional on the stamp this write never made.
+		// Nothing written means a precondition failed. Its reference rows are
+		// untouched, because every one of them is conditional on the stamp this write
+		// never made. A revision that still stands means a reference refused it, not
+		// another session — told apart so the author is not sent to re-read a template
+		// nobody else changed.
 		if (updated?.meta.changes !== 1) {
 			const current = await findById(id);
 			if (!current)
 				return undefined;
+			if (current.revision === patch.revision)
+				throw new BroadcastGraphicTemplateReferenceConflict();
 			throw new BroadcastGraphicTemplateRevisionConflict(current.revision);
 		}
 

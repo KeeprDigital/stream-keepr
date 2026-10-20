@@ -6,13 +6,15 @@ import {
 	updateBroadcastGraphicTemplateSchema,
 } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import {
+	BroadcastGraphicTemplateReferenceConflict,
 	BroadcastGraphicTemplateRevisionConflict,
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -38,10 +40,14 @@ export default defineEventHandler(async (event) => {
 		await readJsonPayloadLimited(event, 512 * 1024, 'Broadcast Graphic Template'),
 	);
 
-	if (body.document) {
-		await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), body.document);
+	// Every revision re-states every reference the stored document will hold, so a
+	// rename is held to the rule as much as a new composition is (#614).
+	const document = body.document
+		?? (await broadcastGraphicTemplateService().findById(templateId))?.document;
+	if (document)
+		await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
+	if (body.document)
 		await assertBroadcastGraphicTemplateStyleSetResolves(body.document);
-	}
 
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);
@@ -60,6 +66,8 @@ export default defineEventHandler(async (event) => {
 		// A stale revision is the author's problem to resolve, not an internal fault:
 		// they are told which revision the template is actually at so they can re-read
 		// it rather than retrying blindly.
+		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
 		if (error instanceof BroadcastGraphicTemplateRevisionConflict) {
 			throw createError({
 				statusCode: 409,

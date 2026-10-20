@@ -6,14 +6,16 @@ import {
 	updateFeatureMatchLayoutTemplateSchema,
 } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import {
+	FeatureMatchLayoutTemplateReferenceConflict,
 	FeatureMatchLayoutTemplateRevisionConflict,
 	featureMatchLayoutTemplateService,
 } from '~~/server/services/featureMatchLayoutTemplate';
 import { requireUserId } from '~~/server/utils/auth';
 import {
-	assertFeatureMatchLayoutTemplateReferencesExist,
+	assertFeatureMatchLayoutTemplateReferencesSelectable,
 	refuseInstalledFeatureMatchLayoutTemplateWrite,
 } from '~~/server/utils/featureMatchLayoutTemplateWrites';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -36,8 +38,12 @@ export default defineEventHandler(async (event) => {
 		await readJsonPayloadLimited(event, 512 * 1024, 'Feature Match Layout Template'),
 	);
 
-	if (body.document)
-		await assertFeatureMatchLayoutTemplateReferencesExist(graphicsAssetLibraryForEvent(event), body.document);
+	// Every revision re-states every reference the stored layout will hold, so a
+	// rename is held to the rule as much as a new layout is (#614).
+	const document = body.document
+		?? (await featureMatchLayoutTemplateService().findById(templateId))?.document;
+	if (document)
+		await assertFeatureMatchLayoutTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 
 	try {
 		const template = await featureMatchLayoutTemplateService().update(templateId, body);
@@ -56,6 +62,8 @@ export default defineEventHandler(async (event) => {
 		// A stale revision is the author's problem to resolve, not an internal fault:
 		// they are told which revision the template is actually at so they can re-read
 		// it rather than retrying blindly.
+		if (error instanceof FeatureMatchLayoutTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Feature Match Layout Template');
 		if (error instanceof FeatureMatchLayoutTemplateRevisionConflict) {
 			throw createError({
 				statusCode: 409,

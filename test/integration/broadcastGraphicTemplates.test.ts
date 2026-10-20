@@ -825,7 +825,7 @@ describe('broadcast Graphic Template library', () => {
 		// Storing it would put a healthy-looking entry in the library whose reference
 		// index records nothing, so nothing is diagnosable until a placement fails.
 		expect(refused.status).toBe(409);
-		expect(refused.data.message).toContain('do not exist');
+		expect(refused.data.message).toContain('(does not exist)');
 
 		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
 		expect((listed.data.templates as BroadcastGraphicTemplateSummary[]).map(entry => entry.name))
@@ -873,6 +873,67 @@ describe('broadcast Graphic Template library', () => {
 		expect(refused.data.message).toContain('retiring-graphic');
 
 		await request(`${TEMPLATES_PATH}/${retiringTemplateId}`, { method: 'DELETE', cookie: authorCookie });
+	});
+
+	// #614: every template write holds each reference to the selectability rule a
+	// Screen applies to a new choice — wrong-kind, retired, and missing alike.
+	it('refuses a revision that pins an asset of the wrong kind for its slot, and a rename once an asset is retired', async () => {
+		const retiring = await ingestImage(sourceEventId, 'template-library-kind', authorCookie);
+		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Kinds', slug: 'template-kinds-screen', currentMode: 'broadcast-graphics' },
+		});
+		expect((await patchStack(sourceEventId, sourceScreen.id, [{
+			id: 'kinds-graphic',
+			name: 'Kinds',
+			items: [mediaItem('plate', retiring)],
+		}])).status).toBe(200);
+		const saved = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: { source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'kinds-graphic' } },
+		});
+		expect(saved.status).toBe(201);
+		const kindsTemplate = saved.data as BroadcastGraphicTemplateResponse;
+
+		const wrongKind = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: {
+				document: {
+					...kindsTemplate.document,
+					items: [{ ...mediaItem('plate', retiring), mediaKind: 'silent-video', loop: true, playbackRate: 1 }],
+				},
+				revision: kindsTemplate.revision,
+			},
+		});
+		expect(wrongKind.status).toBe(409);
+		expect(wrongKind.data.message).toContain('kinds-graphic.items.plate.asset (is an image, not a silent video)');
+
+		await $fetch(`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`, {
+			method: 'POST',
+			headers: { cookie: authorCookie },
+			body: { action: 'retire' },
+		});
+		const renamed = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
+			method: 'PATCH',
+			cookie: authorCookie,
+			body: { name: 'Renamed', revision: kindsTemplate.revision },
+		});
+		expect(renamed.status).toBe(409);
+		expect(renamed.data.message).toContain('kinds-graphic.items.plate.asset (retired)');
+
+		// Refused writes leave the template where it was, and still pinning its asset.
+		expect(await templateRevision(kindsTemplate.id)).toBe(kindsTemplate.revision);
+		const usage = await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${retiring.assetId}/usage`,
+			{ headers: { cookie: authorCookie } },
+		);
+		expect(usage.map(entry => entry.owner)).toContainEqual(
+			expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id }),
+		);
+
+		await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, { method: 'DELETE', cookie: authorCookie });
 	});
 
 	it('removes a template from the library without touching the copies placed from it', async () => {

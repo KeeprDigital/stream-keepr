@@ -2,8 +2,8 @@ import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/t
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it, vi } from 'vitest';
-import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
-import { assertFeatureMatchLayoutTemplateReferencesExist } from '~~/server/utils/featureMatchLayoutTemplateWrites';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 
 // The util under test shares a file with a helper that reads the template
 // library; keep the database out of a unit test of pure batching semantics.
@@ -62,11 +62,14 @@ function featureMatchLayout(options: {
 
 const available = { outcome: 'available', lifecycleState: 'active', kind: 'image' };
 const missing = { outcome: 'missing' };
+const retired = { outcome: 'available', lifecycleState: 'retired', kind: 'image' };
+const trashed = { outcome: 'available', lifecycleState: 'trashed', kind: 'image' };
+const font = { outcome: 'available', lifecycleState: 'active', kind: 'font' };
 const unavailable = { outcome: 'unavailable', retryable: true };
 
-describe('assertBroadcastGraphicTemplateReferencesExist', () => {
+describe('assertBroadcastGraphicTemplateReferencesSelectable', () => {
 	// The batching pin, ported from the Screen write path (#374 → #382): one
-	// existence question per template save, never one catalogue round-trip per
+	// selectability question per template save, never one catalogue round-trip per
 	// reference.
 	it('asks the library once for every reference, in discovery order', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, available]);
@@ -75,7 +78,7 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 			media('badge', reference('asset-2', 'revision-2')),
 		]);
 
-		await assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document);
+		await assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document);
 
 		expect(inspectGraphicAssetRevisions).toHaveBeenCalledTimes(1);
 		expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
@@ -86,7 +89,7 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 		});
 	});
 
-	it('refuses missing references with every missing owner slot, in document order', async () => {
+	it('refuses missing references with every refused owner slot, in document order', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([missing, available, missing]);
 		const document = broadcastGraphic([
 			media('logo', reference('asset-1', 'revision-1')),
@@ -94,20 +97,45 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 			media('badge', reference('asset-3', 'revision-3')),
 		]);
 
-		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.rejects
 			.toMatchObject({
 				statusCode: 409,
-				message: 'Broadcast Graphic Template references Graphic Asset Revisions that do not exist: '
-					+ 'graphics.lower-third.items.logo.asset, graphics.lower-third.items.badge.asset',
+				message: 'Broadcast Graphic Template cannot reference these Graphic Asset Revisions: '
+					+ 'graphics.lower-third.items.logo.asset (does not exist), '
+					+ 'graphics.lower-third.items.badge.asset (does not exist)',
 			});
 	});
 
-	it('accepts unavailable references: the revision exists and the condition is retryable', async () => {
-		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([unavailable]);
+	// #614: every template write, new reference or not, needs each reference to be
+	// one an author could select now, in a slot its kind fits.
+	it('refuses retired, trashed, unavailable, and wrong-kind references, naming why', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([retired, trashed, unavailable, font, available]);
+		const document = broadcastGraphic([
+			media('retired', reference('asset-1', 'revision-1')),
+			media('trashed', reference('asset-2', 'revision-2')),
+			media('unavailable', reference('asset-3', 'revision-3')),
+			media('font', reference('asset-4', 'revision-4')),
+			media('fine', reference('asset-5', 'revision-5')),
+		]);
+
+		await expect(assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: 'Broadcast Graphic Template cannot reference these Graphic Asset Revisions: '
+					+ 'graphics.lower-third.items.retired.asset (retired), '
+					+ 'graphics.lower-third.items.trashed.asset (trashed), '
+					+ 'graphics.lower-third.items.unavailable.asset (content unavailable), '
+					+ 'graphics.lower-third.items.font.asset (is a font, not an image)',
+			});
+	});
+
+	it('accepts active, available references of the kind their slot needs', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
 		const document = broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]);
 
-		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.resolves
 			.toBeUndefined();
 	});
@@ -115,7 +143,7 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 	it('asks the library nothing for a document with no references', async () => {
 		const inspectGraphicAssetRevisions = vi.fn();
 
-		await assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, broadcastGraphic([]));
+		await assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, broadcastGraphic([]));
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 	});
@@ -131,17 +159,17 @@ describe('assertBroadcastGraphicTemplateReferencesExist', () => {
 			media('badge', reference('asset-2', 'revision-2')),
 		]);
 
-		await expect(assertBroadcastGraphicTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertBroadcastGraphicTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.rejects
 			.toMatchObject({
 				statusCode: 409,
-				message: 'Broadcast Graphic Template references Graphic Asset Revisions that do not exist: '
-					+ 'graphics.lower-third.items.badge.asset',
+				message: 'Broadcast Graphic Template cannot reference these Graphic Asset Revisions: '
+					+ 'graphics.lower-third.items.badge.asset (does not exist)',
 			});
 	});
 });
 
-describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
+describe('assertFeatureMatchLayoutTemplateReferencesSelectable', () => {
 	it('asks the library once for every reference, in discovery order', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, available]);
 		const document = featureMatchLayout({
@@ -149,7 +177,7 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 			items: [media('logo', reference('asset-2', 'revision-2'))],
 		});
 
-		await assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document);
+		await assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document);
 
 		expect(inspectGraphicAssetRevisions).toHaveBeenCalledTimes(1);
 		expect(inspectGraphicAssetRevisions).toHaveBeenCalledWith({
@@ -160,27 +188,45 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 		});
 	});
 
-	it('refuses missing references with every missing owner slot, in document order', async () => {
+	it('refuses missing references with every refused owner slot, in document order', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([missing, missing]);
 		const document = featureMatchLayout({
 			backgroundImage: reference('asset-1', 'revision-1'),
 			items: [media('logo', reference('asset-2', 'revision-2'))],
 		});
 
-		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.rejects
 			.toMatchObject({
 				statusCode: 409,
-				message: 'Feature Match Layout Template references Graphic Asset Revisions that do not exist: '
-					+ 'layout.frame.backgroundImage, layout.composition.items.logo.asset',
+				message: 'Feature Match Layout Template cannot reference these Graphic Asset Revisions: '
+					+ 'layout.frame.backgroundImage (does not exist), '
+					+ 'layout.composition.items.logo.asset (does not exist)',
 			});
 	});
 
-	it('accepts unavailable references: the revision exists and the condition is retryable', async () => {
-		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([unavailable]);
+	it('refuses a retired Frame image and a wrong-kind item, naming why', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([retired, font]);
+		const document = featureMatchLayout({
+			backgroundImage: reference('asset-1', 'revision-1'),
+			items: [media('logo', reference('asset-2', 'revision-2'))],
+		});
+
+		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: 'Feature Match Layout Template cannot reference these Graphic Asset Revisions: '
+					+ 'layout.frame.backgroundImage (retired), '
+					+ 'layout.composition.items.logo.asset (is a font, not an image)',
+			});
+	});
+
+	it('accepts active, available references of the kind their slot needs', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available]);
 		const document = featureMatchLayout({ backgroundImage: reference('asset-1', 'revision-1') });
 
-		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.resolves
 			.toBeUndefined();
 	});
@@ -188,7 +234,7 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 	it('asks the library nothing for a document with no references', async () => {
 		const inspectGraphicAssetRevisions = vi.fn();
 
-		await assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, featureMatchLayout({}));
+		await assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, featureMatchLayout({}));
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 	});
@@ -200,12 +246,12 @@ describe('assertFeatureMatchLayoutTemplateReferencesExist', () => {
 			items: [media('logo', reference('asset-2', 'revision-2'))],
 		});
 
-		await expect(assertFeatureMatchLayoutTemplateReferencesExist({ inspectGraphicAssetRevisions }, document))
+		await expect(assertFeatureMatchLayoutTemplateReferencesSelectable({ inspectGraphicAssetRevisions }, document))
 			.rejects
 			.toMatchObject({
 				statusCode: 409,
-				message: 'Feature Match Layout Template references Graphic Asset Revisions that do not exist: '
-					+ 'layout.composition.items.logo.asset',
+				message: 'Feature Match Layout Template cannot reference these Graphic Asset Revisions: '
+					+ 'layout.composition.items.logo.asset (does not exist)',
 			});
 	});
 });

@@ -1,11 +1,15 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { saveBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
-import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
+import {
+	BroadcastGraphicTemplateReferenceConflict,
+	broadcastGraphicTemplateService,
+} from '~~/server/services/broadcastGraphicTemplate';
 import { screenService } from '~~/server/services/screen';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { broadcastGraphicTemplateDocument } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -36,7 +40,7 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const document = broadcastGraphicTemplateDocument(graphic);
-	await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), document);
+	await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 	// The Screen's write path does not prove Graphic Style Set references, because a
 	// placed graphic never receives an update from one. Saving it into the library is
 	// where it becomes a linked artifact, so it is where the link has to hold.
@@ -47,6 +51,10 @@ export default defineEventHandler(async (event) => {
 		name: body.name ?? graphic.name,
 		description: body.description ?? null,
 		document,
+	}).catch((error: unknown) => {
+		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
+		throw error;
 	});
 
 	setResponseStatus(event, 201);

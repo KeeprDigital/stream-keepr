@@ -1,13 +1,17 @@
 import { mapBroadcastGraphicTemplateToResponse } from '~~/server/mappers/broadcastGraphicTemplate';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { applyGraphicStyleUpdateSchema } from '~~/server/schemas/api/graphicStyleSet';
 import {
+	BroadcastGraphicTemplateReferenceConflict,
 	BroadcastGraphicTemplateRevisionConflict,
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { requireUserId } from '~~/server/utils/auth';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 
 /**
@@ -79,6 +83,9 @@ export default defineEventHandler(async (event) => {
 		resolveGraphicStyleSet(styleSet.published),
 		{ decisions: body.decisions, revision: styleSet.revision },
 	);
+	// A new revision like any other, so it is held to the template reference rule
+	// even though a Style Set carries no Graphic Asset of its own (#614).
+	await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 
 	try {
 		const updated = await service.update(templateId, { document, revision: body.revision });
@@ -93,6 +100,8 @@ export default defineEventHandler(async (event) => {
 		return mapBroadcastGraphicTemplateToResponse(updated);
 	}
 	catch (error) {
+		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
 		if (error instanceof BroadcastGraphicTemplateRevisionConflict) {
 			throw createError({
 				statusCode: 409,

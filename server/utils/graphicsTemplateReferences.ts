@@ -1,0 +1,90 @@
+import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
+import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
+import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
+
+const KIND_NOUNS: Record<ScreenGraphicAssetReference['kind'], string> = {
+	'image': 'an image',
+	'silent-video': 'a silent video',
+	'font': 'a font',
+};
+
+/**
+ * Why one reference cannot be written into a template, or null when it can.
+ *
+ * A hole in the batch answer fails closed, as the Screen write path's does: a
+ * reference the library did not answer for has not been shown to exist.
+ */
+function refusal(
+	item: ScreenGraphicAssetReference,
+	status: GraphicAssetReferenceStatus | undefined,
+): string | null {
+	if (status === undefined || status.outcome === 'missing')
+		return 'does not exist';
+	if (status.outcome === 'unavailable')
+		return 'content unavailable';
+	if (status.lifecycleState !== 'active')
+		return status.lifecycleState;
+	if (status.kind !== item.kind)
+		return `is ${KIND_NOUNS[status.kind]}, not ${KIND_NOUNS[item.kind]}`;
+	return null;
+}
+
+/**
+ * What a graphics Template is allowed to reference (#614).
+ *
+ * Every template write, for both template kinds, requires each Graphic Asset
+ * Reference its document holds to be one an author could select right now: an
+ * existing revision whose content is available, of an active Graphic Asset, whose
+ * kind fits the item, input, or typography slot that names it. There is no
+ * retained-reference exemption — a rename re-states every reference the template
+ * already holds, exactly as the save that first wrote it did.
+ *
+ * This is the route's question, asked before the write so a refusal names every
+ * slot and why. The template store asks the catalogue half of it again inside the
+ * statement that commits, so a retirement landing in between still refuses the
+ * write. Content availability is the byte store's, which no transaction can see,
+ * so it is checked here only.
+ *
+ * One catalogue round-trip for the whole document, statuses aligned by input index
+ * — the #374 batching, which a template save needs for the same reason a Screen
+ * config save did: its item stacks are the same order of size (#382).
+ */
+export async function assertGraphicsTemplateReferencesSelectable(
+	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
+	references: readonly ScreenGraphicAssetReference[],
+	artifact: 'Broadcast Graphic Template' | 'Feature Match Layout Template',
+): Promise<void> {
+	if (references.length === 0)
+		return;
+
+	const statuses = await library.inspectGraphicAssetRevisions({
+		references: references.map(item => ({
+			assetId: graphicAssetId(item.reference.assetId),
+			revisionId: graphicAssetRevisionId(item.reference.revisionId),
+		})),
+	});
+	const refused = references.flatMap((item, index) => {
+		const reason = refusal(item, statuses[index]);
+		return reason === null ? [] : [`${item.ownerSlot} (${reason})`];
+	});
+
+	if (refused.length > 0) {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: `${artifact} cannot reference these Graphic Asset Revisions: ${refused.join(', ')}`,
+		});
+	}
+}
+
+/** The answer a template store's commit-time reference refusal becomes. */
+export function graphicsTemplateReferenceConflict(
+	artifact: 'Broadcast Graphic Template' | 'Feature Match Layout Template',
+) {
+	return createError({
+		statusCode: 409,
+		statusMessage: 'Conflict',
+		message: `A Graphic Asset Revision this ${artifact} references stopped being selectable while it was being saved. Reload it, then replace or restore the asset.`,
+	});
+}
