@@ -38,6 +38,7 @@ export type EventDataReloaders = Record<ConsumedEventData, () => unknown>;
 export function createEventDataResync(reloaders: EventDataReloaders) {
 	const consumers = new Map<ConsumedEventData, number>();
 	const behind = new Set<ConsumedEventData>();
+	const ownRereads = new Set<() => unknown>();
 	// Which Event Lifetime a re-read began in, so one answered after a reset
 	// marks nothing behind in the next.
 	let lifetime = 0;
@@ -55,9 +56,15 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 		});
 	}
 
-	/** Name what a consumer reads; the answer releases it. */
-	function consume(datasets: readonly ConsumedEventData[]) {
+	/**
+	 * Name what a consumer reads; the answer releases it. A consumer that also
+	 * reads what no store holds — a page's own summary — passes that re-read too.
+	 * It dies with the consumer, so it is never behind.
+	 */
+	function consume(datasets: readonly ConsumedEventData[], reread?: () => unknown) {
 		const named = [...new Set(datasets)];
+		if (reread)
+			ownRereads.add(reread);
 		const caughtUp = named.filter(dataset => behind.delete(dataset));
 		for (const dataset of named)
 			consumers.set(dataset, (consumers.get(dataset) ?? 0) + 1);
@@ -68,6 +75,8 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 			if (released)
 				return;
 			released = true;
+			if (reread)
+				ownRereads.delete(reread);
 			for (const dataset of named) {
 				const remaining = (consumers.get(dataset) ?? 1) - 1;
 				if (remaining > 0)
@@ -83,7 +92,10 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 			if (!consumers.has(dataset))
 				behind.add(dataset);
 		}
-		await reload(consumers.keys());
+		await Promise.all([
+			reload(consumers.keys()),
+			Promise.allSettled([...ownRereads].map(async reread => reread())),
+		]);
 	}
 
 	function reset() {
@@ -145,7 +157,10 @@ export function storeReloaders(): EventDataReloaders {
 /** This client's Event Data Resync, which the Realtime Event Session runs on Reconnect Resync. */
 export const eventDataResync = createEventDataResync(storeReloaders());
 
-/** Name the Event Data this consumer reads until its scope is disposed. */
-export function useConsumedEventData(datasets: readonly ConsumedEventData[]) {
-	onScopeDispose(eventDataResync.consume(datasets));
+/**
+ * Name the Event Data this consumer reads until its scope is disposed, and its
+ * own re-read of anything it reads outside the stores.
+ */
+export function useConsumedEventData(datasets: readonly ConsumedEventData[], reread?: () => unknown) {
+	onScopeDispose(eventDataResync.consume(datasets, reread));
 }

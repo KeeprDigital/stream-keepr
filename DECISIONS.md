@@ -762,7 +762,7 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 
 - An operator's resync re-reads every consumed collection at once. That is a burst of list reads per open page, once per reconnection.
 - Each mode's Settings panel consumes the Event Data its pickers load. A store loaded by a component that does not consume it is not re-read on reconnect. It is behind, and its next consumer re-reads it.
-- A page's own reads outside the stores are not covered. That includes Metagame summaries and the Matches page's Round availability. Their state comes back on the next visit.
+- A consumer that also reads what no store holds passes its own re-read, which runs on every resync until the consumer is disposed. The metagame pages pass their summary and section fetch. That re-read is never behind, since it dies with its page. A metagame page can fetch twice on one resync, once for its own re-read and once more when the Player re-read bumps the roster version.
 - A Feature Match Slot re-read offers its Session to the Live State Follower, which holds it when it is newer. So a Session missed in the outage reaches Live Control's bound values through the Slots.
 - The Card mode, through Screen Mode Data Freshness, also re-reads on the degraded cadence while disconnected.
 

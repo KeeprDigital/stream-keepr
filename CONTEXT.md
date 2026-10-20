@@ -173,7 +173,7 @@ The client-side module owning the invariant "coming back from a disconnection is
 _Avoid_: reconnect handler, resubscribe hook.
 
 **Event Data Resync**:
-The client-side module owning which Event Data this client consumes, so **Reconnect Resync** re-reads exactly that. Besides Event Data collections, it covers the operator's Event and the selected Screen's Card. A consumer names its datasets while mounted. Each consumed dataset is re-read once, in place. A held dataset nobody consumed at the resync is behind, and its next consumer re-reads it. The end of an **Event Lifetime** forgets what was behind (ADR-0028).
+The client-side module owning which Event Data this client consumes, so **Reconnect Resync** re-reads exactly that. Besides Event Data collections, it covers the operator's Event and the selected Screen's Card. A consumer names its datasets while mounted, with its own re-read of anything no store holds. Each consumed dataset is re-read once, in place. A held dataset nobody consumed at the resync is behind, and its next consumer re-reads it. The end of an **Event Lifetime** forgets what was behind (ADR-0028).
 _Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:

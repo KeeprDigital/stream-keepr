@@ -112,4 +112,27 @@ describe('createEventDataResync', () => {
 		resync.consume(['players']);
 		expect(reloaded()).toEqual([]);
 	});
+
+	it('re-runs a consumer\'s own re-read of what no store holds, until it is released', async () => {
+		const { resync } = harness();
+		const reread = vi.fn();
+		const release = resync.consume([], reread);
+		expect(reread).not.toHaveBeenCalled();
+
+		await resync.resync();
+		expect(reread).toHaveBeenCalledOnce();
+
+		release();
+		await resync.resync();
+		expect(reread).toHaveBeenCalledOnce();
+	});
+
+	it('keeps re-reading the datasets when a consumer\'s own re-read fails', async () => {
+		const { resync, reloaders } = harness();
+		resync.consume(['players'], () => Promise.reject(new Error('offline')));
+
+		await expect(resync.resync()).resolves.toBeUndefined();
+
+		expect(reloaders.players).toHaveBeenCalledOnce();
+	});
 });
