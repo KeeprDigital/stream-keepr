@@ -44,7 +44,7 @@ export function eventService() {
 	const buildResetMeleeImportedDataQueries = async (eventId: number) => {
 		const featureReset = await buildClearImportedMatchDataQueries(eventId);
 
-		return [
+		const queries = [
 			db
 				.delete(eventCardNameOverrides)
 				.where(eq(eventCardNameOverrides.eventId, eventId)),
@@ -68,6 +68,7 @@ export function eventService() {
 				)),
 			...featureReset.queries,
 		];
+		return { queries, settle: featureReset.settle };
 	};
 
 	const buildWhereClause = (params: FindAllParams) => {
@@ -231,9 +232,11 @@ export function eventService() {
 			.where(eq(events.id, id));
 
 		if (shouldResetImportedData) {
-			const resetQueries = await buildResetMeleeImportedDataQueries(id);
-			const queries = [...resetQueries, updateEventQuery];
+			const reset = await buildResetMeleeImportedDataQueries(id);
+			const queries = [...reset.queries, updateEventQuery];
 			await db.batch(queries as [typeof queries[number], ...Array<typeof queries[number]>]);
+			// Announces the cleared Slots' new Sessions, now that they exist.
+			await reset.settle();
 		}
 		else {
 			await updateEventQuery;

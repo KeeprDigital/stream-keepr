@@ -3,9 +3,11 @@ import { getChain, mockDb, resetDbMocks } from '~~/test/helpers/db-mock';
 import { createMockEvent, createMockTalent } from '~~/test/helpers/fixtures';
 
 const featureResetQuery = { kind: 'feature-reset-query' };
+const settleFeatureReset = vi.fn(async () => {});
 const buildClearImportedMatchDataQueries = vi.fn().mockResolvedValue({
 	queries: [featureResetQuery],
 	clearedSlotCount: 1,
+	settle: settleFeatureReset,
 });
 const protectMeleeClientSecret = vi.fn(async (secret: string) => `encrypted:${secret}`);
 
@@ -228,6 +230,9 @@ describe('eventService', () => {
 				featureResetQuery,
 				getChain('update'),
 			]));
+			// The cleared Slots' new Sessions are announced once the reset has committed.
+			expect(settleFeatureReset).toHaveBeenCalledOnce();
+			expect(mockDb.batch.mock.invocationCallOrder[0]).toBeLessThan(settleFeatureReset.mock.invocationCallOrder[0]!);
 		});
 
 		it('resets sync metadata when melee is disabled', async () => {

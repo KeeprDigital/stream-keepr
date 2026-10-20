@@ -199,7 +199,7 @@ Server-side it is an acceptance rule carried as a Field Ownership claim: a Set I
 _Avoid_: owns array, field mask, declared ownership.
 
 **Sequenced Live State**:
-The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." It owns monotonic sequencing, compare-and-swap protection, Command Receipts, and the decision to announce a committed command; reducers, merge policies, and notification content stay with the feature.
+The server-side module owning the invariant "one authoritative order of accepted commands per live aggregate." It owns monotonic sequencing, compare-and-swap protection, Command Receipts, and the decision to announce a committed command; reducers, merge policies, and notification content stay with the feature. It also owns a live aggregate's epoch lifecycle: closing the active epoch, opening its successor, forgetting the ended epoch's Command Receipts in the same commit, and announcing the change only when the commit actually made one (ADR-0029).
 _Avoid_: event store, event sourcing, command bus, write-ahead log.
 
 **Live State Follower**:

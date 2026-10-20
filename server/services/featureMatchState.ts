@@ -1,6 +1,6 @@
-import type { BatchItem } from 'drizzle-orm/batch';
+import type { SQL } from 'drizzle-orm';
 import type { DbFeatureMatch, DbFeatureMatchSession, DbPlayer } from '~~/server/db/schema';
-import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
+import type { SequencedLiveEpochTransition, SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
 import type { FeatureMatchSessionEventPayload, FeatureMatchSessionReducerResult } from '~~/shared/modules/feature-match-session';
 import type { Game } from '~~/shared/types/enums';
 import type { FeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
@@ -12,12 +12,14 @@ import type {
 	FeatureMatchSourceSnapshot,
 } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
 import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
-import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
+import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
+import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
+import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
@@ -40,6 +42,21 @@ interface FeatureMatchSessionRef {
 type EventDefaults = FeatureMatchDefaults & {
 	game: Game;
 };
+
+/** The Slots of one Event whose Sessions an epoch transition replaces. */
+interface FeatureMatchSessionScope {
+	eventId: number;
+	slotIds: readonly number[];
+	/** A predicate over `feature_match_slots` each Slot must still satisfy when the batch runs. */
+	slotCondition?: SQL;
+}
+
+/** The first state of a Slot's new Session. */
+interface FeatureMatchSessionOpening {
+	slotId: number;
+	sourceSnapshot: FeatureMatchSourceSnapshot;
+	currentState: FeatureMatchState;
+}
 
 const AUTHORITATIVE_DECK_SNAPSHOT_FIELDS = new Set<keyof FeatureMatchSnapshotPlayerData>([
 	'deckId',
@@ -221,113 +238,211 @@ export function featureMatchStateService() {
 		return await findActiveSessionBySlot(slotId, eventId);
 	};
 
-	/**
-	 * Build the statements that close any active Session for the Slot, open a
-	 * fresh one, discard the closed Sessions' command receipts and relink the
-	 * Slot — without executing them. The receipt/link statements resolve the
-	 * newly inserted active Session in SQL, so no generated ID has to escape the
-	 * transaction boundary and these statements can be composed into a larger
-	 * atomic D1 batch (e.g. Feature Match Slot promotion).
-	 *
-	 * The caller passes the Slot in the state it should reflect: promotion feeds
-	 * the post-write Slot (promoted / cleared) so the snapshot is built off the
-	 * values the same batch is about to persist rather than a stale read.
-	 */
-	const buildCreateSessionForSlotQueries = async (
-		slot: DbFeatureMatch,
-		eventId: number,
-		preloadedDefaults?: EventDefaults,
-		preloadedPlayers?: ReadonlyMap<number, DbPlayer>,
-	): Promise<{ queries: BatchItem<'sqlite'>[]; sourceSnapshot: FeatureMatchSourceSnapshot; currentState: FeatureMatchState }> => {
-		const slotId = slot.id;
-		const sourceSnapshot = await buildSourceSnapshot(slot, preloadedDefaults, preloadedPlayers);
-		const currentState = createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot);
-		const now = new Date();
-
-		const queries: BatchItem<'sqlite'>[] = [
-			db.update(featureMatchSessions)
-				.set({ status: 'closed', closedAt: now, updatedAt: now })
-				.where(and(
-					eq(featureMatchSessions.slotId, slotId),
-					eq(featureMatchSessions.eventId, eventId),
-					eq(featureMatchSessions.status, 'active'),
-				)),
-			db.insert(featureMatchSessions)
-				.values({
-					eventId,
-					slotId,
-					status: 'active',
-					sourceSnapshot,
-					currentState,
-					sequence: 1,
-				})
-				.returning(),
-			// A closed Session can never accept another command, so its receipts have
-			// nothing left to protect against.
-			forgetAggregateReceipts({
-				aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,
-				aggregateIds: sql`
-					select ${featureMatchSessions.id}
-					from ${featureMatchSessions}
-					where ${featureMatchSessions.slotId} = ${slotId}
-						and ${featureMatchSessions.eventId} = ${eventId}
-						and ${featureMatchSessions.status} = 'closed'
-				`,
-			}),
-			db.update(featureMatches)
-				.set({
-					activeSessionId: sql<number>`(
-						select ${featureMatchSessions.id}
-						from ${featureMatchSessions}
-						where ${featureMatchSessions.eventId} = ${eventId}
-							and ${featureMatchSessions.slotId} = ${slotId}
-							and ${featureMatchSessions.status} = 'active'
-						order by ${featureMatchSessions.id} desc
-						limit 1
-					)`,
-					updatedAt: now,
-				})
-				.where(and(eq(featureMatches.id, slotId), eq(featureMatches.eventId, eventId))),
-		];
-
-		return { queries, sourceSnapshot, currentState };
+	const findActiveSessions = async ({ eventId, slotIds }: FeatureMatchSessionScope): Promise<DbFeatureMatchSession[]> => {
+		if (slotIds.length === 0)
+			return [];
+		return await db.query.featureMatchSessions.findMany({
+			where: and(
+				eq(featureMatchSessions.eventId, eventId),
+				inArray(featureMatchSessions.slotId, [...slotIds]),
+				eq(featureMatchSessions.status, 'active'),
+			),
+		});
 	};
 
 	/**
-	 * Open a Session for the Slot and answer with whichever Session is active
-	 * afterwards — not necessarily the one this call inserted.
+	 * The Slots a scope's statements apply to: those named, in the Event, that still
+	 * satisfy the scope's condition when the batch runs. Every statement of one
+	 * transition selects through this, so a condition that skips a Slot's close
+	 * also skips its open and relink.
+	 */
+	const scopedSlotIds = ({ eventId, slotIds, slotCondition }: FeatureMatchSessionScope) => sql`
+		select ${featureMatches.id}
+		from ${featureMatches}
+		where ${featureMatches.eventId} = ${eventId}
+			and ${featureMatches.id} in (select value from json_each(${JSON.stringify(slotIds)}))
+			and ${slotCondition ?? sql`1`}
+	`;
+
+	/**
+	 * The Feature Match Session half of the shared epoch lifecycle: which Sessions a
+	 * set of Slots owns, and how one is closed, opened and announced. Ordering,
+	 * receipt forgetting and the decision to announce are the module's.
+	 */
+	const sessionEpochs = createSequencedLiveEpochs<FeatureMatchSessionScope, FeatureMatchSessionOpening[], DbFeatureMatchSession>({
+		aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,
+		idOf: session => session.id,
+		findActive: findActiveSessions,
+
+		close: (scope) => {
+			const now = new Date();
+			return [
+				db.update(featureMatchSessions)
+					.set({ status: 'closed', closedAt: now, updatedAt: now })
+					.where(and(
+						eq(featureMatchSessions.eventId, scope.eventId),
+						eq(featureMatchSessions.status, 'active'),
+						sql`${featureMatchSessions.slotId} in (${scopedSlotIds(scope)})`,
+					)),
+			];
+		},
+
+		closedIds: scope => sql`
+			select ${featureMatchSessions.id}
+			from ${featureMatchSessions}
+			where ${featureMatchSessions.eventId} = ${scope.eventId}
+				and ${featureMatchSessions.status} = 'closed'
+				and ${featureMatchSessions.slotId} in (${scopedSlotIds(scope)})
+		`,
+
+		open: (scope, openings) => {
+			const now = Date.now();
+			// Chunked so a whole Event's Slots open in a handful of statements rather
+			// than one per Slot, within D1's per-statement payload bound.
+			const inserts = chunkJsonRows(openings).map(payload => db
+				.insert(featureMatchSessions)
+				.select(selectForInsert(featureMatchSessions, {
+					id: sql`null`,
+					eventId: sql`${scope.eventId}`,
+					slotId: sql`cast(json_extract(input.value, '$.slotId') as integer)`,
+					status: sql`'active'`,
+					sourceSnapshot: sql`json_extract(input.value, '$.sourceSnapshot')`,
+					currentState: sql`json_extract(input.value, '$.currentState')`,
+					sequence: sql`1`,
+					closedAt: sql`null`,
+					createdAt: sql`${now}`,
+					updatedAt: sql`${now}`,
+				}, sql`from json_each(${payload}) as input
+					where cast(json_extract(input.value, '$.slotId') as integer) in (${scopedSlotIds(scope)})`)));
+
+			return [
+				...inserts,
+				db.update(featureMatches)
+					.set({
+						activeSessionId: sql<number>`(
+							select ${featureMatchSessions.id}
+							from ${featureMatchSessions}
+							where ${featureMatchSessions.eventId} = ${featureMatches.eventId}
+								and ${featureMatchSessions.slotId} = ${featureMatches.id}
+								and ${featureMatchSessions.status} = 'active'
+							order by ${featureMatchSessions.id} desc
+							limit 1
+						)`,
+						updatedAt: new Date(now),
+					})
+					.where(and(
+						eq(featureMatches.eventId, scope.eventId),
+						sql`${featureMatches.id} in (${scopedSlotIds(scope)})`,
+					)),
+			];
+		},
+
+		/**
+		 * Each new Session is announced as its own `SessionStarted`, carrying its whole
+		 * snapshot, so a follower holds it as a newer epoch without a reload (ADR-0026).
+		 * An ended Session needs no message of its own: its successor's supersedes it.
+		 * Bindings re-resolve once for the whole change, as for any Event Data write.
+		 */
+		announce: async ({ opened }, { originConnectionId }) => {
+			for (const session of opened) {
+				const response = mapFeatureMatchSessionToResponse(session);
+				await publishMessage(session.eventId, 'featureMatchSession:eventApplied', {
+					slotId: session.slotId,
+					sessionId: response.id,
+					sequence: response.sequence,
+					eventType: 'SessionStarted',
+					sourceSnapshot: response.sourceSnapshot,
+					currentState: response.currentState,
+				}, originConnectionId);
+			}
+			const eventId = opened[0]?.eventId;
+			if (eventId !== undefined)
+				await refreshBroadcastGraphicsBindings(eventId);
+		},
+	});
+
+	/**
+	 * The transition closing every active Session of the given Slots and opening a
+	 * fresh one for each, built but not committed so a caller can carry it inside a
+	 * larger atomic batch (Feature Match Slot Promotion, a Melee reset). Settle it
+	 * once that batch has committed: that is what announces the new Sessions.
+	 *
+	 * Each Slot is passed in the state it should reflect: promotion feeds the
+	 * post-write Slot (promoted / cleared) so the snapshot is built off the values
+	 * the same batch is about to persist rather than a stale read.
+	 *
+	 * `slotCondition` is a predicate over `feature_match_slots` every statement
+	 * applies under, so a Slot that no longer satisfies it when the batch runs keeps
+	 * its Session and is not announced.
+	 */
+	const buildSessionReplacement = async (
+		eventId: number,
+		slots: readonly DbFeatureMatch[],
+		options: {
+			slotCondition?: SQL;
+			defaults?: EventDefaults;
+			players?: ReadonlyMap<number, DbPlayer>;
+		} = {},
+	): Promise<SequencedLiveEpochTransition<DbFeatureMatchSession>> => {
+		const defaults = options.defaults ?? await loadEventDefaults(eventId);
+		const openings = await Promise.all(slots.map(async (slot) => {
+			const sourceSnapshot = await buildSourceSnapshot(slot, defaults, options.players);
+			return {
+				slotId: slot.id,
+				sourceSnapshot,
+				currentState: createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot),
+			};
+		}));
+		return await sessionEpochs.replace(
+			{ eventId, slotIds: slots.map(slot => slot.id), slotCondition: options.slotCondition },
+			openings,
+		);
+	};
+
+	/**
+	 * Open a Session for each Slot, announce them, and answer with whichever
+	 * Session each Slot owns afterwards — not necessarily the one this call
+	 * inserted.
 	 *
 	 * Two callers that both find no active Session both open one, and because
 	 * opening closes any active Session first, the second strands the first: it is
-	 * inserted and closed within milliseconds, and a caller holding it can only be
-	 * told the Session is closed, while its `SessionStarted` announces a Session
-	 * peers will project as live. Re-reading the Slot's active Session collapses
-	 * both callers onto the winner, so the loser adopts the Session the Slot
-	 * actually owns instead of announcing and commanding a corpse.
+	 * inserted and closed within milliseconds. Re-reading each Slot's active Session
+	 * collapses both callers onto the winner, so the loser adopts the Session the
+	 * Slot actually owns instead of commanding a corpse — and the announcement,
+	 * decided from a re-read too, names the winner.
 	 *
 	 * The loser is not refused. An operator's open closes whatever was there, so a
 	 * `409` would tell them to retry something that has already happened to the
 	 * Slot; adopting the winner is what the Slot's own state says happened.
 	 */
+	const openSessionsForSlots = async (
+		eventId: number,
+		slotIds: readonly number[],
+		options: { defaults?: EventDefaults; originConnectionId?: string } = {},
+	): Promise<Map<number, DbFeatureMatchSession>> => {
+		if (slotIds.length === 0)
+			return new Map();
+		const slots = await db.query.featureMatches.findMany({
+			where: and(eq(featureMatches.eventId, eventId), inArray(featureMatches.id, [...slotIds])),
+		});
+		if (slots.length === 0)
+			return new Map();
+
+		const replacement = await buildSessionReplacement(eventId, slots, { defaults: options.defaults });
+		await sessionEpochs.commit(replacement, { originConnectionId: options.originConnectionId });
+
+		const active = await findActiveSessions({ eventId, slotIds: slots.map(slot => slot.id) });
+		if (active.length < slots.length)
+			throw new Error('Failed to create feature match session');
+		return new Map(active.map(session => [session.slotId, session]));
+	};
+
 	const createSessionForSlot = async (
 		slotId: number,
 		eventId: number,
-		preloadedDefaults?: EventDefaults,
+		options: { defaults?: EventDefaults; originConnectionId?: string } = {},
 	): Promise<DbFeatureMatchSession | null> => {
-		const slot = await db.query.featureMatches.findFirst({
-			where: and(eq(featureMatches.id, slotId), eq(featureMatches.eventId, eventId)),
-		});
-		if (!slot)
-			return null;
-
-		// Close, create, discard stale receipts and link the Slot in one D1 batch.
-		const { queries } = await buildCreateSessionForSlotQueries(slot, eventId, preloadedDefaults);
-		const [, insertedRows] = await db.batch(queries as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
-
-		const session = insertedRows?.[0] as DbFeatureMatchSession | undefined;
-		if (!session)
-			throw new Error('Failed to create feature match session');
-		return await getActiveSession(slotId, eventId) ?? session;
+		return (await openSessionsForSlots(eventId, [slotId], options)).get(slotId) ?? null;
 	};
 
 	function toEventAppliedPayload(result: FeatureMatchSessionCommandResult): FeatureMatchSessionEventAppliedPayload {
@@ -447,7 +562,8 @@ export function featureMatchStateService() {
 	/**
 	 * Reverse-sync writes onto whichever Session the Slot currently owns. These
 	 * accompany a Slot change that publishes its own notification, so they do not
-	 * announce themselves.
+	 * announce themselves. A Session this has to open first is announced like any
+	 * other new epoch.
 	 */
 	const applyCommandToActiveSession = async (
 		slotId: number,
@@ -465,7 +581,8 @@ export function featureMatchStateService() {
 	return {
 		loadEventDefaults,
 		buildSourceSnapshot,
-		buildCreateSessionForSlotQueries,
+		buildSessionReplacement,
+		openSessionsForSlots,
 		createSessionForSlot,
 		applyCommand,
 		applyCommandToActiveSession,
