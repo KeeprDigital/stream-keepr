@@ -311,6 +311,25 @@ describe('the built Worker smoke runner', () => {
 		expect(steps).toEqual(expect.arrayContaining(['pnpm typecheck', 'pnpm validator:dry-run']));
 	});
 
+	it('checks the app\'s generated Worker types are fresh and machine-independent in verify and CI', async () => {
+		// The root worker-configuration.d.ts went stale unnoticed, and regenerating
+		// it on a dev machine wrote that machine's `.env` names into `Env`.
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		const generate = packageJson.scripts['types:app'];
+		expect(generate).toMatch(/^wrangler types worker-configuration\.d\.ts /u);
+		expect(generate).toContain('--config wrangler.dev.jsonc');
+		// No `.env` or `.dev.vars` is read, so every checkout generates the same file.
+		expect(generate).toContain('--env-file /dev/null');
+		// `pnpm typecheck` runs `typecheck:app`, and verify runs it as a first-stage gate.
+		expect(packageJson.scripts['typecheck:app']).toMatch(/^pnpm types:app --check && /u);
+
+		const header = (await readFile(join(repositoryRoot, 'worker-configuration.d.ts'), 'utf8')).split('\n', 2)[1];
+		expect(header).toContain('`wrangler types --config=wrangler.dev.jsonc --env-file=/dev/null`');
+	});
+
 	it('runs `pnpm test` as the test gates of verify\'s graph', async () => {
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
