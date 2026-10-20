@@ -32,6 +32,11 @@ vi.mock('~~/server/services/featureMatch', () => ({
 vi.mock('~~/server/services/meleeCredentials', () => ({
 	protectMeleeClientSecret,
 }));
+const clearDeckSourcesQuery = { kind: 'clear-deck-sources-query' };
+const buildClearDeckSourcePlayersQuery = vi.fn(() => clearDeckSourcesQuery);
+vi.mock('~~/server/services/screen', () => ({
+	buildClearDeckSourcePlayersQuery,
+}));
 
 const { eventService } = await import('~~/server/services/event');
 
@@ -230,6 +235,9 @@ describe('eventService', () => {
 				featureResetQuery,
 				getChain('update'),
 			]));
+			// Ahead of the Player delete, so no Deck Source is left naming a deleted Player.
+			expect(mockDb.batch.mock.calls[0]?.[0][0]).toBe(clearDeckSourcesQuery);
+			expect(buildClearDeckSourcePlayersQuery).toHaveBeenCalledWith(1, expect.anything());
 			// The cleared Slots' new Sessions are announced once the reset has committed.
 			expect(settleFeatureReset).toHaveBeenCalledOnce();
 			expect(mockDb.batch.mock.invocationCallOrder[0]).toBeLessThan(settleFeatureReset.mock.invocationCallOrder[0]!);
@@ -282,12 +290,12 @@ describe('eventService', () => {
 			}));
 		});
 
-		it('returns false when event not found', async () => {
+		it('answers nothing when event not found', async () => {
 			mockDb.query.events.findFirst.mockResolvedValue(undefined);
 
 			const result = await eventService().updateMeleeConfig(999, {} as any);
 
-			expect(result).toBe(false);
+			expect(result).toBeUndefined();
 		});
 	});
 

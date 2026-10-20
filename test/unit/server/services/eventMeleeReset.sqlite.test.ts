@@ -57,6 +57,16 @@ describe('eventService Melee config reset SQLite integration', () => {
 			`create table players (
 				id integer primary key autoincrement, event_id integer not null, external_source text
 			)`,
+			`create table screens (
+				id integer primary key autoincrement, event_id integer not null, name text not null,
+				slug text not null, current_mode text not null default 'background', mode_configs text,
+				screen_config text, state_version integer not null default 0,
+				graphic_asset_reference_version text, asset_capability_seed text not null,
+				asset_capability_version integer not null default 1, asset_capability_digest text not null,
+				active_card text, active_card_version integer not null default 0,
+				created_at integer not null default (unixepoch() * 1000),
+				updated_at integer not null default (unixepoch() * 1000)
+			)`,
 			`create table feature_match_slots (
 				id integer primary key autoincrement, event_id integer not null, match_id integer,
 				external_id text, external_source text, table_number integer, round_name text, format_name text,
@@ -104,6 +114,11 @@ describe('eventService Melee config reset SQLite integration', () => {
 			(1, 'melee'), (1, 'manual')`);
 		await client.execute(`insert into players (id, event_id, external_source) values
 			(21, 1, 'melee'), (22, 1, 'manual')`);
+		await client.execute(`insert into screens (
+			id, event_id, name, slug, mode_configs, state_version, asset_capability_seed, asset_capability_digest
+		) values
+			(30, 1, 'Imported Deck', 'imported-deck', '{"deck":{"deckSource":{"type":"player","playerId":21}}}', 2, 'seed-30', 'digest-30'),
+			(31, 1, 'Manual Deck', 'manual-deck', '{"deck":{"deckSource":{"type":"player","playerId":22}}}', 2, 'seed-31', 'digest-31')`);
 		await client.execute({
 			sql: `insert into feature_match_slots (
 				id, event_id, match_id, external_id, external_source, table_number, round_name,
@@ -159,6 +174,10 @@ describe('eventService Melee config reset SQLite integration', () => {
 		expect(await rowCount('matches', `where event_id = 1 and external_source = 'melee'`)).toBe(1);
 		expect(await rowCount('phases', `where event_id = 1 and external_source = 'melee'`)).toBe(1);
 		expect(await rowCount('players', `where event_id = 1 and external_source = 'melee'`)).toBe(1);
+		expect(await firstRow(`select mode_configs, state_version from screens where id = 30`)).toMatchObject({
+			mode_configs: '{"deck":{"deckSource":{"type":"player","playerId":21}}}',
+			state_version: 2,
+		});
 
 		const slotAfterFailure = await firstRow(`select * from feature_match_slots where id = 10`);
 		expect(slotAfterFailure).toMatchObject({
@@ -178,7 +197,15 @@ describe('eventService Melee config reset SQLite integration', () => {
 		expect(await rowCount('live_state_command_receipts')).toBe(1);
 
 		await client.execute(`drop trigger reject_replacement_session_event`);
-		await expect(eventService().updateMeleeConfig(1, input)).resolves.toBe(true);
+		await expect(eventService().updateMeleeConfig(1, input)).resolves.toEqual({
+			clearedScreens: [expect.objectContaining({ id: 30, stateVersion: 3 })],
+		});
+		expect(await firstRow(`select mode_configs from screens where id = 30`))
+			.toMatchObject({ mode_configs: '{"deck":{"deckSource":{"type":"player","playerId":null}}}' });
+		expect(await firstRow(`select mode_configs, state_version from screens where id = 31`)).toMatchObject({
+			mode_configs: '{"deck":{"deckSource":{"type":"player","playerId":22}}}',
+			state_version: 2,
+		});
 
 		const eventAfterSuccess = await firstRow(`select * from events where id = 1`);
 		expect(eventAfterSuccess).toMatchObject({

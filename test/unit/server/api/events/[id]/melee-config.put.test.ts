@@ -12,6 +12,7 @@ const mockFetchMeleeEvent = vi.fn();
 const mockRequireMeleeIntegration = vi.fn();
 const mockPublishEventUpdated = vi.fn();
 const mockPublishMeleeDataReset = vi.fn();
+const mockPublishScreenUpdated = vi.fn();
 const mockGetOriginConnectionId = vi.fn();
 const mockAcquireMeleeSyncLease = vi.fn();
 const mockReleaseMeleeSyncLease = vi.fn();
@@ -53,6 +54,7 @@ vi.mock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => ({
 		eventUpdated: mockPublishEventUpdated,
 		meleeDataReset: mockPublishMeleeDataReset,
+		screenUpdated: mockPublishScreenUpdated,
 	}),
 }));
 vi.mock('~~/server/utils/ably', () => ({
@@ -82,7 +84,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		mockFindEvent.mockReset()
 			.mockResolvedValueOnce({ id: 1, game: 'mtg', meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
 			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'new-envelope' });
-		mockUpdateMeleeConfig.mockReset().mockResolvedValue(true);
+		mockUpdateMeleeConfig.mockReset().mockResolvedValue({ clearedScreens: [] });
 		mockFetchMeleeEvent.mockReset().mockResolvedValue({ ID: 123, Game: 'Magic: The Gathering' });
 		mockRequireMeleeIntegration.mockReset().mockResolvedValue({
 			clientId: 'client-id',
@@ -166,6 +168,28 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			originConnectionId: 'origin-1',
 			reason: 'disabled',
 		});
+	});
+
+	it('announces each Screen whose Deck Source the reset cleared, before the reset itself', async () => {
+		mockReadValidatedBody.mockResolvedValue({
+			meleeEnabled: false,
+			meleeEventId: null,
+			meleeClientId: null,
+		});
+		mockFindEvent.mockReset()
+			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
+			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
+		const cleared = { id: 7, eventId: 1, stateVersion: 3 };
+		mockUpdateMeleeConfig.mockResolvedValue({ clearedScreens: [cleared] });
+
+		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
+
+		expect(mockPublishScreenUpdated).toHaveBeenCalledOnce();
+		// Without an origin: the configuring client holds the Screen at its old version too.
+		expect(mockPublishScreenUpdated).toHaveBeenCalledWith({ eventId: 1, entity: cleared });
+		// A Deck Screen that re-read on the reset first would ask for the deleted Player.
+		expect(mockPublishScreenUpdated.mock.invocationCallOrder[0])
+			.toBeLessThan(mockPublishMeleeDataReset.mock.invocationCallOrder[0]!);
 	});
 
 	it('does not replace a committed configuration result when lease cleanup fails', async () => {

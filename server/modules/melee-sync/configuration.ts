@@ -147,7 +147,7 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 			}
 		}
 
-		let updated: boolean;
+		let updated: Awaited<ReturnType<typeof eventSvc.updateMeleeConfig>>;
 		try {
 			updated = await eventSvc.updateMeleeConfig(eventId, {
 				...normalizedConfig,
@@ -181,6 +181,11 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 			entity: eventData,
 			originConnectionId,
 		});
+		// Ahead of the reset, so a Deck Screen that showed a deleted Player is
+		// already reloading its Screen when the reset arrives. No origin, because
+		// the configuring client never received these Screens back.
+		for (const screen of updated.clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
 		if (resetReason) {
 			await publication.meleeDataReset({
 				eventId,

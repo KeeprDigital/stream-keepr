@@ -95,20 +95,21 @@ describe('playerService', () => {
 	});
 
 	describe('remove', () => {
-		it('returns true when deleted', async () => {
-			getChain('delete').returning.mockResolvedValue([createMockPlayer()]);
+		it('reports the deletion with the Screens whose Deck Source it cleared', async () => {
+			const screen = { id: 4 };
+			mockDb.batch.mockResolvedValue([[screen], [{ id: 1 }]]);
 
 			const result = await playerService().remove(1, 1);
 
-			expect(result).toBe(true);
+			expect(result).toEqual({ deleted: true, clearedScreens: [screen] });
 		});
 
-		it('returns false when not found', async () => {
-			getChain('delete').returning.mockResolvedValue([]);
+		it('reports a missing Player as not deleted', async () => {
+			mockDb.batch.mockResolvedValue([[], []]);
 
 			const result = await playerService().remove(999, 1);
 
-			expect(result).toBe(false);
+			expect(result).toEqual({ deleted: false, clearedScreens: [] });
 		});
 	});
 

@@ -1,10 +1,11 @@
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { DbPlayer, DbPlayerInsert } from '~~/server/db/schema';
+import type { DbPlayer, DbPlayerInsert, DbScreen } from '~~/server/db/schema';
 import type { CreatePlayerInput, UpdatePlayerInput } from '~~/shared/api';
 
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
+import { buildClearDeckSourcePlayersQuery } from '~~/server/services/screen';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
@@ -179,13 +180,17 @@ export function playerService() {
 		return updatedPlayer;
 	};
 
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const result = await db
-			.delete(players)
-			.where(and(eq(players.id, id), eq(players.eventId, eventId)))
-			.returning();
+	/** Deletes the Player, and in the same write releases every Deck Source selecting them. */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [clearedScreens, deleted] = await db.batch([
+			buildClearDeckSourcePlayersQuery(eventId, [id]),
+			db
+				.delete(players)
+				.where(and(eq(players.id, id), eq(players.eventId, eventId)))
+				.returning({ id: players.id }),
+		]);
 
-		return result.length > 0;
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	/**

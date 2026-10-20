@@ -1,10 +1,11 @@
+import type { SQLWrapper } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbScreen, ScreenMode } from '~~/server/db/schema';
 import type { GraphicsAuthoringLeaseFence } from '~~/server/modules/graphics-authoring-lease';
 import type { PersistedScreenOutputAssetCapability } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import {
@@ -18,6 +19,27 @@ import {
 import { mapDeckSourceConflict, StateConflictError } from '~~/server/utils/errors';
 import { mergeScreenConfig, mergeScreenModeConfig } from '~~/shared/types/screenConfig';
 import { isGraphicAssetReferencingScreenMode } from '~~/shared/utils/graphicsAssetReferences';
+
+/**
+ * Clears every Deck Source in the Event naming one of `playerIds` to no Player,
+ * as a new Screen version (ADR-0031). Batch it ahead of the delete of those
+ * Players: the Screen guard triggers prove a Deck Source's Player exists, so a
+ * Screen left naming a deleted Player could never be written again (#651).
+ */
+export function buildClearDeckSourcePlayersQuery(eventId: number, playerIds: number[] | SQLWrapper) {
+	return db
+		.update(screens)
+		.set({
+			modeConfigs: sql`json_set(${screens.modeConfigs}, '$.deck.deckSource.playerId', json('null'))`,
+			stateVersion: sql`${screens.stateVersion} + 1`,
+		})
+		.where(and(
+			eq(screens.eventId, eventId),
+			sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'player'`,
+			inArray(sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.playerId')`, playerIds),
+		))
+		.returning();
+}
 
 export function screenService() {
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {

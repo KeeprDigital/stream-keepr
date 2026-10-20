@@ -1070,6 +1070,44 @@ describe('useDeckModeData', () => {
 			expect(result.error.value).toBe('Player has no deck list');
 		});
 
+		it('leaves a deleted Player\'s deck once the Screen clears its Deck Source, and stops re-reading them (#651)', async () => {
+			vi.useFakeTimers();
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+			try {
+				mockPlayerId.value = 5;
+				const result = mountDeckModeData();
+				await vi.advanceTimersByTimeAsync(0);
+				expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+				// Deleted while disconnected: the resync's read finds no Player and retries.
+				mockRealtime.connectionState = 'disconnected';
+				await nextTick();
+				mockReadPlayer.mockImplementation(async () => null);
+				mockRealtime.connectionState = 'connected';
+				continuity.reattach('event:1');
+				await vi.advanceTimersByTimeAsync(0);
+				const failedReads = mockPlayerDecks.mock.calls.length;
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
+				expect(mockPlayerDecks.mock.calls.length).toBeGreaterThan(failedReads);
+				expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+				// The deletion's `screen:updated` carries the cleared Deck Source.
+				mockPlayerId.value = null;
+				await vi.advanceTimersByTimeAsync(0);
+				const reads = mockPlayerDecks.mock.calls.length;
+				expect(result.pendingSwapVersion.value).toBe(1);
+				result.commitPendingDeck();
+				expect(result.hasDisplayedDeck.value).toBe(false);
+
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 4);
+				expect(mockPlayerDecks).toHaveBeenCalledTimes(reads);
+			}
+			finally {
+				consoleError.mockRestore();
+				vi.useRealTimers();
+			}
+		});
+
 		it('shows a deck imported after the Player was selected without one', async () => {
 			mockReadDeck.mockImplementation(async (_playerId: number, _eventId: number, updatedAt: string) =>
 				createDeckResponse(updatedAt === BEFORE_EDIT ? [] : [createDeckCard({ name: 'Brainstorm' })]));
