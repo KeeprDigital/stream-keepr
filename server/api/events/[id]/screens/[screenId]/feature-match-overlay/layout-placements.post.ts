@@ -1,11 +1,12 @@
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireScreenGraphicsEditWritable } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
+import { admitScreenGraphicsEditWrite } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { placeFeatureMatchLayoutTemplateSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
+import { optionalBrowserSessionId } from '~~/server/utils/auth';
 
 /**
  * Place a Feature Match Layout Template on this Screen as a fully unlinked copy.
@@ -40,7 +41,8 @@ export default defineEventHandler(async (event) => {
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 	const body = placeFeatureMatchLayoutTemplateSchema.parse(await readBody(event) ?? {});
 
-	await requireScreenGraphicsEditWritable(event, eventId, screenId);
+	const authoringSessionId = await optionalBrowserSessionId(event);
+	await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId);
 
 	const screen = await screenService().findById(screenId, eventId);
 	if (!screen)
@@ -83,6 +85,7 @@ export default defineEventHandler(async (event) => {
 			graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 			stateVersion: body.stateVersion,
 			originConnectionId: getOriginConnectionId(event),
+			authoringSessionId,
 		});
 
 		setResponseStatus(event, 201);
