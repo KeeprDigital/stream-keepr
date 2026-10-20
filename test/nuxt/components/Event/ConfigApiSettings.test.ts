@@ -175,8 +175,22 @@ describe('event config api settings', () => {
 		expect(submitted(wrapper)).toEqual({
 			displayRecordSeparator: '/',
 			displayHideZeroDraws: false,
-			displayPositionFormat: 'ordinal',
 		});
+	});
+
+	// #612: a whole-form payload would write the stale value back over a
+	// colleague's change to a setting this operator never touched.
+	it('saves only what the operator edited, keeping a colleague\'s concurrent change', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await hideZeroDrawsSwitch(wrapper).setValue(false);
+		await wrapper.setProps({ event: configEvent({ displayPositionFormat: 'number' }) });
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(selectFor(wrapper, 'displayPositionFormat').props('modelValue')).toBe('number');
+		expect(submitted(wrapper)).toEqual({ displayHideZeroDraws: false });
 	});
 
 	it('offers a save only once the form has changed, and takes it back on reset', async () => {

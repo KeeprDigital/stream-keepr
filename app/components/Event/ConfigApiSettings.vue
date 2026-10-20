@@ -16,12 +16,12 @@ const initialData = computed(() => ({
 	displayPositionFormat: props.event.displayPositionFormat,
 }));
 
-const { formData, isDirty, reset } = useForm({ initialData });
+const { formData, isDirty, reset, getChanges } = useForm({ initialData });
 
 useRegisterDirtyState(isDirty);
 
 function submit() {
-	emit('submit', formData.value);
+	emit('submit', getChanges());
 }
 </script>
 

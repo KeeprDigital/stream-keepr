@@ -319,6 +319,25 @@ describe('event controls', () => {
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ holdingText: null });
 	});
 
+	// #612: the colleague's change used to stay stale in the dirty form and go
+	// back out as an apparent local edit.
+	it('keeps a colleague\'s change to the other position while this operator edits one', async () => {
+		const DANA = createMockTalent({ id: 16, name: 'Dana' });
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await commentatorField(wrapper, 1).setValue(CASPAR.id);
+		mockEventStore.event = { ...loadedEvent({ commentator2TalentId: DANA.id }), talents: [CASPAR, ALICE, BRIONY, DANA] };
+		await flushPromises();
+
+		expect(commentatorField(wrapper, 2).props('modelValue')).toBe(DANA.id);
+
+		await formFor(wrapper, 'commentator1TalentId').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: CASPAR.id });
+	});
+
 	it('saves commentators as the talent ids behind the chosen names', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
