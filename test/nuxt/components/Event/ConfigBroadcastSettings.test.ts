@@ -176,11 +176,22 @@ describe('event config broadcast settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
-			numFeatureMatches: 2,
-			featureMatchOrientation: 'horizontal',
-			cardTimeout: 30,
-		});
+		expect(submitted(wrapper)).toEqual({ cardTimeout: 30 });
+	});
+
+	// #612: a whole-form payload would write the stale value back over a
+	// colleague's change to a setting this operator never touched.
+	it('saves only what the operator edited, keeping a colleague\'s concurrent change', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await numberFor(wrapper, 'cardTimeout').setValue(30);
+		await wrapper.setProps({ event: configEvent({ numFeatureMatches: 4 }) });
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(numberFor(wrapper, 'numFeatureMatches').props('modelValue')).toBe(4);
+		expect(submitted(wrapper)).toEqual({ cardTimeout: 30 });
 	});
 
 	it('refuses to save a negative card timeout, and says so at the field', async () => {

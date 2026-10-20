@@ -93,16 +93,10 @@ function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
 }
 
 const { formData, isDirty, reset, updateOriginal, getChanges } = useForm<FeatureMatchFormData>({
-	initialData: normalizeMatchData(props.match),
+	initialData: computed(() => normalizeMatchData(props.match)),
 });
 
 useRegisterDirtyState(isDirty);
-
-watch(() => props.match, (newMatch) => {
-	if (!isDirty.value) {
-		updateOriginal(normalizeMatchData(newMatch));
-	}
-}, { deep: true });
 
 const matchDisplayMode = computed(() => formData.value.playerDisplayMode);
 const roundNameInput = computed({

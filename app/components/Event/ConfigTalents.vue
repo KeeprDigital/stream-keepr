@@ -28,10 +28,22 @@ const emit = defineEmits<{
 	(e: 'submit', talents: TalentRow[]): void;
 }>();
 
-const editingIndex = ref<number | null>(null);
+/**
+ * The row the editor is open on. Remote updates merge into the staged list row
+ * by row (#612), so a row can move while the editor is open; the editor finds it
+ * again by id, or by identity for a row that has none yet.
+ */
+const editingRow = shallowRef<TalentRow | null>(null);
 const editingValue = ref<TalentEditorValue | null>(null);
 const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
-const hasActiveEdit = computed(() => editingIndex.value !== null);
+const hasActiveEdit = computed(() => editingRow.value !== null);
+
+function isEditingRow(row: TalentRow | undefined) {
+	const target = editingRow.value;
+	if (!row || !target)
+		return false;
+	return target.id !== undefined ? row.id === target.id : toRaw(row) === target;
+}
 
 function rowFromTalent(talent: Talent): TalentRow {
 	return {
@@ -69,28 +81,28 @@ function startEditing(index: number) {
 	if (!row)
 		return;
 
-	editingIndex.value = index;
+	editingRow.value = toRaw(row);
 	editingValue.value = editorValue(row);
 	editingErrors.value = {};
 }
 
 function closeEditor() {
-	editingIndex.value = null;
+	editingRow.value = null;
 	editingValue.value = null;
 	editingErrors.value = {};
 }
 
 function cancelTalentEdit() {
-	const index = editingIndex.value;
-	if (index !== null && !talentsData.value[index]?.name)
+	const index = talentsData.value.findIndex(isEditingRow);
+	if (index !== -1 && !talentsData.value[index]?.name)
 		talentsData.value.splice(index, 1);
 	closeEditor();
 }
 
 function saveTalentEdit() {
-	const index = editingIndex.value;
+	const row = editingRow.value;
 	const value = editingValue.value;
-	if (index === null || !value || !talentsData.value[index])
+	if (!row || !value)
 		return;
 
 	const name = value.name.trim();
@@ -116,17 +128,20 @@ function saveTalentEdit() {
 	if (Object.keys(errors).length > 0)
 		return;
 
-	talentsData.value[index] = {
-		...talentsData.value[index],
-		name,
-		socialProfiles,
-	};
+	// A colleague removed the row while it was open: staging it again lets the
+	// save re-create the Talent, as `applyTalentUpdates` does for any such row.
+	const index = talentsData.value.findIndex(isEditingRow);
+	if (index === -1)
+		talentsData.value.push({ ...row, name, socialProfiles });
+	else
+		talentsData.value[index] = { ...talentsData.value[index]!, name, socialProfiles };
 	closeEditor();
 }
 
 function removeTalent(index: number) {
+	const wasEditing = isEditingRow(talentsData.value[index]);
 	talentsData.value.splice(index, 1);
-	if (editingIndex.value === index)
+	if (wasEditing)
 		closeEditor();
 }
 

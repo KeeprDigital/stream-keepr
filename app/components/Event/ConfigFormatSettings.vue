@@ -28,7 +28,7 @@ const initialData = computed(() => {
 	};
 });
 
-const { formData, isDirty, reset } = useForm({
+const { formData, isDirty, reset, getChanges } = useForm({
 	initialData,
 	clearOnReset: errors,
 });
@@ -73,9 +73,11 @@ function validate(): boolean {
 
 function submit() {
 	if (validate()) {
+		const changes = getChanges();
+		const { pointsSystem, ...matchDefaults } = changes;
 		emit('submit', {
-			...fromFeatureMatchDefaults(formData.value),
-			pointsSystem: formData.value.pointsSystem,
+			...fromFeatureMatchDefaults(matchDefaults),
+			...('pointsSystem' in changes ? { pointsSystem } : {}),
 		} as UpdateEventInput);
 	}
 }

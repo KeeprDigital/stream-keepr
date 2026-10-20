@@ -87,17 +87,6 @@ const stubs = {
 const mountOptions = { attachTo: document.body, global: { stubs } };
 
 /** What the card sends when nothing has been touched, for a test to vary one key of. */
-const UNTOUCHED_PAYLOAD = {
-	pronounsEnabled: true,
-	standingsEnabled: true,
-	lgsEnabled: false,
-	tableNumberEnabled: false,
-	featureMatchDefaultTurnTrackingEnabled: false,
-	featureMatchDefaultActivePlayerTrackingEnabled: false,
-	featureMatchDefaultMulliganTrackingEnabled: false,
-	featureMatchDefaultExtraTurnsLabel: 'Extra Turns',
-};
-
 enableAutoUnmount(afterEach);
 
 async function mountComponent(event: Event = configEvent()) {
@@ -192,10 +181,22 @@ describe('event config feature match settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
-			...UNTOUCHED_PAYLOAD,
-			featureMatchDefaultTurnTrackingEnabled: true,
-		});
+		expect(submitted(wrapper)).toEqual({ featureMatchDefaultTurnTrackingEnabled: true });
+	});
+
+	// #612: a whole-form payload would write the stale value back over a
+	// colleague's change to a setting this operator never touched.
+	it('saves only what the operator edited, keeping a colleague\'s concurrent change', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await toggleFor(wrapper, 'turnTrackingEnabled').setValue(true);
+		await wrapper.setProps({ event: configEvent({ standingsEnabled: false }) });
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(toggleFor(wrapper, 'standingsEnabled').props('modelValue')).toBe(false);
+		expect(submitted(wrapper)).toEqual({ featureMatchDefaultTurnTrackingEnabled: true });
 	});
 
 	it('saves an edited event-level toggle under its own name', async () => {
@@ -206,9 +207,6 @@ describe('event config feature match settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
-			...UNTOUCHED_PAYLOAD,
-			pronounsEnabled: false,
-		});
+		expect(submitted(wrapper)).toEqual({ pronounsEnabled: false });
 	});
 });

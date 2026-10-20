@@ -114,21 +114,6 @@ export function useForm<T extends Record<string, any>>(
 		return JSON.stringify(formData.value) !== JSON.stringify(originalFormData.value);
 	});
 
-	if (isRef(initialData)) {
-		watch(initialData, (newData) => {
-			const cloned = cloneData(newData);
-			// Capture dirty state before updating original, otherwise the
-			// comparison between stale formData and the new originalFormData
-			// always evaluates to dirty and prevents syncing.
-			const wasClean = !isDirty.value;
-			originalFormData.value = cloneData(cloned);
-			// Only sync form data if the user hasn't made edits
-			if (wasClean) {
-				formData.value = cloned;
-			}
-		}, { deep: true });
-	}
-
 	const areValuesEqual = (val1: unknown, val2: unknown): boolean => {
 		if (val1 === val2)
 			return true;
@@ -147,6 +132,92 @@ export function useForm<T extends Record<string, any>>(
 
 		return false;
 	};
+
+	const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+		return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
+	};
+
+	const hasRowId = (value: unknown): value is Record<string, unknown> => {
+		return isPlainObject(value) && value.id !== undefined && value.id !== null;
+	};
+
+	const isRowList = (value: unknown): value is Record<string, unknown>[] => {
+		return Array.isArray(value) && value.every(hasRowId);
+	};
+
+	/**
+	 * Merges a list of rows by `id`. A row the operator added (no id), removed or
+	 * edited stays as they left it, an edited row the remote side removed among
+	 * them; a row they left untouched follows the remote side, as do rows the
+	 * remote side added.
+	 */
+	function mergeRows(local: unknown[], previous: Record<string, unknown>[], next: Record<string, unknown>[]): unknown[] {
+		const previousById = new Map(previous.map(row => [row.id, row]));
+		const nextById = new Map(next.map(row => [row.id, row]));
+		const localIds = new Set<unknown>();
+		const merged: unknown[] = [];
+
+		for (const row of local) {
+			if (!hasRowId(row)) {
+				merged.push(row);
+				continue;
+			}
+
+			localIds.add(row.id);
+			const before = previousById.get(row.id);
+			const after = nextById.get(row.id);
+			if (before && !after) {
+				if (!areValuesEqual(row, before))
+					merged.push(row);
+			}
+			else {
+				merged.push(before && after ? mergeValue(row, before, after) : row);
+			}
+		}
+
+		for (const row of next) {
+			if (!previousById.has(row.id) && !localIds.has(row.id))
+				merged.push(cloneData(row));
+		}
+
+		return merged;
+	}
+
+	/**
+	 * Three-way merge of a new baseline into the form (#612).
+	 *
+	 * A value the operator left as the previous baseline had it takes the new
+	 * baseline's. A value they edited keeps theirs: on a same-field conflict the
+	 * local edit wins and stays a change against the new baseline, unless the
+	 * remote value now matches it. Plain objects merge per key and lists of rows
+	 * carrying an `id` per row; other arrays and values are atomic.
+	 */
+	function mergeValue(local: unknown, previous: unknown, next: unknown): unknown {
+		if (areValuesEqual(local, previous))
+			return cloneData(next);
+
+		if (Array.isArray(local) && local.every(isPlainObject) && isRowList(previous) && isRowList(next))
+			return mergeRows(local, previous, next);
+
+		if (!isPlainObject(local) || !isPlainObject(previous) || !isPlainObject(next))
+			return local;
+
+		const merged: Record<string, unknown> = {};
+		for (const key of new Set([...Object.keys(local), ...Object.keys(next)])) {
+			const value = mergeValue(local[key], previous[key], next[key]);
+			if (value !== undefined || Object.hasOwn(next, key))
+				merged[key] = value;
+		}
+		return merged;
+	}
+
+	if (isRef(initialData)) {
+		watch(initialData, (newData) => {
+			const next = cloneData(newData);
+			formData.value = mergeValue(formData.value, originalFormData.value, next) as T;
+			originalFormData.value = cloneData(next);
+		}, { deep: true });
+	}
 
 	const getChanges = (): DeepPartial<T> => {
 		const current = formData.value as Record<string, unknown>;

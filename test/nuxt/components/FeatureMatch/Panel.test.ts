@@ -127,8 +127,9 @@ const PanelHeaderStub = defineComponent({
 const PlayerFormStub = defineComponent({
 	props: {
 		formId: { type: String, required: true },
+		modelValue: { type: Object, required: false },
 	},
-	emits: ['submit', 'update:playerId'],
+	emits: ['submit', 'update:playerId', 'update:modelValue'],
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
 });
 
@@ -215,6 +216,28 @@ describe('featureMatchPanel setup save', () => {
 		await flushPromises();
 
 		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, { tableNumber: 12 });
+	});
+
+	// #612: the panel ignored remote updates while dirty, so a saved player object
+	// carried the stale value of every field the operator had not touched.
+	it('keeps a colleague\'s change to a player field this operator left untouched', async () => {
+		const updated = createMockFeatureMatch({ id: 1 });
+		mockFeatureMatchStore.updateFeatureMatch.mockResolvedValue(updated);
+		const original = { name: 'Alice', pronouns: 'she/her' };
+		const wrapper = await mountComponent({ player1Data: original });
+
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
+		player1Form.vm.$emit('update:modelValue', { ...player1Form.props('modelValue'), name: 'Alicia' });
+		await wrapper.setProps({
+			match: createMockFeatureMatch({ id: 1, eventId: 1, player1Data: { ...original, pronouns: 'they/them' } }) as any,
+		});
+		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, {
+			player1Data: { name: 'Alicia', pronouns: 'they/them' },
+		});
 	});
 
 	// The guard is what stops an operator navigating away from an unsaved edit. It
