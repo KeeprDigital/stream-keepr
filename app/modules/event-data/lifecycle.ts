@@ -14,6 +14,13 @@ export interface EventDataLifecycleOptions<T extends { id: number; eventId?: num
 	repository: EventDataLifecycleRepository<T, TCreate, TUpdate>;
 	eventFilter?: (item: T, currentEventId: number | null) => boolean;
 	remoteScopeFilter?: (item: T) => boolean;
+	/**
+	 * Offers an item a load or an update answered to what the store follows, answering
+	 * whether it lands. One that does not was read before something newer this client
+	 * already holds, and is left behind: the held item keeps its place. Without it,
+	 * every answered item lands.
+	 */
+	admit?: (item: T) => boolean;
 	onLoad?: (items: T[]) => void;
 	onMutation?: () => void;
 	onReset?: () => void;
@@ -88,10 +95,11 @@ export function useEventDataLifecycle<
 			if (generation !== loadGeneration || currentEventId.value !== eventId)
 				return null;
 
-			items.value = data;
+			const loaded = options.admit ? keepHeldWhereLeftBehind(data, options.admit) : data;
+			items.value = loaded;
 			hasFetched.value = true;
-			options.onLoad?.(data);
-			return data;
+			options.onLoad?.(loaded);
+			return loaded;
 		}
 		catch (caughtError) {
 			if (generation === loadGeneration) {
@@ -103,6 +111,14 @@ export function useEventDataLifecycle<
 			if (generation === loadGeneration)
 				listLoading.value = false;
 		}
+	}
+
+	/**
+	 * A loaded item left behind keeps the held one in its place; with none held, it
+	 * is still the best this client has.
+	 */
+	function keepHeldWhereLeftBehind(data: T[], admit: (item: T) => boolean) {
+		return data.map(item => admit(item) ? item : getById(item.id) ?? item);
 	}
 
 	async function loadByEventId(eventId: number) {
@@ -134,6 +150,7 @@ export function useEventDataLifecycle<
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,
 			flight: lifetime,
+			admit: options.admit,
 		});
 	}
 

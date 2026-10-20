@@ -22,6 +22,9 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 			},
 		},
 		entityLabel: 'Feature match',
+		// A Slot's Session orders it (ADR-0026): one carrying a Session from an epoch
+		// this client has seen end is left behind whole (#635).
+		admit: slot => useFeatureMatchStateStore().offerSlotSession(slot),
 		onReset: () => {
 			itemLoading.value = false;
 		},
@@ -33,13 +36,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	const isLoaded = lifecycle.isLoaded;
 
 	async function loadFeatureMatchesByEventId(eventId: number) {
-		const data = await lifecycle.loadByEventId(eventId);
-		if (data) {
-			const stateStore = useFeatureMatchStateStore();
-			for (const match of data)
-				stateStore.offerSlotSession(match);
-		}
-		return data;
+		return lifecycle.loadByEventId(eventId);
 	}
 
 	/**
@@ -81,11 +78,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	async function updateFeatureMatch(eventId: number, matchId: number, updates: UpdateFeatureMatchInput) {
-		const flight = lifecycle.currentLifetime();
-		const updated = await lifecycle.update(eventId, matchId, updates);
-		if (updated && flight.current)
-			useFeatureMatchStateStore().offerSlotSession(updated);
-		return updated;
+		return lifecycle.update(eventId, matchId, updates);
 	}
 
 	async function removeFeatureMatch(eventId: number, matchId: number) {
