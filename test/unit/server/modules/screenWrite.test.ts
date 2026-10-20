@@ -217,6 +217,7 @@ describe('screenWriteModule', () => {
 			}));
 
 			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, modeConfigs: null } as never,
@@ -240,6 +241,7 @@ describe('screenWriteModule', () => {
 			}));
 
 			await screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: {
@@ -256,6 +258,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.findById.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 404,
 				input: { stateVersion: 0 } as never,
@@ -267,6 +270,7 @@ describe('screenWriteModule', () => {
 
 		it('splits stateVersion from data and forwards it to update', async () => {
 			const response = await screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 3, slug: 'renamed', modeConfigs: { card: {} } } as never,
@@ -282,6 +286,8 @@ describe('screenWriteModule', () => {
 				3,
 				// No epoch to end, so nothing rides with the write.
 				undefined,
+				// Nothing in the graphics Edit workspace changes, so no lease fence.
+				undefined,
 			);
 			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
 				eventId: 1,
@@ -293,6 +299,7 @@ describe('screenWriteModule', () => {
 
 		it('skips the slug uniqueness check when no slug is supplied', async () => {
 			await screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0 } as never,
@@ -309,6 +316,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.slugExists.mockResolvedValue(true);
 
 			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, slug: 'taken' } as never,
@@ -325,6 +333,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'background' }));
 
 			await screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -342,6 +351,7 @@ describe('screenWriteModule', () => {
 				{ currentMode: 'background' },
 				0,
 				epochEndStatements,
+				undefined,
 			);
 			// Announced only after that commit, because the announcement is a claim
 			// that an epoch ended. Not because outputs would otherwise keep rendering
@@ -357,6 +367,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.update.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -370,6 +381,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.update.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', currentMode: 'broadcast-graphics' }));
 
 			await screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0, name: 'Renamed' } as never,
@@ -382,6 +394,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.update.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				input: { stateVersion: 0 } as never,
@@ -448,6 +461,7 @@ describe('screenWriteModule', () => {
 			mockScreenService.updateScreenConfig.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateScreenConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 404,
 				config: {},
@@ -458,6 +472,7 @@ describe('screenWriteModule', () => {
 
 		it('forwards config and stateVersion, then publishes the update', async () => {
 			const response = await screenWriteModule().updateScreenConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				config: { showLogo: false },
@@ -465,7 +480,7 @@ describe('screenWriteModule', () => {
 				originConnectionId: 'origin-1',
 			});
 
-			expect(mockScreenService.updateScreenConfig).toHaveBeenCalledWith(7, 1, { showLogo: false }, 2);
+			expect(mockScreenService.updateScreenConfig).toHaveBeenCalledWith(7, 1, { showLogo: false }, 2, undefined);
 			expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
 				eventId: 1,
 				entity: expect.objectContaining({ id: 7 }),
@@ -490,6 +505,7 @@ describe('screenWriteModule', () => {
 			}]);
 
 			await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -515,6 +531,7 @@ describe('screenWriteModule', () => {
 			};
 
 			await expect(screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -564,6 +581,7 @@ describe('screenWriteModule', () => {
 			]);
 
 			await expect(screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -591,6 +609,7 @@ describe('screenWriteModule', () => {
 				{ outcome: 'missing' },
 			]);
 			await expect(screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -607,6 +626,7 @@ describe('screenWriteModule', () => {
 				{ outcome: 'available', lifecycleState: 'active', kind: 'image' },
 			]);
 			await expect(screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -625,6 +645,7 @@ describe('screenWriteModule', () => {
 		// deferred to the write that actually asks a question. See #247.
 		it('does not build the Graphics Asset Library for a Screen Mode that pins no references', async () => {
 			await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'card',
@@ -649,6 +670,7 @@ describe('screenWriteModule', () => {
 			}));
 
 			await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -680,6 +702,7 @@ describe('screenWriteModule', () => {
 			};
 
 			await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'feature-match-overlay',
@@ -698,6 +721,7 @@ describe('screenWriteModule', () => {
 
 		it('validates mode config references before writing', async () => {
 			await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'card',
@@ -709,13 +733,14 @@ describe('screenWriteModule', () => {
 			expect(mockValidateScreenModeConfigReferences).toHaveBeenCalledWith(1, 'card', { featureMatchId: 5 });
 			expect(mockValidateScreenModeConfigReferences.mock.invocationCallOrder[0])
 				.toBeLessThan(mockScreenService.updateModeConfig.mock.invocationCallOrder[0]!);
-			expect(mockScreenService.updateModeConfig).toHaveBeenCalledWith(7, 1, 'card', { featureMatchId: 5 }, 4);
+			expect(mockScreenService.updateModeConfig).toHaveBeenCalledWith(7, 1, 'card', { featureMatchId: 5 }, 4, undefined);
 		});
 
 		it('returns 404 when the screen does not exist', async () => {
 			mockScreenService.updateModeConfig.mockResolvedValue(undefined);
 
 			await expect(screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 404,
 				mode: 'card',
@@ -728,6 +753,7 @@ describe('screenWriteModule', () => {
 
 		it('publishes the mapped response after a successful write', async () => {
 			const response = await screenWriteModule().updateModeConfig({
+				authoringSessionId: undefined,
 				eventId: 1,
 				screenId: 7,
 				mode: 'card',

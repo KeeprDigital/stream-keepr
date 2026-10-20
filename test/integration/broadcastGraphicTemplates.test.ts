@@ -695,9 +695,11 @@ describe('broadcast Graphic Template library', () => {
 		const screenLease = `/api/events/${otherEventId}/screens/${otherScreenId}/graphics-authoring-lease`;
 		expect((await request(screenLease, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
 			.toBe('grant');
+		const before = await authoredStack(otherEventId, otherScreenId);
 
 		const refused = await place(otherEventId, otherScreenId, { templateId }, secondBrowserCookie);
 		expect(refused.status).toBe(409);
+		expect(await authoredStack(otherEventId, otherScreenId)).toEqual(before);
 
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
