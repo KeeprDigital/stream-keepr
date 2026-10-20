@@ -16,7 +16,7 @@
 		"typecheck": "nuxt prepare && pnpm typecheck:app && pnpm typecheck:test && pnpm typecheck:validator",
 		"typecheck:app": "vue-tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/app.tsbuildinfo",
 		"typecheck:test": "vue-tsc --noEmit -p tsconfig.test.json --incremental --tsBuildInfoFile node_modules/.cache/tsc/test.tsbuildinfo",
-		"typecheck:validator": "pnpm types:validator --check && tsc -p workers/silent-video-validator/tsconfig.json",
+		"typecheck:validator": "pnpm types:validator --check && tsc -p workers/silent-video-validator/tsconfig.json --incremental --tsBuildInfoFile node_modules/.cache/tsc/validator.tsbuildinfo",
 		"types:validator": "wrangler types --config workers/silent-video-validator/wrangler.jsonc workers/silent-video-validator/worker-configuration.d.ts",
 		"preview": "node scripts/reap-workerd.mjs && pnpm build && pnpm db:migrate:local:built && node scripts/stage-preview-secrets.mjs && wrangler dev --local --config .output/server/wrangler.json --persist-to .wrangler/state/built-worker",
 		"preview:bypass": "STREAM_KEEPR_LOCAL_AUTH_BYPASS=true pnpm preview",
