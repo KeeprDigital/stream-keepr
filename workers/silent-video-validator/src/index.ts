@@ -14,11 +14,12 @@ import { NonRetryableError } from 'cloudflare:workflows';
  * producing the deterministic poster.
  */
 
-interface ValidatorEnv {
-	GRAPHICS_ASSET_STAGING: R2Bucket;
-	SILENT_VIDEO_VALIDATION_WORKFLOW: Workflow<SilentVideoValidationParams>;
-	SILENT_VIDEO_VALIDATION_CONTAINER: DurableObjectNamespace<SilentVideoValidationContainer>;
-}
+/**
+ * The bindings wrangler.jsonc declares, as `wrangler types` generates them into
+ * `worker-configuration.d.ts` — not a hand-kept copy that could drift from the
+ * configuration actually deployed (#618).
+ */
+type ValidatorEnv = Env;
 
 interface SilentVideoValidationParams {
 	operationId: string;
@@ -123,15 +124,15 @@ function decodeBase64(value: string) {
 }
 
 export class SilentVideoValidationContainer extends Container {
-	defaultPort = 8080;
-	sleepAfter = '10m';
+	override defaultPort = 8080;
+	override sleepAfter = '10m';
 	// The pinned tooling never needs outbound network access: source bytes
 	// arrive on the validation request and the poster returns on its response.
-	enableInternet = false;
+	override enableInternet = false;
 }
 
 export class SilentVideoValidationWorkflow extends WorkflowEntrypoint<ValidatorEnv, SilentVideoValidationParams> {
-	async run(
+	override async run(
 		event: WorkflowEvent<SilentVideoValidationParams>,
 		step: WorkflowStep,
 	): Promise<SilentVideoValidationOutput> {

@@ -1,0 +1,36 @@
+{
+	// The validator's own program (#618). It is a separate Worker deployed from
+	// its own wrangler.jsonc, so neither the Nuxt program nor the test program
+	// covers it, and it must not see their ambient types: the app's `Env` and
+	// Nitro globals are not what this Worker runs with. Its runtime and binding
+	// types come only from `worker-configuration.d.ts`, generated from
+	// wrangler.jsonc by `pnpm types:validator` and checked fresh by
+	// `pnpm typecheck:validator`.
+	//
+	// The options mirror the strictness the Nuxt program applies to the app
+	// (`.nuxt/tsconfig.json`), standalone so this gate needs no `nuxt prepare`.
+	"compilerOptions": {
+		"target": "ESNext",
+		"lib": ["ESNext"],
+		"moduleDetection": "force",
+		"module": "preserve",
+		"moduleResolution": "Bundler",
+		// `shared/` files the Worker imports reach each other through the app's
+		// root alias.
+		"paths": {
+			"~~/*": ["../../*"]
+		},
+		"resolveJsonModule": true,
+		"types": [],
+		"allowImportingTsExtensions": true,
+		"strict": true,
+		"noImplicitOverride": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"forceConsistentCasingInFileNames": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true
+	},
+	"include": ["./worker-configuration.d.ts", "./src/**/*"]
+}

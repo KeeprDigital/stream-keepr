@@ -11,7 +11,8 @@
  *   consumer reads `.nuxt`. `nuxt prepare` regenerates it first and is the only
  *   gate that writes it: the Nuxt suite (`vitest.nuxt.config.ts`), the server
  *   suites (their persist directories) and the build (`STREAM_KEEPR_BUILD_DIR`)
- *   each write their own.
+ *   each write their own. The silent-video validator's gates are the exception:
+ *   its tsconfig stands alone, so they need no `prepare`.
  * - The server-backed stage (integration, local-auth, browser gates) starts only
  *   once the cheap stage has passed, so a lint or type error never waits behind
  *   it. Those suites are timing-sensitive on a loaded machine (README § Testing):
@@ -21,7 +22,7 @@
  * Usage: node scripts/verify.mjs [--quick | --tests]
  *   --quick  the first stage only: lint, typecheck, unit and Nuxt suites.
  *   --tests  every test suite and local acceptance gate, without lint,
- *            typecheck, or the build; this is `pnpm test`.
+ *            typecheck, the build, or the bundle checks; this is `pnpm test`.
  */
 
 import { spawn } from 'node:child_process';
@@ -34,7 +35,7 @@ import { main as reapStrandedWorkerd } from './reap-workerd.mjs';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const logDirectory = fileURLToPath(new URL('../node_modules/.cache/verify/', import.meta.url));
 
-const FIRST_STAGE = ['lint', 'typecheck:app', 'typecheck:test', 'test:unit:coverage', 'test:nuxt:coverage'];
+const FIRST_STAGE = ['lint', 'typecheck:app', 'typecheck:test', 'typecheck:validator', 'test:unit:coverage', 'test:nuxt:coverage'];
 
 /** Gate name → the command it runs, the gates that must pass first, and any extra environment. */
 export const GATES = {
@@ -44,6 +45,11 @@ export const GATES = {
 	// Chained rather than side by side: each vitest suite already uses every core,
 	// and two at once starve CPU-bound tests into their timeouts.
 	'typecheck:test': { command: ['run', 'typecheck:test'], after: ['typecheck:app'] },
+	// The silent-video validator is its own Worker with its own standalone
+	// program and bundle (#618): neither reads `.nuxt`, so both start at once.
+	// About a second each, they finish while lint is still running.
+	'typecheck:validator': { command: ['run', 'typecheck:validator'], after: [] },
+	'validator:dry-run': { command: ['run', 'validator:dry-run'], after: [] },
 	'test:unit:coverage': { command: ['run', 'test:unit:coverage'], after: ['prepare'] },
 	'test:nuxt:coverage': { command: ['run', 'test:nuxt:coverage'], after: ['test:unit:coverage'] },
 
@@ -70,7 +76,16 @@ function seconds(ms) {
 }
 
 /** Gates that are not test suites; `--tests` leaves them out. */
-const NOT_TESTS = new Set(['lint', 'typecheck:app', 'typecheck:test', 'build', 'worker:dry-run', 'worker:smoke']);
+const NOT_TESTS = new Set([
+	'lint',
+	'typecheck:app',
+	'typecheck:test',
+	'typecheck:validator',
+	'validator:dry-run',
+	'build',
+	'worker:dry-run',
+	'worker:smoke',
+]);
 
 /**
  * The gates a mode runs. A dependency outside the selection counts as met, so

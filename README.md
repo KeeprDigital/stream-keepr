@@ -149,13 +149,13 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Before commit                               | `pnpm test`                                                                         | Every test gate of `pnpm verify` (`verify.mjs --tests`): unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. No lint, typecheck, or build. Needs Chrome/Chromium. |
 | Tests your branch touches                   | `pnpm test:changed`                                                                 | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                                                                                          |
 | Quick check while developing                | `pnpm verify:quick`                                                                 | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                                                                                       |
-| Reproducing a CI failure                    | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.                                                                              |
+| Reproducing a CI failure                    | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck (the validator Worker included), lint, every `pnpm test` suite, `validator:dry-run`, build, `worker:dry-run`, `worker:smoke`.                         |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                 | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build.                                                                      |
 | Listing acceptance harnesses                | `pnpm accept`                                                                       | Every harness, what it proves, what it needs, and its flags. Run one with `pnpm accept <name> [flags]`.                                                                                                                                                                              |
 | Touching still-image codecs or Wasm         | `pnpm accept still-image-ingestion`                                                 | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                                                                                     |
 | Touching an Animation Effect shader         | `pnpm accept animation-effects`                                                     | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, motion, and halo's trails fading out. Local only.                                                                                                     |
 | Touching Fill/Key paint or a glow           | `pnpm accept key-matte`                                                             | Draws a half-opaque glow on a Graphic Item, Source Item, and the Frame in Chromium as Overlay and Key; requires the Key matte to equal the Overlay alpha, the glow grey, and no colour. Local only.                                                                                  |
-| Touching the silent-video validator         | `pnpm accept silent-video-validator`                                                | Needs Docker.                                                                                                                                                                                                                                                                        |
+| Touching the silent-video validator         | `pnpm accept silent-video-validator`                                                | Needs Docker. Compile and bundle are already ordinary gates: `pnpm typecheck:validator` and `pnpm validator:dry-run`, no Docker or credentials. After changing its `wrangler.jsonc` or bumping wrangler, run `pnpm types:validator` and commit the result.                           |
 | Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                         |
 | Deploy day                                  | `pnpm accept deployed`                                                              | The six deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                       |
 
@@ -175,7 +175,9 @@ or server code.
 How `pnpm verify` runs:
 
 - **Cheap gates first.** `nuxt prepare`, then lint, typecheck, and the unit and
-  Nuxt suites; the build runs beside them. The server-backed suites and browser
+  Nuxt suites; the build runs beside them, and the silent-video validator's
+  typecheck and bundle check start at once beside `nuxt prepare`. The
+  server-backed suites and browser
   gates start only once those pass, so a lint or type error arrives in seconds.
 - **Each gate logs to `node_modules/.cache/verify/<gate>.log`.** The terminal
   shows one line per gate and the tail of the first failure.
@@ -185,7 +187,7 @@ How `pnpm verify` runs:
   in an unchanged file that a changed file's types caused; CI starts cold and
   catches it. Delete the cache directory to reproduce CI exactly.
 - **Only `nuxt prepare` writes `.nuxt`.** The root tsconfig extends it, so every
-  other gate reads it; the Nuxt suite, the servers and `verify`'s build each use
+  other gate reads it (except the validator's two, whose tsconfig stands alone); the Nuxt suite, the servers and `verify`'s build each use
   their own build directory. Keep it that way when adding a gate. Dev servers
   started together also need their own Vite cache (`nuxt.config.ts` gives each
   one), or they rewrite each other's optimised dependencies.
@@ -732,6 +734,15 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
 - An instance that ends errored or terminated is never restarted automatically.
   Fix the cause, then run
   `wrangler workflows instances restart silent-video-validation <id>`.
+- The validator has its own TypeScript program
+  (`workers/silent-video-validator/tsconfig.json`), standalone from the app's.
+  Its runtime and binding types are `worker-configuration.d.ts` beside it,
+  generated from its `wrangler.jsonc` by `pnpm types:validator` and committed.
+  Unlike the app's root file, it is checked fresh: `pnpm typecheck:validator`
+  (inside `pnpm typecheck`) fails when that file is stale or the Worker does not
+  compile, and
+  `pnpm validator:dry-run` bundles it as `pnpm deploy:validator` would without
+  building the Container image (#618).
 - Deploying needs Docker plus Workflows and Containers enabled on the account.
   Fixtures live in `scripts/silent-video-validator-fixtures.json`.
 

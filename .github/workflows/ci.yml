@@ -87,6 +87,7 @@ jobs:
       # run is the backstop for what the local per-file ESLint cache can miss
       # (README § Testing).
       - run: pnpm lint
+      # Includes the silent-video validator Worker's own program (#618).
       - run: pnpm typecheck
       # With --coverage, so the thresholds in vitest.shared.ts fail these steps
       # when coverage drops below them (#469).
@@ -128,7 +129,7 @@ jobs:
       - run: pnpm accept key-matte
 
   worker-guard:
-    name: Build, wrangler dry run, and Worker smoke
+    name: Build, wrangler dry runs, and Worker smoke
     needs: scope
     # A PR touching only tests or docs cannot change the uploaded bundle, so
     # building it again would prove what main already proved.
@@ -138,6 +139,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
+      # The silent-video validator is a second deployed Worker (#618), bundled
+      # by wrangler exactly as `pnpm deploy:validator` would. About a second,
+      # and first so a broken import fails before the app build starts.
+      # `--containers-rollout=none` keeps it to the bundle: no Docker build, no
+      # credentials.
+      - run: pnpm validator:dry-run
       # The #302 class of failure: green on Node, broken on workerd. The dry
       # run asserts the bundle wrangler would upload compiles no Wasm from
       # bytes, so it belongs on every PR — not just deploy day.
