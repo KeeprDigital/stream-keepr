@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -45,6 +46,9 @@ const {
 	adminNextPage,
 	adminPrevPage,
 } = useRotationConfigWrites({ config, totalPages, updateConfig });
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players']);
 
 onMounted(async () => {
 	if (props.eventId && !playerStore.isLoaded) {

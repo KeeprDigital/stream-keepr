@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '#ui/types';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 interface Props {
 	flush?: boolean;
@@ -19,6 +20,9 @@ const route = useRoute();
 const eventId = computed(() => eventStore.eventId);
 const meleeEnabled = computed(() => eventStore.event?.meleeEnabled ?? false);
 const meleeConfigured = computed(() => eventStore.event?.meleeConfigured ?? false);
+
+// The Event header and the Screen navigation, on every page this layout frames.
+useConsumedEventData(['event', 'screens']);
 
 watch(eventId, (id) => {
 	if (id && !screenStore.isLoaded)

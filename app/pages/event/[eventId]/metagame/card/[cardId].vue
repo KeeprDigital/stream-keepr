@@ -2,6 +2,7 @@
 import type { CardDetailResponse } from '~~/shared/types/metagame';
 import { getPointEntryByOracleId } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useMetagameClient } from '~/modules/metagame/client';
 
 const route = useRoute();
@@ -66,6 +67,8 @@ async function fetchDetail() {
 		},
 	);
 }
+
+useConsumedEventData(['players']);
 
 watch(() => eventStore.eventId, async (eventId) => {
 	if (eventId && !playerStore.isLoaded) {

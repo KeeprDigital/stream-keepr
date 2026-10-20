@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { useRealtimeMessageGate } from '~/composables/core/useRealtimeMessageGate';
+import { eventDataResync } from '~/modules/event-data/resync';
 import { createEventRealtimeHandlers } from '~/modules/realtime-event-session/handlers';
 
 let sessionActive = false;
@@ -19,12 +20,21 @@ export function useEventRealtimeSession() {
 	const { accept } = useRealtimeMessageGate(computed(() => realtime.connectionId));
 
 	realtime.onRoom('event-session', createEventRealtimeHandlers({ accept, eventStore, realtime }));
-	useReconnectResync(() => {
+	function resync() {
 		void Promise.allSettled([
 			featureMatchAssignmentStore.reloadConsumedRounds(),
 			broadcastDeckListStore.reloadAuthoritativeState(),
+			eventDataResync.resync(),
 		]);
-	}, () => eventStore.eventId, realtime);
+	}
+	useReconnectResync(resync, () => eventStore.eventId, realtime);
+	// Subscriptions that waited on a token missed what was published meanwhile,
+	// and a first attach over an unbroken connection reports no continuity loss
+	// (ADR-0023).
+	watch(() => !!realtime.tokenError, (waiting, wasWaiting) => {
+		if (wasWaiting && !waiting)
+			resync();
+	});
 
 	watch(
 		() => eventStore.eventId,

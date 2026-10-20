@@ -4,6 +4,7 @@ import type {
 	GraphicBindingFeatureMatchSlot,
 } from '~~/shared/modules/graphics';
 import type { GraphicSourceSelectionKind } from '~~/shared/types/graphics';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
  * The Event Data Live Control resolves Graphic Input Bindings and fills its pickers
@@ -22,8 +23,13 @@ import type { GraphicSourceSelectionKind } from '~~/shared/types/graphics';
  * bindings without asking the server: these are the Event Data stores the Realtime
  * Event Session already keeps current, so a renamed Player moves the bound value in
  * every open Live Control as soon as the notification lands.
+ *
+ * A notification missed while disconnected never lands, so this consumes the same
+ * Event Data for Reconnect Resync: coming back re-reads what is held, and the latest
+ * bound values recompute from it, deletes included (#610).
  */
 export function useGraphicBindingData() {
+	useConsumedEventData(['event', 'players', 'phases', 'rounds', 'matches', 'featureMatchSlots', 'archetypes']);
 	const eventStore = useEventStore();
 	const playerStore = usePlayerStore();
 	const matchStore = useMatchStore();

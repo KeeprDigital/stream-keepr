@@ -10,6 +10,7 @@ import type {
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
@@ -26,6 +27,9 @@ defineExpose({ resetConfig, saving });
 
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players', 'playerLists']);
 
 onMounted(async () => {
 	if (!props.eventId) {

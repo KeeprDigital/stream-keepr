@@ -6,6 +6,7 @@ import {
 	VERTICAL_ALIGN_SELECT_OPTIONS,
 } from '~~/shared/utils/selectOptions';
 import { useScreenConfigUpdate } from '~/composables/screen/useScreenConfigUpdate';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
@@ -26,6 +27,9 @@ const { screenConfig, updateScreenConfig } = useScreenConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['featureMatchSlots']);
 
 onMounted(async () => {
 	if (props.eventId) {

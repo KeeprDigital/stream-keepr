@@ -159,7 +159,7 @@ An opaque, long-lived, revocable right that lets one Screen Output resolve only 
 ### Client and live-state infrastructure
 
 **Event Data**:
-The client-side access path for Event-scoped data such as Players, Phases, Rounds, Matches, Feature Match Slots, Feature Match Assignments, Screens, Talents, Archetypes, and Player Lists.
+The client-side access path for Event-scoped data such as Players, Phases, Rounds, Matches, Feature Match Slots, Feature Match Assignments, Screens, Talents, Archetypes, Player Lists, and Player Decks.
 
 **Realtime Event Session**:
 The client-side subscription for Event messages.
@@ -171,6 +171,10 @@ _Avoid_: registration.
 **Reconnect Resync**:
 The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the Event channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). A consumer listening on no Event yet re-reads when the connection comes back instead. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
 _Avoid_: reconnect handler, resubscribe hook.
+
+**Event Data Resync**:
+The client-side module owning which Event Data this client consumes, so **Reconnect Resync** re-reads exactly that. Besides Event Data collections, it covers the operator's Event and the selected Screen's Card. A consumer names its datasets while mounted, with its own re-read of anything no store holds. Each consumed dataset is re-read once, in place. A held dataset nobody consumed at the resync is behind, and its next consumer re-reads it. The end of an **Event Lifetime** forgets what was behind (ADR-0028).
+_Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:
 The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.

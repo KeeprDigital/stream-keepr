@@ -2,6 +2,7 @@
 import type { Screen } from '~/types';
 import { getCounterTypeConfigs, getPlayerIdentityLabel } from '~~/shared/config/games';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
@@ -56,6 +57,9 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['featureMatchSlots']);
 
 // Load matches on mount
 onMounted(async () => {

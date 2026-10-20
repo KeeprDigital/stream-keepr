@@ -5,6 +5,7 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayCompositorTree from './CompositorTree.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
@@ -39,6 +40,9 @@ const {
 } = useGraphicAssetPublicationEligibility(config);
 
 defineExpose({ resetConfig, saving: settingsSaving });
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['featureMatchSlots']);
 
 onMounted(async () => {
 	await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);

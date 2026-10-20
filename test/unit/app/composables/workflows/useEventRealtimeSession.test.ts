@@ -44,6 +44,7 @@ describe('useEventRealtimeSession', () => {
 	const mockNavigateTo = vi.fn();
 	const realtime = {
 		connectionId: 'connection-1',
+		tokenError: null as Error | null,
 		setRoom: vi.fn(),
 		onRoom: vi.fn(),
 		offRoom: vi.fn(),
@@ -127,6 +128,9 @@ describe('useEventRealtimeSession', () => {
 		reloadAuthoritativeState: vi.fn(),
 	};
 	const useReconnectResync = vi.fn();
+	const eventDataResync = {
+		resync: vi.fn(),
+	};
 	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
 		applyEpochEnded: vi.fn(),
@@ -145,6 +149,7 @@ describe('useEventRealtimeSession', () => {
 	};
 
 	let watchCallback: ((eventId: number | null) => void) | undefined;
+	let tokenWaitCallback: ((waiting: boolean, wasWaiting: boolean) => void) | undefined;
 	let disposeCallback: (() => void) | undefined;
 
 	/**
@@ -181,9 +186,11 @@ describe('useEventRealtimeSession', () => {
 		refreshAfterMeleeReset.mockResolvedValue(undefined);
 		mockNavigateTo.mockResolvedValue(undefined);
 		watchCallback = undefined;
+		tokenWaitCallback = undefined;
 		disposeCallback = undefined;
 
 		vi.doMock('~/utils/eventStores', () => ({ resetAllEventStores: mockResetAllEventStores }));
+		vi.doMock('~/modules/event-data/resync', () => ({ eventDataResync }));
 		vi.stubGlobal('useRealtime', () => realtime);
 		vi.stubGlobal('useEventStore', () => eventStore);
 		vi.stubGlobal('usePlayerStore', () => playerStore);
@@ -204,10 +211,14 @@ describe('useEventRealtimeSession', () => {
 		vi.stubGlobal('useScreenStore', () => screenStore);
 		vi.stubGlobal('useCardStore', () => cardStore);
 		vi.stubGlobal('navigateTo', mockNavigateTo);
-		vi.stubGlobal('watch', (source: () => number | null, callback: (eventId: number | null) => void, options?: { immediate?: boolean }) => {
-			watchCallback = callback;
+		vi.stubGlobal('watch', (source: () => unknown, callback: (value: never, previous: never) => void, options?: { immediate?: boolean }) => {
+			if (typeof source() === 'boolean') {
+				tokenWaitCallback = callback as typeof tokenWaitCallback;
+				return;
+			}
+			watchCallback = callback as typeof watchCallback;
 			if (options?.immediate)
-				callback(source());
+				callback(source() as never, undefined as never);
 		});
 		vi.stubGlobal('onScopeDispose', (callback: () => void) => {
 			disposeCallback = callback;
@@ -393,7 +404,7 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
-	it('reloads every consumed Assignment Round and Broadcast Deck detail through Reconnect Resync', async () => {
+	it('reloads every consumed Assignment Round, Broadcast Deck detail and Event Data through Reconnect Resync', async () => {
 		await startSession();
 
 		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), realtime);
@@ -402,6 +413,19 @@ describe('useEventRealtimeSession', () => {
 		resync();
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
+		expect(eventDataResync.resync).toHaveBeenCalledOnce();
+	});
+
+	it('resyncs the same way once its subscriptions stop waiting on a token', async () => {
+		await startSession();
+
+		tokenWaitCallback?.(true, false);
+		expect(eventDataResync.resync).not.toHaveBeenCalled();
+		tokenWaitCallback?.(false, true);
+
+		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
+		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
+		expect(eventDataResync.resync).toHaveBeenCalledOnce();
 	});
 
 	it('resets event state and navigates home when the active event is deleted', async () => {

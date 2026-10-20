@@ -46,7 +46,7 @@ async function fetchCards() {
 const { summaryLoading, fetchPageData } = useMetagamePage(fetchCards);
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
 ], fetchPageData);
 
 watch([cardSortBy, cardBoardFilter], () => fetchCards());

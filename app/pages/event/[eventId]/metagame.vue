@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '#ui/types';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
 	title: 'Metagame',
@@ -40,6 +41,8 @@ const tabs = computed<NavigationMenuItem[]>(() => {
 	}
 	return items;
 });
+
+useConsumedEventData(['playerLists']);
 
 onMounted(async () => {
 	if (eventId.value && !playerListStore.isLoaded) {

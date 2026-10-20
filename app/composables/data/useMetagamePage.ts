@@ -1,4 +1,5 @@
 import type { WatchSource } from 'vue';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
  * Shared scaffolding for the metagame pages: owns the summary fetch, the
@@ -55,6 +56,9 @@ export function useMetagamePage(
 
 	watch(() => playerStore.dataVersion, () => fetchPageData());
 	watch(() => metagameStore.invalidationVersion, () => fetchPageData());
+	// No store holds what this fetches, so Reconnect Resync re-runs it directly
+	// rather than relying on a Player re-read to bump the roster version (#610).
+	useConsumedEventData([], fetchPageData);
 
 	return {
 		summaryLoading,

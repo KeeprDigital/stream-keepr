@@ -19,9 +19,9 @@ const {
 	initialError,
 	retry,
 } = useEventPageLoading([
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ isLoaded: () => archetypeStore.isLoaded, load: id => archetypeStore.loadByEventId(id) },
-	{ isLoaded: () => playerDeckStore.isLoaded, load: id => playerDeckStore.loadByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'archetypes', isLoaded: () => archetypeStore.isLoaded, load: id => archetypeStore.loadByEventId(id) },
+	{ consumes: 'playerDecks', isLoaded: () => playerDeckStore.isLoaded, load: id => playerDeckStore.loadByEventId(id) },
 ]);
 
 // ── Queue ──

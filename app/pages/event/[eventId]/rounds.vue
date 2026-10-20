@@ -18,8 +18,8 @@ const { runRequest } = useRequestFeedback();
 const isMeleeEvent = computed(() => !!eventStore.event?.meleeEnabled);
 
 const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
+	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
 ]);
 
 const totalPhases = computed(() => phaseStore.phases.length);

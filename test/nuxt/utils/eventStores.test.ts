@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { registerEventDataLifecycleReset } from '~~/app/modules/event-data/lifecycle';
+import { eventDataResync } from '~~/app/modules/event-data/resync';
 
 const mockClearPlayerDeckCache = vi.hoisted(() => vi.fn());
 const mockStoreReset = vi.hoisted(() => vi.fn());
@@ -35,6 +36,14 @@ describe('event store reset registry', () => {
 		expect(lifecycleReset).toHaveBeenCalledOnce();
 		expect(mockStoreReset).toHaveBeenCalled();
 		expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
+	});
+
+	it('ends what Event Data Resync holds as behind with the Event Lifetime', () => {
+		const reset = vi.spyOn(eventDataResync, 'reset');
+
+		resetAllEventStores();
+
+		expect(reset).toHaveBeenCalledOnce();
 	});
 
 	/**
