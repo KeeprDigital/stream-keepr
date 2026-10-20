@@ -741,3 +741,31 @@ Graphic Item glow already reached the Key Output, but Source Item and Frame glow
 
 - **Keep withholding host glow from the Key Output** — the Fill/Key mismatch is the defect.
 - **Key every glow opaque white** — overstates a partial glow, so the matte would no longer match the Fill Output.
+
+## ADR-0028: Reconnect Resync re-reads the Event Data its consumers name, and a revisit re-reads what was missed
+
+Accepted · 2026-10-20 · [#610](https://github.com/KeeprDigital/stream-keepr/issues/610)
+
+### Decision
+
+**A consumer names the Event Data it reads, and Reconnect Resync re-reads exactly that.** Event Data Resync (`app/modules/event-data/resync.ts`) counts consumers per dataset: the Event, Players, Phases, Rounds, Matches, Feature Match Slots, Archetypes, Player Lists, Player Decks, Screens, and the selected Screen's Card. A page consumes each `useEventPageLoading` entry while it is mounted, and names what it loads outside them. Live Control consumes the Event Data it resolves Graphic Input Bindings from. The Realtime Event Session runs the resync beside the Feature Match Assignment and Broadcast Deck List reloads. Each dataset is re-read once, however many consumers share it, in place and only if its store already holds it. Its scope is kept: a Round's Matches stay a Round's Matches.
+
+**What nobody consumed at the resync is behind.** A store outlives the page that loaded it, and `useEventPageLoading` skips a loaded store. So the next consumer to name a behind dataset re-reads it instead of trusting it. `resetAllEventStores()` forgets what is behind, because the reset ends the Event Lifetime and nothing it held survives.
+
+**The Card mode reads through Screen Mode Data Freshness.** The Card store still follows the Card's own messages. The module re-reads it on reconnection, and on the slow cadence while realtime is degraded. Only a change of Screen deselects the old one. A re-read leaves the Card on air until it answers.
+
+### Why
+
+The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on reconnect. An Event Data collection already held stayed as it was when the socket dropped, and so did a Card on program. The Card mode loaded on mount and on a Screen change only, so a Card changed or cleared during the outage stayed on air. Live Control computed latest bound values from stale stores. Re-reading only what is consumed keeps a resync's cost to what is on screen.
+
+### Consequences
+
+- An operator's resync re-reads every consumed collection at once. That is a burst of list reads per open page, once per reconnection.
+- A store loaded by a component that does not consume it, a mode's Settings panel for example, is not re-read on reconnect. It is behind, and its next consumer re-reads it.
+- A page's own reads outside the stores are not covered. That includes Metagame summaries and the Matches page's Round availability. Their state comes back on the next visit.
+- Waiting on a token (ADR-0023) does not start this resync for operator surfaces; only a disconnection does. The Card mode, through Screen Mode Data Freshness, also re-reads when a token wait ends.
+
+### Rejected alternatives
+
+- **Re-read every loaded store on reconnect.** It is simpler, but it pays for data no mounted surface shows. It also cannot tell a consumed dataset from one that is just held.
+- **Have `useEventPageLoading` always reload on mount.** That fixes a revisit, but every page navigation would re-read lists that live-follow already keeps current.

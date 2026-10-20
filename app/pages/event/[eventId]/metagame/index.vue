@@ -60,8 +60,8 @@ function onArchetypeSelect(archetypeName: string | null) {
 
 // ── Initialization ──
 const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ isLoaded: () => archetypeStore.isLoaded, load: id => archetypeStore.loadByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'archetypes', isLoaded: () => archetypeStore.isLoaded, load: id => archetypeStore.loadByEventId(id) },
 ], fetchPageData);
 </script>
 

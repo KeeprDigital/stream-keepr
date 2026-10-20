@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { useRealtimeMessageGate } from '~/composables/core/useRealtimeMessageGate';
+import { eventDataResync } from '~/modules/event-data/resync';
 import { createEventRealtimeHandlers } from '~/modules/realtime-event-session/handlers';
 
 let sessionActive = false;
@@ -23,6 +24,7 @@ export function useEventRealtimeSession() {
 		void Promise.allSettled([
 			featureMatchAssignmentStore.reloadConsumedRounds(),
 			broadcastDeckListStore.reloadAuthoritativeState(),
+			eventDataResync.resync(),
 		]);
 	}, realtime);
 

@@ -1,4 +1,5 @@
 import { resetRegisteredEventDataLifecycles } from '~/modules/event-data/lifecycle';
+import { eventDataResync } from '~/modules/event-data/resync';
 
 /**
  * Reset all event-scoped stores and clear the player-deck cache.
@@ -38,6 +39,8 @@ export function resetAllEventStores() {
 	for (const flush of [...pendingEditFlushes])
 		flush();
 	resetRegisteredEventDataLifecycles();
+	// Nothing held survives the reset, so nothing is behind any more.
+	eventDataResync.reset();
 	resetStore(useEventStore());
 	resetStore(useMetagameStore());
 	resetStore(useFeatureMatchAssignmentStore());

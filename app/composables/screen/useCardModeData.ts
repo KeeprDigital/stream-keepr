@@ -1,8 +1,9 @@
 import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 export function useCardModeData() {
 	const config = useScreenModeConfig('card');
-	const { screen, cardDataHealth } = useScreenContext();
+	const { screen, eventId, cardDataHealth } = useScreenContext();
 	const cardStore = useCardStore();
 	const outputReads = useScreenOutputReads();
 	// A rendering of the Screen reads its Card through the Screen (#604).
@@ -23,10 +24,6 @@ export function useCardModeData() {
 		});
 	}
 
-	const displayData = useBroadcastDisplayData<null>({ initialData: null });
-	const loading = displayData.loading;
-	const error = displayData.error;
-
 	// Screen ID from context
 	const screenId = computed<number | null>(() => screen.value?.id ?? null);
 
@@ -37,33 +34,25 @@ export function useCardModeData() {
 		return rest;
 	});
 
-	async function loadCard() {
-		if (!screenId.value) {
-			displayData.clear();
-			return;
-		}
+	// Selecting a Screen clears the Card held for the last one, so it happens only
+	// when the Screen changes: every other re-read holds program until it answers.
+	watch(screenId, id => cardStore.setActiveScreen(id), { immediate: true });
 
-		cardStore.setActiveScreen(screenId.value);
-		await displayData.refresh(async () => {
+	// The store follows the Card's own messages; this owns re-reading it on
+	// reconnection and while realtime is degraded (#610).
+	const freshness = useScreenModeFreshness<null>({
+		eventId,
+		source: () => screenId.value === null ? null : String(screenId.value),
+		read: async () => {
 			await cardStore.loadActiveCard();
 			return null;
-		}, 'Failed to load card data');
-	}
-
-	// Reload when screenId changes
-	watch(
-		() => screenId.value,
-		async () => {
-			if (!import.meta.client)
-				return;
-			await loadCard();
 		},
-	);
-
-	// Initial load
-	onMounted(async () => {
-		await loadCard();
+		initialData: null,
+		errorMessage: 'Failed to load card data',
+		dependsOn: {},
 	});
+	const loading = freshness.loading;
+	const error = freshness.error;
 
 	return {
 		config,

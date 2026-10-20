@@ -127,6 +127,9 @@ describe('useEventRealtimeSession', () => {
 		reloadAuthoritativeState: vi.fn(),
 	};
 	const useReconnectResync = vi.fn();
+	const eventDataResync = {
+		resync: vi.fn(),
+	};
 	const broadcastGraphicsLiveSessionStore = {
 		applyRemoteCommand: vi.fn(),
 		applyEpochEnded: vi.fn(),
@@ -184,6 +187,7 @@ describe('useEventRealtimeSession', () => {
 		disposeCallback = undefined;
 
 		vi.doMock('~/utils/eventStores', () => ({ resetAllEventStores: mockResetAllEventStores }));
+		vi.doMock('~/modules/event-data/resync', () => ({ eventDataResync }));
 		vi.stubGlobal('useRealtime', () => realtime);
 		vi.stubGlobal('useEventStore', () => eventStore);
 		vi.stubGlobal('usePlayerStore', () => playerStore);
@@ -393,7 +397,7 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
-	it('reloads every consumed Assignment Round and Broadcast Deck detail through Reconnect Resync', async () => {
+	it('reloads every consumed Assignment Round, Broadcast Deck detail and Event Data through Reconnect Resync', async () => {
 		await startSession();
 
 		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), realtime);
@@ -401,6 +405,7 @@ describe('useEventRealtimeSession', () => {
 		resync();
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
+		expect(eventDataResync.resync).toHaveBeenCalledOnce();
 	});
 
 	it('resets event state and navigates home when the active event is deleted', async () => {

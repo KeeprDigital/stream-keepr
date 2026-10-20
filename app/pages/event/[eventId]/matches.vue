@@ -4,6 +4,7 @@ import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { isManualResultsRound } from '~~/shared/utils/roundControl';
 import { LazyMatchCreateModal } from '#components';
 import MatchResultModal from '~/components/Match/ResultModal.vue';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
 	title: 'Matches',
@@ -86,11 +87,14 @@ const {
 	initialError: storesError,
 	retry: retryStores,
 } = useEventPageLoading([
-	{ isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{ consumes: 'featureMatches', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
+	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
 ]);
+
+// Matches load per viewed Round below, in whichever scope the store holds.
+useConsumedEventData(['matches']);
 
 watch(eventId, async (id) => {
 	if (!id) {

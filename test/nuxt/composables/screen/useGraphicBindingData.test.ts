@@ -1,8 +1,9 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { reactive } from 'vue';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectScope, reactive } from 'vue';
 import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
+import { eventDataResync } from '~/modules/event-data/resync';
 
 /**
  * The Event Data Live Control resolves bound values and picker options from.
@@ -41,6 +42,7 @@ const LOADED_SESSION = {
 };
 
 const mockEventStore = reactive({
+	eventId: 1,
 	event: {
 		id: 1,
 		name: 'Regional',
@@ -61,7 +63,11 @@ const SLOT_ROW = {
 	activeSession: LOADED_SESSION as typeof LOADED_SESSION | null,
 };
 const mockFeatureMatchStore = { featureMatches: [SLOT_ROW] as (typeof SLOT_ROW)[] };
-const mockPlayerStore = { players: [] as { id: number; name?: string | null }[] };
+const mockPlayerStore = reactive({
+	isLoaded: true,
+	players: [] as { id: number; name?: string | null }[],
+	loadPlayersByEventId: vi.fn(),
+});
 const mockMatchStore = {
 	matches: [] as {
 		id: number;
@@ -241,5 +247,22 @@ describe('useGraphicBindingData', () => {
 			{ label: 'Ava R.', value: 3 },
 			{ label: 'Player 4', value: 4 },
 		]);
+	});
+
+	it('re-resolves from Event Data re-read on Reconnect Resync, including a Player deleted meanwhile (#610)', async () => {
+		mockPlayerStore.players = [{ id: 3, name: 'Ava R.' }, { id: 4, name: 'Ben K.' }];
+		mockPlayerStore.loadPlayersByEventId.mockImplementation(async () => {
+			mockPlayerStore.players = [{ id: 3, name: 'Ava Reyes' }];
+		});
+		const liveControl = effectScope();
+		const { selectionOptions } = liveControl.run(() => useGraphicBindingData())!;
+		expect(selectionOptions('player')).toHaveLength(2);
+
+		await eventDataResync.resync();
+
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		expect(selectionOptions('player')).toEqual([{ label: 'Ava Reyes', value: 3 }]);
+		liveControl.stop();
+		eventDataResync.reset();
 	});
 });

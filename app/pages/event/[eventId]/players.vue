@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
 import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerManageModal, LazyUIConfirmDeleteModal } from '#components';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
 	title: 'Player List',
@@ -130,15 +131,18 @@ const displayedPlayers = computed(() => {
 });
 
 const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ isLoaded: () => playerListStore.isLoaded, load: id => playerListStore.loadByEventId(id) },
-	{ isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'playerLists', isLoaded: () => playerListStore.isLoaded, load: id => playerListStore.loadByEventId(id) },
+	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
+	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
 ], async (id) => {
 	if (!screenStore.isLoaded || screenStore.currentEventId !== id) {
 		await screenStore.loadScreensByEventId(id);
 	}
 });
+
+// Screens load after the entries above, for the Screen pickers.
+useConsumedEventData(['screens']);
 
 const hasPlayers = computed(() => playerStore.players.length > 0);
 const pageState = computed(() => initialError.value ? 'ready' : initialLoading.value ? 'loading' : (hasPlayers.value ? 'ready' : 'empty'));

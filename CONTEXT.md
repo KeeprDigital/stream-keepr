@@ -172,6 +172,10 @@ _Avoid_: registration.
 The client-side module owning the invariant "coming back from a disconnection is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
 _Avoid_: reconnect handler, resubscribe hook.
 
+**Event Data Resync**:
+The client-side module owning which Event Data this client consumes, so **Reconnect Resync** re-reads exactly that. A consumer names its datasets while mounted. Each consumed dataset is re-read once, in place. A held dataset nobody consumed at the resync is behind, and its next consumer re-reads it. The end of an **Event Lifetime** forgets what was behind (ADR-0028).
+_Avoid_: refresh registry, reload list.
+
 **Screen Mode Data Freshness**:
 The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.

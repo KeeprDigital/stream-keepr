@@ -3,11 +3,20 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockCardStore = reactive({
+	activeCard: null as { name: string } | null,
 	setActiveScreen: vi.fn(),
 	loadActiveCard: vi.fn(),
 	readActiveCardAsScreenOutput: vi.fn((_read: () => Promise<unknown>) => vi.fn()),
 	cardDataDegraded: false,
 });
+/** The Card the server holds for the Screen; `loadActiveCard` reads it, as the store does. */
+let serverCard: { name: string } | null = null;
+const mockRealtime = reactive({
+	connectionState: 'connected',
+	tokenError: null as Error | null,
+	onChannel: vi.fn(() => () => {}),
+});
+mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 const mockApiFetch = vi.hoisted(() => vi.fn());
 mockNuxtImport('$fetch', () => mockApiFetch);
 
@@ -42,7 +51,14 @@ describe('useCardModeData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockScreen.value = { id: 1 };
-		mockCardStore.loadActiveCard.mockResolvedValue(null);
+		serverCard = null;
+		mockCardStore.activeCard = null;
+		mockCardStore.loadActiveCard.mockImplementation(async () => {
+			mockCardStore.activeCard = serverCard;
+			return serverCard;
+		});
+		mockRealtime.connectionState = 'connected';
+		mockRealtime.tokenError = null;
 		mockCardStore.cardDataDegraded = false;
 		mockCardDataHealth = ref('complete');
 		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
@@ -140,5 +156,49 @@ describe('useCardModeData', () => {
 		await flushPromises();
 
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(99);
+	});
+
+	// ── Reconnect Resync (#610) ──
+
+	describe('a Card changed while this output was disconnected', () => {
+		async function onAirThenDisconnected() {
+			serverCard = { name: 'Lightning Bolt' };
+			mountCardModeData();
+			await flushPromises();
+			expect(mockCardStore.activeCard).toEqual({ name: 'Lightning Bolt' });
+			mockCardStore.setActiveScreen.mockClear();
+			mockRealtime.connectionState = 'disconnected';
+			await flushPromises();
+		}
+
+		it('shows the change once it reconnects, without leaving its Screen', async () => {
+			await onAirThenDisconnected();
+			serverCard = { name: 'Counterspell' };
+
+			mockRealtime.connectionState = 'connected';
+			await flushPromises();
+
+			expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
+			// Selecting the Screen again would blank program before the read answers.
+			expect(mockCardStore.setActiveScreen).not.toHaveBeenCalled();
+		});
+
+		it('takes a Card cleared meanwhile off once it reconnects', async () => {
+			await onAirThenDisconnected();
+			serverCard = null;
+
+			mockRealtime.connectionState = 'connected';
+			await flushPromises();
+
+			expect(mockCardStore.activeCard).toBeNull();
+		});
+
+		it('holds the Card on air while disconnected', async () => {
+			await onAirThenDisconnected();
+			serverCard = null;
+			await flushPromises();
+
+			expect(mockCardStore.activeCard).toEqual({ name: 'Lightning Bolt' });
+		});
 	});
 });

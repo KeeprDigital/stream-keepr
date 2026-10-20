@@ -48,8 +48,8 @@ const {
 } = useMeleeSyncUnresolvedDeckListResolution({ eventId, isSetupComplete });
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
+	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
 ]);
 
 const connectionBadge = computed<{ color: 'success' | 'error'; label: string }>(() => {

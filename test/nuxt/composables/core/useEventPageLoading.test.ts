@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { reactive } from 'vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectScope, reactive } from 'vue';
+import { eventDataResync } from '~/modules/event-data/resync';
 
 const mockEventStore = reactive({
 	eventId: 1 as number | null,
@@ -9,12 +10,14 @@ const mockEventStore = reactive({
 	$reset: vi.fn(),
 });
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('usePlayerStore', () => () => ({ $reset: vi.fn() }));
+const mockPlayerStore = reactive({ isLoaded: true, loadPlayersByEventId: vi.fn(), $reset: vi.fn() });
+const mockRoundStore = reactive({ isLoaded: true, loadRoundsByEventId: vi.fn(), $reset: vi.fn() });
+mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useArchetypeStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('useMetagameStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('usePlayerListStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('usePhaseStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useRoundStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useRoundStore', () => () => mockRoundStore);
 mockNuxtImport('useMatchStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ $reset: vi.fn() }));
@@ -28,39 +31,51 @@ async function flushPromises() {
 	await Promise.resolve();
 }
 
+/** Each page under test is mounted in its own scope, so what it consumes ends with the test. */
+let pageScope = effectScope();
+function usePage(...args: Parameters<typeof useEventPageLoading>) {
+	return pageScope.run(() => useEventPageLoading(...args))!;
+}
+
 describe('useEventPageLoading', () => {
 	beforeEach(() => {
+		pageScope = effectScope();
 		vi.clearAllMocks();
 		mockEventStore.eventId = 1;
 		mockEventStore.event = { id: 1 };
 	});
 
+	afterEach(() => {
+		pageScope.stop();
+		eventDataResync.reset();
+	});
+
 	it('returns eventId computed from the event store', () => {
-		const { eventId } = useEventPageLoading([]);
+		const { eventId } = usePage([]);
 		expect(eventId.value).toBe(1);
 	});
 
 	it('returns eventId as 0 when store has no eventId', () => {
 		mockEventStore.eventId = null;
-		const { eventId } = useEventPageLoading([]);
+		const { eventId } = usePage([]);
 		expect(eventId.value).toBe(0);
 	});
 
 	it('returns initialLoading true when some entries are not loaded', () => {
 		const entries = [
-			{ isLoaded: () => false, load: vi.fn() },
-			{ isLoaded: () => true, load: vi.fn() },
+			{ consumes: 'players' as const, isLoaded: () => false, load: vi.fn() },
+			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
 		];
-		const { initialLoading } = useEventPageLoading(entries);
+		const { initialLoading } = usePage(entries);
 		expect(initialLoading.value).toBe(true);
 	});
 
 	it('returns initialLoading false when all entries are loaded and no load is running', async () => {
 		const entries = [
-			{ isLoaded: () => true, load: vi.fn() },
-			{ isLoaded: () => true, load: vi.fn() },
+			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
+			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
 		];
-		const { initialLoading } = useEventPageLoading(entries);
+		const { initialLoading } = usePage(entries);
 		await flushPromises();
 		expect(initialLoading.value).toBe(false);
 	});
@@ -69,7 +84,7 @@ describe('useEventPageLoading', () => {
 		const afterLoad = vi.fn().mockResolvedValue(undefined);
 		const load = vi.fn().mockResolvedValue(undefined);
 
-		useEventPageLoading([{ isLoaded: () => false, load }], afterLoad);
+		usePage([{ consumes: 'players', isLoaded: () => false, load }], afterLoad);
 		await flushPromises();
 
 		expect(load).toHaveBeenCalledWith(1);
@@ -84,7 +99,7 @@ describe('useEventPageLoading', () => {
 			loadedEventId = id;
 		});
 
-		useEventPageLoading([{ isLoaded, load }]);
+		usePage([{ consumes: 'players', isLoaded, load }]);
 		await flushPromises();
 
 		mockEventStore.eventId = 2;
@@ -100,8 +115,8 @@ describe('useEventPageLoading', () => {
 			resolveAfterLoad = resolve;
 		}));
 
-		const { initialLoading } = useEventPageLoading([
-			{ isLoaded: () => true, load: vi.fn() },
+		const { initialLoading } = usePage([
+			{ consumes: 'rounds' as const, isLoaded: () => true, load: vi.fn() },
 		], afterLoad);
 		await flushPromises();
 
@@ -124,8 +139,8 @@ describe('useEventPageLoading', () => {
 				return [];
 			});
 
-		const { initialLoading, initialError, retry } = useEventPageLoading([
-			{ isLoaded: () => loaded, load },
+		const { initialLoading, initialError, retry } = usePage([
+			{ consumes: 'players', isLoaded: () => loaded, load },
 		]);
 		await flushPromises();
 
@@ -148,7 +163,7 @@ describe('useEventPageLoading', () => {
 			.mockReturnValueOnce(first)
 			.mockResolvedValueOnce([]);
 
-		const { initialError } = useEventPageLoading([{ isLoaded: () => false, load }], afterLoad);
+		const { initialError } = usePage([{ consumes: 'players', isLoaded: () => false, load }], afterLoad);
 		await flushPromises();
 		mockEventStore.eventId = 2;
 		await flushPromises();
@@ -158,5 +173,39 @@ describe('useEventPageLoading', () => {
 		expect(afterLoad).toHaveBeenCalledTimes(1);
 		expect(afterLoad).toHaveBeenCalledWith(2);
 		expect(initialError.value).toBeNull();
+	});
+
+	it('re-reads the collections a mounted page consumes on Reconnect Resync, and stops once it is gone (#610)', async () => {
+		const page = effectScope();
+		page.run(() => useEventPageLoading([
+			{ consumes: 'players', isLoaded: () => true, load: vi.fn() },
+			{ consumes: 'rounds', isLoaded: () => true, load: vi.fn() },
+		]));
+		await flushPromises();
+
+		await eventDataResync.resync();
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
+
+		vi.clearAllMocks();
+		page.stop();
+		await eventDataResync.resync();
+		expect(mockPlayerStore.loadPlayersByEventId).not.toHaveBeenCalled();
+		eventDataResync.reset();
+	});
+
+	it('re-reads what a revisited page finds loaded when it was missed meanwhile (#610)', async () => {
+		await eventDataResync.resync();
+		vi.clearAllMocks();
+
+		const page = effectScope();
+		page.run(() => useEventPageLoading([
+			{ consumes: 'players', isLoaded: () => true, load: vi.fn() },
+		]));
+		await flushPromises();
+
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		page.stop();
+		eventDataResync.reset();
 	});
 });

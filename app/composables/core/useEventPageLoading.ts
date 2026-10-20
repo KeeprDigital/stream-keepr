@@ -1,4 +1,9 @@
+import type { ConsumedEventData } from '~/modules/event-data/resync';
+import { useConsumedEventData } from '~/modules/event-data/resync';
+
 interface StoreLoadEntry {
+	/** The Event Data this entry loads, which the page consumes while mounted. */
+	consumes: ConsumedEventData;
 	isLoaded: () => boolean;
 	load: (eventId: number) => Promise<unknown>;
 }
@@ -11,11 +16,14 @@ interface StoreLoadEntry {
  * - Parallel loading of stores when the event changes (skipping already-loaded stores)
  * - Gap-free `initialLoading` computed based on `!isLoaded` flags
  * - Optional sequential `afterLoad` for dependent fetches (e.g. matches after rounds)
+ * - Consuming each entry's Event Data while mounted, so Reconnect Resync re-reads
+ *   what the page shows and a revisit re-reads what was missed while away (#610)
  */
 export function useEventPageLoading(
 	entries: StoreLoadEntry[],
 	afterLoad?: (eventId: number) => Promise<void>,
 ) {
+	useConsumedEventData(entries.map(entry => entry.consumes));
 	const eventStore = useEventStore();
 	const eventId = computed<number>(() => eventStore.eventId ?? 0);
 	const loading = ref(false);

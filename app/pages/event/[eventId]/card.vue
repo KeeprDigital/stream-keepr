@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory } from '#components';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
 	title: 'Cards',
@@ -73,15 +74,18 @@ const selectedScreenMatchId = computed<number | null>(() => {
 });
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
-	{ isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
-	{ isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
-	{ isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
-	{ isLoaded: () => screenStore.isLoaded, load: id => screenStore.loadScreensByEventId(id) },
+	{ consumes: 'featureMatches', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
+	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
+	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
+	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
+	{ consumes: 'screens', isLoaded: () => screenStore.isLoaded, load: id => screenStore.loadScreensByEventId(id) },
 ], async () => {
 	syncSelectedScreen();
 	await syncCardScope();
 });
+
+// The selected Screen's Card, which `syncCardScope` selects and loads.
+useConsumedEventData(['card']);
 
 async function syncCardScope() {
 	if (!selectedScreenId.value) {

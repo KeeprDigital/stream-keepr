@@ -59,6 +59,7 @@ export function useMeleeDataRefresh() {
 	}
 
 	return {
+		refreshCurrentMatchScope,
 		refreshMeleeStructureData,
 		refreshAfterMeleeReset,
 	};
