@@ -711,6 +711,7 @@ Issue #590 refused a command result from any different epoch, as Broadcast Graph
 
 - Broadcast Graphics now drops a notification from an older Live Session instead of reloading, and would hold a command result from a newer one.
 - A Slot whose Session is from an older epoch than the one held was read before a newer promotion or clearing of that Slot. The whole Slot is left behind, not only its Session, and a promotion answer whose Slot is left behind does not apply its Assignment either.
+- A Slot settings answer and a Slot list load meet the same rule. The Event Data lifecycle takes an opt-in per-item `admit`, which the Feature Match store answers by offering the Slot's Session. A loaded Slot left behind keeps the held one in its place, and the rest of the load still applies. A settings answer left behind answers its caller with the held Slot (#635).
 - A snapshot carried by another resource's read (a Slot's Session) is held through `acceptRead`, which supersedes no load: it was read at some moment, so a load in flight may answer newer. A load answering something behind what is held leaves it.
 - An aggregate id from a table without `AUTOINCREMENT` cannot be followed: rowid reuse after deleting the newest row would order a new epoch before an ended one.
 

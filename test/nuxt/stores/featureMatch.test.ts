@@ -289,6 +289,67 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
+	// ── Slot answers overtaken by a newer Session epoch (#635) ──
+
+	/**
+	 * A Slot's Session orders it (ADR-0026): a settings answer or a load carrying a
+	 * Session from an epoch this client has seen end was read before a newer Slot
+	 * Promotion or clearing, so that Slot is left behind whole.
+	 */
+	describe('a Slot answer read before a newer Session epoch', () => {
+		const stateStore = () => useFeatureMatchStateStore();
+
+		beforeEach(() => {
+			stateStore().$reset();
+		});
+
+		function announce(slot: ReturnType<typeof slotInEpoch>) {
+			ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
+		}
+
+		it('a settings answer from an ended epoch does not replace the held Slot, and answers with it', async () => {
+			store.featureMatches = [slotInEpoch(1, 501)];
+			stateStore().offerSlotSession(store.featureMatches[0]!);
+			const update = deferred<ReturnType<typeof slotInEpoch>>();
+			mockRepo.update.mockReturnValueOnce(update.promise);
+
+			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
+			const promoted = slotInEpoch(1, 502, { bestOf: 5 });
+			announce(promoted);
+			update.resolve(slotInEpoch(1, 501, { bestOf: 5 }));
+
+			expect(await updating).toEqual(promoted);
+			expect(store.featureMatches).toEqual([promoted]);
+		});
+
+		it('a same-epoch settings answer replaces the held Slot', async () => {
+			store.featureMatches = [slotInEpoch(1, 501)];
+			stateStore().offerSlotSession(store.featureMatches[0]!);
+			const answered = slotInEpoch(1, 501, { bestOf: 5 });
+			mockRepo.update.mockResolvedValueOnce(answered);
+
+			await store.updateFeatureMatch(1, 1, { bestOf: 5 });
+
+			expect(store.featureMatches).toEqual([answered]);
+		});
+
+		it('a load keeps a Slot held from a newer epoch and applies the rest', async () => {
+			mockRepo.list.mockResolvedValueOnce([slotInEpoch(1, 501), slotInEpoch(2, 601)]);
+			await store.loadFeatureMatchesByEventId(1);
+			const load = deferred<ReturnType<typeof slotInEpoch>[]>();
+			mockRepo.list.mockReturnValueOnce(load.promise);
+
+			const loading = store.loadFeatureMatchesByEventId(1);
+			const promoted = slotInEpoch(1, 502);
+			announce(promoted);
+			const sameEpoch = slotInEpoch(2, 601, { bestOf: 5 });
+			load.resolve([slotInEpoch(1, 501, { bestOf: 5 }), sameEpoch]);
+			await loading;
+
+			expect(store.featureMatches).toEqual([promoted, sameEpoch]);
+		});
+	});
+
 	// ── Writes that outlive their Event (#606) ──
 
 	/**
@@ -301,26 +362,6 @@ describe('useFeatureMatchStore', () => {
 		['Event A, loaded again since', [2, 1]],
 	])('a Slot write answered after the operator moved on to %s', (_, switches) => {
 		const stateStore = () => useFeatureMatchStateStore();
-
-		function slotWithSession(id: number, eventId = 1) {
-			return createMockFeatureMatch({
-				id,
-				eventId,
-				activeSessionId: 500 + id,
-				activeSession: {
-					id: 500 + id,
-					eventId,
-					slotId: id,
-					status: 'active',
-					sourceSnapshot: {},
-					currentState: createMockFeatureMatchState(),
-					sequence: 1,
-					closedAt: null,
-					createdAt: new Date('2026-01-01T00:00:00.000Z'),
-					updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-				},
-			} as any);
-		}
 
 		/** Ends on Slots 1 and 2, as Event A's own are when loaded again. */
 		async function switchAway() {
@@ -339,12 +380,12 @@ describe('useFeatureMatchStore', () => {
 		}
 
 		it('a late create adds no Slot and primes no Feature Match Session', async () => {
-			const create = deferred<ReturnType<typeof slotWithSession>>();
+			const create = deferred<ReturnType<typeof slotInEpoch>>();
 			mockRepo.create.mockReturnValueOnce(create.promise);
 
 			const creating = store.createFeatureMatch(1, { bestOf: 3 });
 			const shown = await switchAway();
-			create.resolve(slotWithSession(3));
+			create.resolve(slotInEpoch(3, 503));
 			await creating;
 
 			expect(store.featureMatches).toEqual(shown);
@@ -353,12 +394,12 @@ describe('useFeatureMatchStore', () => {
 
 		it('a late update changes no Slot and primes no Feature Match Session', async () => {
 			store.featureMatches = [createMockFeatureMatch({ id: 1, bestOf: 3 })];
-			const update = deferred<ReturnType<typeof slotWithSession>>();
+			const update = deferred<ReturnType<typeof slotInEpoch>>();
 			mockRepo.update.mockReturnValueOnce(update.promise);
 
 			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
 			const shown = await switchAway();
-			update.resolve({ ...slotWithSession(1), bestOf: 5 });
+			update.resolve({ ...slotInEpoch(1, 501), bestOf: 5 });
 			await updating;
 
 			expect(store.featureMatches).toEqual(shown);
@@ -436,6 +477,28 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 });
+
+function slotInEpoch(id: number, sessionId: number, overrides: Record<string, unknown> = {}) {
+	return createMockFeatureMatch({
+		id,
+		eventId: 1,
+		matchId: sessionId,
+		activeSessionId: sessionId,
+		activeSession: {
+			id: sessionId,
+			eventId: 1,
+			slotId: id,
+			status: 'active',
+			sourceSnapshot: {},
+			currentState: createMockFeatureMatchState(),
+			sequence: 1,
+			closedAt: null,
+			createdAt: new Date('2026-01-01T00:00:00.000Z'),
+			updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+		},
+		...overrides,
+	} as any);
+}
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;

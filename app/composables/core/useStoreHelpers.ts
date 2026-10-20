@@ -16,6 +16,11 @@ interface OptimisticUpdateConfig<T, TUpdates extends object = Partial<T>> {
 	onSuccess?: () => void;
 	/** The lifetime `items` belongs to; once stale, neither the answer nor the rollback lands in it. */
 	flight?: Flight;
+	/**
+	 * Offers the answer to what `items` follows, answering whether it lands. One that
+	 * does not is left behind, and the held item answers in its place.
+	 */
+	admit?: (updated: T) => boolean;
 }
 
 interface OptimisticDeleteConfig<T> {
@@ -39,7 +44,7 @@ export function useStoreHelpers() {
 	async function optimisticUpdate<T extends { id: number }, TUpdates extends object = Partial<T>>(
 		config: OptimisticUpdateConfig<T, TUpdates>,
 	): Promise<T | null> {
-		const { items, id, updates, apiCall, errorRef, entityLabel, onSuccess, flight = unguarded } = config;
+		const { items, id, updates, apiCall, errorRef, entityLabel, onSuccess, flight = unguarded, admit } = config;
 
 		const index = items.value.findIndex(item => item.id === id);
 		if (index === -1) {
@@ -56,6 +61,8 @@ export function useStoreHelpers() {
 				if (flight.stale)
 					return updated;
 				const idx = items.value.findIndex(item => item.id === id);
+				if (admit && !admit(updated))
+					return idx === -1 ? updated : items.value[idx]!;
 				if (idx !== -1)
 					items.value[idx] = updated;
 				onSuccess?.();
