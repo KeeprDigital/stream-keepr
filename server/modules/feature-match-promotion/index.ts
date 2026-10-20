@@ -157,6 +157,12 @@ export function featureMatchPromotionModule() {
 		if (decision.outcome === 'failed')
 			throw createError({ statusCode: 500, message: decision.message });
 
+		// Which Sessions the commit opened, read as soon as the promotion is known
+		// to stand, so a later promotion's are not mistaken for its own. They are
+		// announced among the promotion's own messages, so the whole promotion
+		// re-resolves Graphic Input Bindings once.
+		const { opened } = await sessionReplacement.settle({ announce: false });
+
 		// Reverse-sync the promoted players' latest data into the fresh Sessions
 		// before reading what to publish, so the publication carries it. It runs
 		// after the atomic promotion: it is a read-compute-write cycle with
@@ -168,18 +174,15 @@ export function featureMatchPromotionModule() {
 			[match.player1Id, match.player2Id].filter((playerId): playerId is number => playerId != null),
 		).then(() => ({ faulted: false as const }), (error: unknown) => ({ faulted: true as const, error }));
 
-		// The Sessions are announced among the promotion's own messages, so the
-		// whole promotion re-resolves Graphic Input Bindings once.
-		const { opened } = await sessionReplacement.settle({ announce: false });
 		const [currentSlots, currentAssignment] = await Promise.all([
 			slots.findByEventId(eventId),
 			assignments.findById(eventId, decision.assignment.id),
 		]);
-		const publication = decision.describe({ slots: currentSlots, assignment: currentAssignment, openedSessions: opened });
+		const publication = decision.publication({ slots: currentSlots, assignment: currentAssignment, openedSessions: opened });
 		if (publication.outcome === 'failed')
 			throw createError({ statusCode: 500, message: publication.message });
 
-		await eventData.eventDataChanged({ eventId, messages: publication.messages, originConnectionId });
+		await eventData.featureMatchSlotPromoted({ eventId, messages: publication.messages, originConnectionId });
 		if (reverseSync.faulted)
 			throw reverseSync.error;
 		return publication.response;

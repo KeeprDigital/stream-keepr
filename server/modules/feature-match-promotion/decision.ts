@@ -1,10 +1,11 @@
-import type { DbFeatureMatch, DbFeatureMatchAssignment, DbFeatureMatchSession } from '~~/server/db/schema';
-import type { EventDataMessage } from '~~/server/modules/event-data-publication';
+import type { DbFeatureMatchAssignment, DbFeatureMatchSession } from '~~/server/db/schema';
+import type { DbFeatureMatchWithSession } from '~~/server/mappers/featureMatch';
+import type { EventDataMessage } from '~~/server/modules/event-data-publication/messages';
 import type { FeatureMatchPromotionResponse } from '~~/shared/api';
-import { mapFeatureMatchSessionToStarted, mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
+import { featureMatchMessages } from '~~/server/modules/event-data-publication/messages';
 
-type SlotRead = DbFeatureMatch & { activeSession?: DbFeatureMatchSession | null };
+const SLOT_UNREADABLE = 'Failed to retrieve updated feature match slot';
 
 /** What a promotion read before its batch, and what its plan wrote. */
 export interface PromotionPreState {
@@ -20,19 +21,19 @@ export interface PromotionPreState {
 
 /** Read once the batch has committed, before anything is published. */
 export interface PromotionCommittedReads {
-	slot: SlotRead | undefined;
+	slot: DbFeatureMatchWithSession | undefined;
 	/** The Round's Assignment to the promoted Slot. */
 	assignment: DbFeatureMatchAssignment | undefined;
 }
 
-/** Read after the reverse sync, so what is published carries its snapshot. */
+/** Read once the promotion is known to stand. */
 export interface PromotionCurrentReads {
-	/** The Event's Slots, each with its active Session. */
-	slots: readonly SlotRead[];
+	/** The Sessions the commit opened that are still active, read straight after the decision. */
+	openedSessions: readonly DbFeatureMatchSession[];
+	/** The Event's Slots, each with its active Session, read after the reverse sync so they carry it. */
+	slots: readonly DbFeatureMatchWithSession[];
 	/** The promotion's Assignment, wherever it is now. */
 	assignment: DbFeatureMatchAssignment | undefined;
-	/** The Sessions the promotion's commit opened that are still active. */
-	openedSessions: readonly DbFeatureMatchSession[];
 }
 
 interface PromotionFailed {
@@ -60,7 +61,7 @@ export type PromotionDecision
 			/** The Assignment the promotion committed. */
 			assignment: DbFeatureMatchAssignment;
 			/** The only way to the messages a promotion may publish. */
-			describe: (current: PromotionCurrentReads) => PromotionPublication | PromotionFailed;
+			publication: (current: PromotionCurrentReads) => PromotionPublication | PromotionFailed;
 		};
 
 /**
@@ -73,13 +74,13 @@ export type PromotionDecision
  * ADR-0029). The Assignment is read before the Slot, so a move that carried the
  * Assignment elsewhere shows as a lost promotion rather than a missing Assignment.
  *
- * A standing promotion describes its publication only from later reads. That is
+ * A standing promotion builds its publication only from later reads. That is
  * the shape of "decide the outcome before publishing" (#577): there is no message
- * to publish without a standing decision to describe it.
+ * to publish without a standing decision to build it from.
  */
 export function decidePromotion(pre: PromotionPreState, committed: PromotionCommittedReads): PromotionDecision {
 	if (!committed.slot)
-		return { outcome: 'failed', message: 'Failed to retrieve updated feature match slot' };
+		return { outcome: 'failed', message: SLOT_UNREADABLE };
 	if (committed.slot.matchId !== pre.matchId)
 		return { outcome: 'lost' };
 	const assignment = committed.assignment;
@@ -89,37 +90,31 @@ export function decidePromotion(pre: PromotionPreState, committed: PromotionComm
 	return {
 		outcome: 'standing',
 		assignment,
-		describe: (current) => {
+		publication: (current) => {
 			const slotsById = new Map(current.slots.map(slot => [slot.id, slot]));
 			const promotedSlot = slotsById.get(pre.slotId);
 			if (!promotedSlot)
-				return { outcome: 'failed', message: 'Failed to retrieve updated feature match slot' };
+				return { outcome: 'failed', message: SLOT_UNREADABLE };
 
 			const clearedSlots = pre.clearedSlotIds.flatMap((id) => {
 				const slot = slotsById.get(id);
-				return slot ? [mapFeatureMatchToResponse(slot)] : [];
+				return slot ? [featureMatchMessages.slotUpdated(slot)] : [];
 			});
-			const promoted = mapFeatureMatchToResponse(promotedSlot);
-			const committedAssignment = mapFeatureMatchAssignmentToResponse(assignment);
+			const promoted = featureMatchMessages.slotUpdated(promotedSlot);
 			const displaced = pre.displacedAssignment && pre.displacedAssignment.id !== assignment.id
 				? pre.displacedAssignment
 				: undefined;
 
 			const messages: EventDataMessage[] = [
-				...current.openedSessions.map(session => ({
-					type: 'featureMatchSession:eventApplied' as const,
-					payload: mapFeatureMatchSessionToStarted(session),
-				})),
+				...current.openedSessions.map(featureMatchMessages.sessionStarted),
 				// What this promotion committed, which peers learn even if the Match
 				// has moved on since: the move announces itself.
 				pre.continuedAssignment
-					? { type: 'featureMatchAssignment:updated', payload: { featureMatchAssignment: committedAssignment } }
-					: { type: 'featureMatchAssignment:created', payload: { featureMatchAssignment: committedAssignment } },
-				...(displaced
-					? [{ type: 'featureMatchAssignment:deleted' as const, payload: { featureMatchAssignmentId: displaced.id } }]
-					: []),
-				...clearedSlots.map(featureMatch => ({ type: 'featureMatch:updated' as const, payload: { featureMatch } })),
-				{ type: 'featureMatch:updated', payload: { featureMatch: promoted } },
+					? featureMatchMessages.assignmentUpdated(assignment)
+					: featureMatchMessages.assignmentCreated(assignment),
+				...(displaced ? [featureMatchMessages.assignmentDeleted(displaced.id)] : []),
+				...clearedSlots,
+				promoted,
 			];
 
 			return {
@@ -128,9 +123,9 @@ export function decidePromotion(pre: PromotionPreState, committed: PromotionComm
 				// Answered as things are now, so this operator's client cannot overwrite
 				// a move it has already applied with what this promotion committed.
 				response: {
-					promotedSlot: promoted,
-					clearedSlots,
-					assignment: current.assignment ? mapFeatureMatchAssignmentToResponse(current.assignment) : committedAssignment,
+					promotedSlot: promoted.payload.featureMatch,
+					clearedSlots: clearedSlots.map(message => message.payload.featureMatch),
+					assignment: mapFeatureMatchAssignmentToResponse(current.assignment ?? assignment),
 				},
 			};
 		},

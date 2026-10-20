@@ -2,10 +2,10 @@ import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbFeatureMatc
 import type { ArchetypeKeyCard } from '~~/server/services/archetypeCard';
 import type { BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckList';
 import type { MessagePayload, MessageType } from '~~/shared/types/messages';
+import type { EventDataMessage } from './messages';
 import { mapArchetypeToResponse } from '~~/server/mappers/archetype';
 import { mapEventToResponse } from '~~/server/mappers/event';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
-import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { mapMatchToResponse } from '~~/server/mappers/match';
 import { mapPhaseToResponse } from '~~/server/mappers/phase';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
@@ -17,6 +17,9 @@ import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
+import { featureMatchMessages } from './messages';
+
+export type { EventDataMessage } from './messages';
 
 interface PublicationInput {
 	eventId: number;
@@ -35,7 +38,7 @@ interface FeatureMatchSlotsUpdatedInput extends PublicationInput {
 	slotIds: number[];
 }
 
-interface EventDataChangedInput extends PublicationInput {
+interface FeatureMatchSlotPromotedInput extends PublicationInput {
 	messages: readonly EventDataMessage[];
 }
 
@@ -131,14 +134,6 @@ async function publishEventDataChange<T extends MessageType>(
 	await publishMessage(eventId, messageType, payload, originConnectionId);
 	await refreshBroadcastGraphicsBindings(eventId);
 }
-
-/**
- * One realtime message, decided before anything is published, so a caller can hold
- * a whole run of them as a value. Only messages that carry a payload qualify.
- */
-export type EventDataMessage = {
-	[T in MessageType]: MessagePayload<T> extends undefined ? never : { type: T; payload: MessagePayload<T> };
-}[MessageType];
 
 /**
  * Announce a run of related Event Data changes, in order, and let anything resolving
@@ -372,9 +367,9 @@ export function eventDataPublicationModule() {
 	}
 
 	async function featureMatchSlotUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatch>) {
-		const featureMatch = mapFeatureMatchToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatch:updated', { featureMatch }, originConnectionId);
-		return featureMatch;
+		const message = featureMatchMessages.slotUpdated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatch;
 	}
 
 	async function featureMatchSlotDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
@@ -388,19 +383,19 @@ export function eventDataPublicationModule() {
 	}
 
 	async function featureMatchAssignmentCreated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
-		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatchAssignment:created', { featureMatchAssignment }, originConnectionId);
-		return featureMatchAssignment;
+		const message = featureMatchMessages.assignmentCreated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatchAssignment;
 	}
 
 	async function featureMatchAssignmentUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
-		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatchAssignment:updated', { featureMatchAssignment }, originConnectionId);
-		return featureMatchAssignment;
+		const message = featureMatchMessages.assignmentUpdated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatchAssignment;
 	}
 
 	async function featureMatchAssignmentDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
-		await publishEventDataChange(eventId, 'featureMatchAssignment:deleted', { featureMatchAssignmentId: id }, originConnectionId);
+		await publishEventDataMessages(eventId, [featureMatchMessages.assignmentDeleted(id)], originConnectionId);
 	}
 
 	/*
@@ -444,9 +439,9 @@ export function eventDataPublicationModule() {
 		// iterating slotIds and looking up each in the fetched map.
 		const slots = await featureMatchService().findByEventId(eventId);
 		const slotsById = new Map(slots.map(slot => [slot.id, slot]));
-		const published = slotIds.flatMap((slotId) => {
+		const messages = slotIds.flatMap((slotId) => {
 			const slot = slotsById.get(slotId);
-			return slot ? [mapFeatureMatchToResponse(slot)] : [];
+			return slot ? [featureMatchMessages.slotUpdated(slot)] : [];
 		});
 
 		// Announced one by one, because each message names one Slot, and caught up once,
@@ -454,20 +449,16 @@ export function eventDataPublicationModule() {
 		// operation is one Event Data change as far as a Graphic Input Binding is
 		// concerned, and sweeping per Slot would repeat the whole Event's work fifty
 		// times inside one request.
-		await publishEventDataMessages(
-			eventId,
-			published.map(featureMatch => ({ type: 'featureMatch:updated', payload: { featureMatch } })),
-			originConnectionId,
-		);
+		await publishEventDataMessages(eventId, messages, originConnectionId);
 
-		return published;
+		return messages.map(message => message.payload.featureMatch);
 	}
 
 	/**
-	 * Publish a run of messages decided as one change — a Feature Match Slot
-	 * Promotion's — re-resolving Graphic Input Bindings once for the lot.
+	 * Publish a Feature Match Slot Promotion's messages, decided before any is
+	 * published, as one change: Graphic Input Bindings re-resolve once for the lot.
 	 */
-	async function eventDataChanged({ eventId, messages, originConnectionId }: EventDataChangedInput) {
+	async function featureMatchSlotPromoted({ eventId, messages, originConnectionId }: FeatureMatchSlotPromotedInput) {
 		await publishEventDataMessages(eventId, messages, originConnectionId);
 	}
 
@@ -553,7 +544,7 @@ export function eventDataPublicationModule() {
 		screenUpdated,
 		screenDeleted,
 		featureMatchSlotsUpdated,
-		eventDataChanged,
+		featureMatchSlotPromoted,
 		roundMatchesRefreshed,
 		meleeDeckListsSynced,
 		meleePlayersSynced,

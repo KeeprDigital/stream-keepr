@@ -24,7 +24,10 @@ export function mapFeatureMatchSessionToStarted(session: DbFeatureMatchSession):
 	};
 }
 
-export function mapFeatureMatchToResponse(match: DbFeatureMatch & { activeSession?: DbFeatureMatchSession | null }): FeatureMatchResponse {
+/** A Slot as read with its active Session. */
+export type DbFeatureMatchWithSession = DbFeatureMatch & { activeSession?: DbFeatureMatchSession | null };
+
+export function mapFeatureMatchToResponse(match: DbFeatureMatchWithSession): FeatureMatchResponse {
 	const mapped = mapTimestamps(match);
 	return {
 		...mapped,

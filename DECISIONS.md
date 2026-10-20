@@ -904,11 +904,11 @@ Accepted · 2026-10-20 · [#594](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The outcome is a pure decision.** `decidePromotion` (`server/modules/feature-match-promotion/decision.ts`) takes what the promotion read before its batch and what it reads right after the commit. It answers `lost`, `failed`, or `standing`. Only a standing decision can describe a publication. That description takes later reads and answers `won` or `won-then-moved`, the messages to send, and the response. A lost promotion has no messages to publish, so "decide the outcome before publishing" (#577) holds by the module's shape.
+**The outcome is a pure decision.** `decidePromotion` (`server/modules/feature-match-promotion/decision.ts`) takes what the promotion read before its batch and what it reads right after the commit. It answers `lost`, `failed`, or `standing`. Only a standing decision can build a publication. It takes later reads and answers `won` or `won-then-moved`, the messages to send, and the response. A lost promotion has no messages to publish, so "decide the outcome before publishing" (#577) holds by the module's shape.
 
 **The publication is one change.** Every new Session's `SessionStarted`, the Assignment messages and every Slot's `featureMatch:updated` are published in that order. Graphic Input Bindings then re-resolve once, however many Slots were cleared. The promotion settles its Session transition with `announce: false` and publishes the Sessions among its own messages.
 
-**The reverse sync runs between the decision and the publication.** It writes without announcing, and the publication reads after it, so peers get the players' latest data. When the sync faults, the committed promotion is still published, and then the fault is answered.
+**The reverse sync runs between the decision and the publication's Slot reads.** It writes without announcing, and the Slots are read after it, so peers get the players' latest data. When the sync faults, the committed promotion is still published, and then the fault is answered.
 
 **Contradicts ADR-0029's consequence that a Slot write opening a Session re-resolves bindings twice.** A promotion re-resolves once. It also goes against the epoch module's note that only an end nobody may be told about opts out of announcing. A promotion opts out because it announces the same Sessions itself, in the same order as before.
 
@@ -919,9 +919,10 @@ One function ran about ten steps in a fixed order. It published 3+N messages, an
 ### Consequences
 
 - Every outcome is unit-tested against the pure decision with no mocks (`featureMatchPromotionDecision.test.ts`). The fence, the publication and the refresh count are pinned against SQLite (`featureMatchPromotion.sqlite.test.ts`).
-- A `SessionStarted` now carries the Session as it is after the reverse sync, not at sequence 1.
+- The Sessions a commit opened are still read straight after the outcome is decided, before the reverse sync. So a `SessionStarted` still carries the Session as it opened, and the Slot messages carry it after the sync, as before.
+- A promotion that stands but whose Slot is gone by the later reads, or whose later reads fail, publishes nothing and answers `500`. Before, it had already published its Sessions and Assignment. The Slot's deletion announces itself.
 - A promotion moved off before the later reads still publishes the Assignment it committed. Its Slot messages and response show the move, as before (#575).
-- #605's plan fence is unchanged. It still rides in the batch ahead of the Session transition.
+- The plan fence from #605 is unchanged. It still rides in the batch ahead of the Session transition.
 - A reverse sync that has to open a missing Session announces it on its own, with its own refresh. That cannot happen to the Slots a promotion just opened Sessions for.
 
 ### Rejected alternatives
