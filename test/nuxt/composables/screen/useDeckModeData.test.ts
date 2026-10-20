@@ -979,8 +979,9 @@ describe('useDeckModeData', () => {
 			const result = mountDeckModeData();
 			await flushPromises();
 
-			// Served before the edit, delivered after it: the announcement supersedes
-			// the read, and with nothing on program yet its answer is displayed directly.
+			// Served before the edit, delivered after it: the announcement asks for a
+			// follow-up that supersedes the load, and with nothing on program yet its
+			// answer is displayed directly.
 			applyPlayerUpdated({ ...serverPlayer, updatedAt: AFTER_EDIT });
 			releaseRead();
 			await flushPromises();
