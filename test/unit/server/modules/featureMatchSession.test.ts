@@ -49,7 +49,7 @@ describe('feature Match Session server module', () => {
 		vi.clearAllMocks();
 	});
 
-	it('creates a session and publishes the SessionStarted event at the module seam', async () => {
+	it('creates a session at the module seam, leaving its announcement to the opening itself', async () => {
 		const currentState = createInitialFeatureMatchState();
 		const snapshot = sourceSnapshot();
 		mockCreateSessionForSlot.mockResolvedValue({
@@ -67,15 +67,11 @@ describe('feature Match Session server module', () => {
 		const response = await featureMatchSessionModule().createSessionForSlot(2, 1, 'origin-1');
 
 		expect(response).toMatchObject({ id: 10, sequence: 1, sourceSnapshot: snapshot, currentState });
-		expect(mockCreateSessionForSlot).toHaveBeenCalledWith(2, 1);
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchSession:eventApplied', {
-			slotId: 2,
-			sessionId: 10,
-			sequence: 1,
-			eventType: 'SessionStarted',
-			sourceSnapshot: snapshot,
-			currentState,
-		}, 'origin-1');
+		// Every path that opens a Session announces it the same way (#593), so the
+		// route seam only names whose request it was; `featureMatchSessionOpeners`
+		// pins the announcement itself.
+		expect(mockCreateSessionForSlot).toHaveBeenCalledWith(2, 1, { originConnectionId: 'origin-1' });
+		expect(mockPublishMessage).not.toHaveBeenCalled();
 	});
 
 	it('applies a command as a published live-state write at the module seam', async () => {

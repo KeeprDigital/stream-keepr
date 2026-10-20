@@ -28,7 +28,6 @@ import {
 } from '~~/server/services/broadcastGraphicsState';
 import { graphicBindingDataService } from '~~/server/services/graphicBindingData';
 import { screenService } from '~~/server/services/screen';
-import { publishMessage } from '~~/server/utils/ably';
 import {
 	broadcastGraphicChannelContexts,
 	BroadcastGraphicsCommandRejection,
@@ -489,34 +488,6 @@ export function broadcastGraphicsLiveSessionModule() {
 	};
 
 	/**
-	 * Announce that a Screen's playout epoch has been replaced.
-	 *
-	 * Its own notification rather than a variant of `commandApplied`, because it is
-	 * not a command and nothing about it can be applied: every client holding state
-	 * for this Screen is holding state from a session that has ended, and the only
-	 * correct response is to reload.
-	 *
-	 * The case that needs it is an explicit reset, which changes nothing about the
-	 * Screen and so publishes no other message — without this, every peer would sit on
-	 * the ended epoch still rendering the graphics the reset was meant to clear. A mode
-	 * change is already covered by `screen:updated`, and publishes this as well only so
-	 * the stale epoch is dropped deterministically.
-	 */
-	const publishEpochEnded = async (
-		eventId: number,
-		screenId: number,
-		sessionId: number | null,
-		originConnectionId?: string,
-	): Promise<void> => {
-		await publishMessage(
-			eventId,
-			'broadcastGraphicsLiveSession:epochEnded',
-			{ screenId, sessionId },
-			originConnectionId,
-		);
-	};
-
-	/**
 	 * End the Screen's epoch, unannounced, on the way to deleting the Screen.
 	 *
 	 * The one end nobody is told about, and the only caller left that ends an epoch
@@ -547,8 +518,7 @@ export function broadcastGraphicsLiveSessionModule() {
 	 * So the end is handed back as statements for the caller to commit with the mode
 	 * change, and the announcement as a thunk to run once that commit has happened —
 	 * an announcement is a claim that an epoch ended, and may not outlive a commit
-	 * that did not. Which epoch it names is read here, before the statements are
-	 * committed, because afterwards there is no active session left to identify.
+	 * that did not. The thunk announces only an epoch the commit actually ended.
 	 */
 	const endEpochOnLeavingBroadcastGraphics = async (
 		screenId: number,
@@ -558,11 +528,12 @@ export function broadcastGraphicsLiveSessionModule() {
 		statements: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]];
 		announceEnded: () => Promise<void>;
 	}> => {
-		const ending = await state.findActiveSessionByScreen(screenId, eventId);
+		const ending = await state.endSessionOnLeavingBroadcastGraphics(screenId, eventId);
 		return {
-			statements: state.endSessionStatementsOnLeavingBroadcastGraphics(screenId, eventId),
-			announceEnded: async () =>
-				await publishEpochEnded(eventId, screenId, ending?.id ?? null, originConnectionId),
+			statements: ending.statements,
+			announceEnded: async () => {
+				await ending.settle({ originConnectionId });
+			},
 		};
 	};
 
@@ -588,9 +559,9 @@ export function broadcastGraphicsLiveSessionModule() {
 		// One commit: the old epoch ends, what it published is unpublished, and the
 		// successor opens carrying nothing forward — so the new epoch publishes
 		// nothing until it accepts something of its own, and no failure can leave the
-		// ended epoch's media on the Screen's outputs with nobody told.
-		const { ended, opened } = await state.resetSessionForScreen(screenId, eventId);
-		await publishEpochEnded(eventId, screenId, ended?.id ?? null, originConnectionId);
+		// ended epoch's media on the Screen's outputs with nobody told. Committing it
+		// announces it.
+		const { opened } = await state.resetSessionForScreen(screenId, eventId, originConnectionId);
 		return mapBroadcastGraphicsLiveSessionToResponse(opened);
 	};
 

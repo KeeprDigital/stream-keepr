@@ -93,19 +93,19 @@ export function featureMatchPromotionModule() {
 		const defaults = await state.loadEventDefaults(eventId);
 		const plan = await buildMatchPromotionPlan(eventId, slotId, match, slot);
 
-		const clearedSessionQueries: BatchItem<'sqlite'>[] = [];
-		for (const clearedSlot of plan.clearedSlots) {
-			const { queries } = await state.buildCreateSessionForSlotQueries(clearedSlot, eventId, defaults);
-			clearedSessionQueries.push(...queries);
-		}
+		// Every Slot this promotion moves gets a new Session in the same commit as the
+		// plan's fence, so a plan gone stale resets none of them (#605).
+		const sessionReplacement = await state.buildSessionReplacement(
+			eventId,
+			[...plan.clearedSlots, plan.promotedSlot],
+			{ defaults },
+		);
 
 		const assignmentQueries = buildUpsertAssignmentQueries(eventId, {
 			roundId: match.roundId,
 			slotId,
 			matchId,
 		});
-
-		const { queries: promotedSessionQueries } = await state.buildCreateSessionForSlotQueries(plan.promotedSlot, eventId, defaults);
 
 		const batchQueries: BatchItem<'sqlite'>[] = [
 			buildAssignmentDisplacementGuardQuery(eventId, {
@@ -115,9 +115,8 @@ export function featureMatchPromotionModule() {
 				expectedAssignment: assignmentToDisplace,
 			}),
 			...plan.queries,
-			...clearedSessionQueries,
+			...sessionReplacement.statements,
 			...assignmentQueries,
-			...promotedSessionQueries,
 		];
 		try {
 			await db.batch(batchQueries as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
@@ -157,6 +156,9 @@ export function featureMatchPromotionModule() {
 		if (!assignment) {
 			throw createError({ statusCode: 500, message: 'Failed to save feature match assignment' });
 		}
+
+		// The promotion stands, so its new Sessions may be announced.
+		await sessionReplacement.settle({ originConnectionId });
 
 		// Assignment notifications describe the authoritative batch write and must
 		// not wait behind the optional reverse-sync follow-on. If that later work

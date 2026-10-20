@@ -17,8 +17,9 @@ const mockBuildUpsertAssignmentQueries = vi.fn();
 const mockBuildAssignmentDisplacementGuardQuery = vi.fn();
 const mockFeatureMatchStateService = {
 	loadEventDefaults: vi.fn(),
-	buildCreateSessionForSlotQueries: vi.fn(),
+	buildSessionReplacement: vi.fn(),
 };
+const mockSettleSessions = vi.fn();
 const mockPlayerFeatureMatchSyncService = {
 	syncMatchesFromPlayers: vi.fn(),
 	syncMatchesFromPlayersAfterCommit: vi.fn(),
@@ -114,7 +115,8 @@ describe('feature Match Slot Promotion server module', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockFeatureMatchStateService.loadEventDefaults.mockResolvedValue({ game: 'mtg' });
-		mockFeatureMatchStateService.buildCreateSessionForSlotQueries.mockResolvedValue({ queries: ['session-q'] });
+		mockFeatureMatchStateService.buildSessionReplacement.mockResolvedValue({ statements: ['session-q'], settle: mockSettleSessions });
+		mockSettleSessions.mockResolvedValue({ ended: [], opened: [] });
 		mockBuildUpsertAssignmentQueries.mockReturnValue(['assignment-del', 'assignment-ins']);
 		mockBuildAssignmentDisplacementGuardQuery.mockReturnValue('assignment-guard');
 		mockFeatureMatchAssignmentService.findByRoundAndMatch.mockResolvedValue(undefined);
@@ -151,8 +153,7 @@ describe('feature Match Slot Promotion server module', () => {
 		expect(mockMatchService.findById).toHaveBeenCalledWith(7, 1);
 		expect(mockFeatureMatchService.findById).toHaveBeenNthCalledWith(1, 2, 1);
 		expect(mockBuildMatchPromotionPlan).toHaveBeenCalledWith(1, 2, match, initialSlot);
-		expect(mockFeatureMatchStateService.buildCreateSessionForSlotQueries).toHaveBeenNthCalledWith(1, clearedFuture, 1, { game: 'mtg' });
-		expect(mockFeatureMatchStateService.buildCreateSessionForSlotQueries).toHaveBeenNthCalledWith(2, promotedFuture, 1, { game: 'mtg' });
+		expect(mockFeatureMatchStateService.buildSessionReplacement).toHaveBeenCalledWith(1, [clearedFuture, promotedFuture], { defaults: { game: 'mtg' } });
 		expect(mockBuildUpsertAssignmentQueries).toHaveBeenCalledWith(1, {
 			roundId: 3,
 			slotId: 2,
@@ -165,11 +166,14 @@ describe('feature Match Slot Promotion server module', () => {
 			'assignment-guard',
 			'clear-q',
 			'promote-q',
-			'session-q', // cleared slot session
+			'session-q', // every moved Slot's new Session
 			'assignment-del',
 			'assignment-ins',
-			'session-q', // promoted slot session
 		]);
+
+		// The new Sessions are announced once the promotion is known to stand.
+		expect(mockSettleSessions).toHaveBeenCalledWith({ originConnectionId: 'origin-1' });
+		expect(mockBatch.mock.invocationCallOrder[0]).toBeLessThan(mockSettleSessions.mock.invocationCallOrder[0]!);
 
 		// Reverse-sync and the Assignment re-read happen only after the batch commits.
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [101, 102]);
@@ -308,7 +312,9 @@ describe('feature Match Slot Promotion server module', () => {
 		});
 
 		// The operator is told this promotion failed, so no peer may be shown it
-		// (#576): neither its Assignment nor any Slot it cleared is published.
+		// (#576): neither its Assignment nor any Slot it cleared is published, and
+		// nor are the Sessions it opened.
+		expect(mockSettleSessions).not.toHaveBeenCalled();
 		expect(mockPublishMessage).not.toHaveBeenCalled();
 		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).not.toHaveBeenCalled();
 	});

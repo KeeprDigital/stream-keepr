@@ -1,7 +1,6 @@
 import type { SQL } from 'drizzle-orm';
-import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbBroadcastGraphicsLiveSession } from '~~/server/db/schema';
-import type { SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
+import type { SequencedLiveEpochTransition, SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
 import type { BroadcastGraphicsLiveState, BroadcastGraphicsReductionContext } from '~~/shared/modules/broadcast-graphics-live-session';
 import type {
 	BroadcastGraphicsCommand,
@@ -14,7 +13,7 @@ import {
 	broadcastGraphicsCommandAppliedPayload,
 	mapBroadcastGraphicsCommandResult,
 } from '~~/server/mappers/broadcastGraphicsLiveSession';
-import { createSequencedLiveState, forgetAggregateReceipts } from '~~/server/modules/live-state';
+import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
 import { clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement } from '~~/server/modules/screen-graphic-asset-references';
 import { publishMessage } from '~~/server/utils/ably';
 import {
@@ -76,6 +75,14 @@ export const BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND = 'broadcastGraphics
 interface BroadcastGraphicsLiveSessionRef {
 	sessionId: number;
 	eventId: number;
+}
+
+/** The Screen whose epoch a transition ends or opens. */
+interface BroadcastGraphicsEpochScope {
+	screenId: number;
+	eventId: number;
+	/** A condition every statement ending the epoch is subject to. */
+	onlyIf?: SQL;
 }
 
 export function broadcastGraphicsStateService() {
@@ -147,75 +154,6 @@ export function broadcastGraphicsStateService() {
 	};
 
 	/**
-	 * The three writes that end whichever epoch a Screen currently owns.
-	 *
-	 * A Broadcast Graphics Live Session ends when the Screen leaves Broadcast
-	 * Graphics mode or an operator explicitly resets live state. An ended epoch can
-	 * never accept another command, so its receipts have nothing left to protect;
-	 * and it has accepted nothing, so the media Graphic Input values it published
-	 * stop being published in the same instant. The session row itself is kept: a
-	 * stale retry addressed to it must be recognisably rejected rather than silently
-	 * opening a fresh epoch.
-	 *
-	 * All three together or none, because each of the other two is a consequence of
-	 * the first that nothing downstream re-derives. The reference clear used to be a
-	 * separate write issued after this batch, and its failure left an ended epoch's
-	 * media resolvable through the Screen's outputs while skipping the announcement
-	 * that would have told anyone (#305).
-	 *
-	 * Returned as statements rather than executed so a caller can commit them
-	 * together with the write that causes the end — the successor epoch a reset
-	 * opens, or the mode change a Screen leaving Broadcast Graphics commits.
-	 */
-	const endSessionStatements = (
-		screenId: number,
-		eventId: number,
-		/**
-		 * An extra condition every statement is subject to.
-		 *
-		 * An end committed on its own needs none: the caller has already decided.
-		 * An end riding in the batch of the write that causes it does, because a
-		 * batch applies every statement it holds whether or not the ones before it
-		 * matched anything — so an end travelling with a mode change that may be
-		 * refused has to state that mode change's postcondition itself, or a
-		 * refused write would blank a show nobody asked to stop.
-		 */
-		onlyIf?: SQL,
-	): [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] => {
-		const now = new Date();
-		return [
-			db.update(broadcastGraphicsLiveSessions)
-				.set({ status: 'ended', endedAt: now, updatedAt: now })
-				.where(and(
-					eq(broadcastGraphicsLiveSessions.screenId, screenId),
-					eq(broadcastGraphicsLiveSessions.eventId, eventId),
-					eq(broadcastGraphicsLiveSessions.status, 'active'),
-					onlyIf,
-				)),
-			// Not subject to `onlyIf`, unlike the two statements it rides between, and
-			// that asymmetry is safe because of what its own subquery selects: sessions
-			// that have *already* ended. On a refused write the update above did not end
-			// anything, so this matches only epochs some earlier end already purged the
-			// receipts of, and deletes nothing. It is stated rather than left to be
-			// re-derived because the reading that would make it a defect — a refused
-			// write forgetting a running epoch's receipts, so a stale retry replays
-			// against a show still on air — is exactly the one `onlyIf` exists to
-			// prevent everywhere else in this batch.
-			forgetAggregateReceipts({
-				aggregateKind: BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND,
-				aggregateIds: sql`
-					select ${broadcastGraphicsLiveSessions.id}
-					from ${broadcastGraphicsLiveSessions}
-					where ${broadcastGraphicsLiveSessions.screenId} = ${screenId}
-						and ${broadcastGraphicsLiveSessions.eventId} = ${eventId}
-						and ${broadcastGraphicsLiveSessions.status} = 'ended'
-				`,
-			}),
-			clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement(screenId, onlyIf),
-		];
-	};
-
-	/**
 	 * True once the Screen is no longer in Broadcast Graphics mode.
 	 *
 	 * The postcondition of the mode change an atomic epoch end travels with, and so
@@ -231,48 +169,130 @@ export function broadcastGraphicsStateService() {
 			and ${screens.currentMode} != 'broadcast-graphics'
 	)`;
 
-	const openSessionStatement = (
-		screenId: number,
-		eventId: number,
-		currentState: BroadcastGraphicsLiveState,
-	): BatchItem<'sqlite'> => db.insert(broadcastGraphicsLiveSessions)
-		.values({ eventId, screenId, status: 'active', currentState, sequence: 1 })
-		.returning();
+	/**
+	 * The Broadcast Graphics half of the shared epoch lifecycle: which epoch a Screen
+	 * owns, and how one ends, opens and is announced. Ordering, receipt forgetting
+	 * and the decision to announce are the module's.
+	 *
+	 * A Broadcast Graphics Live Session ends when the Screen leaves Broadcast
+	 * Graphics mode or an operator explicitly resets live state. An ended epoch has
+	 * accepted nothing, so the media Graphic Input values it published stop being
+	 * published in the same instant it ends. The session row itself is kept: a stale
+	 * retry addressed to it must be recognisably rejected rather than silently
+	 * opening a fresh epoch.
+	 *
+	 * The end and the reference clear are committed together because the second is a
+	 * consequence of the first that nothing downstream re-derives. The reference clear
+	 * used to be a separate write issued after the end, and its failure left an ended
+	 * epoch's media resolvable through the Screen's outputs while skipping the
+	 * announcement that would have told anyone (#305).
+	 */
+	const sessionEpochs = createSequencedLiveEpochs<BroadcastGraphicsEpochScope, BroadcastGraphicsLiveState, DbBroadcastGraphicsLiveSession>({
+		aggregateKind: BROADCAST_GRAPHICS_LIVE_SESSION_AGGREGATE_KIND,
+		idOf: session => session.id,
+		findActive: async ({ screenId, eventId }) => {
+			const active = await findActiveSessionByScreen(screenId, eventId);
+			return active ? [active] : [];
+		},
+
+		close: ({ screenId, eventId, onlyIf }) => {
+			const now = new Date();
+			return [
+				db.update(broadcastGraphicsLiveSessions)
+					.set({ status: 'ended', endedAt: now, updatedAt: now })
+					.where(and(
+						eq(broadcastGraphicsLiveSessions.screenId, screenId),
+						eq(broadcastGraphicsLiveSessions.eventId, eventId),
+						eq(broadcastGraphicsLiveSessions.status, 'active'),
+						onlyIf,
+					)),
+				clearBroadcastGraphicsLiveSessionGraphicAssetReferencesStatement(screenId, onlyIf),
+			];
+		},
+
+		// Not subject to `onlyIf`, unlike the statements it rides with, and that
+		// asymmetry is safe because of what it selects: sessions that have *already*
+		// ended. On a refused write the end above ended nothing, so this matches only
+		// epochs some earlier end already forgot the receipts of. It is stated rather
+		// than left to be re-derived because the reading that would make it a defect —
+		// a refused write forgetting a running epoch's receipts, so a stale retry
+		// replays against a show still on air — is exactly the one `onlyIf` exists to
+		// prevent everywhere else in the batch.
+		closedIds: ({ screenId, eventId }) => sql`
+			select ${broadcastGraphicsLiveSessions.id}
+			from ${broadcastGraphicsLiveSessions}
+			where ${broadcastGraphicsLiveSessions.screenId} = ${screenId}
+				and ${broadcastGraphicsLiveSessions.eventId} = ${eventId}
+				and ${broadcastGraphicsLiveSessions.status} = 'ended'
+		`,
+
+		open: ({ screenId, eventId }, currentState) => [
+			db.insert(broadcastGraphicsLiveSessions)
+				.values({ eventId, screenId, status: 'active', currentState, sequence: 1 })
+				.returning(),
+		],
+
+		/**
+		 * Its own notification rather than a variant of `commandApplied`, because it is
+		 * not a command and nothing about it can be applied: every client holding state
+		 * for this Screen is holding state from a session that has ended, and the only
+		 * correct response is to reload.
+		 *
+		 * The case that needs it is an explicit reset, which changes nothing about the
+		 * Screen and so publishes no other message — without this, every peer would sit
+		 * on the ended epoch still rendering the graphics the reset was meant to clear.
+		 * A mode change is already covered by `screen:updated`, and publishes this as
+		 * well only so the stale epoch is dropped deterministically.
+		 */
+		announce: async ({ ended, opened }, { originConnectionId }) => {
+			const screen = ended[0] ?? opened[0]!;
+			await publishMessage(
+				screen.eventId,
+				'broadcastGraphicsLiveSession:epochEnded',
+				{ screenId: screen.screenId, sessionId: ended[0]?.id ?? null },
+				originConnectionId,
+			);
+		},
+	});
 
 	/**
-	 * The statements ending the epoch of a Screen that is leaving Broadcast Graphics
-	 * mode, for a caller committing them with the mode change itself.
+	 * Ending the epoch of a Screen that is leaving Broadcast Graphics mode, for a
+	 * caller committing it with the mode change itself.
 	 *
 	 * The end used to be a second write issued once the mode change had committed —
 	 * that ordering was chosen so a failed update could not blank a running show, and
 	 * it bought that at the cost of the opposite failure: an end that failed left the
 	 * Screen out of the mode with its epoch still active, which the next activation
 	 * found and returned with the previous show's graphics still on air. Committed
-	 * together, neither failure has an instant to happen in, and the condition below
-	 * is what keeps the guarantee the old ordering was protecting.
+	 * together, neither failure has an instant to happen in.
+	 *
+	 * A batch applies every statement it holds whether or not the ones before it
+	 * matched anything, so an end travelling with a mode change that may be refused
+	 * states that mode change's postcondition itself, or a refused write would blank a
+	 * show nobody asked to stop. A refused write therefore ends nothing, and settling
+	 * it announces nothing.
 	 */
-	const endSessionStatementsOnLeavingBroadcastGraphics = (
+	const endSessionOnLeavingBroadcastGraphics = async (
 		screenId: number,
 		eventId: number,
-	): [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] => endSessionStatements(
+	): Promise<SequencedLiveEpochTransition<DbBroadcastGraphicsLiveSession>> => await sessionEpochs.close({
 		screenId,
 		eventId,
-		screenHasLeftBroadcastGraphics(screenId, eventId),
-	);
+		onlyIf: screenHasLeftBroadcastGraphics(screenId, eventId),
+	});
 
-	/** Ends the Screen's epoch, answering which one it was so it can be announced. */
+	/** Ends the Screen's epoch unannounced, answering which one it was. */
 	const endSessionsForScreen = async (
 		screenId: number,
 		eventId: number,
 	): Promise<DbBroadcastGraphicsLiveSession | undefined> => {
-		const ended = await findActiveSessionByScreen(screenId, eventId);
-		await db.batch(endSessionStatements(screenId, eventId));
-		return ended;
+		const { ended } = await sessionEpochs.commit(await sessionEpochs.close({ screenId, eventId }), { announce: false });
+		return ended[0];
 	};
 
 	/**
 	 * End the Screen's epoch and open its successor in one commit, carrying nothing
-	 * forward.
+	 * forward, and announce it.
 	 *
 	 * This is what an explicit live-state reset means: every Broadcast Graphic off,
 	 * a new epoch that stale retries from the old one cannot reach, and — unlike a
@@ -288,19 +308,19 @@ export function broadcastGraphicsStateService() {
 	const resetSessionForScreen = async (
 		screenId: number,
 		eventId: number,
+		originConnectionId?: string,
 	): Promise<{ ended?: DbBroadcastGraphicsLiveSession; opened: DbBroadcastGraphicsLiveSession }> => {
-		const ended = await findActiveSessionByScreen(screenId, eventId);
-		const [first, ...rest] = endSessionStatements(screenId, eventId);
-		const results = await db.batch([
-			first,
-			...rest,
-			openSessionStatement(screenId, eventId, createInitialBroadcastGraphicsLiveState()),
-		]);
-		const opened = (results.at(-1) as DbBroadcastGraphicsLiveSession[] | undefined)?.[0];
-		if (!opened)
+		const { ended, opened } = await sessionEpochs.commit(
+			await sessionEpochs.replace({ screenId, eventId }, createInitialBroadcastGraphicsLiveState()),
+			{ originConnectionId },
+		);
+		// A concurrent reset can have replaced this one's successor already; the
+		// Screen's epoch now is the honest answer.
+		const current = opened[0] ?? await findActiveSessionByScreen(screenId, eventId);
+		if (!current)
 			throw new Error('Failed to open broadcast graphics live session');
 
-		return { ended, opened };
+		return { ended: ended[0], opened: current };
 	};
 
 	/**
@@ -308,10 +328,11 @@ export function broadcastGraphicsStateService() {
 	 *
 	 * A Screen in Broadcast Graphics mode always has exactly one active epoch, so
 	 * the first operator or Screen Output to ask for the authoritative snapshot
-	 * opens it. A fresh epoch has nothing on air, and inherits the previous epoch's
-	 * prepared Graphic Input values: a Screen flipped out of and back into Broadcast
-	 * Graphics mode is one show continuing, so the values an operator staged for
-	 * their next take are not theirs to retype.
+	 * opens it, unannounced: the asker is about to be answered with it. A fresh epoch
+	 * has nothing on air, and inherits the previous epoch's prepared Graphic Input
+	 * values: a Screen flipped out of and back into Broadcast Graphics mode is one
+	 * show continuing, so the values an operator staged for their next take are not
+	 * theirs to retype.
 	 */
 	const ensureActiveSession = async (
 		screenId: number,
@@ -324,19 +345,17 @@ export function broadcastGraphicsStateService() {
 		const previous = await findLatestEndedSessionByScreen(screenId, eventId);
 
 		try {
-			const [created] = await db.insert(broadcastGraphicsLiveSessions)
-				.values({
-					eventId,
-					screenId,
-					status: 'active',
-					currentState: previous
+			const { opened } = await sessionEpochs.commit(
+				await sessionEpochs.open(
+					{ screenId, eventId },
+					previous
 						? carriedForwardBroadcastGraphicsLiveState(previous.currentState)
 						: createInitialBroadcastGraphicsLiveState(),
-					sequence: 1,
-				})
-				.returning();
-			if (created)
-				return created;
+				),
+				{ announce: false },
+			);
+			if (opened[0])
+				return opened[0];
 		}
 		catch (error) {
 			// Another writer opened the epoch first; the partial unique index on the
@@ -347,6 +366,9 @@ export function broadcastGraphicsStateService() {
 			return raced;
 		}
 
+		const raced = await findActiveSessionByScreen(screenId, eventId);
+		if (raced)
+			return raced;
 		throw new Error('Failed to open broadcast graphics live session');
 	};
 
@@ -529,7 +551,7 @@ export function broadcastGraphicsStateService() {
 		findActiveSessionsByEvent,
 		ensureActiveSession,
 		endSessionsForScreen,
-		endSessionStatementsOnLeavingBroadcastGraphics,
+		endSessionOnLeavingBroadcastGraphics,
 		resetSessionForScreen,
 		applyCommand,
 	};
