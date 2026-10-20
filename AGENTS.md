@@ -35,8 +35,8 @@ merge button. Why: README.md § Releases.
   the main checkout, then `pnpm install --frozen-lockfile`. Missing `.env`
   produces 503s and two skipped realtime tests, not branch defects.
 - Stop dev servers with SIGINT/SIGTERM. `pnpm reap` safely removes orphaned
-  `workerd`; scope any manual kill to your worktree
-  (`pkill -f "worktrees/<name>.*workerd"`), never bare `pkill -f workerd`.
+  `workerd`; scope any manual kill to your worktree's path
+  (`pkill -f "<worktree path>/.*workerd"`), never bare `pkill -f workerd`.
 - Run one integration suite at a time per machine.
 
 ## Domain docs
