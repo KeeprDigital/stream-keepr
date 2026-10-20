@@ -48,8 +48,6 @@ export const usePlayerStore = defineStore('player', () => {
 	const isLoaded = lifecycle.isLoaded;
 
 	const loadPlayersByEventId = lifecycle.loadByEventId;
-	/** Hold a roster another read answered — a Screen Output's — so `player:updated` keeps it live. */
-	const loadPlayersFrom = lifecycle.loadFrom;
 	const createPlayer = lifecycle.create;
 	const updatePlayer = lifecycle.update;
 	const removePlayer = lifecycle.remove;
@@ -109,7 +107,6 @@ export const usePlayerStore = defineStore('player', () => {
 
 		// Actions
 		loadPlayersByEventId,
-		loadPlayersFrom,
 		holdPlayer,
 		getPlayerById,
 		createPlayer,

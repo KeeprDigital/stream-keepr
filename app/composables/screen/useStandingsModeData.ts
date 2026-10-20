@@ -1,26 +1,72 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
-import type { Player, Round } from '~/types';
+import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
+import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
+
+/**
+ * The Event Data Standings are read from: the roster, the Round they are fixed
+ * at and its snapshot, and the watchlist they filter to. Every Player is a
+ * row, and Melee syncs rewrite records and snapshots wholesale, so any of them
+ * re-reads.
+ */
+function standingsDependencies(watchlistId: () => number | null): ScreenModeDependencies<ScreenOutputStandingsResponse> {
+	const holdsRound = (held: ScreenOutputStandingsResponse, roundId: number) => held.round?.id === roundId;
+	const isWatchlist = (listId: number) => listId === watchlistId();
+
+	return {
+		'player:created': true,
+		'player:updated': true,
+		'player:deleted': true,
+		'round:updated': ({ round }, held) => holdsRound(held, round.id),
+		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId),
+		'playerList:updated': ({ playerList }) => isWatchlist(playerList.id),
+		'playerList:deleted': ({ listId }) => isWatchlist(listId),
+		'playerList:membersChanged': ({ listId }) => isWatchlist(listId),
+		'melee:dataReset': true,
+		'melee:structureSynced': true,
+		'melee:roundSynced': true,
+		'melee:playersSynced': true,
+	};
+}
 
 export function useStandingsModeData() {
 	const { screen, eventId, interactive } = useScreenContext();
 	const config = useScreenModeConfig('standings');
 
-	const playerStore = usePlayerStore();
 	const screenStore = useScreenStore();
 	const outputReads = useScreenOutputReads();
 	const eventStore = useEventStore();
 
-	const displayData = useBroadcastDisplayData<null>({ initialData: null });
-	const loading = displayData.loading;
-	const error = displayData.error;
-	const roundSnapshotMap = ref<Map<number, Pick<Player, 'wins' | 'losses' | 'draws' | 'position' | 'points'>> | null>(null);
-	const round = ref<Round | null>(null);
-	const watchlist = ref<{ name: string } | null>(null);
+	const selectedWatchlistId = () => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null;
 
-	// ── Watchlist Member Tracking ──
-	const watchlistPlayerIds = ref<Set<number>>(new Set());
+	// ── Data Loading ──
+	/**
+	 * One Screen Output read answers everything Standings renders from, derived
+	 * on the server from the saved configuration (#604). It is held here, never
+	 * in the Player store, so an operator's roster cannot stand in for it (#603).
+	 */
+	const freshness = useScreenModeFreshness<ScreenOutputStandingsResponse>({
+		eventId,
+		source: () => outputReads.scopeKey.value
+			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}`
+			: null,
+		read: () => outputReads.standings(),
+		initialData: { players: [], round: null, roundStandings: null, watchlist: null },
+		errorMessage: 'Failed to load standings data',
+		dependsOn: standingsDependencies(selectedWatchlistId),
+	});
+	const loading = freshness.loading;
+	const error = freshness.error;
+	const round = computed(() => freshness.data.value.round);
+	const watchlist = computed(() => freshness.data.value.watchlist);
+	const watchlistPlayerIds = computed(() => new Set(watchlist.value?.playerIds ?? []));
+	const roundSnapshotMap = computed(() => {
+		const standings = freshness.data.value.roundStandings;
+		return standings ? new Map(standings.map(({ playerId, ...snapshot }) => [playerId, snapshot])) : null;
+	});
 
 	// ── Header ──
 	const headerText = computed(() => computeHeaderText());
@@ -29,7 +75,7 @@ export function useStandingsModeData() {
 	);
 	const standingsRows = computed(() => {
 		const selectedRoundId = config.value.roundId;
-		const rows = [...playerStore.players];
+		const rows: Player[] = [...freshness.data.value.players];
 
 		if (!selectedRoundId) {
 			return rows;
@@ -131,33 +177,6 @@ export function useStandingsModeData() {
 		},
 	});
 
-	// ── Data Loading ──
-	/**
-	 * One Screen Output read answers everything Standings renders from, derived
-	 * on the server from the saved configuration (#604). The roster is held in
-	 * the Player store so `player:updated` keeps its rows live.
-	 */
-	async function loadStandings() {
-		const scope = outputReads.scope.value;
-		if (!scope) {
-			error.value = 'No event loaded';
-			displayData.clear();
-			return;
-		}
-
-		await displayData.refresh(async () => {
-			const data = await outputReads.standings();
-			await playerStore.loadPlayersFrom(scope.eventId, async () => data.players);
-			round.value = data.round;
-			watchlist.value = data.watchlist;
-			watchlistPlayerIds.value = new Set(data.watchlist?.playerIds ?? []);
-			roundSnapshotMap.value = data.roundStandings
-				? new Map(data.roundStandings.map(({ playerId, ...snapshot }) => [playerId, snapshot]))
-				: null;
-			return null;
-		}, 'Failed to load standings data');
-	}
-
 	// ── Header Text Computation ──
 	function computeHeaderText(): string {
 		if (config.value.headerText)
@@ -226,13 +245,6 @@ export function useStandingsModeData() {
 		}
 		return 'No standings data available';
 	});
-
-	// ── Watchers ──
-	watch(
-		() => [outputReads.scopeKey.value, config.value.viewMode, config.value.playerListId, config.value.roundId],
-		() => loadStandings(),
-		{ immediate: true },
-	);
 
 	return {
 		config,

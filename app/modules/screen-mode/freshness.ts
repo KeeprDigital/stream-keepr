@@ -6,13 +6,15 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useBroadcastDisplayData } from '~/composables/screen/useBroadcastDisplayData';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 
 /**
- * How often a mode re-reads while realtime cannot tell it about changes. Well
- * under the transport's own 30 s recovery cadence (ADR-0023): this is what
- * keeps program current while that recovery waits.
+ * How often a mode re-reads while realtime cannot tell it about changes, or
+ * after a read that failed. Well under the transport's own 30 s recovery
+ * cadence (ADR-0023): this is what keeps program current while that recovery
+ * waits.
  */
-export const SCREEN_MODE_DEGRADED_REFETCH_MS = 15_000;
+export const SCREEN_MODE_REREAD_MS = 15_000;
 
 /**
  * Whether one Event message touches what a mode holds, per message type. `true`
@@ -55,7 +57,9 @@ export interface ScreenModeFreshnessOptions<T> {
  *   one Event the transport covers (ADR-0023). It re-reads, never
  *   re-registers: holding subscriptions through an outage is the transport's;
  * - **Reconnect Resync** — once on coming back from either, because what was
- *   published meanwhile is gone.
+ *   published meanwhile is gone;
+ * - **retry** — on the same slow cadence after the latest read failed, because
+ *   the change that asked for it will not be announced again.
  *
  * Every read is stale-while-revalidate: a rendering holds what it shows until a
  * newer read answers, and a failed re-read never blanks program.
@@ -64,13 +68,34 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	const realtime = options.realtime ?? tryUseRealtime();
 	const display = useBroadcastDisplayData<T>({ initialData: options.initialData });
 	let refreshQueued = false;
+	const reads = createGuardedSequence();
+	let retry: ReturnType<typeof setTimeout> | null = null;
+
+	function stopRetry() {
+		if (retry !== null) {
+			clearTimeout(retry);
+			retry = null;
+		}
+	}
 
 	function refresh() {
+		stopRetry();
+		const flight = reads.begin();
 		if (options.source() == null) {
 			display.clear();
 			return;
 		}
-		void display.refresh(options.read, options.errorMessage);
+		void display.refresh(async () => {
+			try {
+				return await options.read();
+			}
+			catch (cause) {
+				// Only the latest read's failure leaves program behind.
+				if (flight.current)
+					retry = setTimeout(queueRefresh, SCREEN_MODE_REREAD_MS);
+				throw cause;
+			}
+		}, options.errorMessage);
 	}
 
 	/** One read for however many reasons arrive together. */
@@ -134,13 +159,15 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	watch(() => disconnected.value || waitingOnToken.value, (degraded) => {
 		stopCadence();
 		if (degraded) {
-			cadence = setInterval(queueRefresh, SCREEN_MODE_DEGRADED_REFETCH_MS);
+			cadence = setInterval(queueRefresh, SCREEN_MODE_REREAD_MS);
 		}
 	}, { immediate: true });
 
 	onScopeDispose(() => {
 		unsubscribe();
 		stopCadence();
+		stopRetry();
+		reads.supersede();
 	});
 
 	return {

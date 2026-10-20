@@ -582,8 +582,8 @@ Deriving from configuration keeps the capability's reach equal to what the Scree
 - The ordinary `/api/events/**` reads stay private. This widens the capability surface, not the Event boundary.
 - An announced active Screen is re-read by id through the Screen Output path, with the credential it was first read with — by id because a slug can be renamed under an output on program.
 - Store-wide reader hooks a rendering installs (`readActiveCardAsScreenOutput`, `readSessionsAsScreenOutput`, `readSessionAsScreenOutput`) are uninstalled when the rendering is disposed, so a control page never inherits them.
-- Deck and the Feature Match Overlay sideboard follow `player:updated` on the Event channel directly, since an output holds no roster for the message to update; this replaces their roster loads, not the wider freshness work.
-- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`, `playerStore.loadPlayersFrom`), so `player:updated` and `featureMatch:updated` keep them live without the private roster or Slot list.
+- The Feature Match Overlay sideboard follows `player:updated` on the Event channel directly, since an output holds no roster for the message to update. Deck and Standings hold their reads in Screen Mode Data Freshness, which hears their Event Data messages on the Event channel the same way (#603).
+- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`), so `player:updated` and `featureMatch:updated` keep them live without the private roster or Slot list. Standings does not: an operator's populated roster would stand in for its read.
 - Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
 - Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
 - The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.

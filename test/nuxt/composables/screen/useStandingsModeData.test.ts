@@ -1,7 +1,9 @@
+import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 // ── Shared mutable config ──
 
@@ -51,13 +53,17 @@ const players = [
 
 // ── Mocks ──
 
+/** The roster the server holds; the Standings read answers it. */
+let serverPlayers = [...players];
+
+/**
+ * An operator's Player store, loaded and stale. A rendering reads its roster
+ * through the Screen, so what this holds must never reach its rows (#603).
+ */
 const mockPlayerStore = reactive({
-	players: [...players],
+	players: [createMockPlayer({ id: 99, name: 'Stale Store Player', position: 1 })],
 	isLoaded: true,
-	// The roster the Standings read answers is held in the Player store.
-	loadPlayersFrom: vi.fn(async (_eventId: number, loader: () => Promise<any[]>) => {
-		mockPlayerStore.players = await loader();
-	}),
+	loadPlayersFrom: vi.fn(),
 });
 
 const mockScreenStore = {
@@ -72,8 +78,30 @@ const mockEventStore = reactive({
 const mockEventId = ref<number | null>(1);
 const mockInteractiveStandings = ref(false);
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+type Handler = (message: Record<string, unknown>) => void;
+const channelHandlers = new Map<string, Set<Handler>>();
+const continuity = createContinuitySignal();
+const mockRealtime = reactive({
+	connectionState: 'connected',
+	tokenError: null as Error | null,
+	onChannel: (channel: string, type: string, handler: Handler) => {
+		const key = `${channel}|${type}`;
+		if (!channelHandlers.has(key))
+			channelHandlers.set(key, new Set());
+		channelHandlers.get(key)!.add(handler);
+		return () => channelHandlers.get(key)!.delete(handler);
+	},
+	onContinuityLost: continuity.onContinuityLost,
+});
+
+/** An Event message, as the Event channel delivers it. */
+function deliver(type: string, payload: Record<string, unknown>) {
+	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
+		handler({ eventId: 1, ...payload });
+}
 
 mockNuxtImport('$fetch', () => mockFetch);
+mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
@@ -87,18 +115,30 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig))
 
 /** The Standings Screen Output read's answer; by default, the roster as it stands. */
 function standingsRead(overrides: Record<string, unknown> = {}) {
-	return { players: [...mockPlayerStore.players], round: null, roundStandings: null, watchlist: null, ...overrides };
+	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, ...overrides };
 }
 
 const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
+
+const scopes: EffectScope[] = [];
+
+/** A rendering of Standings, its first read answered. */
+async function mountStandings() {
+	const scope = effectScope();
+	scopes.push(scope);
+	const result = scope.run(() => useStandingsModeData())!;
+	await flushPromises();
+	return result;
+}
 
 // ──────────────── Tests ────────────────
 
 describe('useStandingsModeData', () => {
 	beforeEach(() => {
 		Object.assign(mutableConfig, defaultConfig);
-		mockPlayerStore.players = [...players];
-		mockPlayerStore.isLoaded = true;
+		serverPlayers = [...players];
+		mockRealtime.connectionState = 'connected';
+		mockRealtime.tokenError = null;
 		mockEventStore.displayEvent = createMockEvent();
 		mockEventId.value = 1;
 		mockInteractiveStandings.value = false;
@@ -107,10 +147,14 @@ describe('useStandingsModeData', () => {
 		mockFetch.mockImplementation(async () => standingsRead());
 	});
 
+	afterEach(() => {
+		scopes.splice(0).forEach(scope => scope.stop());
+	});
+
 	// ── Core properties ──
 
-	it('returns expected properties', () => {
-		const result = useStandingsModeData();
+	it('returns expected properties', async () => {
+		const result = await mountStandings();
 		expect(result).toHaveProperty('displayRows');
 		expect(result).toHaveProperty('headerText');
 		expect(result).toHaveProperty('visibleColumns');
@@ -126,79 +170,79 @@ describe('useStandingsModeData', () => {
 	// ── displayRows: view modes ──
 
 	describe('displayRows', () => {
-		it('returns all players in "all" mode', () => {
+		it('returns all players in "all" mode', async () => {
 			mutableConfig.viewMode = 'all';
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			expect(displayRows.value).toHaveLength(10);
 		});
 
-		it('returns top N players in "topN" mode', () => {
+		it('returns top N players in "topN" mode', async () => {
 			mutableConfig.viewMode = 'topN';
 			mutableConfig.topNCount = 3;
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			expect(displayRows.value).toHaveLength(3);
 			expect(displayRows.value[0]!.name).toBe('Alice');
 			expect(displayRows.value[2]!.name).toBe('Charlie');
 		});
 
-		it('returns players in position range for "slice" mode', () => {
+		it('returns players in position range for "slice" mode', async () => {
 			mutableConfig.viewMode = 'slice';
 			mutableConfig.sliceStart = 3;
 			mutableConfig.sliceEnd = 5;
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			expect(displayRows.value).toHaveLength(3);
 			expect(displayRows.value[0]!.name).toBe('Charlie');
 			expect(displayRows.value[2]!.name).toBe('Ethan');
 		});
 
-		it('excludes players without position in "slice" mode', () => {
+		it('excludes players without position in "slice" mode', async () => {
 			mutableConfig.viewMode = 'slice';
 			mutableConfig.sliceStart = 1;
 			mutableConfig.sliceEnd = 10;
-			mockPlayerStore.players = [
+			serverPlayers = [
 				...players,
 				createMockPlayer({ id: 99, name: 'NoPos', position: null }),
 			];
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			expect(displayRows.value.find(p => p.name === 'NoPos')).toBeUndefined();
 		});
 
-		it('returns watchlist members in "watchlist" mode', () => {
+		it('returns watchlist members in "watchlist" mode', async () => {
 			mutableConfig.viewMode = 'watchlist';
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			// Before watchlist loads, IDs are empty → 0 rows
 			expect(displayRows.value).toHaveLength(0);
 		});
 
-		it('returns first N players in "reveal" mode with bottomUp', () => {
+		it('returns first N players in "reveal" mode with bottomUp', async () => {
 			mutableConfig.viewMode = 'reveal';
 			mutableConfig.revealCount = 8;
 			mutableConfig.revealedCount = 3;
 			mutableConfig.revealOrder = 'bottomUp';
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			// bottomUp: show last 3 of top 8 → positions 6, 7, 8
 			expect(displayRows.value).toHaveLength(3);
 			expect(displayRows.value[0]!.name).toBe('Fiona');
 			expect(displayRows.value[2]!.name).toBe('Helen');
 		});
 
-		it('returns first N players in "reveal" mode with topDown', () => {
+		it('returns first N players in "reveal" mode with topDown', async () => {
 			mutableConfig.viewMode = 'reveal';
 			mutableConfig.revealCount = 8;
 			mutableConfig.revealedCount = 3;
 			mutableConfig.revealOrder = 'topDown';
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			// topDown: show first 3 of top 8 → positions 1, 2, 3
 			expect(displayRows.value).toHaveLength(3);
 			expect(displayRows.value[0]!.name).toBe('Alice');
 			expect(displayRows.value[2]!.name).toBe('Charlie');
 		});
 
-		it('returns empty when revealedCount is 0', () => {
+		it('returns empty when revealedCount is 0', async () => {
 			mutableConfig.viewMode = 'reveal';
 			mutableConfig.revealCount = 8;
 			mutableConfig.revealedCount = 0;
-			const { displayRows } = useStandingsModeData();
+			const { displayRows } = await mountStandings();
 			expect(displayRows.value).toHaveLength(0);
 		});
 
@@ -212,8 +256,7 @@ describe('useStandingsModeData', () => {
 				],
 			}));
 
-			const { displayRows } = useStandingsModeData();
-			await flushPromises();
+			const { displayRows } = await mountStandings();
 
 			expect(mockFetch).toHaveBeenCalledWith(STANDINGS_READ, expect.anything());
 			expect(displayRows.value).toHaveLength(2);
@@ -222,14 +265,12 @@ describe('useStandingsModeData', () => {
 			expect(displayRows.value[0]!.position).toBe(1);
 		});
 
-		it('holds the roster the Standings read answers', async () => {
-			const roster = [createMockPlayer({ id: 21, name: 'Read Player', position: 1 })];
-			mockFetch.mockImplementation(async () => standingsRead({ players: roster }));
+		it('renders the roster the Standings read answers, never the Player store\'s', async () => {
+			serverPlayers = [createMockPlayer({ id: 21, name: 'Read Player', position: 1 })];
 
-			const { displayRows } = useStandingsModeData();
-			await flushPromises();
+			const { displayRows } = await mountStandings();
 
-			expect(mockPlayerStore.loadPlayersFrom).toHaveBeenCalledWith(1, expect.any(Function));
+			expect(mockPlayerStore.loadPlayersFrom).not.toHaveBeenCalled();
 			expect(displayRows.value.map(p => p.name)).toEqual(['Read Player']);
 		});
 
@@ -238,8 +279,7 @@ describe('useStandingsModeData', () => {
 			mutableConfig.playerListId = 42;
 			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [2, 4] } }));
 
-			const { displayRows } = useStandingsModeData();
-			await flushPromises();
+			const { displayRows } = await mountStandings();
 
 			expect(displayRows.value.map(p => p.name)).toEqual(['Bob', 'Diana']);
 		});
@@ -248,33 +288,33 @@ describe('useStandingsModeData', () => {
 	// ── headerText ──
 
 	describe('headerText', () => {
-		it('returns custom header when headerText is set', () => {
+		it('returns custom header when headerText is set', async () => {
 			mutableConfig.headerText = 'Custom Header';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Custom Header');
 		});
 
-		it('returns "Standings" for "all" mode', () => {
+		it('returns "Standings" for "all" mode', async () => {
 			mutableConfig.viewMode = 'all';
 			mutableConfig.headerText = '';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Standings');
 		});
 
-		it('returns "Top N Standings" for "topN" mode', () => {
+		it('returns "Top N Standings" for "topN" mode', async () => {
 			mutableConfig.viewMode = 'topN';
 			mutableConfig.topNCount = 16;
 			mutableConfig.headerText = '';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Top 16 Standings');
 		});
 
-		it('returns range for "slice" mode', () => {
+		it('returns range for "slice" mode', async () => {
 			mutableConfig.viewMode = 'slice';
 			mutableConfig.sliceStart = 9;
 			mutableConfig.sliceEnd = 16;
 			mutableConfig.headerText = '';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Standings (9-16)');
 		});
 
@@ -283,24 +323,23 @@ describe('useStandingsModeData', () => {
 			mutableConfig.playerListId = 42;
 			mutableConfig.headerText = '';
 			mockFetch.mockImplementation(async () => standingsRead({ watchlist: { name: 'VIPs', playerIds: [] } }));
-			const { headerText } = useStandingsModeData();
-			await flushPromises();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('VIPs');
 		});
 
-		it('returns fallback for "watchlist" when list not found', () => {
+		it('returns fallback for "watchlist" when list not found', async () => {
 			mutableConfig.viewMode = 'watchlist';
 			mutableConfig.playerListId = 999;
 			mutableConfig.headerText = '';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Players to Watch');
 		});
 
-		it('returns "Top N" for "reveal" mode', () => {
+		it('returns "Top N" for "reveal" mode', async () => {
 			mutableConfig.viewMode = 'reveal';
 			mutableConfig.revealCount = 8;
 			mutableConfig.headerText = '';
-			const { headerText } = useStandingsModeData();
+			const { headerText } = await mountStandings();
 			expect(headerText.value).toBe('Top 8');
 		});
 
@@ -312,8 +351,7 @@ describe('useStandingsModeData', () => {
 				roundStandings: [{ playerId: 1, wins: 5, losses: 0, draws: 0, position: 1, points: 15 }],
 			}));
 
-			const { headerText } = useStandingsModeData();
-			await flushPromises();
+			const { headerText } = await mountStandings();
 
 			expect(headerText.value).toBe('End of Round 4');
 		});
@@ -322,7 +360,7 @@ describe('useStandingsModeData', () => {
 	// ── visibleColumns ──
 
 	describe('visibleColumns', () => {
-		it('filters to only visible columns', () => {
+		it('filters to only visible columns', async () => {
 			mutableConfig.columns = [
 				{ key: 'position', visible: true },
 				{ key: 'name', visible: true },
@@ -330,20 +368,131 @@ describe('useStandingsModeData', () => {
 				{ key: 'points', visible: false },
 				{ key: 'deck', visible: true },
 			];
-			const { visibleColumns } = useStandingsModeData();
+			const { visibleColumns } = await mountStandings();
 			expect(visibleColumns.value).toHaveLength(3);
 			expect(visibleColumns.value.map((c: any) => c.key)).toEqual(['position', 'name', 'deck']);
 		});
 
-		it('returns empty when no columns are visible', () => {
+		it('returns empty when no columns are visible', async () => {
 			mutableConfig.columns = [
 				{ key: 'position', visible: false },
 				{ key: 'name', visible: false },
 			];
-			const { visibleColumns } = useStandingsModeData();
+			const { visibleColumns } = await mountStandings();
 			expect(visibleColumns.value).toHaveLength(0);
 		});
 	});
 
-	// ── Pagination ──
+	// ── Freshness ──
+
+	describe('freshness', () => {
+		// The Event, the Screen and its configuration are held constant
+		// throughout: only Event Data changes under the output (#603).
+		const names = (rows: { name: string }[]) => rows.map(row => row.name);
+
+		it('follows a Player edit made elsewhere', async () => {
+			const { displayRows } = await mountStandings();
+			mockFetch.mockClear();
+
+			serverPlayers = serverPlayers.map(p => p.id === 2 ? { ...p, wins: 5, points: 15 } : p);
+			deliver('player:updated', { player: serverPlayers[1] });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(displayRows.value[1]).toMatchObject({ name: 'Bob', wins: 5, points: 15 });
+		});
+
+		it('follows a Player added or removed elsewhere', async () => {
+			const { displayRows } = await mountStandings();
+
+			const added = createMockPlayer({ id: 11, name: 'Kim', position: 11 });
+			serverPlayers = [...serverPlayers, added];
+			deliver('player:created', { player: added });
+			await flushPromises();
+			expect(names(displayRows.value)).toContain('Kim');
+
+			serverPlayers = serverPlayers.filter(p => p.id !== 3);
+			deliver('player:deleted', { playerId: 3 });
+			await flushPromises();
+			expect(names(displayRows.value)).not.toContain('Charlie');
+		});
+
+		it('follows the watchlist\'s membership and name, and no other list', async () => {
+			mutableConfig.viewMode = 'watchlist';
+			mutableConfig.playerListId = 42;
+			let watchlist = { name: 'VIPs', playerIds: [2, 4] };
+			mockFetch.mockImplementation(async () => standingsRead({ watchlist }));
+			const { displayRows, headerText } = await mountStandings();
+			mockFetch.mockClear();
+
+			deliver('playerList:membersChanged', { listId: 7, playerIds: [1], action: 'added', memberCount: 1 });
+			await flushPromises();
+			expect(mockFetch).not.toHaveBeenCalled();
+
+			watchlist = { name: 'VIPs', playerIds: [2] };
+			deliver('playerList:membersChanged', { listId: 42, playerIds: [4], action: 'removed', memberCount: 1 });
+			await flushPromises();
+			expect(names(displayRows.value)).toEqual(['Bob']);
+
+			watchlist = { name: 'Feature Players', playerIds: [2] };
+			deliver('playerList:updated', { playerList: { id: 42, name: 'Feature Players' } });
+			await flushPromises();
+			expect(headerText.value).toBe('Feature Players');
+		});
+
+		it('follows a Melee sync of the standings it shows', async () => {
+			mutableConfig.roundId = 7;
+			let roundStandings = [{ playerId: 1, wins: 4, losses: 1, draws: 0, position: 1, points: 12 }];
+			mockFetch.mockImplementation(async () => standingsRead({ round: createMockRound({ id: 7, name: 'Round 7' }), roundStandings }));
+			const { displayRows } = await mountStandings();
+
+			roundStandings = [{ playerId: 1, wins: 5, losses: 1, draws: 0, position: 1, points: 15 }];
+			deliver('melee:roundSynced', { roundId: 7, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 });
+			await flushPromises();
+
+			expect(displayRows.value[0]!.wins).toBe(5);
+		});
+
+		it('shows current standings, not the cached roster, once its channel is attached again', async () => {
+			const { displayRows } = await mountStandings();
+			mockFetch.mockClear();
+
+			mockRealtime.connectionState = 'disconnected';
+			await nextTick();
+			// Missed while disconnected: a result, an addition and a deletion.
+			serverPlayers = [
+				...serverPlayers.filter(p => p.id !== 1).map(p => p.id === 2 ? { ...p, position: 1, wins: 5 } : p),
+				createMockPlayer({ id: 11, name: 'Kim', position: 11 }),
+			];
+			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(names(displayRows.value)).not.toContain('Alice');
+			expect(names(displayRows.value)).toContain('Kim');
+			expect(displayRows.value[0]).toMatchObject({ name: 'Bob', wins: 5 });
+		});
+
+		it('keeps the last accepted standings on program while the resync read is in flight', async () => {
+			const { displayRows, isEmpty } = await mountStandings();
+			let answer!: (value: unknown) => void;
+			mockFetch.mockReturnValue(new Promise((resolve) => {
+				answer = resolve;
+			}));
+
+			mockRealtime.connectionState = 'disconnected';
+			await nextTick();
+			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
+			await flushPromises();
+
+			expect(displayRows.value).toHaveLength(10);
+			expect(isEmpty.value).toBe(false);
+
+			answer(standingsRead({ players: serverPlayers.slice(0, 2) }));
+			await flushPromises();
+			expect(displayRows.value).toHaveLength(2);
+		});
+	});
 });
