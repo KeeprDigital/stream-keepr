@@ -12,6 +12,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
+import { dirname } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -31,10 +32,10 @@ export function selectOrphanedWorkerd(psOutput, checkoutRoots) {
 			const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\S.*)$/);
 			return match && { pid: Number(match[1]), parentPid: Number(match[2]), command: match[3] };
 		})
-		.filter(process => process
-			&& process.parentPid === 1
-			&& checkoutRoots.some(root => runsWorkerdFrom(process.command, root)))
-		.map(process => process.pid);
+		.filter(entry => entry
+			&& entry.parentPid === 1
+			&& checkoutRoots.some(root => runsWorkerdFrom(entry.command, root)))
+		.map(entry => entry.pid);
 }
 
 const TERMINATION_GRACE_MS = 2000;
@@ -84,25 +85,30 @@ export function discoverCheckoutRoots(cwd) {
 			return path;
 		}
 	};
-	let roots;
+	const roots = [cwd];
 	try {
-		const worktrees = git('worktree', 'list', '--porcelain', '-z')
+		roots.push(...git('worktree', 'list', '--porcelain', '-z')
 			.split('\0')
 			.filter(field => field.startsWith('worktree '))
-			.map(field => field.slice('worktree '.length));
-		roots = [git('rev-parse', '--show-toplevel').trim(), ...worktrees];
+			.map(field => field.slice('worktree '.length)));
 	}
 	catch {
-		roots = [cwd];
+		// Git before 2.36 has no `-z` here; the main checkout still covers the
+		// worktrees nested under it.
+		try {
+			roots.push(dirname(git('rev-parse', '--path-format=absolute', '--git-common-dir').trim()));
+		}
+		catch {}
 	}
 	return [...new Set(roots.flatMap(root => [root, realPathOrSame(root)]))];
 }
 
 export async function main() {
 	const psOutput = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' });
+	const scriptCheckout = fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '');
 	const reaped = await reapOrphanedWorkerd({
 		psOutput,
-		checkoutRoots: discoverCheckoutRoots(fileURLToPath(new URL('../', import.meta.url)).replace(/\/$/, '')),
+		checkoutRoots: discoverCheckoutRoots(scriptCheckout),
 		kill: process.kill,
 		sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
 	});

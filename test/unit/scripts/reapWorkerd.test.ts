@@ -140,6 +140,9 @@ describe('discovering this repository\'s checkout roots', () => {
 			stdio: 'ignore',
 			env: {
 				...process.env,
+				// The host's signing or hook config must not decide whether a fixture commits.
+				GIT_CONFIG_GLOBAL: '/dev/null',
+				GIT_CONFIG_NOSYSTEM: '1',
 				GIT_AUTHOR_NAME: 'test',
 				GIT_AUTHOR_EMAIL: 'test@example.com',
 				GIT_COMMITTER_NAME: 'test',
