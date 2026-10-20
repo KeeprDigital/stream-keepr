@@ -407,8 +407,9 @@ describe('useEventRealtimeSession', () => {
 	it('reloads every consumed Assignment Round, Broadcast Deck detail and Event Data through Reconnect Resync', async () => {
 		await startSession();
 
-		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), realtime);
-		const [resync] = useReconnectResync.mock.calls[0]!;
+		expect(useReconnectResync).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), realtime);
+		const [resync, eventId] = useReconnectResync.mock.calls[0]!;
+		expect(eventId()).toBe(12);
 		resync();
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();

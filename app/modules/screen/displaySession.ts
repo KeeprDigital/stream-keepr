@@ -371,7 +371,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		void screenStore.refreshActiveScreen(evtId, slug, assetCapability.value);
 	}
 
-	useReconnectResync(resyncActiveScreen, realtime);
+	// An output on program hears its Screen's announcements on the Event channel.
+	// One showing nothing listens for none yet, so the connection coming back
+	// retries it.
+	useReconnectResync(resyncActiveScreen, () => screenStore.activeScreen ? resolveEventId() : null, realtime);
 
 	onMounted(async () => {
 		await loadActiveScreen(screenSlug.value);

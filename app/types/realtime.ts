@@ -69,6 +69,12 @@ export interface RealtimeTransport {
 		handler: RealtimeHandler<T>,
 	) => () => void;
 	/**
+	 * Call `handler` each time `channel` is attached again having lost message
+	 * continuity, whether the connection dropped or only the channel did. A first
+	 * attach is a loss only when the connection dropped before it (ADR-0023).
+	 */
+	onContinuityLost: (channel: string, handler: () => void) => () => void;
+	/**
 	 * Enter a channel's presence, or hold the entry through a failure and enter it
 	 * once the channel's Event recovers (ADR-0023). Resolves once entered or held,
 	 * never waiting out an outage.

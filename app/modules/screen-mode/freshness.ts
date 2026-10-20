@@ -22,7 +22,7 @@ export type ScreenModeDependencies<T> = {
 	[K in MessageType]?: true | ((message: MessageData<K>, held: T) => boolean);
 };
 
-export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel'>;
+export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel' | 'onContinuityLost'>;
 
 export interface ScreenModeFreshnessOptions<T> {
 	eventId: Readonly<Ref<number | null>>;
@@ -116,7 +116,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	}, { immediate: true });
 
 	// Reconnect Resync, and its twin for subscriptions that waited on a token.
-	const { disconnected } = useReconnectResync(queueRefresh, realtime);
+	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime);
 	const waitingOnToken = computed(() => !!realtime?.tokenError);
 	watch(waitingOnToken, (waiting, wasWaiting) => {
 		if (wasWaiting && !waiting)

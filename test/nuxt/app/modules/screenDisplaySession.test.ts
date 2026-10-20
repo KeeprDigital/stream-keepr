@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, reactive, watch } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { useScreenDisplaySession } from '~/modules/screen/displaySession';
 
 function flushPromises() {
@@ -85,9 +86,11 @@ function createHarness(options: {
 			name: 'Output Event',
 		})),
 	};
+	const { onContinuityLost, reattach } = createContinuitySignal();
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
+		onContinuityLost,
 	});
 	const realtimeCallbacks: any[] = [];
 	const realtimeSession = {
@@ -135,6 +138,7 @@ function createHarness(options: {
 		eventStore,
 		outputReads,
 		realtime,
+		reattach,
 		realtimeSession,
 		realtimeCallbacks,
 		exportElementPng,
@@ -506,13 +510,19 @@ describe('useScreenDisplaySession', () => {
 			await flushPromises();
 		}
 
-		it('re-reads the Screen without ever emptying what is on program', async () => {
+		it('re-reads the Screen once its Event channel is attached again, without ever emptying what is on program', async () => {
 			const harness = createHarness();
 			await flushPromises();
 			harness.order.splice(0);
 			const onProgram = harness.screenStore.activeScreen;
 
 			await suspendAndResume(harness);
+			// Channels reattach only after the connection is back; a read sent before
+			// would miss what is published in between (#641).
+			expect(harness.order).toEqual([]);
+
+			harness.reattach('event:42');
+			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:main']);
 			expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledTimes(1);
@@ -533,9 +543,10 @@ describe('useScreenDisplaySession', () => {
 			expect(harness.order).toEqual([]);
 		});
 
-		it('takes the ordinary load when there is nothing on program to protect', async () => {
-			// Nothing is rendered, so there is no flash to avoid — and this is the
-			// load that starts the realtime session the failed one never got.
+		it('takes the ordinary load on the connection coming back when there is nothing on program to protect', async () => {
+			// Nothing is rendered, so there is no flash to avoid and no channel to
+			// follow yet — and this is the load that starts the realtime session the
+			// failed one never got.
 			const harness = createHarness({ screens: {} });
 			await flushPromises();
 			expect(harness.screenStore.activeScreen).toBeNull();

@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 const mockCardStore = reactive({
 	activeCard: null as { name: string } | null,
@@ -11,10 +12,12 @@ const mockCardStore = reactive({
 });
 /** The Card the server holds for the Screen; `loadActiveCard` reads it, as the store does. */
 let serverCard: { name: string } | null = null;
+const continuity = createContinuitySignal();
 const mockRealtime = reactive({
 	connectionState: 'connected',
 	tokenError: null as Error | null,
 	onChannel: vi.fn(() => () => {}),
+	onContinuityLost: continuity.onContinuityLost,
 });
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 const mockApiFetch = vi.hoisted(() => vi.fn());
@@ -171,11 +174,12 @@ describe('useCardModeData', () => {
 			await flushPromises();
 		}
 
-		it('shows the change once it reconnects, without leaving its Screen', async () => {
+		it('shows the change once its channel is attached again, without leaving its Screen', async () => {
 			await onAirThenDisconnected();
 			serverCard = { name: 'Counterspell' };
 
 			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
 			await flushPromises();
 
 			expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
@@ -183,11 +187,12 @@ describe('useCardModeData', () => {
 			expect(mockCardStore.setActiveScreen).not.toHaveBeenCalled();
 		});
 
-		it('takes a Card cleared meanwhile off once it reconnects', async () => {
+		it('takes a Card cleared meanwhile off once its channel is attached again', async () => {
 			await onAirThenDisconnected();
 			serverCard = null;
 
 			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
 			await flushPromises();
 
 			expect(mockCardStore.activeCard).toBeNull();

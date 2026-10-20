@@ -80,6 +80,7 @@ vi.mock('ably', () => {
 
 		subscribe() {}
 		unsubscribe() {}
+		on() {}
 		async detach() {}
 	}
 

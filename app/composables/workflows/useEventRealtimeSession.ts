@@ -27,9 +27,10 @@ export function useEventRealtimeSession() {
 			eventDataResync.resync(),
 		]);
 	}
-	useReconnectResync(resync, realtime);
+	useReconnectResync(resync, () => eventStore.eventId, realtime);
 	// Subscriptions that waited on a token missed what was published meanwhile,
-	// exactly as a disconnection does (ADR-0023).
+	// and a first attach over an unbroken connection reports no continuity loss
+	// (ADR-0023).
 	watch(() => !!realtime.tokenError, (waiting, wasWaiting) => {
 		if (wasWaiting && !waiting)
 			resync();

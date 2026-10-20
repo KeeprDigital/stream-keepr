@@ -120,7 +120,7 @@ export function useFeatureMatchOverlayModeData() {
 			return;
 
 		void featureMatchStateStore.loadState(evtId, matchId);
-	});
+	}, eventId);
 
 	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.displayEvent), usesSampleDataset, loading, error };
 }

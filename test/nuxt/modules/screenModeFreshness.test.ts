@@ -3,6 +3,7 @@ import type { ScreenModeDependencies, ScreenModeFreshnessTransport } from '~/mod
 import type { RealtimeTransport } from '~/types/realtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_DEGRADED_REFETCH_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 /**
@@ -21,6 +22,7 @@ type Handler = (message: Record<string, unknown>) => void;
 
 function fakeTransport() {
 	const handlers = new Map<string, Set<Handler>>();
+	const continuity = createContinuitySignal();
 	const transport = reactive({
 		connectionState: 'connected' as RealtimeTransport['connectionState'],
 		tokenError: null as Error | null,
@@ -31,6 +33,7 @@ function fakeTransport() {
 			handlers.get(key)!.add(handler);
 			return () => handlers.get(key)!.delete(handler);
 		}),
+		onContinuityLost: continuity.onContinuityLost,
 	});
 	return {
 		transport,
@@ -38,6 +41,8 @@ function fakeTransport() {
 			for (const handler of handlers.get(`event:${eventId}|${type}`) ?? [])
 				handler({ eventId, ...payload });
 		},
+		/** The Event channel attached again having lost continuity. */
+		reattach: (eventId: number) => continuity.reattach(`event:${eventId}`),
 		listeners: () => [...handlers.values()].reduce((total, set) => total + set.size, 0),
 	};
 }
@@ -244,27 +249,88 @@ describe('useScreenModeFreshness', () => {
 	});
 
 	describe('reconnect', () => {
-		it('re-reads once on coming back, holding what it shows until the read answers', async () => {
-			const { read, transport, freshness } = harness();
-			await flushPromises();
-
-			transport.connectionState = 'disconnected';
+		async function dropAndComeBack(transport: ReturnType<typeof fakeTransport>['transport']) {
+			transport.connectionState = 'suspended';
 			await nextTick();
-			let answer!: (held: Held) => void;
-			read.mockReturnValueOnce(new Promise((resolve) => {
-				answer = resolve;
-			}));
 			transport.connectionState = 'connecting';
 			await nextTick();
 			transport.connectionState = 'connected';
 			await flushPromises();
+		}
 
+		it('re-reads once its Event channel is attached again after losing continuity, holding what it shows until the read answers', async () => {
+			const { read, transport, reattach, freshness } = harness();
+			await flushPromises();
+
+			let answer!: (held: Held) => void;
+			read.mockReturnValueOnce(new Promise((resolve) => {
+				answer = resolve;
+			}));
+			await dropAndComeBack(transport);
+			expect(read).toHaveBeenCalledTimes(1);
+
+			reattach(1);
+			await flushPromises();
 			expect(read).toHaveBeenCalledTimes(2);
 			expect(freshness.data.value.label).toBe('read 1');
 
 			answer({ ids: [7], label: 'authoritative' });
 			await flushPromises();
 			expect(freshness.data.value.label).toBe('authoritative');
+		});
+
+		it('shows a change published after the connection came back but before its channel attached (#641)', async () => {
+			const { read, transport, reattach, freshness } = harness();
+			let published = 'before the drop';
+			read.mockImplementation(async () => ({ ids: [7], label: published }));
+			await flushPromises();
+
+			await dropAndComeBack(transport);
+			// Published while nothing listens on the channel, so never delivered.
+			published = 'published before the attach';
+			reattach(1);
+			await flushPromises();
+
+			expect(freshness.data.value.label).toBe('published before the attach');
+		});
+
+		it('does not re-read when the connection comes back with its channel\'s continuity resumed', async () => {
+			const { read, transport } = harness();
+			await flushPromises();
+
+			await dropAndComeBack(transport);
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+
+		it('re-reads for a channel-only loss while the connection stays up', async () => {
+			const { read, reattach } = harness();
+			await flushPromises();
+
+			reattach(1);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(2);
+		});
+
+		it('follows the continuity of the Event it is on, until disposed', async () => {
+			const { read, reattach, eventId, scope } = harness();
+			await flushPromises();
+
+			eventId.value = 2;
+			await flushPromises();
+			reattach(1);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(1);
+
+			reattach(2);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(2);
+
+			scope.stop();
+			reattach(2);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(2);
 		});
 
 		it('does not re-read on a first connection', async () => {

@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 /**
  * The server's two halves of the Screen Output Player read (#604): the Player
@@ -30,9 +31,11 @@ const mockPlayerDecks = vi.fn(async (playerId: number) => {
 });
 const mockScreen = ref({ id: 1, name: 'Test', modeConfigs: { deck: {} } });
 const mockAssetCapability = ref<string | null>('output-capability');
+const continuity = createContinuitySignal();
 const mockRealtime = reactive({
 	connectionState: 'connected',
 	onChannel: mockOnChannel,
+	onContinuityLost: continuity.onContinuityLost,
 });
 
 mockNuxtImport('useScreenOutputReads', () => () => ({
@@ -477,7 +480,7 @@ describe('useDeckModeData', () => {
 		}
 	});
 
-	it('re-reads the selected Broadcast detail after reconnect', async () => {
+	it('re-reads the selected Broadcast detail once its Event channel is attached again', async () => {
 		mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(1, 'Feature Table'));
 		mockBroadcastDeckListId.value = 23;
 		mountDeckModeData();
@@ -487,6 +490,7 @@ describe('useDeckModeData', () => {
 		mockRealtime.connectionState = 'disconnected';
 		await nextTick();
 		mockRealtime.connectionState = 'connected';
+		continuity.reattach('event:1');
 		await flushPromises();
 
 		expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(2);
@@ -957,7 +961,7 @@ describe('useDeckModeData', () => {
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 		});
 
-		it('shows an edit missed while disconnected once after reconnect, without a second swap', async () => {
+		it('shows an edit missed while disconnected once its channel is attached again, without a second swap', async () => {
 			mockPlayerId.value = 5;
 			const result = mountDeckModeData();
 			await flushPromises();
@@ -967,6 +971,7 @@ describe('useDeckModeData', () => {
 			// The message is gone; only the server knows.
 			serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
 			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
 			await flushPromises();
 
 			expect(result.pendingSwapVersion.value).toBe(1);

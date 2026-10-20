@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, ref } from 'vue';
 import { createMockEvent, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 const mockEventStore = {
 	event: createMockEvent(),
@@ -42,8 +43,11 @@ const mockEventId = ref<number | null>(1);
 const mockConfig = ref({ featureMatchId: 1 as number | null });
 const mockConnectionState = ref('connected');
 
+const continuity = createContinuitySignal();
+
 mockNuxtImport('tryUseRealtime', () => () => ({
 	get connectionState() { return mockConnectionState.value; },
+	onContinuityLost: continuity.onContinuityLost,
 }));
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
@@ -166,6 +170,7 @@ describe('useFeatureMatchModeData', () => {
 			mockConnectionState.value = 'suspended';
 			await nextTick();
 			mockConnectionState.value = 'connected';
+			continuity.reattach('event:1');
 			await nextTick();
 			await flushPromises();
 		}
