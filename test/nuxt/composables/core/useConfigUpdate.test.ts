@@ -273,6 +273,158 @@ describe('useConfigUpdate', () => {
 	});
 
 	/*
+	 * The status answers for every edit, not for the last request (#611). A save of
+	 * one field landing says nothing about another field's refused save: showing
+	 * "All changes saved" then hides the only Retry while the store disagrees with
+	 * the screen.
+	 */
+	describe('mixed successes and failures', () => {
+		function createPersistingSetup() {
+			const storeConfig = ref<Partial<TestConfig>>({});
+			const saveToStore = vi.fn(async (updates: Partial<TestConfig>): Promise<unknown> => {
+				storeConfig.value = { ...storeConfig.value, ...updates };
+				return { ok: true };
+			});
+			const api = useConfigUpdate<TestConfig>({
+				getStoreConfig: () => storeConfig.value,
+				saveToStore,
+				defaults: { color: 'red', size: 10 },
+				debounceMs: 100,
+				errorMessage: 'Test error',
+			});
+			return { ...api, storeConfig, saveToStore };
+		}
+
+		it('stays failed when an unrelated field saves after another field\'s save was refused', async () => {
+			const { config, saveState, saveError, updateConfig, retry, storeConfig, saveToStore } = createPersistingSetup();
+			saveToStore.mockRejectedValueOnce(new Error('color refused'));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveState.value).toBe('failed');
+
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
+			expect(storeConfig.value).toEqual({ size: 20 });
+			expect(config.value).toEqual({ color: 'green', size: 20 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+
+			await retry();
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ color: 'green' });
+			expect(storeConfig.value).toEqual({ color: 'green', size: 20 });
+			expect(saveState.value).toBe('committed');
+			expect(saveError.value).toBeNull();
+		});
+
+		it('does not keep an older refused value for retry once the field was edited again', async () => {
+			const { config, saveState, saveError, updateConfig, retry, storeConfig, saveToStore } = createPersistingSetup();
+			const firstSave = deferred<unknown>();
+			saveToStore.mockImplementationOnce(() => firstSave.promise);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ color: 'blue' });
+			firstSave.reject(new Error('green refused'));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(saveToStore).toHaveBeenNthCalledWith(2, { color: 'blue' });
+			expect(storeConfig.value).toEqual({ color: 'blue' });
+			expect(config.value.color).toBe('blue');
+			expect(saveState.value).toBe('committed');
+			expect(saveError.value).toBeNull();
+
+			await retry();
+
+			expect(saveToStore).toHaveBeenCalledTimes(2);
+			expect(storeConfig.value).toEqual({ color: 'blue' });
+		});
+
+		it('keeps showing an outstanding failure while an unrelated field saves', async () => {
+			const { saveState, saveError, updateConfig, saveToStore } = createPersistingSetup();
+			saveToStore.mockRejectedValueOnce(new Error('color refused'));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+
+			updateConfig({ size: 20 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+		});
+
+		it('clears only the failure a newer write of the same field supersedes', async () => {
+			const { config, saveState, saveError, updateConfig, retry, storeConfig, saveToStore } = createPersistingSetup();
+			saveToStore
+				.mockRejectedValueOnce(new Error('color refused'))
+				.mockRejectedValueOnce(new Error('size refused'));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+
+			updateConfig({ color: 'blue' });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ color: 'blue' });
+			expect(storeConfig.value).toEqual({ color: 'blue' });
+			expect(config.value).toEqual({ color: 'blue', size: 20 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('size refused');
+
+			await retry();
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
+			expect(storeConfig.value).toEqual({ color: 'blue', size: 20 });
+			expect(saveState.value).toBe('committed');
+		});
+
+		it('quotes the refusal of the edit still outstanding, not of one since settled', async () => {
+			const { saveState, saveError, updateConfig, storeConfig, saveToStore } = createPersistingSetup();
+			saveToStore
+				.mockRejectedValueOnce(new Error('color refused'))
+				.mockRejectedValueOnce(new Error('size refused'));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveError.value).toBe('size refused');
+
+			updateConfig({ size: 30 });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(storeConfig.value).toEqual({ size: 30 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+		});
+
+		it('keeps an outstanding refusal\'s sentence when a superseded request fails after it', async () => {
+			const { saveState, saveError, updateConfig, storeConfig, saveToStore } = createPersistingSetup();
+			const sizeSave = deferred<unknown>();
+			saveToStore
+				.mockRejectedValueOnce(new Error('color refused'))
+				.mockImplementationOnce(() => sizeSave.promise);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 30 });
+			sizeSave.reject(new Error('size 20 refused'));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ size: 30 });
+			expect(storeConfig.value).toEqual({ size: 30 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+		});
+	});
+
+	/*
 	 * Disposal used to cancel the pending write, and this suite pinned that (#308).
 	 *
 	 * Local-first is what made it silent: the edit is applied to `localOverrides` the

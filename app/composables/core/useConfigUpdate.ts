@@ -43,8 +43,20 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 
 	const saving = ref(false);
 	const inFlight = ref(false);
-	const saveError = ref<string | null>(null);
 	const hasCommitted = ref(false);
+	const pendingUpdates = ref<U>({} as U);
+	const localOverrides = ref<U>({} as U);
+	/** Each refused field's value, kept for retry, with the sentence that refused it — newest last. */
+	const refusedFields = ref<Record<string, { value: unknown; message: string }>>({});
+
+	/**
+	 * A failure is outstanding for as long as an edit it refused is (#611): a later
+	 * request landing — for an unrelated field — says nothing about it. Only a newer
+	 * edit of the refused field, or a retry, settles it. The sentence quoted is the
+	 * newest refusal still outstanding, so it names a slot that still needs repair.
+	 */
+	const saveError = computed<string | null>(() =>
+		Object.values(refusedFields.value).at(-1)?.message ?? null);
 
 	/**
 	 * The save's answer as one state a surface can show (#381): `committed` is an
@@ -52,17 +64,17 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	 * an author who looked away during a multi-second save cannot distinguish
 	 * from a failure whose toast they missed. `idle` only before the first edit;
 	 * once something has been saved the surface keeps saying so.
+	 *
+	 * An outstanding failure outranks `saving` (#611): another field's save in
+	 * flight will not land the refused edit, and only `failed` offers its Retry.
 	 */
 	const saveState = computed<'idle' | 'saving' | 'committed' | 'failed'>(() => {
-		if (saving.value)
-			return 'saving';
 		if (saveError.value !== null)
 			return 'failed';
+		if (saving.value)
+			return 'saving';
 		return hasCommitted.value ? 'committed' : 'idle';
 	});
-	const pendingUpdates = ref<U>({} as U);
-	const failedUpdates = ref<U>({} as U);
-	const localOverrides = ref<U>({} as U);
 
 	// Merged config: defaults < store < local overrides.
 	// Null values from overrides are treated as "unset" (filtered out).
@@ -81,17 +93,48 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		return Object.hasOwn(pendingUpdates.value, key);
 	}
 
+	/**
+	 * Whether the operator has replaced the value a settling request sent for `key` —
+	 * queued a newer one, or no longer shows it. The request's outcome then no
+	 * longer speaks for that field.
+	 */
+	function isSuperseded(key: string, sentValue: unknown): boolean {
+		return pendingHasKey(key)
+			|| !Object.hasOwn(localOverrides.value, key)
+			|| (localOverrides.value as Record<string, unknown>)[key] !== sentValue;
+	}
+
 	function clearOverridesForSettledKeys(updates: U) {
 		const currentOverrides = { ...localOverrides.value } as Record<string, unknown>;
-		for (const key of Object.keys(updates)) {
-			const sentValue = (updates as Record<string, unknown>)[key];
-			if (!pendingHasKey(key)
-				&& Object.hasOwn(currentOverrides, key)
-				&& currentOverrides[key] === sentValue) {
+		for (const [key, sentValue] of Object.entries(updates)) {
+			if (!isSuperseded(key, sentValue))
 				delete currentOverrides[key];
-			}
 		}
 		localOverrides.value = currentOverrides as U;
+	}
+
+	/**
+	 * Keep for retry only what the refused request still speaks for (#611). A field
+	 * edited again while it was in flight has a newer write of its own; holding the
+	 * older value would let a retry put it back over the newer one.
+	 */
+	function recordRefusedKeys(updates: U, message: string) {
+		const refused = { ...refusedFields.value };
+		for (const [key, sentValue] of Object.entries(updates)) {
+			if (isSuperseded(key, sentValue))
+				continue;
+			// Re-inserted so the newest refusal stays last.
+			delete refused[key];
+			refused[key] = { value: sentValue, message };
+		}
+		refusedFields.value = refused;
+	}
+
+	function forgetRefusedKeys(keys: string[]) {
+		const refused = { ...refusedFields.value };
+		for (const key of keys)
+			delete refused[key];
+		refusedFields.value = refused;
 	}
 
 	async function flushPendingUpdates() {
@@ -128,8 +171,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 						color: 'error',
 					}),
 					onFailure: ({ message }) => {
-						saveError.value = message || errorMessage;
-						failedUpdates.value = { ...failedUpdates.value, ...updates };
+						recordRefusedKeys(updates, message || errorMessage);
 					},
 				},
 			));
@@ -139,7 +181,6 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		}
 
 		if (saved) {
-			saveError.value = null;
 			hasCommitted.value = true;
 			// Clear overrides for keys that were successfully saved,
 			// but preserve any NEW overrides that arrived while the request was in flight.
@@ -159,11 +200,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 
 	function updateConfig(updates: U) {
 		saving.value = true;
-		saveError.value = null;
-		const failed = { ...failedUpdates.value } as Record<string, unknown>;
-		for (const key of Object.keys(updates))
-			delete failed[key];
-		failedUpdates.value = failed as U;
+		forgetRefusedKeys(Object.keys(updates));
 		// Apply to local overrides immediately — UI updates this tick
 		localOverrides.value = { ...localOverrides.value, ...updates };
 		// Queue for the debounced API save
@@ -172,12 +209,13 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	}
 
 	async function retry() {
-		if (Object.keys(failedUpdates.value).length === 0)
+		const refused = Object.entries(refusedFields.value);
+		if (refused.length === 0)
 			return;
-		pendingUpdates.value = { ...failedUpdates.value, ...pendingUpdates.value };
-		failedUpdates.value = {} as U;
+		const retried = Object.fromEntries(refused.map(([key, { value }]) => [key, value])) as U;
+		pendingUpdates.value = { ...retried, ...pendingUpdates.value };
+		refusedFields.value = {};
 		saving.value = true;
-		saveError.value = null;
 		await flushPendingUpdates();
 	}
 
