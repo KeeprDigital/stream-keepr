@@ -61,6 +61,10 @@ export interface ScreenModeFreshnessOptions<T> {
  * - **retry** — on the same slow cadence after the latest read failed, because
  *   the change that asked for it will not be announced again.
  *
+ * Only a load supersedes the read in flight. Any other reason heard meanwhile
+ * asks for one follow-up once it settles, so a burst costs at most one more
+ * read however many messages it publishes.
+ *
  * Every read is stale-while-revalidate: a rendering holds what it shows until a
  * newer read answers, and a failed re-read never blanks program.
  */
@@ -78,16 +82,30 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		}
 	}
 
+	/** Whether a read is in flight, and whether a reason arrived since it began. */
+	let reading = false;
+	let followUp = false;
+
+	/** Reads now, superseding any read in flight. */
 	function refresh() {
 		stopRetry();
+		followUp = false;
+		reading = false;
 		const flight = reads.begin();
 		if (options.source() == null) {
 			display.clear();
 			return;
 		}
+		reading = true;
 		void display.refresh(async () => {
 			try {
-				return await options.read();
+				const answer = await options.read();
+				// With nothing on program yet, an answer that predates a reason
+				// would only make the follow-up a second rendering: it supersedes
+				// this one instead, so its answer is the first shown (#567).
+				if (flight.current && followUp && !display.hasDisplayedData.value)
+					refresh();
+				return answer;
 			}
 			catch (cause) {
 				// Only the latest read's failure leaves program behind.
@@ -95,11 +113,24 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 					retry = setTimeout(queueRefresh, SCREEN_MODE_REREAD_MS);
 				throw cause;
 			}
-		}, options.errorMessage);
+		}, options.errorMessage).then(() => {
+			if (flight.stale)
+				return;
+			reading = false;
+			if (followUp)
+				refresh();
+		});
 	}
 
-	/** One read for however many reasons arrive together. */
+	/**
+	 * One read for however many reasons arrive together, and one follow-up for
+	 * however many arrive while a read is in flight (#650).
+	 */
 	function queueRefresh() {
+		if (reading) {
+			followUp = true;
+			return;
+		}
 		if (refreshQueued)
 			return;
 		refreshQueued = true;

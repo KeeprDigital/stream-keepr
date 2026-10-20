@@ -177,7 +177,7 @@ The client-side module owning which Event Data this client consumes, so **Reconn
 _Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:
-The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, and **Reconnect Resync**. Every re-read holds the last accepted rendering until it answers.
+The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, and **Reconnect Resync**. Only a change of what the mode selects supersedes the read in flight; any other reason heard meanwhile asks for one follow-up read, so a burst of messages costs at most one more read. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Guarded Sequence**:

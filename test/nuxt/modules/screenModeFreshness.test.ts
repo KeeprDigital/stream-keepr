@@ -154,6 +154,20 @@ describe('useScreenModeFreshness', () => {
 			expect(read).toHaveBeenCalledTimes(2);
 		});
 
+		it('shows only the follow-up\'s answer when a message is heard during its first read (#567)', async () => {
+			// Nothing is on program yet, so the first read's answer would only make
+			// the follow-up a second rendering.
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			const shown: string[] = [];
+			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
+
+			deliver(1, 'player:updated', {});
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(2);
+			expect(shown).toEqual(['read 2']);
+		});
+
 		it('coalesces a burst of messages into one read', async () => {
 			const { read, deliver } = harness({ 'phase:deleted': true });
 			await flushPromises();
@@ -163,6 +177,55 @@ describe('useScreenModeFreshness', () => {
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
+		});
+
+		it('reads once more, not once per message, for a burst heard in separate frames while a read is in flight (#650)', async () => {
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			await flushPromises();
+
+			let published = 'before the burst';
+			let answer!: () => void;
+			read.mockImplementationOnce(() => {
+				const served = published;
+				return new Promise((resolve) => {
+					answer = () => resolve({ ids: [7], label: served });
+				});
+			});
+			read.mockImplementation(async () => ({ ids: [7], label: published }));
+			for (const player of [1, 2, 3, 4]) {
+				published = `after player ${player}`;
+				deliver(1, 'player:updated', { player });
+				await flushPromises();
+			}
+			expect(read).toHaveBeenCalledTimes(2);
+
+			answer();
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.label).toBe('after player 4');
+		});
+
+		it('still supersedes the read in flight at once on a change of selection', async () => {
+			const { read, deliver, selection, freshness } = harness({ 'player:updated': true });
+			await flushPromises();
+
+			let answer!: () => void;
+			read.mockImplementationOnce(() => new Promise((resolve) => {
+				answer = () => resolve({ ids: [7], label: 'superseded' });
+			}));
+			deliver(1, 'player:updated', {});
+			await flushPromises();
+			deliver(1, 'player:updated', {});
+			selection.value = 9;
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.ids).toEqual([9]);
+
+			answer();
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.ids).toEqual([9]);
 		});
 
 		it('follows the Event it is on, and stops listening when disposed', async () => {
@@ -269,6 +332,27 @@ describe('useScreenModeFreshness', () => {
 
 			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 3);
 			expect(read).toHaveBeenCalledTimes(4);
+		});
+
+		it('reads the follow-up at once, rather than on the cadence, when the read it followed fails', async () => {
+			vi.useFakeTimers();
+			const { read, deliver, freshness } = harness({ 'player:updated': true });
+			await vi.advanceTimersByTimeAsync(0);
+
+			let fail!: () => void;
+			read.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+				fail = () => reject(new Error('unavailable'));
+			}));
+			deliver(1, 'player:updated', {});
+			await vi.advanceTimersByTimeAsync(0);
+			deliver(1, 'player:updated', {});
+			fail();
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(freshness.data.value.label).toBe('read 3');
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 3);
+			expect(read).toHaveBeenCalledTimes(3);
 		});
 
 		it('does not repeat a failed read the mode has since stopped selecting', async () => {
