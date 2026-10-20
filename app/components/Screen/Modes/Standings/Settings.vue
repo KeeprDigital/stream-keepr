@@ -2,6 +2,7 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -21,6 +22,9 @@ defineExpose({ resetConfig, saving });
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 const roundStore = useRoundStore();
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players', 'playerLists', 'rounds']);
 
 onMounted(async () => {
 	if (props.eventId) {

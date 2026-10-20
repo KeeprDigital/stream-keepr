@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { eventDataResync } from '~/modules/event-data/resync';
 
 const mockPlayerStore = {
 	players: [{ id: 1 }, { id: 2 }],
@@ -51,6 +52,7 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 	};
 });
 
+mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
 mockNuxtImport('useModeConfigUpdate', () => () => ({
@@ -193,5 +195,19 @@ describe('screenTopCardsSettings', () => {
 
 		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
 		expect(mockPlayerListStore.loadByEventId).toHaveBeenCalledWith(1);
+	});
+
+	it('re-reads the players and player lists it loaded on Reconnect Resync, until it unmounts (#610)', async () => {
+		const wrapper = await mountComponent();
+		mockPlayerStore.isLoaded = true;
+		mockPlayerListStore.isLoaded = true;
+		vi.clearAllMocks();
+
+		await eventDataResync.resync();
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		expect(mockPlayerListStore.loadByEventId).toHaveBeenCalledWith(1);
+
+		wrapper.unmount();
+		eventDataResync.reset();
 	});
 });

@@ -11,6 +11,7 @@ import {
 	QUANTITY_SIZE_SELECT_OPTIONS,
 	SIDEBOARD_PLACEMENT_SELECT_OPTIONS,
 } from '~~/shared/utils/selectOptions';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
@@ -77,6 +78,9 @@ watch(broadcastDeckListsEnabled, (enabled, wasEnabled) => {
 		void broadcastDeckListStore.loadCollection(props.eventId);
 	}
 });
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players']);
 
 // Merely loading choices or opening a tab never changes the selected source.
 onMounted(async () => {

@@ -12,6 +12,7 @@ import type {
 	MetagameCardColumnConfig,
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -29,6 +30,9 @@ defineExpose({ resetConfig, saving });
 
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players', 'playerLists']);
 
 onMounted(async () => {
 	if (!props.eventId) {
