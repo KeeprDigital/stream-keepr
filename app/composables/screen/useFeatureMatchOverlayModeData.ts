@@ -1,10 +1,16 @@
-import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatch, Match, Phase, Round } from '~/types';
+import type { Match, Phase, Round } from '~/types';
 import { isFeatureMatchOverlayPreviewConfigMessage } from '~/modules/feature-match-overlay/previewMessages';
 
+/** What the Overlay keeps of its Slot's read: the Match the Slot follows, and its Round and Phase. */
+interface OverlaySlotContext {
+	sourceMatch: Match | null;
+	round: Round | undefined;
+	phase: Phase | undefined;
+}
+
 export function useFeatureMatchOverlayModeData() {
-	const { eventId, isPreview } = useScreenContext();
+	const { isPreview } = useScreenContext();
 	const storedConfig = useScreenModeConfig('feature-match-overlay');
 	const previewConfigOverride = ref<FeatureMatchOverlayModeConfig | null>(null);
 	/**
@@ -18,15 +24,30 @@ export function useFeatureMatchOverlayModeData() {
 	 */
 	const config = computed(() => isPreview?.value && previewConfigOverride.value ? previewConfigOverride.value : storedConfig.value);
 	const eventStore = useEventStore();
-	const featureMatchStore = useFeatureMatchStore();
-	const featureMatchStateStore = useFeatureMatchStateStore();
-	const outputReads = useScreenOutputReads();
-	onScopeDispose(featureMatchStateStore.readSessionsAsScreenOutput(outputReads.featureMatchSession));
-	const sourceMatch = ref<Match | null>(null);
 
-	const displayData = useBroadcastDisplayData<null>({ initialData: null });
-	const loading = displayData.loading;
-	const error = displayData.error;
+	/**
+	 * The Slot, its Session, and the Match, Round and Phase it follows come
+	 * through the Screen in one read (#604). The stores hold the Slot and its
+	 * Session, which follow through the Live State Follower (#592); the Match,
+	 * Round and Phase are held here, and re-read when a message touches them.
+	 */
+	const slotData = useScreenFeatureMatchSlot<OverlaySlotContext>({
+		slotId: () => config.value.featureMatchId,
+		project: read => ({ sourceMatch: read.match, round: read.round ?? undefined, phase: read.phase ?? undefined }),
+		initialData: { sourceMatch: null, round: undefined, phase: undefined },
+		errorMessage: 'Failed to load broadcast layout data',
+		dependsOn: {
+			'featureMatch:updated': ({ featureMatch }, held) =>
+				featureMatch.id === config.value.featureMatchId && (featureMatch.matchId ?? null) !== (held.sourceMatch?.id ?? null),
+			'match:updated': ({ match }, held) => match.id === held.sourceMatch?.id,
+			'round:updated': ({ round }, held) => round.id === held.round?.id,
+			'phase:updated': ({ phase }, held) => phase.id === held.phase?.id,
+		},
+	});
+	const { slot: match, state: matchState, loading, error } = slotData;
+	const sourceMatch = computed(() => slotData.data.value.sourceMatch);
+	const round = computed(() => slotData.data.value.round);
+	const phase = computed(() => slotData.data.value.phase);
 
 	function handlePreviewConfigMessage(message: MessageEvent) {
 		if (!isPreview?.value || !isFeatureMatchOverlayPreviewConfigMessage(message, {
@@ -47,18 +68,6 @@ export function useFeatureMatchOverlayModeData() {
 		window.removeEventListener('message', handlePreviewConfigMessage);
 	});
 
-	const match = computed<FeatureMatch | null>(() => {
-		if (!config.value.featureMatchId)
-			return null;
-		return featureMatchStore.featureMatches.find(m => m.id === config.value.featureMatchId) ?? null;
-	});
-
-	const matchState = computed<FeatureMatchState | null>(() => {
-		if (!config.value.featureMatchId)
-			return null;
-		return featureMatchStateStore.featureMatchStates.get(config.value.featureMatchId) ?? null;
-	});
-
 	/**
 	 * Whether this rendering stands in the canonical Feature Match sample dataset
 	 * for the Feature Match it does not have.
@@ -71,56 +80,6 @@ export function useFeatureMatchOverlayModeData() {
 	 * change.
 	 */
 	const usesSampleDataset = computed(() => Boolean(isPreview?.value) && !config.value.featureMatchId);
-
-	const round = ref<Round | undefined>(undefined);
-	const phase = ref<Phase | undefined>(undefined);
-
-	/**
-	 * The Slot, its Session, and the Match, Round and Phase it follows come
-	 * through the Screen in one read (#604). The Slot is held in the stores so
-	 * `featureMatch:updated` and Session events keep it live; the Slot's Match
-	 * changing re-reads the rest.
-	 */
-	watch(
-		() => [eventId.value, config.value.featureMatchId, match.value?.matchId, outputReads.scopeKey.value] as const,
-		async ([evtId, matchId]) => {
-			if (!evtId || !outputReads.scope.value) {
-				error.value = 'No event loaded';
-				displayData.clear();
-				return;
-			}
-
-			await displayData.refresh(async () => {
-				if (!matchId) {
-					sourceMatch.value = null;
-					round.value = undefined;
-					phase.value = undefined;
-					return null;
-				}
-				const context = await outputReads.featureMatchSlot(matchId);
-				featureMatchStore.holdFeatureMatch(context.slot);
-				sourceMatch.value = context.match;
-				round.value = context.round ?? undefined;
-				phase.value = context.phase ?? undefined;
-				return null;
-			}, 'Failed to load broadcast layout data');
-		},
-		{ immediate: true },
-	);
-
-	/**
-	 * The Overlay's half of the same rule the Feature Match Screen holds: nothing
-	 * arrives late after a suspended connection, so the only way to find out what
-	 * was missed is to ask (#307), through the Screen reader installed above.
-	 */
-	useReconnectResync(() => {
-		const evtId = eventId.value;
-		const matchId = config.value.featureMatchId;
-		if (!evtId || !matchId)
-			return;
-
-		void featureMatchStateStore.loadState(evtId, matchId);
-	}, eventId);
 
 	return { config, match, matchState, sourceMatch, round, phase, event: computed(() => eventStore.displayEvent), usesSampleDataset, loading, error };
 }

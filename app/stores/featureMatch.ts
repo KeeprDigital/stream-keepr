@@ -45,16 +45,18 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	/**
 	 * Hold one Slot a Screen Output read answered (#604), with its Session, so
 	 * `featureMatch:updated` keeps it live without loading the Event's Slots. A
-	 * read whose Session's epoch has ended is left behind whole.
+	 * read whose Session's epoch has ended is left behind whole. Answers whether
+	 * the Slot was held.
 	 */
-	function holdFeatureMatch(slot: FeatureMatch) {
+	function holdFeatureMatch(slot: FeatureMatch): boolean {
 		if (!useFeatureMatchStateStore().offerSlotSession(slot))
-			return;
+			return false;
 		const index = featureMatches.value.findIndex(held => held.id === slot.id);
 		if (index === -1)
 			featureMatches.value.push(slot);
 		else
 			featureMatches.value[index] = slot;
+		return true;
 	}
 
 	async function getFeatureMatchById(eventId: number, matchId: number) {

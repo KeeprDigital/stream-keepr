@@ -47,6 +47,8 @@ const continuity = createContinuitySignal();
 
 mockNuxtImport('tryUseRealtime', () => () => ({
 	get connectionState() { return mockConnectionState.value; },
+	tokenError: null,
+	onChannel: () => () => {},
 	onContinuityLost: continuity.onContinuityLost,
 }));
 
@@ -76,6 +78,7 @@ describe('useFeatureMatchModeData', () => {
 				...mockFeatureMatchStore.featureMatches.filter(held => held.id !== slot.id),
 				slot,
 			];
+			return true;
 		});
 		mockApiFetch.mockImplementation(async (path: string) => {
 			const slotId = Number(/feature-match-slots\/(\d+)$/.exec(path)?.[1]);
@@ -175,26 +178,32 @@ describe('useFeatureMatchModeData', () => {
 			await flushPromises();
 		}
 
-		it('re-reads Session state through the store\'s loader', async () => {
+		it('re-reads the Slot and its Session through the Screen, with no resync of its own', async () => {
 			createComposable();
 			await flushPromises();
-			mockFeatureMatchStateStore.loadState.mockClear();
+			mockApiFetch.mockClear();
+			mockFeatureMatchStore.holdFeatureMatch.mockClear();
 
 			await suspendAndResume();
 
-			expect(mockFeatureMatchStateStore.loadState).toHaveBeenCalledWith(1, 1);
+			expect(mockApiFetch).toHaveBeenCalledWith(
+				'/api/screen-output/events/1/screens/1/feature-match-slots/1',
+				expect.anything(),
+			);
+			expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
 		});
 
-		it('does not re-read while still disconnected', async () => {
+		it('does not re-read the moment it disconnects', async () => {
 			createComposable();
 			await flushPromises();
-			mockFeatureMatchStateStore.loadState.mockClear();
+			mockApiFetch.mockClear();
 
 			mockConnectionState.value = 'suspended';
 			await nextTick();
 			await flushPromises();
 
-			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
+			expect(mockApiFetch).not.toHaveBeenCalled();
 		});
 	});
 });
