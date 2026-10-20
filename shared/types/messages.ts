@@ -137,6 +137,15 @@ export interface MessageDefinitions {
 		deck: PlayerDeckSummaryResponse;
 	};
 
+	/**
+	 * An operator resolved an unresolved deck card: these Deck Lists' cards were
+	 * rewritten, without any Player or deck summary changing (#648).
+	 */
+	'playerDeck:cardsResolved': {
+		deckIds: number[];
+		playerIds: number[];
+	};
+
 	// Phase management
 	'phase:created': {
 		phase: PhaseResponse;

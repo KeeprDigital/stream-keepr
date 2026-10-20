@@ -37,6 +37,9 @@ The reserve portion of a Deck List, exchanged with Mainboard cards between games
 **Board Selection**:
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
 
+**Unresolved Deck Card**:
+A Deck List entry imported by **Melee Sync** whose name matched no known card. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031).
+
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 

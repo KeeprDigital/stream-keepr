@@ -18,6 +18,17 @@ export interface PlayerDeckSelection {
 
 const cache = new Map<number, DeckCacheEntry>();
 const inFlight = new Map<string, Promise<PlayerDeckCollectionResponse | null>>();
+/**
+ * How many times the whole cache, and each Player's entry, has been dropped. A
+ * read that lands after its Player was dropped may hold what the drop was for —
+ * a resolved deck card moves no Player revision (#648) — so it is not cached.
+ */
+let cacheDrops = 0;
+const playerDrops = new Map<number, number>();
+
+function dropStamp(playerId: number) {
+	return `${cacheDrops}:${playerDrops.get(playerId) ?? 0}`;
+}
 
 function updatedAtKey(updatedAt: Date | string) {
 	return typeof updatedAt === 'string' ? updatedAt : updatedAt.toISOString();
@@ -68,10 +79,13 @@ export function usePlayerDeckCache() {
 		if (existing)
 			return existing;
 
+		const drops = dropStamp(playerId);
 		const promise = $fetch<PlayerDeckCollectionResponse>(
 			`/api/events/${eventId}/players/${playerId}/decks`,
 			{ query: selection },
 		).then((collection) => {
+			if (dropStamp(playerId) !== drops)
+				return collection;
 			const primaryDeck = collection.decks.find(deck => deck.isPrimary) ?? collection.decks[0] ?? null;
 			cache.set(playerId, {
 				updatedAtKey: key,
@@ -105,6 +119,7 @@ export function usePlayerDeckCache() {
 	}
 
 	function clearCachedDeck(playerId: number) {
+		playerDrops.set(playerId, (playerDrops.get(playerId) ?? 0) + 1);
 		cache.delete(playerId);
 		for (const key of inFlight.keys()) {
 			if (key.startsWith(`${playerId}:`))
@@ -218,6 +233,7 @@ export function usePlayerDeckCache() {
 }
 
 export function clearPlayerDeckCache() {
+	cacheDrops++;
 	cache.clear();
 	inFlight.clear();
 }

@@ -17,6 +17,9 @@ const mockPlayerDeckService = {
 	findManyByIds: vi.fn(),
 };
 const mockFetchScryfallCardById = vi.fn();
+const mockPublication = {
+	playerDeckCardsResolved: vi.fn(),
+};
 
 class MockDeckCompanionValidationError extends Error {}
 
@@ -36,6 +39,9 @@ vi.mock('~~/server/services/playerDeck', () => ({
 }));
 vi.mock('~~/server/utils/scryfall', () => ({
 	fetchScryfallCardById: mockFetchScryfallCardById,
+}));
+vi.mock('~~/server/modules/event-data-publication', () => ({
+	eventDataPublicationModule: () => mockPublication,
 }));
 
 // `cause` and `statusMessage` are carried through (#346) because the retry-after rows
@@ -87,7 +93,7 @@ describe('deck List Resolution server module', () => {
 			createUnresolvedEntry({ id: 11, deckId: 101, sortOrder: 2 }),
 			createUnresolvedEntry({ id: 12, deckId: 102, quantity: 1, compartment: null, sortOrder: 8 }),
 		]);
-		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101 }, { id: 102 }]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101, playerId: 7 }, { id: 102, playerId: 8 }]);
 		mockFetchScryfallCardById.mockResolvedValue({
 			id: '11111111-1111-4111-8111-111111111111',
 			name: 'Lightning Bolt',
@@ -165,6 +171,49 @@ describe('deck List Resolution server module', () => {
 		});
 
 		expect(mockDb.batch).not.toHaveBeenCalled();
+		expect(mockPublication.playerDeckCardsResolved).not.toHaveBeenCalled();
+	});
+
+	it('announces the Deck Lists it rewrote, and their Players, once the batch commits (#648)', async () => {
+		getChain('select').where.mockResolvedValue([]);
+		mockDb.batch.mockImplementation(async () => {
+			expect(mockPublication.playerDeckCardsResolved).not.toHaveBeenCalled();
+			return [];
+		});
+
+		await deckListResolutionModule().resolveUnresolvedDeckCard({
+			eventId: 1,
+			unresolvedCardId: 11,
+			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
+			originConnectionId: 'origin-1',
+		});
+
+		expect(mockDb.batch).toHaveBeenCalledOnce();
+		expect(mockPublication.playerDeckCardsResolved).toHaveBeenCalledOnce();
+		expect(mockPublication.playerDeckCardsResolved).toHaveBeenCalledWith({
+			eventId: 1,
+			deckIds: [101, 102],
+			playerIds: [7, 8],
+			originConnectionId: 'origin-1',
+		});
+	});
+
+	it('names a Player once however many of their Deck Lists held the entry', async () => {
+		getChain('select').where.mockResolvedValue([]);
+		mockPlayerDeckService.findManyByIds.mockResolvedValue([{ id: 101, playerId: 7 }, { id: 102, playerId: 7 }]);
+
+		await deckListResolutionModule().resolveUnresolvedDeckCard({
+			eventId: 1,
+			unresolvedCardId: 11,
+			scryfallId: '11111111-1111-4111-8111-111111111111',
+			requestEvent,
+		});
+
+		expect(mockPublication.playerDeckCardsResolved).toHaveBeenCalledWith(expect.objectContaining({
+			deckIds: [101, 102],
+			playerIds: [7],
+		}));
 	});
 
 	it('preserves a manual companion while atomically resolving its imported entry', async () => {

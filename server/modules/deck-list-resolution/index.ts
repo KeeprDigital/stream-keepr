@@ -10,6 +10,7 @@ import {
 	playerDeckCompanions,
 	playerDeckUnresolvedCards,
 } from '~~/server/db/schema';
+import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { requireMeleeSyncEventData } from '~~/server/modules/melee-sync/eventData';
 import { playerDeckService } from '~~/server/services/playerDeck';
 import { DeckCompanionValidationError, playerDeckCompanionService } from '~~/server/services/playerDeckCompanion';
@@ -33,6 +34,7 @@ export interface ResolveUnresolvedDeckCardInput {
 	 * disambiguation `melee-sync` makes with `requestEvent`.
 	 */
 	requestEvent: H3Event;
+	originConnectionId?: string;
 }
 
 export interface ResolveUnresolvedDeckCardResult {
@@ -43,13 +45,16 @@ export interface ResolveUnresolvedDeckCardResult {
 	resolvedCount: number;
 }
 
-async function validateMatchingEntriesBelongToEvent(eventId: number, matchingEntries: Array<{ deckId: number }>) {
+/** The Event's Deck Lists holding the matching entries; refuses any outside it. */
+async function requireMatchingDecksInEvent(eventId: number, matchingEntries: Array<{ deckId: number }>) {
 	const deckIds = [...new Set(matchingEntries.map(entry => entry.deckId))];
 	const eventDecks = await playerDeckService().findManyByIds(eventId, deckIds);
 
 	if (eventDecks.length !== deckIds.length) {
 		throw createError({ statusCode: 409, statusMessage: 'Unresolved deck card references a deck outside this event' });
 	}
+
+	return eventDecks;
 }
 
 interface ExistingDeckCard {
@@ -109,6 +114,7 @@ export function deckListResolutionModule() {
 		unresolvedCardId,
 		scryfallId,
 		requestEvent,
+		originConnectionId,
 	}: ResolveUnresolvedDeckCardInput): Promise<ResolveUnresolvedDeckCardResult> {
 		await requireMeleeSyncEventData(eventId);
 
@@ -127,7 +133,7 @@ export function deckListResolutionModule() {
 			throw createError({ statusCode: 404, statusMessage: 'No unresolved deck cards remain for this group' });
 		}
 
-		await validateMatchingEntriesBelongToEvent(eventId, matchingEntries);
+		const affectedDecks = await requireMatchingDecksInEvent(eventId, matchingEntries);
 
 		let scryfallData;
 		try {
@@ -345,6 +351,15 @@ export function deckListResolutionModule() {
 		}
 
 		await db.batch(queries as [typeof queries[0], ...typeof queries]);
+
+		// Every Deck List holding the name changed, not only the requester's, so the
+		// whole Event is told which (#648).
+		await eventDataPublicationModule().playerDeckCardsResolved({
+			eventId,
+			deckIds: affectedDecks.map(deck => deck.id),
+			playerIds: [...new Set(affectedDecks.map(deck => deck.playerId))],
+			originConnectionId,
+		});
 
 		return {
 			success: true,

@@ -68,6 +68,7 @@ describe('useEventRealtimeSession', () => {
 	};
 	const playerDeckStore = {
 		applyRemoteReviewed: vi.fn(),
+		applyRemoteCardsResolved: vi.fn(),
 		loadByEventId: vi.fn(),
 	};
 	const metagameStore = {
@@ -128,6 +129,7 @@ describe('useEventRealtimeSession', () => {
 		reloadAuthoritativeState: vi.fn(),
 	};
 	const useReconnectResync = vi.fn();
+	const mockClearPlayerDeckCache = vi.fn();
 	const eventDataResync = {
 		resync: vi.fn(),
 	};
@@ -191,6 +193,7 @@ describe('useEventRealtimeSession', () => {
 
 		vi.doMock('~/utils/eventStores', () => ({ resetAllEventStores: mockResetAllEventStores }));
 		vi.doMock('~/modules/event-data/resync', () => ({ eventDataResync }));
+		vi.doMock('~/composables/data/usePlayerDeckCache', () => ({ clearPlayerDeckCache: mockClearPlayerDeckCache }));
 		vi.stubGlobal('useRealtime', () => realtime);
 		vi.stubGlobal('useEventStore', () => eventStore);
 		vi.stubGlobal('usePlayerStore', () => playerStore);
@@ -269,6 +272,7 @@ describe('useEventRealtimeSession', () => {
 			'player:updated': playerStore.applyRemoteUpdated,
 			'player:deleted': playerStore.applyRemoteDeleted,
 			'playerDeck:reviewed': playerDeckStore.applyRemoteReviewed,
+			'playerDeck:cardsResolved': playerDeckStore.applyRemoteCardsResolved,
 			'archetype:created': archetypeStore.applyRemoteCreated,
 			'archetype:updated': archetypeStore.applyRemoteUpdated,
 			'archetype:deleted': archetypeStore.applyRemoteDeleted,
@@ -323,6 +327,7 @@ describe('useEventRealtimeSession', () => {
 			'player:updated',
 			'player:deleted',
 			'playerDeck:reviewed',
+			'playerDeck:cardsResolved',
 			'archetype:created',
 			'archetype:updated',
 			'archetype:deleted',
@@ -414,6 +419,15 @@ describe('useEventRealtimeSession', () => {
 		expect(featureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
 		expect(broadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
 		expect(eventDataResync.resync).toHaveBeenCalledOnce();
+	});
+
+	it('drops the cached Deck Lists through Reconnect Resync, since a resolved deck card moves no Player revision (#648)', async () => {
+		await startSession();
+
+		const [resync] = useReconnectResync.mock.calls[0]!;
+		resync();
+
+		expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
 	});
 
 	it('resyncs the same way once its subscriptions stop waiting on a token', async () => {

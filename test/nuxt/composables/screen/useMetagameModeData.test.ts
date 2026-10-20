@@ -398,6 +398,16 @@ describe('useMetagameModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
+		it('re-reads when another browser resolves an unresolved deck card (#648)', async () => {
+			await showingMetagame();
+
+			deliver('playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [2, 7] });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(usePlayerStore().dataVersion).toBe(0);
+		});
+
 		it('re-reads when a deck review lands elsewhere', async () => {
 			await showingMetagame();
 

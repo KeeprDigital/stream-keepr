@@ -20,10 +20,15 @@ const mockReadValidatedBody = vi.fn(async (
 	validate: (input: unknown) => unknown,
 ) => validate(event.__body));
 const mockResolveUnresolvedDeckCard = vi.fn();
+const mockGetOriginConnectionId = vi.fn((event: { __originConnectionId?: string }) => event.__originConnectionId);
 
 vi.stubGlobal('defineEventHandler', vi.fn(handler => handler));
 vi.stubGlobal('getValidatedRouterParams', mockGetValidatedRouterParams);
 vi.stubGlobal('readValidatedBody', mockReadValidatedBody);
+
+vi.mock('~~/server/utils/ably', () => ({
+	getOriginConnectionId: mockGetOriginConnectionId,
+}));
 
 vi.mock('~~/server/modules/deck-list-resolution', () => ({
 	deckListResolutionModule: () => ({
@@ -46,6 +51,7 @@ function stubRequestEvent(params: Record<string, string>, body: Record<string, u
 		__requestEventFor: 'unresolved-deck-card-resolution',
 		__params: params,
 		__body: body,
+		__originConnectionId: 'origin-1',
 	});
 }
 
@@ -66,7 +72,9 @@ describe('pUT /api/events/[id]/melee/unresolved-deck-cards/[unresolvedCardId] wi
 			unresolvedCardId: 31,
 			scryfallId,
 			requestEvent: event,
+			originConnectionId: 'origin-1',
 		});
+		expect(mockGetOriginConnectionId).toHaveBeenCalledWith(event);
 	});
 
 	it('refuses a non-positive card id before the resolution module is asked', async () => {

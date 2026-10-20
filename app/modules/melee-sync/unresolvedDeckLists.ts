@@ -319,6 +319,9 @@ export function useMeleeSyncUnresolvedDeckListResolution(
 				scryfallId: card.id,
 			});
 			clearPlayerDeckCache();
+			// Every other browser hears `playerDeck:cardsResolved`; this one is its
+			// origin, so it skips the message and refreshes here (#648).
+			useMetagameStore().applyRemoteInvalidated();
 			await playerStore.loadPlayersByEventId(currentEventId);
 			await loadUnresolvedDeckCards();
 

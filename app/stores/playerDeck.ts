@@ -1,3 +1,4 @@
+import type { MessagePayload } from '~~/shared/types/messages';
 import type { PlayerDeckSummaryResponse } from '~~/shared/types/metagame';
 import type { Archetype } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
@@ -65,6 +66,12 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 			decks.value[index] = data.deck;
 	}
 
+	/** Resolved cards rewrote these Players' Deck Lists; their next read fetches them. */
+	function applyRemoteCardsResolved(data: MessagePayload<'playerDeck:cardsResolved'>) {
+		for (const playerId of data.playerIds)
+			deckCache.clearCachedDeck(playerId);
+	}
+
 	function applyArchetypeUpdated(archetype: Archetype) {
 		deckCache.applyArchetypeUpdated(archetype);
 		for (const deck of decks.value) {
@@ -126,6 +133,7 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 		loadByEventId,
 		reviewDeck,
 		applyRemoteReviewed,
+		applyRemoteCardsResolved,
 		applyArchetypeUpdated,
 		applyArchetypeDeleted,
 		$reset,

@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { useRealtimeMessageGate } from '~/composables/core/useRealtimeMessageGate';
+import { clearPlayerDeckCache } from '~/composables/data/usePlayerDeckCache';
 import { eventDataResync } from '~/modules/event-data/resync';
 import { createEventRealtimeHandlers } from '~/modules/realtime-event-session/handlers';
 
@@ -21,6 +22,9 @@ export function useEventRealtimeSession() {
 
 	realtime.onRoom('event-session', createEventRealtimeHandlers({ accept, eventStore, realtime }));
 	function resync() {
+		// The cache is keyed by Player revision, which a resolved deck card does not
+		// move (#648), so a resolution missed meanwhile could otherwise stay cached.
+		clearPlayerDeckCache();
 		void Promise.allSettled([
 			featureMatchAssignmentStore.reloadConsumedRounds(),
 			broadcastDeckListStore.reloadAuthoritativeState(),

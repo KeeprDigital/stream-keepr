@@ -560,6 +560,21 @@ describe('event Data publication module', () => {
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:reviewed', { deck: result }, 'origin-1');
 	});
 
+	it('announces resolved deck cards by the Deck Lists and Players they rewrote, with no binding to catch up (#648)', async () => {
+		await eventDataPublicationModule().playerDeckCardsResolved({
+			eventId: 1,
+			deckIds: [101, 102],
+			playerIds: [7, 8],
+			originConnectionId: 'origin-1',
+		});
+
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:cardsResolved', {
+			deckIds: [101, 102],
+			playerIds: [7, 8],
+		}, 'origin-1');
+		expect(mockRefreshBindings).not.toHaveBeenCalled();
+	});
+
 	it('publishes Event changes without exposing credentials', async () => {
 		const publication = eventDataPublicationModule();
 
