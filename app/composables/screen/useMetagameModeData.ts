@@ -2,6 +2,9 @@ import type {
 	ArchetypeBreakdownResponse,
 	CardBreakdownResponse,
 } from '~~/shared/types/metagame';
+import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
+import { metagameAggregateDependencies } from '~/modules/metagame/screenDependencies';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
 
 type MetagameDisplayRow = ArchetypeBreakdownResponse['entries'][number] | CardBreakdownResponse['entries'][number];
@@ -10,20 +13,43 @@ export function useMetagameModeData() {
 	const { screen, eventId, interactive } = useScreenContext();
 	const config = useScreenModeConfig('metagame');
 
-	const playerStore = usePlayerStore();
 	const screenStore = useScreenStore();
 	const outputReads = useScreenOutputReads();
 
-	const displayData = useBroadcastDisplayData<{
-		archetypeData: ArchetypeBreakdownResponse | null;
-		cardData: CardBreakdownResponse | null;
-	}>({ initialData: { archetypeData: null, cardData: null } });
-	const loading = displayData.loading;
-	const error = displayData.error;
+	// The server derives the breakdown from the saved configuration (#604), so
+	// the read changes with the configuration fields it depends on.
+	const freshness = useScreenModeFreshness<ScreenOutputMetagameResponse | null>({
+		eventId,
+		source: () => outputReads.scopeKey.value && JSON.stringify([
+			outputReads.scopeKey.value,
+			config.value.viewMode,
+			config.value.scope,
+			config.value.topN,
+			config.value.minPoints,
+			config.value.playerListId,
+			config.value.archetypeFilter,
+			config.value.sortBy,
+			config.value.cardSortBy,
+			config.value.limit,
+			config.value.archetypeLimit,
+		]),
+		read: () => outputReads.metagame(),
+		initialData: null,
+		errorMessage: 'Failed to load metagame data',
+		dependsOn: metagameAggregateDependencies(() => config.value.scope === 'playerList' ? config.value.playerListId : null),
+	});
+	const loading = freshness.loading;
+	const error = computed(() => outputReads.scope.value ? freshness.error.value : 'No event loaded');
 
 	// ── Response data ──
-	const archetypeData = computed(() => displayData.data.value.archetypeData);
-	const cardData = computed(() => displayData.data.value.cardData);
+	const archetypeData = computed<ArchetypeBreakdownResponse | null>(() => {
+		const read = freshness.data.value;
+		return read && read.viewMode !== 'cards' ? read.breakdown : null;
+	});
+	const cardData = computed<CardBreakdownResponse | null>(() => {
+		const read = freshness.data.value;
+		return read?.viewMode === 'cards' ? read.breakdown : null;
+	});
 
 	// ── Active data based on viewMode ──
 	const activeData = computed(() => {
@@ -107,25 +133,6 @@ export function useMetagameModeData() {
 		},
 	});
 
-	// ── Data Loading ──
-	// The Screen Output read derives the breakdown from the saved configuration
-	// (#604), so the watch below re-reads when a field it depends on changes.
-	async function fetchData() {
-		if (!outputReads.scope.value) {
-			error.value = 'No event loaded';
-			displayData.clear();
-			return;
-		}
-
-		await displayData.refresh(async () => {
-			const current = displayData.data.value;
-			const read = await outputReads.metagame();
-			return read.viewMode === 'cards'
-				? { ...current, cardData: read.breakdown }
-				: { ...current, archetypeData: read.breakdown };
-		}, 'Failed to load metagame data');
-	}
-
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
 	// Read off the breakdown: an output holds no roster to count (#604).
@@ -138,32 +145,6 @@ export function useMetagameModeData() {
 		}
 		return 'No metagame data available';
 	});
-
-	// ── Watchers ──
-	// Refetch when viewMode, scope, or filter params change
-	watch(
-		() => [
-			outputReads.scopeKey.value,
-			config.value.viewMode,
-			config.value.scope,
-			config.value.topN,
-			config.value.minPoints,
-			config.value.playerListId,
-			config.value.archetypeFilter,
-			config.value.sortBy,
-			config.value.cardSortBy,
-			config.value.limit,
-			config.value.archetypeLimit,
-		],
-		() => fetchData(),
-		{ immediate: true },
-	);
-
-	// Refetch when any player data changes (realtime updates, syncs, edits)
-	watch(
-		() => playerStore.dataVersion,
-		() => fetchData(),
-	);
 
 	return {
 		config,
@@ -181,6 +162,5 @@ export function useMetagameModeData() {
 		nextPage,
 		prevPage,
 		setPage,
-		fetchData,
 	};
 }
