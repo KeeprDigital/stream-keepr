@@ -146,7 +146,7 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Before commit                               | `pnpm test`                                                                         | Every test gate of `pnpm verify` (`verify.mjs --tests`): unit + Nuxt (coverage thresholds in `vitest.shared.ts`), local-auth, integration, then four local browser gates: still images, silent video, fonts, Animation Effects. No lint, typecheck, or build. Needs Chrome/Chromium. |
 | Tests your branch touches                   | `pnpm test:changed`                                                                 | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                                                                                          |
 | Quick check while developing                | `pnpm verify:quick`                                                                 | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                                                                                       |
-| Before push                                 | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.                                                                              |
+| Reproducing a CI failure                    | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck, lint, every `pnpm test` suite, build, `worker:dry-run`, `worker:smoke`.                                                                              |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                 | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build.                                                                      |
 | Listing acceptance harnesses                | `pnpm accept`                                                                       | Every harness, what it proves, what it needs, and its flags. Run one with `pnpm accept <name> [flags]`.                                                                                                                                                                              |
 | Touching still-image codecs or Wasm         | `pnpm accept still-image-ingestion`                                                 | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                                                                                     |
@@ -156,11 +156,18 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                         |
 | Deploy day                                  | `pnpm accept deployed`                                                              | The six deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                       |
 
-`pnpm verify` exists for its tail. `worker:dry-run` checks the upload bundle
-statically; `worker:smoke` runs it under local workerd with production-shaped
-requests. Together they catch bundles that pass on Node and break on workerd
-(#302). Run it whenever a change touches dependencies, bundling,
-`nuxt.config.ts`, or server code.
+Before push, `pnpm verify:quick` is enough: CI is the full gate (below), and
+running `pnpm verify` first would only repeat it. Open the PR as a draft and
+mark it ready when the branch is done. Realtime integration tests are the one
+gate CI cannot run, so a change touching realtime runs
+`pnpm test:integration --run` locally first.
+
+`pnpm verify` reproduces CI on the working tree. Its tail matters most:
+`worker:dry-run` checks the upload bundle statically; `worker:smoke` runs it
+under local workerd with production-shaped requests. Together they catch
+bundles that pass on Node and break on workerd (#302), so reach for it when
+CI's Worker job fails on a change to dependencies, bundling, `nuxt.config.ts`,
+or server code.
 
 How `pnpm verify` runs:
 
@@ -193,7 +200,7 @@ split across parallel jobs (checks, two integration shards, local-auth and
 browser gates, Worker build) so the longest job sets the wall time. It skips draft PRs (marking one ready runs it), PRs that
 change only docs or other workflows, and the Worker build when only tests or
 docs changed; it does not re-run on merge, and a newer push cancels the older
-run. `pnpm verify` is the gate before that.
+run. It is the full gate: before it, `pnpm verify:quick`.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
 decision (#189). The suites in the table above that need a running preview,
 Docker, or a real store stay local. Other vitest modes work directly,
