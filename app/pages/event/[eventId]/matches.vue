@@ -87,7 +87,7 @@ const {
 	initialError: storesError,
 	retry: retryStores,
 } = useEventPageLoading([
-	{ consumes: 'featureMatches', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
+	{ consumes: 'featureMatchSlots', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
 	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
 	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
 	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },

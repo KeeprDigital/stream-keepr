@@ -748,7 +748,7 @@ Accepted · 2026-10-20 · [#610](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A consumer names the Event Data it reads, and Reconnect Resync re-reads exactly that.** Event Data Resync (`app/modules/event-data/resync.ts`) counts consumers per dataset: the Event, Players, Phases, Rounds, Matches, Feature Match Slots, Archetypes, Player Lists, Player Decks, Screens, and the selected Screen's Card. A page consumes each `useEventPageLoading` entry while it is mounted, and names what it loads outside them. Live Control consumes the Event Data it resolves Graphic Input Bindings from. The Realtime Event Session runs the resync beside the Feature Match Assignment and Broadcast Deck List reloads. Each dataset is re-read once, however many consumers share it, in place and only if its store already holds it. Its scope is kept: a Round's Matches stay a Round's Matches.
+**A consumer names the Event Data it reads, and Reconnect Resync re-reads exactly that.** Event Data Resync (`app/modules/event-data/resync.ts`) counts consumers per dataset: the Event, Players, Phases, Rounds, Matches, Feature Match Slots, Archetypes, Player Lists, Player Decks, Screens, and the selected Screen's Card. A page consumes each `useEventPageLoading` entry while it is mounted, and names what it loads outside them. The default layout consumes the Event and Screens, and Live Control consumes the Event Data it resolves Graphic Input Bindings from. The Realtime Event Session runs the resync beside the Feature Match Assignment and Broadcast Deck List reloads. It does so on reconnection, and when its subscriptions stop waiting on a token (ADR-0023), since those missed what was published meanwhile too. Each dataset is re-read once, however many consumers share it, in place and only if its store already holds it. Its scope is kept: a Round's Matches stay a Round's Matches. A re-read that fails or does not land leaves its dataset behind.
 
 **What nobody consumed at the resync is behind.** A store outlives the page that loaded it, and `useEventPageLoading` skips a loaded store. So the next consumer to name a behind dataset re-reads it instead of trusting it. `resetAllEventStores()` forgets what is behind, because the reset ends the Event Lifetime and nothing it held survives.
 
@@ -763,7 +763,8 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 - An operator's resync re-reads every consumed collection at once. That is a burst of list reads per open page, once per reconnection.
 - A store loaded by a component that does not consume it, a mode's Settings panel for example, is not re-read on reconnect. It is behind, and its next consumer re-reads it.
 - A page's own reads outside the stores are not covered. That includes Metagame summaries and the Matches page's Round availability. Their state comes back on the next visit.
-- Waiting on a token (ADR-0023) does not start this resync for operator surfaces; only a disconnection does. The Card mode, through Screen Mode Data Freshness, also re-reads when a token wait ends.
+- A Feature Match Slot re-read offers its Session to the Live State Follower, which holds it when it is newer. So a Session missed in the outage reaches Live Control's bound values through the Slots.
+- The Card mode, through Screen Mode Data Freshness, also re-reads on the degraded cadence while disconnected.
 
 ### Rejected alternatives
 

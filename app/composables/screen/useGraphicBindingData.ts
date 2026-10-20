@@ -29,7 +29,7 @@ import { useConsumedEventData } from '~/modules/event-data/resync';
  * bound values recompute from it, deletes included (#610).
  */
 export function useGraphicBindingData() {
-	useConsumedEventData(['event', 'players', 'phases', 'rounds', 'matches', 'featureMatches', 'archetypes']);
+	useConsumedEventData(['event', 'players', 'phases', 'rounds', 'matches', 'featureMatchSlots', 'archetypes']);
 	const eventStore = useEventStore();
 	const playerStore = usePlayerStore();
 	const matchStore = useMatchStore();

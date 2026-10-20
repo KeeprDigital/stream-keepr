@@ -176,11 +176,10 @@ describe('useEventPageLoading', () => {
 	});
 
 	it('re-reads the collections a mounted page consumes on Reconnect Resync, and stops once it is gone (#610)', async () => {
-		const page = effectScope();
-		page.run(() => useEventPageLoading([
+		usePage([
 			{ consumes: 'players', isLoaded: () => true, load: vi.fn() },
 			{ consumes: 'rounds', isLoaded: () => true, load: vi.fn() },
-		]));
+		]);
 		await flushPromises();
 
 		await eventDataResync.resync();
@@ -188,24 +187,18 @@ describe('useEventPageLoading', () => {
 		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
 
 		vi.clearAllMocks();
-		page.stop();
+		pageScope.stop();
 		await eventDataResync.resync();
 		expect(mockPlayerStore.loadPlayersByEventId).not.toHaveBeenCalled();
-		eventDataResync.reset();
 	});
 
 	it('re-reads what a revisited page finds loaded when it was missed meanwhile (#610)', async () => {
 		await eventDataResync.resync();
 		vi.clearAllMocks();
 
-		const page = effectScope();
-		page.run(() => useEventPageLoading([
-			{ consumes: 'players', isLoaded: () => true, load: vi.fn() },
-		]));
+		usePage([{ consumes: 'players', isLoaded: () => true, load: vi.fn() }]);
 		await flushPromises();
 
 		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-		page.stop();
-		eventDataResync.reset();
 	});
 });

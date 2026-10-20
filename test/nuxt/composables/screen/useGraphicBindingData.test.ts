@@ -1,6 +1,6 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { resolveGraphicInputBindings } from '~~/shared/modules/graphics';
 import { eventDataResync } from '~/modules/event-data/resync';
@@ -110,6 +110,10 @@ describe('useGraphicBindingData', () => {
 		mockPlayerStore.players = [];
 		mockMatchStore.matches = [];
 		mockEventStore.event.talents = [];
+	});
+
+	afterEach(() => {
+		eventDataResync.reset();
 	});
 
 	it('resolves fixed Social Profiles from the complete Talent data kept current by realtime', () => {
@@ -263,6 +267,5 @@ describe('useGraphicBindingData', () => {
 		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
 		expect(selectionOptions('player')).toEqual([{ label: 'Ava Reyes', value: 3 }]);
 		liveControl.stop();
-		eventDataResync.reset();
 	});
 });

@@ -20,13 +20,20 @@ export function useEventRealtimeSession() {
 	const { accept } = useRealtimeMessageGate(computed(() => realtime.connectionId));
 
 	realtime.onRoom('event-session', createEventRealtimeHandlers({ accept, eventStore, realtime }));
-	useReconnectResync(() => {
+	function resync() {
 		void Promise.allSettled([
 			featureMatchAssignmentStore.reloadConsumedRounds(),
 			broadcastDeckListStore.reloadAuthoritativeState(),
 			eventDataResync.resync(),
 		]);
-	}, realtime);
+	}
+	useReconnectResync(resync, realtime);
+	// Subscriptions that waited on a token missed what was published meanwhile,
+	// exactly as a disconnection does (ADR-0023).
+	watch(() => !!realtime.tokenError, (waiting, wasWaiting) => {
+		if (wasWaiting && !waiting)
+			resync();
+	});
 
 	watch(
 		() => eventStore.eventId,

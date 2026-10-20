@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchData, FeatureMatchFormData, PlayerData, PlayerDisplayConfig, UpdateFeatureMatchInput } from '~/types';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { DEFAULT_PLAYER_DATA, toPlayerData } from '~/types';
 import { buildFeatureMatchSetupUpdate } from '~/utils/featureMatchSetup';
 
@@ -61,6 +62,9 @@ watch(
 	},
 	{ immediate: true },
 );
+
+// The Rounds and Players the pickers below load on demand.
+useConsumedEventData(['rounds', 'players']);
 
 // Load match state on mount + ensure players are available for the picker
 onMounted(async () => {

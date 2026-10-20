@@ -74,7 +74,7 @@ const selectedScreenMatchId = computed<number | null>(() => {
 });
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'featureMatches', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
+	{ consumes: 'featureMatchSlots', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
 	{ consumes: 'phases', isLoaded: () => phaseStore.isLoaded, load: id => phaseStore.loadPhasesByEventId(id) },
 	{ consumes: 'players', isLoaded: () => playerStore.isLoaded, load: id => playerStore.loadPlayersByEventId(id) },
 	{ consumes: 'rounds', isLoaded: () => roundStore.isLoaded, load: id => roundStore.loadRoundsByEventId(id) },
@@ -84,8 +84,9 @@ const { initialLoading, initialError, retry } = useEventPageLoading([
 	await syncCardScope();
 });
 
-// The selected Screen's Card, which `syncCardScope` selects and loads.
-useConsumedEventData(['card']);
+// The selected Screen's Card, which `syncCardScope` selects and loads, and the
+// deck-list Round's Matches loaded below.
+useConsumedEventData(['card', 'matches']);
 
 async function syncCardScope() {
 	if (!selectedScreenId.value) {

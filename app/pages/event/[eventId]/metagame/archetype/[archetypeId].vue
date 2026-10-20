@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { ArchetypeDetailResponse } from '~~/shared/types/metagame';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useMetagameClient } from '~/modules/metagame/client';
 
 type DetailSection = 'cards' | 'players';
@@ -134,6 +135,8 @@ async function fetchDetail() {
 		},
 	);
 }
+
+useConsumedEventData(['players']);
 
 watch(() => eventStore.eventId, async (eventId) => {
 	if (eventId && !playerStore.isLoaded) {

@@ -16,7 +16,7 @@ function harness() {
 		phases: vi.fn(),
 		rounds: vi.fn(),
 		matches: vi.fn(),
-		featureMatches: vi.fn(),
+		featureMatchSlots: vi.fn(),
 		archetypes: vi.fn(),
 		playerLists: vi.fn(),
 		playerDecks: vi.fn(),
@@ -81,13 +81,35 @@ describe('createEventDataResync', () => {
 		expect(reloaded()).toEqual([]);
 	});
 
-	it('keeps re-reading the rest when one re-read fails', async () => {
-		const { resync, reloaders } = harness();
+	it('keeps re-reading the rest when one re-read fails, and leaves the failed ones behind', async () => {
+		const { resync, reloaders, reloaded, clear } = harness();
 		reloaders.players.mockRejectedValue(new Error('offline'));
-		resync.consume(['players', 'rounds']);
+		reloaders.phases.mockResolvedValue(false);
+		resync.consume(['players', 'phases', 'rounds']);
 
 		await expect(resync.resync()).resolves.toBeUndefined();
-
 		expect(reloaders.rounds).toHaveBeenCalledOnce();
+		clear();
+
+		resync.consume(['players', 'phases', 'rounds']);
+		expect(reloaded()).toEqual(['phases', 'players']);
+	});
+
+	it('marks nothing behind in the next Event Lifetime from a re-read the last one began', async () => {
+		const { resync, reloaders, reloaded, clear } = harness();
+		let fail!: (cause: Error) => void;
+		reloaders.players.mockReturnValue(new Promise((_, reject) => {
+			fail = reject;
+		}));
+		resync.consume(['players']);
+		const inFlight = resync.resync();
+
+		resync.reset();
+		fail(new Error('offline'));
+		await inFlight;
+		clear();
+
+		resync.consume(['players']);
+		expect(reloaded()).toEqual([]);
 	});
 });

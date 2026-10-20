@@ -8,7 +8,7 @@ export type ConsumedEventData
 		| 'phases'
 		| 'rounds'
 		| 'matches'
-		| 'featureMatches'
+		| 'featureMatchSlots'
 		| 'archetypes'
 		| 'playerLists'
 		| 'playerDecks'
@@ -18,7 +18,8 @@ export type ConsumedEventData
 /**
  * How one dataset is re-read in place. A reloader re-reads only what its store
  * holds, for the Event it holds it for, and never clears it first: a dataset
- * nothing has loaded is left for its consumer's own load.
+ * nothing has loaded is left for its consumer's own load. It answers `false`, or
+ * fails, when its re-read did not land.
  */
 export type EventDataReloaders = Record<ConsumedEventData, () => unknown>;
 
@@ -37,9 +38,21 @@ export type EventDataReloaders = Record<ConsumedEventData, () => unknown>;
 export function createEventDataResync(reloaders: EventDataReloaders) {
 	const consumers = new Map<ConsumedEventData, number>();
 	const behind = new Set<ConsumedEventData>();
+	// Which Event Lifetime a re-read began in, so one answered after a reset
+	// marks nothing behind in the next.
+	let lifetime = 0;
 
+	/** Re-read each dataset; one whose re-read did not land stays behind. */
 	async function reload(datasets: Iterable<ConsumedEventData>) {
-		await Promise.allSettled([...datasets].map(async dataset => reloaders[dataset]()));
+		const named = [...datasets];
+		const began = lifetime;
+		const outcomes = await Promise.allSettled(named.map(async dataset => reloaders[dataset]()));
+		if (began !== lifetime)
+			return;
+		outcomes.forEach((outcome, index) => {
+			if (outcome.status === 'rejected' || outcome.value === false)
+				behind.add(named[index]!);
+		});
 	}
 
 	/** Name what a consumer reads; the answer releases it. */
@@ -74,6 +87,7 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 	}
 
 	function reset() {
+		lifetime++;
 		behind.clear();
 	}
 
@@ -83,13 +97,18 @@ export function createEventDataResync(reloaders: EventDataReloaders) {
 /**
  * The reloaders for this client's stores, each re-reading only what its store
  * holds for the current Event.
+ *
+ * A loaded store holds the current Event's data because `resetAllEventStores()`
+ * unloads every store before the Event changes, so being loaded is the check.
  */
-function storeReloaders(): EventDataReloaders {
-	function forLoaded(store: () => { isLoaded: boolean }, load: (eventId: number) => unknown) {
-		return () => {
+export function storeReloaders(): EventDataReloaders {
+	/** A collection load answers `null` when it did not land. */
+	function forLoaded<S extends { isLoaded: boolean }>(useStore: () => S, load: (store: S, eventId: number) => Promise<unknown>) {
+		return async () => {
 			const eventId = useEventStore().eventId;
-			if (eventId && store().isLoaded)
-				return load(eventId);
+			const store = useStore();
+			if (eventId && store.isLoaded)
+				return await load(store, eventId) !== null;
 		};
 	}
 
@@ -100,20 +119,20 @@ function storeReloaders(): EventDataReloaders {
 			if (eventStore.event && eventStore.eventId === eventStore.event.id)
 				return eventStore.loadEvent(eventStore.event.id);
 		},
-		players: forLoaded(usePlayerStore, eventId => usePlayerStore().loadPlayersByEventId(eventId)),
-		phases: forLoaded(usePhaseStore, eventId => usePhaseStore().loadPhasesByEventId(eventId)),
-		rounds: forLoaded(useRoundStore, eventId => useRoundStore().loadRoundsByEventId(eventId)),
+		players: forLoaded(usePlayerStore, (store, eventId) => store.loadPlayersByEventId(eventId)),
+		phases: forLoaded(usePhaseStore, (store, eventId) => store.loadPhasesByEventId(eventId)),
+		rounds: forLoaded(useRoundStore, (store, eventId) => store.loadRoundsByEventId(eventId)),
 		// Whichever scope is held — one Round's Matches or the Event's.
 		matches: () => {
 			const eventId = useEventStore().eventId;
 			if (eventId)
 				return useMeleeDataRefresh().refreshCurrentMatchScope(eventId);
 		},
-		featureMatches: forLoaded(useFeatureMatchStore, eventId => useFeatureMatchStore().loadFeatureMatchesByEventId(eventId)),
-		archetypes: forLoaded(useArchetypeStore, eventId => useArchetypeStore().loadByEventId(eventId)),
-		playerLists: forLoaded(usePlayerListStore, eventId => usePlayerListStore().loadByEventId(eventId)),
-		playerDecks: forLoaded(usePlayerDeckStore, eventId => usePlayerDeckStore().loadByEventId(eventId)),
-		screens: forLoaded(useScreenStore, eventId => useScreenStore().loadScreensByEventId(eventId)),
+		featureMatchSlots: forLoaded(useFeatureMatchStore, (store, eventId) => store.loadFeatureMatchesByEventId(eventId)),
+		archetypes: forLoaded(useArchetypeStore, (store, eventId) => store.loadByEventId(eventId)),
+		playerLists: forLoaded(usePlayerListStore, (store, eventId) => store.loadByEventId(eventId)),
+		playerDecks: forLoaded(usePlayerDeckStore, (store, eventId) => store.loadByEventId(eventId)),
+		screens: forLoaded(useScreenStore, (store, eventId) => store.loadScreensByEventId(eventId)),
 		// The selected Screen's Card, re-read without deselecting the Screen.
 		card: () => {
 			const cardStore = useCardStore();

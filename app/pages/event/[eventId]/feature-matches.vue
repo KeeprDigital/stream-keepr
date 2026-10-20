@@ -11,7 +11,7 @@ const screenStore = useScreenStore();
 useUnsavedChanges();
 
 const { initialLoading, initialError, retry } = useEventPageLoading([
-	{ consumes: 'featureMatches', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
+	{ consumes: 'featureMatchSlots', isLoaded: () => featureMatchStore.isLoaded, load: id => featureMatchStore.loadFeatureMatchesByEventId(id) },
 	{ consumes: 'screens', isLoaded: () => screenStore.isLoaded, load: id => screenStore.loadScreensByEventId(id) },
 ]);
 </script>

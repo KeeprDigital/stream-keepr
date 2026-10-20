@@ -39,11 +39,11 @@ describe('event store reset registry', () => {
 	});
 
 	it('ends what Event Data Resync holds as behind with the Event Lifetime', () => {
-		const forget = vi.spyOn(eventDataResync, 'reset');
+		const reset = vi.spyOn(eventDataResync, 'reset');
 
 		resetAllEventStores();
 
-		expect(forget).toHaveBeenCalledOnce();
+		expect(reset).toHaveBeenCalledOnce();
 	});
 
 	/**
