@@ -24,7 +24,7 @@
 		"worker:dry-run": "node scripts/worker-dry-run.mjs",
 		"worker:smoke": "node scripts/reap-workerd.mjs && node scripts/worker-smoke.mjs",
 		"deploy": "pnpm build && pnpm worker:dry-run && pnpm worker:smoke && pnpm db:migrate:remote && wrangler deploy --config .output/server/wrangler.json && pnpm deploy:verify",
-		"deploy:verify": "bash scripts/deploy-verify.sh",
+		"deploy:verify": "node scripts/deploy-verify.mjs",
 		"deploy:validator": "wrangler deploy --config workers/silent-video-validator/wrangler.jsonc",
 		"validator:dry-run": "wrangler deploy --dry-run --containers-rollout=none --config workers/silent-video-validator/wrangler.jsonc",
 		"postinstall": "nuxt prepare",

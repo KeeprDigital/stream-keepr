@@ -3,7 +3,7 @@
 # are never merge-triggered, because deploy day is a human procedure
 # (README.md § Deploy day). This workflow covers only what
 # `pnpm run deploy` covers — build, Wasm dry run, Worker smoke against the
-# production-env build, D1 migration, Worker promotion, health verify.
+# production-env build, D1 migration, Worker promotion, liveness verify.
 # Everything after promotion stays with the operator:
 #
 #   - The seven deployed acceptance gates run locally, in order, stopping
@@ -181,6 +181,6 @@ jobs:
           VALIDATOR_OUTCOME: ${{ steps.validator.outputs.deploy == 'true' && 'deployed' || 'not deployed' }}
           VALIDATOR_REASON: ${{ steps.validator.outputs.reason }}
         run: |
-          echo "Release $RELEASE_TAG promoted and verified against https://stream.keepr.digital." >> "$GITHUB_STEP_SUMMARY"
+          echo "Release $RELEASE_TAG promoted; https://stream.keepr.digital answered deploy:verify (liveness only, not release identity or dependency health)." >> "$GITHUB_STEP_SUMMARY"
           echo "Validator: $VALIDATOR_OUTCOME — $VALIDATOR_REASON." >> "$GITHUB_STEP_SUMMARY"
           echo 'Run the seven `:deployed` gates locally, in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"

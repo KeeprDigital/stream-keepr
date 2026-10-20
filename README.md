@@ -345,8 +345,18 @@ The production hostname is `https://stream.keepr.digital`, attached as a
 3. `pnpm worker:smoke` against that production build.
 4. `pnpm db:migrate:remote`.
 5. `wrangler deploy`.
-6. `pnpm deploy:verify`: curls `GET /api/time` on the deployed Worker with
-   retries. Set `STREAM_KEEPR_DEPLOY_HEALTH_URL` only to verify a different host.
+6. `pnpm deploy:verify` (`scripts/deploy-verify.mjs`): reads `GET /api/time`
+   and passes only on status 200, `application/json`, and a
+   `{ serverTime: <epoch ms> }` body. A redirect fails and is never followed,
+   so an Access or login page cannot pass, and neither can an HTML fallback.
+   Only unreachable, 5xx and 429 answers are retried. Set
+   `STREAM_KEEPR_DEPLOY_HEALTH_URL` only to verify a different origin.
+
+   It proves **liveness only**: some Worker on that origin answers with this
+   app's handler. `/api/time` carries no build identity, so the previous
+   release passes too, and it reads no binding, so it says nothing about D1,
+   auth, R2, KV, Ably or the validator. The deployed gates (Deploy day, step 5)
+   cover those. `worker:smoke` runs the same probe against the built Worker.
 
 Migration and promotion are separate Cloudflare operations, not one
 transaction. Schedule incompatible schema changes for a maintenance window.
