@@ -159,9 +159,14 @@ export function playerUpdateModule() {
 		playerId,
 		originConnectionId,
 	}: DeletePlayerParams): Promise<{ success: true }> {
-		const result = await players.remove(playerId, eventId);
+		const { deleted, clearedScreens } = await players.remove(playerId, eventId);
 
-		if (!result) {
+		// Even for a Player already gone: the clear committed either way (ADR-0032).
+		// No origin, because the deleting client never received these Screens back.
+		for (const screen of clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
+
+		if (!deleted) {
 			throw createError({
 				statusCode: 404,
 				message: 'Player not found',

@@ -11,6 +11,7 @@ vi.doMock('~~/server/db', () => ({ db }));
 
 const mockPublication = {
 	screenUpdated: vi.fn(async ({ entity }: { entity: unknown }) => entity),
+	playerDeleted: vi.fn(),
 };
 vi.doMock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => mockPublication,
@@ -23,6 +24,7 @@ const { broadcastDeckListService } = await import('~~/server/services/broadcastD
 const { eventService } = await import('~~/server/services/event');
 const { screenService } = await import('~~/server/services/screen');
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
+const { playerUpdateModule } = await import('~~/server/modules/player-update');
 
 let eventId: number;
 let otherEventId: number;
@@ -246,5 +248,78 @@ describe('deck source write invariants', () => {
 		}, screen.stateVersion)).rejects.toMatchObject({ statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' });
 		expect((await screenService().findById(screen.id, eventId))?.modeConfigs?.deck?.deckSource)
 			.toEqual({ type: 'player', playerId });
+	});
+});
+
+describe('deleting the Player a Deck Source selects (#651)', () => {
+	it('clears every Deck Source naming the Player to no Player, announces each, and keeps later writes open', async () => {
+		const [deleted] = await db.insert(schema.players).values({ eventId, name: 'Deleted Player' }).returning({ id: schema.players.id });
+		const selecting = await screenService().create(eventId, {
+			name: 'Selects Deleted',
+			slug: 'selects-deleted',
+			currentMode: 'deck',
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId: deleted!.id } } },
+		} as never, capability('selects-deleted'));
+		const bystander = await screenService().create(eventId, {
+			name: 'Selects Other',
+			slug: 'selects-other',
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+		} as never, capability('selects-other'));
+		mockPublication.screenUpdated.mockClear();
+
+		await expect(playerUpdateModule().deletePlayer({ eventId, playerId: deleted!.id, originConnectionId: 'delete-origin' }))
+			.resolves
+			.toEqual({ success: true });
+
+		await expect(screenService().updateModeConfig(selecting.id, eventId, 'standings', { headerText: 'After delete' }))
+			.resolves
+			.toMatchObject({ modeConfigs: { standings: expect.objectContaining({ headerText: 'After delete' }) } });
+		const later = await screenService().findById(selecting.id, eventId);
+		expect(later?.modeConfigs?.deck?.deckSource).toEqual({ type: 'player', playerId: null });
+		expect(later?.stateVersion).toBe(selecting.stateVersion + 2);
+		expect(mockPublication.screenUpdated).toHaveBeenCalledOnce();
+		expect(mockPublication.screenUpdated).toHaveBeenCalledWith({
+			eventId,
+			entity: expect.objectContaining({ id: selecting.id, stateVersion: selecting.stateVersion + 1 }),
+		});
+		// The deleting client holds the Screen at its old version too.
+		expect(mockPublication.screenUpdated.mock.calls[0]?.[0]).not.toHaveProperty('originConnectionId');
+		expect(await screenService().findById(bystander.id, eventId)).toMatchObject({
+			stateVersion: bystander.stateVersion,
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+		});
+	});
+
+	it('clears the Deck Sources of the Players a Melee data reset deletes, and answers the Screens it cleared', async () => {
+		const [imported] = await db.insert(schema.players).values({
+			eventId,
+			name: 'Imported Player',
+			externalSource: 'melee',
+			externalId: 'melee-651',
+		}).returning({ id: schema.players.id });
+		const selecting = await screenService().create(eventId, {
+			name: 'Selects Imported',
+			slug: 'selects-imported',
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId: imported!.id } } },
+		} as never, capability('selects-imported'));
+		const manual = await screenService().create(eventId, {
+			name: 'Selects Manual',
+			slug: 'selects-manual',
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+		} as never, capability('selects-manual'));
+
+		const reset = await eventService().updateMeleeConfig(eventId, { meleeEnabled: false, meleeEventId: null, meleeClientId: null });
+
+		expect(reset?.clearedScreens).toEqual([expect.objectContaining({ id: selecting.id, stateVersion: selecting.stateVersion + 1 })]);
+		expect(await screenService().findById(selecting.id, eventId)).toMatchObject({
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId: null } } },
+		});
+		expect(await screenService().findById(manual.id, eventId)).toMatchObject({
+			stateVersion: manual.stateVersion,
+			modeConfigs: { deck: { deckSource: { type: 'player', playerId } } },
+		});
+		await expect(screenService().updateModeConfig(selecting.id, eventId, 'standings', { headerText: 'After reset' }))
+			.resolves
+			.toBeDefined();
 	});
 });

@@ -64,7 +64,7 @@ describe('playerUpdateModule', () => {
 		mockArchetypeService.findById.mockResolvedValue(createMockArchetype({ id: 3, name: 'Control' }));
 		mockPlayerService.create.mockResolvedValue(createMockPlayer({ id: 9, name: 'New Player' }));
 		mockPlayerService.update.mockResolvedValue(createMockPlayer({ id: 5, name: 'Updated Player' }));
-		mockPlayerService.remove.mockResolvedValue(true);
+		mockPlayerService.remove.mockResolvedValue({ deleted: true, clearedScreens: [] });
 		mockPlayerDeckService.reconcilePrimaryArchetype.mockResolvedValue(null);
 		mockPlayerDeckService.reviewDeck.mockResolvedValue({
 			deck: { id: 21, playerId: 5 },
@@ -220,7 +220,7 @@ describe('playerUpdateModule', () => {
 	});
 
 	it('returns 404 when deleting a missing Player', async () => {
-		mockPlayerService.remove.mockResolvedValue(false);
+		mockPlayerService.remove.mockResolvedValue({ deleted: false, clearedScreens: [] });
 
 		await expect(playerUpdateModule().deletePlayer({
 			eventId: 1,

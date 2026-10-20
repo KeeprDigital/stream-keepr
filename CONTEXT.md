@@ -637,6 +637,7 @@ _Avoid_: Dummy data, test data
 - A **Screen** has exactly one current **Screen Mode**
 - A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, or one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled
 - A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the whole **Event** is the cascade exception
+- Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0032)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame
 - A graphics **Screen Output** uses one stable Screen URL with an output selection; an omitted or invalid selection renders the **Overlay Output**
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying
