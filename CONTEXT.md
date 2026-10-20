@@ -123,7 +123,7 @@ Where a Screen's own image or video comes from: one exact Graphic Asset Revision
 _Avoid_: media URL, asset source
 
 **Remote Media URL**:
-A Screen Media Source naming media by URL rather than by library revision, fetched by every rendering: an HTTPS URL to media the installation does not hold, or a root-relative path to media the application serves, which is only under `/video/`; an application route such as a library content path is never one (ADR-0021). It is never a Graphic Asset Reference, so it protects nothing in the library. An HTTPS URL cannot travel in a Template Package; a root-relative path travels as data and resolves against whichever installation renders it.
+A Screen Media Source naming media by URL rather than by library revision, fetched by every rendering: an HTTPS URL to media the installation does not hold, or a root-relative path to media the application serves, which is only under `/video/`, never a route that serves Graphic Asset Content (ADR-0021). It is never a Graphic Asset Reference, so it protects nothing in the library. An HTTPS URL cannot travel in a Template Package; a root-relative path travels as data and resolves against whichever installation renders it.
 _Avoid_: hotlink, external asset
 
 **Animation Effect**:

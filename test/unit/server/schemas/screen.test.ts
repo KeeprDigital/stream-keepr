@@ -723,6 +723,18 @@ describe('a root-relative Remote Media URL', () => {
 			expect(accepts(url), JSON.stringify(url)).toBe(false);
 	});
 
+	it.each(hosts)('is refused as an https: URL with no authority, which a Screen resolves against its own origin, by %s', (_host, accepts) => {
+		// `https:/api/…` parses alone as host `api`, but a browser resolves it
+		// against the page, so it would name the application's own route.
+		for (const url of [
+			'https:/api/graphics-assets/asset-1/revisions/revision-1/content',
+			'HTTPS:/api/events',
+			'https:\\api/events',
+			'https:api/events',
+		])
+			expect(accepts(url), url).toBe(false);
+	});
+
 	it.each(hosts)('leaves HTTPS and the unset empty string as they were for %s', (_host, accepts) => {
 		expect(accepts('https://cdn.example.com/api/loop.mp4')).toBe(true);
 		expect(accepts('')).toBe(true);

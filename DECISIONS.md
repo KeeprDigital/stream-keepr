@@ -521,7 +521,7 @@ Every output that matters is Chromium: broadcast software captures a browser sou
 
 ## ADR-0021: A Screen Media Source is for a Screen's own media; graphics content stays library-only
 
-Accepted · 2026-10-15 · [#484](https://github.com/KeeprDigital/stream-keepr/issues/484) · amended 2026-10-21 · [#582](https://github.com/KeeprDigital/stream-keepr/issues/582)
+Accepted · 2026-10-15, amended under #582 · [#484](https://github.com/KeeprDigital/stream-keepr/issues/484)
 
 ### Decision
 
@@ -529,7 +529,7 @@ Accepted · 2026-10-15 · [#484](https://github.com/KeeprDigital/stream-keepr/is
 
 In code it is `ScreenMediaSource` (`{ kind: 'asset', assetId, revisionId } | { kind: 'url', url }`), never `MediaSource`, which would shadow the browser global. The Frame takes it as-is: `backgroundImage` becomes a `ScreenMediaSource`, and `mediaBackground` becomes `{ enabled, source, fit, opacity, playbackRate, loop }` with no `type`, its library arm limited to silent video. One shared picker component serves every host.
 
-A Remote Media URL is HTTPS or root-relative, and the empty string means unset. A root-relative path must name media the application serves: it is taken only under an allowlist of app-served media prefixes, today `/video/` alone (`APP_SERVED_MEDIA_PATH_PREFIXES`, `shared/utils/remoteMediaUrl.ts`). Every other same-origin path is refused, as is any path that could leave the prefix once resolved or percent-decoded (dot segments, encoded separators or dots, backslashes, control characters, a second encoding layer). The schema and the editor share the rule and its wording.
+A Remote Media URL is HTTPS or root-relative, and the empty string means unset. A root-relative path must name media the application serves: it is taken only under an allowlist of app-served media prefixes, today `/video/` alone (`APP_SERVED_MEDIA_PATH_PREFIXES`, `shared/utils/remoteMediaUrl.ts`). Every other same-origin path is refused, as is any path that could leave the prefix once resolved or percent-decoded: a dot segment however spelled or encoded, a backslash, whitespace or a control character, or a second encoding layer. An HTTPS URL must carry its `//` authority, because `https:/api/…` resolves against the Screen's own origin. The schema and the editor share the rule and its wording.
 
 ### Why
 

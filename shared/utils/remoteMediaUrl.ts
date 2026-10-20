@@ -1,15 +1,8 @@
 /**
  * Where the application serves media of its own: the root-relative prefixes a
- * Remote Media URL may name (ADR-0021, #582).
- *
- * Only `/video/`: it is the one directory under `public/` holding media a Screen
- * draws (the bundled `loop.mp4`). `public/` also serves `/fonts/` (fonts are not a
- * Screen Media Source), `/_acceptance/` (environment probe pages) and
- * `/favicon.ico`, none of which is a background. Every other same-origin path is
- * an application route — above all the library's `/api/` content routes, which
- * preview with the author's session, answer nothing to a Screen Output, and
- * protect no revision — so the list allows rather than denies, and a new route
- * cannot reopen the gap.
+ * Remote Media URL may name. Only `/video/`, the one `public/` directory holding
+ * Screen media; an allowlist, so a new route cannot become a media source
+ * (ADR-0021 says why, #582).
  */
 export const APP_SERVED_MEDIA_PATH_PREFIXES = ['/video/'] as const;
 
@@ -60,7 +53,15 @@ function isAppServedMediaPath(value: string): boolean {
 	);
 }
 
+/**
+ * An absolute HTTPS URL, spelled with its `//` authority. Parsed alone,
+ * `https:/api/…` or `https:api/…` reads as host `api`, but a browser resolves
+ * either against the page that draws it, so it would name the application's own
+ * route rather than another host.
+ */
 function isHttpsUrl(value: string): boolean {
+	if (!/^https:\/\//i.test(value))
+		return false;
 	try {
 		const parsed = new URL(value);
 		return parsed.protocol === 'https:'
@@ -88,5 +89,5 @@ export function remoteMediaUrlRefusal(value: string): string | undefined {
 			? undefined
 			: `A root-relative Remote Media URL must name a file the application serves under ${APP_SERVED_MEDIA_PATH_PREFIXES.join(' or ')}. For Graphics Asset Library media, choose the asset from the Asset library instead.`;
 	}
-	return `A Remote Media URL must be HTTPS or a root-relative path under ${APP_SERVED_MEDIA_PATH_PREFIXES.join(' or ')}`;
+	return `A Remote Media URL must be HTTPS or a root-relative path under ${APP_SERVED_MEDIA_PATH_PREFIXES.join(' or ')}.`;
 }

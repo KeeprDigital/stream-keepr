@@ -228,7 +228,7 @@ const optionalCssColorSchema = cssColorSchema.optional();
  * empty means unset (ADR-0021). The rule and its wording live in
  * `remoteMediaUrlRefusal`, which the editor shows before a save is attempted.
  */
-const safeMediaUrlSchema = z.string().max(2000).superRefine((value, context) => {
+const remoteMediaUrlSchema = z.string().max(2000).superRefine((value, context) => {
 	const refusal = remoteMediaUrlRefusal(value);
 	if (refusal !== undefined)
 		context.addIssue({ code: 'custom', message: refusal });
@@ -302,7 +302,7 @@ const screenMediaSourceSchema = z.discriminatedUnion('kind', [
 	}).strict(),
 	z.object({
 		kind: z.literal('url'),
-		url: safeMediaUrlSchema,
+		url: remoteMediaUrlSchema,
 	}).strict(),
 ]);
 
