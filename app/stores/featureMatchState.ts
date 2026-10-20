@@ -13,6 +13,12 @@ import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/cl
 import { createLiveStateFollower } from '~/modules/live-state/follower';
 import { createOptimisticState } from '~/modules/optimistic-state';
 
+/** A Slot read or announcement, as far as its Session orders it. */
+interface OfferedSlot {
+	id: number;
+	activeSession?: FeatureMatchSessionResponse | null;
+}
+
 export const useFeatureMatchStateStore = defineStore('featureMatchState', () => {
 	const repo = useFeatureMatchSessionClient();
 	const { executeReporting } = useReportingAction();
@@ -214,14 +220,25 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	 * only when not behind. Answers whether the Slot is current: false when its
 	 * Session's epoch has ended, so the Slot was read before a newer promotion or
 	 * clearing and nothing it says is newer than what is held.
+	 *
+	 * A Slot with no Session is behind any Session held for it: no server path
+	 * ends a Slot's Session without opening its successor in the same commit, so
+	 * one read without a Session was read before its first opened (#658).
 	 */
-	function offerSlotSession(slot: { activeSession?: FeatureMatchSessionResponse | null }): boolean {
-		return !slot.activeSession || !follower.acceptRead(slot.activeSession).epochEnded;
+	function offerSlotSession(slot: OfferedSlot): boolean {
+		return slotIsCurrent(slot, follower.acceptRead);
 	}
 
 	/** As `offerSlotSession`, for a Slot a write answered: its Session is a command result. */
-	function settleSlotCommandResult(slot: { activeSession?: FeatureMatchSessionResponse | null }): boolean {
-		return !slot.activeSession || !follower.acceptCommandResult(slot.activeSession).epochEnded;
+	function settleSlotCommandResult(slot: OfferedSlot): boolean {
+		return slotIsCurrent(slot, follower.acceptCommandResult);
+	}
+
+	function slotIsCurrent(
+		slot: OfferedSlot,
+		offer: (session: FeatureMatchSessionResponse) => { epochEnded: boolean },
+	): boolean {
+		return slot.activeSession ? !offer(slot.activeSession).epochEnded : !heldSession(slot.id);
 	}
 
 	/**
