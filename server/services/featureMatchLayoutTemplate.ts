@@ -98,10 +98,11 @@ export function featureMatchLayoutTemplateService() {
 	};
 
 	/**
-	 * The reference facts one template write is refused on and indexes, bound once.
+	 * The reference facts one template write is refused on and indexes, as the one
+	 * JSON array both statements bind.
 	 * No reference may be retired: a template has no retained-reference path (#614).
 	 */
-	const boundReferences = (document: FeatureMatchLayoutConfig): string =>
+	const boundReferenceFacts = (document: FeatureMatchLayoutConfig): string =>
 		boundGraphicAssetReferenceFacts(templateAssetReferences(document).map(item => ({
 			...item,
 			id: crypto.randomUUID(),
@@ -115,7 +116,8 @@ export function featureMatchLayoutTemplateService() {
 	const referenceStatements = (
 		client: typeof db.$client,
 		id: string,
-		references: string,
+		/** The bound JSON array `boundReferenceFacts` encoded. */
+		referenceFacts: string,
 		referenceVersion: string,
 		now: number,
 	): D1PreparedStatement[] => [
@@ -146,13 +148,13 @@ export function featureMatchLayoutTemplateService() {
 					SELECT 1 FROM feature_match_layout_templates
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
-		`).bind(id, now, now, references, id, referenceVersion),
+		`).bind(id, now, now, referenceFacts, id, referenceVersion),
 	];
 
 	const create = async (input: SaveFeatureMatchLayoutTemplate): Promise<DbFeatureMatchLayoutTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const references = boundReferences(input.document);
+		const referenceFacts = boundReferenceFacts(input.document);
 		const client = db.$client;
 
 		const [inserted] = await client.batch([
@@ -172,9 +174,9 @@ export function featureMatchLayoutTemplateService() {
 				referenceVersion,
 				now,
 				now,
-				references,
+				referenceFacts,
 			),
-			...referenceStatements(client, input.id, references, referenceVersion, now),
+			...referenceStatements(client, input.id, referenceFacts, referenceVersion, now),
 		]);
 
 		if (inserted?.meta.changes !== 1)
@@ -205,7 +207,7 @@ export function featureMatchLayoutTemplateService() {
 		const document = patch.document ?? existing.document;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const references = boundReferences(document);
+		const referenceFacts = boundReferenceFacts(document);
 		const client = db.$client;
 
 		const [updated] = await client.batch([
@@ -223,9 +225,9 @@ export function featureMatchLayoutTemplateService() {
 				now,
 				id,
 				patch.revision,
-				references,
+				referenceFacts,
 			),
-			...referenceStatements(client, id, references, referenceVersion, now),
+			...referenceStatements(client, id, referenceFacts, referenceVersion, now),
 		]);
 
 		// Nothing written means a precondition failed, and its reference rows are

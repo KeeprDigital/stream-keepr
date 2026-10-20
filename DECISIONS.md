@@ -952,6 +952,8 @@ Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/is
 
 **Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
 
+**This narrows CONTEXT.md's Retired Graphic Asset**, whose existing references keep resolving. A template's do too, for every read, but a template write keeping one is refused.
+
 ### Why
 
 Both template stores checked only that a revision existed. An image Media Graphic Item could pin a font, and retired or unavailable content was accepted. The check ran only at the route, and the index insert silently skipped a revision it could not find, so a template could be stored with a reference the index never recorded. No template documents with old references exist yet, so there is nothing to keep a retained-reference exemption for.
@@ -960,6 +962,7 @@ Both template stores checked only that a revision existed. An image Media Graphi
 
 - An asset referenced by a saved template can still be retired; Retire does not check references. The template keeps its references and their index rows, so the asset stays pinned against Trash. Placing it was already refused, since a Screen takes no new retired reference. Every write to it is refused, a rename included, until the author replaces that reference in the same write or restores the asset. Unavailable content refuses writes the same way until it is repaired.
 - Trash, Revision Pruning, and purge cannot reach a referenced revision, because each one proves no reference points at it.
+- A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
 - Style Set library-wide operations (`graphicStyleSetService`) rewrite template documents without touching their Graphic Asset References or the index, and are not held to this rule.
 - A Template Package Installation writes Installed Graphics Templates through the library's own store, which already maps every reference to one exact local revision.
 

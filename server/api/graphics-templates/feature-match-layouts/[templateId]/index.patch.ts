@@ -39,9 +39,11 @@ export default defineEventHandler(async (event) => {
 	);
 
 	// Every revision re-states every reference the stored layout will hold, so a
-	// rename is held to the rule as much as a new layout is (#614).
-	const document = body.document
-		?? (await featureMatchLayoutTemplateService().findById(templateId))?.document;
+	// rename is held to the rule as much as a new layout is (#614). A rename built on
+	// a stale revision is left to the compare-and-swap, so the author hears about the
+	// revision they missed first.
+	const stored = body.document ? undefined : await featureMatchLayoutTemplateService().findById(templateId);
+	const document = body.document ?? (stored?.revision === body.revision ? stored.document : undefined);
 	if (document)
 		await assertFeatureMatchLayoutTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 
@@ -59,11 +61,11 @@ export default defineEventHandler(async (event) => {
 		return mapFeatureMatchLayoutTemplateToResponse(template);
 	}
 	catch (error) {
+		if (error instanceof FeatureMatchLayoutTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Feature Match Layout Template');
 		// A stale revision is the author's problem to resolve, not an internal fault:
 		// they are told which revision the template is actually at so they can re-read
 		// it rather than retrying blindly.
-		if (error instanceof FeatureMatchLayoutTemplateReferenceConflict)
-			throw graphicsTemplateReferenceConflict('Feature Match Layout Template');
 		if (error instanceof FeatureMatchLayoutTemplateRevisionConflict) {
 			throw createError({
 				statusCode: 409,

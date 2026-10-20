@@ -109,13 +109,14 @@ export function broadcastGraphicTemplateService() {
 	};
 
 	/**
-	 * The reference facts one template write is refused on and indexes, bound once.
+	 * The reference facts one template write is refused on and indexes, as the one
+	 * JSON array both statements bind.
 	 *
 	 * No reference is allowed to be retired, unlike a Screen's unchanged one: a
 	 * template has no retained-reference path (#614), so every write states every
 	 * reference as if it were new.
 	 */
-	const boundReferences = (document: BroadcastGraphicConfig): string =>
+	const boundReferenceFacts = (document: BroadcastGraphicConfig): string =>
 		boundGraphicAssetReferenceFacts(templateAssetReferences(document).map(item => ({
 			...item,
 			id: crypto.randomUUID(),
@@ -133,7 +134,8 @@ export function broadcastGraphicTemplateService() {
 	const referenceStatements = (
 		client: typeof db.$client,
 		id: string,
-		references: string,
+		/** The bound JSON array `boundReferenceFacts` encoded. */
+		referenceFacts: string,
 		referenceVersion: string,
 		now: number,
 	): D1PreparedStatement[] => [
@@ -164,13 +166,13 @@ export function broadcastGraphicTemplateService() {
 					SELECT 1 FROM broadcast_graphic_templates
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
-		`).bind(id, now, now, references, id, referenceVersion),
+		`).bind(id, now, now, referenceFacts, id, referenceVersion),
 	];
 
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const references = boundReferences(input.document);
+		const referenceFacts = boundReferenceFacts(input.document);
 		const client = db.$client;
 
 		const [inserted] = await client.batch([
@@ -193,9 +195,9 @@ export function broadcastGraphicTemplateService() {
 				input.document.styleSet?.revision ?? null,
 				now,
 				now,
-				references,
+				referenceFacts,
 			),
-			...referenceStatements(client, input.id, references, referenceVersion, now),
+			...referenceStatements(client, input.id, referenceFacts, referenceVersion, now),
 		]);
 
 		if (inserted?.meta.changes !== 1)
@@ -231,7 +233,7 @@ export function broadcastGraphicTemplateService() {
 		const document = patch.document ?? existing.document;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const references = boundReferences(document);
+		const referenceFacts = boundReferenceFacts(document);
 		const client = db.$client;
 
 		const [updated] = await client.batch([
@@ -252,9 +254,9 @@ export function broadcastGraphicTemplateService() {
 				now,
 				id,
 				patch.revision,
-				references,
+				referenceFacts,
 			),
-			...referenceStatements(client, id, references, referenceVersion, now),
+			...referenceStatements(client, id, referenceFacts, referenceVersion, now),
 		]);
 
 		// Nothing written means a precondition failed. Its reference rows are

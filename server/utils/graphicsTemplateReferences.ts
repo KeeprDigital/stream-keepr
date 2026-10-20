@@ -3,6 +3,9 @@ import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset'
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
 
+/** Which graphics Template library a write belongs to, as an author reads it. */
+export type GraphicsTemplateArtifact = 'Broadcast Graphic Template' | 'Feature Match Layout Template';
+
 const KIND_NOUNS: Record<ScreenGraphicAssetReference['kind'], string> = {
 	'image': 'an image',
 	'silent-video': 'a silent video',
@@ -53,7 +56,7 @@ function refusal(
 export async function assertGraphicsTemplateReferencesSelectable(
 	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
 	references: readonly ScreenGraphicAssetReference[],
-	artifact: 'Broadcast Graphic Template' | 'Feature Match Layout Template',
+	artifact: GraphicsTemplateArtifact,
 ): Promise<void> {
 	if (references.length === 0)
 		return;
@@ -79,9 +82,7 @@ export async function assertGraphicsTemplateReferencesSelectable(
 }
 
 /** The answer a template store's commit-time reference refusal becomes. */
-export function graphicsTemplateReferenceConflict(
-	artifact: 'Broadcast Graphic Template' | 'Feature Match Layout Template',
-) {
+export function graphicsTemplateReferenceConflict(artifact: GraphicsTemplateArtifact) {
 	return createError({
 		statusCode: 409,
 		statusMessage: 'Conflict',

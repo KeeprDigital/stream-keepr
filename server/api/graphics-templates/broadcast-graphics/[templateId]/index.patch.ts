@@ -41,9 +41,11 @@ export default defineEventHandler(async (event) => {
 	);
 
 	// Every revision re-states every reference the stored document will hold, so a
-	// rename is held to the rule as much as a new composition is (#614).
-	const document = body.document
-		?? (await broadcastGraphicTemplateService().findById(templateId))?.document;
+	// rename is held to the rule as much as a new composition is (#614). A rename
+	// built on a stale revision is left to the compare-and-swap, so the author hears
+	// about the revision they missed before anything in a document they never read.
+	const stored = body.document ? undefined : await broadcastGraphicTemplateService().findById(templateId);
+	const document = body.document ?? (stored?.revision === body.revision ? stored.document : undefined);
 	if (document)
 		await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 	if (body.document)
@@ -63,11 +65,11 @@ export default defineEventHandler(async (event) => {
 		return mapBroadcastGraphicTemplateToResponse(template);
 	}
 	catch (error) {
+		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
 		// A stale revision is the author's problem to resolve, not an internal fault:
 		// they are told which revision the template is actually at so they can re-read
 		// it rather than retrying blindly.
-		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
-			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
 		if (error instanceof BroadcastGraphicTemplateRevisionConflict) {
 			throw createError({
 				statusCode: 409,

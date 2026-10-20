@@ -383,7 +383,7 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 A stable-identity library resource for a validated image, silent video, or font, owned by the installation-wide Graphics Asset Library and reusable across Events. Events may associate with or reference one but never own it.
 
 **Retired Graphic Asset**:
-A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. It may be restored.
+A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. A Broadcast Graphic Template or Feature Match Layout Template keeping a reference to one cannot be revised (ADR-0034). It may be restored.
 
 **Trashed Graphic Asset**:
 An unreferenced Graphic Asset removed from discovery and new references, restorable for 30 days; afterwards it is purged only after a fresh proof that no reference points to any revision.

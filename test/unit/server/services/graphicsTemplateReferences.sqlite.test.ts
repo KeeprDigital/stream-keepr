@@ -276,6 +276,37 @@ describe('a Feature Match Layout Template write', () => {
 		expect(await indexedSlots(OWNER, 'layout')).toEqual([]);
 	});
 
+	it('refuses to create a template referencing a retired asset', async () => {
+		await retire(RETIRING_IMAGE);
+
+		await expect(featureMatchLayoutTemplateService().create({
+			id: 'layout',
+			name: 'Layout',
+			description: null,
+			document: featureMatchLayout(IMAGE, media('logo', RETIRING_IMAGE)),
+		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
+
+		expect(await featureMatchLayoutTemplateService().findById('layout')).toBeUndefined();
+	});
+
+	it('refuses a revision that introduces an asset of the wrong kind', async () => {
+		const created = await featureMatchLayoutTemplateService().create({
+			id: 'layout',
+			name: 'Layout',
+			description: null,
+			document: featureMatchLayout(IMAGE),
+		});
+
+		await expect(featureMatchLayoutTemplateService().update('layout', {
+			document: featureMatchLayout(IMAGE, media('logo', FONT)),
+			revision: created.revision,
+		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
+
+		expect((await featureMatchLayoutTemplateService().findById('layout'))?.document)
+			.toEqual(featureMatchLayout(IMAGE));
+		expect(await indexedSlots(OWNER, 'layout')).toEqual(['layout.frame.backgroundImage']);
+	});
+
 	it('refuses a revision once an asset it references is retired, leaving the template and its index as they were', async () => {
 		const created = await featureMatchLayoutTemplateService().create({
 			id: 'layout',
