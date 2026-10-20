@@ -11,8 +11,9 @@
 #   - PRs only, never on push to main. main's ruleset admits only squash
 #     merges of PRs whose `CI passed` was green, and deploys ship released
 #     tags, so re-running the same gates on the merge commit adds no signal.
-#   - Not on draft PRs. `pnpm verify` is the gate while a branch is in
-#     progress; marking the PR ready for review runs CI.
+#   - Not on draft PRs. `pnpm verify:quick` is the gate while a branch is in
+#     progress; marking the PR ready for review runs CI, the full gate, so
+#     nobody runs `pnpm verify` locally just to repeat it.
 #   - Only the jobs a change can affect: none for docs or other workflows, no
 #     Worker build for tests alone (the `scope` job decides).
 #   - A newer push cancels the run it supersedes.

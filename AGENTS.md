@@ -3,13 +3,15 @@ holds only what an agent must follow.
 
 ## Before pushing
 
-Run `pnpm verify` before pushing: it applies CI's gates to the working tree and
-stops at the first failure. Its tail (`worker:dry-run`, `worker:smoke`) is the
-only local check that the Worker bundle runs on workerd, so any change touching
-dependencies, bundling, `nuxt.config.ts`, or server code needs it; `pnpm test`
-does not cover it. Iterate with `pnpm verify:quick` (lint, typecheck, unit and
-Nuxt suites); finish with `pnpm verify`. Commit `pnpm-lock.yaml` with any
-`package.json` change that affects dependency resolution.
+Push once `pnpm verify:quick` (lint, typecheck, unit and Nuxt suites) passes;
+CI is the full gate. Open the PR as a draft, which CI skips, and mark it ready
+when the branch is done: that runs every gate `pnpm verify` runs, Worker build
+and workerd smoke included. Realtime integration tests are the exception: CI
+has no Ably key, so they run only against your local `.env`. A change touching
+realtime needs `pnpm test:integration --run` green before you mark it ready.
+Reach for `pnpm verify` to reproduce a CI failure locally. Commit
+`pnpm-lock.yaml` with any `package.json` change that affects dependency
+resolution.
 
 ## Landing on main
 
