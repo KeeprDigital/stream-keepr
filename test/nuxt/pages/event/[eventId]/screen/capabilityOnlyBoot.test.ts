@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useCardStore } from '~/stores/card';
+import { usePlayerStore } from '~/stores/player';
 import { useScreenStore } from '~/stores/screen';
 import { resetAllEventStores } from '~/utils/eventStores';
 
@@ -119,6 +120,21 @@ function history(name: string, result: Record<string, unknown> = {}) {
 			resultString: null,
 			...result,
 		}],
+	};
+}
+
+function topCards(name: string) {
+	return {
+		entries: [{ id: 1, name, inclusionRate: 80, avgCopies: 4, totalCopies: 16, deckCount: 4, mainboardCount: 16, sideboardCount: 0, mainboardDeckCount: 4, sideboardDeckCount: 0, cardType: 'Instant', scryfallId: null, colors: 'R', cmc: 1, manaCost: '{R}' }],
+		totalDecks: 5,
+		scope: 'all',
+	};
+}
+
+function metagame(archetype: string) {
+	return {
+		viewMode: 'archetype',
+		breakdown: { entries: [{ name: archetype, count: 2, metaShare: 100, colors: 'R' }], totalPlayers: 2, scope: 'all' },
 	};
 }
 
@@ -255,6 +271,62 @@ describe('a capability-only Screen Output', () => {
 		await settleUntil(() => wrapper.text().includes('LOSS'));
 
 		expect(wrapper.text()).toContain('LOSS');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	it('follows a deck review on a Top Cards output, with no roster or settings panel loaded', async () => {
+		api.screen = screen({ currentMode: 'top-cards', modeConfigs: { 'top-cards': { showCardNames: true } } });
+		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Lightning Bolt'));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Lightning Bolt'),
+		);
+
+		// Reviewed in another browser: no Player record, Screen configuration or
+		// roster changes, so only the aggregate's own invalidation says to re-read.
+		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Counterspell'));
+		realtime().deliver('event:42', 'playerDeck:reviewed', { eventId: 42, deck: { id: 3, playerId: 11 } });
+		await settleUntil(() => wrapper.text().includes('Counterspell'));
+
+		expect(wrapper.text()).toContain('Counterspell');
+		expect(usePlayerStore().dataVersion).toBe(0);
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	it('follows membership of the Player List driving a Metagame output, with no roster or settings panel loaded', async () => {
+		api.screen = screen({ currentMode: 'metagame', modeConfigs: { metagame: { scope: 'playerList', playerListId: 5 } } });
+		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Mono Red'));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Mono Red'),
+		);
+
+		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Azorius Control'));
+		realtime().deliver('event:42', 'playerList:membersChanged', { eventId: 42, listId: 5, playerIds: [12], action: 'added', memberCount: 2 });
+		await settleUntil(() => wrapper.text().includes('Azorius Control'));
+
+		expect(wrapper.text()).toContain('Azorius Control');
+		expect(usePlayerStore().dataVersion).toBe(0);
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	it('shows a Metagame change missed while disconnected once its Event channel is attached again', async () => {
+		api.screen = screen({ currentMode: 'metagame', modeConfigs: { metagame: {} } });
+		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Mono Red'));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Mono Red'),
+		);
+
+		realtime().connectionState = 'suspended';
+		await flushPromises();
+		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Azorius Control'));
+		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
+		realtime().connectionState = 'connected';
+		realtime().reattach('event:42');
+		await settleUntil(() => wrapper.text().includes('Azorius Control'));
+
+		expect(wrapper.text()).toContain('Azorius Control');
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 

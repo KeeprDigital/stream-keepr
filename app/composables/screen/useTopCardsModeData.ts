@@ -1,18 +1,36 @@
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
+import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
+import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 export function useTopCardsModeData() {
+	const { eventId } = useScreenContext();
 	const config = useScreenModeConfig('top-cards');
-
-	const playerStore = usePlayerStore();
 	const outputReads = useScreenOutputReads();
 
-	const displayData = useBroadcastDisplayData<{ cardData: CardBreakdownResponse | null }>({
-		initialData: { cardData: null },
+	// The server derives the breakdown from the saved configuration (#604), so
+	// the read changes with the configuration fields it depends on.
+	const freshness = useScreenModeFreshness<CardBreakdownResponse | null>({
+		eventId,
+		source: () => outputReads.scopeKey.value && JSON.stringify([
+			outputReads.scopeKey.value,
+			config.value.scope,
+			config.value.topN,
+			config.value.playerListId,
+			config.value.archetypeFilter,
+			config.value.board,
+			config.value.sortBy,
+			config.value.limit,
+			config.value.excludedCardTypes,
+		]),
+		read: () => outputReads.topCards(),
+		initialData: null,
+		errorMessage: 'Failed to load top cards data',
+		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
-	const loading = displayData.loading;
-	const error = displayData.error;
+	const loading = freshness.loading;
+	const error = freshness.error;
 
-	const cardData = computed(() => displayData.data.value.cardData);
+	const cardData = computed(() => freshness.data.value);
 	const entries = computed(() => cardData.value?.entries ?? []);
 
 	// ── Header ──
@@ -31,20 +49,6 @@ export function useTopCardsModeData() {
 			: `${prefix}Most Played Cards`;
 	});
 
-	// ── Data Loading ──
-	async function fetchData() {
-		if (!outputReads.scope.value) {
-			error.value = 'No event loaded';
-			displayData.clear();
-			return;
-		}
-
-		// Derived on the server from the saved configuration (#604).
-		await displayData.refresh(async () => ({
-			cardData: await outputReads.topCards(),
-		}), 'Failed to load top cards data');
-	}
-
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && entries.value.length === 0);
 	// Read off the breakdown: an output holds no roster to count (#604).
@@ -55,30 +59,6 @@ export function useTopCardsModeData() {
 		return 'No card data available';
 	});
 
-	// ── Watchers ──
-	// Refetch when any scope, filter, or ranking param changes
-	watch(
-		() => [
-			outputReads.scopeKey.value,
-			config.value.scope,
-			config.value.topN,
-			config.value.playerListId,
-			config.value.archetypeFilter,
-			config.value.board,
-			config.value.sortBy,
-			config.value.limit,
-			config.value.excludedCardTypes,
-		],
-		() => fetchData(),
-		{ immediate: true },
-	);
-
-	// Refetch when any player data changes (realtime updates, syncs, edits)
-	watch(
-		() => playerStore.dataVersion,
-		() => fetchData(),
-	);
-
 	return {
 		config,
 		loading,
@@ -88,6 +68,5 @@ export function useTopCardsModeData() {
 		headerText,
 		cardData,
 		entries,
-		fetchData,
 	};
 }
