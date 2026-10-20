@@ -95,6 +95,10 @@ The live state timeline for a Feature Match Slot.
 **Feature Match Slot Promotion**:
 The workflow that promotes a Match into a Feature Match Slot for production controls and saves the Round-scoped Feature Match Assignment.
 
+**Reverse Sync**:
+The follow-on that copies Players' current data into every Feature Match Slot seating them, and into each such Slot's active Feature Match Session source snapshot. It runs after the Player write, Melee Sync or Feature Match Slot Promotion that caused it has committed, and announces nothing itself: its caller's own messages carry the result. A lost Session race is absorbed, and the next pass finds the same difference.
+_Avoid_: player sync, match snapshot refresh.
+
 ### Screens
 
 **Screen**:

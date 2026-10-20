@@ -2,10 +2,10 @@ import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbFeatureMatc
 import type { ArchetypeKeyCard } from '~~/server/services/archetypeCard';
 import type { BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckList';
 import type { MessagePayload, MessageType } from '~~/shared/types/messages';
+import type { EventDataMessage } from './messages';
 import { mapArchetypeToResponse } from '~~/server/mappers/archetype';
 import { mapEventToResponse } from '~~/server/mappers/event';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
-import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { mapMatchToResponse } from '~~/server/mappers/match';
 import { mapPhaseToResponse } from '~~/server/mappers/phase';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
@@ -17,6 +17,9 @@ import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
+import { featureMatchMessages } from './messages';
+
+export type { EventDataMessage } from './messages';
 
 interface PublicationInput {
 	eventId: number;
@@ -33,6 +36,10 @@ interface DeletedPublicationInput extends PublicationInput {
 
 interface FeatureMatchSlotsUpdatedInput extends PublicationInput {
 	slotIds: number[];
+}
+
+interface FeatureMatchSlotPromotedInput extends PublicationInput {
+	messages: readonly EventDataMessage[];
 }
 
 interface FeatureMatchSlotsReorderedInput extends PublicationInput {
@@ -124,25 +131,32 @@ async function publishEventDataChange<T extends MessageType>(
 	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
 	originConnectionId?: string,
 ): Promise<void> {
-	await publishEventDataMessage(eventId, messageType, payload, originConnectionId);
+	await publishMessage(eventId, messageType, payload, originConnectionId);
 	await refreshBroadcastGraphicsBindings(eventId);
 }
 
 /**
- * The announcement half on its own, for a caller publishing a run of related changes.
+ * Announce a run of related Event Data changes, in order, and let anything resolving
+ * against them catch up once.
  *
  * The re-resolution is per Event rather than per message, so a caller that publishes
  * several in one operation catches its Broadcast Graphics up once at the end instead
  * of once per message — the same work, done once. Every caller that publishes exactly
  * one change uses `publishEventDataChange` and never sees this.
  */
-async function publishEventDataMessage<T extends MessageType>(
+async function publishEventDataMessages(
 	eventId: number,
-	messageType: T,
-	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
+	messages: readonly EventDataMessage[],
 	originConnectionId?: string,
 ): Promise<void> {
-	await publishMessage(eventId, messageType, payload, originConnectionId);
+	if (messages.length === 0)
+		return;
+	for (const message of messages) {
+		// The pairing of type and payload is what `EventDataMessage` guarantees; a
+		// union cannot carry it through `publishMessage`'s per-type overloads.
+		await publishMessage(eventId, message.type, message.payload as never, originConnectionId);
+	}
+	await refreshBroadcastGraphicsBindings(eventId);
 }
 
 async function publishSyncMessage<T extends MessageType>(
@@ -353,9 +367,9 @@ export function eventDataPublicationModule() {
 	}
 
 	async function featureMatchSlotUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatch>) {
-		const featureMatch = mapFeatureMatchToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatch:updated', { featureMatch }, originConnectionId);
-		return featureMatch;
+		const message = featureMatchMessages.slotUpdated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatch;
 	}
 
 	async function featureMatchSlotDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
@@ -369,19 +383,19 @@ export function eventDataPublicationModule() {
 	}
 
 	async function featureMatchAssignmentCreated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
-		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatchAssignment:created', { featureMatchAssignment }, originConnectionId);
-		return featureMatchAssignment;
+		const message = featureMatchMessages.assignmentCreated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatchAssignment;
 	}
 
 	async function featureMatchAssignmentUpdated({ eventId, entity, originConnectionId }: EntityPublicationInput<DbFeatureMatchAssignment>) {
-		const featureMatchAssignment = mapFeatureMatchAssignmentToResponse(entity);
-		await publishEventDataChange(eventId, 'featureMatchAssignment:updated', { featureMatchAssignment }, originConnectionId);
-		return featureMatchAssignment;
+		const message = featureMatchMessages.assignmentUpdated(entity);
+		await publishEventDataMessages(eventId, [message], originConnectionId);
+		return message.payload.featureMatchAssignment;
 	}
 
 	async function featureMatchAssignmentDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
-		await publishEventDataChange(eventId, 'featureMatchAssignment:deleted', { featureMatchAssignmentId: id }, originConnectionId);
+		await publishEventDataMessages(eventId, [featureMatchMessages.assignmentDeleted(id)], originConnectionId);
 	}
 
 	/*
@@ -425,26 +439,27 @@ export function eventDataPublicationModule() {
 		// iterating slotIds and looking up each in the fetched map.
 		const slots = await featureMatchService().findByEventId(eventId);
 		const slotsById = new Map(slots.map(slot => [slot.id, slot]));
-		const published = [];
-
-		for (const slotId of slotIds) {
+		const messages = slotIds.flatMap((slotId) => {
 			const slot = slotsById.get(slotId);
-			if (!slot)
-				continue;
-			const featureMatch = mapFeatureMatchToResponse(slot);
-			// Announced one by one, because each message names one Slot.
-			await publishEventDataMessage(eventId, 'featureMatch:updated', { featureMatch }, originConnectionId);
-			published.push(featureMatch);
-		}
+			return slot ? [featureMatchMessages.slotUpdated(slot)] : [];
+		});
 
-		// Caught up once, because re-resolution is per Event and not per Slot. Fifty Slots
-		// moving in one operation is one Event Data change as far as a Graphic Input
-		// Binding is concerned, and sweeping per Slot would repeat the whole Event's work
-		// fifty times inside one request.
-		if (published.length > 0)
-			await refreshBroadcastGraphicsBindings(eventId);
+		// Announced one by one, because each message names one Slot, and caught up once,
+		// because re-resolution is per Event and not per Slot. Fifty Slots moving in one
+		// operation is one Event Data change as far as a Graphic Input Binding is
+		// concerned, and sweeping per Slot would repeat the whole Event's work fifty
+		// times inside one request.
+		await publishEventDataMessages(eventId, messages, originConnectionId);
 
-		return published;
+		return messages.map(message => message.payload.featureMatch);
+	}
+
+	/**
+	 * Publish a Feature Match Slot Promotion's messages, decided before any is
+	 * published, as one change: Graphic Input Bindings re-resolve once for the lot.
+	 */
+	async function featureMatchSlotPromoted({ eventId, messages, originConnectionId }: FeatureMatchSlotPromotedInput) {
+		await publishEventDataMessages(eventId, messages, originConnectionId);
 	}
 
 	async function roundMatchesRefreshed({ eventId, originConnectionId, ...payload }: RoundMatchesRefreshedInput) {
@@ -529,6 +544,7 @@ export function eventDataPublicationModule() {
 		screenUpdated,
 		screenDeleted,
 		featureMatchSlotsUpdated,
+		featureMatchSlotPromoted,
 		roundMatchesRefreshed,
 		meleeDeckListsSynced,
 		meleePlayersSynced,

@@ -1,7 +1,6 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { FeatureMatchNoteDiscardConfirmation, FeatureMatchPromotionResponse } from '~~/shared/api';
 import { db } from '~~/server/db';
-import { mapFeatureMatchAssignmentToResponse } from '~~/server/mappers/featureMatchAssignment';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { buildAssignmentDisplacementGuardQuery, buildUpsertAssignmentQueries, featureMatchAssignmentService, isAssignmentDisplacementGuardViolation } from '~~/server/services/featureMatchAssignment';
@@ -10,6 +9,7 @@ import { buildMatchPromotionPlan, isMatchPromotionPlanStaleViolation, matchServi
 import { playerFeatureMatchSyncService } from '~~/server/services/playerFeatureMatchSync';
 import { StateConflictError } from '~~/server/utils/errors';
 import { hasExactNoteDiscardConfirmation, throwFeatureMatchNoteDiscardRequired } from '~~/server/utils/featureMatchNoteDiscard';
+import { decidePromotion } from './decision';
 
 /**
  * Whether a write failed because two Feature Match Slots would have held one
@@ -38,8 +38,9 @@ interface PromoteMatchToSlotInput {
  *
  * Owns the operator workflow for promoting a Match into a Feature Match Slot:
  * Slot/Match validation, duplicate Slot clearing, Feature Match Assignment
- * persistence, Feature Match Session resets, response mapping, and realtime
- * Event Data publication.
+ * persistence, Feature Match Session resets, and running its outcome's
+ * publication. What that outcome is, and what it publishes and answers, is
+ * decided purely in `./decision`.
  */
 export function featureMatchPromotionModule() {
 	const matches = matchService();
@@ -139,83 +140,52 @@ export function featureMatchPromotionModule() {
 			throw new StateConflictError('Feature match assignment', assignmentToDisplace?.id ?? slotId);
 		}
 
-		const assignment = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
-		// Decide this promotion's outcome before anything is published. The batch
-		// committed, so this Slot did hold the Match; if another promotion has
-		// moved it off since, this one is answered as lost, and a peer must not be
-		// shown a promotion its operator was told failed (#576). Read after the
-		// Assignment, so a move that carried the Assignment to another Slot shows
-		// here too, rather than as a missing Assignment.
+		// Decide this promotion's outcome from what its commit left, before
+		// anything is published (#576, #577). The Assignment is read before the
+		// Slot, so a move that carried the Assignment off shows as a lost promotion.
+		const committedAssignment = await assignments.findByRoundAndSlot(eventId, match.roundId, slotId);
 		const committedSlot = await slots.findById(slotId, eventId);
-		if (!committedSlot) {
-			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
-		}
-		if (committedSlot.matchId !== matchId) {
+		const decision = decidePromotion({
+			slotId,
+			matchId,
+			continuedAssignment: incomingAssignment,
+			displacedAssignment: assignmentToDisplace,
+			clearedSlotIds: plan.clearedSlots.map(cleared => cleared.id),
+		}, { slot: committedSlot, assignment: committedAssignment });
+		if (decision.outcome === 'lost')
 			throw new StateConflictError('Feature match slot', slotId);
-		}
-		if (!assignment) {
-			throw createError({ statusCode: 500, message: 'Failed to save feature match assignment' });
-		}
+		if (decision.outcome === 'failed')
+			throw createError({ statusCode: 500, message: decision.message });
 
-		// The promotion stands, so its new Sessions may be announced.
-		await sessionReplacement.settle({ originConnectionId });
+		// Which Sessions the commit opened, read as soon as the promotion is known
+		// to stand, so a later promotion's are not mistaken for its own. They are
+		// announced among the promotion's own messages, so the whole promotion
+		// re-resolves Graphic Input Bindings once.
+		const { opened } = await sessionReplacement.settle({ announce: false });
 
-		// Assignment notifications describe the authoritative batch write and must
-		// not wait behind the optional reverse-sync follow-on. If that later work
-		// faults, peers still learn about the committed Assignment lifecycle.
-		if (incomingAssignment)
-			await eventData.featureMatchAssignmentUpdated({ eventId, entity: assignment, originConnectionId });
-		else
-			await eventData.featureMatchAssignmentCreated({ eventId, entity: assignment, originConnectionId });
-		if (assignmentToDisplace && assignmentToDisplace.id !== assignment.id)
-			await eventData.featureMatchAssignmentDeleted({ eventId, id: assignmentToDisplace.id, originConnectionId });
-
-		// Reverse-sync the promoted players' latest data into the fresh Sessions.
-		// This runs after the atomic promotion: it is a read-compute-write cycle
-		// with intermediate session CAS that cannot compose into the batch, and a
-		// failure here leaves a consistent promotion (the Session simply keeps the
-		// Match's embedded snapshot until the next player update).
-		await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(
+		// Run the Reverse Sync for the promoted players before reading what to
+		// publish, so the publication carries their latest data. It runs
+		// after the atomic promotion: it is a read-compute-write cycle with
+		// intermediate session CAS that cannot compose into the batch. It
+		// announces nothing itself, and a fault is answered only once the
+		// committed promotion has been published, so peers still learn of it.
+		const reverseSync = await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(
 			eventId,
 			[match.player1Id, match.player2Id].filter((playerId): playerId is number => playerId != null),
-		);
+		).then(() => ({ faulted: false as const }), (error: unknown) => ({ faulted: true as const, error }));
 
-		const clearedSlots = [];
-		for (const clearedSlot of plan.clearedSlots) {
-			const refreshedClearedSlot = await slots.findById(clearedSlot.id, eventId);
-			if (refreshedClearedSlot) {
-				const clearedResponse = await eventData.featureMatchSlotUpdated({
-					eventId,
-					entity: refreshedClearedSlot,
-					originConnectionId,
-				});
-				clearedSlots.push(clearedResponse);
-			}
-		}
+		const [currentSlots, currentAssignment] = await Promise.all([
+			slots.findByEventId(eventId),
+			assignments.findById(eventId, decision.assignment.id),
+		]);
+		const publication = decision.publication({ slots: currentSlots, assignment: currentAssignment, openedSessions: opened });
+		if (publication.outcome === 'failed')
+			throw createError({ statusCode: 500, message: publication.message });
 
-		// Re-read for the reverse sync's snapshot. A promotion that has moved the
-		// Match off since the outcome was decided does not undo this one, whose
-		// Assignment peers have already been shown: the history is a serial
-		// "promoted, then moved" (#575). The Slot and Assignment are answered as
-		// they are now, so this operator's client cannot overwrite a move it has
-		// already applied with what this promotion committed.
-		const currentSlot = await slots.findById(slotId, eventId);
-		if (!currentSlot) {
-			throw createError({ statusCode: 500, message: 'Failed to retrieve updated feature match slot' });
-		}
-		const currentAssignment = await assignments.findById(eventId, assignment.id) ?? assignment;
-
-		const response = await eventData.featureMatchSlotUpdated({
-			eventId,
-			entity: currentSlot,
-			originConnectionId,
-		});
-
-		return {
-			promotedSlot: response,
-			clearedSlots,
-			assignment: mapFeatureMatchAssignmentToResponse(currentAssignment),
-		};
+		await eventData.featureMatchSlotPromoted({ eventId, messages: publication.messages, originConnectionId });
+		if (reverseSync.faulted)
+			throw reverseSync.error;
+		return publication.response;
 	}
 
 	return {

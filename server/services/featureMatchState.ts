@@ -15,7 +15,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
-import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
+import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
@@ -344,17 +344,8 @@ export function featureMatchStateService() {
 		 * Bindings re-resolve once for the whole change, as for any Event Data write.
 		 */
 		announce: async ({ opened }, { originConnectionId }) => {
-			for (const session of opened) {
-				const response = mapFeatureMatchSessionToResponse(session);
-				await publishMessage(session.eventId, 'featureMatchSession:eventApplied', {
-					slotId: session.slotId,
-					sessionId: response.id,
-					sequence: response.sequence,
-					eventType: 'SessionStarted',
-					sourceSnapshot: response.sourceSnapshot,
-					currentState: response.currentState,
-				}, originConnectionId);
-			}
+			for (const session of opened)
+				await publishMessage(session.eventId, 'featureMatchSession:eventApplied', mapFeatureMatchSessionToStarted(session), originConnectionId);
 			const eventId = opened[0]?.eventId;
 			if (eventId !== undefined)
 				await refreshBroadcastGraphicsBindings(eventId);
