@@ -45,17 +45,18 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	const inFlight = ref(false);
 	const hasCommitted = ref(false);
 	const pendingUpdates = ref<U>({} as U);
-	const failedUpdates = ref<U>({} as U);
 	const localOverrides = ref<U>({} as U);
-	const lastFailureMessage = ref<string | null>(null);
+	/** Each refused field's value, kept for retry, with the sentence that refused it — newest last. */
+	const refusedFields = ref<Record<string, { value: unknown; message: string }>>({});
 
 	/**
 	 * A failure is outstanding for as long as an edit it refused is (#611): a later
 	 * request landing — for an unrelated field — says nothing about it. Only a newer
-	 * edit of the refused field, or a retry, settles it.
+	 * edit of the refused field, or a retry, settles it. The sentence quoted is the
+	 * newest refusal still outstanding, so it names a slot that still needs repair.
 	 */
 	const saveError = computed<string | null>(() =>
-		Object.keys(failedUpdates.value).length > 0 ? lastFailureMessage.value : null);
+		Object.values(refusedFields.value).at(-1)?.message ?? null);
 
 	/**
 	 * The save's answer as one state a surface can show (#381): `committed` is an
@@ -93,7 +94,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	}
 
 	/**
-	 * Whether the author has replaced the value a settling request sent for `key` —
+	 * Whether the operator has replaced the value a settling request sent for `key` —
 	 * queued a newer one, or no longer shows it. The request's outcome then no
 	 * longer speaks for that field.
 	 */
@@ -117,11 +118,23 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	 * edited again while it was in flight has a newer write of its own; holding the
 	 * older value would let a retry put it back over the newer one.
 	 */
-	function recordRefusedKeys(updates: U) {
-		const refused = Object.fromEntries(
-			Object.entries(updates).filter(([key, sentValue]) => !isSuperseded(key, sentValue)),
-		);
-		failedUpdates.value = { ...failedUpdates.value, ...refused };
+	function recordRefusedKeys(updates: U, message: string) {
+		const refused = { ...refusedFields.value };
+		for (const [key, sentValue] of Object.entries(updates)) {
+			if (isSuperseded(key, sentValue))
+				continue;
+			// Re-inserted so the newest refusal stays last.
+			delete refused[key];
+			refused[key] = { value: sentValue, message };
+		}
+		refusedFields.value = refused;
+	}
+
+	function forgetRefusedKeys(keys: string[]) {
+		const refused = { ...refusedFields.value };
+		for (const key of keys)
+			delete refused[key];
+		refusedFields.value = refused;
 	}
 
 	async function flushPendingUpdates() {
@@ -158,8 +171,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 						color: 'error',
 					}),
 					onFailure: ({ message }) => {
-						lastFailureMessage.value = message || errorMessage;
-						recordRefusedKeys(updates);
+						recordRefusedKeys(updates, message || errorMessage);
 					},
 				},
 			));
@@ -188,10 +200,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 
 	function updateConfig(updates: U) {
 		saving.value = true;
-		const failed = { ...failedUpdates.value } as Record<string, unknown>;
-		for (const key of Object.keys(updates))
-			delete failed[key];
-		failedUpdates.value = failed as U;
+		forgetRefusedKeys(Object.keys(updates));
 		// Apply to local overrides immediately — UI updates this tick
 		localOverrides.value = { ...localOverrides.value, ...updates };
 		// Queue for the debounced API save
@@ -200,10 +209,12 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	}
 
 	async function retry() {
-		if (Object.keys(failedUpdates.value).length === 0)
+		const refused = Object.entries(refusedFields.value);
+		if (refused.length === 0)
 			return;
-		pendingUpdates.value = { ...failedUpdates.value, ...pendingUpdates.value };
-		failedUpdates.value = {} as U;
+		const retried = Object.fromEntries(refused.map(([key, { value }]) => [key, value])) as U;
+		pendingUpdates.value = { ...retried, ...pendingUpdates.value };
+		refusedFields.value = {};
 		saving.value = true;
 		await flushPendingUpdates();
 	}

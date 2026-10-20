@@ -381,6 +381,47 @@ describe('useConfigUpdate', () => {
 			expect(storeConfig.value).toEqual({ color: 'blue', size: 20 });
 			expect(saveState.value).toBe('committed');
 		});
+
+		it('quotes the refusal of the edit still outstanding, not of one since settled', async () => {
+			const { saveState, saveError, updateConfig, storeConfig, saveToStore } = createPersistingSetup();
+			saveToStore
+				.mockRejectedValueOnce(new Error('color refused'))
+				.mockRejectedValueOnce(new Error('size refused'));
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+			expect(saveError.value).toBe('size refused');
+
+			updateConfig({ size: 30 });
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(storeConfig.value).toEqual({ size: 30 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+		});
+
+		it('keeps an outstanding refusal\'s sentence when a superseded request fails after it', async () => {
+			const { saveState, saveError, updateConfig, storeConfig, saveToStore } = createPersistingSetup();
+			const sizeSave = deferred<unknown>();
+			saveToStore
+				.mockRejectedValueOnce(new Error('color refused'))
+				.mockImplementationOnce(() => sizeSave.promise);
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 30 });
+			sizeSave.reject(new Error('size 20 refused'));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(saveToStore).toHaveBeenLastCalledWith({ size: 30 });
+			expect(storeConfig.value).toEqual({ size: 30 });
+			expect(saveState.value).toBe('failed');
+			expect(saveError.value).toBe('color refused');
+		});
 	});
 
 	/*
