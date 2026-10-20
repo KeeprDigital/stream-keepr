@@ -2,7 +2,7 @@ import type { H3Event } from 'h3';
 import process from 'node:process';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { getCookie, setCookie } from 'h3';
+import { appendResponseHeader, getCookie, setCookie } from 'h3';
 import { db, schema } from '~~/server/db';
 import {
 	LOCAL_AUTH_BYPASS_NAME,
@@ -230,6 +230,14 @@ const REQUEST_SESSION_CONTEXT_KEY = 'userSession';
  * A configuration fault is not cached, because `serverAuth()` raises before there
  * is a promise to keep — so a request that meets a blank secret meets the same
  * 503 every time it asks, which is what the caller that swallows it expects.
+ *
+ * **The read's cookies are this request's to send (#613).** Better Auth slides a
+ * Session's expiry *inside* `getSession` once `updateAge` has passed, and reports
+ * it as a renewed session cookie on the response it would have written. Read
+ * without `returnHeaders`, the row was extended and the cookie dropped, so an
+ * open tab kept extending a Session its browser was about to forget. Forwarded
+ * here, inside the memoised promise, so it happens once per request however many
+ * identities are asked — and every cookie, including the expiry of a dead one.
  */
 export async function requestUserSession(event: H3Event): Promise<UserSession> {
 	const resolved = event.context[REQUEST_SESSION_CONTEXT_KEY] as Promise<UserSession> | undefined;
@@ -238,9 +246,21 @@ export async function requestUserSession(event: H3Event): Promise<UserSession> {
 
 	const resolving = localAuthBypassIsActive(event)
 		? Promise.resolve(localDeveloperSession(event))
-		: serverAuth().api.getSession({ headers: event.headers });
+		: readBetterAuthSession(event, serverAuth());
 	event.context[REQUEST_SESSION_CONTEXT_KEY] = resolving;
 	return await resolving;
+}
+
+/**
+ * One Better Auth session read, with the cookies it sets sent on this request's
+ * response. Handed the instance rather than calling `serverAuth()` itself, so a
+ * blank secret still raises before `requestUserSession` has a promise to keep.
+ */
+async function readBetterAuthSession(event: H3Event, auth: ServerAuth): Promise<UserSession> {
+	const { headers, response } = await auth.api.getSession({ headers: event.headers, returnHeaders: true });
+	for (const cookie of headers.getSetCookie())
+		appendResponseHeader(event, 'set-cookie', cookie);
+	return response;
 }
 
 /**

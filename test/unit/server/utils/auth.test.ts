@@ -1,3 +1,6 @@
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Socket } from 'node:net';
+import { createEvent } from 'h3';
 import { describe, expect, it, vi } from 'vitest';
 import { LOCAL_NUXT_NAME_SURFACES } from '~~/build/localConfiguration';
 import {
@@ -145,19 +148,24 @@ describe('the optional session read', () => {
  * pinned here rather than left to a hundred call sites to get right one at a time.
  */
 describe('the identities a request carries', () => {
-	async function freshAuth(session: unknown) {
+	async function freshAuth(session: unknown, headers = new Headers()) {
 		// Fresh for the reason the row above gives: `serverAuth` memoises its
 		// instance, so a suite that configured a secret in place would leave the
 		// blank-secret rows passing on where they sit in the file.
 		vi.resetModules();
 		mockUseRuntimeConfig.mockReturnValue({ betterAuthSecret: 'a-configured-secret-0000000000' });
 		const fresh = await import('~~/server/utils/auth');
-		const getSession = vi.spyOn(fresh.serverAuth().api, 'getSession').mockResolvedValue(session as never);
+		// Better Auth's `returnHeaders` answer: the session, plus the headers the
+		// read would have set on a response of its own.
+		const getSession = vi.spyOn(fresh.serverAuth().api, 'getSession')
+			.mockResolvedValue({ headers, response: session } as never);
 		return { ...fresh, getSession };
 	}
 
+	/** A real event over a real response, so the cookies a read sets can be read back off it. */
 	function requestEvent() {
-		return stubH3Event({ headers: new Headers(), context: {} });
+		const request = new IncomingMessage(new Socket());
+		return createEvent(request, new ServerResponse(request));
 	}
 
 	const signedIn = { session: { id: 'a-browser-session' }, user: { id: 'a-user' } };
@@ -215,6 +223,54 @@ describe('the identities a request carries', () => {
 		await Promise.all([requireUserId(event), optionalBrowserSessionId(event)]);
 
 		expect(getSession).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * Session renewal reaches the browser (#613).
+	 *
+	 * Better Auth slides a Session's expiry inside `getSession` and says so with a
+	 * renewed cookie in its response headers. Read without `returnHeaders`, the row
+	 * was extended and the cookie was dropped, so a long-lived tab outlived its own
+	 * cookie while the server went on extending a Session nobody could present.
+	 */
+	it('forwards every cookie a session read sets, once, however many identities the request asks for', async () => {
+		const renewal = new Headers();
+		renewal.append('set-cookie', 'better-auth.session_token=renewed; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax');
+		renewal.append('set-cookie', 'better-auth.session_data=; Max-Age=0; Path=/');
+		const { requestUserSession, requireUserId, optionalBrowserSessionId, getSession } = await freshAuth(signedIn, renewal);
+		const event = requestEvent();
+
+		await requestUserSession(event);
+		await Promise.all([requireUserId(event), optionalBrowserSessionId(event)]);
+
+		expect(getSession).toHaveBeenCalledTimes(1);
+		expect(event.node.res.getHeader('set-cookie')).toEqual([
+			'better-auth.session_token=renewed; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax',
+			'better-auth.session_data=; Max-Age=0; Path=/',
+		]);
+	});
+
+	it('keeps cookies the request had already set beside the ones a session read adds', async () => {
+		const renewal = new Headers({ 'set-cookie': 'better-auth.session_token=renewed; Max-Age=604800; Path=/' });
+		const { requestUserSession } = await freshAuth(signedIn, renewal);
+		const event = requestEvent();
+		event.node.res.setHeader('set-cookie', 'earlier=1; Path=/');
+
+		await requestUserSession(event);
+
+		expect(event.node.res.getHeader('set-cookie')).toEqual([
+			'earlier=1; Path=/',
+			'better-auth.session_token=renewed; Max-Age=604800; Path=/',
+		]);
+	});
+
+	it('adds no cookie when the session read sets none', async () => {
+		const { requestUserSession } = await freshAuth(signedIn);
+		const event = requestEvent();
+
+		await requestUserSession(event);
+
+		expect(event.node.res.getHeader('set-cookie')).toBeUndefined();
 	});
 
 	it('does not memoise a blank secret, so the answer stays the 503 that names it', async () => {

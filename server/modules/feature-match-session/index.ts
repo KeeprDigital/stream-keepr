@@ -2,7 +2,6 @@ import type { FeatureMatchSessionCommand, FeatureMatchSessionCommandResult } fro
 import { mapFeatureMatchSessionToResponse } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { publishMessage } from '~~/server/utils/ably';
 
 /**
  * Server-side Feature Match Session workflow module.
@@ -49,22 +48,10 @@ export function featureMatchSessionModule() {
 		eventId: number,
 		originConnectionId?: string,
 	) {
-		const session = await stateService.createSessionForSlot(slotId, eventId);
-		if (!session)
-			return null;
-
-		const response = mapFeatureMatchSessionToResponse(session);
-		await publishMessage(eventId, 'featureMatchSession:eventApplied', {
-			slotId,
-			sessionId: response.id,
-			sequence: response.sequence,
-			eventType: 'SessionStarted',
-			sourceSnapshot: response.sourceSnapshot,
-			currentState: response.currentState,
-		}, originConnectionId);
-		await refreshBroadcastGraphicsBindings(eventId);
-
-		return response;
+		// Opening announces the new Session and catches bindings up, as it does for
+		// every path that opens one.
+		const session = await stateService.createSessionForSlot(slotId, eventId, { originConnectionId });
+		return session ? mapFeatureMatchSessionToResponse(session) : null;
 	}
 
 	async function applyCommand(

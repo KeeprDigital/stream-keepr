@@ -4,6 +4,7 @@ import { createMockFeatureMatch } from '~~/test/helpers/fixtures';
 
 const featureMatchStateServiceMocks = vi.hoisted(() => ({
 	createSessionForSlot: vi.fn().mockResolvedValue({ id: 1, slotId: 1 }),
+	openSessionsForSlots: vi.fn().mockResolvedValue(new Map()),
 	buildSourceSnapshot: vi.fn().mockResolvedValue({ slotId: 1 }),
 	applyCommandToActiveSession: vi.fn().mockResolvedValue(null),
 	loadEventDefaults: vi.fn().mockResolvedValue({
@@ -45,6 +46,7 @@ vi.mock('~~/server/db/schema', () => ({
 vi.mock('~~/server/services/featureMatchState', () => ({
 	featureMatchStateService: () => ({
 		createSessionForSlot: featureMatchStateServiceMocks.createSessionForSlot,
+		openSessionsForSlots: featureMatchStateServiceMocks.openSessionsForSlots,
 		buildSourceSnapshot: featureMatchStateServiceMocks.buildSourceSnapshot,
 		applyCommandToActiveSession: featureMatchStateServiceMocks.applyCommandToActiveSession,
 		loadEventDefaults: featureMatchStateServiceMocks.loadEventDefaults,
@@ -92,6 +94,7 @@ describe('featureMatchService', () => {
 	beforeEach(() => {
 		resetDbMocks();
 		featureMatchStateServiceMocks.createSessionForSlot.mockClear();
+		featureMatchStateServiceMocks.openSessionsForSlots.mockClear();
 		featureMatchStateServiceMocks.buildSourceSnapshot.mockClear();
 		featureMatchStateServiceMocks.applyCommandToActiveSession.mockClear();
 		featureMatchStateServiceMocks.loadEventDefaults.mockClear();
@@ -322,17 +325,20 @@ describe('featureMatchService', () => {
 			expect(result.created).toHaveLength(2);
 			expect(result.deleted).toHaveLength(0);
 			expect(featureMatchStateServiceMocks.loadEventDefaults).toHaveBeenCalledWith(1);
-			expect(featureMatchStateServiceMocks.createSessionForSlot).toHaveBeenNthCalledWith(
+			// Every created Slot's Session opens in one call, reusing the Event's defaults.
+			expect(featureMatchStateServiceMocks.openSessionsForSlots).toHaveBeenCalledOnce();
+			expect(featureMatchStateServiceMocks.openSessionsForSlots).toHaveBeenCalledWith(
 				1,
-				1,
-				1,
-				expect.objectContaining({
-					game: 'mtg',
-					turnTrackingEnabled: false,
-					extraTurnsEnabled: true,
-					extraTurns: 5,
-					mulliganTrackingEnabled: false,
-				}),
+				[1, 2],
+				{
+					defaults: expect.objectContaining({
+						game: 'mtg',
+						turnTrackingEnabled: false,
+						extraTurnsEnabled: true,
+						extraTurns: 5,
+						mulliganTrackingEnabled: false,
+					}),
+				},
 			);
 		});
 
@@ -354,7 +360,7 @@ describe('featureMatchService', () => {
 			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
 			getChain('insert').returning.mockResolvedValue([createMockFeatureMatch({ id: 1 })]);
 			const sessionFailure = new Error('session failed');
-			featureMatchStateServiceMocks.createSessionForSlot.mockRejectedValueOnce(sessionFailure);
+			featureMatchStateServiceMocks.openSessionsForSlots.mockRejectedValueOnce(sessionFailure);
 			const deleteFailure = new Error('delete failed');
 			getChain('delete').where.mockRejectedValueOnce(deleteFailure);
 

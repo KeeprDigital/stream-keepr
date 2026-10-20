@@ -16,6 +16,10 @@ function isEventApplied(call: unknown[]): boolean {
 
 vi.mock('~~/server/db', () => ({ db: mockDb }));
 
+vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
+	refreshBroadcastGraphicsBindings: vi.fn(async () => {}),
+}));
+
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,
 }));
@@ -588,39 +592,16 @@ describe('feature match session state service', () => {
 		}));
 	});
 
-	it('creates a session, discards the closed sessions\' receipts, and activates the slot', async () => {
-		const slot = createSlot({ id: 7, tableNumber: 3 });
-		const inserted = createDbSession({ id: 30, slotId: 7, sequence: 1 });
-		mockDb.query.featureMatches.findFirst.mockResolvedValue(slot);
-		mockDb.batch.mockResolvedValueOnce([[], [inserted], [], []]);
-
-		const result = await featureMatchStateService().createSessionForSlot(7, 1, {
-			...DEFAULT_FEATURE_MATCH_DEFAULTS,
-			game: 'mtg',
-		});
-
-		expect(result).toBe(inserted);
-		expect(getChain('insert').values).toHaveBeenCalledWith(expect.objectContaining({
-			eventId: 1,
-			slotId: 7,
-			sequence: 1,
-		}));
-		expect(getChain('delete').where).toHaveBeenCalledOnce();
-		expect(mockDb.batch).toHaveBeenCalledOnce();
-		expect(mockDb.batch.mock.calls[0]?.[0]).toHaveLength(4);
-	});
-
-	it('answers an open with the Session the Slot ended up owning, not the one it inserted', async () => {
+	it('answers an open with the Session the Slot ended up owning, and announces that one', async () => {
 		const slot = createSlot({ id: 7, activeSessionId: null });
-		const stranded = createDbSession({ id: 30, slotId: 7, sequence: 1 });
 		const winner = createDbSession({ id: 31, slotId: 7, sequence: 1 });
 		// The Slot is read unowned, and by the time this open has committed a
 		// concurrent open has closed the row this one inserted and taken the Slot.
-		mockDb.query.featureMatches.findFirst
-			.mockResolvedValueOnce(slot)
-			.mockResolvedValue({ ...slot, activeSessionId: winner.id });
-		mockDb.query.featureMatchSessions.findFirst.mockResolvedValue(winner);
-		mockDb.batch.mockResolvedValueOnce([[], [stranded], [], []]);
+		mockDb.query.featureMatches.findMany.mockResolvedValue([slot]);
+		mockDb.query.featureMatchSessions.findMany
+			.mockResolvedValueOnce([])
+			.mockResolvedValue([winner]);
+		mockDb.batch.mockResolvedValueOnce([]);
 
 		const result = await featureMatchStateService().createSessionForSlot(7, 1);
 
@@ -628,6 +609,12 @@ describe('feature match session state service', () => {
 		// closed milliseconds after it was inserted — everything downstream of this
 		// call, the SessionStarted announcement included, names the survivor.
 		expect(result).toBe(winner);
+		expect(mockPublishMessage.mock.calls.filter(isEventApplied)).toEqual([[
+			1,
+			'featureMatchSession:eventApplied',
+			expect.objectContaining({ slotId: 7, sessionId: winner.id, eventType: 'SessionStarted' }),
+			undefined,
+		]]);
 	});
 
 	it('rejects reuse of a command ID for a different command', async () => {
@@ -754,17 +741,17 @@ describe('feature match session state service', () => {
 
 	it('applies a reverse-sync command to the session that won a concurrent open, not the one it inserted', async () => {
 		const slot = createSlot({ id: 7, activeSessionId: null });
-		const stranded = createDbSession({ id: 30, slotId: 7, sequence: 1 });
 		const winner = createDbSession({ id: 31, slotId: 7, sequence: 1 });
-		mockDb.query.featureMatches.findFirst
-			.mockResolvedValueOnce(slot)
-			.mockResolvedValueOnce(slot)
-			.mockResolvedValue({ ...slot, activeSessionId: winner.id });
+		mockDb.query.featureMatches.findFirst.mockResolvedValue(slot);
+		mockDb.query.featureMatches.findMany.mockResolvedValue([slot]);
 		mockDb.query.featureMatchSessions.findFirst
 			.mockResolvedValueOnce(undefined)
 			.mockResolvedValue(winner);
+		mockDb.query.featureMatchSessions.findMany
+			.mockResolvedValueOnce([])
+			.mockResolvedValue([winner]);
 		mockDb.batch
-			.mockResolvedValueOnce([[], [stranded], [], []])
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([[], [], [createDbSession({ id: 31, slotId: 7, sequence: 2 })]]);
 
 		const createCommand = vi.fn((session: DbFeatureMatchSession) => ({

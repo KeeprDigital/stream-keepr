@@ -6,12 +6,10 @@ import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSes
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
-import { forgetAggregateReceipts } from '~~/server/modules/live-state';
-import { FEATURE_MATCH_SESSION_AGGREGATE_KIND, featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkJsonRows, observedValue, selectForInsert } from '~~/server/utils/db';
+import { featureMatchStateService } from '~~/server/services/featureMatchState';
+import { observedValue } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
-import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
 import { randomCommandId } from '~~/shared/utils/uuid';
 
 interface PairingIdentity {
@@ -30,13 +28,15 @@ type FeatureMatchIdentityInput = UpdateFeatureMatchInput & {
 export interface ImportedFeatureMatchResetPlan {
 	queries: BatchItem<'sqlite'>[];
 	clearedSlotCount: number;
+	/** Run once the batch carrying `queries` has committed, to announce the replacement Sessions. */
+	settle: () => Promise<unknown>;
 }
 
 /**
  * Prepare, but do not execute, the complete feature-slot portion of a Melee
  * import reset. Callers can append these statements to a larger D1 batch so
  * imported records, replacement feature sessions, and Event config commit or
- * roll back together.
+ * roll back together, then settle the plan once that batch has committed.
  */
 export async function buildClearImportedMatchDataQueries(
 	eventId: number,
@@ -50,99 +50,36 @@ export async function buildClearImportedMatchDataQueries(
 		));
 
 	if (importedSlots.length === 0) {
-		return { queries: [], clearedSlotCount: 0 };
+		return { queries: [], clearedSlotCount: 0, settle: async () => {} };
 	}
 
-	const stateSvc = featureMatchStateService();
-	const eventDefaults = await stateSvc.loadEventDefaults(eventId);
 	const resetAt = new Date();
-	const resetAtMs = resetAt.getTime();
-	const sessionRows = await Promise.all(importedSlots.map(async (slot) => {
-		const clearedSlot: DbFeatureMatch = {
-			...slot,
-			matchId: null,
-			externalId: null,
-			externalSource: null,
-			tableNumber: null,
-			roundName: null,
-			formatName: null,
-			player1Id: null,
-			player2Id: null,
-			player1Data: null,
-			player2Data: null,
-			updatedAt: resetAt,
-		};
-		const sourceSnapshot = await stateSvc.buildSourceSnapshot(clearedSlot, eventDefaults);
-		const currentState = createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot);
-
-		return {
-			slotId: slot.id,
-			sourceSnapshot,
-			currentState,
-		};
+	const clearedSlots = importedSlots.map((slot): DbFeatureMatch => ({
+		...slot,
+		matchId: null,
+		externalId: null,
+		externalSource: null,
+		tableNumber: null,
+		roundName: null,
+		formatName: null,
+		player1Id: null,
+		player2Id: null,
+		player1Data: null,
+		player2Data: null,
+		updatedAt: resetAt,
 	}));
-	const payloads = chunkJsonRows(sessionRows);
 
 	// Scope every mutation to slots that are still Melee-owned when the batch
 	// starts. This prevents a stale preparation read from resetting a slot that
 	// was manually rebound before the transaction acquired its write lock.
-	const closeSessionQueries = payloads.map(payload => db
-		.update(featureMatchSessions)
-		.set({ status: 'closed', closedAt: resetAt, updatedAt: resetAt })
-		.where(and(
-			eq(featureMatchSessions.eventId, eventId),
-			eq(featureMatchSessions.status, 'active'),
-			sql`exists (
-				select 1
-				from ${featureMatches}
-				where ${featureMatches.id} = ${featureMatchSessions.slotId}
-					and ${featureMatches.eventId} = ${eventId}
-					and ${featureMatches.externalSource} = 'melee'
-					and ${featureMatches.id} in (
-						select cast(json_extract(value, '$.slotId') as integer)
-						from json_each(${payload})
-					)
-			)`,
-		)));
+	const stillMeleeOwned = eq(featureMatches.externalSource, 'melee');
+	const sessionReplacement = await featureMatchStateService().buildSessionReplacement(eventId, clearedSlots, {
+		slotCondition: stillMeleeOwned,
+	});
 
-	const insertSessionQueries = payloads.map(payload => db
-		.insert(featureMatchSessions)
-		.select(selectForInsert(featureMatchSessions, {
-			id: sql`null`,
-			eventId: sql`${eventId}`,
-			slotId: sql`cast(json_extract(input.value, '$.slotId') as integer)`,
-			status: sql`'active'`,
-			sourceSnapshot: sql`json_extract(input.value, '$.sourceSnapshot')`,
-			currentState: sql`json_extract(input.value, '$.currentState')`,
-			sequence: sql`1`,
-			closedAt: sql`null`,
-			createdAt: sql`${resetAtMs}`,
-			updatedAt: sql`${resetAtMs}`,
-		}, sql`from json_each(${payload}) as input
-			where cast(json_extract(input.value, '$.slotId') as integer) in (
-				select ${featureMatches.id}
-				from ${featureMatches}
-				where ${featureMatches.eventId} = ${eventId}
-					and ${featureMatches.externalSource} = 'melee'
-			)`)));
-
-	// The Sessions closed above can never accept another command, so their command
-	// receipts have nothing left to protect against.
-	const forgetClosedSessionReceiptQueries = payloads.map(payload => forgetAggregateReceipts({
-		aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,
-		aggregateIds: sql`
-			select ${featureMatchSessions.id}
-			from ${featureMatchSessions}
-			where ${featureMatchSessions.eventId} = ${eventId}
-				and ${featureMatchSessions.status} = 'closed'
-				and ${featureMatchSessions.slotId} in (
-					select cast(json_extract(value, '$.slotId') as integer)
-					from json_each(${payload})
-				)
-		`,
-	}));
-
-	const clearAndRelinkSlotQueries = payloads.map(payload => db
+	// After the Session statements, which select their Slots through the same
+	// Melee ownership this clears.
+	const clearSlotQuery = db
 		.update(featureMatches)
 		.set({
 			matchId: null,
@@ -155,33 +92,20 @@ export async function buildClearImportedMatchDataQueries(
 			player2Id: null,
 			player1Data: null,
 			player2Data: null,
-			activeSessionId: sql<number>`(
-				select ${featureMatchSessions.id}
-				from ${featureMatchSessions}
-				where ${featureMatchSessions.eventId} = ${featureMatches.eventId}
-					and ${featureMatchSessions.slotId} = ${featureMatches.id}
-					and ${featureMatchSessions.status} = 'active'
-				limit 1
-			)`,
 			updatedAt: resetAt,
 		})
 		.where(and(
 			eq(featureMatches.eventId, eventId),
-			eq(featureMatches.externalSource, 'melee'),
-			sql`${featureMatches.id} in (
-				select cast(json_extract(value, '$.slotId') as integer)
-				from json_each(${payload})
-			)`,
-		)));
+			stillMeleeOwned,
+			// One bound JSON array rather than one parameter per Slot, within D1's
+			// bound-parameter ceiling at any Slot count.
+			sql`${featureMatches.id} in (select value from json_each(${JSON.stringify(importedSlots.map(slot => slot.id))}))`,
+		));
 
 	return {
-		queries: [
-			...closeSessionQueries,
-			...insertSessionQueries,
-			...forgetClosedSessionReceiptQueries,
-			...clearAndRelinkSlotQueries,
-		],
+		queries: [...sessionReplacement.statements, clearSlotQuery],
 		clearedSlotCount: importedSlots.length,
+		settle: sessionReplacement.settle,
 	};
 }
 
@@ -476,11 +400,9 @@ export function featureMatchService() {
 			const createdMatches = await db.insert(featureMatches).values(newMatches).returning();
 			created.push(...createdMatches);
 
-			// Initialize state for created matches, reusing event defaults
+			// Initialize state for created matches in one commit, reusing event defaults
 			try {
-				for (const match of createdMatches) {
-					await stateService.createSessionForSlot(match.id, eventId, eventDefaults);
-				}
+				await stateService.openSessionsForSlots(eventId, createdMatches.map(match => match.id), { defaults: eventDefaults });
 			}
 			catch (error) {
 				await runCompensation(error, () => db.delete(featureMatches).where(and(
