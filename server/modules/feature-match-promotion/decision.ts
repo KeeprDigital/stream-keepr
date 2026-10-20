@@ -30,7 +30,7 @@ export interface PromotionCommittedReads {
 export interface PromotionCurrentReads {
 	/** The Sessions the commit opened that are still active, read straight after the decision. */
 	openedSessions: readonly DbFeatureMatchSession[];
-	/** The Event's Slots, each with its active Session, read after the reverse sync so they carry it. */
+	/** The Event's Slots, each with its active Session, read after the Reverse Sync so they carry it. */
 	slots: readonly DbFeatureMatchWithSession[];
 	/** The promotion's Assignment, wherever it is now. */
 	assignment: DbFeatureMatchAssignment | undefined;

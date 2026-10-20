@@ -362,7 +362,7 @@ describe('feature Match Slot Promotion around its batch', () => {
 		expect(publishMessage).not.toHaveBeenCalled();
 	});
 
-	it('publishes the promoted players\' latest data, which the reverse sync applied after the commit', async () => {
+	it('publishes the promoted players\' latest data, which the Reverse Sync applied after the commit', async () => {
 		const stage = await stageEvent();
 		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
 		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));
@@ -375,7 +375,7 @@ describe('feature Match Slot Promotion around its batch', () => {
 		});
 	});
 
-	it('publishes a committed promotion even when its reverse sync faults, then answers with the fault', async () => {
+	it('publishes a committed promotion even when its Reverse Sync faults, then answers with the fault', async () => {
 		const stage = await stageEvent();
 		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
 		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));

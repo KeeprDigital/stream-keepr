@@ -163,8 +163,8 @@ export function featureMatchPromotionModule() {
 		// re-resolves Graphic Input Bindings once.
 		const { opened } = await sessionReplacement.settle({ announce: false });
 
-		// Reverse-sync the promoted players' latest data into the fresh Sessions
-		// before reading what to publish, so the publication carries it. It runs
+		// Run the Reverse Sync for the promoted players before reading what to
+		// publish, so the publication carries their latest data. It runs
 		// after the atomic promotion: it is a read-compute-write cycle with
 		// intermediate session CAS that cannot compose into the batch. It
 		// announces nothing itself, and a fault is answered only once the
