@@ -289,6 +289,10 @@ describe('useFeatureMatchStore', () => {
 		});
 	});
 
+	function announce(slot: ReturnType<typeof createMockFeatureMatch>) {
+		ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
+	}
+
 	// ── Slot answers overtaken by a newer Session epoch (#635) ──
 
 	/**
@@ -302,10 +306,6 @@ describe('useFeatureMatchStore', () => {
 		beforeEach(() => {
 			stateStore().$reset();
 		});
-
-		function announce(slot: ReturnType<typeof slotInEpoch>) {
-			ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
-		}
 
 		it('a settings answer from an ended epoch does not replace the held Slot, and answers with it', async () => {
 			store.featureMatches = [slotInEpoch(1, 501)];
@@ -365,18 +365,14 @@ describe('useFeatureMatchStore', () => {
 			stateStore().$reset();
 		});
 
-		function announce(slot: ReturnType<typeof createMockFeatureMatch>) {
-			ablyCallbacks.featureMatches!['featureMatch:updated']!({ featureMatch: slot });
-		}
-
 		it('an announcement does not replace a Slot holding a Session', () => {
-			const promoted = slotInEpoch(1, 501);
-			store.featureMatches = [promoted];
-			stateStore().offerSlotSession(promoted);
+			const withSession = slotInEpoch(1, 501);
+			store.featureMatches = [withSession];
+			stateStore().offerSlotSession(withSession);
 
 			announce(sessionlessSlot(1, { bestOf: 5 }));
 
-			expect(store.featureMatches).toEqual([promoted]);
+			expect(store.featureMatches).toEqual([withSession]);
 		});
 
 		it('a settings answer does not replace a Slot holding a Session, and answers with it', async () => {
@@ -385,12 +381,12 @@ describe('useFeatureMatchStore', () => {
 			mockRepo.update.mockReturnValueOnce(update.promise);
 
 			const updating = store.updateFeatureMatch(1, 1, { bestOf: 5 });
-			const promoted = slotInEpoch(1, 501);
-			announce(promoted);
+			const withSession = slotInEpoch(1, 501);
+			announce(withSession);
 			update.resolve(sessionlessSlot(1, { bestOf: 5 }));
 
-			expect(await updating).toEqual(promoted);
-			expect(store.featureMatches).toEqual([promoted]);
+			expect(await updating).toEqual(withSession);
+			expect(store.featureMatches).toEqual([withSession]);
 		});
 
 		it('a load keeps a Slot holding a Session and applies the rest', async () => {
@@ -400,30 +396,30 @@ describe('useFeatureMatchStore', () => {
 			mockRepo.list.mockReturnValueOnce(load.promise);
 
 			const loading = store.loadFeatureMatchesByEventId(1);
-			const promoted = slotInEpoch(1, 501);
-			announce(promoted);
-			const stillEmpty = sessionlessSlot(2, { bestOf: 5 });
-			load.resolve([sessionlessSlot(1, { bestOf: 5 }), stillEmpty]);
+			const withSession = slotInEpoch(1, 501);
+			announce(withSession);
+			const stillSessionless = sessionlessSlot(2, { bestOf: 5 });
+			load.resolve([sessionlessSlot(1, { bestOf: 5 }), stillSessionless]);
 			await loading;
 
-			expect(store.featureMatches).toEqual([promoted, stillEmpty]);
+			expect(store.featureMatches).toEqual([withSession, stillSessionless]);
 		});
 
 		it('a Screen Output read is not held over a Slot holding a Session', () => {
-			const promoted = slotInEpoch(1, 501);
-			expect(store.holdFeatureMatch(promoted)).toBe(true);
+			const withSession = slotInEpoch(1, 501);
+			expect(store.holdFeatureMatch(withSession)).toBe(true);
 
 			expect(store.holdFeatureMatch(sessionlessSlot(1))).toBe(false);
-			expect(store.featureMatches).toEqual([promoted]);
+			expect(store.featureMatches).toEqual([withSession]);
 		});
 
 		it('a saved Slot does not replace a Slot holding a Session', () => {
-			const promoted = slotInEpoch(1, 501);
-			store.featureMatches = [promoted];
-			stateStore().offerSlotSession(promoted);
+			const withSession = slotInEpoch(1, 501);
+			store.featureMatches = [withSession];
+			stateStore().offerSlotSession(withSession);
 
 			expect(store.applySavedSlot(sessionlessSlot(1, { bestOf: 5 }))).toBe(false);
-			expect(store.featureMatches).toEqual([promoted]);
+			expect(store.featureMatches).toEqual([withSession]);
 		});
 
 		it('applies while no Session is held for the Slot', () => {

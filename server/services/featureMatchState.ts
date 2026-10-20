@@ -268,6 +268,10 @@ export function featureMatchStateService() {
 	 * The Feature Match Session half of the shared epoch lifecycle: which Sessions a
 	 * set of Slots owns, and how one is closed, opened and announced. Ordering,
 	 * receipt forgetting and the decision to announce are the module's.
+	 *
+	 * Only `replace` and `open` are used here, never `close` alone: a Slot that has
+	 * held a Session always holds one. Clients rely on that to order Slot reads,
+	 * refusing a Slot read without a Session over one they hold (ADR-0026, #658).
 	 */
 	const sessionEpochs = createSequencedLiveEpochs<FeatureMatchSessionScope, FeatureMatchSessionOpening[], DbFeatureMatchSession>({
 		aggregateKind: FEATURE_MATCH_SESSION_AGGREGATE_KIND,

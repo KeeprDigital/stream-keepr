@@ -226,16 +226,19 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	 * one read without a Session was read before its first opened (#658).
 	 */
 	function offerSlotSession(slot: OfferedSlot): boolean {
-		return slot.activeSession
-			? !follower.acceptRead(slot.activeSession).epochEnded
-			: !heldSession(slot.id);
+		return slotIsCurrent(slot, follower.acceptRead);
 	}
 
 	/** As `offerSlotSession`, for a Slot a write answered: its Session is a command result. */
 	function settleSlotCommandResult(slot: OfferedSlot): boolean {
-		return slot.activeSession
-			? !follower.acceptCommandResult(slot.activeSession).epochEnded
-			: !heldSession(slot.id);
+		return slotIsCurrent(slot, follower.acceptCommandResult);
+	}
+
+	function slotIsCurrent(
+		slot: OfferedSlot,
+		offer: (session: FeatureMatchSessionResponse) => { epochEnded: boolean },
+	): boolean {
+		return slot.activeSession ? !offer(slot.activeSession).epochEnded : !heldSession(slot.id);
 	}
 
 	/**
