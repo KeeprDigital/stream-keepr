@@ -50,7 +50,10 @@ export interface UseFormReturn<T> {
  *
  * Provides form data tracking, dirty state detection, reset capabilities,
  * and extraction of changed fields for PATCH requests.
- * Automatically watches for changes to initial data if provided as a ref.
+ * Automatically watches for changes to initial data if provided as a ref, and
+ * merges each new baseline into the form: fields the operator has not edited
+ * follow it, edited ones keep the local value (#612). Submit `getChanges()`,
+ * not the whole form, so untouched fields are never written back.
  *
  * @example
  * // Basic usage

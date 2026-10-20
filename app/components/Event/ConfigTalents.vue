@@ -34,6 +34,8 @@ const emit = defineEmits<{
  * again by id, or by identity for a row that has none yet.
  */
 const editingRow = shallowRef<TalentRow | null>(null);
+/** The editor as it opened, so a save stages only the fields edited in it. */
+const openedValue = shallowRef<TalentEditorValue | null>(null);
 const editingValue = ref<TalentEditorValue | null>(null);
 const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
 const hasActiveEdit = computed(() => editingRow.value !== null);
@@ -82,12 +84,14 @@ function startEditing(index: number) {
 		return;
 
 	editingRow.value = toRaw(row);
+	openedValue.value = editorValue(row);
 	editingValue.value = editorValue(row);
 	editingErrors.value = {};
 }
 
 function closeEditor() {
 	editingRow.value = null;
+	openedValue.value = null;
 	editingValue.value = null;
 	editingErrors.value = {};
 }
@@ -101,8 +105,9 @@ function cancelTalentEdit() {
 
 function saveTalentEdit() {
 	const row = editingRow.value;
+	const opened = openedValue.value;
 	const value = editingValue.value;
-	if (!row || !value)
+	if (!row || !opened || !value)
 		return;
 
 	const name = value.name.trim();
@@ -128,13 +133,29 @@ function saveTalentEdit() {
 	if (Object.keys(errors).length > 0)
 		return;
 
-	// A colleague removed the row while it was open: staging it again lets the
-	// save re-create the Talent, as `applyTalentUpdates` does for any such row.
+	// A field left as the editor opened takes the row's current value, which a
+	// colleague's change may have moved meanwhile (#612). A row they removed
+	// is staged again, so the save re-creates the Talent as `applyTalentUpdates`
+	// does for any such row.
 	const index = talentsData.value.findIndex(isEditingRow);
+	const current = talentsData.value[index] ?? row;
+	const staged: TalentRow = {
+		...current,
+		name: value.name === opened.name ? current.name : name,
+		socialProfiles: {},
+	};
+	for (const network of SUPPORTED_SOCIAL_NETWORKS) {
+		const handle = value.socialProfiles[network.key] === opened.socialProfiles[network.key]
+			? current.socialProfiles[network.key]
+			: socialProfiles[network.key];
+		if (handle !== undefined)
+			staged.socialProfiles[network.key] = handle;
+	}
+
 	if (index === -1)
-		talentsData.value.push({ ...row, name, socialProfiles });
+		talentsData.value.push(staged);
 	else
-		talentsData.value[index] = { ...talentsData.value[index]!, name, socialProfiles };
+		talentsData.value[index] = staged;
 	closeEditor();
 }
 

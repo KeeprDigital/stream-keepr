@@ -92,7 +92,7 @@ function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
 	};
 }
 
-const { formData, isDirty, reset, updateOriginal, getChanges } = useForm<FeatureMatchFormData>({
+const { formData, isDirty, reset, getChanges } = useForm<FeatureMatchFormData>({
 	initialData: computed(() => normalizeMatchData(props.match)),
 });
 
@@ -249,9 +249,6 @@ async function save() {
 				description: featureMatchStore.error ?? 'The match was not updated.',
 				color: 'error',
 			}),
-			onSuccess: (updatedMatch) => {
-				updateOriginal(normalizeMatchData(updatedMatch));
-			},
 			onFailure: ({ error }) => {
 				if (error)
 					console.error('Failed to save match:', error);

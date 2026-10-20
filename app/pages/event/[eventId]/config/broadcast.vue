@@ -17,18 +17,23 @@ async function handleSaveTalents(newTalents: { id?: number; name: string; social
 		return;
 
 	await runRequest(async () => {
-		await applyTalentUpdates({
-			currentTalents: currentEvent.talents || [],
-			requestedTalents: newTalents,
-			removeTalent: talentId => eventStore.removeTalent(talentId),
-			addTalent: input => eventStore.addTalent(input),
-			updateTalent: (talentId, input) => eventStore.updateTalent(talentId, input),
-		});
-
-		// Explicitly reset form after all mutations complete so dirty state
-		// is cleared regardless of intermediate useForm watcher timing
-		await nextTick();
-		talentsRef.value?.resetForm();
+		try {
+			await applyTalentUpdates({
+				currentTalents: currentEvent.talents || [],
+				requestedTalents: newTalents,
+				removeTalent: talentId => eventStore.removeTalent(talentId),
+				addTalent: input => eventStore.addTalent(input),
+				updateTalent: (talentId, input) => eventStore.updateTalent(talentId, input),
+			});
+		}
+		finally {
+			// Reset to the event once the mutations settle, failed or not. The card
+			// merges each landed Talent in beside the row with no id that asked for
+			// it (#612), so a staged list left after a failure would add it again
+			// on retry.
+			await nextTick();
+			talentsRef.value?.resetForm();
+		}
 
 		return true;
 	}, {

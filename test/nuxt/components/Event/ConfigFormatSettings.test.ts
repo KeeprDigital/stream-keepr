@@ -106,7 +106,6 @@ const stubs = {
 // only submits its form once the tree is in the document.
 const mountOptions = { attachTo: document.body, global: { stubs } };
 
-/** What the card sends when nothing has been touched, for a test to vary one key of. */
 enableAutoUnmount(afterEach);
 
 async function mountComponent(event: Event = configEvent()) {

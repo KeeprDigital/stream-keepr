@@ -172,10 +172,23 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
  * unsaved-changes guard. See the shared harness for why the registration is
  * invisible from a bare mount.
  */
-async function mountUnderGuard() {
+async function mountUnderGuard(props = mountProps()) {
 	const { default: FeatureMatchPanel } = await import(componentPath);
 
-	return mountUnderPageGuard<Wrapper>(FeatureMatchPanel, { ...mountOptions, props: mountProps() });
+	return mountUnderPageGuard<Wrapper>(FeatureMatchPanel, { ...mountOptions, props });
+}
+
+/**
+ * A match the mocked store updates in place with each answer, as the real one
+ * does: the panel learns the save landed from its prop, not from the answer.
+ */
+function storeEchoedMatch() {
+	const match = reactive(createMockFeatureMatch({ id: 1, eventId: 1 }));
+	mockFeatureMatchStore.updateFeatureMatch.mockImplementation(async (_eventId: number, _matchId: number, update: object) => {
+		Object.assign(match, update);
+		return { ...match };
+	});
+	return match;
 }
 
 describe('featureMatchPanel setup save', () => {
@@ -245,9 +258,8 @@ describe('featureMatchPanel setup save', () => {
 	// registers with nothing and loses this silently — which is what this file used
 	// to arrange for itself by mocking the registration away.
 	it('tells the page it has unsaved changes while its setup edit is unsaved', async () => {
-		const updated = createMockFeatureMatch({ id: 1, tableNumber: 12 });
-		mockFeatureMatchStore.updateFeatureMatch.mockResolvedValue(updated);
-		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		const match = storeEchoedMatch();
+		const { wrapper, pageIsDirty } = await mountUnderGuard({ match: match as any, matchNumber: 1 });
 
 		expect(pageIsDirty()).toBe(false);
 
@@ -259,6 +271,31 @@ describe('featureMatchPanel setup save', () => {
 		await flushPromises();
 
 		expect(pageIsDirty()).toBe(false);
+	});
+
+	it('keeps an edit typed while the save is in flight', async () => {
+		const match = reactive(createMockFeatureMatch({ id: 1, eventId: 1 }));
+		let land = () => {};
+		mockFeatureMatchStore.updateFeatureMatch.mockImplementation((_eventId: number, _matchId: number, update: object) =>
+			new Promise((resolve) => {
+				land = () => {
+					Object.assign(match, update);
+					resolve({ ...match });
+				};
+			}));
+		const { wrapper, pageIsDirty } = await mountUnderGuard({ match: match as any, matchNumber: 1 });
+
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		await wrapper.get('[data-testid="set-table"]').trigger('click');
+		await wrapper.get('button[data-label="Save"]').trigger('click');
+		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
+		player1Form.vm.$emit('update:modelValue', { ...player1Form.props('modelValue'), name: 'Alicia' });
+		land();
+		await flushPromises();
+
+		expect(match.tableNumber).toBe(12);
+		expect(wrapper.findAllComponents(PlayerFormStub)[0]!.props('modelValue')).toMatchObject({ name: 'Alicia' });
+		expect(pageIsDirty()).toBe(true);
 	});
 
 	it('associates hidden submit buttons with both player forms', async () => {

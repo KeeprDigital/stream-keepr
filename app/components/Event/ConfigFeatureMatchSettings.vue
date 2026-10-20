@@ -32,9 +32,10 @@ const { formData, isDirty, reset, getChanges } = useForm({
 useRegisterDirtyState(isDirty);
 
 function submit() {
-	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...matchDefaults } = getChanges();
+	const changes = getChanges();
+	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...matchDefaults } = changes;
 	const eventToggles = Object.fromEntries(
-		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled }).filter(([, value]) => value !== undefined),
+		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled }).filter(([key]) => key in changes),
 	);
 	emit('submit', { ...eventToggles, ...fromFeatureMatchDefaults(matchDefaults) } as UpdateEventInput);
 }

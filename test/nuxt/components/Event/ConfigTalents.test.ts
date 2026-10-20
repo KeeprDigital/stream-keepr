@@ -261,6 +261,20 @@ describe('event config Talents', () => {
 		]);
 	});
 
+	it('stages only the fields edited in the open editor, keeping a colleague\'s change to the rest', async () => {
+		const wrapper = await mountComponent([talent(11, 'Alice', { twitch: 'Old' })]);
+		chooseRowAction(wrapper, 0, 'Edit');
+		await flushPromises();
+		await wrapper.setProps({ talents: [talent(11, 'Alice', { twitch: 'New', x: 'Added' })] });
+		await flushPromises();
+
+		await wrapper.get('[data-field="name"] input').setValue('Alicia');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([{ id: 11, name: 'Alicia', socialProfiles: { twitch: 'New', x: 'Added' } }]);
+	});
+
 	it('finishes an edit on its own row after a colleague removes an earlier one', async () => {
 		const wrapper = await mountComponent([ALICE, BOB]);
 		chooseRowAction(wrapper, 1, 'Edit');
