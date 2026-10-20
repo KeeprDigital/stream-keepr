@@ -4,8 +4,8 @@
  *
  * Two faults are worth separating, because the second used to have no surface at
  * all. A dropped connection is loud and self-healing: Ably reconnects, and every
- * realtime-fed surface re-reads authoritative state on the way back
- * (`useReconnectResync`). A token this client cannot mint is neither. The socket
+ * realtime-fed surface re-reads authoritative state once its channel is attached
+ * again (`useReconnectResync`). A token this client cannot mint is neither. The socket
  * stays connected, the page looks healthy, and every channel for the Event the
  * operator just switched to is silently unsubscribable — which before #307 was
  * reported by a single `console.warn` and recovered only by a page reload.

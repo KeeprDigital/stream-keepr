@@ -24,6 +24,7 @@ export interface MockRealtime {
 
 	// Channel transport
 	onChannel: ReturnType<typeof vi.fn>;
+	onContinuityLost: ReturnType<typeof vi.fn>;
 
 	// Presence
 	enterPresence: ReturnType<typeof vi.fn>;
@@ -48,11 +49,35 @@ export function createMockRealtime(): MockRealtime {
 
 		// Channel transport
 		onChannel: vi.fn().mockReturnValue(() => {}),
+		onContinuityLost: vi.fn().mockReturnValue(() => {}),
 
 		// Presence
 		enterPresence: vi.fn().mockResolvedValue(undefined),
 		leavePresence: vi.fn().mockResolvedValue(undefined),
 		updatePresence: vi.fn().mockResolvedValue(undefined),
 		watchPresence: vi.fn().mockReturnValue(() => {}),
+	};
+}
+
+/**
+ * The transport's lost-continuity signal, for a stand-in transport: spread
+ * `onContinuityLost` into it, and `reattach` a channel to signal it attached
+ * again having lost continuity — the moment Reconnect Resync re-reads (#641).
+ */
+export function createContinuitySignal() {
+	const handlers = new Map<string, Set<() => void>>();
+	return {
+		onContinuityLost: vi.fn((channel: string, handler: () => void) => {
+			if (!handlers.has(channel))
+				handlers.set(channel, new Set());
+			handlers.get(channel)!.add(handler);
+			return () => {
+				handlers.get(channel)!.delete(handler);
+			};
+		}),
+		reattach(channel: string) {
+			for (const handler of [...handlers.get(channel) ?? []])
+				handler();
+		},
 	};
 }

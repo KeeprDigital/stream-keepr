@@ -22,6 +22,7 @@ import {
 	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
+import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 enableAutoUnmount(afterEach);
 
@@ -40,6 +41,7 @@ const mockRecoveryFault = ref<BroadcastGraphicsRecoveryFault | null>(null);
 const mockResetLiveState = vi.fn();
 
 /** What the realtime transport reports; the workspace derives disconnection from it. */
+const continuity = createContinuitySignal();
 const mockConnectionState = ref<'connected' | 'disconnected' | 'suspended' | 'connecting'>('connected');
 
 mockNuxtImport('tryUseRealtime', () => () => ({
@@ -49,6 +51,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 	get isConnected() {
 		return mockConnectionState.value === 'connected';
 	},
+	onContinuityLost: continuity.onContinuityLost,
 }));
 
 /** Answers the reset confirmation; `null` stands for the operator cancelling. */
@@ -637,12 +640,13 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 			expect(mockTake).not.toHaveBeenCalled();
 		});
 
-		it('reloads the authoritative snapshot on reconnection, because nothing arrives late', async () => {
+		it('reloads the authoritative snapshot once its Event channel is attached again, because nothing arrives late', async () => {
 			mockConnectionState.value = 'disconnected';
 			await mountComponent();
 			mockLoadSession.mockClear();
 
 			mockConnectionState.value = 'connected';
+			continuity.reattach('event:7');
 			await flushPromises();
 
 			expect(mockLoadSession).toHaveBeenCalledWith(7, 3);

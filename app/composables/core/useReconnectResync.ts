@@ -1,4 +1,6 @@
+import type { MaybeRefOrGetter } from 'vue';
 import type { RealtimeTransport } from '~/types/realtime';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 /**
  * Reloading authoritative state after this client has been out of touch.
@@ -11,10 +13,24 @@ import type { RealtimeTransport } from '~/types/realtime';
  * had when the socket dropped; a Feature Match surface is missing whatever
  * happened in between; a Live Control shows a stack minutes out of date.
  *
- * So reconnection is itself a reason to reload, exactly as a sequence gap is.
+ * So losing continuity is itself a reason to reload, exactly as a sequence gap is.
  * That principle was written for Broadcast Graphics Live Sessions and honoured by
  * exactly one consumer; this is the same rule with the Live Session taken out of
  * it, so every realtime-fed surface can hold it (#307).
+ *
+ * ## When it re-reads
+ *
+ * Once the Event channel the consumer listens on is attached again having lost
+ * continuity, not when the connection comes back. Ably reattaches channels only
+ * after the connection is back, so a read sent then can be answered before
+ * anything listens again, and a change published in between is in neither the
+ * read nor any message (#641). The channel's own signal also catches a loss on
+ * the channel alone while the connection stays up, and stays quiet when the
+ * reattach resumed, because then nothing was missed.
+ *
+ * A consumer listening on no Event has missed no message, but may hold nothing at
+ * all: a Screen Output whose load failed has no Screen to listen for yet. For it,
+ * the connection coming back is still the retry.
  *
  * ## What it deliberately does not do on a disconnection
  *
@@ -27,12 +43,14 @@ import type { RealtimeTransport } from '~/types/realtime';
  */
 export function useReconnectResync(
 	resync: () => void,
+	/** The Event whose channel the consumer listens on, or nothing while it listens on none. */
+	eventId: MaybeRefOrGetter<number | null | undefined>,
 	/**
 	 * The transport to watch. Defaulted rather than always resolved, because the
 	 * Screen Output's display session is handed its transport rather than looking
 	 * one up, and a composable that could only look one up would be unusable there.
 	 */
-	realtime: Pick<RealtimeTransport, 'connectionState'> | undefined = tryUseRealtime(),
+	realtime: Pick<RealtimeTransport, 'connectionState' | 'onContinuityLost'> | undefined = tryUseRealtime(),
 ) {
 	/**
 	 * Whether this client is currently out of touch with the authoritative order.
@@ -50,11 +68,16 @@ export function useReconnectResync(
 			|| realtime.connectionState === 'closed';
 	});
 
-	// Only the transition back to connected resyncs. Watching this rather than
-	// every connection state keeps a `connecting` → `connected` flap from firing a
-	// reload on top of the one the mount already did.
+	watch(() => toValue(eventId), (listenedOn, _, onCleanup) => {
+		if (realtime && listenedOn)
+			onCleanup(realtime.onContinuityLost(eventRealtimeChannel(listenedOn), resync));
+	}, { immediate: true });
+
+	// Only the transition back to connected, and only while listening on nothing.
+	// Watching this rather than every connection state keeps a `connecting` →
+	// `connected` flap from firing a reload on top of the one the mount already did.
 	watch(disconnected, (isDisconnected, wasDisconnected) => {
-		if (wasDisconnected && !isDisconnected)
+		if (wasDisconnected && !isDisconnected && !toValue(eventId))
 			resync();
 	});
 

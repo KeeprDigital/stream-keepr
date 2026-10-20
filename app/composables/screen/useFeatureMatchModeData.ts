@@ -78,7 +78,7 @@ export function useFeatureMatchModeData() {
 			return;
 
 		void featureMatchStateStore.loadState(evtId, matchId);
-	});
+	}, eventId);
 
 	return {
 		config,

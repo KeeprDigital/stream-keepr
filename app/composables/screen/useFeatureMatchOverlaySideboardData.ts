@@ -275,7 +275,7 @@ export function useFeatureMatchOverlaySideboardData(
 			return;
 
 		void load();
-	});
+	}, eventId, realtime);
 
 	onScopeDispose(() => {
 		unsubscribeFromPlayerUpdates?.();

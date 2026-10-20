@@ -570,7 +570,7 @@ export function useDeckModeData() {
 	 */
 	useReconnectResync(() => {
 		void reloadSelectedSource();
-	}, realtime);
+	}, eventId, realtime);
 
 	onScopeDispose(() => {
 		for (const unsubscribe of unsubscribeFromEventUpdates.splice(0))

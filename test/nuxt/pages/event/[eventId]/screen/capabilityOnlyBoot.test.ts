@@ -41,6 +41,8 @@ mockNuxtImport('$fetch', () => async (path: string, options: { headers?: Record<
 
 vi.mock('~/composables/core/useRealtime', async () => {
 	const { reactive } = await import('vue');
+	const { createContinuitySignal } = await import('~~/test/helpers/realtime-mock');
+	const continuity = createContinuitySignal();
 	type Handler = (message: Record<string, unknown>) => void;
 	const handlers = new Map<string, Set<Handler>>();
 	const transport = reactive({
@@ -50,6 +52,7 @@ vi.mock('~/composables/core/useRealtime', async () => {
 		onRoom: () => {},
 		offRoom: () => {},
 		setRoom: () => {},
+		onContinuityLost: continuity.onContinuityLost,
 		onChannel: (channel: string, type: string, handler: Handler) => {
 			const key = `${channel}|${type}`;
 			if (!handlers.has(key))
@@ -58,6 +61,8 @@ vi.mock('~/composables/core/useRealtime', async () => {
 			return () => handlers.get(key)!.delete(handler);
 		},
 		watchPresence: () => () => {},
+		/** Signal a channel attached again having lost continuity. */
+		reattach: continuity.reattach,
 		/** Deliver one message to whoever listens on its channel, as the transport would. */
 		deliver: (channel: string, type: string, message: Record<string, unknown>) => {
 			for (const handler of handlers.get(`${channel}|${type}`) ?? [])
@@ -120,10 +125,11 @@ function history(name: string, result: Record<string, unknown> = {}) {
 const pendingResult = { outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null };
 const recordedLoss = { outcome: 'loss', hasResult: true, playerGameWins: 1, opponentGameWins: 2 };
 
-/** The output's stand-in transport, with a hand to deliver Event messages. */
+/** The output's stand-in transport, with a hand to deliver Event messages and signal a reattach. */
 function realtime() {
 	return tryUseRealtime() as unknown as {
 		connectionState: string;
+		reattach: (channel: string) => void;
 		deliver: (channel: string, type: string, message: Record<string, unknown>) => void;
 	};
 }
@@ -230,7 +236,7 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
-	it('shows a result missed while disconnected once it reconnects', async () => {
+	it('shows a result missed while disconnected once its Event channel is attached again', async () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
@@ -245,6 +251,7 @@ describe('a capability-only Screen Output', () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
 		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
 		realtime().connectionState = 'connected';
+		realtime().reattach('event:42');
 		await settleUntil(() => wrapper.text().includes('LOSS'));
 
 		expect(wrapper.text()).toContain('LOSS');
