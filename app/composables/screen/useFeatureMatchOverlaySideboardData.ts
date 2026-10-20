@@ -21,9 +21,10 @@ interface SideboardSourceState {
 	/**
 	 * Per-side source identity: player, source-record freshness, the deck the
 	 * fetch actually resolved, and its sideboard — a resolved deck card rewrites
-	 * that without moving the Player's revision (#648). It is how a still-degraded rebuild can tell
-	 * "identical placeholder rendering, keep it" from "the source changed
-	 * mid-outage, swap it in" — the Deck Screen Mode's rule (#465), held per side.
+	 * that without moving the Player's revision (#648). It is how a
+	 * still-degraded rebuild can tell "identical placeholder rendering, keep it"
+	 * from "the source changed mid-outage, swap it in" — the Deck Screen Mode's
+	 * rule (#465), held per side.
 	 */
 	stamps: Record<PlayerSide, string | null>;
 }
@@ -267,7 +268,8 @@ export function useFeatureMatchOverlaySideboardData(
 			}
 		}));
 		unsubscribeFromDeckChanges.push(realtime.onChannel(channel, 'playerDeck:cardsResolved', ({ playerIds }) => {
-			if (PLAYER_SIDES.some(side => playerIds.includes(requests.value[side]?.playerId)))
+			const shown = PLAYER_SIDES.flatMap(side => requests.value[side]?.playerId ?? []);
+			if (shown.some(playerId => playerIds.includes(playerId)))
 				void load();
 		}));
 	}, { immediate: true });

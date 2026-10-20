@@ -485,7 +485,8 @@ export function eventDataPublicationModule() {
 	}
 
 	async function playerDeckCardsResolved({ eventId, originConnectionId, ...payload }: PlayerDeckCardsResolvedInput) {
-		await publishEventDataChange(eventId, 'playerDeck:cardsResolved', payload, originConnectionId);
+		// Published plainly: no Graphic Input Binding reads a Deck List's cards.
+		await publishMessage(eventId, 'playerDeck:cardsResolved', payload, originConnectionId);
 	}
 
 	return {
