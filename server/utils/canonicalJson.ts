@@ -4,8 +4,8 @@
  *
  * Two values that differ only in key order render identically, which is what
  * comparing a stored document with the same document as a client sent it back
- * needs. Ordered by codepoint rather than locale because Command Receipts persist
- * the result and compare it across processes.
+ * needs. Ordered by codepoint rather than locale, so the result is the same in
+ * every process that renders it.
  */
 export function canonicalJson(value: unknown): string {
 	if (Array.isArray(value))

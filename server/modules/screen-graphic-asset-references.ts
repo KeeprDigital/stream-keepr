@@ -12,6 +12,7 @@ import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import {
+	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceClause,
 	graphicsAuthoringLeaseModule,
 } from '~~/server/modules/graphics-authoring-lease';
@@ -342,8 +343,10 @@ export async function updateScreenModeConfigWithGraphicAssetReferences(input: {
 		// read — and that is a different conflict from a concurrent Screen edit,
 		// which the client's own reload-and-restate does converge on. All are 409;
 		// only the last is worth restating.
-		if (current.stateVersion === expectedVersion && input.leaseFence)
-			await graphicsAuthoringLeaseModule().requireWritable(input.leaseFence, input.leaseFence.sessionId);
+		if (current.stateVersion === expectedVersion && input.leaseFence
+			&& await graphicsAuthoringLeaseModule().fenceRefused(input.leaseFence, now)) {
+			throw graphicsAuthoringLeaseConflict();
+		}
 		throw current.stateVersion === expectedVersion
 			? new StateConflictError('Graphic Asset Reference', input.id)
 			: new StateConflictError('Screen', input.id);

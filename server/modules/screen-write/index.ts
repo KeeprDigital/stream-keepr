@@ -15,12 +15,12 @@ import { admitScreenGraphicsEditWrite } from '~~/server/modules/graphics-authori
 import { parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
 import { cardService } from '~~/server/services/card';
 import { screenService } from '~~/server/services/screen';
+import { canonicalJson } from '~~/server/utils/canonicalJson';
 import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
 import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
-import { canonicalJson } from '~~/shared/utils/canonicalJson';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
@@ -149,15 +149,16 @@ function rejectChangedGraphicAssetReferencesOnGenericUpdate(
 	}
 }
 
-/*
- * What a Graphics Authoring Lease protects on a Screen: its graphics Edit
+/**
+ * The canvas fields of a Screen's graphics Edit workspace.
+ *
+ * What a Graphics Authoring Lease protects on a Screen is its graphics Edit
  * workspace, which is the Broadcast Graphics stack and — while the Screen is in
  * Broadcast Graphics mode — the canvas every Broadcast Graphic is composed in.
  * Resizing the canvas moves the frame a holder's composition was authored into,
  * which is the harm the lease exists to prevent. Every other Screen field and
  * every other Screen Mode stays open: live operation must not wait on an author.
  */
-
 const CANVAS_FIELDS = ['width', 'height'] as const;
 
 function namesCanvas(config: Record<string, unknown>): boolean {

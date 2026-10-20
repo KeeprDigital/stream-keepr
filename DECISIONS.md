@@ -797,6 +797,8 @@ The lease was only checked at two routes. The generic Screen write reached the s
 - The fence uses the server's clock at commit. A lease that lapses between admission and commit admits the write, which matches the lease's own rule.
 - Two takeovers in the same instant still both report success (see the lease module); the fence orders whichever holder the table records.
 - Feature Match Layout placement keeps its admission-only lease check. No client takes a lease on a Feature Match Overlay layout, and its mode configuration route has none.
+- Broadcast Graphic Template placement is admitted inside the mode configuration write, after the template is read. A non-holder placing a missing template now gets its 404 before the lease's 409. Nothing is written either way.
+- Deleting a Screen is not lease-gated. It removes the Screen rather than editing its workspace, and its lease lapses at the holder's next missed heartbeat.
 
 ### Rejected alternatives
 

@@ -8,8 +8,8 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import {
+	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceCondition,
-	graphicsAuthoringLeaseModule,
 } from '~~/server/modules/graphics-authoring-lease';
 import {
 	deleteScreenWithGraphicAssetReferences,
@@ -149,8 +149,10 @@ export function screenService() {
 		if (!screen)
 			return undefined;
 
+		// With the version still standing, the fence is the only other condition
+		// the statement had.
 		if (leaseFence && screen.stateVersion === currentVersion)
-			await graphicsAuthoringLeaseModule().requireWritable(leaseFence, leaseFence.sessionId);
+			throw graphicsAuthoringLeaseConflict();
 		throw new StateConflictError('Screen', id);
 	};
 

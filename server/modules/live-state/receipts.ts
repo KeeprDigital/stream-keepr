@@ -4,8 +4,8 @@ import type { DbLiveStateCommandReceipt } from '~~/server/db/schema';
 import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { liveStateCommandReceipts } from '~~/server/db/schema';
+import { canonicalJson } from '~~/server/utils/canonicalJson';
 import { selectForInsert } from '~~/server/utils/db';
-import { canonicalJson } from '~~/shared/utils/canonicalJson';
 
 /**
  * How many of an aggregate's most recent commands keep a receipt.

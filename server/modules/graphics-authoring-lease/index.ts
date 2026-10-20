@@ -12,6 +12,7 @@ import { db } from '~~/server/db';
 import { graphicsAuthoringLeases } from '~~/server/db/schema';
 import { sessionHolderName } from '~~/server/utils/actorNames';
 import {
+	graphicsAuthoringLeaseAllowsWrite,
 	graphicsAuthoringLeaseDeadline,
 	graphicsAuthoringLeaseState,
 	isGraphicsAuthoringLeaseLive,
@@ -106,7 +107,8 @@ export function graphicsAuthoringLeaseFenceClause(
 	return fenceDialect.sqlToQuery(graphicsAuthoringLeaseFenceCondition(fence, now));
 }
 
-function graphicsAuthoringLeaseConflict() {
+/** The refusal every lease admission answers, at the door or at the commit. */
+export function graphicsAuthoringLeaseConflict() {
 	return createError({
 		statusCode: 409,
 		statusMessage: 'Conflict',
@@ -323,6 +325,17 @@ export function graphicsAuthoringLeaseModule() {
 		};
 	}
 
+	/**
+	 * Whether the fence is what refused a write that did not commit.
+	 *
+	 * Judged at the instant the write's own condition was, so a lease that lapsed
+	 * since still reads as the refusal it was. Only a release or takeover landing
+	 * in between can change the answer, and either way the write stands refused.
+	 */
+	async function fenceRefused(fence: GraphicsAuthoringLeaseFence, now: number): Promise<boolean> {
+		return !graphicsAuthoringLeaseAllowsWrite(await loadRecord(fence.artifact), fence.sessionId, now);
+	}
+
 	/** Give up a lease this session holds. Another session's lease is untouched. */
 	async function release(
 		ref: GraphicsAuthoringLeaseRef,
@@ -337,5 +350,5 @@ export function graphicsAuthoringLeaseModule() {
 		return await describe(ref, sessionId);
 	}
 
-	return { describe, requireWritable, acquire, release };
+	return { describe, requireWritable, fenceRefused, acquire, release };
 }
