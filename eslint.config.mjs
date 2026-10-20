@@ -12,7 +12,7 @@ export default withNuxt(
 			'.worktrees/**',
 			'AGENTS.md',
 			'CLAUDE.md',
-			'worker-configuration.d.ts',
+			'**/worker-configuration.d.ts',
 		],
 		typescript: true,
 		vue: true,

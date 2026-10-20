@@ -290,6 +290,27 @@ describe('the built Worker smoke runner', () => {
 		expect(workerGuard.match(/pnpm build/gu)).toHaveLength(1);
 	});
 
+	it('typechecks and bundles the silent-video validator Worker in verify and CI', async () => {
+		// #618: the validator deploys from its own wrangler.jsonc, so the app's
+		// programs and build never see it.
+		const repositoryRoot = join(import.meta.dirname, '../../..');
+		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		expect(packageJson.scripts['typecheck:validator']).toContain('-p workers/silent-video-validator/tsconfig.json');
+		expect(packageJson.scripts['validator:dry-run']).toContain('--config workers/silent-video-validator/wrangler.jsonc');
+		// CI's `checks` job runs `pnpm typecheck`, so the validator program rides on it.
+		expect(packageJson.scripts.typecheck).toMatch(/&& pnpm typecheck:validator(?: |$)/u);
+
+		const { selectGates } = await import('../../../scripts/verify.mjs');
+		expect(Object.keys(selectGates([]))).toEqual(expect.arrayContaining(['typecheck:validator', 'validator:dry-run']));
+		expect(Object.keys(selectGates(['--quick']))).toContain('typecheck:validator');
+
+		const ci = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+		const steps = [...ci.matchAll(/run: (pnpm .+)$/gmu)].map(match => match[1]!);
+		expect(steps).toEqual(expect.arrayContaining(['pnpm typecheck', 'pnpm validator:dry-run']));
+	});
+
 	it('runs `pnpm test` as the test gates of verify\'s graph', async () => {
 		const repositoryRoot = join(import.meta.dirname, '../../..');
 		const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as {
