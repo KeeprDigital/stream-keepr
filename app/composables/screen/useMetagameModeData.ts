@@ -3,7 +3,7 @@ import type {
 	CardBreakdownResponse,
 } from '~~/shared/types/metagame';
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
-import { metagameAggregateDependencies } from '~/modules/metagame/screenDependencies';
+import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModePagination } from '~/modules/screen-mode/pagination';
 
@@ -36,10 +36,10 @@ export function useMetagameModeData() {
 		read: () => outputReads.metagame(),
 		initialData: null,
 		errorMessage: 'Failed to load metagame data',
-		dependsOn: metagameAggregateDependencies(() => config.value.scope === 'playerList' ? config.value.playerListId : null),
+		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
 	const loading = freshness.loading;
-	const error = computed(() => outputReads.scope.value ? freshness.error.value : 'No event loaded');
+	const error = freshness.error;
 
 	// ── Response data ──
 	const archetypeData = computed<ArchetypeBreakdownResponse | null>(() => {

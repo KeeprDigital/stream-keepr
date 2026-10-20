@@ -422,6 +422,17 @@ describe('useMetagameModeData', () => {
 			expect(usePlayerStore().dataVersion).toBe(0);
 		});
 
+		it('re-reads when a Melee round sync rewrites standings', async () => {
+			mutableConfig.scope = 'minPoints';
+			await showingMetagame();
+
+			deliver('melee:roundSynced', { roundId: 31, matchCount: 8, created: 0, updated: 8, staleDeleted: 0 });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(usePlayerStore().dataVersion).toBe(0);
+		});
+
 		it('shows a breakdown missed while disconnected once its channel is attached again', async () => {
 			const { displayRows } = await showingMetagame();
 

@@ -274,13 +274,13 @@ describe('useTopCardsModeData', () => {
 		});
 	});
 
-	it('reports no Event, and reads nothing, until the Screen and its Event are known', async () => {
+	it('reads nothing, and reports no failure, until the Screen and its Event are known', async () => {
 		mockEventId.value = null;
 
 		const { error } = makeTopCardsModeData();
 		await flushPromises();
 
 		expect(mockFetch).not.toHaveBeenCalled();
-		expect(error.value).toBe('No event loaded');
+		expect(error.value).toBeNull();
 	});
 });

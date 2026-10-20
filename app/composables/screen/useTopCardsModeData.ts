@@ -1,5 +1,5 @@
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
-import { metagameAggregateDependencies } from '~/modules/metagame/screenDependencies';
+import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 export function useTopCardsModeData() {
@@ -25,10 +25,10 @@ export function useTopCardsModeData() {
 		read: () => outputReads.topCards(),
 		initialData: null,
 		errorMessage: 'Failed to load top cards data',
-		dependsOn: metagameAggregateDependencies(() => config.value.scope === 'playerList' ? config.value.playerListId : null),
+		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
 	const loading = freshness.loading;
-	const error = computed(() => outputReads.scope.value ? freshness.error.value : 'No event loaded');
+	const error = freshness.error;
 
 	const cardData = computed(() => freshness.data.value);
 	const entries = computed(() => cardData.value?.entries ?? []);
