@@ -71,7 +71,7 @@ describe('backgroundGraphicAssetReferences', () => {
 		const references = backgroundGraphicAssetReferences(config([
 			{ id: 'wash', type: 'color', enabled: true, opacity: 1, color: '#0b1020' },
 			{ id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(#000, #123)' },
-			{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '/plate.png' }, fit: 'cover' },
+			{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' },
 			{ id: 'anim', type: 'animation', enabled: true, opacity: 1, animation: { effect: 'fog' } },
 		]));
 
@@ -132,7 +132,7 @@ describe('a plain overlay mode’s own Background Layer stack', () => {
 			[mode]: {
 				backgroundLayers: [
 					assetImageLayer('plate'),
-					{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '/plate.png' }, fit: 'cover' },
+					{ id: 'remote', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' },
 				],
 			},
 		} as GraphicAssetReferencingScreenModeConfigs;

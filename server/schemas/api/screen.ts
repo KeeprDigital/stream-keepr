@@ -113,6 +113,7 @@ import {
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
+import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
 const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
@@ -223,25 +224,15 @@ const nonNegativePixelSchema = finiteNumberSchema.nonnegative().max(MAX_PIXEL_VA
 const cssColorSchema = z.string().min(1).max(500);
 const optionalCssColorSchema = cssColorSchema.optional();
 /**
- * A Remote Media URL: HTTPS, or root-relative for a file the application
- * bundles; empty means unset. Plain HTTP is refused because an HTTPS-served
- * Screen blocks it as mixed content and would show a blank output (ADR-0021).
+ * A Remote Media URL: HTTPS, or root-relative under an app-served media prefix;
+ * empty means unset (ADR-0021). The rule and its wording live in
+ * `remoteMediaUrlRefusal`, which the editor shows before a save is attempted.
  */
-const safeMediaUrlSchema = z.string().max(2000).refine((value) => {
-	if (value === '')
-		return true;
-	if (value.startsWith('/') && !value.startsWith('//'))
-		return true;
-	try {
-		const parsed = new URL(value);
-		return parsed.protocol === 'https:'
-			&& parsed.username === ''
-			&& parsed.password === '';
-	}
-	catch {
-		return false;
-	}
-}, 'A Remote Media URL must be HTTPS or a root-relative path');
+const safeMediaUrlSchema = z.string().max(2000).superRefine((value, context) => {
+	const refusal = remoteMediaUrlRefusal(value);
+	if (refusal !== undefined)
+		context.addIssue({ code: 'custom', message: refusal });
+});
 const graphicAssetReferenceSchema = z.object({
 	assetId: z.string().min(1).max(100).transform(graphicAssetId),
 	revisionId: z.string().min(1).max(100).transform(graphicAssetRevisionId),

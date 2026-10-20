@@ -28,7 +28,7 @@ const global = {
 	},
 };
 
-const media = { enabled: true, source: { kind: 'url' as const, url: '/loop.mp4' }, fit: 'cover' as const, opacity: 0.5, playbackRate: 2, loop: true };
+const media = { enabled: true, source: { kind: 'url' as const, url: '/video/loop.mp4' }, fit: 'cover' as const, opacity: 0.5, playbackRate: 2, loop: true };
 
 function numberField(wrapper: ReturnType<typeof mount>, testId: string) {
 	return wrapper.findAllComponents(UInputNumberStub).find(input => input.attributes('data-testid') === testId)!;
