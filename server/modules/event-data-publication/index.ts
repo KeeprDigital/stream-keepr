@@ -35,6 +35,10 @@ interface FeatureMatchSlotsUpdatedInput extends PublicationInput {
 	slotIds: number[];
 }
 
+interface EventDataChangedInput extends PublicationInput {
+	messages: readonly EventDataMessage[];
+}
+
 interface FeatureMatchSlotsReorderedInput extends PublicationInput {
 	slots: { matchId: number; sortOrder: number }[];
 }
@@ -124,25 +128,40 @@ async function publishEventDataChange<T extends MessageType>(
 	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
 	originConnectionId?: string,
 ): Promise<void> {
-	await publishEventDataMessage(eventId, messageType, payload, originConnectionId);
+	await publishMessage(eventId, messageType, payload, originConnectionId);
 	await refreshBroadcastGraphicsBindings(eventId);
 }
 
 /**
- * The announcement half on its own, for a caller publishing a run of related changes.
+ * One realtime message, decided before anything is published, so a caller can hold
+ * a whole run of them as a value. Only messages that carry a payload qualify.
+ */
+export type EventDataMessage = {
+	[T in MessageType]: MessagePayload<T> extends undefined ? never : { type: T; payload: MessagePayload<T> };
+}[MessageType];
+
+/**
+ * Announce a run of related Event Data changes, in order, and let anything resolving
+ * against them catch up once.
  *
  * The re-resolution is per Event rather than per message, so a caller that publishes
  * several in one operation catches its Broadcast Graphics up once at the end instead
  * of once per message — the same work, done once. Every caller that publishes exactly
  * one change uses `publishEventDataChange` and never sees this.
  */
-async function publishEventDataMessage<T extends MessageType>(
+async function publishEventDataMessages(
 	eventId: number,
-	messageType: T,
-	payload: MessagePayload<T> extends undefined ? never : MessagePayload<T>,
+	messages: readonly EventDataMessage[],
 	originConnectionId?: string,
 ): Promise<void> {
-	await publishMessage(eventId, messageType, payload, originConnectionId);
+	if (messages.length === 0)
+		return;
+	for (const message of messages) {
+		// The pairing of type and payload is what `EventDataMessage` guarantees; a
+		// union cannot carry it through `publishMessage`'s per-type overloads.
+		await publishMessage(eventId, message.type, message.payload as never, originConnectionId);
+	}
+	await refreshBroadcastGraphicsBindings(eventId);
 }
 
 async function publishSyncMessage<T extends MessageType>(
@@ -425,26 +444,31 @@ export function eventDataPublicationModule() {
 		// iterating slotIds and looking up each in the fetched map.
 		const slots = await featureMatchService().findByEventId(eventId);
 		const slotsById = new Map(slots.map(slot => [slot.id, slot]));
-		const published = [];
-
-		for (const slotId of slotIds) {
+		const published = slotIds.flatMap((slotId) => {
 			const slot = slotsById.get(slotId);
-			if (!slot)
-				continue;
-			const featureMatch = mapFeatureMatchToResponse(slot);
-			// Announced one by one, because each message names one Slot.
-			await publishEventDataMessage(eventId, 'featureMatch:updated', { featureMatch }, originConnectionId);
-			published.push(featureMatch);
-		}
+			return slot ? [mapFeatureMatchToResponse(slot)] : [];
+		});
 
-		// Caught up once, because re-resolution is per Event and not per Slot. Fifty Slots
-		// moving in one operation is one Event Data change as far as a Graphic Input
-		// Binding is concerned, and sweeping per Slot would repeat the whole Event's work
-		// fifty times inside one request.
-		if (published.length > 0)
-			await refreshBroadcastGraphicsBindings(eventId);
+		// Announced one by one, because each message names one Slot, and caught up once,
+		// because re-resolution is per Event and not per Slot. Fifty Slots moving in one
+		// operation is one Event Data change as far as a Graphic Input Binding is
+		// concerned, and sweeping per Slot would repeat the whole Event's work fifty
+		// times inside one request.
+		await publishEventDataMessages(
+			eventId,
+			published.map(featureMatch => ({ type: 'featureMatch:updated', payload: { featureMatch } })),
+			originConnectionId,
+		);
 
 		return published;
+	}
+
+	/**
+	 * Publish a run of messages decided as one change — a Feature Match Slot
+	 * Promotion's — re-resolving Graphic Input Bindings once for the lot.
+	 */
+	async function eventDataChanged({ eventId, messages, originConnectionId }: EventDataChangedInput) {
+		await publishEventDataMessages(eventId, messages, originConnectionId);
 	}
 
 	async function roundMatchesRefreshed({ eventId, originConnectionId, ...payload }: RoundMatchesRefreshedInput) {
@@ -529,6 +553,7 @@ export function eventDataPublicationModule() {
 		screenUpdated,
 		screenDeleted,
 		featureMatchSlotsUpdated,
+		eventDataChanged,
 		roundMatchesRefreshed,
 		meleeDeckListsSynced,
 		meleePlayersSynced,

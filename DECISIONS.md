@@ -782,7 +782,7 @@ Accepted · 2026-10-20 · [#593](https://github.com/KeeprDigital/stream-keepr/is
 
 **Every epoch of a live aggregate opens and closes through Sequenced Live State.** `createSequencedLiveEpochs` (`server/modules/live-state/epochs.ts`) builds a transition: the feature's close statements, a statement forgetting the ended epochs' Command Receipts, and the feature's open statements, in that order. The caller commits them alone or inside a larger batch, then settles the transition. The feature supplies only which epochs a scope holds and how one is closed, opened and announced. Feature Match Sessions (the sessions route, Slot create, update and sync, the command fallback, Slot Promotion, the Melee reset) and Broadcast Graphics Live Sessions (reset, mode change, Screen delete, first load) all use it.
 
-**Whether to announce is decided from the commit.** The scope's active epochs are read when the transition is built and again when it settles. Only a difference is announced. A transition whose conditions skipped a Slot or Screen announces nothing for it. A new Feature Match Session is announced as its own `SessionStarted`, carrying its whole snapshot, and Graphic Input Bindings re-resolve once per transition. A Broadcast Graphics epoch change is announced as `epochEnded`. An end on the way to a Screen's deletion and the epoch a first load opens opt out.
+**Whether to announce is decided from the commit.** The scope's active epochs are read when the transition is built and again when it settles. Only a difference is announced. A transition whose conditions skipped a Slot or Screen announces nothing for it. A new Feature Match Session is announced as its own `SessionStarted`, carrying its whole snapshot, and Graphic Input Bindings re-resolve once per transition. A Slot Promotion publishes its Sessions' `SessionStarted` among its own messages instead (ADR-0033). A Broadcast Graphics epoch change is announced as `epochEnded`. An end on the way to a Screen's deletion and the epoch a first load opens opt out.
 
 ### Why
 
@@ -792,7 +792,7 @@ The close, open and receipt-forgetting sequence was written by hand in three pla
 
 - Command Receipts from an ended epoch are gone in the commit that ends it. That is pinned against SQLite in `test/unit/server/modules/liveStateEpochs.sqlite.test.ts`.
 - A Screen leaving Broadcast Graphics mode with no active epoch no longer publishes `epochEnded` with a null session.
-- A Slot write that opens a Session now re-resolves bindings twice: once for the Session and once for the Slot's own `featureMatch:updated`.
+- A Slot write that opens a Session now re-resolves bindings twice: once for the Session and once for the Slot's own `featureMatch:updated`. A Slot Promotion re-resolves once (ADR-0033).
 - Every Feature Match Session transition selects its Slots through one JSON-array subquery. So a whole Event's Slots open in a handful of statements, and the Melee reset is no longer its own variant.
 - ADR-0004 is unaffected: a command's notification still carries the difference.
 - A promotion that commits but loses to a later one before its outcome is decided announces nothing (#576). That includes the new Sessions of the Slots it cleared. Peers show those Slots' previous Sessions until the next resync or Slot message. This was accepted because it needs two operators promoting the same Match within moments, and it corrects itself.
@@ -897,3 +897,34 @@ No Player is already a valid Deck Source, and a Screen with nothing selected is 
 
 - **Refuse to delete a selected Player, as a selected Broadcast Deck List is refused.** The Melee data reset would then have to refuse a configuration change too, or delete around the Screens. Either way, operators would have to hunt for Screens before changing Melee configuration.
 - **An `AFTER DELETE` trigger on `players`.** It would cover every path without code, but the service could not say which Screens changed, and they still have to be announced.
+
+## ADR-0033: A Feature Match Slot Promotion decides its outcome purely, then publishes once
+
+Accepted · 2026-10-20 · [#594](https://github.com/KeeprDigital/stream-keepr/issues/594)
+
+### Decision
+
+**The outcome is a pure decision.** `decidePromotion` (`server/modules/feature-match-promotion/decision.ts`) takes what the promotion read before its batch and what it reads right after the commit. It answers `lost`, `failed`, or `standing`. Only a standing decision can describe a publication. That description takes later reads and answers `won` or `won-then-moved`, the messages to send, and the response. A lost promotion has no messages to publish, so "decide the outcome before publishing" (#577) holds by the module's shape.
+
+**The publication is one change.** Every new Session's `SessionStarted`, the Assignment messages and every Slot's `featureMatch:updated` are published in that order. Graphic Input Bindings then re-resolve once, however many Slots were cleared. The promotion settles its Session transition with `announce: false` and publishes the Sessions among its own messages.
+
+**The reverse sync runs between the decision and the publication.** It writes without announcing, and the publication reads after it, so peers get the players' latest data. When the sync faults, the committed promotion is still published, and then the fault is answered.
+
+**Contradicts ADR-0029's consequence that a Slot write opening a Session re-resolves bindings twice.** A promotion re-resolves once. It also goes against the epoch module's note that only an end nobody may be told about opts out of announcing. A promotion opts out because it announces the same Sessions itself, in the same order as before.
+
+### Why
+
+One function ran about ten steps in a fixed order. It published 3+N messages, and each message re-resolved bindings. Its unit test mocked seven modules. The race histories were proven only by an integration test that #577 had to run 401 times.
+
+### Consequences
+
+- Every outcome is unit-tested against the pure decision with no mocks (`featureMatchPromotionDecision.test.ts`). The fence, the publication and the refresh count are pinned against SQLite (`featureMatchPromotion.sqlite.test.ts`).
+- A `SessionStarted` now carries the Session as it is after the reverse sync, not at sequence 1.
+- A promotion moved off before the later reads still publishes the Assignment it committed. Its Slot messages and response show the move, as before (#575).
+- #605's plan fence is unchanged. It still rides in the batch ahead of the Session transition.
+- A reverse sync that has to open a missing Session announces it on its own, with its own refresh. That cannot happen to the Slots a promotion just opened Sessions for.
+
+### Rejected alternatives
+
+- **Decide and describe in one call from one set of reads.** Either the reverse sync runs before the decision, writing to the winner's Slots on a lost promotion where no one is told, or the publication carries data from before the sync.
+- **Publish the Assignment before a fallible reverse sync, as before.** The single publication would split in two, with a refresh for each half.

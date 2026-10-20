@@ -48,7 +48,8 @@ export interface SequencedLiveEpochSettleOptions {
 	 * Announce what changed. On by default: a new epoch is learned from its own
 	 * announcement, whichever path opened it. Only an end nobody may be told about —
 	 * a Screen on its way to deletion, or an epoch opened by the read that is about to
-	 * return it — opts out.
+	 * return it — opts out, or a caller that announces the returned change itself as
+	 * part of one larger publication (a Feature Match Slot Promotion, ADR-0033).
 	 */
 	announce?: boolean;
 }

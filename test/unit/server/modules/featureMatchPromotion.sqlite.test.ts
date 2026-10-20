@@ -22,7 +22,8 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; st
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-const publishMessage = vi.fn(async () => {});
+const publishMessage = vi.fn(async (..._args: unknown[]) => {});
+const refreshBroadcastGraphicsBindings = vi.fn(async (_eventId: number) => {});
 
 vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/utils/ably', () => ({
@@ -30,6 +31,12 @@ vi.doMock('~~/server/utils/ably', () => ({
 	publishMessageStrict: publishMessage,
 	publishScreenCommand: async () => {},
 	getOriginConnectionId: () => undefined,
+}));
+// Counted rather than run: what is under test is how often a promotion asks
+// Broadcast Graphics to re-resolve, not the re-resolution itself.
+vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
+	...await importOriginal<typeof import('~~/server/modules/broadcast-graphics-live-session')>(),
+	refreshBroadcastGraphicsBindings,
 }));
 
 const { featureMatchPromotionModule } = await import('~~/server/modules/feature-match-promotion');
@@ -47,6 +54,9 @@ afterAll(async () => {
  */
 let beforeNextBatch: (() => Promise<unknown>) | null = null;
 let afterNextBatch: (() => Promise<unknown>) | null = null;
+/** Fails every batch after the next one, as a store fault would. */
+let faultAfterNextBatch = false;
+let faulting = false;
 
 // Patched by assignment rather than `vi.spyOn`: the suite config restores
 // spies before every test, and this patch must hold for the whole file.
@@ -56,16 +66,23 @@ db.batch = (async (queries: unknown) => {
 	const after = afterNextBatch;
 	beforeNextBatch = null;
 	afterNextBatch = null;
+	if (faulting)
+		throw new Error('D1_ERROR: storage unavailable');
 	await before?.();
 	const results = await realBatch(queries);
 	await after?.();
+	faulting = faultAfterNextBatch;
+	faultAfterNextBatch = false;
 	return results;
 }) as unknown as typeof db.batch;
 
 beforeEach(() => {
 	beforeNextBatch = null;
 	afterNextBatch = null;
+	faultAfterNextBatch = false;
+	faulting = false;
 	publishMessage.mockClear();
+	refreshBroadcastGraphicsBindings.mockClear();
 });
 
 interface Stage {
@@ -102,6 +119,9 @@ async function stageEvent(): Promise<Stage> {
 	const slots = featureMatchService();
 	const slot1 = await slots.create(eventId, {});
 	const slot2 = await slots.create(eventId, {});
+	// Staging announces the Slots' first Sessions; only what follows is under test.
+	publishMessage.mockClear();
+	refreshBroadcastGraphicsBindings.mockClear();
 
 	return {
 		eventId,
@@ -258,9 +278,16 @@ describe('feature Match Slot Promotion histories that still resolve', () => {
 		let mover: Awaited<ReturnType<typeof promote>> | undefined;
 		afterNextBatch = async () => {
 			mover = await promote(stage, stage.slot1, stage.matchM);
+			publishMessage.mockClear();
+			refreshBroadcastGraphicsBindings.mockClear();
 		};
 
 		await expect(promote(stage, stage.slot2, stage.matchM)).rejects.toMatchObject({ statusCode: 409 });
+
+		// Its operator is told it lost, so no peer is shown any of it, not even the
+		// new Session it opened on the Slot it promoted into (#576, ADR-0029).
+		expect(publishMessage).not.toHaveBeenCalled();
+		expect(refreshBroadcastGraphicsBindings).not.toHaveBeenCalled();
 
 		expect(mover?.promotedSlot).toMatchObject({ id: stage.slot1, matchId: stage.matchM });
 		expect(mover?.clearedSlots).toEqual([expect.objectContaining({ id: stage.slot2, matchId: null })]);
@@ -274,5 +301,157 @@ describe('feature Match Slot Promotion histories that still resolve', () => {
 		expect(await assignmentsOf(stage)).toEqual([
 			expect.objectContaining({ slotId: stage.slot1, matchId: stage.matchM }),
 		]);
+	});
+});
+
+function published() {
+	return publishMessage.mock.calls.map(([, type, payload]) => ({ type, payload }) as { type: string; payload: Record<string, unknown> });
+}
+
+describe('feature Match Slot Promotion publication', () => {
+	it('announces a promotion as one change, re-resolving Graphic Input Bindings once however many Slots it clears', async () => {
+		const stage = await stageEvent();
+		await promote(stage, stage.slot1, stage.matchM);
+		// A third Slot names the same Match by the external identity it was given
+		// since, so moving the Match to Slot 2 clears two Slots.
+		await db.update(schema.matches)
+			.set({ externalId: 'melee-m', externalSource: 'melee' })
+			.where(eq(schema.matches.id, stage.matchM));
+		const slot3 = await featureMatchService().create(stage.eventId, {});
+		await db.update(schema.featureMatches)
+			.set({ externalId: 'melee-m', externalSource: 'melee' })
+			.where(eq(schema.featureMatches.id, slot3.id));
+		publishMessage.mockClear();
+		refreshBroadcastGraphicsBindings.mockClear();
+
+		const moved = await promote(stage, stage.slot2, stage.matchM);
+
+		const bySlot = (a: { id: number }, b: { id: number }) => a.id - b.id;
+		expect(moved.clearedSlots.map(slot => ({ id: slot.id })).sort(bySlot)).toEqual([{ id: stage.slot1 }, { id: slot3.id }].sort(bySlot));
+		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledOnce();
+		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledWith(stage.eventId);
+		const messages = published();
+		expect(messages.map(message => message.type)).toEqual([
+			'featureMatchSession:eventApplied',
+			'featureMatchSession:eventApplied',
+			'featureMatchSession:eventApplied',
+			'featureMatchAssignment:updated',
+			'featureMatch:updated',
+			'featureMatch:updated',
+			'featureMatch:updated',
+		]);
+		// Every moved Slot's new Session.
+		expect(messages.slice(0, 3).map(message => message.payload.slotId).sort()).toEqual([stage.slot1, stage.slot2, slot3.id].sort());
+		expect(messages.slice(0, 3).every(message => message.payload.eventType === 'SessionStarted')).toBe(true);
+		// The promoted Slot last, carrying the Session the response answers with.
+		expect(messages[6]!.payload).toMatchObject({ featureMatch: { id: stage.slot2, matchId: stage.matchM, activeSessionId: moved.promotedSlot.activeSessionId } });
+		// Re-resolved once everything it reads has been announced.
+		expect(refreshBroadcastGraphicsBindings.mock.invocationCallOrder[0]).toBeGreaterThan(publishMessage.mock.invocationCallOrder.at(-1)!);
+	});
+});
+
+describe('feature Match Slot Promotion around its batch', () => {
+	it('refuses a Match or Slot outside the Event before writing anything', async () => {
+		const stage = await stageEvent();
+		const before = await promotionState(stage);
+
+		await expect(promote(stage, stage.slot1, 999_999)).rejects.toMatchObject({ statusCode: 404, message: 'Match not found' });
+		await expect(promote(stage, 999_999, stage.matchM)).rejects.toMatchObject({ statusCode: 404, message: 'Feature match slot not found' });
+
+		expect(await promotionState(stage)).toEqual(before);
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('publishes the promoted players\' latest data, which the reverse sync applied after the commit', async () => {
+		const stage = await stageEvent();
+		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
+		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));
+
+		const promoted = await promote(stage, stage.slot1, stage.matchM);
+
+		expect(promoted.promotedSlot.player1Data).toMatchObject({ name: 'Mia Renamed' });
+		expect(published().at(-1)!.payload).toMatchObject({
+			featureMatch: { id: stage.slot1, player1Data: { name: 'Mia Renamed' } },
+		});
+	});
+
+	it('publishes a committed promotion even when its reverse sync faults, then answers with the fault', async () => {
+		const stage = await stageEvent();
+		const match = await db.query.matches.findFirst({ where: (matches, { eq }) => eq(matches.id, stage.matchM) });
+		await db.update(schema.players).set({ name: 'Mia Renamed' }).where(eq(schema.players.id, match!.player1Id!));
+		faultAfterNextBatch = true;
+
+		await expect(promote(stage, stage.slot1, stage.matchM)).rejects.toThrow('storage unavailable');
+		faulting = false;
+
+		// Peers still learn of the committed promotion, as it is without the sync.
+		expect(published().map(message => message.type)).toEqual([
+			'featureMatchSession:eventApplied',
+			'featureMatchAssignment:created',
+			'featureMatch:updated',
+		]);
+		expect(published().at(-1)!.payload).toMatchObject({ featureMatch: { id: stage.slot1, matchId: stage.matchM } });
+		expect(refreshBroadcastGraphicsBindings).toHaveBeenCalledOnce();
+		expect((await slotRow(stage.slot1))?.matchId).toBe(stage.matchM);
+	});
+
+	it('refuses to discard a Note given to its destination\'s Assignment while it planned', async () => {
+		const stage = await stageEvent();
+		beforeNextBatch = async () => {
+			await db.insert(schema.featureMatchAssignments)
+				.values({ eventId: stage.eventId, roundId: stage.roundId, slotId: stage.slot1, matchId: stage.matchN, note: 'Feature this next' });
+		};
+
+		await expect(promote(stage, stage.slot1, stage.matchM)).rejects.toMatchObject({
+			statusCode: 409,
+			data: { code: 'feature-match-note-discard-required' },
+		});
+
+		expect(await assignmentsOf(stage)).toEqual([
+			expect.objectContaining({ slotId: stage.slot1, matchId: stage.matchN, note: 'Feature this next' }),
+		]);
+		expect((await slotRow(stage.slot1))?.matchId).toBeNull();
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('refuses a Note discard confirmation for an Assignment that has changed since it was reviewed', async () => {
+		const stage = await stageEvent();
+		const first = await promote(stage, stage.slot1, stage.matchN);
+		await db.update(schema.featureMatchAssignments)
+			.set({ note: null, updatedAt: new Date(Date.now() + 1000) })
+			.where(eq(schema.featureMatchAssignments.id, first.assignment.id));
+		const before = await promotionState(stage);
+		publishMessage.mockClear();
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: stage.eventId,
+			slotId: stage.slot1,
+			matchId: stage.matchM,
+			confirmedNoteDiscards: [{ assignmentId: first.assignment.id, updatedAt: new Date(first.assignment.updatedAt) }],
+		})).rejects.toMatchObject({ statusCode: 409 });
+
+		expect(await promotionState(stage)).toEqual(before);
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('answers a confirmed Note discard whose Assignment was deleted while it planned as a conflict', async () => {
+		const stage = await stageEvent();
+		const first = await promote(stage, stage.slot1, stage.matchN);
+		const [noted] = await db.update(schema.featureMatchAssignments)
+			.set({ note: 'Reviewed note' })
+			.where(eq(schema.featureMatchAssignments.id, first.assignment.id))
+			.returning();
+		beforeNextBatch = async () => {
+			await db.delete(schema.featureMatchAssignments).where(eq(schema.featureMatchAssignments.id, noted!.id));
+		};
+
+		await expect(featureMatchPromotionModule().promoteMatchToSlot({
+			eventId: stage.eventId,
+			slotId: stage.slot1,
+			matchId: stage.matchM,
+			confirmedNoteDiscards: [{ assignmentId: noted!.id, updatedAt: noted!.updatedAt }],
+		})).rejects.toMatchObject({ statusCode: 409, name: 'StateConflictError' });
+
+		expect((await slotRow(stage.slot1))?.matchId).toBe(stage.matchN);
 	});
 });
