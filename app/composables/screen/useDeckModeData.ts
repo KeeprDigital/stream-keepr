@@ -18,12 +18,12 @@ interface DeckDisplayState {
 	version: number;
 	source: LoadedDeckSource;
 	/**
-	 * The source's authoritative revision: a Player's update timestamp or a
-	 * Broadcast Deck List revision. It is how a still-degraded
-	 * rebuild can tell "identical placeholder rendering, keep program" from
-	 * "the deck itself changed mid-outage, swap it in" (#465 review).
+	 * Everything the deck was built from, as one comparable value. It is how a
+	 * still-degraded rebuild can tell "identical placeholder rendering, keep
+	 * program" from "the deck itself changed mid-outage, swap it in" (#465
+	 * review), including a resolved deck card, which moves no revision (#648).
 	 */
-	sourceRevision: number | null;
+	inputKey: string;
 	primaryHeader: string;
 	secondaryHeader: string;
 	deckColors: string;
@@ -72,7 +72,8 @@ function readRevision(read: DeckSourceRead | null): number | null | undefined {
  * The Event Data a Deck Source is read from. An edit to a Player's deck rolls
  * their `updatedAt` (#483), and a Broadcast Deck List carries its revision, so
  * an announcement at the revision already held carries nothing new. A Melee
- * sync or a deck review changes what a Player's deck shows without one.
+ * sync, a deck review or a resolved deck card changes what a Player's deck
+ * shows without one.
  */
 function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
 	const selectedPlayerId = () => {
@@ -91,6 +92,10 @@ function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDe
 		'player:updated': ({ player }, held) =>
 			player.id === selectedPlayerId() && deckSourceStamp(player.updatedAt) !== readRevision(held),
 		'playerDeck:reviewed': ({ deck }) => deck.playerId === selectedPlayerId(),
+		'playerDeck:cardsResolved': ({ playerIds }) => {
+			const playerId = selectedPlayerId();
+			return playerId !== null && playerIds.includes(playerId);
+		},
 		// A reviewed deck shows its Archetype's name and colours.
 		'archetype:updated': ({ archetype }, held) => showsArchetype(archetype.id, held),
 		'archetype:deleted': ({ archetypeId }, held) => showsArchetype(archetypeId, held),
@@ -296,12 +301,9 @@ export function useDeckModeData() {
 			if (built && isSelected(built.input.source))
 				void buildDeck(built.input);
 		},
-		// Identity is what is on program: a rebuild of the same source whose
-		// authoritative revision has not changed carries nothing new.
-		isUnchanged: (next) => {
-			const current = displayedDeck.value;
-			return sameDeckSource(current?.source, next.source) && current?.sourceRevision === next.sourceRevision;
-		},
+		// Identity is what is on program: a rebuild from the same input carries
+		// nothing new.
+		isUnchanged: next => displayedDeck.value?.inputKey === next.inputKey,
 		report: (degraded) => {
 			if (cardDataHealth) {
 				cardDataHealth.value = degraded ? 'degraded' : 'complete';
@@ -352,6 +354,7 @@ export function useDeckModeData() {
 
 	interface DeckDisplayInput {
 		source: LoadedDeckSource;
+		/** A Player's update timestamp or a Broadcast Deck List revision. */
 		sourceRevision: number | null;
 		primaryHeader: string;
 		secondaryHeader: string;
@@ -384,7 +387,7 @@ export function useDeckModeData() {
 			deck: {
 				version: ++deckVersion,
 				source: input.source,
-				sourceRevision: input.sourceRevision,
+				inputKey: buildKey(input),
 				primaryHeader: input.primaryHeader,
 				secondaryHeader: input.secondaryHeader,
 				deckColors: input.deckColors,

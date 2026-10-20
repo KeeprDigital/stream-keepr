@@ -54,6 +54,8 @@ interface PlayerDeckPublicationInput extends EntityPublicationInput<DbPlayerDeck
 	archetype?: DbArchetype | null;
 }
 
+interface PlayerDeckCardsResolvedInput extends PublicationInput, MessagePayload<'playerDeck:cardsResolved'> {}
+
 interface ArchetypeKeyCardsUpdatedInput extends PublicationInput {
 	archetypeId: number;
 	keyCards: ArchetypeKeyCard[];
@@ -482,6 +484,10 @@ export function eventDataPublicationModule() {
 		return deck;
 	}
 
+	async function playerDeckCardsResolved({ eventId, originConnectionId, ...payload }: PlayerDeckCardsResolvedInput) {
+		await publishEventDataChange(eventId, 'playerDeck:cardsResolved', payload, originConnectionId);
+	}
+
 	return {
 		broadcastDeckListCreated,
 		broadcastDeckListUpdated,
@@ -530,5 +536,6 @@ export function eventDataPublicationModule() {
 		meleeRoundSynced,
 		meleeDataReset,
 		playerDeckReviewed,
+		playerDeckCardsResolved,
 	};
 }

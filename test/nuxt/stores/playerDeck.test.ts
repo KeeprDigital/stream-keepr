@@ -8,6 +8,7 @@ const mockReviewDeck = vi.fn();
 const mockApplyArchetypeUpdated = vi.fn();
 const mockApplyArchetypeDeleted = vi.fn();
 const mockApplyReviewedDeck = vi.fn();
+const mockClearCachedDeck = vi.fn();
 const mockPlayerStore = reactive({ players: [] as any[] });
 const mockMetagameStore = { applyRemoteInvalidated: vi.fn() };
 const mockFeatureMatchStore = { loadFeatureMatchesByEventId: vi.fn() };
@@ -18,6 +19,7 @@ mockNuxtImport('usePlayerDeckCache', () => () => ({
 	applyArchetypeUpdated: mockApplyArchetypeUpdated,
 	applyArchetypeDeleted: mockApplyArchetypeDeleted,
 	applyReviewedDeck: mockApplyReviewedDeck,
+	clearCachedDeck: mockClearCachedDeck,
 }));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
 mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
@@ -92,6 +94,19 @@ describe('usePlayerDeckStore', () => {
 
 		expect(store.decks[0]).toEqual(reviewedDeck);
 		expect(mockApplyReviewedDeck).toHaveBeenCalledWith(reviewedDeck);
+	});
+
+	it('drops the cached Deck Lists of every Player whose cards another client resolved, and only theirs (#648)', () => {
+		const store = usePlayerDeckStore();
+		const summaries = [deck(), deck({ id: 11, playerId: 3 })];
+		store.decks = structuredClone(summaries) as any;
+
+		store.applyRemoteCardsResolved({ deckIds: [10], playerIds: [2] });
+
+		expect(mockClearCachedDeck).toHaveBeenCalledOnce();
+		expect(mockClearCachedDeck).toHaveBeenCalledWith(2);
+		// A resolved card changes no deck summary.
+		expect(store.decks).toEqual(summaries);
 	});
 
 	it('applies archetype edits to every reviewed deck and its primary player projection', () => {

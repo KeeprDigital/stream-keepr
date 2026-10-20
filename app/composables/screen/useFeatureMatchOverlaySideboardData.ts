@@ -19,8 +19,9 @@ interface SideRequest {
 interface SideboardSourceState {
 	sideboards: FeatureMatchOverlaySideboards;
 	/**
-	 * Per-side source identity: player, source-record freshness, and the deck the
-	 * fetch actually resolved. It is how a still-degraded rebuild can tell
+	 * Per-side source identity: player, source-record freshness, the deck the
+	 * fetch actually resolved, and its sideboard — a resolved deck card rewrites
+	 * that without moving the Player's revision (#648). It is how a still-degraded rebuild can tell
 	 * "identical placeholder rendering, keep it" from "the source changed
 	 * mid-outage, swap it in" — the Deck Screen Mode's rule (#465), held per side.
 	 */
@@ -70,7 +71,8 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
  *
  * Fetch scoping: a side is fetched only while the composition holds at least
  * one `deck-list` item for it. No item, no fetch. Live-follow rides
- * `player:updated`: a revision other than the one on screen re-runs the load.
+ * `player:updated`: a revision other than the one on screen re-runs the load,
+ * as does a `playerDeck:cardsResolved` naming either side's Player.
  *
  * Deck selection ladder: the session snapshot's `deckId` first, because the
  * snapshot pins what this session is actually playing; a pin the collection no
@@ -148,7 +150,6 @@ export function useFeatureMatchOverlaySideboardData(
 		if (!deck)
 			return { cards: null, degraded: false, stamp: `${request.playerId}:${updatedAtMs}:none` };
 
-		const stamp = `${request.playerId}:${updatedAtMs}:${deck.id}`;
 		const sideboardCards = deck.cards
 			.filter(card => card.compartment === 'sideboard')
 			.map(card => ({
@@ -159,6 +160,7 @@ export function useFeatureMatchOverlaySideboardData(
 				cardType: card.cardType ?? '',
 				scryfallId: card.scryfallId,
 			}));
+		const stamp = `${request.playerId}:${updatedAtMs}:${deck.id}:${JSON.stringify(sideboardCards)}`;
 		if (sideboardCards.length === 0)
 			return { cards: [], degraded: false, stamp };
 
@@ -243,16 +245,18 @@ export function useFeatureMatchOverlaySideboardData(
 	/**
 	 * Live-follow of both sides: a `player:updated` whose revision differs from
 	 * the one on screen re-reads, including one announced while a read is still in
-	 * flight. Heard on the Event channel itself, because an output holds no roster
-	 * for the message to replace a record in (#604).
+	 * flight, and so does a resolved deck card of either side's Player (#648).
+	 * Heard on the Event channel itself, because an output holds no roster for the
+	 * message to replace a record in (#604).
 	 */
-	let unsubscribeFromPlayerUpdates: (() => void) | null = null;
+	let unsubscribeFromDeckChanges: Array<() => void> = [];
 	watch(eventId, (evtId) => {
-		unsubscribeFromPlayerUpdates?.();
-		unsubscribeFromPlayerUpdates = null;
+		unsubscribeFromDeckChanges.forEach(unsubscribe => unsubscribe());
+		unsubscribeFromDeckChanges = [];
 		if (!realtime || !evtId)
 			return;
-		unsubscribeFromPlayerUpdates = realtime.onChannel(eventRealtimeChannel(evtId), 'player:updated', ({ player }) => {
+		const channel = eventRealtimeChannel(evtId);
+		unsubscribeFromDeckChanges.push(realtime.onChannel(channel, 'player:updated', ({ player }) => {
 			for (const side of PLAYER_SIDES) {
 				if (requests.value[side]?.playerId !== player.id)
 					continue;
@@ -261,7 +265,11 @@ export function useFeatureMatchOverlaySideboardData(
 					return;
 				}
 			}
-		});
+		}));
+		unsubscribeFromDeckChanges.push(realtime.onChannel(channel, 'playerDeck:cardsResolved', ({ playerIds }) => {
+			if (PLAYER_SIDES.some(side => playerIds.includes(requests.value[side]?.playerId)))
+				void load();
+		}));
 	}, { immediate: true });
 
 	/**
@@ -278,7 +286,7 @@ export function useFeatureMatchOverlaySideboardData(
 	}, eventId, realtime);
 
 	onScopeDispose(() => {
-		unsubscribeFromPlayerUpdates?.();
+		unsubscribeFromDeckChanges.forEach(unsubscribe => unsubscribe());
 		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {

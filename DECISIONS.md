@@ -582,7 +582,7 @@ Deriving from configuration keeps the capability's reach equal to what the Scree
 - The ordinary `/api/events/**` reads stay private. This widens the capability surface, not the Event boundary.
 - An announced active Screen is re-read by id through the Screen Output path, with the credential it was first read with — by id because a slug can be renamed under an output on program.
 - Store-wide reader hooks a rendering installs (`readActiveCardAsScreenOutput`, `readSessionsAsScreenOutput`, `readSessionAsScreenOutput`) are uninstalled when the rendering is disposed, so a control page never inherits them.
-- The Feature Match Overlay sideboard follows `player:updated` on the Event channel directly, since an output holds no roster for the message to update. Deck and Standings hold their reads in Screen Mode Data Freshness, which hears their Event Data messages on the Event channel the same way (#603).
+- The Feature Match Overlay sideboard follows `player:updated` and `playerDeck:cardsResolved` on the Event channel directly, since an output holds no roster for either message to update (ADR-0031). Deck and Standings hold their reads in Screen Mode Data Freshness, which hears their Event Data messages on the Event channel the same way (#603).
 - A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`), so `player:updated` and `featureMatch:updated` keep them live without the private roster or Slot list. Standings does not: an operator's populated roster would stand in for its read.
 - Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
 - Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
@@ -834,3 +834,35 @@ The lease was only checked at two routes. The generic Screen write reached the s
 
 - **Refuse the protected fields on the generic Screen write outright.** That would break the Edit Screen dialog, which sends `modeConfigs` back on every rename.
 - **Keep the admission check alone and state the race.** The fence costs one `NOT EXISTS` on a uniquely indexed row, and it closes the race outright.
+
+## ADR-0031: A resolved deck card announces the Deck Lists it rewrote, and re-projects nothing
+
+Accepted · 2026-10-20 · [#648](https://github.com/KeeprDigital/stream-keepr/issues/648)
+
+### Decision
+
+**Resolving an unresolved deck card publishes `playerDeck:cardsResolved`** once its batch commits. The message names every Deck List the resolution rewrote and their Players (`deckIds`, `playerIds`), because one resolution rewrites every Deck List in the Event holding that name, not only the one the operator opened. It publishes as an Event Data change, so Broadcast Graphics bindings catch up too.
+
+**No Player revision moves and no Archetype projection re-runs.** The projection reads only a deck's Archetype, review, name and colours, none of which a card changes. Key-card matching is a suggestion in the Archetype assignment UI, not part of the projection.
+
+**Subscribers:**
+
+- The Metagame and Top Cards breakdowns re-read on every resolution.
+- The Deck mode re-reads when the message names its selected Player. The Feature Match Overlay sideboard re-reads when it names either side's Player.
+- An operator browser drops those Players' cached Deck Lists and invalidates its Metagame pages. The resolving browser does the same itself, since it skips its own message.
+- Reconnect Resync drops the whole Player deck cache, because that cache is keyed by Player revision and a missed resolution moves none.
+
+### Why
+
+The resolution published nothing. Only the resolving browser cleared its own deck cache. Every other browser and every Screen Output kept the old Deck Lists until some unrelated change made them read again.
+
+### Consequences
+
+- A degraded Deck or sideboard rebuild is compared by what it was built from, not by Player revision. Otherwise a rewritten Deck List could be kept off program as "unchanged" while Scryfall is still failing.
+- Other operators' unresolved-card lists on the Melee sync page do not follow the message. A second resolution of the same group gets a 404 and reloads the list.
+- A Companion resolution names every matching Deck List, including one whose manual Companion it left alone. That one re-reads for nothing.
+
+### Rejected alternatives
+
+- **Reuse `melee:decklistsSynced`.** This is an operator edit, not a sync, and the operator handler for that message reloads whole collections.
+- **Roll each affected Player's `updatedAt` and publish `player:updated`.** That reuses the revision-keyed paths, but it sends one message per Player, possibly hundreds for a common misspelling. It also reports a Player change that did not happen.

@@ -1026,6 +1026,73 @@ describe('useDeckModeData', () => {
 			expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
 		});
 
+		describe('a resolved deck card, which moves no Player revision (#648)', () => {
+			/** The card the server holds once the unresolved entry is resolved. */
+			let resolved: boolean;
+
+			beforeEach(() => {
+				resolved = false;
+				mockReadDeck.mockImplementation(async () =>
+					createDeckResponse([createDeckCard({ name: resolved ? 'Lightning Bolt' : 'Counterspell' })]));
+			});
+
+			it('stages the rewritten Deck List of the selected Player, and reads nothing for another', async () => {
+				mockPlayerId.value = 5;
+				const result = mountDeckModeData();
+				await flushPromises();
+				expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+				resolved = true;
+				deliver('playerDeck:cardsResolved', { deckIds: [9], playerIds: [6] });
+				await flushPromises();
+				expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
+
+				deliver('playerDeck:cardsResolved', { deckIds: [3, 9], playerIds: [5, 6] });
+				await flushPromises();
+
+				expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+				expect(result.pendingSwapVersion.value).toBe(1);
+				result.commitPendingDeck();
+				await nextTick();
+				expect(mainboardNames(result)).toEqual(['Lightning Bolt']);
+			});
+
+			it('swaps in the rewritten Deck List even while its card data is still degraded', async () => {
+				mockFetchScryfallCards.mockResolvedValue({ cards: new Map(), degraded: true });
+				mockPlayerId.value = 5;
+				const result = mountDeckModeData();
+				await flushPromises();
+				expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+				resolved = true;
+				deliver('playerDeck:cardsResolved', { deckIds: [3], playerIds: [5] });
+				await flushPromises();
+
+				expect(result.pendingSwapVersion.value).toBe(1);
+				result.commitPendingDeck();
+				await nextTick();
+				expect(mainboardNames(result)).toEqual(['Lightning Bolt']);
+			});
+
+			it('shows a resolution missed while disconnected once its channel is attached again', async () => {
+				mockPlayerId.value = 5;
+				const result = mountDeckModeData();
+				await flushPromises();
+
+				mockRealtime.connectionState = 'disconnected';
+				await nextTick();
+				resolved = true;
+				mockRealtime.connectionState = 'connected';
+				continuity.reattach('event:1');
+				await flushPromises();
+
+				expect(result.pendingSwapVersion.value).toBe(1);
+				result.commitPendingDeck();
+				await nextTick();
+				expect(mainboardNames(result)).toEqual(['Lightning Bolt']);
+			});
+		});
+
 		it('re-reads while disconnected without re-staging a deck that has not changed', async () => {
 			vi.useFakeTimers();
 			try {

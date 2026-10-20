@@ -9,7 +9,7 @@ interface MetagameBreakdownScoping {
 /**
  * The Event Data a Screen Output's Metagame breakdown is read from, for Screen
  * Mode Data Freshness: the Players in scope (their standing, activity and
- * Archetype), their reviewed Deck Lists, the Archetypes, and the Player List
+ * Archetype), their reviewed Deck Lists and the cards in them, the Archetypes, and the Player List
  * scoping it. Melee syncs rewrite Players, Deck Lists and standings in bulk.
  *
  * These are the breakdown's own invalidations, not the Player store's: a deck
@@ -28,6 +28,7 @@ export function metagameBreakdownDependencies(scoping: () => MetagameBreakdownSc
 		'player:updated': true,
 		'player:deleted': true,
 		'playerDeck:reviewed': true,
+		'playerDeck:cardsResolved': true,
 		'archetype:created': true,
 		'archetype:updated': true,
 		'archetype:deleted': true,
