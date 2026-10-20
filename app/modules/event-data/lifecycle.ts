@@ -15,12 +15,12 @@ export interface EventDataLifecycleOptions<T extends { id: number; eventId?: num
 	eventFilter?: (item: T, currentEventId: number | null) => boolean;
 	remoteScopeFilter?: (item: T) => boolean;
 	/**
-	 * Whether an item a load or an update answered is still current against what this
-	 * collection holds. One that is not was read before something newer this client
+	 * Offers an item a load or an update answered to what the store follows, answering
+	 * whether it lands. One that does not was read before something newer this client
 	 * already holds, and is left behind: the held item keeps its place. Without it,
-	 * every answered item is current.
+	 * every answered item lands.
 	 */
-	isCurrent?: (item: T) => boolean;
+	admit?: (item: T) => boolean;
 	onLoad?: (items: T[]) => void;
 	onMutation?: () => void;
 	onReset?: () => void;
@@ -95,7 +95,7 @@ export function useEventDataLifecycle<
 			if (generation !== loadGeneration || currentEventId.value !== eventId)
 				return null;
 
-			const loaded = options.isCurrent ? keepHeldWhereNewer(data, options.isCurrent) : data;
+			const loaded = options.admit ? keepHeldWhereLeftBehind(data, options.admit) : data;
 			items.value = loaded;
 			hasFetched.value = true;
 			options.onLoad?.(loaded);
@@ -114,11 +114,11 @@ export function useEventDataLifecycle<
 	}
 
 	/**
-	 * A loaded item that is not current keeps the held one in its place; with none
-	 * held, it is still the best this client has.
+	 * A loaded item left behind keeps the held one in its place; with none held, it
+	 * is still the best this client has.
 	 */
-	function keepHeldWhereNewer(data: T[], isCurrent: (item: T) => boolean) {
-		return data.map(item => isCurrent(item) ? item : getById(item.id) ?? item);
+	function keepHeldWhereLeftBehind(data: T[], admit: (item: T) => boolean) {
+		return data.map(item => admit(item) ? item : getById(item.id) ?? item);
 	}
 
 	async function loadByEventId(eventId: number) {
@@ -150,7 +150,7 @@ export function useEventDataLifecycle<
 			entityLabel: options.entityLabel,
 			onSuccess: options.onMutation,
 			flight: lifetime,
-			isCurrent: options.isCurrent,
+			admit: options.admit,
 		});
 	}
 

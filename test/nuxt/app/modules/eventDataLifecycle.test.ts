@@ -252,12 +252,12 @@ describe('event data lifecycle module', () => {
 		});
 	});
 
-	it('leaves behind a loaded or answered item its store does not find current', async () => {
+	it('leaves behind a loaded or answered item its store does not admit', async () => {
 		const repository = { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() };
 		const lifecycle = useEventDataLifecycle<Item, { name: string }, { name: string }>({
 			repository,
 			entityLabel: 'Item',
-			isCurrent: item => item.name !== 'Behind',
+			admit: item => item.name !== 'Behind',
 		});
 		const held = [{ id: 1, eventId: 10, name: 'Held' }, { id: 2, eventId: 10, name: 'Held' }];
 		repository.list.mockResolvedValueOnce(held);
@@ -272,7 +272,7 @@ describe('event data lifecycle module', () => {
 		repository.update.mockResolvedValueOnce({ id: 2, eventId: 10, name: 'Behind' });
 		const answer = await lifecycle.update(10, 2, { name: 'Saving' });
 
-		expect(answer).toEqual({ id: 2, eventId: 10, name: 'Behind' });
+		expect(answer).toEqual({ id: 2, eventId: 10, name: 'Saving' });
 		expect(lifecycle.items.value).toEqual([
 			{ id: 1, eventId: 10, name: 'Held' },
 			{ id: 2, eventId: 10, name: 'Saving' },

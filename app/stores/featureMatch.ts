@@ -24,7 +24,7 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		entityLabel: 'Feature match',
 		// A Slot's Session orders it (ADR-0026): one carrying a Session from an epoch
 		// this client has seen end is left behind whole (#635).
-		isCurrent: slot => useFeatureMatchStateStore().offerSlotSession(slot),
+		admit: slot => useFeatureMatchStateStore().offerSlotSession(slot),
 		onReset: () => {
 			itemLoading.value = false;
 		},
