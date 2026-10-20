@@ -1,9 +1,13 @@
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useCardStore } from '~/stores/card';
+import { useFeatureMatchStore } from '~/stores/featureMatch';
+import { useFeatureMatchStateStore } from '~/stores/featureMatchState';
 import { usePlayerStore } from '~/stores/player';
 import { useScreenStore } from '~/stores/screen';
 import { resetAllEventStores } from '~/utils/eventStores';
@@ -33,6 +37,9 @@ function unauthorized(path: string) {
 mockNuxtImport('$fetch', () => async (path: string, options: { headers?: Record<string, string> } = {}) => {
 	const authorization = options.headers?.authorization;
 	api.requests.push({ path, authorization });
+	// Answered on a later task, as the network would: a read that re-issues
+	// itself on its own answer then shows as a count, not a starved event loop.
+	await new Promise(resolve => setTimeout(resolve, 0));
 	const answer = api.answers.get(path);
 	if (!path.startsWith('/api/screen-output/') || authorization !== `Bearer ${capability}` || !answer)
 		throw unauthorized(path);
@@ -73,6 +80,27 @@ vi.mock('~/composables/core/useRealtime', async () => {
 	return {
 		useRealtime: () => transport,
 		tryUseRealtime: () => transport,
+	};
+});
+
+/**
+ * The Feature Match Overlay's own rendering (Frame, compositor) re-patches
+ * styles without end under happy-dom and starves the timers these tests settle
+ * on. A probe stands in for it, rendering what the real mode data composable
+ * answers: the Session's life total and the Round the Slot follows.
+ */
+vi.mock('~/components/Screen/Modes/FeatureMatchOverlay/Display.vue', async () => {
+	const { defineComponent, h } = await import('vue');
+	const { useFeatureMatchOverlayModeData } = await import('~/composables/screen/useFeatureMatchOverlayModeData');
+	return {
+		// `defineAsyncComponent` takes `default` only from a module it recognises as one.
+		__esModule: true,
+		default: defineComponent({
+			setup() {
+				const { matchState, round } = useFeatureMatchOverlayModeData();
+				return () => h('div', `Life ${matchState.value?.player1.lifeTotal ?? '-'} · ${round.value?.name ?? '-'}`);
+			},
+		}),
 	};
 });
 
@@ -352,5 +380,199 @@ describe('a capability-only Screen Output', () => {
 
 		expect(useCardStore().activeCard).toBeNull();
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+});
+
+/**
+ * A capability-only Feature Match Overlay follows its Slot's Feature Match
+ * Session through the Live State Follower (#592): the operator surface's
+ * ordering guarantees, with no operator Session to read through.
+ */
+describe('a capability-only Feature Match Overlay output', () => {
+	const slotPath = '/api/screen-output/events/42/screens/7/feature-match-slots/11';
+
+	function overlayScreen() {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.featureMatchId = 11;
+		return screen({ currentMode: 'feature-match-overlay', modeConfigs: { 'feature-match-overlay': config } });
+	}
+
+	function session(id: number, sequence: number, lifeTotal: number, matchId = 300) {
+		const currentState = createMockFeatureMatchState();
+		currentState.player1 = { ...currentState.player1, lifeTotal };
+		return {
+			id,
+			eventId: 42,
+			slotId: 11,
+			status: 'active',
+			sourceSnapshot: { eventId: 42, slotId: 11, matchId, player1: { name: 'Alice' }, player2: { name: 'Bob' } },
+			currentState,
+			sequence,
+			closedAt: null,
+			createdAt: '2026-10-17T00:00:00.000Z',
+			updatedAt: '2026-10-17T00:00:00.000Z',
+		};
+	}
+
+	/** The Round each Match the Slot can follow is played in. */
+	const roundOfMatch: Record<number, { id: number; name: string }> = {
+		300: { id: 20, name: 'Round 3' },
+		301: { id: 21, name: 'Round 4' },
+	};
+
+	/** What the Screen's Slot read answers: the Slot, its Session, and the Match, Round and Phase it follows. */
+	function slotRead(activeSession: ReturnType<typeof session>, matchId = 300) {
+		const round = roundOfMatch[matchId]!;
+		return {
+			slot: { ...createWireMockFeatureMatch({ id: 11, eventId: 42, matchId, activeSessionId: activeSession.id }), activeSession },
+			match: { id: matchId, eventId: 42, roundId: round.id },
+			round: { ...round, eventId: 42, phaseId: 5 },
+			phase: { id: 5, eventId: 42, name: 'Swiss' },
+		};
+	}
+
+	/** One `featureMatchSession:eventApplied`, handed to the store as the Event room would. */
+	function sessionEvent(announced: ReturnType<typeof session>) {
+		return useFeatureMatchStateStore().applyRemoteSessionEvent({
+			eventId: 42,
+			slotId: 11,
+			sessionId: announced.id,
+			sequence: announced.sequence,
+			eventType: 'LifeAdjusted',
+			sourceSnapshot: announced.sourceSnapshot,
+			currentState: announced.currentState,
+			timestamp: Date.now(),
+		} as never);
+	}
+
+	/** The Session state the Overlay renders from. */
+	function held() {
+		const store = useFeatureMatchStateStore();
+		return {
+			sessionId: store.sessionIdBySlotId.get(11),
+			sequence: store.sessionSequenceBySlotId.get(11),
+			lifeTotal: store.featureMatchStates.get(11)?.player1.lifeTotal,
+		};
+	}
+
+	function privateRequests() {
+		return api.requests.filter(request => !request.path.startsWith('/api/screen-output/'));
+	}
+
+	/** Lose continuity and come back, with the Slot read answering what `answer` gives. */
+	async function reconnectReading(answer: () => unknown) {
+		realtime().connectionState = 'suspended';
+		await flushPromises();
+		api.answers.set(slotPath, answer);
+		// The page's own Screen re-read is held back, so only the mode's resync can
+		// find out what was missed.
+		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
+		realtime().connectionState = 'connected';
+		realtime().reattach('event:42');
+	}
+
+	/** A Slot read held open until the test answers it. */
+	function heldOpenRead() {
+		const read = { answer: null as ((value: unknown) => void) | null };
+		return {
+			read,
+			answer: () => new Promise((resolve) => {
+				read.answer = resolve;
+			}),
+		};
+	}
+
+	beforeEach(() => {
+		api.requests = [];
+		api.screen = overlayScreen();
+		api.answers = new Map<string, () => unknown>([
+			['/api/screen-output/events/42/screens/slug/main', () => api.screen],
+			['/api/screen-output/events/42/screens/7', () => api.screen],
+			['/api/screen-output/events/42/screens/7/event', () => outputEvent],
+			[slotPath, () => slotRead(session(90, 3, 20))],
+		]);
+		resetAllEventStores();
+		realtime().connectionState = 'connected';
+	});
+
+	afterEach(() => {
+		for (const wrapper of mounted.splice(0))
+			wrapper.unmount();
+	});
+
+	async function mountOverlay() {
+		const wrapper = await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, text => text.includes('Life 20 · Round 3'));
+		expect(wrapper.text()).toContain('Life 20 · Round 3');
+		expect(held()).toEqual({ sessionId: 90, sequence: 3, lifeTotal: 20 });
+		return wrapper;
+	}
+
+	it('reads its Slot once, and not again for holding what it read', async () => {
+		await mountOverlay();
+		await settleUntil(() => false);
+
+		expect(api.requests.filter(request => request.path === slotPath)).toHaveLength(1);
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('shows the Session and Slot it missed while disconnected once its Event channel is attached again', async () => {
+		const wrapper = await mountOverlay();
+
+		// Published while suspended, so never delivered: the Slot was promoted to
+		// another Match, opening a newer Session that has since moved on.
+		await reconnectReading(() => slotRead(session(91, 6, 13, 301), 301));
+		await settleUntil(() => wrapper.text().includes('Life 13 · Round 4'));
+
+		expect(wrapper.text()).toContain('Life 13 · Round 4');
+		expect(held()).toEqual({ sessionId: 91, sequence: 6, lifeTotal: 13 });
+		expect(useFeatureMatchStore().featureMatches.map(slot => slot.matchId)).toEqual([301]);
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('reloads a gap in the Session\'s notifications through its Screen, never starting a Session', async () => {
+		const wrapper = await mountOverlay();
+		const slotReads = api.requests.filter(request => request.path === slotPath).length;
+
+		// Sequence 4 was missed: 5 is a gap, which only a read can close.
+		api.answers.set(slotPath, () => slotRead(session(90, 5, 16)));
+		await sessionEvent(session(90, 5, 16));
+		await settleUntil(() => wrapper.text().includes('Life 16'));
+
+		expect(wrapper.text()).toContain('Life 16 · Round 3');
+		expect(held()).toEqual({ sessionId: 90, sequence: 5, lifeTotal: 16 });
+		expect(api.requests.filter(request => request.path === slotPath)).toHaveLength(slotReads + 1);
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('never applies an older sequence after a newer one', async () => {
+		const wrapper = await mountOverlay();
+
+		// A resync read issued at sequence 3 answers only after sequence 4 was announced.
+		const { read, answer } = heldOpenRead();
+		await reconnectReading(answer);
+		await settleUntil(() => read.answer !== null);
+		await sessionEvent(session(90, 4, 18));
+		read.answer!(slotRead(session(90, 3, 20)));
+		await settleUntil(() => false);
+
+		expect(wrapper.text()).toContain('Life 18 · Round 3');
+		expect(held()).toEqual({ sessionId: 90, sequence: 4, lifeTotal: 18 });
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('never applies an older epoch after a newer one', async () => {
+		const wrapper = await mountOverlay();
+
+		// The Slot is promoted while a resync read is in flight: a newer Session opens.
+		const { read, answer } = heldOpenRead();
+		await reconnectReading(answer);
+		await settleUntil(() => read.answer !== null);
+		await sessionEvent(session(91, 1, 17, 301));
+		read.answer!(slotRead(session(90, 9, 7)));
+		await settleUntil(() => false);
+
+		expect(wrapper.text()).toContain('Life 17');
+		expect(held()).toEqual({ sessionId: 91, sequence: 1, lifeTotal: 17 });
+		expect(privateRequests()).toEqual([]);
 	});
 });

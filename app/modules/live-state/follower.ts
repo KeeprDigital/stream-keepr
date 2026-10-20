@@ -23,7 +23,8 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * - a snapshot read elsewhere (carried by another resource) is held only when it
  *   is not behind, and supersedes nothing: it was read at some moment, not
  *   produced after everything in flight;
- * - Reconnect Resync re-reads through `load`, which never clears what is held.
+ * - Reconnect Resync re-reads through `load`, or through a read of the resource
+ *   that carries the snapshot (`acceptRead`); neither clears what is held.
  *
  * The feature supplies only where it keeps a snapshot and how to apply a full
  * state or a difference. Reloading is the feature's to perform, because only it
