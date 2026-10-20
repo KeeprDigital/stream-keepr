@@ -6,6 +6,7 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useBroadcastDisplayData } from '~/composables/screen/useBroadcastDisplayData';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 
 /**
  * How often a mode re-reads while realtime cannot tell it about changes, or
@@ -13,7 +14,7 @@ import { useBroadcastDisplayData } from '~/composables/screen/useBroadcastDispla
  * cadence (ADR-0023): this is what keeps program current while that recovery
  * waits.
  */
-export const SCREEN_MODE_DEGRADED_REFETCH_MS = 15_000;
+export const SCREEN_MODE_REREAD_MS = 15_000;
 
 /**
  * Whether one Event message touches what a mode holds, per message type. `true`
@@ -67,7 +68,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	const realtime = options.realtime ?? tryUseRealtime();
 	const display = useBroadcastDisplayData<T>({ initialData: options.initialData });
 	let refreshQueued = false;
-	let reads = 0;
+	const reads = createGuardedSequence();
 	let retry: ReturnType<typeof setTimeout> | null = null;
 
 	function stopRetry() {
@@ -79,7 +80,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 
 	function refresh() {
 		stopRetry();
-		const id = ++reads;
+		const flight = reads.begin();
 		if (options.source() == null) {
 			display.clear();
 			return;
@@ -90,8 +91,8 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 			}
 			catch (cause) {
 				// Only the latest read's failure leaves program behind.
-				if (id === reads)
-					retry = setTimeout(queueRefresh, SCREEN_MODE_DEGRADED_REFETCH_MS);
+				if (flight.current)
+					retry = setTimeout(queueRefresh, SCREEN_MODE_REREAD_MS);
 				throw cause;
 			}
 		}, options.errorMessage);
@@ -158,7 +159,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	watch(() => disconnected.value || waitingOnToken.value, (degraded) => {
 		stopCadence();
 		if (degraded) {
-			cadence = setInterval(queueRefresh, SCREEN_MODE_DEGRADED_REFETCH_MS);
+			cadence = setInterval(queueRefresh, SCREEN_MODE_REREAD_MS);
 		}
 	}, { immediate: true });
 
@@ -166,7 +167,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		unsubscribe();
 		stopCadence();
 		stopRetry();
-		reads++;
+		reads.supersede();
 	});
 
 	return {

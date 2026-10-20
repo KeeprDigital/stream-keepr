@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
-import { SCREEN_MODE_DEGRADED_REFETCH_MS } from '~/modules/screen-mode/freshness';
+import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 /**
  * The server's two halves of the Screen Output Player read (#604): the Player
@@ -1034,13 +1034,13 @@ describe('useDeckModeData', () => {
 				await vi.advanceTimersByTimeAsync(0);
 
 				mockRealtime.connectionState = 'disconnected';
-				await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 2);
 				expect(mockPlayerDecks).toHaveBeenCalledTimes(3);
 				expect(result.pendingSwapVersion.value).toBe(0);
 
 				// The edit lands on the next cadence read, not the next message.
 				serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
-				await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 				expect(result.pendingSwapVersion.value).toBe(1);
 				result.commitPendingDeck();
 				expect(mainboardNames(result)).toEqual(['Brainstorm']);
@@ -1048,6 +1048,26 @@ describe('useDeckModeData', () => {
 			finally {
 				vi.useRealTimers();
 			}
+		});
+
+		it('clears a Deck List removed while disconnected once its channel is attached again', async () => {
+			mockPlayerId.value = 5;
+			const result = mountDeckModeData();
+			await flushPromises();
+			expect(mainboardNames(result)).toEqual(['Counterspell']);
+
+			mockRealtime.connectionState = 'disconnected';
+			await nextTick();
+			serverPlayer = { ...serverPlayer, updatedAt: AFTER_EDIT };
+			mockReadDeck.mockResolvedValue(null);
+			mockRealtime.connectionState = 'connected';
+			continuity.reattach('event:1');
+			await flushPromises();
+
+			expect(result.pendingSwapVersion.value).toBe(1);
+			result.commitPendingDeck();
+			expect(result.hasDisplayedDeck.value).toBe(false);
+			expect(result.error.value).toBe('Player has no deck list');
 		});
 
 		it('shows a deck imported after the Player was selected without one', async () => {

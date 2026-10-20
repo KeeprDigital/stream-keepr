@@ -51,6 +51,12 @@ function deckSourceKey(source: LoadedDeckSource): string {
 	return source.type === 'player' ? `player:${source.playerId}` : `broadcast:${source.broadcastDeckListId}`;
 }
 
+function sameDeckSource(left: LoadedDeckSource | null | undefined, right: LoadedDeckSource): boolean {
+	return !!left && deckSourceKey(left) === deckSourceKey(right);
+}
+
+const DECK_LOAD_FAILED = 'Failed to load deck';
+
 /** What one read of the selected Deck Source answers. */
 type DeckSourceRead
 	= { type: 'player'; player: Player; deck: PlayerDeckResponse | null }
@@ -233,8 +239,7 @@ export function useDeckModeData() {
 	let deckVersion = 0;
 
 	const selectedSource = computed(() => selectedDeckSource(config.value.deckSource));
-	const isSelected = (source: LoadedDeckSource) =>
-		!!selectedSource.value && deckSourceKey(selectedSource.value) === deckSourceKey(source);
+	const isSelected = (source: LoadedDeckSource) => sameDeckSource(selectedSource.value, source);
 
 	/**
 	 * The authoritative read of the selected Deck Source, through the Screen
@@ -261,15 +266,20 @@ export function useDeckModeData() {
 			: null,
 		read: readDeckSource,
 		initialData: null,
-		errorMessage: 'Failed to load deck',
+		errorMessage: DECK_LOAD_FAILED,
 		dependsOn: deckDependencies(() => selectedSource.value),
 	});
 
-	/**
-	 * The input the deck on program was last built from, or is being built from;
-	 * `key` is `null` once that build failed, so the next read builds it again.
-	 */
-	let built: { input: DeckDisplayInput; key: string | null } | null = null;
+	/** One build of the deck on program, or of the deck being built for it. */
+	interface DeckBuild {
+		input: DeckDisplayInput;
+		/** What the input holds, as one comparable value. */
+		key: string;
+		/** A failed build is built again by the next read of the same deck. */
+		failed: boolean;
+	}
+	let built: DeckBuild | null = null;
+	const buildKey = (input: DeckDisplayInput) => JSON.stringify(input);
 
 	/**
 	 * The reload-free recovery path (#465): a degraded deck rebuilds itself on a
@@ -290,8 +300,7 @@ export function useDeckModeData() {
 		// authoritative revision has not changed carries nothing new.
 		isUnchanged: (next) => {
 			const current = displayedDeck.value;
-			return !!current && deckSourceKey(current.source) === deckSourceKey(next.source)
-				&& current.sourceRevision === next.sourceRevision;
+			return sameDeckSource(current?.source, next.source) && current?.sourceRevision === next.sourceRevision;
 		},
 		report: (degraded) => {
 			if (cardDataHealth) {
@@ -320,7 +329,7 @@ export function useDeckModeData() {
 		const read = freshness.data.value;
 		if (read && !displayInput(read))
 			return 'Player has no deck list';
-		return freshness.error.value ?? (buildFailed.value ? 'Failed to load deck' : null);
+		return freshness.error.value ?? (buildFailed.value ? DECK_LOAD_FAILED : null);
 	});
 
 	onScopeDispose(() => {
@@ -474,8 +483,8 @@ export function useDeckModeData() {
 
 	async function buildDeck(input: DeckDisplayInput) {
 		const flight = degradedRefetch.begin();
-		const entry: NonNullable<typeof built> = { input, key: JSON.stringify(input) };
-		built = entry;
+		const build: DeckBuild = { input, key: buildKey(input), failed: false };
+		built = build;
 		buildFailed.value = false;
 		try {
 			const { deck: nextDeck, degraded } = await buildDeckDisplayState(input);
@@ -491,7 +500,7 @@ export function useDeckModeData() {
 			console.error('Failed to build deck:', err);
 			if (flight.stale)
 				return;
-			entry.key = null;
+			build.failed = true;
 			buildFailed.value = true;
 			degradedRefetch.keepCadence();
 		}
@@ -501,10 +510,12 @@ export function useDeckModeData() {
 	 * Program follows what the Deck Source read answers. A read that answers the
 	 * deck already on program, or being built for it, changes nothing: the
 	 * module re-reads on every resync and degraded tick, and an unchanged deck
-	 * must not cross-fade to itself. A Player with no deck list keeps program.
+	 * must not cross-fade to itself. Selecting nothing, or a Player whose Deck
+	 * List is gone, blanks program through the same staged swap.
 	 */
 	watch(freshness.data, (read) => {
-		if (!read) {
+		const input = read && displayInput(read);
+		if (!input) {
 			built = null;
 			degradedRefetch.settle();
 			if (displayedDeck.value)
@@ -513,8 +524,7 @@ export function useDeckModeData() {
 				pendingDeck.value = null;
 			return;
 		}
-		const input = displayInput(read);
-		if (!input || built?.key === JSON.stringify(input))
+		if (built && !built.failed && built.key === buildKey(input))
 			return;
 		void buildDeck(input);
 	});

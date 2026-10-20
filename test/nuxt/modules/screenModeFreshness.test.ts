@@ -4,7 +4,7 @@ import type { RealtimeTransport } from '~/types/realtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
-import { SCREEN_MODE_DEGRADED_REFETCH_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { SCREEN_MODE_REREAD_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 /**
  * Screen Mode Data Freshness, driven through a stand-in transport: a mode names
@@ -192,9 +192,9 @@ describe('useScreenModeFreshness', () => {
 
 			transport.tokenError = new Error('mint failed');
 			await nextTick();
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 			expect(read).toHaveBeenCalledTimes(2);
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 			expect(read).toHaveBeenCalledTimes(3);
 
 			// Recovered: whatever was published while nothing listened is gone, so
@@ -202,7 +202,7 @@ describe('useScreenModeFreshness', () => {
 			transport.tokenError = null;
 			await flushPromises();
 			expect(read).toHaveBeenCalledTimes(4);
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 3);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 3);
 			expect(read).toHaveBeenCalledTimes(4);
 		});
 
@@ -214,7 +214,7 @@ describe('useScreenModeFreshness', () => {
 			transport.connectionState = 'suspended';
 			read.mockRejectedValueOnce(new Error('offline'));
 			await nextTick();
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 
 			expect(read).toHaveBeenCalledTimes(2);
 			expect(freshness.data.value.label).toBe('read 1');
@@ -229,7 +229,7 @@ describe('useScreenModeFreshness', () => {
 			selection.value = null;
 			transport.tokenError = new Error('mint failed');
 			await nextTick();
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 2);
 
 			expect(read).toHaveBeenCalledTimes(1);
 		});
@@ -242,7 +242,7 @@ describe('useScreenModeFreshness', () => {
 			transport.tokenError = new Error('mint failed');
 			await nextTick();
 			scope.stop();
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 2);
 
 			expect(read).toHaveBeenCalledTimes(1);
 		});
@@ -261,13 +261,13 @@ describe('useScreenModeFreshness', () => {
 			expect(read).toHaveBeenCalledTimes(2);
 			expect(freshness.data.value.label).toBe('read 1');
 
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 			expect(read).toHaveBeenCalledTimes(3);
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
 			expect(read).toHaveBeenCalledTimes(4);
 			expect(freshness.data.value.label).toBe('read 4');
 
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 3);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 3);
 			expect(read).toHaveBeenCalledTimes(4);
 		});
 
@@ -278,7 +278,7 @@ describe('useScreenModeFreshness', () => {
 			await vi.advanceTimersByTimeAsync(0);
 
 			selection.value = null;
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 2);
 
 			expect(read).toHaveBeenCalledTimes(1);
 		});
@@ -290,7 +290,7 @@ describe('useScreenModeFreshness', () => {
 			await vi.advanceTimersByTimeAsync(0);
 
 			scope.stop();
-			await vi.advanceTimersByTimeAsync(SCREEN_MODE_DEGRADED_REFETCH_MS * 2);
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS * 2);
 
 			expect(read).toHaveBeenCalledTimes(1);
 		});

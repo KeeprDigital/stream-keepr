@@ -40,6 +40,8 @@ export function useStandingsModeData() {
 	const outputReads = useScreenOutputReads();
 	const eventStore = useEventStore();
 
+	const selectedWatchlistId = () => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null;
+
 	// ── Data Loading ──
 	/**
 	 * One Screen Output read answers everything Standings renders from, derived
@@ -49,12 +51,12 @@ export function useStandingsModeData() {
 	const freshness = useScreenModeFreshness<ScreenOutputStandingsResponse>({
 		eventId,
 		source: () => outputReads.scopeKey.value
-			? [outputReads.scopeKey.value, config.value.viewMode, config.value.playerListId, config.value.roundId].join(':')
+			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}`
 			: null,
 		read: () => outputReads.standings(),
 		initialData: { players: [], round: null, roundStandings: null, watchlist: null },
 		errorMessage: 'Failed to load standings data',
-		dependsOn: standingsDependencies(() => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null),
+		dependsOn: standingsDependencies(selectedWatchlistId),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
