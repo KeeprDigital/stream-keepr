@@ -92,17 +92,11 @@ function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
 	};
 }
 
-const { formData, isDirty, reset, updateOriginal, getChanges } = useForm<FeatureMatchFormData>({
-	initialData: normalizeMatchData(props.match),
+const { formData, isDirty, reset, getChanges } = useForm<FeatureMatchFormData>({
+	initialData: computed(() => normalizeMatchData(props.match)),
 });
 
 useRegisterDirtyState(isDirty);
-
-watch(() => props.match, (newMatch) => {
-	if (!isDirty.value) {
-		updateOriginal(normalizeMatchData(newMatch));
-	}
-}, { deep: true });
 
 const matchDisplayMode = computed(() => formData.value.playerDisplayMode);
 const roundNameInput = computed({
@@ -255,9 +249,6 @@ async function save() {
 				description: featureMatchStore.error ?? 'The match was not updated.',
 				color: 'error',
 			}),
-			onSuccess: (updatedMatch) => {
-				updateOriginal(normalizeMatchData(updatedMatch));
-			},
 			onFailure: ({ error }) => {
 				if (error)
 					console.error('Failed to save match:', error);

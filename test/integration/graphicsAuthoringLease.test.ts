@@ -365,6 +365,85 @@ describe('graphics Authoring Leases', () => {
 		expect(resized.status).toBe(200);
 	});
 
+	/**
+	 * The generic Screen write reaches the same artifact by another door (#607).
+	 *
+	 * Each write below carries the Screen's current `stateVersion`, so a refusal is
+	 * the lease's and not a stale-version conflict — which is exactly how the
+	 * generic route used to let an observer through.
+	 */
+	async function currentScreen(): Promise<ScreenResponse> {
+		return await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
+	}
+
+	async function patchScreen(cookie: string, body: Record<string, unknown>) {
+		return await request(`/api/events/${eventId}/screens/${screenId}`, {
+			method: 'PATCH',
+			body: { stateVersion: (await currentScreen()).stateVersion, ...body },
+			cookie,
+		});
+	}
+
+	it('refuses an observer\'s canvas resize through the generic Screen write', async () => {
+		await askForLease(browserA);
+		expect((await patchCanvas(browserA, 1080)).status).toBe(200);
+		const before = await currentScreen();
+
+		const refused = await patchScreen(browserB, {
+			screenConfig: { ...before.screenConfig, width: 1600 },
+		});
+
+		expect(refused.status).toBe(409);
+		const after = await currentScreen();
+		expect(after.screenConfig).toEqual(before.screenConfig);
+		expect(after.stateVersion).toBe(before.stateVersion);
+	});
+
+	it('refuses an observer\'s stack edit through the generic Screen write', async () => {
+		await askForLease(browserA);
+		await patchStack(browserA, [graphic('holder-stack')]);
+		const before = await currentScreen();
+
+		const refused = await patchScreen(browserB, {
+			modeConfigs: {
+				...before.modeConfigs,
+				'broadcast-graphics': { graphics: [graphic('observer-stack')] },
+			},
+		});
+
+		expect(refused.status).toBe(409);
+		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
+		expect((await currentScreen()).stateVersion).toBe(before.stateVersion);
+	});
+
+	it('leaves an observer\'s rename open when it carries the leased fields back unchanged', async () => {
+		// What the Edit Screen dialog sends: the name it changed, and the mode
+		// configuration exactly as it read it.
+		await askForLease(browserA);
+		await patchStack(browserA, [graphic('holder-stack')]);
+		const before = await currentScreen();
+
+		const renamed = await patchScreen(browserB, {
+			name: 'Renamed While Leased',
+			modeConfigs: before.modeConfigs,
+		});
+
+		expect(renamed.status).toBe(200);
+		expect((await currentScreen()).name).toBe('Renamed While Leased');
+		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
+	});
+
+	it('admits the holder\'s own edit through the generic Screen write', async () => {
+		await askForLease(browserA);
+
+		const accepted = await patchScreen(browserA, {
+			modeConfigs: { 'broadcast-graphics': { graphics: [graphic('holder-generic')] } },
+		});
+
+		expect(accepted.status).toBe(200);
+		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-generic']);
+	});
+
 	it('hands the artifact over on an explicit takeover and demotes the previous holder', async () => {
 		await askForLease(browserA);
 

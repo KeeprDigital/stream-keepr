@@ -221,6 +221,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		await showOnAir();
 
 		await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -242,6 +243,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		vi.spyOn(db, 'batch').mockRejectedValueOnce(new Error('epoch end failed'));
 
 		await expect(screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -259,6 +261,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		// And the operator's retry converges rather than conflicting, because the
 		// state version the failed attempt was written against still stands.
 		await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -272,6 +275,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		vi.spyOn(db, 'batch').mockRejectedValueOnce(new Error('epoch end failed'));
 
 		await expect(screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: 0, currentMode: 'background' } as never,
@@ -281,11 +285,13 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		// Graphics gets a fresh epoch. This is the acceptance criterion stated as the
 		// show: leave the mode, come back, and find nothing on air.
 		await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: (await screenRow())!.stateVersion, currentMode: 'background' } as never,
 		});
 		await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: (await screenRow())!.stateVersion, currentMode: 'broadcast-graphics' } as never,
@@ -303,6 +309,7 @@ describe('a Screen leaving Broadcast Graphics mode', () => {
 		const { sessionId } = await showOnAir();
 
 		await expect(screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
 			eventId,
 			screenId,
 			input: { stateVersion: 99, currentMode: 'background' } as never,

@@ -106,18 +106,6 @@ const stubs = {
 // only submits its form once the tree is in the document.
 const mountOptions = { attachTo: document.body, global: { stubs } };
 
-/** What the card sends when nothing has been touched, for a test to vary one key of. */
-const UNTOUCHED_PAYLOAD = {
-	featureMatchDefaultBestOf: 3,
-	featureMatchDefaultStartingLife: 20,
-	featureMatchDefaultClockType: 'countdown',
-	featureMatchDefaultClockDuration: 50,
-	featureMatchDefaultCountUpAfterCountdown: false,
-	featureMatchDefaultExtraTurnsEnabled: false,
-	featureMatchDefaultExtraTurns: 5,
-	pointsSystem: null,
-};
-
 enableAutoUnmount(afterEach);
 
 async function mountComponent(event: Event = configEvent()) {
@@ -229,10 +217,22 @@ describe('event config format settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
-			...UNTOUCHED_PAYLOAD,
-			featureMatchDefaultStartingLife: 40,
-		});
+		expect(submitted(wrapper)).toEqual({ featureMatchDefaultStartingLife: 40 });
+	});
+
+	// #612: a whole-form payload would write the stale value back over a
+	// colleague's change to a setting this operator never touched.
+	it('saves only what the operator edited, keeping a colleague\'s concurrent change', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await numberFor(wrapper, 'startingLife').setValue(40);
+		await wrapper.setProps({ event: configEvent({ featureMatchDefaultBestOf: 5 }) });
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(selectFor(wrapper, 'bestOf').props('modelValue')).toBe(5);
+		expect(submitted(wrapper)).toEqual({ featureMatchDefaultStartingLife: 40 });
 	});
 
 	// The points system is the event's own column rather than a match default, so
@@ -245,10 +245,7 @@ describe('event config format settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({
-			...UNTOUCHED_PAYLOAD,
-			pointsSystem: '7ph',
-		});
+		expect(submitted(wrapper)).toEqual({ pointsSystem: '7ph' });
 	});
 
 	it('refuses to save a negative starting life, and says so at the field', async () => {

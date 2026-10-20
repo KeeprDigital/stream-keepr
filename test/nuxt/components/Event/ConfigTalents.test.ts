@@ -245,6 +245,64 @@ describe('event config Talents', () => {
 		expect(submitted(wrapper)).toEqual([{ id: BOB_AGAIN.id, name: 'Bob', socialProfiles: {} }]);
 	});
 
+	// #612: the staged list used to stay as the operator first saw it, so saving
+	// it removed every Talent a colleague had added meanwhile.
+	it('keeps a Talent a colleague added while this operator removes another', async () => {
+		const CARA = talent(14, 'Cara');
+		const wrapper = await mountComponent([ALICE, BOB]);
+		chooseRowAction(wrapper, 1, 'Remove');
+		await wrapper.setProps({ talents: [ALICE, BOB, CARA] });
+		await flushPromises();
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([
+			{ id: ALICE.id, name: 'Alice', socialProfiles: {} },
+			{ id: CARA.id, name: 'Cara', socialProfiles: {} },
+		]);
+	});
+
+	it('stages only the fields edited in the open editor, keeping a colleague\'s change to the rest', async () => {
+		const wrapper = await mountComponent([talent(11, 'Alice', { twitch: 'Old' })]);
+		chooseRowAction(wrapper, 0, 'Edit');
+		await flushPromises();
+		await wrapper.setProps({ talents: [talent(11, 'Alice', { twitch: 'New', x: 'Added' })] });
+		await flushPromises();
+
+		await wrapper.get('[data-field="name"] input').setValue('Alicia');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([{ id: 11, name: 'Alicia', socialProfiles: { twitch: 'New', x: 'Added' } }]);
+	});
+
+	it('finishes an edit on its own row after a colleague removes an earlier one', async () => {
+		const wrapper = await mountComponent([ALICE, BOB]);
+		chooseRowAction(wrapper, 1, 'Edit');
+		await flushPromises();
+		await wrapper.setProps({ talents: [BOB] });
+		await flushPromises();
+
+		await wrapper.get('[data-field="name"] input').setValue('Robert');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([{ id: BOB.id, name: 'Robert', socialProfiles: {} }]);
+	});
+
+	it('stages an edit to a Talent a colleague removed while it was open, so the save re-creates them', async () => {
+		const wrapper = await mountComponent([ALICE]);
+		chooseRowAction(wrapper, 0, 'Edit');
+		await flushPromises();
+		await wrapper.setProps({ talents: [] });
+		await flushPromises();
+
+		await wrapper.get('[data-field="name"] input').setValue('Alicia');
+		await finishEditor(wrapper);
+		await button(wrapper, 'Save').trigger('click');
+
+		expect(submitted(wrapper)).toEqual([{ id: ALICE.id, name: 'Alicia', socialProfiles: {} }]);
+	});
+
 	it('adds a normalized Talent row with no id', async () => {
 		const wrapper = await mountComponent([ALICE]);
 		await button(wrapper, 'Add talent').trigger('click');

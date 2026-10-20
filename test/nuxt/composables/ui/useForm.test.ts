@@ -123,5 +123,141 @@ describe('useForm', () => {
 			expect(isDirty.value).toBe(false);
 			expect(formData.value.name).toBe('Charlie');
 		});
+
+		it('takes a remote change to a field the dirty form left untouched (#612)', async () => {
+			const initial = ref({ commentator1TalentId: 1, commentator2TalentId: 2 });
+			const { formData, getChanges } = useForm({ initialData: initial });
+
+			formData.value.commentator1TalentId = 3;
+			initial.value = { commentator1TalentId: 1, commentator2TalentId: 4 };
+			await nextTick();
+
+			expect(formData.value).toEqual({ commentator1TalentId: 3, commentator2TalentId: 4 });
+			expect(getChanges()).toEqual({ commentator1TalentId: 3 });
+		});
+
+		it('keeps a local edit over a conflicting remote change to the same field, still as a change', async () => {
+			const initial = ref({ commentator1TalentId: 1, commentator2TalentId: 2 });
+			const { formData, isDirty, getChanges } = useForm({ initialData: initial });
+
+			formData.value.commentator1TalentId = 3;
+			initial.value = { commentator1TalentId: 5, commentator2TalentId: 2 };
+			await nextTick();
+
+			expect(formData.value.commentator1TalentId).toBe(3);
+			expect(isDirty.value).toBe(true);
+			expect(getChanges()).toEqual({ commentator1TalentId: 3 });
+		});
+
+		it('stops counting a local edit once the remote value matches it', async () => {
+			const initial = ref({ commentator1TalentId: 1, commentator2TalentId: 2 });
+			const { formData, isDirty, getChanges } = useForm({ initialData: initial });
+
+			formData.value.commentator1TalentId = 3;
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 4 };
+			await nextTick();
+
+			expect(formData.value).toEqual({ commentator1TalentId: 3, commentator2TalentId: 4 });
+			expect(isDirty.value).toBe(false);
+			expect(getChanges()).toEqual({});
+		});
+
+		it('merges nested objects per key, so a submitted object carries the remote sibling', async () => {
+			const initial = ref({ player1Data: { name: 'Alice', deckName: 'Burn' } });
+			const { formData, getChanges } = useForm({ initialData: initial });
+
+			formData.value.player1Data.name = 'Alicia';
+			initial.value = { player1Data: { name: 'Alice', deckName: 'Control' } };
+			await nextTick();
+
+			expect(getChanges()).toEqual({ player1Data: { name: 'Alicia', deckName: 'Control' } });
+		});
+
+		it('treats an edited array as one value and keeps it whole', async () => {
+			const initial = ref({ tags: ['a', 'b'], title: 'x' });
+			const { formData, getChanges } = useForm({ initialData: initial });
+
+			formData.value.tags.push('c');
+			initial.value = { tags: ['a', 'z'], title: 'y' };
+			await nextTick();
+
+			expect(formData.value).toEqual({ tags: ['a', 'b', 'c'], title: 'y' });
+			expect(getChanges()).toEqual({ tags: ['a', 'b', 'c'] });
+		});
+
+		it('merges rows carrying an id one row at a time', async () => {
+			const initial = ref([
+				{ id: 1, name: 'Alice', handle: 'a' },
+				{ id: 2, name: 'Briony', handle: 'b' },
+				{ id: 3, name: 'Caspar', handle: 'c' },
+				{ id: 4, name: 'Dana', handle: 'd' },
+			]);
+			const { formData } = useForm({ initialData: initial });
+
+			formData.value[0]!.name = 'Alicia';
+			formData.value.splice(1, 1);
+			formData.value.push({ name: 'Elias', handle: 'e' } as any);
+			initial.value = [
+				{ id: 1, name: 'Alice', handle: 'a2' },
+				{ id: 2, name: 'Briony', handle: 'b' },
+				{ id: 3, name: 'Caspar', handle: 'c2' },
+				{ id: 5, name: 'Farah', handle: 'f' },
+			];
+			await nextTick();
+
+			expect(formData.value).toEqual([
+				{ id: 1, name: 'Alicia', handle: 'a2' },
+				{ id: 3, name: 'Caspar', handle: 'c2' },
+				{ name: 'Elias', handle: 'e' },
+				{ id: 5, name: 'Farah', handle: 'f' },
+			]);
+		});
+
+		it('keeps a row edited locally that a colleague removed', async () => {
+			const initial = ref([{ id: 1, name: 'Alice' }, { id: 2, name: 'Briony' }]);
+			const { formData } = useForm({ initialData: initial });
+
+			formData.value[0]!.name = 'Alicia';
+			initial.value = [];
+			await nextTick();
+
+			expect(formData.value).toEqual([{ id: 1, name: 'Alicia' }]);
+		});
+
+		it('takes remote changes while a save is in flight and settles clean on its answer', async () => {
+			const initial = ref({ commentator1TalentId: 1, commentator2TalentId: 2 });
+			const { formData, isDirty, getChanges } = useForm({ initialData: initial });
+
+			formData.value.commentator1TalentId = 3;
+			// Submit: the store applies the change optimistically
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 2 };
+			await nextTick();
+			// A colleague's change lands while the request is in flight
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 4 };
+			await nextTick();
+
+			expect(formData.value).toEqual({ commentator1TalentId: 3, commentator2TalentId: 4 });
+			expect(getChanges()).toEqual({});
+
+			// The server's answer merges into the store
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 4 };
+			await nextTick();
+			expect(isDirty.value).toBe(false);
+		});
+
+		it('keeps an edit made while a save is in flight', async () => {
+			const initial = ref({ commentator1TalentId: 1, commentator2TalentId: 2 });
+			const { formData, getChanges } = useForm({ initialData: initial });
+
+			formData.value.commentator1TalentId = 3;
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 2 };
+			await nextTick();
+			formData.value.commentator2TalentId = 5;
+			initial.value = { commentator1TalentId: 3, commentator2TalentId: 4 };
+			await nextTick();
+
+			expect(formData.value).toEqual({ commentator1TalentId: 3, commentator2TalentId: 5 });
+			expect(getChanges()).toEqual({ commentator2TalentId: 5 });
+		});
 	});
 });

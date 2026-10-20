@@ -1,11 +1,11 @@
 import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broadcast-graphic-template-library';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
-import { requireScreenGraphicsEditWritable } from '~~/server/modules/graphics-authoring-lease/screenEditWorkspace';
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { placeBroadcastGraphicTemplateSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
+import { optionalBrowserSessionId } from '~~/server/utils/auth';
 import { placeBroadcastGraphicTemplate } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 
@@ -28,8 +28,6 @@ import { randomUuid } from '~~/shared/utils/uuid';
 export default defineEventHandler(async (event) => {
 	const { id: eventId, screenId } = await getValidatedRouterParams(event, screenParamsSchema.parse);
 	const body = placeBroadcastGraphicTemplateSchema.parse(await readBody(event) ?? {});
-
-	await requireScreenGraphicsEditWritable(event, eventId, screenId);
 
 	const screen = await screenService().findById(screenId, eventId);
 	if (!screen)
@@ -79,6 +77,7 @@ export default defineEventHandler(async (event) => {
 			config: { graphics: [...existing, graphic] },
 			stateVersion: body.stateVersion,
 			originConnectionId: getOriginConnectionId(event),
+			authoringSessionId: await optionalBrowserSessionId(event),
 		});
 
 		setResponseStatus(event, 201);

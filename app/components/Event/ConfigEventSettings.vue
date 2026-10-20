@@ -16,7 +16,7 @@ const initialData = computed(() => ({
 	name: props.event.name,
 }));
 
-const { formData, isDirty, reset } = useForm({
+const { formData, isDirty, reset, getChanges } = useForm({
 	initialData,
 	clearOnReset: errors,
 });
@@ -33,7 +33,7 @@ function validate(): boolean {
 
 function submit() {
 	if (validate()) {
-		emit('submit', formData.value);
+		emit('submit', getChanges());
 	}
 }
 </script>

@@ -25,15 +25,19 @@ const initialData = computed(() => {
 	};
 });
 
-const { formData, isDirty, reset } = useForm({
+const { formData, isDirty, reset, getChanges } = useForm({
 	initialData,
 });
 
 useRegisterDirtyState(isDirty);
 
 function submit() {
-	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...matchDefaults } = formData.value;
-	emit('submit', { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...fromFeatureMatchDefaults(matchDefaults) } as UpdateEventInput);
+	const changes = getChanges();
+	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...matchDefaults } = changes;
+	const eventToggles = Object.fromEntries(
+		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled }).filter(([key]) => key in changes),
+	);
+	emit('submit', { ...eventToggles, ...fromFeatureMatchDefaults(matchDefaults) } as UpdateEventInput);
 }
 </script>
 
