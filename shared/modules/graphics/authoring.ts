@@ -9,9 +9,6 @@ import type {
 	GraphicAnimationStagger,
 	GraphicContainerAnimation,
 	GraphicFadeChannel,
-	GraphicFill,
-	GraphicFillKind,
-	GraphicFillStop,
 	GraphicGlow,
 	GraphicGroupChildConfig,
 	GraphicGroupChildSizing,
@@ -44,6 +41,7 @@ import type {
 } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
+import type { GraphicFillEdit } from './fill';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import {
 	DEFAULT_ON_AIR_UPDATE_POLICY,
@@ -66,6 +64,7 @@ import {
 import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from './animation';
 import { isGraphicBindingFieldCompatible } from './bindingCatalog';
 import { canDeriveGraphicSource } from './bindingResolution';
+import { applyGraphicFillEdit } from './fill';
 import { createDefaultGraphicInputDeclaration } from './inputs';
 import {
 	createDefaultGraphicSurfaceStyle,
@@ -1369,105 +1368,22 @@ export function patchGraphicGroupDefaultChildSurfaceStyle(
 	}));
 }
 
-function currentFillColour(fill: GraphicFill): string {
-	return fill.type === 'solid' ? fill.color : (fill.stops[0]?.color ?? '#000000');
-}
-
 /**
- * A Graphic Fill switched between solid and linear gradient keeps the colour the
- * author was already working with, so changing kind is never a reset.
+ * An item's new gradient ends on black, the neutral every CSS colour fill can
+ * offer; the rest of a Graphic Fill edit's rules are shared with a Graphic Style
+ * Set fill entry (`applyGraphicFillEdit`).
  */
-export function setGraphicFillKind(
+const ITEM_GRAPHIC_FILL_EDIT_OPTIONS = { gradientEndColor: '#000000' } as const;
+
+/** Apply one Graphic Fill edit to one Graphic Surface Style slot of one item. */
+function editGraphicFill(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
-	kind: GraphicFillKind,
-	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
-): BroadcastGraphicConfig {
-	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
-		if (style.fill.type === kind)
-			return style;
-
-		const colour = currentFillColour(style.fill);
-		const fill: GraphicFill = kind === 'solid'
-			? { type: 'solid', color: colour }
-			: {
-					type: 'linear-gradient',
-					angle: 90,
-					stops: [
-						{ color: colour, position: 0, opacity: 1 },
-						{ color: '#000000', position: 1, opacity: 1 },
-					],
-				};
-
-		return { ...style, fill };
-	});
-}
-
-/** Merge into a solid Graphic Fill. */
-export function patchGraphicSolidFill(
-	graphic: BroadcastGraphicConfig,
-	itemId: string,
-	color: string,
-	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
+	slot: GraphicSurfaceStyleSlot,
+	edit: GraphicFillEdit,
 ): BroadcastGraphicConfig {
 	return patchSurfaceStyleSlot(graphic, itemId, slot, style =>
-		style.fill.type === 'solid' ? { ...style, fill: { type: 'solid', color } } : style);
-}
-
-/** Merge into a linear-gradient Graphic Fill's angle. */
-export function patchGraphicGradientAngle(
-	graphic: BroadcastGraphicConfig,
-	itemId: string,
-	angle: number,
-	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
-): BroadcastGraphicConfig {
-	return patchSurfaceStyleSlot(graphic, itemId, slot, style =>
-		style.fill.type === 'linear-gradient' ? { ...style, fill: { ...style.fill, angle } } : style);
-}
-
-/** Merge into one colour stop of a linear-gradient Graphic Fill. */
-export function patchGraphicGradientStop(
-	graphic: BroadcastGraphicConfig,
-	itemId: string,
-	index: number,
-	patch: Partial<GraphicFillStop>,
-	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
-): BroadcastGraphicConfig {
-	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
-		if (style.fill.type !== 'linear-gradient')
-			return style;
-		const stops = style.fill.stops.map((stop, position) =>
-			position === index ? { ...stop, ...patch } : stop,
-		);
-		return { ...style, fill: { ...style.fill, stops } };
-	});
-}
-
-/**
- * Add or remove a gradient stop. A Graphic Fill holds two to four stops, so the
- * bounds are the vocabulary's own rather than the editor's.
- */
-export function changeGraphicGradientStopCount(
-	graphic: BroadcastGraphicConfig,
-	itemId: string,
-	delta: 1 | -1,
-	slot: GraphicSurfaceStyleSlot = 'surfaceStyle',
-): BroadcastGraphicConfig {
-	return patchSurfaceStyleSlot(graphic, itemId, slot, (style) => {
-		if (style.fill.type !== 'linear-gradient')
-			return style;
-
-		const stops = [...style.fill.stops];
-		if (delta === 1 && stops.length < 4) {
-			const last = stops[stops.length - 1]!;
-			stops.push({ ...last, position: 1 });
-		}
-		else if (delta === -1 && stops.length > 2) {
-			stops.pop();
-		}
-
-		return { ...style, fill: { ...style.fill, stops } };
-	});
+		({ ...style, fill: applyGraphicFillEdit(style.fill, edit, ITEM_GRAPHIC_FILL_EDIT_OPTIONS) }));
 }
 
 /** Merge into a Graphic Surface Style's uniform outline, or remove it. */
@@ -1587,11 +1503,7 @@ export function patchGameWinsGraphicItem(
  */
 export type GraphicSurfaceStyleEdit
 	= | { kind: 'present'; present: boolean }
-		| { kind: 'fill-kind'; fillKind: GraphicFillKind }
-		| { kind: 'solid-fill'; color: string }
-		| { kind: 'gradient-angle'; angle: number }
-		| { kind: 'gradient-stop'; index: number; patch: Partial<GraphicFillStop> }
-		| { kind: 'stop-count'; delta: 1 | -1 }
+		| GraphicFillEdit
 		| { kind: 'fill-opacity'; fillOpacity: number }
 		| { kind: 'outline'; patch: Partial<GraphicOutline> | null }
 		| { kind: 'glow'; patch: Partial<GraphicGlow> | null };
@@ -1617,15 +1529,11 @@ export function applyGraphicSurfaceStyleEdit(
 				? patchGraphicSurfaceStyle(graphic, itemId, {})
 				: clearGraphicSurfaceStyle(graphic, itemId);
 		case 'fill-kind':
-			return setGraphicFillKind(graphic, itemId, edit.fillKind, slot);
 		case 'solid-fill':
-			return patchGraphicSolidFill(graphic, itemId, edit.color, slot);
 		case 'gradient-angle':
-			return patchGraphicGradientAngle(graphic, itemId, edit.angle, slot);
 		case 'gradient-stop':
-			return patchGraphicGradientStop(graphic, itemId, edit.index, edit.patch, slot);
 		case 'stop-count':
-			return changeGraphicGradientStopCount(graphic, itemId, edit.delta, slot);
+			return editGraphicFill(graphic, itemId, slot, edit);
 		case 'fill-opacity':
 			return patchGraphicSurfaceStyle(graphic, itemId, { fillOpacity: edit.fillOpacity }, slot);
 		case 'outline':

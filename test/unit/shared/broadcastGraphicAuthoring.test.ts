@@ -7,7 +7,6 @@ import {
 	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	associateSocialProfileProjection,
-	changeGraphicGradientStopCount,
 	clearGraphicSurfaceStyle,
 	clearMediaGraphicItemAsset,
 	createBroadcastGraphic,
@@ -23,14 +22,11 @@ import {
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
 	patchGraphicGlow,
-	patchGraphicGradientAngle,
-	patchGraphicGradientStop,
 	patchGraphicGroup,
 	patchGraphicGroupChildSizing,
 	patchGraphicGroupDefaultChildSurfaceStyle,
 	patchGraphicItem,
 	patchGraphicOutline,
-	patchGraphicSolidFill,
 	patchGraphicSurfaceStyle,
 	patchGraphicTextOverflow,
 	patchGraphicTypography,
@@ -41,7 +37,6 @@ import {
 	patchShapeGeometry,
 	patchSocialProfileProjection,
 	selectMediaGraphicItemAsset,
-	setGraphicFillKind,
 	setMediaClipGeometry,
 } from '~~/shared/modules/graphics';
 
@@ -436,15 +431,19 @@ describe('broadcastGraphicAuthoring', () => {
 	});
 
 	describe('graphic fill', () => {
+		// The fill's own rules (kind, angle, stops, the two-to-four bound) are shared with a
+		// Graphic Style Set fill entry and tested once, in graphicFill.test.ts. What is the
+		// item's own is the colour a new gradient ends on, and which slot an edit reaches.
 		it('switches a Graphic Fill between solid and gradient without losing the authored colour', () => {
-			const built = patchGraphicSolidFill(
+			const built = applyGraphicSurfaceStyleEdit(
 				addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic,
 				'bar',
-				'#123456',
+				'surfaceStyle',
+				{ kind: 'solid-fill', color: '#123456' },
 			);
 
-			const gradient = setGraphicFillKind(built, 'bar', 'linear-gradient');
-			const back = setGraphicFillKind(gradient, 'bar', 'solid');
+			const gradient = applyGraphicSurfaceStyleEdit(built, 'bar', 'surfaceStyle', { kind: 'fill-kind', fillKind: 'linear-gradient' });
+			const back = applyGraphicSurfaceStyleEdit(gradient, 'bar', 'surfaceStyle', { kind: 'fill-kind', fillKind: 'solid' });
 
 			expect(gradient.items[0]).toMatchObject({
 				surfaceStyle: {
@@ -458,49 +457,23 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(back.items[0]).toMatchObject({ surfaceStyle: { fill: { type: 'solid', color: '#123456' } } });
 		});
 
-		it('edits one gradient stop and the angle without disturbing the others', () => {
-			const built = setGraphicFillKind(
+		it('adds a gradient stop to the slot the edit names', () => {
+			const built = applyGraphicSurfaceStyleEdit(
 				addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic,
 				'bar',
-				'linear-gradient',
+				'surfaceStyle',
+				{ kind: 'fill-kind', fillKind: 'linear-gradient' },
 			);
 
-			const patched = patchGraphicGradientStop(
-				patchGraphicGradientAngle(built, 'bar', 135),
-				'bar',
-				1,
-				{ opacity: 0.4 },
-			);
+			const grown = applyGraphicSurfaceStyleEdit(built, 'bar', 'surfaceStyle', { kind: 'stop-count', delta: 1 });
 
-			expect(surfaced(patched.items[0]).surfaceStyle?.fill).toMatchObject({
-				angle: 135,
+			expect(surfaced(grown.items[0]).surfaceStyle?.fill).toMatchObject({
 				stops: [
 					{ color: '#0077a3', position: 0, opacity: 1 },
-					{ color: '#000000', position: 1, opacity: 0.4 },
+					{ color: '#000000', position: 1, opacity: 1 },
+					{ color: '#000000', position: 1, opacity: 1 },
 				],
 			});
-		});
-
-		it('holds a Graphic Fill between two and four stops', () => {
-			const built = setGraphicFillKind(
-				addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic,
-				'bar',
-				'linear-gradient',
-			);
-
-			let grown = built;
-			for (let index = 0; index < 5; index += 1)
-				grown = changeGraphicGradientStopCount(grown, 'bar', 1);
-
-			let shrunk = grown;
-			for (let index = 0; index < 5; index += 1)
-				shrunk = changeGraphicGradientStopCount(shrunk, 'bar', -1);
-
-			const grownFill = surfaced(grown.items[0]).surfaceStyle?.fill;
-			const shrunkFill = surfaced(shrunk.items[0]).surfaceStyle?.fill;
-
-			expect(grownFill?.type === 'linear-gradient' && grownFill.stops).toHaveLength(4);
-			expect(shrunkFill?.type === 'linear-gradient' && shrunkFill.stops).toHaveLength(2);
 		});
 
 		it('adds and removes an outline and a glow without touching the fill', () => {
