@@ -62,11 +62,11 @@ const TERMINAL_STAGE_SQL = `(
 
 /**
  * A terminal operation still holding staging bytes is a stranded release, and
- * only that (#358): every ordinary terminal transition zeroes the staging byte
- * columns in the same statement that makes the stage terminal
- * (`updateOperationStatement`), and the staged-input expiry above now leaves
- * them standing precisely when `releaseStagedObjects` could not land. So the
- * accounting is the marker — no separate column records the strand.
+ * only that (#358, #700): no terminal transition — completion, cancellation,
+ * permanent rejection, or the staged-input expiry above — zeroes the staging
+ * byte columns, and only `releaseStagedInputBytes` does, once the staged
+ * objects are proven deleted. So the accounting is the marker — no separate
+ * column records the strand.
  */
 const UNRELEASED_STAGED_INPUT_SQL = `(
 	${TERMINAL_STAGE_SQL}
@@ -307,13 +307,11 @@ export function createD1GraphicsAssetRetentionCatalogue(
 			const zeroed = await database.prepare(`
 				UPDATE graphics_ingestion_operations
 				SET staging_reserved_byte_length = 0,
-					staging_used_byte_length = 0,
-					updated_at = ?
+					staging_used_byte_length = 0
 				WHERE id = ?
 					AND ${TERMINAL_STAGE_SQL}
 					AND staging_used_byte_length + staging_reserved_byte_length = ?
 			`).bind(
-				new Date(input.releasedAt).getTime(),
 				input.operationId,
 				before.staging_bytes,
 			).run();

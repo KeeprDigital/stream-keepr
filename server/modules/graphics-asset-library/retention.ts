@@ -66,9 +66,10 @@ export interface StagedInputExpiryCandidate {
 
 /**
  * A terminal Graphics Ingestion Operation whose staged objects a release never
- * proved gone (#358). The accounting is the marker: terminal stage with staging
- * bytes still on the books means exactly this, because every ordinary terminal
- * transition zeroes those bytes in the transition itself.
+ * proved gone (#358, #700). The accounting is the marker: no terminal
+ * transition zeroes the staging bytes, and only a release that saw every
+ * staged object go does, so a terminal stage with staging bytes still on the
+ * books means exactly this.
  */
 export interface UnreleasedStagedInput {
 	operationId: GraphicsIngestionOperationId;
@@ -167,15 +168,7 @@ export interface GraphicsAssetRetentionCatalogue {
 		observedUpdatedAt: string;
 		expiredAt: string;
 	}) => Promise<boolean>;
-	/**
-	 * Zeroes a terminal operation's staging byte accounting once its staged
-	 * objects are proven gone, reporting what was actually freed. Idempotent:
-	 * a second run finds nothing on the books and reports `released: false`.
-	 */
-	releaseStagedInputBytes: (input: {
-		operationId: GraphicsIngestionOperationId;
-		releasedAt: string;
-	}) => Promise<{ released: boolean; bytesFreed: number }>;
+	releaseStagedInputBytes: ReleaseStagedInputBytes;
 	/** Stranded releases, oldest first: terminal operations still holding bytes. */
 	listUnreleasedStagedInput: (input: { limit: number }) => Promise<UnreleasedStagedInput[]>;
 	findUnreleasedStagedInput: (
@@ -318,14 +311,112 @@ export interface GraphicsAssetRetentionCatalogue {
 	) => Promise<GraphicAssetTombstone | undefined>;
 }
 
+/**
+ * Zeroes a terminal operation's staging byte accounting once its staged
+ * objects are proven gone, reporting what was actually freed. Idempotent: a
+ * second run finds nothing on the books and reports `released: false`. It
+ * never writes an operation that is still working.
+ */
+export type ReleaseStagedInputBytes = (input: {
+	operationId: GraphicsIngestionOperationId;
+}) => Promise<{ released: boolean; bytesFreed: number }>;
+
+/** The operation whose staged objects a release names. */
+interface StagedInputOwner {
+	operationId: GraphicsIngestionOperationId;
+	initiatedBy: string;
+}
+
+/** The catalogue half of releasing one terminal operation's staged input. */
+export interface GraphicsStagedInputReleaseCatalogue {
+	getGraphicAssetMultipartState: (
+		operationId: GraphicsIngestionOperationId,
+		initiatedBy: string,
+	) => Promise<GraphicsAssetMultipartState | undefined>;
+	releaseStagedInputBytes: ReleaseStagedInputBytes;
+}
+
+/**
+ * Releases every staging object one operation may own, and reports whether
+ * every abort and delete landed. Only object-store unavailability withholds
+ * the flag, because it is the one outcome that leaves bytes behind: a false
+ * answer means bytes this release did not reclaim are still in the store.
+ * Every object it names belongs to this one operation, so it can never reach
+ * canonical content or another operation's staged input.
+ */
+async function releaseStagedIngestionObjects(
+	dependencies: {
+		catalogue: Pick<GraphicsStagedInputReleaseCatalogue, 'getGraphicAssetMultipartState'>;
+		staging: GraphicsStagingObjectStore;
+	},
+	{ operationId, initiatedBy }: StagedInputOwner,
+): Promise<boolean> {
+	const { catalogue, staging } = dependencies;
+	const multipart = await catalogue.getGraphicAssetMultipartState(operationId, initiatedBy);
+	let released = true;
+	if (multipart?.uploadId) {
+		const aborted = await staging.abortMultipart({
+			identity: stagedIngestionObjectIdentities(operationId)[0]!,
+			uploadId: multipart.uploadId,
+		});
+		// An upload the store no longer holds is released, the same way a staged
+		// object the store does not have is; only unavailability withholds the
+		// flag. Matches the `delete` reading below it.
+		released = released && aborted.outcome !== 'unavailable';
+	}
+	for (const identity of stagedIngestionObjectIdentities(operationId)) {
+		// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+		const deleted = await staging.delete(identity);
+		released = released && deleted.outcome !== 'unavailable';
+	}
+	return released;
+}
+
+/**
+ * What releasing one terminal operation's staged input did: its objects are
+ * proven gone and its books zeroed, another release already zeroed them, or
+ * the store could not answer and the obligation stands.
+ */
+export type TerminalStagedInputReleaseOutcome
+	= | { outcome: 'released'; bytesFreed: number }
+		| { outcome: 'already-released' }
+		| { outcome: 'unavailable' };
+
+/**
+ * The one release of a terminal Graphics Ingestion Operation's staged input
+ * (#700): its objects first, then — only once every delete landed — its
+ * staging accounting. No terminal transition zeroes those bytes itself, so a
+ * release that cannot reach the store leaves the operation in the
+ * unreleased-staged-input Operational Queue, still counted against the
+ * Graphics Staging Allowance, for the sweep or the queue's retry action to
+ * finish. Ingestion runs it after each terminal transition; the sweep's retry
+ * stage and the retry action run it for whatever that left.
+ *
+ * Pass only an operation already terminal: the objects go before the
+ * catalogue's own terminal guard is consulted.
+ */
+export async function releaseTerminalStagedInput(
+	dependencies: {
+		catalogue: GraphicsStagedInputReleaseCatalogue;
+		staging: GraphicsStagingObjectStore;
+	},
+	operation: StagedInputOwner,
+): Promise<TerminalStagedInputReleaseOutcome> {
+	const releasedObjects = await releaseStagedIngestionObjects(dependencies, operation);
+	if (!releasedObjects)
+		return { outcome: 'unavailable' };
+	const freed = await dependencies.catalogue.releaseStagedInputBytes({
+		operationId: operation.operationId,
+	});
+	return freed.released
+		? { outcome: 'released', bytesFreed: freed.bytesFreed }
+		: { outcome: 'already-released' };
+}
+
 interface GraphicsRetentionDependencies {
-	catalogue: GraphicsAssetRetentionCatalogue & {
-		getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
-		getGraphicAssetMultipartState: (
-			operationId: GraphicsIngestionOperationId,
-			initiatedBy: string,
-		) => Promise<GraphicsAssetMultipartState | undefined>;
-	};
+	catalogue: GraphicsAssetRetentionCatalogue
+		& GraphicsStagedInputReleaseCatalogue
+		& { getCapacity: () => Promise<GraphicsAssetLibraryCapacity> };
 	staging: GraphicsStagingObjectStore;
 	canonical: GraphicsCanonicalObjectStore;
 	now: () => Date;
@@ -366,36 +457,6 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			// early evidence before the purge it was written to explain.
 			expiresAt: null,
 		};
-	}
-
-	/**
-	 * Releases every staging object one operation may own, and reports whether
-	 * every abort and delete landed. Only object-store unavailability withholds
-	 * the flag, because it is the one outcome that leaves bytes behind: a false
-	 * answer means bytes this sweep did not reclaim are still in the store.
-	 */
-	async function releaseStagedObjects(
-		operationId: GraphicsIngestionOperationId,
-		initiatedBy: string,
-	): Promise<boolean> {
-		const multipart = await catalogue.getGraphicAssetMultipartState(operationId, initiatedBy);
-		let released = true;
-		if (multipart?.uploadId) {
-			const aborted = await staging.abortMultipart({
-				identity: stagedIngestionObjectIdentities(operationId)[0]!,
-				uploadId: multipart.uploadId,
-			});
-			// An upload the store no longer holds is released, the same way a staged
-			// object the store does not have is; only unavailability withholds the
-			// flag. Matches the `delete` reading below it.
-			released = released && aborted.outcome !== 'unavailable';
-		}
-		for (const identity of stagedIngestionObjectIdentities(operationId)) {
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			const deleted = await staging.delete(identity);
-			released = released && deleted.outcome !== 'unavailable';
-		}
-		return released;
 	}
 
 	/**
@@ -444,22 +505,15 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 			// first: releasing the objects before it would delete the staged input
 			// of an operation that resumed since it was listed — the exact case the
 			// expiry's own observed-instant guard exists to lose.
-			const released = await releaseStagedObjects(
-				candidate.operationId,
-				candidate.initiatedBy,
-			);
+			//
 			// The accounting follows the proof (#358): the claim above left the
 			// staging bytes on the books, and they zero only once the objects are
 			// known gone. A release that failed leaves a terminal operation still
 			// holding bytes, which is the strand the retry stage lists — so
 			// capacity keeps reporting what the store is still holding, admission
 			// keeps counting it, and no separate marker is needed.
-			if (released) {
-				await catalogue.releaseStagedInputBytes({
-					operationId: candidate.operationId,
-					releasedAt: timestamp(),
-				});
-			}
+			const release = await releaseTerminalStagedInput({ catalogue, staging }, candidate);
+			const released = release.outcome !== 'unavailable';
 			if (candidate.transferComplete)
 				expiredCompletedInput++;
 			else
@@ -510,31 +564,21 @@ export function createGraphicsRetention(dependencies: GraphicsRetentionDependenc
 	}
 
 	/**
-	 * Releases one strand's staged objects and, only once they are proven
-	 * gone, zeroes its byte accounting. The one release both the sweep's retry
-	 * stage and the queue's retry action run, so the retry policy cannot fork.
+	 * Releases one strand through `releaseTerminalStagedInput`, the same
+	 * release ingestion runs at its terminal transition, so the sweep's retry
+	 * stage, the queue's retry action and ingestion cannot fork the policy.
 	 */
 	async function releaseOneStrand(strand: UnreleasedStagedInput): Promise<
 		| { outcome: 'released'; releasedAt: string; bytesFreed: number }
 		| { outcome: 'already-released' }
 		| { outcome: 'unavailable' }
 	> {
-		const releasedObjects = await releaseStagedObjects(
-			strand.operationId,
-			strand.initiatedBy,
-		);
-		if (!releasedObjects)
-			return { outcome: 'unavailable' };
-		const releasedAt = timestamp();
-		const freed = await catalogue.releaseStagedInputBytes({
-			operationId: strand.operationId,
-			releasedAt,
-		});
+		const released = await releaseTerminalStagedInput({ catalogue, staging }, strand);
 		// Someone zeroed the books between the listing and now — the other
 		// retry path, most likely. Nothing further to record.
-		if (!freed.released)
-			return { outcome: 'already-released' };
-		return { outcome: 'released', releasedAt, bytesFreed: freed.bytesFreed };
+		if (released.outcome !== 'released')
+			return released;
+		return { outcome: 'released', releasedAt: timestamp(), bytesFreed: released.bytesFreed };
 	}
 
 	/** The `staged-input-released` entry a finally-landed release records. */

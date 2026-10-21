@@ -390,18 +390,12 @@ function updateOperationStatement(
 					THEN json_set(multipart_state, '$.cleanupPending', json('true'))
 				ELSE multipart_state
 			END,
-			staging_reserved_byte_length = CASE
-				WHEN ? IN ('completed', 'cancelled')
-					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
-					THEN 0
-				ELSE staging_reserved_byte_length
-			END,
-			staging_used_byte_length = CASE
-				WHEN ? IN ('completed', 'cancelled')
-					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
-					THEN 0
-				ELSE staging_used_byte_length
-			END,
+			-- The staging byte columns are deliberately left standing at a
+			-- terminal transition (#700): the staged objects are still in the
+			-- store until the release that follows proves them deleted, and only
+			-- that release (\`releaseStagedInputBytes\`) zeroes them. A release that
+			-- cannot land leaves the operation in the unreleased-staged-input
+			-- queue, still counted against the Graphics Staging Allowance.
 			canonical_reserved_byte_length = CASE
 				WHEN ? IN ('completed', 'cancelled')
 					OR (? = 'failed' AND json_extract(?, '$.retryable') = 0)
@@ -431,12 +425,6 @@ function updateOperationStatement(
 			: JSON.stringify(operation.canonicalCapacityOutcome),
 		new Date(operation.updatedAt).getTime(),
 		operation.stage,
-		operation.stage,
-		operation.stage,
-		operation.failure === undefined ? null : JSON.stringify(operation.failure),
-		operation.stage,
-		operation.stage,
-		operation.failure === undefined ? null : JSON.stringify(operation.failure),
 		operation.stage,
 		operation.stage,
 		operation.failure === undefined ? null : JSON.stringify(operation.failure),
@@ -2146,8 +2134,6 @@ export function createD1GraphicsAssetCatalogue(
 							)
 						),
 						failure = NULL,
-						staging_reserved_byte_length = 0,
-						staging_used_byte_length = 0,
 						canonical_reserved_byte_length = 0,
 						updated_at = ?
 					WHERE id = ? AND ${guard}

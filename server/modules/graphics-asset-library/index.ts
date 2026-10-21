@@ -78,7 +78,12 @@ import type {
 	VerifyGraphicsContentBytesOutcome,
 } from './reconciliation';
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
-import type { GraphicsAssetRetentionCatalogue, StrandedStagedInputReleaseOutcome } from './retention';
+import type {
+	GraphicsAssetRetentionCatalogue,
+	ReleaseStagedInputBytes,
+	StrandedStagedInputReleaseOutcome,
+	TerminalStagedInputReleaseOutcome,
+} from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import type { ResolvedPackagedRevision } from './template-package';
 import type { TemplatePackageArchiveEntry } from './template-package-archive';
@@ -120,6 +125,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { isTerminalIngestionOperation } from './operation';
 import { createGraphicsOperationalQueues } from './operational-queues';
 import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
@@ -131,7 +137,7 @@ import {
 	reconciliationWorkingCopyIdentity,
 	reconciliationWorkingCopyOperationId,
 } from './reconciliation';
-import { createGraphicsRetention } from './retention';
+import { createGraphicsRetention, releaseTerminalStagedInput } from './retention';
 import {
 	processSilentVideo,
 	processSilentVideoFromRandomAccess,
@@ -423,6 +429,12 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<void>;
+	/**
+	 * Zeroes a terminal operation's staging accounting once its staged objects
+	 * are proven deleted. Ingestion reaches it only through
+	 * `releaseTerminalStagedInput`, which proves the deletes first.
+	 */
+	releaseStagedInputBytes: ReleaseStagedInputBytes;
 	getTemplatePackagePreflight: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -2177,8 +2189,9 @@ export function createGraphicsAssetLibrary(
 		failure: NonNullable<GraphicsIngestionOperation['failure']>,
 		report?: GraphicAssetValidationReport,
 	) {
+		let failed: GraphicsIngestionOperation;
 		try {
-			return await catalogue.updateIngestionOperation(
+			failed = await catalogue.updateIngestionOperation(
 				changedOperation(operation, {
 					stage: 'failed',
 					report,
@@ -2194,9 +2207,49 @@ export function createGraphicsAssetLibrary(
 				{ cause: error },
 			);
 		}
+		// A permanent failure is terminal, so the staged input it held is owed
+		// back now. A retryable one keeps it: a retry resumes from those bytes.
+		await releaseOwedStagedInput(failed);
+		return failed;
 	}
 
-	async function cleanupCancelledMultipart(
+	/**
+	 * Runs the release a terminal operation owes its staged input (#700), and
+	 * does nothing for one still working. It never fails the caller: the
+	 * terminal transition already happened and is reported as it is, and a
+	 * release that could not land leaves the obligation on the books, in the
+	 * unreleased-staged-input Operational Queue, for the sweep or the queue's
+	 * retry action to finish.
+	 */
+	async function releaseOwedStagedInput(
+		operation: GraphicsIngestionOperation,
+	): Promise<TerminalStagedInputReleaseOutcome | { outcome: 'not-terminal' }> {
+		if (!isTerminalIngestionOperation(operation))
+			return { outcome: 'not-terminal' };
+		try {
+			return await releaseTerminalStagedInput(
+				{ catalogue: requireCatalogue(), staging: requireStaging() },
+				{ operationId: operation.id, initiatedBy: operation.initiatedBy },
+			);
+		}
+		catch (error) {
+			logGraphicsStoreFailure(
+				'graphics_staged_input_release_deferred',
+				{ operationId: operation.id },
+				error,
+			);
+			return { outcome: 'unavailable' };
+		}
+	}
+
+	/**
+	 * A cancellation's release: the staged input, any multipart upload it was
+	 * holding included, and — once that release is proven — the multipart
+	 * checkpoint's `cleanupPending`. A checkpoint already cleared means an
+	 * earlier pass proved the release, so repeating a cancellation aborts
+	 * nothing twice.
+	 */
+	async function releaseCancelledStagedInput(
 		catalogue: GraphicsAssetCatalogue,
 		operation: GraphicsIngestionOperation,
 	): Promise<GraphicsIngestionOperation> {
@@ -2204,17 +2257,10 @@ export function createGraphicsAssetLibrary(
 			() => catalogue.getGraphicAssetMultipartState(operation.id, operation.initiatedBy),
 			'Graphics multipart cancellation checkpoint is temporarily unavailable',
 		);
-		if (!multipart?.uploadId || !multipart.cleanupPending)
+		if (multipart && !multipart.cleanupPending)
 			return operation;
-		const staging = requireStaging();
-		const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
-		const aborted = await staging.abortMultipart({
-			identity,
-			uploadId: multipart.uploadId,
-		});
-		// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by operation identity.
-		const deleted = await staging.delete(identity);
-		if (aborted.outcome === 'unavailable' || deleted.outcome === 'unavailable')
+		const release = await releaseOwedStagedInput(operation);
+		if (release.outcome === 'unavailable' || release.outcome === 'not-terminal' || !multipart)
 			return operation;
 		await catalogueRequest(
 			() => catalogue.recordGraphicAssetMultipartCleanupComplete(operation.id, operation.initiatedBy),
@@ -3111,10 +3157,8 @@ export function createGraphicsAssetLibrary(
 			);
 			if (authoritative?.stage !== 'cancelled' && authoritative?.stage !== 'completed')
 				return undefined;
-			if (authoritative.stage === 'cancelled') {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
-			}
+			if (authoritative.stage === 'cancelled')
+				await releaseOwedStagedInput(authoritative);
 			return authoritative;
 		}
 
@@ -3367,8 +3411,7 @@ export function createGraphicsAssetLibrary(
 				})),
 				publishedAt: timestamp(),
 			});
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			await staging.delete(stagingIdentity);
+			await releaseOwedStagedInput(installed);
 			return installed;
 		}
 
@@ -3533,8 +3576,12 @@ export function createGraphicsAssetLibrary(
 					{ cause: catalogueError },
 				);
 			}
-			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled')
+			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled') {
+				// Whatever was interrupted, the operation is terminal and owes its
+				// staged input back; repeating a release that already ran is safe.
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
+			}
 			if (authoritative && authoritative.updatedAt !== operation.updatedAt)
 				return authoritative;
 			return await failOperation(catalogue, authoritative ?? operation, {
@@ -3555,7 +3602,6 @@ export function createGraphicsAssetLibrary(
 		const canonical = requireCanonical();
 		let operation = initialOperation;
 		const stagingIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
-		const posterIdentity = graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`);
 
 		async function terminalOperationAtCheckpoint() {
 			const authoritative = await catalogue.getIngestionOperation(
@@ -3564,12 +3610,8 @@ export function createGraphicsAssetLibrary(
 			);
 			if (authoritative?.stage !== 'cancelled' && authoritative?.stage !== 'completed')
 				return;
-			if (authoritative.stage === 'cancelled') {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(posterIdentity);
-			}
+			if (authoritative.stage === 'cancelled')
+				await releaseOwedStagedInput(authoritative);
 			return authoritative;
 		}
 
@@ -3756,16 +3798,12 @@ export function createGraphicsAssetLibrary(
 					error,
 					GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].compatibilityProfile,
 				);
-				const failed = await failOperation(catalogue, operation, {
+				// A permanent rejection: `failOperation` releases the staged input.
+				return await failOperation(catalogue, operation, {
 					code: 'validation-failed',
 					retryable: false,
 					message: 'Graphic Asset did not satisfy its compatibility profile.',
 				}, report);
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(posterIdentity);
-				return failed;
 			}
 			const validationTerminal = await terminalOperationAtCheckpoint();
 			if (validationTerminal)
@@ -3788,8 +3826,7 @@ export function createGraphicsAssetLibrary(
 						current,
 						completedAt: timestamp(),
 					});
-					// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-					await staging.delete(stagingIdentity);
+					await releaseOwedStagedInput(completed);
 					return completed;
 				}
 			}
@@ -3952,10 +3989,9 @@ export function createGraphicsAssetLibrary(
 					});
 				}
 			}
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			await staging.delete(stagingIdentity);
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			await staging.delete(posterIdentity);
+			// Published: whatever the release below manages, `completed` is the
+			// answer, and a release the store refuses stays owed (#700).
+			await releaseOwedStagedInput(completed);
 			if (supersededAt && operation.targetAssetId) {
 				await recordSupersession({
 					assetId: operation.targetAssetId,
@@ -3977,8 +4013,12 @@ export function createGraphicsAssetLibrary(
 					{ cause: error },
 				);
 			}
-			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled')
+			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled') {
+				// Whatever was interrupted, the operation is terminal and owes its
+				// staged input back; repeating a release that already ran is safe.
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
+			}
 			if (authoritative && authoritative.updatedAt !== operation.updatedAt)
 				return authoritative;
 			return await failOperation(catalogue, authoritative ?? operation, {
@@ -4309,8 +4349,9 @@ export function createGraphicsAssetLibrary(
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
 			if (operation.stage === 'completed')
 				return operation;
+			// Repeating a cancellation retries whatever release it still owes.
 			if (operation.stage === 'cancelled')
-				return await cleanupCancelledMultipart(catalogue, operation);
+				return await releaseCancelledStagedInput(catalogue, operation);
 			const cancelled = await catalogueRequest(
 				() => catalogue.updateIngestionOperation(
 					changedOperation(operation, {
@@ -4325,14 +4366,7 @@ export function createGraphicsAssetLibrary(
 				),
 				'Graphics ingestion cancellation could not be recorded',
 			);
-			const cleaned = await cleanupCancelledMultipart(catalogue, cancelled);
-			const staging = requireStaging();
-			// Source and poster are one operation's provisional staging set.
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			await staging.delete(graphicsObjectIdentity(`ingestion/${operation.id}/source`));
-			// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-			await staging.delete(graphicsObjectIdentity(`ingestion/${operation.id}/video-poster`));
-			return cleaned;
+			return await releaseCancelledStagedInput(catalogue, cancelled);
 		},
 		async startGraphicAssetMultipartUpload(input) {
 			const catalogue = requireCatalogue();
@@ -4790,8 +4824,7 @@ export function createGraphicsAssetLibrary(
 				'Graphics ingestion transfer checkpoint is temporarily unavailable',
 			);
 			if (authoritative?.stage === 'cancelled' || authoritative?.stage === 'completed') {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
 			}
 			await catalogueRequest(
@@ -4973,8 +5006,7 @@ export function createGraphicsAssetLibrary(
 				'Approved remote Graphic Asset copy checkpoint is temporarily unavailable',
 			);
 			if (authoritative?.stage === 'cancelled' || authoritative?.stage === 'completed') {
-				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
-				await staging.delete(stagingIdentity);
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
 			}
 			await catalogueRequest(
