@@ -15,11 +15,23 @@ function readDocument(name: string): string {
  */
 describe('the testing guide (README.md § Testing)', () => {
 	it('names every local browser gate `pnpm test` runs, in the order verify runs them', () => {
-		// `pnpm accept <name>` gates, in declaration order: verify chains them one
-		// after another, so declaration order is run order.
-		const browserGates = Object.values(GATES)
-			.filter(gate => gate.command[1] === 'accept')
-			.map(gate => gate.command[2]!);
+		// `pnpm accept <name>` gates in run order: verify chains them, each after
+		// the one before, so follow the chain from the gate that waits on none.
+		const accepts = Object.entries(GATES as Record<string, { command: string[]; after: string[] }>)
+			.filter(([, gate]) => gate.command[1] === 'accept');
+		const browserGates: string[] = [];
+		let previous: string | undefined;
+		for (;;) {
+			const next = accepts.find(([, gate]) => previous === undefined
+				? !gate.after.some(name => name.startsWith('accept:'))
+				: gate.after.includes(previous));
+			if (next === undefined)
+				break;
+			previous = next[0];
+			browserGates.push(next[1].command[2]!);
+		}
+
+		expect(browserGates).toHaveLength(accepts.length);
 		const row = readDocument('README.md').split('\n').find(line => line.startsWith('| Before commit '));
 
 		expect(row).toBeDefined();

@@ -81,8 +81,7 @@ points at them.
     [ADR-0010](DECISIONS.md#adr-0010-authentication-replaces-the-anonymous-author-session),
     [ADR-0012](DECISIONS.md#adr-0012-environment-dependent-library-behaviour-is-stated-tested-or-recorded),
     [ADR-0017](DECISIONS.md#adr-0017-the-local-auth-bypass-is-one-launcher-owned-name),
-    [ADR-0018](DECISIONS.md#adr-0018-a-lan-bypassed-launcher-is-an-accepted-local-exposure),
-    [ADR-0030](DECISIONS.md#adr-0030-a-graphics-authoring-lease-is-decided-by-the-screen-write-module-and-fenced-at-the-commit).
+    [ADR-0018](DECISIONS.md#adr-0018-a-lan-bypassed-launcher-is-an-accepted-local-exposure).
   - Code: `server/utils/authOptions.ts`, `server/middleware/api-session.ts`,
     `server/modules/user-administration/`.
 - **Event Data and realtime**: Event Data, Realtime Subscriptions, Reconnect
@@ -102,8 +101,9 @@ points at them.
   - Code: `app/composables/core/useRealtime.ts`,
     `app/composables/core/useReconnectResync.ts`, `server/modules/live-state/`,
     `server/modules/event-data-publication/`.
-- **Screen Outputs**: Screens, their Screen Modes, and the Overlay, Fill and
-  Key Outputs a Screen Output Asset Capability admits.
+- **Screen Outputs**: Screens, their Screen Modes, the Overlay, Fill and Key
+  Outputs a Screen Output Asset Capability admits, and the Graphics Authoring
+  Lease over a Screen's graphics.
   - Operate:
     [Transparent video is Chromium-only](#transparent-video-is-chromium-only),
     [Worker secrets](#worker-secrets) (the capability signing key),
@@ -117,13 +117,14 @@ points at them.
     [ADR-0021](DECISIONS.md#adr-0021-a-screen-media-source-is-for-a-screens-own-media-graphics-content-stays-library-only),
     [ADR-0022](DECISIONS.md#adr-0022-a-screen-output-reads-what-its-screen-publishes-through-its-screen),
     [ADR-0027](DECISIONS.md#adr-0027-the-key-output-keys-every-glow-at-its-own-opacity),
+    [ADR-0030](DECISIONS.md#adr-0030-a-graphics-authoring-lease-is-decided-by-the-screen-write-module-and-fenced-at-the-commit),
     [ADR-0037](DECISIONS.md#adr-0037-a-screen-modes-config-has-one-contract-and-a-default-lives-only-in-it),
     [ADR-0038](DECISIONS.md#adr-0038-a-screen-mode-definition-declares-its-event-references-and-the-screen-write-derives-its-checks-from-them),
     [ADR-0039](DECISIONS.md#adr-0039-a-paginated-screen-mode-definition-declares-its-page-rotation-and-one-rule-decides-its-shape-changes).
   - Code: `server/modules/screen-write/`, `server/modules/screen-output-assets/`,
     `server/api/screen-output/`, `app/composables/screen/`.
-- **Melee Sync**: imports Event structure, Players, Deck Lists, standings,
-  Matches and Rounds from Melee.gg, with their Provenance.
+- **Melee Sync**: imports Event structure, Players, Deck Lists, Round
+  Standings, Matches and Rounds from Melee.gg, with their Provenance.
   - Operate: [Local configuration](#local-configuration) and
     [Worker secrets](#worker-secrets) (Melee credential keys and rotation).
   - Terms: [Tournament](CONTEXT.md#tournament),
@@ -132,8 +133,9 @@ points at them.
     [ADR-0031](DECISIONS.md#adr-0031-a-resolved-unresolved-deck-card-announces-the-deck-lists-it-rewrote-and-re-projects-nothing),
     [ADR-0032](DECISIONS.md#adr-0032-deleting-a-player-releases-every-deck-source-that-selects-them).
   - Code: `server/modules/melee-sync/`, `server/services/melee*.ts`.
-- **Feature Match production**: Feature Match Slots, Assignments, Sessions and
-  Slot Promotion, shown by the Feature Match Overlay.
+- **Feature Match production**: Feature Match Slots, Feature Match
+  Assignments, Feature Match Sessions and Feature Match Slot Promotion, shown by
+  the Feature Match Overlay.
   - Operate: [Graphics notes](#graphics-notes).
   - Terms: [Feature Match production](CONTEXT.md#feature-match-production),
     [Feature Match Overlay](CONTEXT.md#feature-match-overlay).
@@ -144,7 +146,8 @@ points at them.
     `server/modules/feature-match-session/`,
     `server/modules/feature-match-slot-write/`.
 - **Graphics Asset Library**: Graphic Assets, Graphics Ingestion Operations,
-  retention, Graphics Reconciliation, and the Operations Cockpit.
+  the Graphics Retention Sweep, Graphics Reconciliation, and the Operations
+  Cockpit.
   - Operate:
     [Graphics Asset Library operations](#graphics-asset-library-operations),
     [Silent-video validator](#silent-video-validator),
@@ -506,8 +509,8 @@ How a change reaches `main`, and why:
   `Conventional Commit title` must be green on the PR and on its merge group.
   Repository admins keep one bypass, for pull requests only: an admin can
   still merge a PR around the queue and its checks, though nobody can push to
-  `main` directly. ADR-0036 records no bypass actor; the maintainer kept this
-  one ([#615](https://github.com/KeeprDigital/stream-keepr/issues/615#issuecomment-6307069465)).
+  `main` directly (ADR-0036,
+  [#615](https://github.com/KeeprDigital/stream-keepr/issues/615#issuecomment-6307069465)).
   Nothing routine uses it: Release PRs, which once needed it, go through the
   queue like any other, and a bypass merge that lands unverified is refused a
   tag by the release gate below. The **release
@@ -1124,9 +1127,8 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
   locally against a fake Wrangler adapter
   (`test/unit/scripts/silentVideoValidatorAcceptance.test.ts`).
   - **Every future deploy** runs it as gate 1 of [Deploy day](#deploy-day)
-    step 5, with the step 4 variables set. A pass prints
-    `silent-video-validator-v1 acceptance passed checks=3 fixtures=3 cleaned=6`
-    and leaves no cleanup manifest; a failed cleanup follows **Validator gate
+    step 5, with the step 4 variables set. A pass line ends `cleaned=6` and
+    leaves no cleanup manifest; a failed cleanup follows **Validator gate
     cleanup** there.
   - **Completed once, not owed again:** the human-authorized deployed proof
     #619 asked for, observed on 21 October 2026 against v1.5.0 (Deploy run
