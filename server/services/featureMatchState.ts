@@ -12,7 +12,7 @@ import type {
 	FeatureMatchSourceSnapshot,
 } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
 import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
@@ -247,6 +247,9 @@ export function featureMatchStateService() {
 				inJsonArray(featureMatchSessions.slotId, slotIds),
 				eq(featureMatchSessions.status, 'active'),
 			),
+			// Announcements follow this order, so it is Slot order by contract
+			// rather than whichever plan the lookup happens to get.
+			orderBy: [asc(featureMatchSessions.slotId)],
 		});
 	};
 

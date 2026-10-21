@@ -46,7 +46,11 @@ beforeEach(() => {
 	announcedSlotIds.length = 0;
 });
 
-/** An Event holding `count` Slots, none with a Session yet, in id order. */
+/**
+ * An Event holding `count` Slots, none with a Session yet, in id order. Above
+ * fifty the Slots outnumber the Event's own count on purpose: no product path
+ * writes such an Event, and only the service under test reads these.
+ */
 async function eventWithSlots(count: number) {
 	const [event] = await db.insert(schema.events)
 		.values({ name: `Slots ${count}`, game: 'mtg', featureMatchOrientation: 'horizontal', numFeatureMatches: Math.min(count, 50) })
@@ -115,6 +119,23 @@ describe('opening Feature Match Sessions on D1', () => {
 		const sessions = await sessionsOf(eventId);
 		expect(sessions.filter(session => session.status === 'closed').map(session => session.id))
 			.toEqual(slotIds.map(slotId => first.get(slotId)!.id));
+		expect(announcedSlotIds).toEqual(slotIds);
+	});
+
+	/**
+	 * Slots named out of order, holding Sessions opened one at a time in reverse,
+	 * so neither the order asked nor the Sessions' ids follow the Slots' own.
+	 */
+	it.each([3, 120])('announces the Sessions of %i Slots named out of order in Slot order', async (count) => {
+		const { eventId, slotIds } = await eventWithSlots(count);
+		const reversed = [...slotIds].reverse();
+		for (const slotId of reversed)
+			await featureMatchStateService().createSessionForSlot(slotId, eventId);
+		announcedSlotIds.length = 0;
+
+		const opened = await featureMatchStateService().openSessionsForSlots(eventId, reversed);
+
+		await expectEachSlotOwnsItsSession(eventId, slotIds, opened);
 		expect(announcedSlotIds).toEqual(slotIds);
 	});
 });
