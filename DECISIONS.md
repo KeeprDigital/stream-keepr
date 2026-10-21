@@ -1042,7 +1042,7 @@ The one `production` tag stood for both components but moved only after the app 
 
 ## ADR-0036: The merge queue verifies the exact revision that lands, and only such a revision is released
 
-Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/issues/615)
+Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/issues/615) · Amended 2026-10-21: a merge group reuses a full, green PR run's verification of a byte-identical tree
 
 ### Decision
 
@@ -1052,9 +1052,20 @@ Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/is
 
 **Both required checks report in the queue.** `CI passed` (ci.yml) and `Conventional Commit title` (pr-title.yml) run on `merge_group` as well as `pull_request`. A required check that never reports holds the group until the queue's timeout. In the queue, the title check reads the subject of every squash commit the group lands, which is exactly what release-please reads. CI's scope decision measures a merge group against the queue's base (`merge_group.base_sha`), not `HEAD^1`, and runs everything when it cannot measure (`scripts/ci-scope.mjs`). PR runs stay for feedback, and because the queue admits only a PR whose required checks passed.
 
+**A merge group skips the gates only for a tree a full, green PR run already verified.** In practice that is a group of one PR whose `main` has not moved since its PR run. The guarantee is tree equality: the group's tree is byte-identical to the merge commit tree of a `pull_request` run of `ci.yml` in which every job ran and passed, none skipped by its scope. The tree includes `ci.yml` and every script it runs, so that run executed exactly the code the group's own run would. The PR run's `record` job leaves the evidence, an artifact holding an OIDC token GitHub signed for that job. In the queue, `scripts/ci-reuse.mjs` accepts it only if:
+
+- the signature is GitHub's (`token.actions.githubusercontent.com` JWKS, RS256);
+- the claims are this repository's (name and id), `event_name` `pull_request`, `workflow_ref` `ci.yml`, a GitHub-hosted runner, the uploading run's id, and `workflow_sha` equal to `sha`;
+- the tree of the commit the token names (`sha`, the merge commit the run executed) is the group's;
+- GitHub's run and jobs API shows that run completed with every job a success.
+
+`CI passed` then reports success with the gates skipped, and the scope job's `verified-by` output names the run. Anything else runs everything: no record, an expired or oversized one, a bad signature or claim, another tree (a moved `main`, a multi-entry group), a skipped, failed or unfinished job, an API or network error. The title check still runs in the queue, and so does the release gate's check, which a reused run satisfies as a successful `merge_group` run for that exact commit.
+
 ### Why
 
 CI ran only on PRs, and the ruleset did not require a PR to be up to date with `main`. Two PRs that each passed against the same old `main` could merge one after the other, and nothing ever tested the combined tree. A later release could ship it (#615). Squash-only merging does not change that.
+
+Running the queue made most merges run full CI twice on the same tree, about ten minutes each: once on the PR, which the queue requires, and again on the group when `main` had not moved. Reusing the PR run halves that without weakening "the tree that lands passed CI". The record must not be self-attested, though. A `pull_request` run executes the PR's own workflow code, so one push could upload a fake artifact, write a commit status, or claim any tree, then push an honest `ci.yml` back. GitHub's record of a run names only the PR head, not the merge commit it tested. The OIDC token is the one fact about a run that its code cannot choose: GitHub signs which commit the run executed. A PR cannot get a token naming a commit whose tree is the group's unless it actually ran the group's code. What remains is what the queue already trusted: a PR that edits `ci.yml`, `ci-scope.mjs` or `ci-reuse.mjs` controls its own group's run, with or without reuse. Because reuse requires tree equality, that edit has to be in the diff that lands, so review is the control, as before.
 
 ### Consequences
 
@@ -1064,11 +1075,18 @@ CI ran only on PRs, and the ruleset did not require a PR to be up to date with `
 - The release gate runs from `main`'s workflow and blocks every release-please run while an unverified release is pending. It waits up to two minutes for a merge-group run still concluding, since the queue merges on the check a moment before the run finishes. Recovery is by hand (README.md § Releases).
 - Every workflow file now counts as code for CI's scope, because each is held by wiring tests that only run when CI does. Editing `deploy.yml`, `pr-title.yml` or `release-please.yml` runs the gates, but not the Worker build.
 - Docs-only changes still skip CI's gates in the queue. That is sound while nothing bypasses the queue, because the queue's base then passed its own run. If something did, the next Release PR's group still tests the whole tree before a release.
+- A reused group run takes about a minute instead of ten. The first queued merge after this lands shows which path it took. A reused run has its gates skipped, and the scope job's log and `CI passed` name the PR run. A full run logs why each record was rejected. A PR run of a docs-only or tests-only change records nothing, because it skipped gates, so its group runs everything except what its own scope skips.
+- The record is a real OIDC token in an artifact that anyone who can read this public repository's artifacts can download. It is short-lived and minted for the audience `stream-keepr:ci-verified-tree`, which no cloud provider or other relying party accepts, and this repository trusts GitHub's OIDC tokens nowhere else. Artifacts are kept 30 days; a PR queued later runs in full. A JWKS key rotation between the PR run and the group also only costs a full run. The token's expiry is ignored on purpose: it is read as GitHub's signed statement about a past run, never presented as a credential.
+- Fork PRs get no token, so their groups always run in full.
+- The decision is unit-tested against a locally generated signing key and fake GitHub reads (`ciReuse.test.ts`), and the record job's command line against a stand-in OIDC endpoint. That GitHub's `sha` claim is the PR's merge commit, and that the artifact and API reads work with the job's token, is proven only by an observed queued merge. If either is wrong, groups simply run in full.
 
 ### Rejected alternatives
 
 - **Require PRs to be up to date with `main`** (strict status checks). It verifies the same combined tree, but each PR must be rebased and re-run by hand after every merge ahead of it, and a release still relies on nobody merging out of order.
 - **Verify `main` or the release revision after merge, before publishing.** This catches a broken combination only after it is on `main`, and needs CI on `push` plus a release that waits for it. The queue proves the same revision before it lands.
+- **Reuse on a record the PR run writes for itself**: an artifact, a check-run summary or a commit status naming the tree. The PR's own workflow code writes it, so any PR could claim a tree it never tested and then land honest code on top of that claim.
+- **Reuse by PR head commit**: skipping when the PR head's PR run passed. That run tested the head merged into whatever `main` was then, not the group's tree.
+- **Sigstore artifact attestations** (`actions/attest`, `gh attestation verify`). They are the same OIDC binding with more machinery: a transparency log, an `attestations: write` grant, and a CLI verification step. The bare token checks the same claims with `node:crypto` and nothing to install.
 - **Skip the title check in the queue** by making it non-required there. Rulesets require the same checks for PRs and merge groups, and the queue's squash subjects are what release-please reads, so checking them is the stronger check.
 
 ## ADR-0037: A Screen Mode's config has one contract, and a default lives only in it

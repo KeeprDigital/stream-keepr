@@ -10,6 +10,11 @@
  * this refuses before release-please runs, and no tag, GitHub Release or
  * Deploy candidate is made from it.
  *
+ * A `merge_group` run that skipped its gates because the tree is
+ * byte-identical to one a full, green PR run verified (scripts/ci-reuse.mjs)
+ * counts as that verification. The guarantee is tree equality with a full
+ * green run of CI, and the tree carries CI's own workflow and scripts.
+ *
  * It refuses only while such a release is pending. With none pending,
  * release-please just refreshes the Release PR.
  *

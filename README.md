@@ -208,7 +208,12 @@ wall time. The queue's run tests the exact tree that lands
 ([Releases](#releases)). It skips draft PRs (marking one ready runs it),
 changes that touch only docs, and the Worker build when only tests, docs or
 the other workflows changed (`scripts/ci-scope.mjs` decides, against a PR's
-base or the queue's base, and runs everything when it cannot tell). A newer
+base or the queue's base, and runs everything when it cannot tell). A merge
+group also skips the gates when its tree is byte-identical to one a full, green
+PR run verified: one PR, with `main` unchanged since its PR run. That PR run's
+`record` job leaves a GitHub-signed OIDC token naming the commit it ran on, and
+`scripts/ci-reuse.mjs` checks it (ADR-0036). The scope job's log and `CI passed`
+then name the run that verified the tree. Any doubt runs everything. A newer
 push cancels the older PR run. It is the full gate: before it,
 `pnpm verify:quick`.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
@@ -348,7 +353,10 @@ How a change reaches `main`, and why:
   (grouping `ALLGREEN`), so every commit `main` holds passed. A PR that fails
   is removed from the queue, and the ones behind it are re-tested without it.
   PR runs are
-  feedback and the entry ticket; the queue's run is the one that counts.
+  feedback and the entry ticket; the queue's run is the one that counts. When
+  the group's tree is exactly the one a full, green PR run already verified,
+  the queue's run reuses that verification and skips the gates rather than
+  repeating ten minutes of CI on identical bytes (see [Testing](#testing)).
 - **PR titles are Conventional Commits**, checked by
   `.github/workflows/pr-title.yml`. A title that is not one would drop the PR
   from the changelog and the version bump. In the queue it checks the subject
@@ -372,7 +380,10 @@ How a change reaches `main`, and why:
   passed on. Before it runs, `scripts/release-gate.mjs` checks every merged
   Release PR still awaiting its tag (`autorelease: pending`) and fails the
   workflow, tagging nothing, if no successful `merge_group` CI run is recorded
-  for that commit, waiting up to two minutes for one still finishing. Only a
+  for that commit, waiting up to two minutes for one still finishing. A run
+  that reused a PR run's verification counts: the guarantee is that the
+  commit's tree passed a full, green CI run, which is the case when it is
+  byte-identical to the tree that run verified. Only a
   Release PR merged around the queue (a bypass, or a merge while the queue was
   off) can trip it; re-run the workflow once in case the queue's run was slow.
   It stops every release-please run until resolved by hand: verify that

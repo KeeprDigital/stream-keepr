@@ -18,14 +18,24 @@
  * Anything it cannot tell runs everything: another event, a malformed event,
  * a failed fetch or diff, an empty diff.
  *
- *   node scripts/ci-scope.mjs   (reads GITHUB_EVENT_NAME, GITHUB_EVENT_PATH;
- *                                appends code= and bundle= to GITHUB_OUTPUT)
+ * A merge group whose tree is byte-identical to one a full, green PR run of
+ * CI verified skips every gate: what they would check passed already, on
+ * exactly this tree (scripts/ci-reuse.mjs). It then appends `verified-by=`,
+ * that run's URL. Without that exact match, or when it cannot tell, the
+ * group is scoped as above.
+ *
+ *   node scripts/ci-scope.mjs   (reads GITHUB_EVENT_NAME, GITHUB_EVENT_PATH,
+ *                                and in a merge group GITHUB_REPOSITORY,
+ *                                GITHUB_REPOSITORY_ID and GH_TOKEN; appends
+ *                                code=, bundle= and, on reuse, verified-by=
+ *                                to GITHUB_OUTPUT)
  */
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
+import { verifiedRunOnGitHub } from './ci-reuse.mjs';
 
 /**
  * Docs, editor settings and Dependabot's config. Every workflow is code: each
@@ -80,10 +90,17 @@ function git(args) {
 	return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
-function main() {
+async function main() {
 	const eventName = process.env.GITHUB_EVENT_NAME ?? '';
 	const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
 	const range = diffRange(eventName, event);
+	const verified = eventName === 'merge_group' && range ? await verifiedRunOnGitHub(range.head) : undefined;
+	if (verified) {
+		console.log('code=false bundle=false');
+		if (process.env.GITHUB_OUTPUT)
+			appendFileSync(process.env.GITHUB_OUTPUT, `code=false\nbundle=false\nverified-by=${verified.url}\n`);
+		return;
+	}
 	/** @type {string[]} */
 	let changed = [];
 	if (range === undefined) {
@@ -108,4 +125,4 @@ function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href)
-	main();
+	await main();
