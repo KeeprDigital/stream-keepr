@@ -159,13 +159,20 @@ export function createInMemoryGraphicsAssetCatalogue(
 		return [...usage, ...references.values()];
 	}
 
-	function releaseCapacity(operationId: GraphicsIngestionOperationId) {
-		// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
-		stagingReservations.delete(operationId);
-		// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
-		stagingUsage.delete(operationId);
+	/**
+	 * What a terminal transition gives back. Staging stays on the books, as in
+	 * the D1 catalogue, until `releaseStagedInputBytes` follows a release that
+	 * proved the staged objects deleted (#700).
+	 */
+	function releaseCanonicalReservation(operationId: GraphicsIngestionOperationId) {
 		// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 		canonicalReservations.delete(operationId);
+	}
+
+	function isTerminal(operation: GraphicsIngestionOperation) {
+		return operation.stage === 'completed'
+			|| operation.stage === 'cancelled'
+			|| (operation.stage === 'failed' && operation.failure?.retryable === false);
 	}
 
 	function getCapacity(): GraphicsAssetLibraryCapacity {
@@ -737,7 +744,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(completed.id, cloneOperation(completed));
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			canonicalWriteCandidates.delete(completed.id);
-			releaseCapacity(completed.id);
+			releaseCanonicalReservation(completed.id);
 			for (const asset of input.created) {
 				assets.set(asset.assetId, {
 					...assets.get(asset.assetId)!,
@@ -802,14 +809,23 @@ export function createInMemoryGraphicsAssetCatalogue(
 					});
 				}
 			}
-			if (
-				operation.stage === 'completed'
-				|| operation.stage === 'cancelled'
-				|| (operation.stage === 'failed' && operation.failure?.retryable === false)
-			) {
-				releaseCapacity(operation.id);
-			}
+			if (isTerminal(operation))
+				releaseCanonicalReservation(operation.id);
 			return cloneOperation(operation);
+		},
+		async releaseStagedInputBytes(input) {
+			const operation = operations.get(input.operationId);
+			if (!operation || !isTerminal(operation))
+				return { released: false, bytesFreed: 0 };
+			const bytesFreed = (stagingUsage.get(input.operationId) ?? 0)
+				+ (stagingReservations.get(input.operationId) ?? 0);
+			if (bytesFreed <= 0)
+				return { released: false, bytesFreed: 0 };
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			stagingReservations.delete(input.operationId);
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			stagingUsage.delete(input.operationId);
+			return { released: true, bytesFreed };
 		},
 		async claimGraphicsIngestion(input) {
 			const existing = operations.get(input.operation.id);
@@ -883,7 +899,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(completed.id, cloneOperation(completed));
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			canonicalWriteCandidates.delete(completed.id);
-			releaseCapacity(completed.id);
+			releaseCanonicalReservation(completed.id);
 			const eventIds = input.operation.defaultEventId === undefined
 				? asset.eventIds
 				: [...new Set([...asset.eventIds, input.operation.defaultEventId])].sort((left, right) => left - right);
@@ -916,7 +932,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				completedAt: input.completedAt,
 			});
 			operations.set(completed.id, cloneOperation(completed));
-			releaseCapacity(completed.id);
+			releaseCanonicalReservation(completed.id);
 			return cloneOperation(completed);
 		},
 		async publishGraphicAssetReplacement(input) {
@@ -942,7 +958,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				operations.set(completed.id, cloneOperation(completed));
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 				canonicalWriteCandidates.delete(completed.id);
-				releaseCapacity(completed.id);
+				releaseCanonicalReservation(completed.id);
 				return cloneOperation(completed);
 			}
 			const revisionNumber = asset.revisionNumber + 1;
@@ -956,7 +972,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(completed.id, cloneOperation(completed));
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			canonicalWriteCandidates.delete(completed.id);
-			releaseCapacity(completed.id);
+			releaseCanonicalReservation(completed.id);
 			revisions.set(input.revisionId, {
 				assetId: input.targetAssetId,
 				revisionNumber,
@@ -1024,7 +1040,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 				operations.set(completed.id, cloneOperation(completed));
 				// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 				canonicalWriteCandidates.delete(completed.id);
-				releaseCapacity(completed.id);
+				releaseCanonicalReservation(completed.id);
 				assets.set(reusable.id, {
 					...reusable,
 					eventIds: input.operation.defaultEventId === undefined
@@ -1049,7 +1065,7 @@ export function createInMemoryGraphicsAssetCatalogue(
 			operations.set(completed.id, cloneOperation(completed));
 			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 			canonicalWriteCandidates.delete(completed.id);
-			releaseCapacity(completed.id);
+			releaseCanonicalReservation(completed.id);
 			assets.set(input.assetId, {
 				id: input.assetId,
 				name: input.operation.name,

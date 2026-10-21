@@ -853,11 +853,12 @@ becomes reclaimable after a one-hour lease. Content that becomes reachable
 mid-delete is marked Unavailable Graphic Asset Content with a
 `content-deletion-conflict` entry: a repair case, not data loss.
 
-**Unreleased staged input.** If the staging store is down when staged input
-expires, the operation expires but its bytes stay counted against the staging
-allowance. Every sweep retries the release indefinitely, and the **Unreleased
-staged input** queue has a **Retry release** action. A warning alert stands
-until the release lands, which records `staged-input-released`.
+**Unreleased staged input.** If the staging store is down when an ingestion
+completes, is cancelled, is permanently rejected, or has its staged input
+expire, that outcome stands, but its staged bytes stay counted against the
+staging allowance. Every sweep retries the release indefinitely, and the
+**Unreleased staged input** queue has a **Retry release** action. A warning
+alert stands until the release lands, which records `staged-input-released`.
 
 **Orphaned multipart uploads.** An in-flight multipart upload whose operation
 row no longer exists is invisible to the sweep. Find and abort it with R2's S3
