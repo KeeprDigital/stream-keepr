@@ -1,15 +1,15 @@
 # Manually triggered production deploy — the Actions counterpart of running
-# `pnpm run deploy` locally. It exists as an *option*, not a replacement: deploys
-# are never merge-triggered, because deploy day is a human procedure
-# (README.md § Deploy day). This workflow covers only what
-# `pnpm run deploy` covers — build, Wasm dry run, Worker smoke against the
-# production-env build, D1 migration, Worker promotion, liveness verify.
-# Everything after promotion stays with the operator:
+# `pnpm deploy:validator` (when needed) and `pnpm run deploy` locally. It exists
+# as an *option*, not a replacement: deploys are never merge-triggered, because
+# deploy day is a human procedure (README.md § Deploy day). This workflow
+# covers only what those cover — validator promotion, build, Wasm dry run,
+# Worker smoke against the production-env build, D1 migration, Worker
+# promotion, liveness verify. Everything after promotion stays with the
+# operator:
 #
-#   - The seven deployed acceptance gates run locally, in order, stopping
-#     at the first failure (`pnpm accept deployed`). Two of them cannot run
-#     on a hosted runner at all (Safari VP9-alpha needs real Safari; the
-#     validator pre-flight needs your Docker).
+#   - The six deployed acceptance gates run locally, in order, stopping at
+#     the first failure (`pnpm accept deployed`). The validator pre-flight
+#     needs your Docker, so they cannot run on a hosted runner.
 #   - "Nothing on air" is a condition only a person can verify before
 #     triggering this.
 #
@@ -18,6 +18,14 @@
 # promotes is always a formally released snapshot whose PRs ran CI green — and rollback
 # is dispatching this workflow with the previous tag. Local `pnpm run deploy`
 # stays free-form for emergencies.
+#
+# Each component has its own promotion marker, an annotated git tag
+# (ADR-0035): `production` for the app and `production-validator` for the
+# validator, each `pending` while its deploy runs and `deployed` once it is
+# confirmed, so a run that fails between the two records exactly that. The
+# promotion runs `scripts/deploy-promotion.mjs` from this workflow's own
+# commit (main), not from the release, so rolling back to a release older
+# than the markers still reads and writes them.
 #
 # Required `production` environment secrets (the environment deploys only
 # from main): CLOUDFLARE_API_TOKEN (Workers Scripts:Edit,
@@ -45,11 +53,10 @@ on:
         type: string
       validator:
         description: >-
-          Silent-video validator promotion. auto: deploy it first only when
-          workers/silent-video-validator changed between the last successful
-          production deployment and the target release. always/never override
-          the detection (e.g. redeploying to recover a bad validator state,
-          or skipping a first run with no deployment record).
+          Silent-video validator promotion. auto: deploy it first unless the
+          production-validator marker records a confirmed deploy with the
+          target release's validator fingerprint (its bundle, Container
+          context and configuration). always/never override the detection.
         required: false
         type: choice
         default: auto
@@ -63,18 +70,13 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  # write: a successful deploy moves the `production` git tag to the commit
-  # it shipped — the authoritative deployed-state marker the validator
-  # auto-detection diffs against.
+  # write: the run force-pushes the `production` and `production-validator`
+  # promotion-marker tags.
   contents: write
-  # Fallback for the auto-detection while no `production` tag exists yet:
-  # the environment's deployment records. Less precise — a record carries
-  # the dispatch-time main commit, not the deployed tag's commit.
-  deployments: read
 
 jobs:
   deploy:
-    name: Build, migrate, promote, verify
+    name: Promote the validator and the app, verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
@@ -83,6 +85,9 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # The tagger identity of the annotated marker tags.
+      GIT_COMMITTER_NAME: github-actions[bot]
+      GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
       # nuxt build OOMs Node's default ~2GB heap on hosted runners.
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
@@ -111,76 +116,38 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.release.outputs.tag }}
-          # Full history: the validator detection diffs the deployed commit
-          # against the target tag.
+          # Full history: fetching a marker tag brings the commit it points
+          # at, which a shallow clone would have to deepen to.
           fetch-depth: 0
-      - name: Decide whether the validator deploys
-        id: validator
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_VALIDATOR: ${{ inputs.validator }}
-        run: |
-          decide() {
-            case "$INPUT_VALIDATOR" in
-              always) echo "true|forced by the always input"; return ;;
-              never) echo "false|suppressed by the never input"; return ;;
-            esac
-            # The `production` tag marks the exact commit the last successful
-            # deploy shipped (moved by this workflow's final step).
-            deployed_sha=$(git rev-parse -q --verify 'refs/tags/production^{commit}' || true)
-            baseline="the production tag"
-            if [ -z "$deployed_sha" ]; then
-              # Fallback: the environment's deployment records. Imprecise —
-              # a record's sha is main at dispatch time, not the deployed
-              # tag's commit — but pre-tag history is better than nothing.
-              # Newest-first; the first record whose latest status is success
-              # is what production runs. This run's own record is still
-              # in_progress, so it never matches.
-              baseline="deployment records"
-              for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=20" --jq '.[].id'); do
-                state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
-                if [ "$state" = "success" ]; then
-                  deployed_sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq .sha)
-                  break
-                fi
-              done
-            fi
-            if [ -z "$deployed_sha" ]; then
-              echo "true|no successful production deployment on record — deploying it is the safe default"
-            elif ! git cat-file -e "$deployed_sha" 2> /dev/null; then
-              echo "true|deployed commit $deployed_sha is unknown to this history — deploying it is the safe default"
-            elif git diff --quiet "$deployed_sha" HEAD -- workers/silent-video-validator; then
-              echo "false|workers/silent-video-validator unchanged since deployed $deployed_sha ($baseline)"
-            else
-              echo "true|workers/silent-video-validator changed since deployed $deployed_sha ($baseline)"
-            fi
-          }
-          result=$(decide)
-          deploy="${result%%|*}"
-          reason="${result#*|}"
-          echo "Validator deploy: $deploy ($reason)"
-          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+      - name: Check out the promotion tooling from this workflow's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .deploy-tooling
+          sparse-checkout: scripts/deploy-promotion.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # Untracked files mark a checkout `dirty` in the markers; this one is
+      # not part of the release.
+      - run: echo /.deploy-tooling/ >> .git/info/exclude
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Deploy the silent-video validator
-        if: steps.validator.outputs.deploy == 'true'
-        run: pnpm deploy:validator
-      - name: Deploy (build, dry run, smoke, migrate D1, promote, verify)
-        run: pnpm run deploy
-      - name: Move the production tag to the deployed commit
-        run: git push origin +HEAD:refs/tags/production
+      # Decides the validator against its marker, deploys it first when that
+      # says so, then runs `pnpm run deploy`, each between its markers. The
+      # step summary records the decision, and on failure what each marker
+      # now says (README.md § Recovering from a partial promotion).
+      - name: Promote (validator when decided, then build, dry run, smoke, migrate D1, promote, verify)
+        env:
+          INPUT_VALIDATOR: ${{ inputs.validator }}
+        run: node .deploy-tooling/scripts/deploy-promotion.mjs promote "$INPUT_VALIDATOR"
       - name: Remind the operator what is still owed
         env:
           # Step outputs derive from dispatch inputs; same env discipline as above.
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          VALIDATOR_OUTCOME: ${{ steps.validator.outputs.deploy == 'true' && 'deployed' || 'not deployed' }}
-          VALIDATOR_REASON: ${{ steps.validator.outputs.reason }}
         run: |
           echo "Release $RELEASE_TAG promoted; https://stream.keepr.digital answered deploy:verify (liveness only, not release identity or dependency health)." >> "$GITHUB_STEP_SUMMARY"
-          echo "Validator: $VALIDATOR_OUTCOME — $VALIDATOR_REASON." >> "$GITHUB_STEP_SUMMARY"
-          echo 'Run the seven `:deployed` gates locally, in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Run the six `:deployed` gates locally (`pnpm accept deployed`), in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"
