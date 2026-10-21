@@ -98,8 +98,6 @@ describe('useCardStore', () => {
 			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
 			'card:preview': data => !(mockIsSelfOrigin as any)(data) && store.applyRemotePreview(data as any),
 			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(data as any),
-			'card:timeout': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTimeout(data as any),
-			'card:timeout:cancel': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTimeoutCancel(data as any),
 		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
@@ -146,7 +144,9 @@ describe('useCardStore', () => {
 			expect(store.activeCard).toBeNull();
 		});
 
-		it('restores a persisted card timeout after reconnecting', async () => {
+		// Scenario 4 of #707: the operator Card page hides an expired Card as a rendering
+		// does, and asks the server for nothing (ADR-0022).
+		it('restores a persisted card timeout after reconnecting and hides the Card at expiry without clearing it', async () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
 			store.activeScreenId = 5;
@@ -157,13 +157,35 @@ describe('useCardStore', () => {
 				},
 			});
 			mockCardRepo.getScreenCard.mockResolvedValue(card);
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 
 			await store.loadActiveCard();
-			await vi.advanceTimersByTimeAsync(3_000);
+			expect(store.timeout.remaining).toBe(3);
+			await vi.advanceTimersByTimeAsync(2_999);
+			expect(store.activeCard).toEqual(card);
+			await vi.advanceTimersByTimeAsync(1);
 
-			expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledWith(1, 5);
 			expect(store.activeCard).toBeNull();
+			expect(store.timeout.remaining).toBe(0);
+			expect(mockCardRepo.getScreenCard).toHaveBeenCalledTimes(1);
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+		});
+
+		// Scenario 6 of #707: operator A's timer for X fires before B's replacement reaches it.
+		it('sends no Clear at expiry, so a replacement it has not heard of yet stands and shows once announced', async () => {
+			vi.useFakeTimers();
+			store.activeScreenId = 5;
+			mockCardRepo.getScreenCard.mockResolvedValue(createMockMtgCard({
+				id: 'x',
+				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+			}));
+			await store.loadActiveCard();
+
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(store.activeCard).toBeNull();
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: createMockMtgCard({ id: 'y' }) });
+
+			expect(store.activeCard?.id).toBe('y');
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
 		// Characterises #707's trace on main: a rendering's expiry is visible only. The
@@ -345,31 +367,10 @@ describe('useCardStore', () => {
 			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
-		it('lands the Card a read brings when a timeout message arrives while it is out', async () => {
-			vi.useFakeTimers();
-			store.setActiveScreen(5);
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
-			const read = deferredRead();
-			const loading = store.loadActiveCard();
-
-			ablyCallbacks.card!['card:timeout']!({
-				eventId: 1,
-				screenId: 5,
-				timeoutDuration: 1_000,
-				expiresAt: Date.now() + 1_000,
-			});
-			ablyCallbacks.card!['card:timeout:cancel']!({ eventId: 1, screenId: 5 });
-			read.resolve(newCard());
-			await loading;
-
-			expect(store.activeCard?.id).toBe('new');
-		});
-
-		it('lets a local expiry supersede a read that would bring the expired Card back', async () => {
+		it('holds no Card from a read that answers with a Card which expired while it was out', async () => {
 			vi.useFakeTimers();
 			store.setActiveScreen(5);
 			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 			const timed = oldCard({ timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 } });
 			await store.saveActiveCard(timed);
 			const read = deferredRead();
@@ -378,10 +379,11 @@ describe('useCardStore', () => {
 			await vi.advanceTimersByTimeAsync(1_000);
 			read.resolve(timed);
 			await loading;
-			await vi.advanceTimersByTimeAsync(0);
 
+			// Not even for a tick: the expired Card is projected away as it lands.
 			expect(store.activeCard).toBeNull();
-			expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledTimes(1);
+			expect(store.timeout.remaining).toBe(0);
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
 		it('reports no failure from a superseded read and settles loading once it answers', async () => {
@@ -510,19 +512,19 @@ describe('useCardStore', () => {
 			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
-		it('clears a card when its timeout elapsed while the save was in flight', async () => {
+		// Scenario 10 of #707.
+		it('hides a card whose timeout elapsed while the save was in flight, without clearing it', async () => {
 			vi.useFakeTimers();
 			store.activeScreenId = 5;
 			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 
 			await store.saveActiveCard(createMockMtgCard({
 				timeoutData: { timeoutStartTimestamp: Date.now() - 2_000, timeoutDuration: 1_000 },
 			}));
-			await vi.advanceTimersByTimeAsync(0);
 
-			expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledWith(1, 5);
 			expect(store.activeCard).toBeNull();
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 	});
 
@@ -714,10 +716,9 @@ describe('useCardStore', () => {
 				expect(store.activeCard).toBeNull();
 			});
 
-			it('schedules expiry from the durable card data', async () => {
+			it('schedules hiding from the durable card data, and clears nothing', async () => {
 				vi.useFakeTimers();
 				store.activeScreenId = 5;
-				mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 				const card = createMockMtgCard({
 					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
 				});
@@ -725,8 +726,27 @@ describe('useCardStore', () => {
 				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
 				await vi.advanceTimersByTimeAsync(1_000);
 
-				expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledWith(1, 5);
 				expect(store.activeCard).toBeNull();
+				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+			});
+
+			it('uses the absolute expiry instead of extending a delayed message', async () => {
+				vi.useFakeTimers();
+				vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
+				store.activeScreenId = 5;
+				// Saved 59 s ago with a 60 s timeout: one second is left, however late this arrives.
+				const card = createMockMtgCard({
+					timeoutData: { timeoutStartTimestamp: Date.now() - 59_000, timeoutDuration: 60_000 },
+				});
+
+				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card });
+				expect(store.timeout.remaining).toBe(1);
+				await vi.advanceTimersByTimeAsync(999);
+				expect(store.activeCard).toEqual(card);
+				await vi.advanceTimersByTimeAsync(1);
+
+				expect(store.activeCard).toBeNull();
+				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 			});
 
 			it('cancels the prior expiry when a remote update clears the card', async () => {
@@ -746,26 +766,6 @@ describe('useCardStore', () => {
 
 				expect(store.activeCard).toBeNull();
 				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
-			});
-		});
-
-		describe('card:timeout', () => {
-			it('uses the absolute expiry instead of extending a delayed message', async () => {
-				vi.useFakeTimers();
-				vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
-				store.activeScreenId = 5;
-				store.activeCard = createMockMtgCard();
-				mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
-
-				ablyCallbacks.card!['card:timeout']!({
-					eventId: 1,
-					screenId: 5,
-					timeoutDuration: 60_000,
-					expiresAt: Date.now() + 1_000,
-				});
-				await vi.advanceTimersByTimeAsync(1_000);
-
-				expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledWith(1, 5);
 			});
 		});
 

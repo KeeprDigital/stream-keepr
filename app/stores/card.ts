@@ -167,8 +167,6 @@ export const useCardStore = defineStore('card', () => {
 	const applyRemoteUpdated = activeCardRuntime.applyRemoteUpdated;
 	const applyRemotePreview = cardSearchRuntime.applyRemotePreview;
 	const applyRemoteCleared = activeCardRuntime.applyRemoteCleared;
-	const applyRemoteTimeout = activeCardRuntime.applyRemoteTimeout;
-	const applyRemoteTimeoutCancel = activeCardRuntime.applyRemoteTimeoutCancel;
 
 	// ──────────────── Reset ────────────────
 
@@ -244,8 +242,6 @@ export const useCardStore = defineStore('card', () => {
 		applyRemoteUpdated,
 		applyRemotePreview,
 		applyRemoteCleared,
-		applyRemoteTimeout,
-		applyRemoteTimeoutCancel,
 		$reset,
 	};
 });

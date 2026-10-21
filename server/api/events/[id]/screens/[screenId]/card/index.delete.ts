@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const originConnectionId = getOriginConnectionId(event);
-	await cardService().deleteScreenCard(id, screenId, originConnectionId);
+	await cardService().deleteScreenCard(id, screenId);
 	await screenRuntimePublicationModule().cardCleared({
 		eventId: id,
 		screenId,

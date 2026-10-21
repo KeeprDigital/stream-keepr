@@ -7,21 +7,19 @@ import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * Who changes a timed Card's durable state when it expires, today (#707).
+ * A Card's expiry is a clock projection that no read, client or timer writes
+ * (ADR-0022, #707, #725). Each row is one of #707's acceptance scenarios for a
+ * Card saved at T₀ with timeout D, and says which.
  *
- * Characterisation, not specification: these pin what main does so the ADR-0022
- * revision #707 proposes has evidence under it. Rows that revision changes say
- * so in their names (a read that clears, the operator's expiry DELETE, the raw
- * Screen read); the follow-up implementing it rewrites those rows to its
- * acceptance scenarios rather than deleting them. The Card
- * routes run as written over real SQLite (the version guard is SQL). Only
- * admission and transport are stood in for: every announcement is recorded
- * instead of sent, and the Screen Output read is admitted without a capability.
+ * The Card and Screen routes run as written over real SQLite (the Card's
+ * revision is SQL). Only admission and transport are stood in for: every
+ * announcement is recorded instead of sent, and the Screen Output reads are
+ * admitted without a capability.
  *
  * What a row here observes, and why each is observed where it is:
- * - **durable state and revision** are the Screen row's `activeCard` and
- *   `activeCardVersion`. No route answers the version, and it is the guard the
- *   read-time cleanup relies on, so it is read from the row.
+ * - **durable state** is the Screen row's `activeCard`, `activeCardVersion`
+ *   (its revision) and `updatedAt`. No route answers them, so they are read from
+ *   the row: "a read writes nothing" means these do not move.
  * - **announcements** are the realtime messages the server published.
  * - **the derived copy** is the KV key the service mirrors the Card into.
  */
@@ -30,8 +28,8 @@ const harness = await createSqliteD1Harness();
 const realDb = drizzle(harness.database, { schema });
 
 /**
- * Runs once, between the Card read loading its row and deciding what to do with it,
- * so a test can place a concurrent write exactly there.
+ * Runs once, between the Card read loading its row and answering, so a test can
+ * place a concurrent write exactly there.
  */
 let afterCardRowLoaded: (() => Promise<void>) | null = null;
 const db = new Proxy(realDb, {
@@ -43,8 +41,8 @@ const db = new Proxy(realDb, {
 					...target.query.screens,
 					findFirst: async (...args: Parameters<typeof target.query.screens.findFirst>) => {
 						const row = await target.query.screens.findFirst(...args);
-						// The Card read's own load names the revision it will guard on; the route's existence check does not.
-						const hook = args[0]?.columns?.activeCardVersion ? afterCardRowLoaded : null;
+						// The Card read loads only the Card column; the routes' Screen lookups load whole rows.
+						const hook = args[0]?.columns?.activeCard ? afterCardRowLoaded : null;
 						if (hook) {
 							afterCardRowLoaded = null;
 							await hook();
@@ -76,14 +74,14 @@ vi.stubGlobal('useStorage', () => ({
 	del: async (key: string) => void kv.delete(key),
 }));
 
-interface StubEvent { params: Record<string, string>; body?: unknown }
+interface StubEvent { params: Record<string, string>; body?: unknown; context?: Record<string, unknown> }
 vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
 vi.stubGlobal('getValidatedRouterParams', async (event: StubEvent, parse: (value: unknown) => unknown) => parse(event.params));
 vi.stubGlobal('readValidatedBody', async (event: StubEvent, parse: (value: unknown) => unknown) => parse(event.body));
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));
 
-// Admission is ADR-0022's and pinned elsewhere; this suite is about what the read does once admitted.
+// Admission is ADR-0022's and pinned elsewhere; this suite is about what a read does once admitted.
 async function admitScreenOutputRead(event: StubEvent) {
 	const eventId = Number(event.params.id);
 	const screen = await realDb.query.screens.findFirst({ where: eq(schema.screens.id, Number(event.params.screenId)) });
@@ -93,23 +91,31 @@ vi.doMock('~~/server/utils/screenOutputRead', () => ({
 	requireScreenOutputRead: admitScreenOutputRead,
 	requireScreenOutputModeRead: admitScreenOutputRead,
 }));
+vi.doMock('~~/server/utils/screenOutputAuthorization', () => ({
+	canReadScreenOutput: async () => true,
+}));
 
 type Handler = (event: H3Event) => Promise<unknown>;
 const putCard = (await import('~~/server/api/events/[id]/screens/[screenId]/card/index.put')).default as unknown as Handler;
 const getCard = (await import('~~/server/api/events/[id]/screens/[screenId]/card/index.get')).default as unknown as Handler;
 const deleteCard = (await import('~~/server/api/events/[id]/screens/[screenId]/card/index.delete')).default as unknown as Handler;
 const getOutputCard = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/card.get')).default as unknown as Handler;
+const listScreens = (await import('~~/server/api/events/[id]/screens/index.get')).default as unknown as Handler;
+const getScreen = (await import('~~/server/api/events/[id]/screens/[screenId]/index.get')).default as unknown as Handler;
 const getOutputScreen = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/index.get')).default as unknown as Handler;
+const getOutputScreenBySlug = (await import('~~/server/api/screen-output/events/[id]/screens/slug/[slug].get')).default as unknown as Handler;
 
 let eventId: number;
 let screenId: number;
+let screenSlug: string;
 const SAVED_AT = Date.UTC(2026, 9, 21, 12, 0, 0);
+const D = 5_000;
 
 function request(body?: unknown): H3Event {
-	return stubH3Event({ params: { id: String(eventId), screenId: String(screenId) }, body });
+	return stubH3Event({ params: { id: String(eventId), screenId: String(screenId), slug: screenSlug }, body, context: {} });
 }
 
-function card(id: string, timeoutDuration?: number) {
+function card(id: string, timeoutDuration?: number, timeoutStartTimestamp = SAVED_AT) {
 	return {
 		id,
 		name: id,
@@ -118,16 +124,23 @@ function card(id: string, timeoutDuration?: number) {
 		imageData: { front: null, back: null },
 		orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
 		displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
-		...(timeoutDuration === undefined ? {} : { timeoutData: { timeoutDuration, timeoutStartTimestamp: SAVED_AT } }),
+		...(timeoutDuration === undefined ? {} : { timeoutData: { timeoutDuration, timeoutStartTimestamp } }),
 	};
 }
 
-async function row() {
+const kvKey = () => `event:${eventId}:screen:${screenId}:card`;
+
+/** The Screen row's durable Card state, everything a write would move. */
+async function stored() {
 	const screen = await realDb.query.screens.findFirst({ where: eq(schema.screens.id, screenId) });
-	return { cardId: (screen?.activeCard as { id?: string } | null)?.id ?? null, version: screen!.activeCardVersion };
+	return {
+		cardId: (screen?.activeCard as { id?: string } | null)?.id ?? null,
+		version: screen!.activeCardVersion,
+		updatedAt: screen!.updatedAt.getTime(),
+		kv: (kv.get(kvKey()) as { id?: string } | undefined)?.id ?? null,
+	};
 }
 
-const kvKey = () => `event:${eventId}:screen:${screenId}:card`;
 const announced = () => published.map(message => message.type);
 
 beforeAll(async () => {
@@ -142,11 +155,12 @@ beforeEach(async () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(SAVED_AT);
 	screenSeq += 1;
+	screenSlug = `card-${screenSeq}`;
 	const [screen] = await realDb.insert(schema.screens)
 		.values({
 			eventId,
 			name: `Card ${screenSeq}`,
-			slug: `card-${screenSeq}`,
+			slug: screenSlug,
 			currentMode: 'card',
 			assetCapabilitySeed: `seed-${screenSeq}`,
 			assetCapabilityDigest: `digest-${screenSeq}`,
@@ -164,29 +178,30 @@ afterAll(async () => {
 });
 
 describe('saving a timed Card', () => {
-	it('advances the revision and announces the Card with its absolute expiry', async () => {
-		await putCard(request(card('bolt', 5_000)));
+	it('stores it, advances the revision, and announces only card:updated carrying its timeout (scenario 1)', async () => {
+		await putCard(request(card('bolt', D)));
 
-		expect(await row()).toEqual({ cardId: 'bolt', version: 1 });
-		expect(kv.has(kvKey())).toBe(true);
+		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: 'bolt' });
 		expect(published).toEqual([
-			{ type: 'card:timeout', data: { screenId, timeoutDuration: 5_000, expiresAt: SAVED_AT + 5_000 } },
-			{ type: 'card:updated', data: expect.objectContaining({ screenId, card: expect.objectContaining({ id: 'bolt' }) }) },
+			{
+				type: 'card:updated',
+				data: expect.objectContaining({
+					screenId,
+					card: expect.objectContaining({ id: 'bolt', timeoutData: { timeoutDuration: D, timeoutStartTimestamp: SAVED_AT } }),
+				}),
+			},
 		]);
 	});
 
-	it('schedules nothing on the server: no time passing changes the row', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		published.length = 0;
+	it('stores and announces a Card whose timeout already elapsed, and nothing clears it (scenario 10)', async () => {
+		vi.setSystemTime(SAVED_AT + 2 * D);
 
-		// The save left no timer behind, and an hour after every client has gone nothing has run.
-		expect(vi.getTimerCount()).toBe(0);
-		vi.setSystemTime(SAVED_AT + 60 * 60_000);
-		await vi.runAllTimersAsync();
+		await putCard(request(card('bolt', D)));
 
-		expect(await row()).toEqual({ cardId: 'bolt', version: 1 });
-		expect(kv.has(kvKey())).toBe(true);
-		expect(published).toEqual([]);
+		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: 'bolt' });
+		expect(announced()).toEqual(['card:updated']);
+		await expect(getCard(request())).resolves.toBeNull();
+		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: 'bolt' });
 	});
 });
 
@@ -194,103 +209,110 @@ describe.each([
 	['an operator read', getCard],
 	['a Screen Output read', getOutputCard],
 ])('%s of a timed Card', (_reader, read) => {
-	it('before expiry answers the Card and changes nothing', async () => {
-		await putCard(request(card('bolt', 5_000)));
+	it('before expiry answers the Card and writes nothing (scenario 2)', async () => {
+		await putCard(request(card('bolt', D)));
+		const before = await stored();
 		published.length = 0;
 
-		vi.setSystemTime(SAVED_AT + 4_999);
+		vi.setSystemTime(SAVED_AT + D - 1);
 		await expect(read(request())).resolves.toMatchObject({ id: 'bolt' });
 
-		expect(await row()).toEqual({ cardId: 'bolt', version: 1 });
+		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
 	});
 
-	it('at expiry answers no Card, clears the row, advances the revision, and announces nothing', async () => {
-		await putCard(request(card('bolt', 5_000)));
+	it('at expiry answers no Card and writes nothing, however often it is repeated (scenario 3)', async () => {
+		await putCard(request(card('bolt', D)));
+		const before = await stored();
 		published.length = 0;
 
-		vi.setSystemTime(SAVED_AT + 5_000);
+		vi.setSystemTime(SAVED_AT + D);
+		await expect(read(request())).resolves.toBeNull();
 		await expect(read(request())).resolves.toBeNull();
 
-		expect(await row()).toEqual({ cardId: null, version: 2 });
-		expect(kv.has(kvKey())).toBe(false);
+		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
 	});
 
-	it('after the row is cleared, a later read writes nothing', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
-		await read(request());
+	it('an hour after every client left still finds storage as the save left it, and writes nothing (scenario 5)', async () => {
+		await putCard(request(card('bolt', D)));
+		const before = await stored();
 		published.length = 0;
 
+		// The save left no timer behind, so nothing runs while nobody is connected.
+		expect(vi.getTimerCount()).toBe(0);
+		vi.setSystemTime(SAVED_AT + D + 60 * 60_000);
+		await vi.runAllTimersAsync();
+		expect(await stored()).toEqual(before);
+
 		await expect(read(request())).resolves.toBeNull();
 
-		expect(await row()).toEqual({ cardId: null, version: 2 });
+		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
 	});
 
-	it('loses its cleanup to a replacement saved after it loaded the row, and still answers no Card', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
+	it('that loaded the row before a replacement leaves the replacement in storage (scenario 7)', async () => {
+		await putCard(request(card('bolt', D)));
+		vi.setSystemTime(SAVED_AT + D);
 		afterCardRowLoaded = async () => void await putCard(request(card('counterspell')));
 		published.length = 0;
 
-		// The guard keeps the replacement; the answer is the expired Card's, not the row's.
+		// Ordering this answer against the newer card:updated is the Card read's freshness (#704).
 		await expect(read(request())).resolves.toBeNull();
 
-		expect(await row()).toEqual({ cardId: 'counterspell', version: 2 });
+		expect(await stored()).toMatchObject({ cardId: 'counterspell', version: 2, kv: 'counterspell' });
 		expect(announced()).toEqual(['card:updated']);
 	});
 });
 
-describe('the operator client\'s expiry DELETE', () => {
-	it('clears the row, advances the revision, and announces the clear', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
-		published.length = 0;
-
-		await deleteCard(request());
-
-		expect(await row()).toEqual({ cardId: null, version: 2 });
-		expect(kv.has(kvKey())).toBe(false);
-		expect(announced()).toEqual(['card:timeout:cancel', 'card:cleared']);
-	});
-
-	it('is repeated by every operator client holding the Screen, each one a revision and a clear', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
-		published.length = 0;
-
-		await deleteCard(request());
-		await deleteCard(request());
-
-		expect(await row()).toEqual({ cardId: null, version: 3 });
-		expect(announced()).toEqual(['card:timeout:cancel', 'card:cleared', 'card:timeout:cancel', 'card:cleared']);
-	});
-
-	it('is unguarded: a stale one arriving after a replacement clears the replacement', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
-		// Another operator replaces the Card while this client's expiry DELETE is in flight.
+describe('a replacement saved just before the replaced Card expires', () => {
+	it('stands past that expiry: no read clears it and nothing announces a clear (scenario 6)', async () => {
+		await putCard(request(card('bolt', D)));
+		// Operator B replaces the Card just before operator A's timer for it fires.
+		vi.setSystemTime(SAVED_AT + D - 1);
 		await putCard(request(card('counterspell')));
-		published.length = 0;
+		const replaced = await stored();
 
-		await deleteCard(request());
+		vi.setSystemTime(SAVED_AT + D);
+		await expect(getCard(request())).resolves.toMatchObject({ id: 'counterspell' });
+		await expect(getOutputCard(request())).resolves.toMatchObject({ id: 'counterspell' });
 
-		expect(await row()).toEqual({ cardId: null, version: 3 });
-		expect(announced()).toEqual(['card:timeout:cancel', 'card:cleared']);
+		expect(replaced).toMatchObject({ cardId: 'counterspell', version: 2 });
+		expect(await stored()).toEqual(replaced);
+		expect(announced()).toEqual(['card:updated', 'card:updated']);
 	});
 });
 
-describe('a Screen read', () => {
-	it('ships the stored Card and its revision raw, expired or not, beside the projected Card read', async () => {
-		await putCard(request(card('bolt', 5_000)));
-		vi.setSystemTime(SAVED_AT + 5_000);
+describe('the operator\'s explicit Clear', () => {
+	it('clears the stored Card, advances the revision, and announces only card:cleared (scenario 8)', async () => {
+		await putCard(request(card('bolt', D)));
+		vi.setSystemTime(SAVED_AT + 1_000);
+		published.length = 0;
 
-		// `ScreenResponse` declares neither field; the mapper passes them through untyped.
-		await expect(getOutputScreen(request())).resolves.toMatchObject({
-			activeCard: expect.objectContaining({ id: 'bolt' }),
-			activeCardVersion: 1,
-		});
+		await deleteCard(request());
+
+		expect(await stored()).toMatchObject({ cardId: null, version: 2, kv: null });
+		expect(announced()).toEqual(['card:cleared']);
+	});
+});
+
+describe.each([
+	['the operator Screen list', async () => ((await listScreens(request())) as { screens: Array<{ id: number }> }).screens.find(screen => screen.id === screenId)],
+	['the operator Screen read', async () => await getScreen(request())],
+	['the Screen Output Screen read by id', async () => await getOutputScreen(request())],
+	['the Screen Output Screen read by slug', async () => await getOutputScreenBySlug(request())],
+])('%s', (_route, readScreen) => {
+	it('carries no Card and no Card revision, expired or not (scenario 9)', async () => {
+		await putCard(request(card('bolt', D)));
+
+		const live = await readScreen();
+		vi.setSystemTime(SAVED_AT + D);
+		const expired = await readScreen();
+
+		for (const screen of [live, expired]) {
+			expect(screen).toMatchObject({ id: screenId });
+			expect(screen).not.toHaveProperty('activeCard');
+			expect(screen).not.toHaveProperty('activeCardVersion');
+		}
 	});
 });

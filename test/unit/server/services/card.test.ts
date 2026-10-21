@@ -12,8 +12,6 @@ const mockWhere = vi.fn(() => ({ returning: mockReturning }));
 const mockSet = vi.fn(() => ({ where: mockWhere }));
 const mockUpdate = vi.fn(() => ({ set: mockSet }));
 
-const mockPublishMessage = vi.fn();
-
 // Nitro's auto-imported storage. Only the `kv` mount (the KV binding) answers
 // with `mockKv`, so a card written through any other mount misses every
 // assertion on its key.
@@ -44,8 +42,6 @@ vi.mock('~~/server/schemas/kv/card', () => ({
 		safeParse: (data: any) => ({ success: true, data }),
 	},
 }));
-// publishMessage is auto-imported in Nitro context
-vi.stubGlobal('publishMessage', mockPublishMessage);
 
 const { cardService } = await import('~~/server/services/card');
 
@@ -117,33 +113,6 @@ describe('cardService', () => {
 			} as any)).rejects.toThrow('Screen not found');
 			expect(mockKv.set).not.toHaveBeenCalled();
 		});
-
-		it('publishes a card:timeout message when timeoutData has remaining time', async () => {
-			const now = Date.now();
-			const cardData = {
-				id: 'card-1',
-				name: 'Lightning Bolt',
-				set: 'alpha',
-				layout: 'normal',
-				imageData: { front: null, back: null },
-				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
-				timeoutData: {
-					timeoutDuration: 60_000,
-					timeoutStartTimestamp: now, // just started — plenty of time remaining
-				},
-			};
-
-			await cardService().setScreenCard(1, 2, cardData as any, 'conn-1');
-
-			// publishMessage is called for card:timeout
-			expect(mockPublishMessage).toHaveBeenCalledWith(
-				1,
-				'card:timeout',
-				expect.objectContaining({ timeoutDuration: expect.any(Number), screenId: 2 }),
-				'conn-1',
-			);
-		});
 	});
 
 	describe('getScreenCard', () => {
@@ -162,7 +131,6 @@ describe('cardService', () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
 			mockFindFirst.mockResolvedValue({
-				activeCardVersion: 7,
 				activeCard: {
 					id: 'card-1',
 					name: 'Bolt',
@@ -174,9 +142,10 @@ describe('cardService', () => {
 				},
 			});
 
+			// Expiry is a projection (ADR-0022): the read answers no Card and writes nothing.
 			await expect(cardService().getScreenCard(1, 2)).resolves.toBeNull();
-			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ activeCard: null }));
-			expect(mockKv.del).toHaveBeenCalledWith('event:1:screen:2:card');
+			expect(mockUpdate).not.toHaveBeenCalled();
+			expect(mockKv.del).not.toHaveBeenCalled();
 			vi.useRealTimers();
 		});
 	});

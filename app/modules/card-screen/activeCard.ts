@@ -25,17 +25,22 @@ interface ActiveCardRuntimeState {
 /**
  * Active Card Screen runtime Module.
  *
- * Owns active Card Screen persistence, local timeout cleanup, and realtime
+ * Owns active Screen Card persistence, its local Card Timeout, and realtime
  * application for the currently selected Screen.
+ *
+ * A Card's expiry is a clock projection (ADR-0022): this client holds a timed
+ * Card only until server time reaches its `timeoutStartTimestamp +
+ * timeoutDuration`, then hides it. It never asks the server to clear it, on the
+ * operator Card page or in a rendering; `clearActiveCard` is the operator's
+ * explicit Clear only. A Card that arrives already expired is held as no Card.
  *
  * A Card read is a Flight: it lands only while nothing newer has reached the
  * held Card since it began (#704). A newer read, a `card:updated` or
  * `card:cleared` for the selected Screen, an accepted local save or clear, a
- * local expiry, a Screen selection and the store reset that ends the Event
- * Lifetime each supersede it before they touch the Card, so a late answer can
- * neither replace what they put there nor arm a timer that would later clear
- * it. A timeout message carries no Card, so it moves the timer and leaves a
- * read out to land, and a failed clear's rollback supersedes nothing.
+ * Screen selection and the store reset that ends the Event Lifetime each
+ * supersede it before they touch the Card, so a late answer can neither replace
+ * what they put there nor arm a timer that would later hide it. A failed
+ * clear's rollback supersedes nothing.
  */
 export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	const { saveScreenCard, getScreenCard, deleteScreenCard } = useCardRepository();
@@ -43,10 +48,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	let cardTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	/**
 	 * Set when this client is a rendering of the Screen rather than its operator
-	 * (#604): the Card is read through the Screen's capability-scoped read, and an
-	 * expired Card is hidden here rather than cleared on the server — an output
-	 * must not change live state by watching it, and the server's own timeout
-	 * clears the Card and announces it.
+	 * (#604): the Card is read through the Screen's capability-scoped read.
 	 */
 	let screenOutputRead: (() => Promise<MtgCard | null>) | null = null;
 	const reads = createGuardedSequence();
@@ -68,17 +70,29 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		}
 	}
 
-	/** Hold a Card, arming its expiry from its own timeout data. */
+	/** Hold a Card, arming its hiding from its own timeout data; an expired Card is held as none. */
 	function holdCard(card: MtgCard | null) {
-		state.activeCard.value = card;
-		if (card) {
+		if (card && !isExpired(card)) {
+			state.activeCard.value = card;
 			updateTimeout(card);
 			scheduleLocalTimeout(card);
 		}
 		else {
+			state.activeCard.value = null;
 			state.timeout.reset();
 			clearCardTimeout();
 		}
+	}
+
+	function remainingMs(card: MtgCard) {
+		if (!card.timeoutData)
+			return Infinity;
+		const { timeoutStartTimestamp, timeoutDuration } = card.timeoutData;
+		return timeoutDuration - (getServerTime() - timeoutStartTimestamp);
+	}
+
+	function isExpired(card: MtgCard) {
+		return remainingMs(card) <= 0;
 	}
 
 	/** Install the rendering's Card read; the answer uninstalls it when the rendering goes away. */
@@ -90,15 +104,8 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		};
 	}
 
+	/** The held Card's Card Timeout ran out: hide it here, and write nothing (ADR-0022). */
 	function expireCard() {
-		if (!state.activeCard.value)
-			return;
-		// A read out now could only bring back the Card that just expired.
-		reads.supersede();
-		if (!screenOutputRead) {
-			void clearActiveCard();
-			return;
-		}
 		state.activeCard.value = null;
 		state.timeout.reset();
 	}
@@ -132,38 +139,24 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.activeScreenId.value !== null && messageData.screenId === state.activeScreenId.value;
 	}
 
-	function updateTimeout(cardData: MtgCard | null) {
-		if (!cardData || !cardData.timeoutData) {
+	function updateTimeout(cardData: MtgCard) {
+		if (!cardData.timeoutData) {
 			state.timeout.reset();
 			return;
 		}
-		const { timeoutStartTimestamp, timeoutDuration } = cardData.timeoutData;
-		const remainingMs = timeoutDuration - (getServerTime() - timeoutStartTimestamp);
-		if (remainingMs <= 0) {
-			state.timeout.reset();
-			return;
-		}
-		state.timeout.start(Math.round(remainingMs / 1000));
+		state.timeout.start(Math.round(remainingMs(cardData) / 1000));
 	}
 
-	/**
-	 * Set up a local setTimeout to auto-clear the card when timeout expires.
-	 * Needed because realtime self-origin messages are ignored.
-	 */
+	/** Hide the held Card when its Card Timeout runs out, on the shared clock. */
 	function scheduleLocalTimeout(cardData: MtgCard) {
 		// Replacing a timed card with an untimed card must cancel the old timer too.
 		clearCardTimeout();
 		if (!cardData.timeoutData)
 			return;
-		const { timeoutDuration, timeoutStartTimestamp } = cardData.timeoutData;
-		const remainingMs = Math.max(0, timeoutDuration - (getServerTime() - timeoutStartTimestamp));
-		// A short timeout may expire while the save/reload request is in flight.
-		// Scheduling at zero still performs the authoritative DELETE; silently
-		// skipping it would leave the expired card visible until another reload.
 		cardTimeoutId = setTimeout(() => {
 			expireCard();
 			cardTimeoutId = null;
-		}, remainingMs);
+		}, Math.max(0, remainingMs(cardData)));
 	}
 
 	async function loadActiveCard() {
@@ -261,29 +254,6 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 			resetActiveCardState();
 	}
 
-	function applyRemoteTimeout(data: MessageData<'card:timeout'>) {
-		const eventId = currentEventId();
-		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
-			const remainingMs = Math.max(0, data.expiresAt - getServerTime());
-			if (remainingMs > 0) {
-				state.timeout.start(Math.round(remainingMs / 1000));
-				clearCardTimeout();
-				cardTimeoutId = setTimeout(() => {
-					expireCard();
-					cardTimeoutId = null;
-				}, remainingMs);
-			}
-		}
-	}
-
-	function applyRemoteTimeoutCancel(data: MessageData<'card:timeout:cancel'>) {
-		const eventId = currentEventId();
-		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
-			state.timeout.reset();
-			clearCardTimeout();
-		}
-	}
-
 	onScopeDispose(() => clearCardTimeout());
 
 	return {
@@ -296,7 +266,5 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		clearActiveCard,
 		applyRemoteUpdated,
 		applyRemoteCleared,
-		applyRemoteTimeout,
-		applyRemoteTimeoutCancel,
 	};
 }

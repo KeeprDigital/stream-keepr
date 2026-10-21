@@ -146,8 +146,6 @@ describe('useEventRealtimeSession', () => {
 		applyRemoteUpdated: vi.fn(),
 		applyRemotePreview: vi.fn(),
 		applyRemoteCleared: vi.fn(),
-		applyRemoteTimeout: vi.fn(),
-		applyRemoteTimeoutCancel: vi.fn(),
 	};
 
 	let watchCallback: ((eventId: number | null) => void) | undefined;
@@ -310,8 +308,6 @@ describe('useEventRealtimeSession', () => {
 			'card:updated': cardStore.applyRemoteUpdated,
 			'card:preview': cardStore.applyRemotePreview,
 			'card:cleared': cardStore.applyRemoteCleared,
-			'card:timeout': cardStore.applyRemoteTimeout,
-			'card:timeout:cancel': cardStore.applyRemoteTimeoutCancel,
 		};
 		const extraHandledTypes = new Set([
 			'event:deleted',
