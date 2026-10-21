@@ -25,7 +25,8 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-const CONVENTIONAL = /^(?:feat|fix|perf|refactor|docs|test|build|ci|chore|revert|style)(?:\([^)]+\))?!?: \S/;
+const TYPES = ['feat', 'fix', 'perf', 'refactor', 'docs', 'test', 'build', 'ci', 'chore', 'revert', 'style'];
+const CONVENTIONAL = new RegExp(`^(?:${TYPES.join('|')})(?:\\([^)]+\\))?!?: \\S`);
 const COMMIT_ID = /^[0-9a-f]{40}$/;
 
 /** @param {string} title */
@@ -86,7 +87,7 @@ async function main() {
 		return;
 	}
 	for (const problem of problems)
-		console.log(`::error title=Not a Conventional Commit::${problem} Use 'type(scope): summary', e.g. 'fix(export): keep the canvas origin-clean'. Types: feat, fix, perf, refactor, docs, test, build, ci, chore, revert, style.`);
+		console.log(`::error title=Not a Conventional Commit::${problem} Use 'type(scope): summary', e.g. 'fix(export): keep the canvas origin-clean'. Types: ${TYPES.join(', ')}.`);
 	process.exitCode = 1;
 }
 

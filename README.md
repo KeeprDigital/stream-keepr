@@ -294,9 +294,9 @@ broken migration in place over adding a corrective one.
 release-please (`.github/workflows/release-please.yml`) versions from
 conventional commits: `fix:` → patch, `feat:` → minor, `feat!:` or
 `BREAKING CHANGE` → major. It keeps one rolling Release PR against `main`.
-**Merging that PR (through the merge queue) is the release**: it tags `vX.Y.Z`, publishes a GitHub
-Release, bumps `package.json`, and updates `CHANGELOG.md`. `main` is trunk;
-there is no `develop` branch.
+**Merging that PR (through the merge queue) is the release**: it tags
+`vX.Y.Z`, publishes a GitHub Release, bumps `package.json`, and updates
+`CHANGELOG.md`. `main` is trunk; there is no `develop` branch.
 
 How a change reaches `main`, and why:
 
@@ -311,8 +311,10 @@ How a change reaches `main`, and why:
   it onto `main` plus every PR queued ahead of it, and runs CI and the title
   check on that combined commit (`merge_group`). Only if they pass does `main`
   fast-forward to that very commit, so two PRs that each passed against an old
-  `main` cannot land an untested combination. A PR that fails is removed from
-  the queue, and the ones behind it are re-tested without it. PR runs are
+  `main` cannot land an untested combination. Each entry must pass on its own
+  (grouping `ALLGREEN`), so every commit `main` holds passed. A PR that fails
+  is removed from the queue, and the ones behind it are re-tested without it.
+  PR runs are
   feedback and the entry ticket; the queue's run is the one that counts.
 - **PR titles are Conventional Commits**, checked by
   `.github/workflows/pr-title.yml`. A title that is not one would drop the PR
@@ -328,8 +330,7 @@ How a change reaches `main`, and why:
   tags** ruleset makes `v*` tags immutable, and repository admins can bypass
   it. `CI passed` is one summary job that always reports, so CI can skip what
   a change cannot affect without leaving a required check waiting. The
-  `production` and
-  `production-validator` promotion-marker tags
+  `production` and `production-validator` promotion-marker tags
   ([Promotion markers](#promotion-markers)) are unprotected: every deploy
   force-moves them, and GitHub refuses the Actions app as a ruleset bypass
   actor.
@@ -338,20 +339,24 @@ How a change reaches `main`, and why:
   passed on. Before it runs, `scripts/release-gate.mjs` checks every merged
   Release PR still awaiting its tag (`autorelease: pending`) and fails the
   workflow, tagging nothing, if no successful `merge_group` CI run is recorded
-  for that commit. Only a Release PR merged around the queue (a bypass, or a
-  merge while the queue was off) can trip it, and it stops every
-  release-please run until resolved by hand: verify that commit yourself,
-  create its release (`gh release create vX.Y.Z --target <commit>` with the
-  changelog section), and relabel the PR from `autorelease: pending` to
-  `autorelease: tagged`.
+  for that commit, waiting up to two minutes for one still finishing. Only a
+  Release PR merged around the queue (a bypass, or a merge while the queue was
+  off) can trip it; re-run the workflow once in case the queue's run was slow.
+  It stops every release-please run until resolved by hand: verify that
+  commit yourself, create its release
+  (`gh release create vX.Y.Z --target <commit>` with the changelog section),
+  and relabel the PR from `autorelease: pending` to `autorelease: tagged`.
 - **Release PRs need their CI approved.** release-please opens and updates the
   Release PR with the default workflow token, and GitHub creates the
   `pull_request` runs such a token triggers as **approval-required**
   (`action_required`) rather than starting them, so a workflow cannot trigger
-  itself. Before merging a release, open the Release PR, select **Approve
-  workflows to run**, wait for the checks, then **Merge when ready**. Only the
-  newest commit's runs matter; release-please rewrites the PR on every push to
-  `main`. Run the workflow by hand (`gh workflow run release-please.yml`) to
+  itself. To release, wait until the queue is empty and release-please has
+  refreshed the Release PR from the last push, select **Approve workflows to
+  run**, wait for the checks, then **Merge when ready**, and queue nothing else
+  until it lands. Queued behind another PR, the release would tag that PR's
+  change without its changelog line; and a push to `main` while it waits
+  rewrites the Release PR, which drops it from the queue and needs a fresh
+  approval. Run the workflow by hand (`gh workflow run release-please.yml`) to
   refresh the Release PR without a push. A GitHub App token for release-please
   would start its runs without the approval.
 

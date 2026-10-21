@@ -28,7 +28,6 @@ describe('a release is cut only from a revision the merge queue verified', () =>
 		['it landed outside the queue: no merge-group run tested it', []],
 		['only its PR runs passed, which tested a different tree', [ciRun({ event: 'pull_request' })]],
 		['its merge-group run failed', [ciRun({ conclusion: 'failure' })]],
-		['its merge-group run is still going', [ciRun({ conclusion: null })]],
 		['its merge-group run was cancelled', [ciRun({ conclusion: 'cancelled' })]],
 		['the passing merge-group run is another workflow\'s', [ciRun({ path: '.github/workflows/pr-title.yml' })]],
 		['the passing merge-group run tested another commit', [ciRun({ head_sha: 'd'.repeat(40) })]],
@@ -36,6 +35,41 @@ describe('a release is cut only from a revision the merge queue verified', () =>
 		await expect(checkPendingReleases(pending, runsFor(runs))).resolves.toEqual([
 			`Release PR #573 landed as ${RELEASE_COMMIT}, which no successful merge-queue CI run verified.`,
 		]);
+	});
+
+	it('waits for a merge-group run still finishing: the queue merges on the check, a moment before the run concludes', async () => {
+		const answers = [[ciRun({ conclusion: null })], [ciRun({ conclusion: null })], [ciRun()]];
+		const waits: number[] = [];
+		const wait = async (ms: number) => {
+			waits.push(ms);
+		};
+
+		await expect(checkPendingReleases(pending, async () => answers.shift()!, { attempts: 5, wait })).resolves.toEqual([]);
+		expect(waits).toHaveLength(2);
+	});
+
+	it('gives up on a merge-group run that never concludes', async () => {
+		let asked = 0;
+		const unfinished = async () => {
+			asked += 1;
+			return [ciRun({ conclusion: null })];
+		};
+
+		await expect(checkPendingReleases(pending, unfinished, { attempts: 3, wait: async () => {} })).resolves.toEqual([
+			`Release PR #573 landed as ${RELEASE_COMMIT}, which no successful merge-queue CI run verified.`,
+		]);
+		expect(asked).toBe(3);
+	});
+
+	it('does not wait when no merge-group run is still going', async () => {
+		let asked = 0;
+		const failed = async () => {
+			asked += 1;
+			return [ciRun({ conclusion: 'failure' })];
+		};
+
+		await checkPendingReleases(pending, failed, { attempts: 3, wait: async () => {} });
+		expect(asked).toBe(1);
 	});
 
 	it('refuses a Release PR it cannot find the merge commit of', async () => {

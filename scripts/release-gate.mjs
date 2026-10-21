@@ -21,6 +21,14 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 const CI_WORKFLOW = '.github/workflows/ci.yml';
+/** Two minutes of 10s reads: far longer than a finished run takes to conclude. */
+const DEFAULT_ATTEMPTS = 12;
+const RETRY_DELAY_MS = 10_000;
+
+/** @param {number} ms */
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 /**
  * @typedef {{ number: number, mergeCommit: string | null }} PendingRelease
@@ -31,11 +39,16 @@ const CI_WORKFLOW = '.github/workflows/ci.yml';
  * The problems with releasing what is pending; empty when every pending
  * release's commit passed CI in the merge queue.
  *
+ * The queue merges once the `CI passed` check succeeds, a moment before its
+ * workflow run concludes, so a merge-group CI run on the commit that is still
+ * going is waited for, up to `attempts` reads.
+ *
  * @param {readonly PendingRelease[]} pending merged Release PRs labelled `autorelease: pending`
  * @param {(sha: string) => Promise<readonly WorkflowRun[]>} runsFor the workflow runs on a commit
+ * @param {{ attempts?: number, wait?: (ms: number) => Promise<void> }} [options] how long to wait for an unfinished run
  * @returns {Promise<string[]>} one line per refused release
  */
-export async function checkPendingReleases(pending, runsFor) {
+export async function checkPendingReleases(pending, runsFor, { attempts = DEFAULT_ATTEMPTS, wait = sleep } = {}) {
 	/** @type {string[]} */
 	const problems = [];
 	for (const { number, mergeCommit } of pending) {
@@ -43,11 +56,16 @@ export async function checkPendingReleases(pending, runsFor) {
 			problems.push(`Release PR #${number} has no merge commit to verify.`);
 			continue;
 		}
-		const runs = await runsFor(mergeCommit);
-		const verified = runs.some(run => run.event === 'merge_group'
-			&& run.path === CI_WORKFLOW
-			&& run.head_sha === mergeCommit
-			&& run.conclusion === 'success');
+		let verified = false;
+		for (let attempt = 1; attempt <= attempts; attempt += 1) {
+			const queueRuns = (await runsFor(mergeCommit)).filter(run => run.event === 'merge_group'
+				&& run.path === CI_WORKFLOW
+				&& run.head_sha === mergeCommit);
+			verified = queueRuns.some(run => run.conclusion === 'success');
+			if (verified || !queueRuns.some(run => run.conclusion === null) || attempt === attempts)
+				break;
+			await wait(RETRY_DELAY_MS);
+		}
 		if (!verified)
 			problems.push(`Release PR #${number} landed as ${mergeCommit}, which no successful merge-queue CI run verified.`);
 	}

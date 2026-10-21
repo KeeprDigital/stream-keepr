@@ -21,13 +21,13 @@ function code(workflow: string) {
 
 /** Each top-level job's id and its text. */
 function jobs(workflow: string) {
-	const body = code(workflow).slice(code(workflow).indexOf('\njobs:\n') + '\njobs:\n'.length);
+	const text = code(workflow);
+	const body = text.slice(text.indexOf('\njobs:\n') + '\njobs:\n'.length);
 	return new Map(body.split(/^(?= {2}[\w-]+:$)/m).filter(Boolean).map(job => [job.slice(2, job.indexOf(':')), job]));
 }
 
 function triggers(workflow: string) {
-	const on = code(workflow).match(/^on:\n((?: {2}.*\n)+)/m)?.[1] ?? '';
-	return on;
+	return code(workflow).match(/^on:\n((?: {2}.*\n)+)/m)?.[1] ?? '';
 }
 
 describe('every required check reports in the merge queue as well as on PRs', () => {

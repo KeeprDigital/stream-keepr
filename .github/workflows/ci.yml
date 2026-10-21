@@ -19,8 +19,8 @@
 #   - Not on draft PRs. `pnpm verify:quick` is the gate while a branch is in
 #     progress; marking the PR ready for review runs CI, the full gate, so
 #     nobody runs `pnpm verify` locally just to repeat it.
-#   - Only the jobs a change can affect: none for docs or other workflows, no
-#     Worker build for tests alone. The `scope` job decides, measuring a PR
+#   - Only the jobs a change can affect: none for docs, no Worker build for
+#     tests or the other workflows alone. The `scope` job decides, measuring a PR
 #     against its base and a merge group against the queue's base
 #     (scripts/ci-scope.mjs); anything it cannot measure runs everything.
 #   - A newer push cancels the PR run it supersedes. Every merge-group entry
@@ -136,8 +136,9 @@ jobs:
   worker-guard:
     name: Build, wrangler dry runs, and Worker smoke
     needs: scope
-    # A change touching only tests or docs cannot change the uploaded bundle,
-    # so building it again would prove what main already proved.
+    # A change touching only tests, docs or the other workflows cannot change
+    # the uploaded bundle, so building it again would prove what main already
+    # proved.
     if: needs.scope.outputs.bundle == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
