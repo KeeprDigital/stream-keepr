@@ -13,7 +13,5 @@ export function createScreenCardRealtimeHandlers({ accept }: Options) {
 		'card:updated': accept('card:updated', data => useCardStore().applyRemoteUpdated(data)),
 		'card:preview': accept('card:preview', data => useCardStore().applyRemotePreview(data)),
 		'card:cleared': accept('card:cleared', data => useCardStore().applyRemoteCleared(data)),
-		'card:timeout': accept('card:timeout', data => useCardStore().applyRemoteTimeout(data)),
-		'card:timeout:cancel': accept('card:timeout:cancel', data => useCardStore().applyRemoteTimeoutCancel(data)),
 	};
 }

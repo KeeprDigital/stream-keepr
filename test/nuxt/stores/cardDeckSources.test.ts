@@ -114,8 +114,6 @@ describe('useCardStore deck sources and search', () => {
 			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
 			'card:preview': data => !(mockIsSelfOrigin as any)(data) && store.applyRemotePreview(data as any),
 			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(data as any),
-			'card:timeout': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTimeout(data as any),
-			'card:timeout:cancel': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteTimeoutCancel(data as any),
 		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
@@ -764,45 +762,6 @@ describe('useCardStore deck sources and search', () => {
 				ablyCallbacks.card!['card:preview']!({ eventId: 1, screenId: 5, card: createMockMtgCard() });
 
 				expect(store.previewCard).toBeNull();
-			});
-		});
-
-		describe('card:timeout:cancel', () => {
-			it('cancels timeout for matching screen', () => {
-				vi.useFakeTimers();
-				store.activeScreenId = 5;
-				const card = createMockMtgCard();
-				store.activeCard = card;
-				ablyCallbacks.card!['card:timeout']!({ eventId: 1, screenId: 5, timeoutDuration: 5000, expiresAt: Date.now() + 5000 });
-				expect(store.timeout.remaining).toBe(5);
-
-				ablyCallbacks.card!['card:timeout:cancel']!({ eventId: 1, screenId: 5 });
-
-				expect(store.activeCard).toEqual(card);
-				expect(store.timeout.remaining).toBe(0);
-			});
-
-			it('skips when screenId does not match', () => {
-				vi.useFakeTimers();
-				store.activeScreenId = 5;
-				store.activeCard = createMockMtgCard();
-				ablyCallbacks.card!['card:timeout']!({ eventId: 1, screenId: 5, timeoutDuration: 5000, expiresAt: Date.now() + 5000 });
-
-				ablyCallbacks.card!['card:timeout:cancel']!({ eventId: 1, screenId: 99 });
-
-				expect(store.timeout.remaining).toBe(5);
-			});
-
-			it('skips when isSelfOrigin returns true', () => {
-				vi.useFakeTimers();
-				store.activeScreenId = 5;
-				store.activeCard = createMockMtgCard();
-				ablyCallbacks.card!['card:timeout']!({ eventId: 1, screenId: 5, timeoutDuration: 5000, expiresAt: Date.now() + 5000 });
-				mockIsSelfOrigin.mockReturnValueOnce(true);
-
-				ablyCallbacks.card!['card:timeout:cancel']!({ eventId: 1, screenId: 5 });
-
-				expect(store.timeout.remaining).toBe(5);
 			});
 		});
 	});

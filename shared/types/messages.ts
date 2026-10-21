@@ -354,17 +354,9 @@ export interface MessageDefinitions {
 		screenId: number;
 	};
 
+	// The operator's explicit Clear only. Nothing announces a Card's expiry: every
+	// holder hides it from the `timeoutData` that `card:updated` carries (ADR-0022).
 	'card:cleared': {
-		screenId: number;
-	};
-
-	'card:timeout': {
-		timeoutDuration: number;
-		expiresAt: number;
-		screenId: number;
-	};
-
-	'card:timeout:cancel': {
 		screenId: number;
 	};
 

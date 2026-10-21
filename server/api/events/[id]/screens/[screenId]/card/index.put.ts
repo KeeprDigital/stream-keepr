@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const originConnectionId = getOriginConnectionId(event);
-	await cardService().setScreenCard(id, screenId, body, originConnectionId);
+	await cardService().setScreenCard(id, screenId, body);
 	await screenRuntimePublicationModule().cardUpdated({
 		eventId: id,
 		screenId,
