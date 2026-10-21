@@ -1,5 +1,6 @@
 import { beforeEach } from 'vitest';
 import { requestLedger } from './requestLedger';
+import { monitorEventLoopStalls } from './serverConnectionDiagnostics.mjs';
 import { createServerLogWindow } from './serverLogWindow';
 import { integrationServerLogPath } from './servers';
 import { getIntegrationWranglerPersistDir } from './state';
@@ -30,6 +31,18 @@ const SERVER_LOG_SETTLE_LIMIT_MILLISECONDS = 3_000;
 
 const serverLog = createServerLogWindow(integrationServerLogPath(getIntegrationWranglerPersistDir()));
 
+/**
+ * This test worker's own stalls (#633), the newest ten. A request the worker
+ * wrote just before it stopped turning can meet a socket its server has since
+ * timed out, so a transport failure here is read beside them.
+ */
+const REPORTED_STALLS = 10;
+let testWorkerStalls: number[] = [];
+monitorEventLoopStalls((gap) => {
+	testWorkerStalls.push(gap);
+	testWorkerStalls.splice(0, Math.max(0, testWorkerStalls.length - REPORTED_STALLS));
+});
+
 async function settledServerLog(): Promise<string[]> {
 	const sleep = () => new Promise(resolve => setTimeout(resolve, SERVER_LOG_QUIET_MILLISECONDS));
 	const deadline = Date.now() + SERVER_LOG_SETTLE_LIMIT_MILLISECONDS;
@@ -47,6 +60,7 @@ async function settledServerLog(): Promise<string[]> {
 beforeEach((context) => {
 	requestLedger.clear();
 	serverLog.mark();
+	testWorkerStalls = [];
 	context.onTestFailed(async () => {
 		const logged = await settledServerLog();
 		console.error([
@@ -56,6 +70,7 @@ beforeEach((context) => {
 				? `[integration] server log during "${context.task.name}":`
 				: `[integration] server log during "${context.task.name}": no line reached its file`,
 			...logged.map(line => `  ${line}`),
+			...testWorkerStalls.map(gap => `[integration] this test worker's event loop stalled for ${gap}ms`),
 		].join('\n'));
 	});
 });
