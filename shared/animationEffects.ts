@@ -83,6 +83,18 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
  * A larger value always draws larger on screen, and a `scale` of 1 is the
  * effect's designed look. `zoom` and qualified variants (`cellSize`,
  * `waveScale`) are not used; the catalogue's unit test refuses them.
+ *
+ * Every other param follows the same rule: its name says what the operator
+ * sees change, and a shared concept keeps the shared name (ADR-0025, #583):
+ * - `speed` is the effect's whole motion rate, never qualified; a second rate
+ *   for one motion inside the effect is `<motion>Speed` (ripple's `spinSpeed`).
+ * - `intensity` is brightness or glow strength, and nothing else.
+ * - `centerX`/`centerY` move the pattern's centre.
+ * - A colour is `<role>Color`, named for what it paints, labelled
+ *   "<Role> color"; `backgroundColor` is the colour behind everything.
+ *
+ * So no shader multipliers (`amplitudeFactor`), numbered or bare colours
+ * (`color1`, `color`), or offsets, which the catalogue's unit test refuses.
  */
 export const ANIMATION_EFFECT_CATALOGUE = {
 	/** Caustics: refracted-light interference drifting over a water colour. */
@@ -99,16 +111,18 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Cells: a Worley-noise cellular field, ported from the retired fork under its
 	 * old name. Only the params the fragment shader reads survive the port: the
-	 * fork's editor also offered `amplitudeFactor`, `ringFactor`, `rotationFactor`,
-	 * and a background colour that its cells shader declared but never referenced.
-	 * Defaults are the pre-rebuild application's, not the fork's, with the fork's
-	 * `size` renormalised into `scale` so 1 is its old default of 3.
+	 * fork's editor also offered three multipliers and a background colour that
+	 * its cells shader declared but never referenced. Defaults are the
+	 * pre-rebuild application's, not the fork's, with the fork's `size`
+	 * renormalised into `scale` so 1 is its old default of 3. The fork's
+	 * numbered colours are named for their tones (#583): `highlightColor` takes
+	 * the field's bright peaks, `lowlightColor` its dimmer tones.
 	 */
 	cells: {
 		label: 'Cells',
 		paramsSchema: z.strictObject({
-			color1: colorParam('Primary color', '#008c8c'),
-			color2: colorParam('Secondary color', '#06b6d4'),
+			lowlightColor: colorParam('Lowlight color', '#008c8c'),
+			highlightColor: colorParam('Highlight color', '#06b6d4'),
 			scale: numberParam('Cell scale', { min: 0.1, max: 1.65, step: 0.05, default: 1 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
 		}),
@@ -120,13 +134,14 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * to it, and a dot field never covers the frame. `showLines` is the
 	 * catalogue's first toggle param. Defaults and ranges are the pre-rebuild
 	 * application's, including the dots-specific `spacing` fallback of 34 rather
-	 * than the shared bag's 16.
+	 * than the shared bag's 16. `lineColor` paints the radial segments, which
+	 * the pre-rebuild editor called "Accent color" (#583).
 	 */
 	dots: {
 		label: 'Dots',
 		paramsSchema: z.strictObject({
-			color: colorParam('Dot color', '#7c3aed'),
-			color2: colorParam('Accent color', '#06b6d4'),
+			dotColor: colorParam('Dot color', '#7c3aed'),
+			lineColor: colorParam('Line color', '#06b6d4'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			size: numberParam('Dot size', { min: 0.5, max: 20, step: 0.5, default: 3 }),
 			spacing: numberParam('Spacing', { min: 5, max: 100, step: 1, default: 34 }),
@@ -155,6 +170,8 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Fog: the fbm domain-warp shader ported from the retired fork under its old
 	 * name, minus the mouse uniform nothing on a headless browser source ever fed.
+	 * `softness` weights the noise toward its broad octaves; `backgroundColor`
+	 * is the ground the fog's tones mix over, which the fork called its base.
 	 */
 	fog: {
 		label: 'Fog',
@@ -162,8 +179,8 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			highlightColor: colorParam('Highlight color', '#f59e0b'),
 			midtoneColor: colorParam('Midtone color', '#7c3aed'),
 			lowlightColor: colorParam('Lowlight color', '#06b6d4'),
-			baseColor: colorParam('Base color', '#111111'),
-			blurFactor: numberParam('Softness', { min: 0.1, max: 0.95, step: 0.05, default: 0.55 }),
+			backgroundColor: colorParam('Background color', '#111111'),
+			softness: numberParam('Softness', { min: 0.1, max: 0.95, step: 0.05, default: 0.55 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 0.6 }),
 			scale: numberParam('Fog scale', { min: 0.35, max: 2, step: 0.05, default: 1 }),
 		}),
@@ -175,13 +192,15 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * the fork passed the removed `THREE.VertexColors` constant, so its connection
 	 * lines rendered flat white on air; the port enables vertex colours. One label
 	 * is corrected: the pre-rebuild editor called `size` "Point size", but the
-	 * fork only ever read it as the wireframe globe's radius scale.
+	 * fork only ever read it as the wireframe globe's radius scale. `lineColor`
+	 * paints the wireframe, the plane's connection lines, and its point markers;
+	 * `accentColor` the radial accent spokes and the pole lines.
 	 */
 	globe: {
 		label: 'Globe',
 		paramsSchema: z.strictObject({
-			color: colorParam('Primary color', '#7c3aed'),
-			color2: colorParam('Secondary color', '#06b6d4'),
+			lineColor: colorParam('Line color', '#7c3aed'),
+			accentColor: colorParam('Accent color', '#06b6d4'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			size: numberParam('Globe size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
@@ -193,19 +212,23 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Halo: a flower-edged ring of cycling hues smearing through a feedback
 	 * buffer, ported from the retired fork under its old name. Only the params the
-	 * fragment shader reads survive the port: the fork's editor also offered
-	 * `color2`, `ringFactor`, and `rotationFactor`, which its halo shader declared
-	 * and never referenced. Defaults are the pre-rebuild application's.
+	 * fragment shader reads survive the port: the fork's editor also offered a
+	 * second colour and two multipliers, which its halo shader declared and never
+	 * referenced. Defaults are the pre-rebuild application's. The fork's
+	 * "Intensity" never touched brightness: it deepens the petals of the ring's
+	 * flower edge, so it is `petalDepth` (#583). `tintColor` is added to the
+	 * cycling hues, and `centerX`/`centerY` share ripple's names for the same
+	 * move.
 	 */
 	halo: {
 		label: 'Halo',
 		paramsSchema: z.strictObject({
-			baseColor: colorParam('Base color', '#111111'),
+			tintColor: colorParam('Tint color', '#111111'),
 			backgroundColor: colorParam('Background color', '#111111'),
-			amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
+			petalDepth: numberParam('Petal depth', { min: 0, max: 4, step: 0.1, default: 1 }),
 			size: numberParam('Halo size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
-			xOffset: numberParam('Horizontal offset', { min: -1, max: 1, step: 0.05, default: 0 }),
-			yOffset: numberParam('Vertical offset', { min: -1, max: 1, step: 0.05, default: 0 }),
+			centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
+			centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),
 			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 		}),
 	},
@@ -232,7 +255,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Net: a slowly orbiting point field strung with distance-faded connection
 	 * lines, ported from the retired fork under its old name. Every param is read:
-	 * `color` drives the lines and the point markers, `backgroundColor` the clear
+	 * `lineColor` drives the lines and the point markers, `backgroundColor` the clear
 	 * colour and the line gradient's dark end, and the rest the field's
 	 * construction. One knowing restoration rides the port: the fork passed the
 	 * `THREE.VertexColors` constant that three had removed, so on air its
@@ -244,7 +267,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	net: {
 		label: 'Net',
 		paramsSchema: z.strictObject({
-			color: colorParam('Line color', '#7c3aed'),
+			lineColor: colorParam('Line color', '#7c3aed'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
 			maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
@@ -290,17 +313,22 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Ripple: rings of orbiting lights accumulating over a background colour,
 	 * ported from the retired fork under its old name and the pre-rebuild
-	 * application's defaults.
+	 * application's defaults. The fork's multipliers are named for what they
+	 * move (#583): `size` is each ring's radius (its "Intensity"), `spinSpeed`
+	 * how fast each ring's lights swing round it (its "Ripple scale", which was
+	 * never spatial), and `drift` how far the ring centres wander (its
+	 * "Rotation"). `highlightColor` takes the densest light, `lowlightColor` the
+	 * softer glow around it.
 	 */
 	ripple: {
 		label: 'Ripple',
 		paramsSchema: z.strictObject({
-			color1: colorParam('Primary color', '#008c8c'),
-			color2: colorParam('Secondary color', '#06b6d4'),
+			highlightColor: colorParam('Highlight color', '#008c8c'),
+			lowlightColor: colorParam('Lowlight color', '#06b6d4'),
 			backgroundColor: colorParam('Background color', '#111111'),
-			amplitudeFactor: numberParam('Intensity', { min: 0, max: 4, step: 0.1, default: 1 }),
-			ringFactor: numberParam('Ripple scale', { min: 0, max: 12, step: 0.1, default: 1 }),
-			rotationFactor: numberParam('Rotation', { min: 0, max: 4, step: 0.1, default: 1 }),
+			size: numberParam('Ring size', { min: 0, max: 4, step: 0.1, default: 1 }),
+			spinSpeed: numberParam('Spin speed', { min: 0, max: 12, step: 0.1, default: 1 }),
+			drift: numberParam('Ring drift', { min: 0, max: 4, step: 0.1, default: 1 }),
 			centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
 			centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),
 			frequency: numberParam('Ripple frequency', { min: 0, max: 4, step: 0.1, default: 1 }),
@@ -334,16 +362,17 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * and the water plane leaves the frame's far corners uncovered at low scale, so
 	 * it is visible on air. Defaults and ranges are the pre-rebuild application's,
 	 * with its `zoom` renormalised into `scale` so 1 is the waves-specific zoom
-	 * fallback of 0.85 rather than the shared bag's 1.
+	 * fallback of 0.85 rather than the shared bag's 1. Its one rate is the
+	 * shared `speed`, which the fork called `waveSpeed` (#583).
 	 */
 	waves: {
 		label: 'Waves',
 		paramsSchema: z.strictObject({
-			color: colorParam('Wave color', '#7c3aed'),
+			waveColor: colorParam('Wave color', '#7c3aed'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			shininess: numberParam('Shine', { min: 0, max: 100, step: 1, default: 30 }),
 			waveHeight: numberParam('Wave height', { min: 0, max: 50, step: 1, default: 20 }),
-			waveSpeed: numberParam('Wave speed', { min: 0, max: 4, step: 0.1, default: 1 }),
+			speed: numberParam('Speed', { min: 0, max: 4, step: 0.1, default: 1 }),
 			scale: numberParam('Wave scale', { min: 0.6, max: 3.5, step: 0.05, default: 1 }),
 		}),
 	},

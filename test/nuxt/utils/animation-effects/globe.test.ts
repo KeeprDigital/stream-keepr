@@ -69,7 +69,7 @@ describe('createGlobeDelegate', () => {
 		expect(dots.length).toBe(11 * 11);
 		// No jitter: the corner point sits exactly on the grid.
 		expect(dots[0]!.position.toArray()).toEqual([-5 * params.spacing, 0, -5 * params.spacing]);
-		expect(dots[0]!.material.color.getHexString()).toBe(params.color.slice(1));
+		expect(dots[0]!.material.color.getHexString()).toBe(params.lineColor.slice(1));
 	});
 
 	it('waves the plane with the fork\'s absolute sine of position and time', () => {
@@ -94,9 +94,9 @@ describe('createGlobeDelegate', () => {
 		expect(group.position.toArray()).toEqual([0, 15, 0]);
 		expect(group.rotation.x).toBe(-0.25);
 		const { sphere, ball, poles } = globeLineSegments(scene);
-		expect(sphere.material.color.getHexString()).toBe(params.color.slice(1));
-		expect(ball.material.color.getHexString()).toBe(params.color2.slice(1));
-		expect(poles.material.color.getHexString()).toBe(params.color2.slice(1));
+		expect(sphere.material.color.getHexString()).toBe(params.lineColor.slice(1));
+		expect(ball.material.color.getHexString()).toBe(params.accentColor.slice(1));
+		expect(poles.material.color.getHexString()).toBe(params.accentColor.slice(1));
 		sphere.geometry.computeBoundingSphere();
 		expect(sphere.geometry.boundingSphere!.radius).toBeCloseTo(18, 0);
 	});
@@ -134,7 +134,7 @@ describe('createGlobeDelegate', () => {
 
 	it('applies colours live, and rebuilds what a construction param change requires', () => {
 		const { delegate, scene, context, params } = mountDelegate();
-		delegate.applyParams({ ...context, params: { ...params, color: '#123456', color2: '#654321', backgroundColor: '#224466' } });
+		delegate.applyParams({ ...context, params: { ...params, lineColor: '#123456', accentColor: '#654321', backgroundColor: '#224466' } });
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 		const { sphere, ball, poles } = globeLineSegments(scene);
 		expect(sphere.material.color.getHexString()).toBe('123456');

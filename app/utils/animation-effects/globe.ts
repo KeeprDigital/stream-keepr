@@ -61,7 +61,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 		dotMaterial?.dispose();
 
 		dotGeometry = current.showDots ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.color }) : undefined;
+		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
 
 		positions = [];
 		const n = current.points;
@@ -91,7 +91,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 		const sphereGeometry = new three.SphereGeometry(GLOBE_RADIUS * current.size, 18, 14);
 		sphere = new three.LineSegments(
 			new three.EdgesGeometry(sphereGeometry),
-			new three.LineBasicMaterial({ color: current.color }),
+			new three.LineBasicMaterial({ color: current.lineColor }),
 		);
 		sphereGeometry.dispose();
 		globeGroup.add(sphere);
@@ -135,7 +135,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 			}
 			ball = new three.LineSegments(
 				new three.BufferGeometry().setFromPoints(ballPoints),
-				new three.LineBasicMaterial({ color: params.color2 }),
+				new three.LineBasicMaterial({ color: params.accentColor }),
 			);
 			globeGroup.add(ball);
 
@@ -158,7 +158,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 			}
 			poles = new three.LineSegments(
 				new three.BufferGeometry().setFromPoints(polePoints),
-				new three.LineBasicMaterial({ color: params.color2 }),
+				new three.LineBasicMaterial({ color: params.accentColor }),
 			);
 			globeGroup.add(poles);
 
@@ -184,10 +184,10 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 				buildField(three);
 			if (sizeChanged)
 				buildSphere(three);
-			dotMaterial?.color.set(params.color);
-			sphere?.material.color.set(params.color);
-			ball.material.color.set(params.color2);
-			poles.material.color.set(params.color2);
+			dotMaterial?.color.set(params.lineColor);
+			sphere?.material.color.set(params.lineColor);
+			ball.material.color.set(params.accentColor);
+			poles.material.color.set(params.accentColor);
 			lines?.applyBlending(params);
 		},
 

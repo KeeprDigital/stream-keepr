@@ -177,7 +177,7 @@ describe('screenModesBackgroundDisplay', () => {
 		const surface = wrapper.getComponent(AnimationSurfaceStub);
 
 		expect(surface.props('effect')).toBe('fog');
-		expect(surface.props('params')).toMatchObject({ speed: 2, blurFactor: 0.55 });
+		expect(surface.props('params')).toMatchObject({ speed: 2, softness: 0.55 });
 	});
 
 	it('renders nothing for an animation layer naming an effect this build does not ship', async () => {

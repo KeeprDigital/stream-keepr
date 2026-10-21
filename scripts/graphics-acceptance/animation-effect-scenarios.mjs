@@ -96,16 +96,16 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  * larger than the two cases that provoked it — a reader comparing this table
  * against the schemas will find real ends that are absent on purpose:
  *
- * - **Every Speed minimum.** Eleven effects offer `speed` (or `waveSpeed`) down
- *   to `0`, which stops the clock. The frame is correct and the animation check
- *   cannot pass, by construction rather than by defect.
+ * - **Every Speed minimum.** Eleven effects offer `speed` down to `0`, which
+ *   stops the clock. The frame is correct and the animation check cannot
+ *   pass, by construction rather than by defect.
  * - **Amplitudes that scale the whole image to nothing**, such as shards at
  *   `intensity: 0`.
- * - **Offsets that carry the effect out of frame**, such as halo at
- *   `xOffset`/`yOffset` of ±1.
+ * - **Centres that carry the effect out of frame**, such as halo at
+ *   `centerX`/`centerY` of ±1.
  * - **Two measured cases**: fog at the bottom of its Softness range is flat base
  *   colour by construction (the fbm's first octave is that amplitude), and
- *   ripple at the top of its Rotation range swings its orbiting lights clear of
+ *   ripple at the top of its Ring drift range swings its orbiting lights clear of
  *   the frame for seconds at a time.
  *
  * None of these is a rendering defect, and none can be asserted about here: a
@@ -147,7 +147,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	},
 	fog: {
 		extremes: [
-			{ name: 'max-softness', params: { blurFactor: 0.95 } },
+			{ name: 'max-softness', params: { softness: 0.95 } },
 			{ name: 'min-scale', params: { scale: 0.35 } },
 		],
 	},
@@ -166,7 +166,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		frameRate: 30,
 		extremes: [
 			{ name: 'max-size', params: { size: 5 } },
-			{ name: 'max-intensity', params: { amplitudeFactor: 4 } },
+			{ name: 'max-petal-depth', params: { petalDepth: 4 } },
 		],
 		// The smear has to fade all the way out. Carrying the ring out of frame
 		// leaves nothing feeding it, so every pixel should be back to the
@@ -174,7 +174,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		// feedback buffers, with residue still on screen at eight (#502); twelve
 		// leaves room. The 8-bit fade does round to nothing near black, but the
 		// shader's outward zoom carries that residue out of frame first.
-		settle: { name: 'settles-to-background', params: { xOffset: 1 }, durationSeconds: 12 },
+		settle: { name: 'settles-to-background', params: { centerX: 1 }, durationSeconds: 12 },
 	},
 	inkmap: {
 		extremes: [
@@ -214,8 +214,8 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	},
 	ripple: {
 		extremes: [
-			{ name: 'max-rings', params: { ringFactor: 12, amplitudeFactor: 4 } },
-			{ name: 'no-rotation', params: { ringFactor: 0, rotationFactor: 0 } },
+			{ name: 'max-rings', params: { spinSpeed: 12, size: 4 } },
+			{ name: 'no-spin-or-drift', params: { spinSpeed: 0, drift: 0 } },
 		],
 	},
 	shards: {

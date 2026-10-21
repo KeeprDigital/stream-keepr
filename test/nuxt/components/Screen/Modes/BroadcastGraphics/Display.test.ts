@@ -2016,7 +2016,7 @@ describe('live playout animation in a Screen Output', () => {
 			const surface = wrapper.getComponent(AnimationSurfaceStub);
 
 			expect(surface.props('effect')).toBe('fog');
-			expect(surface.props('params')).toMatchObject({ speed: 2, blurFactor: 0.55 });
+			expect(surface.props('params')).toMatchObject({ speed: 2, softness: 0.55 });
 		});
 
 		it('composes the background behind every Broadcast Graphic, at the authored opacity', async () => {
