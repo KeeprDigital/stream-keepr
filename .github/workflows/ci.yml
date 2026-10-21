@@ -6,27 +6,38 @@
 # only: they provision real Events in production and spend Ably free-plan
 # quota (#189).
 #
-# When it runs, and why no more often:
+# When it runs, and why no more often (ADR-0036):
 #
-#   - PRs only, never on push to main. main's ruleset admits only squash
-#     merges of PRs whose `CI passed` was green, and deploys ship released
-#     tags, so re-running the same gates on the merge commit adds no signal.
+#   - In the merge queue (`merge_group`): the run that decides what lands. It
+#     tests the group's head, the exact combined tree main moves to, so two
+#     PRs that each passed against an old main cannot land an untested
+#     combination. main then fast-forwards to that commit, and release-please
+#     tags only a commit that passed here (scripts/release-gate.mjs).
+#   - On PRs, for feedback and because the queue admits only a PR whose
+#     required checks passed. Not on push to main: what main moves to already
+#     passed in the queue.
 #   - Not on draft PRs. `pnpm verify:quick` is the gate while a branch is in
 #     progress; marking the PR ready for review runs CI, the full gate, so
 #     nobody runs `pnpm verify` locally just to repeat it.
-#   - Only the jobs a change can affect: none for docs or other workflows, no
-#     Worker build for tests alone (the `scope` job decides).
-#   - A newer push cancels the run it supersedes.
+#   - Only the jobs a change can affect: none for docs, no Worker build for
+#     tests or the other workflows alone. The `scope` job decides, measuring a PR
+#     against its base and a merge group against the queue's base
+#     (scripts/ci-scope.mjs); anything it cannot measure runs everything.
+#   - A newer push cancels the PR run it supersedes. Every merge-group entry
+#     has its own ref, so the queue's runs never cancel each other.
 #
-# `CI passed` is the one required status check. It always reports, whatever
-# was skipped, so a docs-only PR is never left waiting on a check that cannot
-# arrive; a workflow-level `paths-ignore` would do exactly that.
+# `CI passed` is a required status check, on PRs and merge groups alike. It
+# always reports, whatever was skipped, so a docs-only change is never left
+# waiting on a check that cannot arrive; a workflow-level `paths-ignore` would
+# do exactly that, and in the queue would hold the group until it timed out.
 
 name: CI
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,7 +54,8 @@ env:
 jobs:
   scope:
     name: Decide what the change can affect
-    if: ${{ !github.event.pull_request.draft }}
+    # A merge group carries no `pull_request`; it always runs.
+    if: github.event_name == 'merge_group' || !github.event.pull_request.draft
     # Pinned rather than `ubuntu-latest`, so an image change (Chrome, system
     # libraries the browser gates depend on) is a reviewed edit, not a surprise.
     runs-on: ubuntu-24.04
@@ -54,22 +66,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The merge commit and its first parent, the base: enough to diff.
+          # A PR's test merge commit and its first parent, the base: enough to
+          # diff. A merge group's base is further back; the script fetches it.
           fetch-depth: 2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
       - id: scope
-        run: |
-          changed=$(git diff --name-only HEAD^1 HEAD)
-          printf '%s\n' "$changed"
-          # Docs, editor settings, and workflows other than this one.
-          outside_code='\.md$|^\.vscode/|^\.github/dependabot\.yml$|^\.github/workflows/(deploy|pr-title|release-please)\.yml$'
-          # Anything that is not a test or outside the code cannot change the
-          # uploaded Worker bundle.
-          outside_bundle="^test/|$outside_code"
-          if grep -qvE "$outside_code" <<< "$changed"; then code=true; else code=false; fi
-          if grep -qvE "$outside_bundle" <<< "$changed"; then bundle=true; else bundle=false; fi
-          echo "code=$code bundle=$bundle"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+        run: node scripts/ci-scope.mjs
 
   # Every gate `pnpm test` runs (verify.mjs --tests) appears below as its own step
   # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
@@ -132,8 +136,9 @@ jobs:
   worker-guard:
     name: Build, wrangler dry runs, and Worker smoke
     needs: scope
-    # A PR touching only tests or docs cannot change the uploaded bundle, so
-    # building it again would prove what main already proved.
+    # A change touching only tests, docs or the other workflows cannot change
+    # the uploaded bundle, so building it again would prove what main already
+    # proved.
     if: needs.scope.outputs.bundle == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -164,7 +169,7 @@ jobs:
     steps:
       # Skipped is fine: `scope` decided the job had nothing to prove. Failed or
       # cancelled is not. A draft PR skips everything and passes here, which is
-      # harmless: a draft cannot be merged, and marking it ready runs CI again.
+      # harmless: a draft cannot be queued, and marking it ready runs CI again.
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |

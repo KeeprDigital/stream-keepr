@@ -17,8 +17,8 @@ resolution.
 
 Every change reaches `main` as a squash-merged PR whose title is a Conventional
 Commit (`fix(scope): summary`); release-please reads that one commit, and CI
-runs only on PRs. Open the PR from your branch and leave `main` itself to the
-merge button. Why: README.md § Releases.
+runs only on PRs and in the merge queue. Open the PR from your branch and leave
+`main` itself to the merge queue. Why: README.md § Releases.
 
 ## Local auth bypass
 
