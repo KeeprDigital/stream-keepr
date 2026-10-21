@@ -151,6 +151,31 @@ describe('screen store writes and what overtakes them', () => {
 		});
 	});
 
+	describe('what a write answers its caller with', () => {
+		it('is a server revision, never another write\'s unsettled fields', async () => {
+			store.screens = [createMockScreen({ id: 1, stateVersion: 1, name: 'One', modeConfigs: { metagame: { topN: 8 } } })];
+			const write = served();
+			const rename = served();
+			mockRepo.updateModeConfig.mockReturnValueOnce(write.promise);
+			mockRepo.update.mockReturnValueOnce(rename.promise);
+
+			const save = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
+			await sendPending();
+			const v3 = createMockScreen({ id: 1, stateVersion: 3, name: 'One', modeConfigs: { metagame: { topN: 16 } } });
+			mockRepo.getById.mockResolvedValueOnce(v3);
+			await store.applyRemoteUpdated({ eventId: 1, screenId: 1 } as never);
+			// A rename queued behind the write, shown but not yet saved.
+			const renaming = store.updateScreen(1, 1, { name: 'Renamed' });
+			expect(store.screens[0]!.name).toBe('Renamed');
+
+			write.resolve(createMockScreen({ id: 1, stateVersion: 2, name: 'One', modeConfigs: { metagame: { topN: 16 } } }));
+			await expect(save).resolves.toEqual(v3);
+
+			rename.resolve(createMockScreen({ id: 1, stateVersion: 4, name: 'Renamed', modeConfigs: { metagame: { topN: 16 } } }));
+			await renaming;
+		});
+	});
+
 	describe('a failed write', () => {
 		it('rolls back only its own field, keeping a remote change that landed meanwhile', async () => {
 			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
@@ -212,8 +237,22 @@ describe('screen store writes and what overtakes them', () => {
 		});
 	});
 
-	describe('a failed write of a Screen deleted meanwhile', () => {
-		it('does not bring the Screen back', async () => {
+	describe('a write of a Screen deleted meanwhile', () => {
+		it('does not bring the Screen back when it succeeds', async () => {
+			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
+			const write = served();
+			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
+
+			const save = store.updateScreenConfig(1, 1, { background: '#fff' });
+			await sendPending();
+			store.applyRemoteDeleted({ eventId: 1, screenId: 1 } as never);
+			write.resolve(createMockScreen({ id: 1, stateVersion: 2, screenConfig: { background: '#fff' } }));
+			await save;
+
+			expect(store.screens).toEqual([]);
+		});
+
+		it('does not bring the Screen back when it fails', async () => {
 			store.screens = [createMockScreen({ id: 1, stateVersion: 1, screenConfig: { background: '#000' } })];
 			const write = served();
 			mockRepo.updateScreenConfig.mockReturnValueOnce(write.promise);
@@ -327,6 +366,32 @@ describe('screen store writes and what overtakes them', () => {
 
 			await expect(save).rejects.toThrow('Refused');
 			expect(store.screens).toEqual([eventTwoScreen]);
+			expect(store.error).toBeNull();
+		});
+
+		it('changes nothing when the operator has come back to the same Event since', async () => {
+			store.screens = [createMockScreen({ id: 1, stateVersion: 1, modeConfigs: { metagame: { topN: 8 } } })];
+			const succeeded = served();
+			const failed = served();
+			mockRepo.updateModeConfig.mockReturnValueOnce(succeeded.promise);
+			mockRepo.updateScreenConfig.mockReturnValueOnce(failed.promise);
+
+			const saving = store.updateModeConfig(1, 1, 'metagame', { topN: 16 });
+			const configuring = store.updateScreenConfig(1, 1, { background: '#fff' });
+			await sendPending();
+			await moveToEventTwo();
+			store.$reset();
+			// Event 1 loaded afresh, before either answer: it already holds the edit that will succeed.
+			const reloaded = createMockScreen({ id: 1, stateVersion: 2, name: 'Loaded again', modeConfigs: { metagame: { topN: 16 } } });
+			mockRepo.list.mockResolvedValueOnce([reloaded]);
+			await store.loadScreensByEventId(1);
+
+			succeeded.resolve(createMockScreen({ id: 1, stateVersion: 2, modeConfigs: { metagame: { topN: 16 } } }));
+			failed.reject(new Error('Refused'));
+			await saving;
+			await expect(configuring).rejects.toThrow('Refused');
+
+			expect(store.screens).toEqual([reloaded]);
 			expect(store.error).toBeNull();
 		});
 

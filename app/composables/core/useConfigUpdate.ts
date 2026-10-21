@@ -6,7 +6,11 @@ import { registerPendingEditFlush } from '~/utils/eventStores';
 interface UseConfigUpdateOptions<T, U extends Record<string, any> = Partial<T>> {
 	/** How to read current config from the store */
 	getStoreConfig: () => Partial<T>;
-	/** How to persist updates to the store */
+	/**
+	 * How to persist updates to the store. It must order its own writes: when the
+	 * surface ends, a queued edit is handed to it while an earlier save may still
+	 * be out (the Screen store queues each Screen's writes).
+	 */
 	saveToStore: (updates: U) => Promise<any>;
 	/** Default config values */
 	defaults: T;

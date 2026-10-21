@@ -236,14 +236,16 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	/**
-	 * What a write answers its caller with: the server's answer, or the newer revision
-	 * this client held by the time it came, so a caller mirroring it cannot regress.
+	 * What a write answers its caller with: the server's answer, or the newer server
+	 * revision this client held by the time it came, so a caller mirroring it cannot
+	 * regress. Never with another write's unsettled fields, which the server does not
+	 * hold yet.
 	 */
 	function answerFor(writeLifetime: WriteLifetime, answer: Screen): Screen {
 		if (writeLifetime.flight.stale)
 			return answer;
-		const cached = cachedRevision(answer.id);
-		return cached && cached.stateVersion > answer.stateVersion ? toRaw(cached) : answer;
+		const held = writeLifetime.owned.get(answer.id)?.base ?? cachedRevision(answer.id);
+		return held && held.stateVersion > answer.stateVersion ? toRaw(held) : answer;
 	}
 
 	function resolveAll<T>(deferred: Deferred<T>[], value: T) {
@@ -284,7 +286,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			if (!freshScreen)
 				return;
 			heard(writeLifetime, freshScreen);
-			if (writeLifetime.flight.current)
+			if (writeLifetime.flight.current && holdsScreen(screenId))
 				holdRevision(freshScreen);
 		};
 	}
@@ -311,7 +313,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 							makeRefreshScreen(eventId, screenId, writeLifetime),
 						);
 						heard(writeLifetime, answer);
-						if (writeLifetime.flight.current)
+						// A Screen deleted while the write was out stays deleted.
+						if (writeLifetime.flight.current && holdsScreen(screenId))
 							holdRevision(answer);
 						return answerFor(writeLifetime, answer);
 					}

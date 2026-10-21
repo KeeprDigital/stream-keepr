@@ -416,11 +416,15 @@ export type ScreenConfigPatch = Partial<NullableScreenConfig>;
  * An edit of one mode's stored config, the form its PATCH takes (ADR-0037). A
  * field left out is unchanged; a field given `null` is deleted from storage and
  * reads as its contract default. The complete config type is untouched: `null`
- * is a request, never a stored value of a field whose contract refuses it.
+ * is a request, never a stored value of a field whose contract refuses it. An
+ * authored stack takes no `null`, as its PATCH form refuses one (ADR-0037).
  */
 export type ScreenModeConfigPatch<M extends ScreenMode> = {
-	[K in keyof ModeConfigTypeMap[M]]?: ModeConfigTypeMap[M][K] | null;
+	[K in keyof ModeConfigTypeMap[M]]?: ModeConfigTypeMap[M][K] | (K extends AuthoredStackOf<M> ? never : null);
 };
+
+/** The authored stacks a mode's config contract declares. */
+type AuthoredStackOf<M extends ScreenMode> = (typeof MODE_CONFIG_CONTRACTS)[M]['authoredStacks'][number];
 
 /**
  * An edit as it must cross the wire. A field an edit names with `undefined` is

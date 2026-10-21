@@ -268,6 +268,10 @@ describe('toModeConfigPatch', () => {
 	});
 
 	it('never deletes an authored stack, which leaves it out instead (ADR-0037)', () => {
+		// @ts-expect-error An authored stack's edit takes no null: its PATCH form refuses one.
+		toModeConfigPatch('background', { layers: null });
+		// @ts-expect-error The Broadcast Graphics stack is authored too.
+		toModeConfigPatch('broadcast-graphics', { graphics: null });
 		expect(toModeConfigPatch('background', { layers: undefined })).toEqual({});
 		expect(toModeConfigPatch('broadcast-graphics', { graphics: undefined, channels: undefined }))
 			.toEqual({ channels: null });
