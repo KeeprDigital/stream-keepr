@@ -409,6 +409,19 @@ export type ModeConfigsMap = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]>
 // Sending `null` for a field means "delete this key from stored config".
 export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] | null };
 
+/** An edit of a Screen's own config: a field left out is unchanged, and `null` deletes it. */
+export type ScreenConfigPatch = Partial<NullableScreenConfig>;
+
+/**
+ * An edit of one mode's stored config, the form its PATCH takes (ADR-0037). A
+ * field left out is unchanged; a field given `null` is deleted from storage and
+ * reads as its contract default. The complete config type is untouched: `null`
+ * is a request, never a stored value of a field whose contract refuses it.
+ */
+export type ScreenModeConfigPatch<M extends ScreenMode> = {
+	[K in keyof ModeConfigTypeMap[M]]?: ModeConfigTypeMap[M][K] | null;
+};
+
 /**
  * Keys a display reset must not touch. Two kinds qualify:
  *

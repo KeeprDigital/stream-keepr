@@ -1,8 +1,8 @@
-import type { NullableScreenConfig, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { ScreenConfig, ScreenConfigPatch } from '~~/shared/types/screenConfig';
 import { DEFAULT_SCREEN_CONFIG } from '~~/shared/types/screenConfig';
 
 // Update payload allows `null` to signal "delete this key" (e.g. clear width back to auto)
-type ScreenConfigUpdate = Partial<NullableScreenConfig>;
+type ScreenConfigUpdate = ScreenConfigPatch;
 
 interface UseScreenConfigUpdateOptions {
 	/** Debounce delay in ms before flushing to API. Default: 300 */

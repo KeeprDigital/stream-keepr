@@ -1,4 +1,4 @@
-import type { ModeConfigsMap, ScreenConfig, ScreenModeConfig } from '~~/shared/types/screenConfig';
+import type { ModeConfigsMap, ScreenConfig, ScreenConfigPatch, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { useAsyncAction } from '~/composables/core/useAsyncAction';
 import type {
 	CreateScreenInput,
@@ -96,7 +96,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		eventId: number;
 		screenId: number;
 		mode: ScreenMode;
-		partialConfig: Partial<ScreenModeConfig>;
+		partialConfig: Record<string, unknown>;
 		original: Screen;
 		flight: Flight;
 		deferred: Deferred<Screen>[];
@@ -311,11 +311,11 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 	const screenConfigWriteDebounce = createCancelableDebounce(flushScreenConfigWrites, 300, 1000);
 
-	async function updateModeConfig(
+	async function updateModeConfig<M extends ScreenMode>(
 		eventId: number,
 		screenId: number,
-		mode: ScreenMode,
-		partialConfig: Partial<ScreenModeConfig>,
+		mode: M,
+		partialConfig: ScreenModeConfigPatch<M>,
 	) {
 		const index = state.screens.value.findIndex(s => s.id === screenId);
 		if (index === -1) {
@@ -337,7 +337,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			const flight = writeFlights.begin(key);
 			const existing = pendingModeConfigWrites.get(key);
 			if (existing) {
-				existing.partialConfig = { ...existing.partialConfig, ...partialConfig } as Partial<ScreenModeConfig>;
+				existing.partialConfig = { ...existing.partialConfig, ...partialConfig };
 				existing.flight = flight;
 				existing.deferred.push({ resolve, reject });
 			}
@@ -348,7 +348,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		});
 	}
 
-	async function updateScreenConfig(eventId: number, screenId: number, partialConfig: Record<string, unknown>) {
+	async function updateScreenConfig(eventId: number, screenId: number, partialConfig: ScreenConfigPatch) {
 		const index = state.screens.value.findIndex(s => s.id === screenId);
 		if (index === -1) {
 			state.error.value = 'Screen not found';
