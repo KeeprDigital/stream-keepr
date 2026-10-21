@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -99,7 +100,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 		return await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: lifecyclePixelPng },
-		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
+		).then(expectOperationResult);
 	}
 
 	async function lifecycleAction(assetId: string, action: GraphicAssetLifecycleAction) {
@@ -131,7 +132,7 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: lifecycleReplacementPng,
 			},
-		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
+		).then(expectOperationResult);
 	}
 
 	it('retires and restores without changing identity, revision history, metadata, associations, or exact-reference delivery', async () => {

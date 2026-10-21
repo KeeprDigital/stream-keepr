@@ -213,7 +213,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				body: transparentPixelPng,
 			},
 		);
-		expect(uploadResponse.status).toBe(200);
+		await expectResponseStatus(uploadResponse, 200);
 		const completed = await uploadResponse.json() as GraphicsIngestionOperation;
 		expect(completed).toMatchObject({
 			stage: 'completed',
@@ -293,6 +293,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			`/api/graphics-assets/ingestion-operations/${duplicate.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: transparentPixelPng },
 		);
+		await expectResponseStatus(duplicateResponse, 200);
 		const reused = await duplicateResponse.json() as GraphicsIngestionOperation;
 		expect(reused.result).toEqual({
 			outcome: 'reused',
@@ -328,6 +329,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			`/api/graphics-assets/ingestion-operations/${separate.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: transparentPixelPng },
 		);
+		await expectResponseStatus(separateResponse, 200);
 		const separatelyPublished = await separateResponse.json() as GraphicsIngestionOperation;
 		expect(separatelyPublished.result).toMatchObject({ outcome: 'published' });
 		expect(separatelyPublished.result?.assetId).not.toBe(completed.result?.assetId);
@@ -720,7 +722,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			},
 		);
 
-		expect(response.status).toBe(200);
+		await expectResponseStatus(response, 200);
 		const completed = await response.json() as GraphicsIngestionOperation;
 		expect(completed).toMatchObject({
 			stage: 'completed',

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
 	browserCookie,
+	collectPageDiagnostics,
 	initialTarget,
 	openAuthoredPage,
 	verdictFailureCode,
@@ -283,5 +284,44 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 			expect(verdictFailureCode({ outcome: 'timed-out', code: 'font-glyph-not-rendered' }))
 				.toBe('browser-acceptance-timed-out');
 		});
+	});
+});
+
+/**
+ * What a page said while it was observed (#687): its console and anything it
+ * threw that nothing caught, kept so a failed run can say why. Fed the CDP
+ * events Chromium sends once `Runtime` is enabled.
+ */
+describe('the page diagnostics a run keeps', () => {
+	function eventPage() {
+		const handlers = new Map<string, (params: any) => void>();
+		return {
+			on: (method: string, handler: (params: any) => void) => handlers.set(method, handler),
+			emit: (method: string, params: object) => handlers.get(method)?.(params),
+		};
+	}
+
+	it('keeps console text and uncaught errors, newest last', () => {
+		const page = eventPage();
+		const diagnostics = collectPageDiagnostics(page);
+
+		page.emit('Runtime.consoleAPICalled', { type: 'warning', args: [{ type: 'string', value: 'THREE.WebGLProgram:' }, { type: 'number', value: 3 }] });
+		page.emit('Runtime.consoleAPICalled', { type: 'error', args: [{ type: 'object', description: 'Error: shader failed' }] });
+		page.emit('Runtime.exceptionThrown', { exceptionDetails: { text: 'Uncaught', exception: { description: 'TypeError: x is undefined\n    at y' } } });
+
+		expect(diagnostics.read()).toEqual({
+			console: ['warning: THREE.WebGLProgram: 3', 'error: Error: shader failed'],
+			uncaught: ['TypeError: x is undefined\n    at y'],
+		});
+	});
+
+	it('keeps only the newest few, so a chatty page cannot grow the run without bound', () => {
+		const page = eventPage();
+		const diagnostics = collectPageDiagnostics(page);
+
+		for (let index = 0; index < 50; index += 1)
+			page.emit('Runtime.consoleAPICalled', { type: 'log', args: [{ type: 'number', value: index }] });
+
+		expect(diagnostics.read().console).toEqual(['log: 45', 'log: 46', 'log: 47', 'log: 48', 'log: 49']);
 	});
 });

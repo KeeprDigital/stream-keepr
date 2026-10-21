@@ -17,6 +17,7 @@ import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { anotherBrowser } from './identities';
 import { executeIntegrationD1 } from './integrationD1';
+import { expectOperationResult } from './responseStatus';
 
 /**
  * The Broadcast Graphic Template library through the real API.
@@ -223,8 +224,8 @@ async function ingestImage(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{ method: 'PUT', headers: { cookie }, body: pixelPng },
 	);
-	const operation = await response.json() as GraphicsIngestionOperation;
-	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+	const operation = await expectOperationResult(response);
+	return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 }
 
 const TEMPLATES_PATH = '/api/graphics-templates/broadcast-graphics';

@@ -22,6 +22,7 @@ import {
 	animationEffectSettleScenarios,
 } from './animation-effect-scenarios.mjs';
 import { bundleAcceptancePage } from './bundle.mjs';
+import { pageTextEvidence } from './evidence.mjs';
 
 export const ANIMATION_EFFECT_PROOF_PAGE_PATH = '/_acceptance/animation-effect-v1.html';
 export const ANIMATION_EFFECT_PROOF_SCRIPT_PATH = '/_acceptance/animation-effect-v1.js';
@@ -86,8 +87,15 @@ export function animationEffectProofPage() {
 `;
 }
 
-/** The expression the run polls: the report, once the page says it is finished. */
-export const ANIMATION_EFFECT_PROOF_EXPRESSION = `document.body.dataset.measurements === 'complete'
+/**
+ * The expression the run polls: the report, once the page says it is finished.
+ *
+ * `body` is optional because the first poll can land before the parser has
+ * reached it — on a loaded machine, often enough to fail a run (#687). A page
+ * with no body yet is still loading, which reads as "not finished" like any
+ * other moment before `data-measurements` appears.
+ */
+export const ANIMATION_EFFECT_PROOF_EXPRESSION = `document.body?.dataset.measurements === 'complete'
 	? document.getElementById('report').textContent
 	: undefined`;
 
@@ -227,6 +235,7 @@ function checksTheControlTripped(control) {
  * @param {{
  *   backend: string,
  *   pageFailed: boolean,
+ *   pageError?: string,
  *   catalogue: string[],
  *   scenarios: object[],
  *   settles: object[],
@@ -243,8 +252,9 @@ export function judgeAnimationEffectReport(report) {
 		return [{ code: 'animation-effect-backend-unexpected', detail: { backend: report.backend } }];
 
 	const failures = [];
+	// What the page caught, reduced: its text is page-authored (#687).
 	if (report.pageFailed)
-		failures.push({ code: 'animation-effect-page-failed' });
+		failures.push({ code: 'animation-effect-page-failed', detail: { source: 'page', thrown: pageTextEvidence(report.pageError) } });
 
 	// The catalogue the bundle saw, against the one the table covers: an effect
 	// shipped without a scenario here would otherwise be proven by nobody, and

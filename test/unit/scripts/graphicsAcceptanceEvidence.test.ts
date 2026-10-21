@@ -4,6 +4,7 @@ import {
 	ACCEPTANCE_FAILURE_CODES,
 	createAcceptanceEvidence,
 	deliveryRouteLabel,
+	pageTextEvidence,
 } from '../../../scripts/graphics-acceptance/evidence.mjs';
 import { runAcceptanceHarness } from '../../../scripts/graphics-acceptance/harness.mjs';
 import { acceptanceOrigin } from '../../../scripts/graphics-acceptance/installation.mjs';
@@ -176,6 +177,47 @@ describe('graphics staging acceptance evidence', () => {
 		expect(() => evidence().report([
 			{ code: 'delivery-body-mismatch', detail: { key: 'REVISION_8F2B1C4D9E7A6B5C4D3E2F1A0B9C8D7E' } },
 		])).toThrow('delivery-v1 evidence-opaque-token-leak field=key');
+	});
+});
+
+/**
+ * What a page threw or logged, reduced until the formatter accepts it (#687).
+ *
+ * `accept:animation-effects` failed twice under load as "a page that threw
+ * while being read" and printed nothing that said what it threw. The text is
+ * page-authored, so it is reduced rather than trusted: what is left has to pass
+ * the same checks as every other detail value, and still say what went wrong.
+ */
+describe('page text as evidence', () => {
+	function printable(text: string) {
+		return evidence().report([{ code: 'animation-effect-page-failed', detail: { thrown: pageTextEvidence(text) } }]);
+	}
+
+	it('keeps the message of an ordinary error and drops its stack', () => {
+		expect(pageTextEvidence('TypeError: Cannot read properties of null (reading \'dataset\')\n    at <anonymous>:1:15'))
+			.toBe('TypeError: Cannot read properties of null (reading \'dataset\')');
+	});
+
+	it('withholds a URL, a filename and a token instead of refusing the line', () => {
+		const text = `Error: failed to fetch http://127.0.0.1:52811/_acceptance/animation-effect-v1.js for plate.png as ${AN_OBJECT_KEY}`;
+
+		const reduced = pageTextEvidence(text);
+
+		expect(reduced).toBe('Error: failed to fetch <url> for <file> as canonical/<token>');
+		expect(() => printable(text)).not.toThrow();
+	});
+
+	it('shortens a message too long to read at a glance', () => {
+		const reduced = pageTextEvidence(`RangeError: ${'too deep '.repeat(40)}`);
+
+		expect(reduced.length).toBeLessThanOrEqual(100);
+		expect(reduced.endsWith('…')).toBe(true);
+		expect(() => printable(`RangeError: ${'too deep '.repeat(40)}`)).not.toThrow();
+	});
+
+	it('says when there was nothing to read', () => {
+		expect(pageTextEvidence(undefined)).toBe('<none>');
+		expect(pageTextEvidence('   ')).toBe('<none>');
 	});
 });
 

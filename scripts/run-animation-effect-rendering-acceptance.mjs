@@ -32,6 +32,7 @@ import {
 	SWIFTSHADER_ARGS,
 } from './graphics-acceptance/animation-effect-proof.mjs';
 import { observeChromiumValue, serveAcceptanceRoutes } from './graphics-acceptance/chromium.mjs';
+import { pageDiagnosticsEvidence, pageTextEvidence } from './graphics-acceptance/evidence.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 
 const HARNESS = 'animation-effect-v1';
@@ -83,16 +84,25 @@ export async function main(argv = process.argv) {
 				// three different facts: no browser to drive, a page that threw while
 				// being read, and a page that never published anything. The last is a
 				// timeout rather than a page failure because nothing was observed at
-				// all — including whether the page was still working.
+				// all — including whether the page was still working. The last two
+				// say what the page threw and logged (#687), reduced, because a code
+				// alone left two failures under load with no cause to look at.
 				if (observed.outcome !== 'passed') {
 					const outcomes = {
 						'unavailable': 'browser-driver-unavailable',
 						'failed': 'animation-effect-page-failed',
 						'timed-out': 'browser-acceptance-timed-out',
 					};
+					const thrown = observed.outcome === 'failed'
+						? { source: 'evaluate', thrown: pageTextEvidence(observed.detail) }
+						: {};
 					record([{
 						code: outcomes[observed.outcome] ?? 'browser-acceptance-failed',
-						detail: { page: HARNESS },
+						detail: {
+							page: HARNESS,
+							...thrown,
+							...(observed.diagnostics ? pageDiagnosticsEvidence(observed.diagnostics) : {}),
+						},
 					}]);
 					return { mode: 'local' };
 				}
@@ -100,16 +110,21 @@ export async function main(argv = process.argv) {
 				// A report that will not parse is the page failing to publish one,
 				// which is the same fact as the page failing to finish — and its text
 				// is never read, so nothing page-authored reaches the evidence line.
+				// A page that gave up says so in its report rather than by throwing,
+				// so its console is carried on that line too (#687).
+				const pageSaid = pageDiagnosticsEvidence(observed.diagnostics);
 				let report;
 				try {
 					report = JSON.parse(observed.value);
 				}
 				catch {
-					record([{ code: 'animation-effect-page-failed' }]);
+					record([{ code: 'animation-effect-page-failed', detail: { source: 'report', ...pageSaid } }]);
 					return { mode: 'local' };
 				}
 
-				record(judgeAnimationEffectReport(report));
+				record(judgeAnimationEffectReport(report).map(failure => failure.code === 'animation-effect-page-failed'
+					? { ...failure, detail: { ...failure.detail, ...pageSaid } }
+					: failure));
 				return {
 					mode: 'local',
 					backend: report.backend,

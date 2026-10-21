@@ -393,8 +393,8 @@ function publish(report) {
 }
 
 /** A run that reached no effects, in the shape Node judges every run in. */
-function nothingMeasured(backend, pageFailed) {
-	return { backend, pageFailed, catalogue: [], scenarios: [], settles: [], control: { mounted: false } };
+function nothingMeasured(backend, pageFailed, pageError) {
+	return { backend, pageFailed, pageError, catalogue: [], scenarios: [], settles: [], control: { mounted: false } };
 }
 
 async function run() {
@@ -406,11 +406,12 @@ async function run() {
 		else
 			publish({ backend, pageFailed: false, ...await measureEverything() });
 	}
-	catch {
+	catch (error) {
 		// Whatever went wrong is the page's own plumbing rather than an effect's —
 		// every effect failure is already caught per scenario. The run says so and
-		// proves nothing, which is what `pageFailed` means in Node.
-		publish(nothingMeasured(backend, true));
+		// proves nothing, which is what `pageFailed` means in Node, and says what
+		// it caught, which Node reduces before printing (#687).
+		publish(nothingMeasured(backend, true, String(error?.stack ?? error)));
 	}
 }
 

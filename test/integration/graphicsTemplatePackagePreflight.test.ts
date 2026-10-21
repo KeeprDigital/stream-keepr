@@ -15,7 +15,7 @@ import {
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
-import { expectResponseStatus } from './responseStatus';
+import { expectOperationResult, expectResponseStatus } from './responseStatus';
 import { throughTransientUnavailability } from './transientUnavailability';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -96,7 +96,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>, options: { fileN
 			body: archive,
 		},
 	);
-	expect(response.status).toBe(200);
+	await expectResponseStatus(response, 200);
 	return await response.json() as GraphicsIngestionOperation;
 }
 
@@ -240,10 +240,10 @@ describe('template Package preflight through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: packagePixelPng },
 		);
-		const operation = await uploaded.json() as GraphicsIngestionOperation;
+		const operation = await expectOperationResult(uploaded);
 		reference = {
-			assetId: operation.result!.assetId,
-			revisionId: operation.result!.revisionId,
+			assetId: operation.result.assetId,
+			revisionId: operation.result.revisionId,
 		};
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);

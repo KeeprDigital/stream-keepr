@@ -195,7 +195,8 @@ export async function main(argv = process.argv) {
 	process.removeListener('SIGTERM', interrupt);
 
 	if (failure) {
-		// Anything a killed server suite left behind.
+		// Anything a killed server suite or browser gate left behind: orphaned
+		// workerd, and leaked acceptance Chrome (#687).
 		await reapStrandedWorkerd();
 		if (failure.logPath) {
 			const lines = (await readFile(failure.logPath, 'utf8')).trimEnd().split('\n');

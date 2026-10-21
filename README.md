@@ -113,6 +113,14 @@ binary lives in a checkout Git lists for this repository (`git worktree list`):
 the main checkout, worktrees nested under it, and worktrees anywhere else. A
 reap from any one checkout covers them all; other repositories are untouched.
 
+The same reap removes a leaked acceptance Chrome (#687): a headless Chrome
+whose parent is gone and whose `--user-data-dir` is a
+`stream-keepr-acceptance-<checkout>-*` profile named after one of those
+checkouts, with its helper processes. Your own browsers never run under such a
+profile, so they are never touched. The browser gates also stop their own
+Chrome however they end, including a timeout and SIGINT/SIGTERM of the runner,
+escalating to SIGKILL; the reap is for a runner that was itself SIGKILLed.
+
 ### Local auth bypass
 
 The `:bypass` launchers set `STREAM_KEEPR_LOCAL_AUTH_BYPASS=true` on their own

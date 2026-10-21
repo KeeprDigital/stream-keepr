@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { expectResponseStatus } from '~~/test/integration/responseStatus';
+import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { requestLedger } from '~~/test/integration/requestLedger';
+import { expectOperationResult, expectResponseStatus, expectResultOf } from '~~/test/integration/responseStatus';
+
+beforeEach(() => requestLedger.clear());
 
 /**
  * A status assertion that says what the server said (#633).
@@ -26,6 +30,59 @@ describe('expectResponseStatus', () => {
 
 		await expect(expectResponseStatus(response, 200)).rejects.toThrow(
 			/Multipart part 1 is temporarily unavailable[\s\S]*expected 503 to be 200/,
+		);
+	});
+
+	/**
+	 * A setup helper fails in a `beforeAll`, where no test has failed and so the
+	 * suite's own report of the test's requests never prints (#687): the failure
+	 * itself has to carry them.
+	 */
+	it('fails with the requests the test made', async () => {
+		await requestLedger.record('PUT /api/graphics-assets/ingestion-operations/op-1/content', async () => {});
+
+		await expect(expectResponseStatus(new Response('{}', { status: 503 }), 200)).rejects.toThrow(
+			/requests:\n {2}PUT \/api\/graphics-assets\/ingestion-operations\/op-1\/content: \d+ms/,
+		);
+	});
+});
+
+/**
+ * The content PUT that publishes a setup asset (#687). `ingestImage` read
+ * `operation.result!.assetId` off whatever it was answered, so a refused upload
+ * under load failed the suite's `beforeAll` as `Cannot read properties of
+ * undefined (reading 'assetId')` and said nothing about why.
+ */
+describe('expectOperationResult', () => {
+	const published = { id: 'op-1', stage: 'completed', result: { assetId: 'asset-1', revisionId: 'revision-1' } };
+
+	it('hands back the operation a published upload answered', async () => {
+		const operation = await expectOperationResult(Response.json(published));
+
+		expect(operation.result.assetId).toBe('asset-1');
+	});
+
+	it('fails a refused upload with its status and body', async () => {
+		const refused = Response.json({ statusCode: 503, message: 'Graphics staging is temporarily unavailable' }, { status: 503 });
+
+		await expect(expectOperationResult(refused)).rejects.toThrow(
+			/Graphics staging is temporarily unavailable[\s\S]*expected 503 to be 200/,
+		);
+	});
+
+	it('fails an upload answered 200 that published nothing, naming its stage', async () => {
+		const unpublished = Response.json({ id: 'op-1', stage: 'rejected', report: { code: 'still-image-undecodable' } });
+
+		await expect(expectOperationResult(unpublished)).rejects.toThrow(
+			/reached no result \(stage rejected\)[\s\S]*still-image-undecodable/,
+		);
+	});
+
+	it('fails an operation read some other way that reached no result, with the requests made', async () => {
+		await requestLedger.record('POST /api/graphics-assets/ingestion-operations/op-1/font-browser-evidence', async () => {});
+
+		expect(() => expectResultOf({ id: 'op-1', stage: 'awaiting-confirmation' } as GraphicsIngestionOperation)).toThrow(
+			/reached no result \(stage awaiting-confirmation\)[\s\S]*requests:\n {2}POST \/api\/graphics-assets\/ingestion-operations\/op-1\/font-browser-evidence/,
 		);
 	});
 });

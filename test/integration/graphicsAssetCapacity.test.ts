@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
+import { expectResponseStatus } from './responseStatus';
 
 describe('the Graphics Asset Library Capacity API', () => {
 	const administratorHeaders = {
@@ -178,7 +179,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 				`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
 				{ method: 'PUT', headers: authorHeaders, body: noGrowthBytes },
 			);
-			expect(response.status).toBe(200);
+			await expectResponseStatus(response, 200);
 			return await response.json() as GraphicsIngestionOperation;
 		};
 
@@ -244,7 +245,7 @@ describe('the Graphics Asset Library Capacity API', () => {
 				`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
 				{ method: 'PUT', headers: authorHeaders, body: bytes },
 			);
-			expect(response.status).toBe(200);
+			await expectResponseStatus(response, 200);
 			return await response.json() as GraphicsIngestionOperation;
 		};
 
