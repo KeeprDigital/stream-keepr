@@ -174,7 +174,6 @@ export const useCardStore = defineStore('card', () => {
 
 	function $reset() {
 		cardSearchRuntime.resetPreviewState();
-		activeCard.value = null;
 		activeScreenId.value = null;
 		cardPageMode.value = 'search';
 		deckListRoundId.value = null;
