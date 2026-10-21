@@ -245,6 +245,7 @@ const leaseNotice = computed(() => {
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:writable="canAuthor"
+					:style-set="styleSetAuthoring.context.value ?? undefined"
 					@update:graphics="emit('update:graphics', $event)"
 					@update:selected-target="emit('update:selectedTarget', $event)"
 				>

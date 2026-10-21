@@ -1027,6 +1027,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:selected-target="selectedTarget"
 				:game="game"
 				:writable="writable"
+				:style-set="styleSet"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
 		</template>
@@ -1043,6 +1044,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
 			:writable="writable"
+			:style-set="styleSet"
 			@update:graphics="emit('update:graphics', $event)"
 		/>
 
