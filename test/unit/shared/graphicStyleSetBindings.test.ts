@@ -25,7 +25,7 @@ import {
 	resolveGraphicStyleSet,
 	unbindGraphicStyleRef,
 } from '~~/shared/modules/graphic-style-sets';
-import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { GRAPHIC_STYLE_SLOT_VALUES } from '~~/shared/types/graphicStyleSet';
 
 /**
@@ -216,34 +216,6 @@ describe('gRAPHIC_STYLE_SLOT_OWNED_KEYS', () => {
 			.toEqual(Object.keys(onScreenRecipe).sort());
 		// A Graphic Fill is a discriminated union, so it has no partial to deviate in.
 		expect(GRAPHIC_STYLE_SLOT_OWNED_KEYS['surfaceStyle.fill']).toEqual([]);
-	});
-
-	/**
-	 * The Graphic Surface Style slots are shared with the authoring module that edits
-	 * those same surfaces, and each side would happily hold its own opinion about
-	 * which Graphic Item kinds own them. If they drifted, a picker would be offered
-	 * for a surface the item does not have and would then write nothing — visible
-	 * only as a control that does not work. So the inheriting side is asserted to
-	 * agree with the editing side, which is the one that owns the fact.
-	 */
-	it('agrees with the authoring module about which kinds own each Graphic Surface Style', () => {
-		const kinds = [
-			'text',
-			'shape',
-			'media',
-			'group',
-			'clock',
-			'player-life',
-			'game-wins',
-			'deck-list',
-		] as const;
-
-		for (const slot of ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
-			for (const kind of kinds) {
-				expect(graphicStyleOwnerSupportsSlot({ type: kind } as GraphicItemConfig, slot))
-					.toBe(GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot].includes(kind));
-			}
-		}
 	});
 
 	it('inherits typography into a Deck List Item and offers it no surface', () => {

@@ -249,7 +249,7 @@ export type GraphicStyleSetEntry = {
  * draw. Its `boxGeometry` shapes a win box rather than the whole indicator, for the
  * same reason a Media Graphic Item's clipping geometry is not its bounds.
  *
- * The three surface slots are the ones `GraphicSurfaceStyleSlot` names, and that type
+ * The four surface slots are the ones `GraphicSurfaceStyleSlot` names, and that type
  * is derived from this one so the two can never disagree about them.
  */
 export const GRAPHIC_STYLE_SLOT_VALUES = [

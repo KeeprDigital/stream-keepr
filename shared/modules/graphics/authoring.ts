@@ -1,4 +1,4 @@
-import type { Game } from '../../types/enums';
+import type { Game, PlayerSide } from '../../types/enums';
 import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -40,8 +40,8 @@ import type {
 	TextOverflowPolicy,
 } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
-import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { GraphicFillEdit } from './fill';
+import type { GraphicSurfaceStyleSlot } from './itemDefinitions';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import {
 	DEFAULT_ON_AIR_UPDATE_POLICY,
@@ -71,7 +71,12 @@ import {
 	getGraphicItemDefinition,
 	GRAPHIC_GROUP_CHILD_KINDS,
 	graphicItemKindLabel,
+	graphicShapeGeometry,
+	graphicSurfaceStyleAt,
+	ownsGraphicSurfaceStyle,
 	ownsGraphicTypography,
+	ownsPlayerSide,
+	ownsShapeGeometry,
 	ownsTextOverflowPolicy,
 } from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
@@ -1092,96 +1097,15 @@ function patchGraphicItemWhere<T extends GraphicItemConfig>(
 	return patchGraphicItem(graphic, itemId, merge(item));
 }
 
-/**
- * The kinds that own a Shape Geometry: a Shape Graphic Item and a Graphic Group
- * draw one, a Media Graphic Item clips to one, and a Game Wins Graphic Item
- * shapes its win boxes with one.
- */
-const GEOMETRY_KINDS = ['shape', 'group', 'media', 'game-wins'] as const;
-
-/**
- * Where one Graphic Item keeps a Graphic Surface Style.
- *
- * Most kinds have exactly one, optional, and named `surfaceStyle`. A Game Wins
- * Graphic Item has three: its own, and the two that paint a win box before and
- * after the Player wins it — an unwon box and a won one are the whole point of
- * the indicator, so both are ordinary authored surfaces rather than one style
- * with a hardcoded variant.
- */
-export type GraphicSurfaceStyleSlot = Extract<
-	GraphicStyleSlot,
-	'surfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle'
->;
-
-/**
- * The kinds each slot exists on. A Media Graphic Item paints an asset and a Deck
- * List Item renders cards rather than painting a surface, so neither carries
- * one; the two box slots belong to Game Wins alone.
- *
- * Exported because it is the *only* statement of this fact. Graphic Style Sets
- * inherit into these same three surfaces, and a second table saying which kinds own
- * them would let a style reference be bound to a surface the editor knows the item
- * does not have — a picker that appears and then writes nothing.
- */
-export const GRAPHIC_SURFACE_STYLE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, readonly GraphicItemKind[]> = {
-	surfaceStyle: ['text', 'shape', 'group', 'clock', 'player-life', 'game-wins'],
-	boxSurfaceStyle: ['game-wins'],
-	wonBoxSurfaceStyle: ['game-wins'],
-};
-
-/** The kinds whose own Graphic Surface Style is optional, so it can be cleared. */
-const SURFACE_KINDS = GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle;
-
-type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[number] }>;
-
-/**
- * Where one item keeps the Shape Geometry a geometry edit means, and what it
- * currently holds.
- *
- * A Shape Graphic Item and a Graphic Group always have a `geometry`. A Media
- * Graphic Item's `clipGeometry` is optional, and absent means it clips to nothing
- * but its own bounds — so a geometry edit aimed at one that is not clipping
- * resolves to nothing and becomes a no-op, rather than switching clipping on as a
- * side effect of nudging a corner. `setMediaClipGeometry` is the one control that
- * decides whether a media item clips at all.
- */
-interface OwnedShapeGeometry {
-	field: 'geometry' | 'clipGeometry' | 'boxGeometry';
-	geometry: ShapeGeometry;
-	/**
-	 * The bounds the geometry is drawn inside, and where a preset that proposes a
-	 * height writes it. Usually the item's own rectangle — but a Game Wins Item's
-	 * geometry shapes one win box, so a preset sized against the whole indicator
-	 * would be sized against the wrong thing.
-	 */
-	bounds: { width: number; height: number };
-	heightField: 'height' | 'boxHeight';
-}
-
-function ownedShapeGeometry(item: GeometryOwner): OwnedShapeGeometry | null {
-	const own = { bounds: { width: item.width, height: item.height }, heightField: 'height' } as const;
-	if (item.type === 'media')
-		return item.clipGeometry ? { field: 'clipGeometry', geometry: item.clipGeometry, ...own } : null;
-	if (item.type === 'game-wins') {
-		return {
-			field: 'boxGeometry',
-			geometry: item.boxGeometry,
-			bounds: { width: item.boxWidth, height: item.boxHeight },
-			heightField: 'boxHeight',
-		};
-	}
-	return { field: 'geometry', geometry: item.geometry, ...own };
-}
-
 /** Merge into a Shape Geometry, preserving every other field. */
 export function patchShapeGeometry(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<ShapeGeometry>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
-		const owned = ownedShapeGeometry(item);
-		return owned ? { [owned.field]: { ...owned.geometry, ...patch } } : {};
+	return patchGraphicItemWhere(graphic, itemId, ownsShapeGeometry, (item) => {
+		const owned = graphicShapeGeometry(item);
+		return owned ? { [owned.slot]: { ...owned.geometry, ...patch } } : {};
 	});
 }
 
@@ -1192,12 +1116,12 @@ export function patchShapeCorner(
 	corner: ShapeCornerKey,
 	patch: Partial<ShapeCorner>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
-		const owned = ownedShapeGeometry(item);
+	return patchGraphicItemWhere(graphic, itemId, ownsShapeGeometry, (item) => {
+		const owned = graphicShapeGeometry(item);
 		if (!owned)
 			return {};
 		return {
-			[owned.field]: { ...owned.geometry, [corner]: { ...owned.geometry[corner], ...patch } },
+			[owned.slot]: { ...owned.geometry, [corner]: { ...owned.geometry[corner], ...patch } },
 		};
 	});
 }
@@ -1212,14 +1136,14 @@ export function applyShapeGeometryPreset(
 	itemId: string,
 	presetId: ShapeGeometryPresetId,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GEOMETRY_KINDS, (item) => {
-		const owned = ownedShapeGeometry(item);
+	return patchGraphicItemWhere(graphic, itemId, ownsShapeGeometry, (item) => {
+		const owned = graphicShapeGeometry(item);
 		if (!owned)
 			return {};
 		const result = getShapeGeometryPreset(presetId).apply(owned.bounds);
 		return result.height === undefined
-			? { [owned.field]: result.geometry }
-			: { [owned.field]: result.geometry, [owned.heightField]: result.height };
+			? { [owned.slot]: result.geometry }
+			: { [owned.slot]: result.geometry, [owned.heightField]: result.height };
 	});
 }
 
@@ -1300,16 +1224,6 @@ export function clearMediaGraphicItemAsset(
 	}));
 }
 
-/** The Graphic Surface Style one item currently holds in one slot, if it has one. */
-function surfaceStyleAt(
-	item: GraphicItemConfig,
-	slot: GraphicSurfaceStyleSlot,
-): GraphicSurfaceStyle | undefined {
-	if (slot === 'surfaceStyle')
-		return 'surfaceStyle' in item ? item.surfaceStyle : undefined;
-	return item.type === 'game-wins' ? item[slot] : undefined;
-}
-
 /**
  * Merge into one slot's Graphic Surface Style, whatever the edit.
  *
@@ -1325,8 +1239,8 @@ function patchSurfaceStyleSlot(
 	slot: GraphicSurfaceStyleSlot,
 	merge: (style: GraphicSurfaceStyle) => GraphicSurfaceStyle,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot], item => ({
-		[slot]: merge(surfaceStyleAt(item, slot) ?? createDefaultGraphicSurfaceStyle()),
+	return patchGraphicItemWhere(graphic, itemId, item => ownsGraphicSurfaceStyle(item, slot), item => ({
+		[slot]: merge(graphicSurfaceStyleAt(item, slot) ?? createDefaultGraphicSurfaceStyle()),
 	}));
 }
 
@@ -1352,7 +1266,12 @@ export function clearGraphicSurfaceStyle(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, SURFACE_KINDS, () => ({ surfaceStyle: undefined }));
+	return patchGraphicItemWhere(
+		graphic,
+		itemId,
+		item => ownsGraphicSurfaceStyle(item, 'surfaceStyle'),
+		() => ({ surfaceStyle: undefined }),
+	);
 }
 
 /** Merge into a Graphic Group's local style default for its direct children. */
@@ -1361,10 +1280,10 @@ export function patchGraphicGroupDefaultChildSurfaceStyle(
 	itemId: string,
 	patch: Partial<GraphicSurfaceStyle> | null,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, ['group'], item => ({
+	return patchGraphicItemWhere(graphic, itemId, item => ownsGraphicSurfaceStyle(item, 'defaultChildSurfaceStyle'), item => ({
 		defaultChildSurfaceStyle: patch === null
 			? undefined
-			: { ...(item.defaultChildSurfaceStyle ?? createDefaultGraphicSurfaceStyle()), ...patch },
+			: { ...(graphicSurfaceStyleAt(item, 'defaultChildSurfaceStyle') ?? createDefaultGraphicSurfaceStyle()), ...patch },
 	}));
 }
 
@@ -1459,6 +1378,18 @@ export function patchGraphicTextOverflow(
 	patch: { overflowPolicy?: TextOverflowPolicy; minFontSize?: number },
 ): BroadcastGraphicConfig {
 	return patchGraphicItemWhere(graphic, itemId, ownsTextOverflowPolicy, () => patch);
+}
+
+/**
+ * Choose the player side an item reads, on any item whose Graphic Item Definition
+ * says it reads one; any other item is returned unchanged.
+ */
+export function patchGraphicPlayerSide(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	playerSide: PlayerSide,
+): BroadcastGraphicConfig {
+	return patchGraphicItemWhere(graphic, itemId, ownsPlayerSide, () => ({ playerSide }));
 }
 
 /** Replace top-level properties of a Player Life Graphic Item, with its own type checked. */

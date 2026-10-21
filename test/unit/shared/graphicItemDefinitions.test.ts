@@ -13,13 +13,23 @@ import {
 	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
 	graphicItemSummary,
+	graphicShapeGeometry,
 	graphicsHostTokenCatalogue,
 	isGraphicItemDefinitionAvailable,
+	ownsGraphicSurfaceStyle,
 	ownsGraphicTypography,
+	ownsPlayerSide,
+	ownsShapeGeometry,
 	ownsTextOverflowPolicy,
+	paintedGraphicSurfaceStyles,
 	paintedGraphicTypography,
+	paintedShapeGeometry,
+	patchGraphicPlayerSide,
+	patchGraphicSurfaceStyle,
 	patchGraphicTextOverflow,
 	patchGraphicTypography,
+	patchShapeGeometry,
+	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 
 describe('graphicItemDefinitions', () => {
@@ -422,6 +432,131 @@ describe('graphicItemDefinitions', () => {
 				expect(paintedGraphicTypography(placed(kind))).not.toBeNull();
 			for (const kind of ['shape', 'media', 'social-network-icon', 'group'] as const)
 				expect(paintedGraphicTypography(placed(kind))).toBeNull();
+		});
+	});
+
+	describe('surface styles, the Shape Geometry, and the player side', () => {
+		type SurfaceSlot = 'surfaceStyle' | 'defaultChildSurfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
+		type GeometrySlot = 'geometry' | 'clipGeometry' | 'boxGeometry';
+
+		const SURFACE_SLOTS: readonly SurfaceSlot[] = ['surfaceStyle', 'defaultChildSurfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'];
+		const GEOMETRY_SLOTS: readonly GeometrySlot[] = ['geometry', 'clipGeometry', 'boxGeometry'];
+
+		/**
+		 * What each kind owns, stated independently of the Definitions so a wrong
+		 * declaration fails here. A Media Graphic Item paints an asset, a Social Network
+		 * Icon its vector, and a Deck List cards, so none owns a surface; a Media Graphic
+		 * Item clips to its Shape Geometry, and a Game Wins Item shapes and paints its
+		 * win boxes with theirs.
+		 */
+		const OWNS: Record<GraphicItemKind, { surfaces: SurfaceSlot[]; geometry: GeometrySlot | null; playerSide: boolean }> = {
+			'text': { surfaces: ['surfaceStyle'], geometry: null, playerSide: false },
+			'shape': { surfaces: ['surfaceStyle'], geometry: 'geometry', playerSide: false },
+			'media': { surfaces: [], geometry: 'clipGeometry', playerSide: false },
+			'social-network-icon': { surfaces: [], geometry: null, playerSide: false },
+			'group': { surfaces: ['surfaceStyle', 'defaultChildSurfaceStyle'], geometry: 'geometry', playerSide: false },
+			'clock': { surfaces: ['surfaceStyle'], geometry: null, playerSide: false },
+			'player-life': { surfaces: ['surfaceStyle'], geometry: null, playerSide: true },
+			'game-wins': {
+				surfaces: ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'],
+				geometry: 'boxGeometry',
+				playerSide: true,
+			},
+			'deck-list': { surfaces: [], geometry: null, playerSide: true },
+		};
+
+		function placed(kind: GraphicItemKind): GraphicItemConfig {
+			const item = getGraphicItemDefinition(kind).createDefault({ id: kind, label: kind, canvasWidth: 1920, canvasHeight: 1080 });
+			// A Media Graphic Item holds its clipping geometry only once clipping is on.
+			return item.type === 'media' ? { ...item, clipGeometry: squareShapeGeometry() } : item;
+		}
+
+		function composition(item: GraphicItemConfig): BroadcastGraphicConfig {
+			return { id: 'graphic', name: 'Graphic', items: [item] };
+		}
+
+		it('covers every Definition', () => {
+			expect(Object.keys(OWNS).sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+		});
+
+		it.each(GRAPHIC_ITEM_KINDS)('declares on the %s Definition what slots and authoring then honour', (kind) => {
+			const owns = OWNS[kind];
+			const item = placed(kind);
+			const graphic = composition(item);
+
+			for (const slot of SURFACE_SLOTS) {
+				expect(ownsGraphicSurfaceStyle(item, slot), slot).toBe(owns.surfaces.includes(slot));
+				// The Graphic Style Set slot exists exactly where the item owns the surface.
+				expect(graphicStyleOwnerSupportsSlot(item, slot), slot).toBe(owns.surfaces.includes(slot));
+			}
+			expect(graphicStyleOwnerSupportsSlot(item, 'surfaceStyle.fill')).toBe(owns.surfaces.includes('surfaceStyle'));
+			for (const slot of ['surfaceStyle', 'boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
+				const painted = patchGraphicSurfaceStyle(graphic, kind, { fillOpacity: 0.3 }, slot);
+				expect(painted !== graphic, slot).toBe(owns.surfaces.includes(slot));
+			}
+
+			expect(ownsShapeGeometry(item)).toBe(owns.geometry !== null);
+			expect(graphicShapeGeometry(item)?.slot ?? null).toBe(owns.geometry);
+			for (const slot of GEOMETRY_SLOTS)
+				expect(graphicStyleOwnerSupportsSlot(item, slot), slot).toBe(owns.geometry === slot);
+			const shaped = patchShapeGeometry(graphic, kind, { leftSlant: 12 });
+			expect(shaped !== graphic).toBe(owns.geometry !== null);
+			if (owns.geometry !== null)
+				expect(shaped.items[0]).toMatchObject({ [owns.geometry]: { leftSlant: 12 } });
+
+			expect(ownsPlayerSide(item)).toBe(owns.playerSide);
+			expect('playerSide' in item).toBe(owns.playerSide);
+			const sided = patchGraphicPlayerSide(graphic, kind, 'player2');
+			expect(sided !== graphic).toBe(owns.playerSide);
+		});
+
+		it('offers a Game Wins Item its win boxes in the Inspector only while it renders them', () => {
+			// The `number` display mode paints a win count, with no box to shape or paint.
+			// The item owns the boxes either way, so a Style Set slot binds to them
+			// whatever is on screen.
+			const boxes = placed('game-wins');
+			if (boxes.type !== 'game-wins')
+				throw new Error('expected a Game Wins Graphic Item');
+			const number = { ...boxes, displayMode: 'number' } as const;
+
+			expect(Object.keys(paintedGraphicSurfaceStyles(boxes)).sort())
+				.toEqual(['boxSurfaceStyle', 'surfaceStyle', 'wonBoxSurfaceStyle']);
+			expect(paintedShapeGeometry(boxes)).toMatchObject({ slot: 'boxGeometry', geometry: boxes.boxGeometry });
+
+			expect(Object.keys(paintedGraphicSurfaceStyles(number))).toEqual(['surfaceStyle']);
+			expect(paintedShapeGeometry(number)).toBeNull();
+			for (const slot of ['boxSurfaceStyle', 'wonBoxSurfaceStyle', 'boxGeometry'] as const)
+				expect(graphicStyleOwnerSupportsSlot(number, slot), slot).toBe(true);
+		});
+
+		it('offers an item without a surface of its own the control that gives it one', () => {
+			const text = getGraphicItemDefinition('text').createDefault({ id: 'text', label: 'Text', canvasWidth: 1920, canvasHeight: 1080 });
+
+			expect(paintedGraphicSurfaceStyles(text)).toEqual({ surfaceStyle: null });
+			expect(paintedGraphicSurfaceStyles(placed('deck-list'))).toEqual({});
+		});
+
+		it('offers a Media Graphic Item Shape Geometry controls only while it clips', () => {
+			const unclipped = getGraphicItemDefinition('media').createDefault({ id: 'media', label: 'Media', canvasWidth: 1920, canvasHeight: 1080 });
+
+			expect(paintedShapeGeometry(unclipped)).toBeNull();
+			expect(patchShapeGeometry(composition(unclipped), 'media', { leftSlant: 12 }).items[0]).toEqual(unclipped);
+			expect(paintedShapeGeometry(placed('media'))).toMatchObject({ slot: 'clipGeometry' });
+		});
+
+		it('sizes a win box preset against the win box rather than the indicator', () => {
+			const wins = placed('game-wins');
+			if (wins.type !== 'game-wins')
+				throw new Error('expected a Game Wins Graphic Item');
+
+			expect(graphicShapeGeometry(wins)).toMatchObject({
+				bounds: { width: wins.boxWidth, height: wins.boxHeight },
+				heightField: 'boxHeight',
+			});
+			expect(graphicShapeGeometry(placed('shape'))).toMatchObject({
+				bounds: { width: 768, height: 108 },
+				heightField: 'height',
+			});
 		});
 	});
 });
