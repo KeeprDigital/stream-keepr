@@ -466,7 +466,8 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 }
 
 /**
- * Returns the display-only defaults for a mode. Used by "Reset to Defaults", so
+ * Returns the display-only defaults for a mode. "Reset to Defaults" writes them
+ * (through `getDisplayResetForMode`, which restarts a Page Rotation), so
  * it omits every key a reset must preserve — what the Screen points at, such
  * as its `featureMatchId` Event Reference, and authored content such as a Broadcast Graphics Screen's
  * stack of Broadcast Graphics.

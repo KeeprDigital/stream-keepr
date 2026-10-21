@@ -59,7 +59,7 @@ export const MAX_GRAPHIC_STYLE_SET_ENTRY_NAME_LENGTH = 60;
  *
  * A Style Set is loaded whole by every editor that authors against it and stored as
  * one JSON document, so the bound is on the set rather than per kind: an author who
- * needs a hundred palette colours and no animation recipes is not served by a
+ * needs a hundred Palette Entries and no animation recipes is not served by a
  * per-kind cap, and the cost the bound protects is the whole document's.
  */
 export const MAX_GRAPHIC_STYLE_SET_ENTRIES = 200;
@@ -93,7 +93,7 @@ export type GraphicStyleEntryKind = typeof GRAPHIC_STYLE_ENTRY_KIND_VALUES[numbe
  */
 export const GRAPHIC_STYLE_ENTRY_SCHEMA_VERSION = 1;
 
-/** One named palette colour. Opacity belongs to the consuming style property. */
+/** A Palette Entry's value: one named colour. Opacity belongs to the consuming style property. */
 export interface PaletteGraphicStyleEntryValue {
 	color: string;
 }

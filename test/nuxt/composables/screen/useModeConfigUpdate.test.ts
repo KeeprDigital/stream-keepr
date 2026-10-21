@@ -5,7 +5,11 @@ const mockUpdateModeConfig = vi.fn();
 const mockToast = { add: vi.fn() };
 
 const mockScreenStore = {
-	screens: [{ id: 1, modeConfigs: { 'feature-match': { featureMatchId: 5 } } }],
+	screens: [{ id: 1, modeConfigs: {
+		'feature-match': { featureMatchId: 5 },
+		// A Standings Page Rotation running from a manual selection of page 3.
+		'standings': { autoPageEnabled: true, rowsPerPage: 4, currentPage: 3, rotationAnchor: 123 },
+	} }],
 	updateModeConfig: mockUpdateModeConfig,
 };
 
@@ -47,5 +51,16 @@ describe('useModeConfigUpdate', () => {
 
 		await vi.advanceTimersByTimeAsync(200);
 		expect(mockUpdateModeConfig).toHaveBeenCalledWith(1, 1, 'feature-match', { featureMatchId: 10 });
+	});
+
+	it('a display reset of a paginated mode restarts its Page Rotation from page 1', async () => {
+		const { resetConfig } = useModeConfigUpdate(1, 1, 'standings', { debounceMs: 100 });
+		resetConfig();
+
+		await vi.advanceTimersByTimeAsync(200);
+		const written = mockUpdateModeConfig.mock.calls[0]![3];
+		// Auto-page is off after a reset, so no Rotation Anchor is written.
+		expect(written).toMatchObject({ autoPageEnabled: false, rowsPerPage: 8, currentPage: 1 });
+		expect(written).not.toHaveProperty('rotationAnchor');
 	});
 });

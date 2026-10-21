@@ -1,6 +1,8 @@
+import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { ScreenModeContainerControls } from './screenModes';
 import type { DisplayType, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenConfig, ScreenOutput } from './types/screenConfig';
+import { pageRotationEdit } from './modules/page-rotation';
 import { getContainerControls, SCREEN_MODES } from './screenModes';
 import {
 	getDefaultConfigForMode,
@@ -185,6 +187,24 @@ export function getScreenModeDefinition<M extends ScreenMode>(mode: M): SharedSc
 		getDisplayDefaults: () => getDisplayDefaultsForMode(mode),
 		configurationPolicy: getScreenModeConfigurationPolicy(mode),
 	};
+}
+
+/**
+ * The write a display reset ("Reset to Defaults") makes: the mode's display
+ * defaults (`getDisplayDefaultsForMode`). For a paginated mode that restores
+ * the default page size and page duration, a change of the rotation's shape,
+ * so the reset goes through the one rule for those (`pageRotationEdit`,
+ * ADR-0039): it restarts the rotation from page 1, with a Rotation Anchor of
+ * now only if auto-page is on once reset.
+ */
+export function getDisplayResetForMode<M extends ScreenMode>(mode: M, now: number): Partial<ModeConfigTypeMap[M]> {
+	const display = getDisplayDefaultsForMode(mode);
+	const declaration = SCREEN_MODES[mode].pageRotation;
+	if (!declaration)
+		return display;
+	// Auto-page as the reset leaves it: a declaring mode's display defaults carry it.
+	const autoPageEnabled = (display as Partial<Record<keyof PageRotationConfig, unknown>>).autoPageEnabled === true;
+	return pageRotationEdit(declaration, { autoPageEnabled }, display, now);
 }
 
 export function getScreenModeSelectOptions(): ScreenModeSelectOption[] {
