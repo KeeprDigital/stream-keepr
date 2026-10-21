@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { $fetch } from './client';
+import { $fetch, anonymousFetch } from './client';
+import { executeIntegrationD1 } from './integrationD1';
 
 describe('metagame API', () => {
 	let eventId: number;
@@ -421,5 +422,107 @@ describe('metagame API', () => {
 
 			expect(data).toEqual({ decks: [], selectedDeckId: null });
 		});
+	});
+});
+
+/**
+ * Metagame reads at the Archetype counts an Event reaches, on local D1 (#702).
+ * The represented Archetypes were looked up with one bound parameter per id plus
+ * the Event's, so a hundred of them failed every read — a small requested limit
+ * included, since it applied after the lookup.
+ *
+ * Fixture: 120 represented Archetypes, `Archetype 001` to `120`, and one with no
+ * Players. `001` has four Players and every other one Player: 123 classified.
+ * Two more Players carry no Archetype.
+ */
+describe('metagame reads with a hundred and more represented Archetypes', () => {
+	const REPRESENTED = 120;
+	let eventId: number;
+	const archetypeName = (index: number) => `Archetype ${String(index).padStart(3, '0')}`;
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Large Metagame Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		});
+		eventId = event.id;
+
+		const archetypeOf = (index: number) => `(SELECT id FROM archetypes WHERE event_id = ${eventId} AND name = '${archetypeName(index)}')`;
+		const classified = [
+			...[1, 2, 3, 4].map(() => 1),
+			...Array.from({ length: REPRESENTED - 1 }, (_, index) => index + 2),
+		];
+		await executeIntegrationD1([
+			...Array.from({ length: REPRESENTED + 1 }, (_, index) =>
+				`INSERT INTO archetypes (event_id, name) VALUES (${eventId}, '${archetypeName(index + 1)}');`),
+			...classified.map((archetype, index) =>
+				`INSERT INTO players (event_id, name, archetype_id, wins, losses) VALUES (${eventId}, 'Player ${index}', ${archetypeOf(archetype)}, 1, 1);`),
+			`INSERT INTO players (event_id, name) VALUES (${eventId}, 'Unclassified A'), (${eventId}, 'Unclassified B');`,
+		].join('\n'));
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	it('answers the operator summary', async () => {
+		const summary = await $fetch(`/api/events/${eventId}/metagame`, { query: { scope: 'all' } });
+
+		expect(summary).toMatchObject({
+			totalPlayers: REPRESENTED + 5,
+			classifiedPlayers: REPRESENTED + 3,
+			totalArchetypes: REPRESENTED + 1,
+			scopedArchetypeCount: REPRESENTED,
+		});
+		expect(summary.topArchetypes.map(entry => entry.name)).toEqual([1, 2, 3, 4, 5].map(archetypeName));
+	});
+
+	it('answers the full operator breakdown and a small requested limit', async () => {
+		const full = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all' } });
+		expect(full.entries.map(entry => entry.name))
+			.toEqual(Array.from({ length: REPRESENTED }, (_, index) => archetypeName(index + 1)));
+		expect(full.entries[0]).toMatchObject({ count: 4, winRate: 50 });
+
+		const limited = await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', limit: 5 } });
+		expect(limited.entries.map(entry => entry.name)).toEqual([1, 2, 3, 4, 5].map(archetypeName).concat('Other'));
+		expect(limited.entries.at(-1)).toMatchObject({ id: -1, count: REPRESENTED - 5, winRate: 50 });
+	});
+
+	it('answers a capability-authorised Screen Output read of the breakdown its Screen renders', async () => {
+		const screen = await $fetch<{ id: number }>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Metagame', slug: `large-metagame-${eventId}`, currentMode: 'metagame' },
+		});
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${screen.id}/asset-capability`,
+		);
+		async function outputBreakdown() {
+			const response = await anonymousFetch(`/api/screen-output/events/${eventId}/screens/${screen.id}/metagame`, {
+				headers: { authorization: `Bearer ${assetCapability}` },
+			});
+			return { status: response.status, data: await response.json() as { viewMode: string; breakdown: { entries: unknown[] } } };
+		}
+		async function configure(config: Record<string, unknown>) {
+			await $fetch(`/api/events/${eventId}/screens/${screen.id}/config/metagame`, { method: 'PATCH', body: config });
+		}
+
+		await configure({ viewMode: 'archetype', scope: 'all', archetypeLimit: null });
+		const full = await outputBreakdown();
+		expect(full.status).toBe(200);
+		expect(full.data.breakdown.entries).toHaveLength(REPRESENTED);
+
+		await configure({ archetypeLimit: 5 });
+		const limited = await outputBreakdown();
+		expect(limited).toEqual({
+			status: 200,
+			data: {
+				viewMode: 'archetype',
+				breakdown: await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', sortBy: 'metaShare', limit: 5 } }),
+			},
+		});
+		expect(limited.data.breakdown.entries).toHaveLength(6);
 	});
 });

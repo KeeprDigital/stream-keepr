@@ -3,11 +3,11 @@ import type { DbFeatureMatch, DbFeatureMatchSession } from '~~/server/db/schema'
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { observedValue } from '~~/server/utils/db';
+import { chunkRowsWithinParameterBudget, observedValue } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -30,6 +30,11 @@ export interface ImportedFeatureMatchResetPlan {
 	clearedSlotCount: number;
 	/** Run once the batch carrying `queries` has committed, to announce the replacement Sessions. */
 	settle: () => Promise<unknown>;
+}
+
+/** The Slots named, as one bound JSON array: within D1's parameter limit at any Slot count. */
+function slotIdIn(slotIds: readonly number[]) {
+	return sql`${featureMatches.id} in (select value from json_each(${JSON.stringify(slotIds)}))`;
 }
 
 /**
@@ -97,9 +102,7 @@ export async function buildClearImportedMatchDataQueries(
 		.where(and(
 			eq(featureMatches.eventId, eventId),
 			stillMeleeOwned,
-			// One bound JSON array rather than one parameter per Slot, within D1's
-			// bound-parameter ceiling at any Slot count.
-			sql`${featureMatches.id} in (select value from json_each(${JSON.stringify(importedSlots.map(slot => slot.id))}))`,
+			slotIdIn(importedSlots.map(slot => slot.id)),
 		));
 
 	return {
@@ -397,7 +400,11 @@ export function featureMatchService() {
 				sortOrder: maxSort + i + 1,
 			}));
 
-			const createdMatches = await db.insert(featureMatches).values(newMatches).returning();
+			// One D1 batch, so the new Slots are inserted all together or not at
+			// all, in statements each within D1's bound-parameter limit (#702).
+			const insertSlots = (rows: typeof newMatches) => db.insert(featureMatches).values(rows).returning();
+			const [firstInsert, ...restInserts] = chunkRowsWithinParameterBudget(newMatches, insertSlots).map(insertSlots);
+			const createdMatches = firstInsert ? (await db.batch([firstInsert, ...restInserts])).flat() : [];
 			created.push(...createdMatches);
 
 			// Initialize state for created matches in one commit, reusing event defaults
@@ -405,9 +412,11 @@ export function featureMatchService() {
 				await stateService.openSessionsForSlots(eventId, createdMatches.map(match => match.id), { defaults: eventDefaults });
 			}
 			catch (error) {
+				// A Slot is not usable without its first Session: remove every Slot
+				// this call created, so the Event holds only the Slots it held before.
 				await runCompensation(error, () => db.delete(featureMatches).where(and(
 					eq(featureMatches.eventId, eventId),
-					inArray(featureMatches.id, createdMatches.map(match => match.id)),
+					slotIdIn(createdMatches.map(match => match.id)),
 				)));
 				throw error;
 			}
@@ -423,7 +432,7 @@ export function featureMatchService() {
 				.where(
 					and(
 						eq(featureMatches.eventId, eventId),
-						inArray(featureMatches.id, idsToDelete),
+						slotIdIn(idsToDelete),
 					),
 				);
 
@@ -431,6 +440,23 @@ export function featureMatchService() {
 		}
 
 		return { created, deleted };
+	};
+
+	/**
+	 * The compensation for a Slot count change that failed after the Event's count
+	 * was written: set the count back to the Slots the Event actually holds. It
+	 * applies only while the Event still holds the count that change wrote, so a
+	 * later write's count is never overwritten by this one's recovery.
+	 */
+	const reconcileEventSlotCount = async (eventId: number, writtenCount: number): Promise<void> => {
+		await db
+			.update(events)
+			.set({
+				numFeatureMatches: sql<number>`(
+					select count(*) from ${featureMatches} where ${featureMatches.eventId} = ${eventId}
+				)`,
+			})
+			.where(and(eq(events.id, eventId), eq(events.numFeatureMatches, writtenCount)));
 	};
 
 	const swapMatchOrder = async (
@@ -488,6 +514,7 @@ export function featureMatchService() {
 		exists,
 		countByEventId,
 		syncFeatureMatches,
+		reconcileEventSlotCount,
 		swapMatchOrder,
 	};
 }

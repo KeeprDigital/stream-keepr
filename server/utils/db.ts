@@ -65,6 +65,46 @@ export function maxInsertChunkSize(colCount: number): number {
 	return Math.floor(D1_MAX_PARAMS / colCount);
 }
 
+/** Anything drizzle can render to the SQL and parameters it would send. */
+interface RenderableStatement {
+	toSQL: () => { params: unknown[] };
+}
+
+/**
+ * Split rows into groups whose multi-row statement each stays within D1's
+ * bound-parameter limit.
+ *
+ * The cost of a row is measured from the statement drizzle actually builds for
+ * it, so a column added to the table, or a default bound once per row, is
+ * counted without anyone keeping a column count in step. Every group is
+ * measured again before it is returned: rows of differing shape cannot slip a
+ * group past the limit.
+ *
+ * @example
+ * chunkRowsWithinParameterBudget(rows, chunk => db.insert(featureMatches).values(chunk))
+ */
+export function chunkRowsWithinParameterBudget<T>(
+	rows: readonly T[],
+	statementFor: (rows: T[]) => RenderableStatement,
+): T[][] {
+	const [first] = rows;
+	if (first === undefined)
+		return [];
+
+	const paramsOf = (chunk: T[]) => statementFor(chunk).toSQL().params.length;
+	const perRow = paramsOf([first]);
+	if (perRow > D1_MAX_PARAMS)
+		throw new Error(`chunkRowsWithinParameterBudget: one row binds ${perRow} parameters, over D1's ${D1_MAX_PARAMS}`);
+
+	const chunks = chunkArray([...rows], perRow === 0 ? rows.length : maxInsertChunkSize(perRow));
+	for (const chunk of chunks) {
+		const params = paramsOf(chunk);
+		if (params > D1_MAX_PARAMS)
+			throw new Error(`chunkRowsWithinParameterBudget: a group binds ${params} parameters, over D1's ${D1_MAX_PARAMS}`);
+	}
+	return chunks;
+}
+
 /**
  * One select expression per insertable column of the target table.
  * Generated-always columns are excluded, mirroring the runtime filter below.

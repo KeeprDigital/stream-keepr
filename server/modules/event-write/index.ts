@@ -5,7 +5,7 @@ import { cardService } from '~~/server/services/card';
 import { eventService } from '~~/server/services/event';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
-import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
+import { BroadcastDeckListsInUseError, runCompensation } from '~~/server/utils/errors';
 import { requireTalentInEvent } from '~~/server/utils/routeGuards';
 import { BROADCAST_DECK_LISTS_IN_USE } from '~~/shared/types/broadcastDeckList';
 
@@ -69,8 +69,18 @@ export function eventWriteModule() {
 			});
 		}
 
-		if (input.numFeatureMatches !== undefined)
-			await featureMatchService().syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
+		if (input.numFeatureMatches !== undefined) {
+			const slotService = featureMatchService();
+			try {
+				await slotService.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
+			}
+			catch (error) {
+				// The count was written first. A Slot change that failed leaves the
+				// Slots it started with (#702), so set the count back to describe them.
+				await runCompensation(error, () => slotService.reconcileEventSlotCount(eventId, updatedEvent.numFeatureMatches));
+				throw error;
+			}
+		}
 
 		return await publication.eventUpdated({
 			eventId,

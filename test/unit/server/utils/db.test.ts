@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	chunkArray,
 	chunkJsonRows,
+	chunkRowsWithinParameterBudget,
 	D1_JSON_BULK_MAX_BYTES,
 	D1_JSON_BULK_MAX_ROWS,
 	D1_MAX_PARAMS,
@@ -73,6 +74,38 @@ describe('maxInsertChunkSize', () => {
 		for (let cols = 1; cols <= 20; cols++) {
 			expect(maxInsertChunkSize(cols) * cols).toBeLessThanOrEqual(D1_MAX_PARAMS);
 		}
+	});
+});
+
+describe('chunkRowsWithinParameterBudget', () => {
+	/** A statement binding each row's own parameters, as a multi-row insert does. */
+	const statementFor = (rows: { params: number }[]) => ({
+		toSQL: () => ({ params: rows.flatMap(row => Array.from({ length: row.params }).fill(0)) }),
+	});
+	const rowsOf = (count: number, params: number) => Array.from({ length: count }, () => ({ params }));
+
+	it('answers no groups for no rows', () => {
+		expect(chunkRowsWithinParameterBudget([], statementFor)).toEqual([]);
+	});
+
+	it('fits fifty four-parameter rows in two groups of twenty-five', () => {
+		const groups = chunkRowsWithinParameterBudget(rowsOf(50, 4), statementFor);
+
+		expect(groups.map(group => group.length)).toEqual([25, 25]);
+	});
+
+	it('keeps rows that fit in one statement together', () => {
+		expect(chunkRowsWithinParameterBudget(rowsOf(25, 4), statementFor)).toHaveLength(1);
+	});
+
+	it('refuses a row that alone binds more than D1 accepts', () => {
+		expect(() => chunkRowsWithinParameterBudget(rowsOf(1, D1_MAX_PARAMS + 1), statementFor)).toThrow(/one row binds 101/);
+	});
+
+	it('refuses a group whose later rows bind more than the first did', () => {
+		const rows = [{ params: 1 }, ...rowsOf(20, 10)];
+
+		expect(() => chunkRowsWithinParameterBudget(rows, statementFor)).toThrow(/a group binds/);
 	});
 });
 
