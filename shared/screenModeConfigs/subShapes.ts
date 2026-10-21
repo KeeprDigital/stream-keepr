@@ -28,7 +28,9 @@ export const DEFAULT_HEADER_CONFIG = {
  * A paginated mode's Page Rotation: `currentPage` is the manually selected page
  * (auto-page off); `rotationAnchor` is the rotation's epoch (auto-page on),
  * written only by operator surfaces and projected against server time by every
- * rendering. How many rows a page holds is the mode's own field.
+ * rendering. How many rows a page holds is a field the mode names itself, which
+ * its Screen Mode Definition declares (`pageRotation`), validated by
+ * `pageRotationPageSize`.
  */
 export const pageRotationShape = {
 	autoPageEnabled: z.boolean(),
@@ -37,7 +39,13 @@ export const pageRotationShape = {
 	rotationAnchor: z.number().int().nonnegative().optional(),
 };
 
+/** The Page Rotation fields as a paginated mode's config holds them. */
+export type PageRotationConfig = z.input<z.ZodObject<typeof pageRotationShape>>;
+
 export const DEFAULT_PAGE_ROTATION = {
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 } as const;
+
+/** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
+export const pageRotationPageSize = z.number().int().min(1).max(100);

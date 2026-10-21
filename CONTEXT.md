@@ -108,7 +108,7 @@ A broadcast or control surface that can show Feature Match Slot output, decks/ca
 A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, or Player History.
 
 **Screen Mode Definition**:
-The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack or its Event References. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
+The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Round, a Player, a Player List, a Feature Match Slot, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
@@ -142,7 +142,7 @@ A user-created, installation-scoped, named Animation Effect selection: one effec
 _Avoid_: Animation Effect Template, linked effect style
 
 **Page Rotation**:
-The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009).
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape and restarts it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Rotation Anchor**:

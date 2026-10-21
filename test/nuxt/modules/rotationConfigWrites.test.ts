@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 /**
@@ -20,8 +21,9 @@ mockNuxtImport('useServerTime', () => () => ({
 }));
 
 function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number; currentPage?: number } = {}) {
-	const updateConfig = vi.fn();
+	const saveConfig = vi.fn();
 	const state = reactive({
+		...getDefaultConfigForMode('standings'),
 		autoPageEnabled: overrides.autoPageEnabled ?? true,
 		autoPageIntervalMs: 10_000,
 		currentPage: overrides.currentPage ?? 1,
@@ -29,11 +31,12 @@ function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number
 		rowsPerPage: 5,
 	});
 	const writes = useRotationConfigWrites({
+		mode: 'standings',
 		config: computed(() => state),
-		totalPages: computed(() => 4),
-		updateConfig,
+		rowCount: computed(() => 20), // 4 pages of 5
+		saveConfig,
 	});
-	return { writes, updateConfig, state };
+	return { writes, updateConfig: saveConfig, state };
 }
 
 describe('useRotationConfigWrites', () => {
@@ -58,14 +61,22 @@ describe('useRotationConfigWrites', () => {
 		expect(updateConfig).toHaveBeenCalledWith({ autoPageEnabled: false });
 	});
 
-	it('occasion 2 — a rotation-shape edit re-anchors while rotating, and not otherwise', () => {
-		const rotating = harness();
-		rotating.writes.updateRotationShape({ autoPageIntervalMs: 5_000 });
-		expect(rotating.updateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000, rotationAnchor: 1_000_000 });
+	it('occasion 2 — a rotation-shape edit restarts from page 1, re-anchoring while rotating and not otherwise', () => {
+		const rotating = harness({ currentPage: 3 });
+		rotating.writes.updateConfig({ rowsPerPage: 8 });
+		expect(rotating.updateConfig).toHaveBeenCalledWith({ rowsPerPage: 8, currentPage: 1, rotationAnchor: 1_000_000 });
 
-		const manual = harness({ autoPageEnabled: false });
-		manual.writes.updateRotationShape({ autoPageIntervalMs: 5_000 });
-		expect(manual.updateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000 });
+		const manual = harness({ autoPageEnabled: false, currentPage: 3 });
+		manual.writes.updateConfig({ autoPageIntervalMs: 5_000 });
+		expect(manual.updateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000, currentPage: 1 });
+	});
+
+	it('writes an edit that leaves the rotation\'s shape alone as it is', () => {
+		const { writes, updateConfig } = harness({ currentPage: 3 });
+
+		writes.updateConfig({ headerText: 'Top 8' });
+
+		expect(updateConfig).toHaveBeenCalledWith({ headerText: 'Top 8' });
 	});
 
 	it('occasion 3 — manual selection while rotating re-anchors so the page holds a full duration', () => {
@@ -88,5 +99,13 @@ describe('useRotationConfigWrites', () => {
 		// Anchor 15s ago of 10s pages → page 2 of 4.
 		const { writes } = harness({ rotationAnchor: mockServerNow - 15_000 });
 		expect(writes.currentPage.value).toBe(2);
+	});
+
+	it('counts pages by the page size field the mode declares', () => {
+		const { writes, state } = harness();
+		expect(writes.totalPages.value).toBe(4);
+
+		state.rowsPerPage = 8;
+		expect(writes.totalPages.value).toBe(3);
 	});
 });

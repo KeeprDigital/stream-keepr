@@ -1,5 +1,7 @@
+import type { PageRotationDeclaration } from './modules/page-rotation';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
+import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, ScreenMode } from './types/enums';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
@@ -104,6 +106,19 @@ export interface ScreenModeDefinition {
 	 * definitions fail to compile (ADR-0038).
 	 */
 	eventReferences: ScreenModeEventReferences;
+	/**
+	 * The mode is paginated: its pages show in turn as a Page Rotation
+	 * (ADR-0009), and this names the config field holding how many rows a page
+	 * holds. A mode that is not paginated leaves it out.
+	 *
+	 * Declared here and nowhere else. The settings editor's rotation writes,
+	 * and the one rule for which edits change the rotation's shape
+	 * (`pageRotationEdit`), and the Screen Output's paging all read it. A
+	 * declaring mode's config must carry the shared Page Rotation fields and a
+	 * numeric page size field, and a mode carrying any rotation field must
+	 * declare it, or the definitions fail to compile (ADR-0039).
+	 */
+	pageRotation?: PageRotationDeclaration;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -132,7 +147,7 @@ const SCREEN_MODE_DEFINITIONS = {
 	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background', config: backgroundModeConfigContract, eventReferences: {} },
 	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract, eventReferences: { deckSource: 'deckSource' } },
-	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract, eventReferences: { roundId: 'round', playerListId: 'playerList' } },
+	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract, eventReferences: { roundId: 'round', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: {} },
 	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'feature-match-overlay': {
@@ -162,9 +177,9 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
 	},
-	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract, eventReferences: { playerListId: 'playerList' } },
+	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract, eventReferences: { playerListId: 'playerList' }, pageRotation: { pageSize: 'pageSize' } },
 	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' } },
-	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' } },
+	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' }, pageRotation: { pageSize: 'rowsPerPage' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;
@@ -209,6 +224,34 @@ type MisdeclaredEventReference = {
  * Exported only so the check is not an unused binding.
  */
 export const EVENT_REFERENCES_FIT_THEIR_CONFIG: [MisdeclaredEventReference] extends [never] ? true : MisdeclaredEventReference = true;
+
+/** The Screen Modes whose definition declares a Page Rotation. */
+export type PageRotationMode = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { pageRotation: PageRotationDeclaration } ? M : never;
+}[ScreenMode];
+
+/** A paginated mode's Page Rotation declaration. */
+export function screenModePageRotation(mode: PageRotationMode): PageRotationDeclaration {
+	return SCREEN_MODES[mode].pageRotation!;
+}
+
+/**
+ * Each mode whose Page Rotation declaration and config disagree: a declaring
+ * mode whose config lacks the shared rotation fields or a numeric page size
+ * field, or a mode carrying a rotation field without declaring a Page Rotation.
+ */
+type MisdeclaredPageRotation = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { pageRotation: { pageSize: infer PageSize extends string } }
+		? ConfigOfMode<M> extends PageRotationConfig & Record<PageSize, number> ? never : M
+		: Extract<keyof ConfigOfMode<M>, keyof PageRotationConfig> extends never ? never : M;
+}[ScreenMode];
+
+/**
+ * Fails to compile when a Page Rotation is misdeclared; the error's
+ * `MisdeclaredPageRotation` resolves to each offending mode.
+ * Exported only so the check is not an unused binding.
+ */
+export const PAGE_ROTATIONS_FIT_THEIR_CONFIG: [MisdeclaredPageRotation] extends [never] ? true : MisdeclaredPageRotation = true;
 
 /** A mode's config contract. */
 export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof SCREEN_MODE_DEFINITIONS[M]['config'] {

@@ -7,7 +7,7 @@ import {
 	STANDINGS_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationShape } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
 
 /** The Standings Screen Mode's config contract: its shape, type, and defaults. */
 export const standingsModeConfigContract = defineScreenModeConfigContract({
@@ -41,7 +41,7 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	revealedCount: z.number().int().nonnegative().max(64),
 
 	// Pagination
-	rowsPerPage: z.number().int().min(1).max(100),
+	rowsPerPage: pageRotationPageSize,
 	...pageRotationShape,
 
 	// Animation

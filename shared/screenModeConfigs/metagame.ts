@@ -9,7 +9,7 @@ import {
 	METAGAME_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationShape } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
 
 /** The Metagame Screen Mode's config contract: its shape, type, and defaults. */
 export const metagameModeConfigContract = defineScreenModeConfigContract({
@@ -37,7 +37,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	maxTableWidth: z.number().int().min(1).nullable().optional(),
 
 	// Pagination
-	pageSize: z.number().int().min(1).max(100),
+	pageSize: pageRotationPageSize,
 	...pageRotationShape,
 
 	// Visibility toggles

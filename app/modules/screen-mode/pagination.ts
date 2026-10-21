@@ -1,6 +1,10 @@
 import type { ComputedRef } from 'vue';
+import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
+import type { PageRotationMode } from '~~/shared/screenModes';
+import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { computed, ref, watchEffect } from 'vue';
-import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage } from '~~/shared/modules/page-rotation';
+import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
+import { screenModePageRotation } from '~~/shared/screenModes';
 
 export interface ScreenModePaginationOptions<TRow> {
 	rows: ComputedRef<TRow[]>;
@@ -138,4 +142,46 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 		nextPage,
 		prevPage,
 	};
+}
+
+export interface PaginatedScreenModeOptions<M extends PageRotationMode, TRow> {
+	/** The paginated mode, whose Screen Mode Definition declares its Page Rotation. */
+	mode: M;
+	config: ComputedRef<ModeConfigTypeMap[M]>;
+	rows: ComputedRef<TRow[]>;
+}
+
+/**
+ * A paginated Screen Mode's paging as its rendering reads it: the mode's Page
+ * Rotation over `rows`, a page holding as many rows as the field the mode
+ * declares (`pageRotation.pageSize`).
+ *
+ * A page selection is written only from an interactive surface, such as the
+ * Program monitor; a Screen Output never writes, so it cannot move the
+ * Rotation Anchor (ADR-0009).
+ */
+export function usePaginatedScreenMode<M extends PageRotationMode, TRow>(options: PaginatedScreenModeOptions<M, TRow>) {
+	const { screen, eventId, interactive } = useScreenContext();
+	const screenStore = useScreenStore();
+	const declaration = screenModePageRotation(options.mode);
+	const rotation = computed<PageRotationConfig>(() => options.config.value);
+
+	function persist(patch: Partial<PageRotationConfig>) {
+		if (interactive.value && screen.value && eventId.value) {
+			void Promise.resolve(
+				screenStore.updateModeConfig(eventId.value, screen.value.id, options.mode, patch),
+			).catch(() => {});
+		}
+	}
+
+	return useScreenModePagination({
+		rows: options.rows,
+		pageSize: computed(() => rotationPageSize(declaration, options.config.value)),
+		currentPage: computed(() => rotation.value.currentPage ?? 1),
+		autoPageEnabled: computed(() => rotation.value.autoPageEnabled),
+		autoPageIntervalMs: computed(() => rotation.value.autoPageIntervalMs),
+		rotationAnchor: computed(() => rotation.value.rotationAnchor),
+		persistPage: page => persist({ currentPage: page }),
+		persistRotationAnchor: anchor => persist({ rotationAnchor: anchor }),
+	});
 }

@@ -10,7 +10,7 @@ const props = defineProps<{
 	eventId: number;
 }>();
 
-const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
+const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'standings',
@@ -79,6 +79,42 @@ const isDeckColumnVisible = computed(() =>
 	config.value.columns.some(col => col.key === 'deck' && col.visible),
 );
 
+// ── Pagination ──
+// Estimate display row count from player store for page controls
+const estimatedRowCount = computed(() => {
+	const mode = config.value.viewMode;
+	const total = playerStore.players.length;
+
+	if (mode === 'topN')
+		return Math.min(config.value.topNCount, total);
+	if (mode === 'slice') {
+		return playerStore.players.filter(p =>
+			p.position != null
+			&& p.position >= config.value.sliceStart
+			&& p.position <= config.value.sliceEnd,
+		).length;
+	}
+	if (mode === 'watchlist') {
+		const list = playerListStore.lists.find(l => l.id === config.value.playerListId);
+		return list?.memberCount ?? 0;
+	}
+	if (mode === 'reveal')
+		return config.value.revealCount;
+	return total;
+});
+
+// The live Page Rotation projection and the anchor writes an operator makes.
+// Every edit below goes through its `updateConfig`, which restarts the
+// rotation from page 1 when the edit changes the rotation's shape.
+const {
+	currentPage,
+	totalPages,
+	updateConfig,
+	setAutoPageEnabled,
+	adminNextPage,
+	adminPrevPage,
+} = useRotationConfigWrites({ mode: 'standings', config, rowCount: estimatedRowCount, saveConfig });
+
 function updateMaxTableWidth(value: number | null | undefined) {
 	updateConfig({ maxTableWidth: value ?? null } as Partial<StandingsModeConfig>);
 }
@@ -118,43 +154,6 @@ const revealOrderOptions = [
 	{ label: 'Bottom up', value: 'bottomUp' },
 	{ label: 'Top down', value: 'topDown' },
 ];
-
-// ── Pagination ──
-// Estimate display row count from player store for page controls
-const estimatedRowCount = computed(() => {
-	const mode = config.value.viewMode;
-	const total = playerStore.players.length;
-
-	if (mode === 'topN')
-		return Math.min(config.value.topNCount, total);
-	if (mode === 'slice') {
-		return playerStore.players.filter(p =>
-			p.position != null
-			&& p.position >= config.value.sliceStart
-			&& p.position <= config.value.sliceEnd,
-		).length;
-	}
-	if (mode === 'watchlist') {
-		const list = playerListStore.lists.find(l => l.id === config.value.playerListId);
-		return list?.memberCount ?? 0;
-	}
-	if (mode === 'reveal')
-		return config.value.revealCount;
-	return total;
-});
-
-const totalPages = computed(() =>
-	Math.max(1, Math.ceil(estimatedRowCount.value / config.value.rowsPerPage)),
-);
-
-// The live Page Rotation projection and the anchor writes an operator makes.
-const {
-	currentPage,
-	setAutoPageEnabled,
-	updateRotationShape,
-	adminNextPage,
-	adminPrevPage,
-} = useRotationConfigWrites({ config, totalPages, updateConfig });
 
 const modeSettingsLabel = computed(() => {
 	switch (config.value.viewMode) {
@@ -401,7 +400,7 @@ const modeSettingsLabel = computed(() => {
 					:min="1"
 					:max="100"
 					class="w-32"
-					@update:model-value="updateRotationShape({ rowsPerPage: Number($event) })"
+					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
 				/>
 			</UFormField>
 
@@ -429,7 +428,7 @@ const modeSettingsLabel = computed(() => {
 					:min="3"
 					:max="60"
 					class="w-32"
-					@update:model-value="updateRotationShape({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
 				/>
 			</UFormField>
 
