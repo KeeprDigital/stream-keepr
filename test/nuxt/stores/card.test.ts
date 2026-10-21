@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { createEventDataResync, storeReloaders } from '~/modules/event-data/resync';
 
 // ── $fetch stub (used by searchFuzzyCardName, searchCardPrints, selectMeldCardPart) ──
 
@@ -140,7 +141,8 @@ describe('useCardStore', () => {
 
 			const result = await store.loadActiveCard();
 
-			expect(result).toBeNull();
+			// No Screen holds no Card, and that is what it read.
+			expect(result).toBe('landed');
 			expect(store.activeCard).toBeNull();
 		});
 
@@ -477,6 +479,277 @@ describe('useCardStore', () => {
 				expect(store.activeCard).toBeNull();
 				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 			});
+		});
+	});
+
+	/**
+	 * A Card write's continuation belongs to the Event Lifetime and Screen
+	 * selection it began in (ADR-0024), and a failed Clear changes nothing it
+	 * holds (#726). Each test holds the write open, moves the store on, then
+	 * answers it.
+	 */
+	describe('card write lifetime', () => {
+		function deferred<T = void>() {
+			let resolve!: (value: T) => void;
+			let reject!: (error: unknown) => void;
+			const promise = new Promise<T>((res, rej) => {
+				resolve = res;
+				reject = rej;
+			});
+			return { promise, resolve, reject };
+		}
+
+		const oldCard = () => createMockMtgCard({ id: 'old', name: 'Old Card' });
+		const newCard = () => createMockMtgCard({ id: 'new', name: 'New Card' });
+		const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
+
+		it('drops a save answered after its Event Lifetime ended, even back into the same Event and Screen', async () => {
+			store.setActiveScreen(5);
+			const save = deferred();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(oldCard());
+
+			// A → B → A: the same Event and Screen ids, loaded afresh.
+			store.$reset();
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+			await store.loadActiveCard();
+			save.resolve();
+
+			// The caller still hears its write landed.
+			await expect(saving).resolves.toEqual(oldCard());
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('lets a read begun in the next lifetime land over a save from the last', async () => {
+			store.setActiveScreen(5);
+			const save = deferred();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(oldCard());
+
+			store.$reset();
+			store.setActiveScreen(5);
+			const read = deferred<ReturnType<typeof newCard>>();
+			mockCardRepo.getScreenCard.mockReturnValueOnce(read.promise);
+			const loading = store.loadActiveCard();
+			save.resolve();
+			await saving;
+			read.resolve(newCard());
+			await loading;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('reports no failure from a save whose lifetime ended, and leaves loading to the next lifetime', async () => {
+			store.setActiveScreen(5);
+			const save = deferred();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(oldCard());
+
+			store.$reset();
+			store.setActiveScreen(5);
+			const read = deferred<ReturnType<typeof newCard>>();
+			mockCardRepo.getScreenCard.mockReturnValueOnce(read.promise);
+			const loading = store.loadActiveCard();
+			save.reject(transportFailure({ status: 409, body: { message: 'Another operator is showing a card on this Screen' } }));
+			await saving;
+
+			expect(store.error).toBeNull();
+			expect(store.loading).toBe(true);
+			read.resolve(newCard());
+			await loading;
+			expect(store.loading).toBe(false);
+		});
+
+		it('drops a clear answered after its Event Lifetime ended, even back into the same Event and Screen', async () => {
+			store.setActiveScreen(5);
+			store.activeCard = oldCard();
+			const clear = deferred();
+			mockCardRepo.deleteScreenCard.mockReturnValueOnce(clear.promise);
+			const clearing = store.clearActiveCard();
+
+			store.$reset();
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+			await store.loadActiveCard();
+			clear.resolve();
+			await clearing;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('reports no failure from a clear whose lifetime ended', async () => {
+			store.setActiveScreen(5);
+			store.activeCard = oldCard();
+			const clear = deferred();
+			mockCardRepo.deleteScreenCard.mockReturnValueOnce(clear.promise);
+			const clearing = store.clearActiveCard();
+
+			store.$reset();
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+			await store.loadActiveCard();
+			clear.reject(unavailable());
+			await clearing;
+
+			expect(store.error).toBeNull();
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('drops a save that crossed a Screen selection, even back to the same Screen', async () => {
+			store.setActiveScreen(5);
+			const save = deferred();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(oldCard());
+
+			store.setActiveScreen(6);
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+			await store.loadActiveCard();
+			save.resolve();
+			await saving;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		describe('a failed Clear', () => {
+			/** Send a Clear and hold its DELETE; the answer fails it. */
+			function clearThatFails() {
+				const clear = deferred();
+				mockCardRepo.deleteScreenCard.mockReturnValueOnce(clear.promise);
+				const clearing = store.clearActiveCard();
+				return async () => {
+					clear.reject(unavailable());
+					await clearing;
+				};
+			}
+
+			beforeEach(() => {
+				store.setActiveScreen(5);
+				store.activeCard = oldCard();
+			});
+
+			it('keeps a realtime Card heard while its DELETE was out', async () => {
+				const fail = clearThatFails();
+
+				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+				await fail();
+
+				expect(store.activeCard?.id).toBe('new');
+				// The operator is still told the Clear failed.
+				expect(store.error).toBe('Unavailable');
+			});
+
+			it('keeps a realtime clear heard while its DELETE was out', async () => {
+				const fail = clearThatFails();
+
+				ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5 });
+				await fail();
+
+				expect(store.activeCard).toBeNull();
+			});
+
+			it('keeps a local save accepted while its DELETE was out', async () => {
+				const fail = clearThatFails();
+
+				mockCardRepo.saveScreenCard.mockResolvedValueOnce(undefined);
+				await store.saveActiveCard(newCard());
+				await fail();
+
+				expect(store.activeCard?.id).toBe('new');
+			});
+
+			it('keeps a read landed while its DELETE was out', async () => {
+				const fail = clearThatFails();
+
+				mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+				await store.loadActiveCard();
+				await fail();
+
+				expect(store.activeCard?.id).toBe('new');
+			});
+
+			it('keeps a Card hidden once its Card Timeout ran out while the DELETE was out', async () => {
+				vi.useFakeTimers();
+				mockCardRepo.saveScreenCard.mockResolvedValueOnce(undefined);
+				await store.saveActiveCard(createMockMtgCard({
+					id: 'timed',
+					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+				}));
+				const fail = clearThatFails();
+
+				await vi.advanceTimersByTimeAsync(1_000);
+				await fail();
+
+				expect(store.activeCard).toBeNull();
+			});
+
+			it('still holds the Card it began with when nothing newer was accepted', async () => {
+				const held = store.activeCard;
+				const fail = clearThatFails();
+
+				await fail();
+
+				expect(store.activeCard).toEqual(held);
+			});
+		});
+	});
+
+	/**
+	 * What the Card's re-read answers Event Data Resync on Reconnect Resync
+	 * (ADR-0028): a failed read did not land, so it stays behind; a read of no
+	 * Card did land.
+	 */
+	describe('the Card re-read on Reconnect Resync', () => {
+		const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
+
+		it('reports a failed Card read as not landed', async () => {
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockRejectedValueOnce(unavailable());
+
+			await expect(storeReloaders().card()).resolves.toBe(false);
+		});
+
+		it('reports a read of no Card as landed', async () => {
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(null);
+
+			await expect(storeReloaders().card()).resolves.toBe(true);
+		});
+
+		it('reports a read of a Card as landed', async () => {
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(createMockMtgCard());
+
+			await expect(storeReloaders().card()).resolves.toBe(true);
+		});
+
+		it('reports a read something newer superseded as not landed', async () => {
+			store.setActiveScreen(5);
+			let resolve!: (card: unknown) => void;
+			mockCardRepo.getScreenCard.mockReturnValueOnce(new Promise((res) => {
+				resolve = res;
+			}));
+			const reread = storeReloaders().card();
+
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: createMockMtgCard({ id: 'new' }) });
+			resolve(createMockMtgCard());
+
+			await expect(reread).resolves.toBe(false);
+		});
+
+		it('leaves the Card behind after a failed read, so its next consumer re-reads it', async () => {
+			store.setActiveScreen(5);
+			const resync = createEventDataResync(storeReloaders());
+			const release = resync.consume(['card']);
+			mockCardRepo.getScreenCard.mockRejectedValueOnce(unavailable());
+			await resync.resync();
+			release();
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(createMockMtgCard({ id: 'caught-up' }));
+
+			resync.consume(['card']);
+
+			await vi.waitFor(() => expect(store.activeCard?.id).toBe('caught-up'));
 		});
 	});
 

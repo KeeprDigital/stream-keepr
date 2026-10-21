@@ -178,8 +178,9 @@ export const useCardStore = defineStore('card', () => {
 		deckListMatchId.value = null;
 		error.value = null;
 		loading.value = false;
-		// Ends the Event Lifetime for the Card too: a read still out lands nothing (#704).
-		activeCardRuntime.resetActiveCardState();
+		// Ends the Event Lifetime for the Card too: a read still out lands nothing (#704),
+		// and a save or Clear still out touches nothing (ADR-0024).
+		activeCardRuntime.endLifetime();
 		deckSourceRuntime.resetDeckSources();
 	}
 

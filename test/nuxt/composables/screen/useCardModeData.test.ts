@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 const mockCardStore = reactive({
 	activeCard: null as { name: string } | null,
@@ -58,7 +59,7 @@ describe('useCardModeData', () => {
 		mockCardStore.activeCard = null;
 		mockCardStore.loadActiveCard.mockImplementation(async () => {
 			mockCardStore.activeCard = serverCard;
-			return serverCard;
+			return 'landed';
 		});
 		mockRealtime.connectionState = 'connected';
 		mockRealtime.tokenError = null;
@@ -205,5 +206,41 @@ describe('useCardModeData', () => {
 
 			expect(mockCardStore.activeCard).toEqual({ name: 'Lightning Bolt' });
 		});
+
+		it('re-reads again after its resync read failed, keeping the Card on air meanwhile (#726)', async () => {
+			await onAirThenDisconnected();
+			vi.useFakeTimers();
+			try {
+				serverCard = { name: 'Counterspell' };
+				let reachable = false;
+				mockCardStore.loadActiveCard.mockImplementation(async () => {
+					if (!reachable)
+						return 'failed';
+					mockCardStore.activeCard = serverCard;
+					return 'landed';
+				});
+
+				mockRealtime.connectionState = 'connected';
+				continuity.reattach('event:1');
+				await vi.advanceTimersByTimeAsync(0);
+				expect(mockCardStore.activeCard).toEqual({ name: 'Lightning Bolt' });
+
+				reachable = true;
+				await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
+				expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	it('shows no error on program for a read something newer superseded', async () => {
+		mockCardStore.loadActiveCard.mockResolvedValueOnce('superseded');
+
+		const { error } = mountCardModeData();
+		await flushPromises();
+
+		expect(error.value).toBeNull();
 	});
 });

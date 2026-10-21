@@ -43,8 +43,11 @@ export function useCardModeData() {
 	const freshness = useScreenModeFreshness<null>({
 		eventId,
 		source: () => screenId.value === null ? null : String(screenId.value),
+		// A failed read is this module's to retry, so it fails here too (#726). A
+		// superseded one does not: something newer already reached the Card.
 		read: async () => {
-			await cardStore.loadActiveCard();
+			if (await cardStore.loadActiveCard() === 'failed')
+				throw new Error(cardStore.error ?? 'Failed to load card data');
 			return null;
 		},
 		initialData: null,

@@ -678,7 +678,7 @@ The client resets every Event-scoped store when the operator leaves an Event, th
 
 **Each Event-scoped store begins a new Event Lifetime on reset, as a Flight from its own Guarded Sequence.** A write captures the current Flight before it awaits. Its continuation runs only while that Flight is current. That covers merging the answer, the optimistic rollback, the error and loading refs, and anything it starts afterwards: priming a Feature Match Session, reloading Slots, invalidating the Metagame. `useAsyncAction` takes the Flight as `flight`. While that Flight is stale, `useAsyncAction` leaves `errorRef` and `loadingRef` alone and does not call `onError`. The Event Data lifecycle module exposes `currentLifetime()` for the stores built on it, and so do the Feature Match Slot and Assignment stores, for the Slot Promotion workflow that writes into both.
 
-This covers the Event store (Event and Talent writes), every Event Data collection, Player List members, Feature Match Slots, Assignments and Slot Promotions, Archetypes, Screens, Deck reviews, Broadcast Deck List creates and Melee operations.
+This covers the Event store (Event and Talent writes), every Event Data collection, Player List members, Feature Match Slots, Assignments and Slot Promotions, Archetypes, Screens, Deck reviews, Broadcast Deck List creates, Melee operations and the Card store's saves and Clears (#726).
 
 A stale continuation still returns its answer, or raises its failure, to the caller that started the write. The write did happen, and the operator is told so. Only cross-Event state is still updated: the Events list learns a late save or create, because no Event Lifetime owns it. A late Event delete still clears the loaded Event when its id matches, in any lifetime, because that Event no longer exists.
 
@@ -693,6 +693,7 @@ An Event id cannot tell two lifetimes of the same Event apart. After A → B →
 - A Melee operation from an earlier lifetime no longer answers one started since. The in-flight coalescing is cleared on reset.
 - The write itself is not a continuation. One still queued, or retrying a lost race, when its lifetime ends is still sent for its own Event and Screen, at the revision that lifetime last knew (ADR-0041); only its effects on the stores are gated.
 - Ordering _within_ one lifetime is unchanged. This decision does not replace live aggregates' sequence and epoch rules (#590, #591). A Slot Promotion result is dropped when its lifetime ended, and otherwise still meets those rules.
+- The Card store holds one Screen's Card, so a Screen selection is a boundary too: selecting a Screen, even the one already selected, begins a new Flight within the lifetime, and a save or Clear answered after it touches nothing. Its Card reads were already Flights that a selection, a reset and anything newer supersede (#704). A Clear changes nothing it holds until its `DELETE` succeeds, so a failed one has nothing to roll back: what the store accepted meanwhile stands (#726).
 
 ### Rejected alternatives
 
@@ -841,6 +842,7 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 - A consumer that also reads what no store holds passes its own re-read, which runs on every resync until the consumer is disposed. The metagame pages pass their summary and section fetch. That re-read is never behind, since it dies with its page. A metagame page can fetch twice on one resync, once for its own re-read and once more when the Player re-read bumps the roster version.
 - A Feature Match Slot re-read offers its Session to the Live State Follower, which holds it when it is newer. So a Session missed in the outage reaches Live Control's bound values through the Slots.
 - The Card mode, through Screen Mode Data Freshness, also re-reads on the degraded cadence while disconnected.
+- A Card read answers whether it landed. A read of no Card has landed. A failed read has not, so the operator's stays behind and a Screen Output's is retried on the slow cadence. A read something newer superseded has not either, as a superseded collection load has not; the newer state is already held (#726).
 - The Feature Match and Feature Match Overlay modes read their Slot through Screen Mode Data Freshness as well (#592). Their Reconnect Resync re-reads the whole Slot through the Screen and offers its Session to the Live State Follower, rather than reloading the Session alone. So a promotion missed in the outage is found as well as a score. A gap in the Session's notifications still reloads through the follower's load, by the same Screen read.
 
 ### Rejected alternatives

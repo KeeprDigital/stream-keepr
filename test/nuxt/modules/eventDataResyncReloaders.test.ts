@@ -33,7 +33,7 @@ describe('storeReloaders', () => {
 			loadMatchesByRoundId: vi.fn(async () => []),
 			loadMatchesByEventId: vi.fn(async () => []),
 		});
-		stores.card = reactive({ activeScreenId: 5 as number | null, setActiveScreen: vi.fn(), loadActiveCard: vi.fn(async () => null) });
+		stores.card = reactive({ activeScreenId: 5 as number | null, setActiveScreen: vi.fn(), loadActiveCard: vi.fn(async () => 'landed') });
 	});
 
 	it('re-reads a held collection for the current Event, and leaves one nothing loaded', async () => {
