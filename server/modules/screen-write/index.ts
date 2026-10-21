@@ -404,9 +404,9 @@ export function screenWriteModule() {
 		 * rules about the whole configuration — today the byte total shared across all
 		 * ten Screen Modes — are properties of the merged result. Checking them at this
 		 * one point is what makes them hold identically whether a Screen was configured
-		 * in a single write or built up one patch at a time, and it means a rule added
-		 * to `modeConfigSchemaMap` in future is enforced on the editors' write path
-		 * without anyone having to remember to wire it up. See #85.
+		 * in a single write or built up one patch at a time, and it means a whole-map
+		 * rule added to `modeConfigsMapSchema` in future is enforced on the editors'
+		 * write path without anyone having to remember to wire it up. See #85.
 		 */
 		parseModeConfigPatchResult(existing.modeConfigs, mode, config);
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { defineScreenModeConfigContract, serverValidatedField } from './contract';
 
-export const FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES = ['full-table', 'left-stacked-player-cams', 'neon-feature-match'] as const;
+const FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES = ['full-table', 'left-stacked-player-cams', 'neon-feature-match'] as const;
 
 export type FeatureMatchOverlayPresetId = typeof FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES[number];
 

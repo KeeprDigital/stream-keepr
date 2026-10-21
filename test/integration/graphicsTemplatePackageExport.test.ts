@@ -162,6 +162,31 @@ describe('template Package export through the API boundary', () => {
 		]));
 	});
 
+	it('exports the layout a Screen renders when its stored configuration is a fragment without one', async () => {
+		// A PATCH writes a fragment, so a Feature Match Overlay configuration can be
+		// stored with no `layout`. The Screen renders the default layout, so that is
+		// the layout it exports.
+		const fragmentScreen = await $fetch(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Fragment Overlay', slug: 'fragment-overlay', currentMode: 'feature-match-overlay' },
+		});
+		await $fetch(`/api/events/${eventId}/screens/${fragmentScreen.id}/config/feature-match-overlay`, {
+			method: 'PATCH',
+			body: { presetId: 'full-table' },
+		});
+
+		const response = await fetch(
+			`/api/events/${eventId}/screens/${fragmentScreen.id}/template-packages/feature-match-layout`,
+			{ headers: { cookie: graphicsAuthorCookie } },
+		);
+
+		expect(response.status).toBe(200);
+		const template = readStoredZipArchive(await collectStream(response.body!))
+			.json<{ sources: { id: string }[] }>('template.json');
+		expect(template.sources.map(source => source.id))
+			.toEqual(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.sources.map(source => source.id));
+	});
+
 	it('blocks export with one complete report when a referenced revision is gone', async () => {
 		// The Screen write boundary refuses a dangling reference, so a stored
 		// configuration is planted directly to prove export also fails closed

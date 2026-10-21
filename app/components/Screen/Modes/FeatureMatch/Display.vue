@@ -15,7 +15,7 @@ const {
 } = useFeatureMatchModeData();
 
 function allow(key: FeatureMatchBooleanKey): boolean {
-	return config.value[key] ?? featureMatchModeConfigContract.defaults[key] ?? true;
+	return config.value[key] ?? featureMatchModeConfigContract.defaults[key]!;
 }
 
 const showTurnControls = computed(() => allow('showTurnControls'));

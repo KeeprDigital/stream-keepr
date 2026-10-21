@@ -11,8 +11,9 @@ declare const serverValidated: unique symbol;
  * A contract field whose schema only the server can build, because it reaches
  * server-only Graphic Asset ids: a Background Layer stack, a Broadcast Graphics
  * stack, or a Feature Match Layout. The contract fixes the field's type and
- * default; the server supplies its schema, typed to produce exactly that type
- * (`configContractModeForms`), so the two cannot disagree (ADR-0037).
+ * default; the server supplies its schema, typed so that what it produces is
+ * that type (`configContractModeForms`), the check a `satisfies z.ZodType<T>`
+ * made before (ADR-0037).
  *
  * In the contract's own `schema` the field refuses every value, so nothing in
  * `shared/` can mistake it for validation.
@@ -54,9 +55,8 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   (`ScreenModeConfigOf`), so type and schema cannot disagree. It is the
  *   schema's input: the config as authored, so a nested value a reader re-proves,
  *   such as a Broadcast Graphics Background's sparse params, keeps its authored
- *   form. A
- *   `serverValidatedField` in it refuses every value; the server's complete
- *   schema is the one that validates.
+ *   form. A `serverValidatedField` in it refuses every value; the server's
+ *   complete schema is the one that validates.
  * - `defaults` is a complete config of that type, so a default of the wrong type is
  *   a compile error. Its bounds are checked against the server's write forms by
  *   `test/unit/server/schemas/screenModeConfigContracts.test.ts`.
