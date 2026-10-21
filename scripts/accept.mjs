@@ -19,6 +19,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { loadCommittedInstallation, resolveDeployedTarget } from './graphics-acceptance/deployed-target.mjs';
 import { AcceptanceFailure, createAcceptanceEvidence } from './graphics-acceptance/evidence.mjs';
+import { reportFailures } from './graphics-acceptance/harness.mjs';
 
 /**
  * Name → runner script (and its leading arguments), what it proves, what a
@@ -127,13 +128,7 @@ async function preflightDeployDay(env) {
 		const failure = error instanceof AcceptanceFailure
 			? error
 			: new AcceptanceFailure('harness-precondition-unmet', { reason: 'target-unreadable' });
-		let line;
-		try {
-			line = evidence.report([failure]);
-		}
-		catch {
-			line = `accept-deployed ${failure.code} detail=withheld`;
-		}
+		const line = reportFailures(evidence, 'accept-deployed', [failure]);
 		process.stderr.write(`${line}\n\n✗ the deployed target is incomplete; no deploy-day harness ran\n`);
 		return false;
 	}

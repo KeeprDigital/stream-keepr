@@ -154,17 +154,18 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// The account the run was given does not hold the bucket or Workflow the
 	// target names, checked read-only before the first write (#619).
 	'harness-target-unverified',
-	// A run wrote objects it could not delete. They are listed in the cleanup
-	// manifest, and the run is not a pass while any remain (#619).
+	// A run wrote objects it could not delete, or that a Workflow which has not
+	// settled may still write. They stay listed in the cleanup manifest, and the
+	// run is not a pass while any remain (#619).
 	'harness-cleanup-incomplete',
 	// An earlier run's cleanup manifest still lists objects, so this run refuses
 	// to stage more until a cleanup retry has removed them (#619).
 	'harness-cleanup-pending',
-	// Silent-video validator acceptance (#619). The fixture name and a status
-	// word travel; the staged key, validation id and digests do not.
+	// Silent-video validator acceptance (#619). The fixture name, the command's
+	// one-word step and a status word travel; the staged key, validation id,
+	// digests, Wrangler's arguments and anything it printed do not.
 	'validator-runtime-unavailable',
-	'validator-staging-failed',
-	'validator-trigger-failed',
+	'validator-command-failed',
 	'validator-did-not-settle',
 	'validator-settled-unsuccessfully',
 	'validator-output-unexpected',

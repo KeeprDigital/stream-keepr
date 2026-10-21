@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,6 +56,7 @@ interface FakeOptions {
 	failDeletes?: number;
 	failProbe?: 'bucket' | 'workflow';
 	outcome?: string;
+	neverSettle?: boolean;
 }
 
 function fakeCommands(options: FakeOptions = {}) {
@@ -115,7 +116,7 @@ function fakeCommands(options: FakeOptions = {}) {
 		},
 		async describeInstance({ target, id }: any) {
 			log('describe', target);
-			return { status: 'Complete', output: instances.get(id) };
+			return options.neverSettle ? { status: 'Running' } : { status: 'Complete', output: instances.get(id) };
 		},
 	};
 }
@@ -185,10 +186,12 @@ describe('deployed validator acceptance: preflight', () => {
 
 	it.each(['bucket', 'workflow'] as const)('writes nothing when the account does not hold the %s', async (probe) => {
 		const commands = fakeCommands({ failProbe: probe });
-		const { exitCode } = await run(commands);
+		const { exitCode, openSession } = await run(commands);
 
 		expect(exitCode).toBe(1);
 		expect(mutations(commands)).toEqual([]);
+		// A bootstrapping sign-in creates or resets an account, so it waits for the probes.
+		expect(openSession).not.toHaveBeenCalled();
 		expect(output).toContain(`silent-video-validator-v1 harness-target-unverified step=${probe}`);
 		expectSafe(output);
 	});
@@ -236,7 +239,7 @@ describe('deployed validator acceptance: redacted failures', () => {
 		const { exitCode } = await run(commands);
 
 		expect(exitCode).toBe(1);
-		expect(output).toContain('silent-video-validator-v1 validator-staging-failed fixture=h264Mp4 exit=1');
+		expect(output).toContain('silent-video-validator-v1 validator-command-failed fixture=h264Mp4 step=put exit=1');
 		expectSafe(output);
 		// The source was recorded before its put, so cleanup tries it even though
 		// the put's own outcome is unknown.
@@ -277,7 +280,11 @@ describe('deployed validator acceptance: cleanup', () => {
 		const retry = fakeCommands();
 		for (const { key } of manifest.objects)
 			retry.objects.set(key, new Uint8Array(1));
-		const retried = await run(retry, { flags: ['--deployed', '--cleanup'] });
+		// A retry signs in as nobody, so it does not need the operator.
+		const retried = await run(retry, {
+			env: { ...ENV, STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD: undefined },
+			flags: ['--deployed', '--cleanup'],
+		});
 		expect(retried.exitCode).toBeUndefined();
 		expect(retry.objects.size).toBe(0);
 		expect(output.trim()).toBe('silent-video-validator-v1 acceptance passed checks=1 cleaned=2');
@@ -289,6 +296,37 @@ describe('deployed validator acceptance: cleanup', () => {
 		expect((await run(again, { flags: ['--deployed', '--cleanup'] })).exitCode).toBeUndefined();
 		expect(mutations(again)).toEqual([]);
 		expect(output.trim()).toBe('silent-video-validator-v1 acceptance passed checks=1 cleaned=0');
+	});
+
+	it('keeps a poster listed while its Workflow has not settled, and a later retry clears it', async () => {
+		const unsettled = fakeCommands({ neverSettle: true });
+		const first = await run(unsettled);
+
+		expect(first.exitCode).toBe(1);
+		expect(output).toContain('silent-video-validator-v1 validator-did-not-settle fixture=h264Mp4');
+		// The source is gone; the poster the instance may still write is not forgotten.
+		expect(output).toContain('silent-video-validator-v1 harness-cleanup-incomplete remaining=1');
+		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+		expect(manifest.objects).toEqual([{ key: expect.stringMatching(/^validation\/silent-video\//u), instance: expect.any(String) }]);
+		expectSafe(output);
+
+		output = '';
+		const settled = fakeCommands();
+		expect((await run(settled, { flags: ['--deployed', '--cleanup'] })).exitCode).toBeUndefined();
+		expect(output.trim()).toBe('silent-video-validator-v1 acceptance passed checks=1 cleaned=1');
+		expect(existsSync(manifestPath)).toBe(false);
+	});
+
+	it('treats a manifest that lists nothing as no manifest, so a run killed before its first write blocks nothing', async () => {
+		await mkdir(workspace, { recursive: true });
+		await writeFile(manifestPath, JSON.stringify({
+			version: 1,
+			target: { accountId: ACCOUNT, stagingBucket: BUCKET, workflow: WORKFLOW },
+			objects: [],
+		}));
+
+		expect((await run(fakeCommands())).exitCode).toBeUndefined();
+		expect(existsSync(manifestPath)).toBe(false);
 	});
 
 	it('keeps what a retry could not delete, and deletes the rest', async () => {

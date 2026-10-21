@@ -3,15 +3,17 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
 	assertManifestTarget,
 	DEFAULT_CLEANUP_MANIFEST,
 	drainCleanupManifest,
+	isSettledStatus,
 	openCleanupManifest,
 } from './graphics-acceptance/cleanup-manifest.mjs';
-import { loadCommittedInstallation, resolveDeployedTarget } from './graphics-acceptance/deployed-target.mjs';
+import { loadCommittedInstallation, resolveDeployedTarget, stagingBucketOf } from './graphics-acceptance/deployed-target.mjs';
 import { AcceptanceFailure } from './graphics-acceptance/evidence.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import { openOperatorSession } from './graphics-acceptance/operator.mjs';
@@ -81,20 +83,43 @@ function validationInput(fixture, operationId) {
 const sourceKey = operationId => `ingestion/${operationId}/source`;
 const posterKey = validationId => `validation/silent-video/${validationId}/poster`;
 
-/** Name a failed command by the step it was and the fixture it was for. */
-async function step(code, fixture, action) {
+/**
+ * Run one adapter command, turning its failure into `code` with `detail` and
+ * the exit code. The failure's own message is never read: it is the adapter's.
+ */
+async function remote(code, detail, action) {
 	try {
 		return await action();
 	}
 	catch (error) {
 		if (error instanceof RemoteCommandFailure)
-			throw new AcceptanceFailure(code, { fixture, exit: error.exit ?? 'signal' });
+			throw new AcceptanceFailure(code, { ...detail, exit: error.exit ?? 'signal' });
 		throw error;
 	}
 }
 
-function failure(code, detail) {
-	return new AcceptanceFailure(code, detail);
+/** A fixture's command, named by the one-word step it was. */
+function command(fixture, step, action) {
+	return remote('validator-command-failed', { fixture, step }, action);
+}
+
+const operationIdFor = (suffix, name) => `acceptance-${suffix}-${name.toLowerCase()}`;
+
+function stageFixture(commands, target, name, operationId) {
+	return command(name, 'put', () => commands.putObject({
+		target,
+		key: sourceKey(operationId),
+		bytes: Buffer.from(fixtures[name].base64, 'base64'),
+		contentType: fixtures[name].facts.canonicalMime,
+	}));
+}
+
+/**
+ * The stage a local rejection names is the validator's response text, so only
+ * a word of the shape the validator uses travels.
+ */
+function stageWord(stage) {
+	return typeof stage === 'string' && /^[a-z][a-z-]{0,31}$/.test(stage) ? stage : 'unrecognised';
 }
 
 /** The first field of a settled output that is not an exact acceptance of `input`. */
@@ -118,10 +143,10 @@ function assertAccepted(fixture, input, headers, posterBytes, name) {
 	const required = (header) => {
 		const value = headers.get(header);
 		if (!value)
-			throw failure('validator-output-unexpected', { fixture: name, field: 'header-missing' });
+			throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'header-missing' });
 		return value;
 	};
-	const unexpected = field => failure('validator-output-unexpected', { fixture: name, field });
+	const unexpected = field => new AcceptanceFailure('validator-output-unexpected', { fixture: name, field });
 	if (required('x-stream-keepr-operation-id') !== input.operationId
 		|| required('x-stream-keepr-idempotency-key') !== input.idempotencyKey
 		|| required('x-stream-keepr-source-digest') !== input.sourceDigest
@@ -143,7 +168,7 @@ function assertAccepted(fixture, input, headers, posterBytes, name) {
 	if (Math.abs(Number(required('x-stream-keepr-poster-time')) - fixture.facts.posterTimeSeconds) > 0.001)
 		throw unexpected('posterTime');
 	if (sha256Hex(posterBytes) !== required('x-stream-keepr-poster-digest'))
-		throw failure('validator-poster-mismatch', { fixture: name });
+		throw new AcceptanceFailure('validator-poster-mismatch', { fixture: name });
 	if (posterBytes.length <= 0 || posterBytes.length > 2 * 1024 * 1024)
 		throw unexpected('posterLength');
 }
@@ -166,15 +191,15 @@ async function driveServiceBinding(baseUrl, fixture, operationId, name) {
 		}
 		if (response.status === 422) {
 			const body = await response.json();
-			return { outcome: 'rejected', stage: body.stage, input };
+			return { outcome: 'rejected', stage: stageWord(body?.stage), input };
 		}
 		if (!response.ok)
-			throw failure('validator-settled-unsuccessfully', { fixture: name, status: response.status });
+			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: response.status });
 		const posterBytes = Buffer.from(await response.arrayBuffer());
 		assertAccepted(fixture, input, response.headers, posterBytes, name);
 		return { outcome: 'accepted', input };
 	}
-	throw failure('validator-did-not-settle', { fixture: name });
+	throw new AcceptanceFailure('validator-did-not-settle', { fixture: name });
 }
 
 /** `wrangler dev` for the validator, ready to serve, or a named failure. */
@@ -191,7 +216,7 @@ function startLocalValidator({ validatorConfigPath, persistTo, port, repoRoot })
 	], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
 	const ready = new Promise((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(failure('validator-runtime-unavailable', { reason: 'not-ready-is-docker-running' })),
+			() => reject(new AcceptanceFailure('validator-runtime-unavailable', { reason: 'not-ready-is-docker-running' })),
 			300_000,
 		);
 		let output = '';
@@ -206,7 +231,7 @@ function startLocalValidator({ validatorConfigPath, persistTo, port, repoRoot })
 		dev.stderr.setEncoding('utf8').on('data', watch);
 		dev.once('exit', (code) => {
 			clearTimeout(timeout);
-			reject(failure('validator-runtime-unavailable', { exit: code ?? 'signal' }));
+			reject(new AcceptanceFailure('validator-runtime-unavailable', { exit: code ?? 'signal' }));
 		});
 	});
 	return {
@@ -220,41 +245,33 @@ function startLocalValidator({ validatorConfigPath, persistTo, port, repoRoot })
 }
 
 async function runLocalAcceptance({ record }, { commands, installation, repoRoot, startValidator }) {
-	const persistTo = await mkdtemp(`${tmpdir()}/silent-video-validator-state-`);
+	const persistTo = await mkdtemp(join(tmpdir(), 'silent-video-validator-state-'));
 	const target = {
 		local: persistTo,
-		stagingBucket: installation.validator.r2_buckets
-			.find(bucket => bucket.binding === 'GRAPHICS_ASSET_STAGING')
-			.bucket_name,
+		stagingBucket: stagingBucketOf(installation.validator),
 		validatorConfigPath: installation.validatorConfigPath,
 	};
 	const port = 8987;
 	const suffix = Date.now().toString(36);
-	const plan = FIXTURE_NAMES.map(name => [name, `acceptance-${suffix}-${name.toLowerCase()}`]);
+	const plan = FIXTURE_NAMES.map(name => [name, operationIdFor(suffix, name)]);
 	// The tampered case declares WebM facts against staged MP4 bytes.
 	const tamperedOperation = `acceptance-${suffix}-tampered`;
 	let validator;
 	try {
-		for (const [name, operationId] of [...plan, ['h264Mp4', tamperedOperation]]) {
-			await step('validator-staging-failed', name, () => commands.putObject({
-				target,
-				key: sourceKey(operationId),
-				bytes: Buffer.from(fixtures[name].base64, 'base64'),
-				contentType: fixtures[name].facts.canonicalMime,
-			}));
-		}
+		for (const [name, operationId] of [...plan, ['h264Mp4', tamperedOperation]])
+			await stageFixture(commands, target, name, operationId);
 		validator = startValidator({ validatorConfigPath: target.validatorConfigPath, persistTo, port, repoRoot });
 		await validator.ready;
 		const baseUrl = `http://127.0.0.1:${port}`;
 		for (const [name, operationId] of plan) {
 			const result = await driveServiceBinding(baseUrl, fixtures[name], operationId, name);
 			if (result.outcome !== 'accepted')
-				throw failure('validator-settled-unsuccessfully', { fixture: name, stage: result.stage });
+				throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, stage: result.stage });
 			record([]);
 		}
 		const tampered = await driveServiceBinding(baseUrl, fixtures.vp9Webm, tamperedOperation, 'tampered');
 		if (tampered.outcome !== 'rejected' || tampered.stage !== 'metadata')
-			throw failure('validator-tamper-not-rejected', { outcome: tampered.outcome, stage: tampered.stage ?? 'none' });
+			throw new AcceptanceFailure('validator-tamper-not-rejected', { outcome: tampered.outcome, stage: tampered.stage ?? 'none' });
 		record([]);
 		return { mode: 'local', fixtures: plan.length, tampered: 'rejected' };
 	}
@@ -272,69 +289,59 @@ async function preflightDeployed({ evidence }, { env, installation, manifest, co
 	if (left) {
 		process.stderr.write('An earlier deployed run could not delete everything it staged. Run '
 			+ '`pnpm accept silent-video-validator --deployed --cleanup` with the same target first.\n');
-		throw failure('harness-cleanup-pending', { remaining: left.objects?.length ?? 0 });
+		throw new AcceptanceFailure('harness-cleanup-pending', { remaining: left.objects?.length ?? 0 });
 	}
+	// Read-only probes before the sign-in, because a bootstrapping sign-in
+	// creates or resets an account and is itself a write.
+	await remote('harness-target-unverified', { step: 'bucket' }, () => commands.probeBucket({ target }));
+	await remote('harness-target-unverified', { step: 'workflow' }, () => commands.probeWorkflow({ target }));
 	for (const cookie of await openSession(target.origin))
 		evidence.addSecret(cookie);
-	for (const [probe, run] of [['bucket', commands.probeBucket], ['workflow', commands.probeWorkflow]]) {
-		try {
-			await run({ target });
-		}
-		catch (error) {
-			if (error instanceof RemoteCommandFailure)
-				throw failure('harness-target-unverified', { step: probe, exit: error.exit ?? 'signal' });
-			throw error;
-		}
-	}
 	return target;
 }
 
 async function runDeployedFixture({ commands, manifest, target, pollIntervalMs }, name, suffix) {
 	const fixture = fixtures[name];
-	const operationId = `acceptance-${suffix}-${name.toLowerCase()}`;
+	const operationId = operationIdFor(suffix, name);
 	const input = validationInput(fixture, operationId);
 	const validationId = sha256Hex(Buffer.from(input.idempotencyKey, 'utf8'));
 
 	await manifest.record(sourceKey(operationId));
-	await step('validator-staging-failed', name, () => commands.putObject({
-		target,
-		key: sourceKey(operationId),
-		bytes: Buffer.from(fixture.base64, 'base64'),
-		contentType: fixture.facts.canonicalMime,
-	}));
+	await stageFixture(commands, target, name, operationId);
 	// The Workflow writes its poster under this key, so it is listed before the
-	// Workflow can write it.
-	await manifest.record(posterKey(validationId));
-	await step('validator-trigger-failed', name, () => commands.triggerWorkflow({ target, id: validationId, params: input }));
+	// Workflow can write it, and stays listed until the instance has settled.
+	await manifest.record(posterKey(validationId), { instance: validationId });
+	await command(name, 'trigger', () => commands.triggerWorkflow({ target, id: validationId, params: input }));
 
 	let output;
 	for (let attempt = 1; attempt <= 120 && !output; attempt++) {
-		const { status, output: settled } = await step('validator-did-not-settle', name, () =>
+		const { status, output: settled } = await command(name, 'describe', () =>
 			commands.describeInstance({ target, id: validationId }));
+		if (isSettledStatus(status))
+			await manifest.settle(posterKey(validationId));
 		if (status.includes('Complete')) {
 			if (!settled || typeof settled !== 'object')
-				throw failure('validator-output-unexpected', { fixture: name, field: 'output' });
+				throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'output' });
 			output = settled;
 		}
 		else if (status.includes('Errored') || status.includes('Terminated')) {
-			throw failure('validator-settled-unsuccessfully', { fixture: name, status: status.includes('Errored') ? 'errored' : 'terminated' });
+			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: status.includes('Errored') ? 'errored' : 'terminated' });
 		}
 		else {
 			await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
 		}
 	}
 	if (!output)
-		throw failure('validator-did-not-settle', { fixture: name });
+		throw new AcceptanceFailure('validator-did-not-settle', { fixture: name });
 	const field = inexactField(fixture, input, output);
 	if (field)
-		throw failure('validator-output-unexpected', { fixture: name, field });
+		throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field });
 	if (output.posterKey !== posterKey(validationId))
-		throw failure('validator-output-unexpected', { fixture: name, field: 'posterKey' });
+		throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'posterKey' });
 
-	const posterBytes = await step('validator-poster-mismatch', name, () =>
-		commands.getObject({ target, key: output.posterKey }));
+	const posterBytes = await command(name, 'get', () => commands.getObject({ target, key: output.posterKey }));
 	if (!posterBytes || sha256Hex(posterBytes) !== output.posterDigest)
-		throw failure('validator-poster-mismatch', { fixture: name });
+		throw new AcceptanceFailure('validator-poster-mismatch', { fixture: name });
 }
 
 async function runDeployedAcceptance(context, dependencies) {
@@ -342,7 +349,7 @@ async function runDeployedAcceptance(context, dependencies) {
 	const { manifest, commands } = dependencies;
 	const suffix = Date.now().toString(36);
 
-	await manifest.begin(target);
+	manifest.begin(target);
 	let cleaned = 0;
 	try {
 		for (const name of FIXTURE_NAMES) {
@@ -354,8 +361,8 @@ async function runDeployedAcceptance(context, dependencies) {
 		const drained = await drainCleanupManifest({ manifest, commands, target });
 		cleaned = drained.cleaned;
 		if (drained.remaining > 0) {
-			process.stderr.write('Some staged objects could not be deleted; they are listed in the cleanup manifest. '
-				+ 'Retry with `pnpm accept silent-video-validator --deployed --cleanup`.\n');
+			process.stderr.write('Some staged objects could not be deleted, or a Workflow had not settled; they are '
+				+ 'listed in the cleanup manifest. Retry with `pnpm accept silent-video-validator --deployed --cleanup`.\n');
 			context.record([{ code: 'harness-cleanup-incomplete', detail: { remaining: drained.remaining } }]);
 		}
 	}
@@ -363,7 +370,7 @@ async function runDeployedAcceptance(context, dependencies) {
 }
 
 async function runDeployedCleanup(context, { env, installation, manifest, commands }) {
-	const target = resolveDeployedTarget({ env, installation });
+	const target = resolveDeployedTarget({ env, installation, requireOperator: false });
 	context.evidence.addSecret(target.accountId);
 	const left = await manifest.read();
 	if (!left) {
@@ -371,7 +378,7 @@ async function runDeployedCleanup(context, { env, installation, manifest, comman
 		return { cleaned: 0 };
 	}
 	assertManifestTarget(left, target);
-	await manifest.resume(left);
+	manifest.resume(left);
 	const { cleaned, remaining } = await drainCleanupManifest({ manifest, commands, target });
 	context.record(remaining > 0 ? [{ code: 'harness-cleanup-incomplete', detail: { remaining } }] : []);
 	return { cleaned };
@@ -405,7 +412,7 @@ export async function main(argv = process.argv, options = {}) {
 		harness: HARNESS,
 		async run(context) {
 			if (cleanup && !deployed)
-				throw failure('harness-precondition-unmet', { reason: 'cleanup-needs-deployed' });
+				throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'cleanup-needs-deployed' });
 			const dependencies = {
 				commands: options.commands ?? NOT_INJECTED,
 				env: options.env ?? process.env,

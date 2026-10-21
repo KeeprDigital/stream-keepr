@@ -451,10 +451,11 @@ no Graphics Ingestion Operation that retention could find, so it records every
 key in `.cache/acceptance/silent-video-validator-cleanup.json` (private,
 gitignored) before writing it, and deletes them all at the end. A delete that
 fails leaves the file, fails the run with `harness-cleanup-incomplete`, and
-makes the next run stop with `harness-cleanup-pending`. Retry with
-`pnpm accept silent-video-validator --deployed --cleanup` under the same target
-variables; it is safe to repeat. The Workflow instances stay, holding facts
-only.
+makes the next run stop with `harness-cleanup-pending`. A poster stays listed
+until its Workflow instance is seen to settle, since the instance may still
+write it. Retry with `pnpm accept silent-video-validator --deployed --cleanup`
+with the same URL and account (no operator needed); it is safe to repeat. The
+Workflow instances stay, holding facts only.
 
 Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the

@@ -10,6 +10,12 @@
  * stage more until it is gone, and a cleanup retry works through it. R2 deletes
  * are idempotent, so retrying a key that is already gone is harmless.
  *
+ * A poster is written by the Workflow, not by the run, so its entry also names
+ * the Workflow instance. Until that instance is seen to have settled it may
+ * still write the poster after any delete, so the entry stays listed however
+ * the delete went: a run that gave up on an instance does not pass, and a later
+ * retry asks the instance again.
+ *
  * The file holds object keys, so it is private (0600), lives under the
  * gitignored `.cache/`, and is never printed: evidence carries only counts.
  */
@@ -23,6 +29,13 @@ import { AcceptanceFailure } from './evidence.mjs';
 export const DEFAULT_CLEANUP_MANIFEST = fileURLToPath(
 	new URL('../../.cache/acceptance/silent-video-validator-cleanup.json', import.meta.url),
 );
+
+/** Instance statuses after which a Workflow writes nothing more. */
+const SETTLED_STATUS = /Complete|Errored|Terminated/;
+
+export function isSettledStatus(status) {
+	return SETTLED_STATUS.test(status ?? '');
+}
 
 /** The part of a target a manifest is bound to: where its objects are. */
 function targetIdentity({ accountId, stagingBucket, workflow }) {
@@ -40,6 +53,10 @@ export function openCleanupManifest(path) {
 	let state;
 
 	async function persist() {
+		if (state.objects.length === 0) {
+			await rm(path, { force: true });
+			return;
+		}
 		await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 		const temporary = `${path}.${process.pid}.tmp`;
 		await writeFile(temporary, `${JSON.stringify(state, null, '\t')}\n`, { mode: 0o600 });
@@ -47,39 +64,56 @@ export function openCleanupManifest(path) {
 	}
 
 	return {
-		/** The manifest a previous run left, or undefined. */
+		/**
+		 * The manifest a previous run left, or undefined. One that lists nothing
+		 * (a run that died before its first write) is no manifest, and is removed.
+		 */
 		async read() {
+			let left;
 			try {
-				return JSON.parse(await readFile(path, 'utf8'));
+				left = JSON.parse(await readFile(path, 'utf8'));
 			}
 			catch (error) {
 				if (error?.code === 'ENOENT')
 					return undefined;
 				throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'cleanup-manifest-unreadable' });
 			}
+			if (!Array.isArray(left?.objects) || left.objects.length === 0) {
+				await rm(path, { force: true });
+				return undefined;
+			}
+			return left;
 		},
-		async begin(target) {
+		/** Nothing is written until the first `record`, so an empty run leaves no file. */
+		begin(target) {
 			state = { version: 1, target: targetIdentity(target), objects: [] };
-			await persist();
 		},
-		async resume(manifest) {
+		resume(manifest) {
 			state = manifest;
 		},
-		/** Before the command that creates the object. */
-		async record(key) {
+		/**
+		 * Before the command that creates the object. `instance` names the
+		 * Workflow instance that writes it, for an object the run does not write.
+		 */
+		async record(key, { instance } = {}) {
 			if (!state.objects.some(entry => entry.key === key)) {
-				state.objects.push({ key });
+				state.objects.push(instance ? { key, instance } : { key });
+				await persist();
+			}
+		},
+		/** The writing instance has settled, so a delete of this key now stays deleted. */
+		async settle(key) {
+			const entry = state.objects.find(candidate => candidate.key === key);
+			if (entry?.instance) {
+				delete entry.instance;
 				await persist();
 			}
 		},
 		async forget(key) {
 			state.objects = state.objects.filter(entry => entry.key !== key);
-			if (state.objects.length === 0)
-				await rm(path, { force: true });
-			else
-				await persist();
+			await persist();
 		},
-		pending: () => state?.objects.map(entry => entry.key) ?? [],
+		pending: () => state?.objects.map(entry => ({ ...entry })) ?? [],
 	};
 }
 
@@ -90,11 +124,18 @@ export function openCleanupManifest(path) {
  */
 export async function drainCleanupManifest({ manifest, commands, target }) {
 	let cleaned = 0;
-	for (const key of manifest.pending()) {
+	for (const { key, instance } of manifest.pending()) {
 		try {
+			if (instance) {
+				const { status } = await commands.describeInstance({ target, id: instance });
+				if (isSettledStatus(status))
+					await manifest.settle(key);
+			}
 			await commands.deleteObject({ target, key });
-			await manifest.forget(key);
-			cleaned += 1;
+			if (!manifest.pending().find(entry => entry.key === key)?.instance) {
+				await manifest.forget(key);
+				cleaned += 1;
+			}
 		}
 		catch {
 			// Stays listed; the count below reports it.

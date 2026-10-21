@@ -86,6 +86,11 @@ function bucketBound(config, binding) {
 	return config.r2_buckets?.find(bucket => bucket.binding === binding)?.bucket_name;
 }
 
+/** The staging bucket a Wrangler config binds, the one the validator reads sources from. */
+export function stagingBucketOf(config) {
+	return bucketBound(config, STAGING_BINDING);
+}
+
 /** Every host the app's config serves, from its `routes`. */
 function servedHosts(app) {
 	return (app.routes ?? []).map(route => (typeof route === 'string' ? route : route.pattern)).filter(Boolean).map(pattern => pattern.replace(/\/.*$/, '').toLowerCase());
@@ -102,11 +107,15 @@ function servedHosts(app) {
  * @param {{
  *   env: Record<string, string | undefined>,
  *   installation: { app: any, validator: any, validatorConfigPath: string },
+ *   requireOperator?: boolean,
  * }} options
  */
-export function resolveDeployedTarget({ env, installation }) {
+export function resolveDeployedTarget({ env, installation, requireOperator = true }) {
 	const origin = acceptanceOrigin({ deployed: true, env });
-	operatorCredentialPlan({ deployed: true, env, newPassword: newOperatorPassword() });
+	// Called for its refusal: it throws, with its notice, when no operator is
+	// available. A cleanup retry signs in as nobody, so it does not ask.
+	if (requireOperator)
+		operatorCredentialPlan({ deployed: true, env, newPassword: newOperatorPassword() });
 
 	const accountId = env[ACCOUNT_ID_ENV]?.trim();
 	if (!accountId)
