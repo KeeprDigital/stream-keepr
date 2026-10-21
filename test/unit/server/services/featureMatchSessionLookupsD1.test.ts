@@ -123,15 +123,16 @@ describe('opening Feature Match Sessions on D1', () => {
 	});
 
 	/**
-	 * Slots named out of order, holding Sessions opened one at a time in reverse,
-	 * so neither the order asked nor the Sessions' ids follow the Slots' own.
+	 * Slots named out of order, holding Sessions opened later half first, so
+	 * neither the order asked nor the Sessions' ids follow the Slots' own.
 	 */
 	it.each([3, 120])('announces the Sessions of %i Slots named out of order in Slot order', async (count) => {
 		const { eventId, slotIds } = await eventWithSlots(count);
-		const reversed = [...slotIds].reverse();
-		for (const slotId of reversed)
-			await featureMatchStateService().createSessionForSlot(slotId, eventId);
+		const half = Math.floor(count / 2);
+		await featureMatchStateService().openSessionsForSlots(eventId, slotIds.slice(half));
+		await featureMatchStateService().openSessionsForSlots(eventId, slotIds.slice(0, half));
 		announcedSlotIds.length = 0;
+		const reversed = [...slotIds].reverse();
 
 		const opened = await featureMatchStateService().openSessionsForSlots(eventId, reversed);
 
