@@ -456,10 +456,13 @@ export default defineNuxtPlugin({
 		}
 
 		function onceAttached(channelName: string, handler: () => void): Unsubscribe {
+			// `getChannel` is what creates the channel's continuity record.
 			const channel = getChannel(channelName);
 			if (channel.state === 'attached')
 				return () => {};
 			const { onNextAttach } = continuity.get(channelName)!;
+			// Its own entry, so the same handler waiting twice is told twice and
+			// disposing one wait leaves the other.
 			const once = () => handler();
 			onNextAttach.add(once);
 			return () => {

@@ -258,6 +258,43 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
 	});
 
+	it('keeps retrying when its retry\'s Screen re-read answers nothing, since the Screen was found', async () => {
+		// The Screen reads answer nothing for a failed read as for a missing Screen;
+		// a transient failure here must not end the retries under "Screen not found".
+		vi.useFakeTimers();
+		const harness = createHarness();
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		await vi.advanceTimersByTimeAsync(0);
+		harness.screenStore.refreshActiveScreen.mockResolvedValueOnce(null);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.screenStore.refreshActiveScreen).toHaveBeenCalledOnce();
+		expect(harness.session.error.value).toBe('Event details unavailable');
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.session.error.value).toBeNull();
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+	});
+
+	it('lets a Screen change win over a retry that falls due while the old session stops', async () => {
+		vi.useFakeTimers();
+		const harness = createHarness();
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		await vi.advanceTimersByTimeAsync(0);
+		const stopping = deferred<void>();
+		harness.realtimeSession.stop.mockReturnValueOnce(stopping.promise);
+
+		harness.route.params.screenSlug = 'second';
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		stopping.resolve();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(harness.screenStore.refreshActiveScreen).not.toHaveBeenCalled();
+		expect(harness.screenStore.activeScreen?.id).toBe(8);
+		expect(harness.realtimeSession.start).toHaveBeenLastCalledWith(42, 8);
+		expect(harness.session.error.value).toBeNull();
+	});
+
 	it('stops retrying once disposed', async () => {
 		vi.useFakeTimers();
 		const harness = createHarness();

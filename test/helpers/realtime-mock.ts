@@ -99,6 +99,7 @@ export function createAttachSignal() {
 				return () => {};
 			if (!waiting.has(channel))
 				waiting.set(channel, new Set());
+			// Its own entry, as the transport's: one handler can wait twice.
 			const once = () => handler();
 			waiting.get(channel)!.add(once);
 			return () => {
