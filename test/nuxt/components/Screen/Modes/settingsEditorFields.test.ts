@@ -24,15 +24,12 @@ import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/ty
  * may declare no editor field.
  */
 
-const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {};
-
-/** Modes whose editors #498 has yet to move onto their contracts. */
-const NOT_YET_GUARDED = new Set<ScreenMode>([
-	'background',
-	'topCut',
-	'feature-match-overlay',
-	'broadcast-graphics',
-]);
+const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
+	'background': 'its editor is the Background Layer stack, an authored stack',
+	'topCut': 'its editor configures nothing yet',
+	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
+	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Animation Effect background, whose params are schema-derived already',
+};
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
@@ -240,7 +237,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 	const entry = EDITOR_VARIANTS[mode];
 	const reason = MODES_WITHOUT_SCALAR_CONTROLS[mode];
 
-	it.skipIf(NOT_YET_GUARDED.has(mode))('is guarded: listed with its variants, or with why its editor has no scalar control', () => {
+	it('is guarded: listed with its variants, or with why its editor has no scalar control', () => {
 		expect(Boolean(entry) !== Boolean(reason), `list ${mode} in EDITOR_VARIANTS or MODES_WITHOUT_SCALAR_CONTROLS`).toBe(true);
 	});
 
