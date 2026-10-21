@@ -85,6 +85,8 @@ function createMockMtgCard(overrides?: Record<string, any>) {
 	} as any;
 }
 
+const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
+
 describe('useCardStore', () => {
 	let store: ReturnType<typeof useCardStore>;
 
@@ -501,7 +503,6 @@ describe('useCardStore', () => {
 
 		const oldCard = () => createMockMtgCard({ id: 'old', name: 'Old Card' });
 		const newCard = () => createMockMtgCard({ id: 'new', name: 'New Card' });
-		const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
 
 		it('drops a save answered after its Event Lifetime ended, even back into the same Event and Screen', async () => {
 			store.setActiveScreen(5);
@@ -612,6 +613,23 @@ describe('useCardStore', () => {
 			expect(store.activeCard?.id).toBe('new');
 		});
 
+		it('drops a clear that crossed a Screen selection, even back to the same Screen', async () => {
+			store.setActiveScreen(5);
+			store.activeCard = oldCard();
+			const clear = deferred();
+			mockCardRepo.deleteScreenCard.mockReturnValueOnce(clear.promise);
+			const clearing = store.clearActiveCard();
+
+			store.setActiveScreen(6);
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(newCard());
+			await store.loadActiveCard();
+			clear.resolve();
+			await clearing;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
 		describe('a failed Clear', () => {
 			/** Send a Clear and hold its DELETE; the answer fails it. */
 			function clearThatFails() {
@@ -698,11 +716,10 @@ describe('useCardStore', () => {
 	/**
 	 * What the Card's re-read answers Event Data Resync on Reconnect Resync
 	 * (ADR-0028): a failed read did not land, so it stays behind; a read of no
-	 * Card did land.
+	 * Card did land. Over the real store, which is why it is here rather than
+	 * beside the other reloaders in `eventDataResyncReloaders.test.ts`.
 	 */
 	describe('the Card re-read on Reconnect Resync', () => {
-		const unavailable = () => transportFailure({ status: 503, body: { message: 'Unavailable' } });
-
 		it('reports a failed Card read as not landed', async () => {
 			store.setActiveScreen(5);
 			mockCardRepo.getScreenCard.mockRejectedValueOnce(unavailable());

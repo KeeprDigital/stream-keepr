@@ -52,8 +52,8 @@ interface ActiveCardRuntimeState {
  * A Card save or Clear is not: it is the operator's, and is sent whatever
  * arrives meanwhile. Its continuation — holding the saved Card, clearing the
  * held one, reporting its failure — belongs to the Screen selection it began
- * in, a Flight that each Screen selection and the store reset ending the Event
- * Lifetime begin anew (ADR-0024). So a write answered after A → B → A, or after
+ * in. A selection is a Flight. Selecting a Screen begins a new one, and so does
+ * the store reset that ends the Event Lifetime (ADR-0024). So a write answered after A → B → A, or after
  * leaving its Screen and coming back, touches nothing the fresh load holds. The
  * caller still receives its answer. A Clear changes nothing it holds until its
  * `DELETE` succeeds, so a failed one has nothing to roll back, and whatever
@@ -72,29 +72,33 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	/** The Screen selection, within the Event Lifetime, a write's continuation belongs to. */
 	const selections = createGuardedSequence();
 	let selection = selections.begin();
+	/** The Event Lifetime a request's effect on `state.loading` belongs to. */
+	const lifetimes = createGuardedSequence();
+	let lifetime = lifetimes.begin();
 	/**
 	 * Card reads and saves still out in this Event Lifetime. `state.loading` is
 	 * true while any is, so a superseded read neither leaves it stuck nor turns it
 	 * off under a save, and a request from an ended lifetime touches it no more.
 	 */
-	let requestsOut = { count: 0 };
+	let requestsOut = 0;
 
 	async function whileLoading<T>(request: () => Promise<T>) {
-		const out = requestsOut;
-		out.count++;
+		const flight = lifetime;
+		requestsOut++;
 		state.loading.value = true;
 		try {
 			return await request();
 		}
 		finally {
-			out.count--;
-			if (out === requestsOut)
-				state.loading.value = out.count > 0;
+			if (flight.current) {
+				requestsOut--;
+				state.loading.value = requestsOut > 0;
+			}
 		}
 	}
 
 	/** Whether a continuation begun in `flight` for this Event and Screen may still touch the store. */
-	function stillHolds(flight: Flight, eventId: number, screenId: number) {
+	function stillSelected(flight: Flight, eventId: number, screenId: number) {
 		// The ids are checked too, because the Card page's Screen picker writes
 		// `activeScreenId` before its watcher selects the Screen.
 		return flight.current && currentEventId() === eventId && state.activeScreenId.value === screenId;
@@ -164,7 +168,8 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	/** The store reset ends the Event Lifetime: nothing still out touches the next one. */
 	function endLifetime() {
 		selection = selections.begin();
-		requestsOut = { count: 0 };
+		lifetime = lifetimes.begin();
+		requestsOut = 0;
 		resetActiveCardState();
 	}
 
@@ -216,7 +221,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 			async (): Promise<CardReadOutcome> => {
 				const card = await whileLoading(async () => screenOutputRead ? await screenOutputRead() : await getScreenCard(eventId, screenId));
 				// Something newer reached the Card while this read was out: it lands nothing.
-				if (!stillHolds(flight, eventId, screenId))
+				if (!stillSelected(flight, eventId, screenId))
 					return 'superseded';
 				holdCard(card);
 				return 'landed';
@@ -242,7 +247,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.executeAction(
 			async () => {
 				await whileLoading(async () => saveScreenCard(eventId, screenId, cardData));
-				if (!stillHolds(flight, eventId, screenId))
+				if (!stillSelected(flight, eventId, screenId))
 					return cardData;
 				reads.supersede();
 				holdCard(cardData);
@@ -271,7 +276,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.executeAction(
 			async () => {
 				await deleteScreenCard(eventId, screenId);
-				if (!stillHolds(flight, eventId, screenId))
+				if (!stillSelected(flight, eventId, screenId))
 					return;
 				resetActiveCardState();
 			},
