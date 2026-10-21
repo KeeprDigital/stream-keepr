@@ -824,4 +824,61 @@ describe('feature match slots API', () => {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
 		}
 	});
+
+	/**
+	 * The permitted Slot counts on local D1 (#702). Each Slot row bound four
+	 * parameters, so a statement inserting more than twenty-five failed D1's
+	 * hundred-parameter limit.
+	 */
+	describe('at the permitted Slot counts', () => {
+		/** The Slots in display order, each holding its first Session. */
+		function expectInitialisedInOrder(slots: { sortOrder: number; activeSession?: { sequence: number } | null }[]) {
+			expect(slots.map(slot => slot.sortOrder)).toEqual(slots.map((_, index) => index));
+			for (const slot of slots)
+				expect(slot.activeSession?.sequence).toBe(1);
+		}
+
+		it('creates an Event with fifty Slots', async () => {
+			const event = await $fetch('/api/events', {
+				method: 'POST',
+				body: { name: 'Integration Fifty Slots Event', game: 'mtg', featureMatchOrientation: 'horizontal', numFeatureMatches: 50 },
+			});
+
+			try {
+				expect(event.numFeatureMatches).toBe(50);
+				const data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+				expect(data.featureMatchSlots).toHaveLength(50);
+				expectInitialisedInOrder(data.featureMatchSlots);
+			}
+			finally {
+				await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+			}
+		});
+
+		it('increases an Event by more than twenty-five Slots, then decreases it', async () => {
+			const event = await $fetch('/api/events', {
+				method: 'POST',
+				body: { name: 'Integration Grown Slots Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+			});
+
+			try {
+				const [first] = (await $fetch(`/api/events/${event.id}/feature-match-slots`)).featureMatchSlots;
+
+				const grown = await $fetch(`/api/events/${event.id}`, { method: 'PATCH', body: { numFeatureMatches: 40 } });
+				expect(grown.numFeatureMatches).toBe(40);
+				const increased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+				expect(increased.featureMatchSlots).toHaveLength(40);
+				expectInitialisedInOrder(increased.featureMatchSlots);
+				expect(increased.featureMatchSlots[0]!.id).toBe(first!.id);
+
+				await $fetch(`/api/events/${event.id}`, { method: 'PATCH', body: { numFeatureMatches: 3 } });
+				const decreased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
+				expect(decreased.featureMatchSlots.map(slot => slot.id))
+					.toEqual(increased.featureMatchSlots.slice(0, 3).map(slot => slot.id));
+			}
+			finally {
+				await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+			}
+		});
+	});
 });

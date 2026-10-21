@@ -313,10 +313,19 @@ describe('featureMatchService', () => {
 	});
 
 	describe('syncFeatureMatches', () => {
+		/**
+		 * The new Slots are inserted in one D1 batch of statements sized to D1's
+		 * parameter limit; the real limit is proven in featureMatchSlotCountD1.test.ts.
+		 */
+		function insertsCommitAsOneBatch(created: ReturnType<typeof createMockFeatureMatch>[]) {
+			Object.assign(getChain('insert'), { toSQL: () => ({ params: [] }) });
+			mockDb.batch.mockResolvedValueOnce([created]);
+		}
+
 		it('creates matches when target > current', async () => {
 			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
 			const created = [createMockFeatureMatch({ id: 1 }), createMockFeatureMatch({ id: 2 })];
-			getChain('insert').returning.mockResolvedValue(created);
+			insertsCommitAsOneBatch(created);
 			// Session creation for each created match uses update chain
 			getChain('update').returning.mockResolvedValue([{ state: {}, stateVersion: 0 }]);
 
@@ -358,7 +367,7 @@ describe('featureMatchService', () => {
 
 		it('surfaces the session failure when the compensating delete also fails, attaching the delete failure', async () => {
 			mockDb.query.featureMatches.findMany.mockResolvedValueOnce([]);
-			getChain('insert').returning.mockResolvedValue([createMockFeatureMatch({ id: 1 })]);
+			insertsCommitAsOneBatch([createMockFeatureMatch({ id: 1 })]);
 			const sessionFailure = new Error('session failed');
 			featureMatchStateServiceMocks.openSessionsForSlots.mockRejectedValueOnce(sessionFailure);
 			const deleteFailure = new Error('delete failed');
