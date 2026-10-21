@@ -18,7 +18,7 @@ import type {
 } from '~~/shared/types/metagame';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
-import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '~~/server/db';
 import { archetypeCards, archetypes, cards, playerDeckCards, playerDecks, players } from '~~/server/db/schema';
@@ -26,6 +26,7 @@ import { hasReviewedPlayerDeckDetails } from '~~/server/mappers/playerDeck';
 import { buildArchetypeBreakdownEntries, compareArchetypeBreakdownEntries, groupClassifiedPlayersByArchetype, isConvertedPlayer, limitArchetypeBreakdownEntries } from '~~/server/modules/metagame/archetypes';
 import { compareCardBreakdownEntries, createCardTypeBucketFilter, isEligibleMetagameCard, toCardBreakdownEntry } from '~~/server/modules/metagame/cards';
 import { resolveMetagameScope } from '~~/server/modules/metagame/scopeModel';
+import { archetypeService } from '~~/server/services/archetype';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
 import { buildMetagameFacts } from '~~/server/services/metagameFacts';
 import { computeMetagameWinRate } from '~~/server/services/metagameMetrics';
@@ -116,26 +117,26 @@ export function createMetagameReadModelImplementation() {
 
 		const groups = groupClassifiedPlayersByArchetype(classifiedRows, conversionTarget);
 
-		// Fetch only the archetypes that have classified players
-		const archetypeIds = [...groups.keys()];
-		const archetypeRows = await db
-			.select()
-			.from(archetypes)
-			.where(and(
-				eq(archetypes.eventId, eventId),
-				inArray(archetypes.id, archetypeIds),
-			));
-		// Fetch key cards for all archetypes in one call
-		const keyCardRowsByArchetypeId = await archetypeCardService().getKeyCardsByArchetypeIds(archetypeIds);
-		const keyCardsByArchetypeId = new Map(
-			[...keyCardRowsByArchetypeId.entries()].map(([archetypeId, keyCards]) => [archetypeId, keyCards.map(mapCardRow)]),
-		);
+		// Only the Event's own Archetypes that have classified players, looked up
+		// in groups within D1's parameter limit: an Event can represent a hundred
+		// or more, and every id is a bound parameter (#702).
+		const archetypeRows = await archetypeService().findManyByIds(eventId, [...groups.keys()]);
 
-		const entries = buildArchetypeBreakdownEntries(groups, archetypeRows, classifiedPlayers, keyCardsByArchetypeId, conversionTarget);
+		const entries = buildArchetypeBreakdownEntries(groups, archetypeRows, classifiedPlayers, new Map(), conversionTarget);
 		entries.sort((a, b) => compareArchetypeBreakdownEntries(sortBy, a, b));
 		const limitedEntries = limitArchetypeBreakdownEntries(entries, groups, classifiedPlayers, limit, conversionTarget);
 
-		return { entries: limitedEntries, totalPlayers, classifiedPlayers, scope };
+		// Key cards only for the entries answered: the limit applies first, and
+		// the aggregated Other entry has none.
+		const keyCardRowsByArchetypeId = await archetypeCardService().getKeyCardsByArchetypeIds(
+			limitedEntries.filter(entry => groups.has(entry.id)).map(entry => entry.id),
+		);
+		const answered = limitedEntries.map(entry => ({
+			...entry,
+			keyCards: keyCardRowsByArchetypeId.get(entry.id)?.map(mapCardRow) ?? [],
+		}));
+
+		return { entries: answered, totalPlayers, classifiedPlayers, scope };
 	}
 
 	async function getArchetypeBreakdown(
