@@ -4,14 +4,9 @@ import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
 	DEFAULT_BROADCAST_GRAPHICS_CONFIG,
-	DEFAULT_CARD_CONFIG,
-	DEFAULT_DECK_CONFIG,
 	DEFAULT_FEATURE_MATCH_CONFIG,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-	DEFAULT_PLAYER_HISTORY_CONFIG,
 	DEFAULT_SCREEN_CONFIG,
-	DEFAULT_STANDINGS_CONFIG,
-	DEFAULT_TOPCUT_CONFIG,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
 	mergeScreenModeConfig,
@@ -21,22 +16,6 @@ import {
 describe('getDefaultConfigForMode', () => {
 	it('returns background config for background mode', () => {
 		expect(getDefaultConfigForMode('background')).toEqual(DEFAULT_BACKGROUND_CONFIG);
-	});
-
-	it('returns card config for card mode', () => {
-		expect(getDefaultConfigForMode('card')).toEqual(DEFAULT_CARD_CONFIG);
-	});
-
-	it('returns deck config for deck mode', () => {
-		expect(getDefaultConfigForMode('deck')).toEqual(DEFAULT_DECK_CONFIG);
-	});
-
-	it('returns standings config for standings mode', () => {
-		expect(getDefaultConfigForMode('standings')).toEqual(DEFAULT_STANDINGS_CONFIG);
-	});
-
-	it('returns topCut config for topCut mode', () => {
-		expect(getDefaultConfigForMode('topCut')).toEqual(DEFAULT_TOPCUT_CONFIG);
 	});
 
 	it('returns feature-match config for feature-match mode', () => {
@@ -50,15 +29,11 @@ describe('getDefaultConfigForMode', () => {
 	it('returns broadcast-graphics config for broadcast-graphics mode', () => {
 		expect(getDefaultConfigForMode('broadcast-graphics')).toEqual(DEFAULT_BROADCAST_GRAPHICS_CONFIG);
 	});
-
-	it('returns player-history config for player-history mode', () => {
-		expect(getDefaultConfigForMode('player-history')).toEqual(DEFAULT_PLAYER_HISTORY_CONFIG);
-	});
 });
 
 describe('getDisplayDefaultsForMode', () => {
 	it('returns full config for modes without data bindings', () => {
-		expect(getDisplayDefaultsForMode('topCut')).toEqual(DEFAULT_TOPCUT_CONFIG);
+		expect(getDisplayDefaultsForMode('topCut')).toEqual({ bracketSize: 8 });
 	});
 
 	it('preserves the authored Background Layer stack on a display reset', () => {
@@ -69,14 +44,14 @@ describe('getDisplayDefaultsForMode', () => {
 
 	it('returns display defaults that preserve visual settings only', () => {
 		expect(getDisplayDefaultsForMode('card')).toMatchObject({
-			scale: DEFAULT_CARD_CONFIG.scale,
-			animationEnabled: DEFAULT_CARD_CONFIG.animationEnabled,
+			scale: getDefaultConfigForMode('card').scale,
+			animationEnabled: getDefaultConfigForMode('card').animationEnabled,
 		});
 
 		expect(getDisplayDefaultsForMode('deck')).toMatchObject({
-			board: DEFAULT_DECK_CONFIG.board,
-			mainboard: DEFAULT_DECK_CONFIG.mainboard,
-			sideboard: DEFAULT_DECK_CONFIG.sideboard,
+			board: getDefaultConfigForMode('deck').board,
+			mainboard: getDefaultConfigForMode('deck').mainboard,
+			sideboard: getDefaultConfigForMode('deck').sideboard,
 		});
 		expect('deckSource' in getDisplayDefaultsForMode('deck')).toBe(false);
 
@@ -93,21 +68,21 @@ describe('getDisplayDefaultsForMode', () => {
 		});
 
 		expect(getDisplayDefaultsForMode('player-history')).toMatchObject({
-			columns: DEFAULT_PLAYER_HISTORY_CONFIG.columns,
-			showHeader: DEFAULT_PLAYER_HISTORY_CONFIG.showHeader,
+			columns: getDefaultConfigForMode('player-history').columns,
+			showHeader: getDefaultConfigForMode('player-history').showHeader,
 		});
 	});
 
 	it('preserves the complete Broadcast source while resetting Deck display settings', () => {
 		const source = { type: 'broadcast' as const, broadcastDeckListId: 73 };
 		const reset = mergeScreenModeConfig(
-			{ deck: { ...DEFAULT_DECK_CONFIG, deckSource: source, showDeckName: false } },
+			{ deck: { ...getDefaultConfigForMode('deck'), deckSource: source, showDeckName: false } },
 			'deck',
 			getDisplayDefaultsForMode('deck'),
 		);
 
 		expect(reset.deck?.deckSource).toEqual(source);
-		expect(reset.deck?.showDeckName).toBe(DEFAULT_DECK_CONFIG.showDeckName);
+		expect(reset.deck?.showDeckName).toBe(getDefaultConfigForMode('deck').showDeckName);
 	});
 });
 
@@ -116,8 +91,8 @@ describe('resolveDeckBoards', () => {
 		expect(resolveDeckBoards({})).toEqual({
 			board: 'full',
 			sideboardPlacement: 'beside',
-			mainboard: DEFAULT_DECK_CONFIG.mainboard,
-			sideboard: DEFAULT_DECK_CONFIG.sideboard,
+			mainboard: getDefaultConfigForMode('deck').mainboard,
+			sideboard: getDefaultConfigForMode('deck').sideboard,
 		});
 	});
 
@@ -128,8 +103,8 @@ describe('resolveDeckBoards', () => {
 		});
 
 		expect(resolved.board).toBe('sideboard');
-		expect(resolved.sideboard).toEqual({ ...DEFAULT_DECK_CONFIG.sideboard, columns: 6 });
-		expect(resolved.mainboard).toEqual(DEFAULT_DECK_CONFIG.mainboard);
+		expect(resolved.sideboard).toEqual({ ...getDefaultConfigForMode('deck').sideboard, columns: 6 });
+		expect(resolved.mainboard).toEqual(getDefaultConfigForMode('deck').mainboard);
 	});
 });
 
@@ -146,17 +121,17 @@ describe('default config constants', () => {
 	});
 
 	it('default card config has null featureMatchId', () => {
-		expect(DEFAULT_CARD_CONFIG.featureMatchId).toBeNull();
+		expect(getDefaultConfigForMode('card').featureMatchId).toBeNull();
 	});
 
 	it('default deck config selects no Player', () => {
-		expect(DEFAULT_DECK_CONFIG.deckSource).toEqual({ type: 'player', playerId: null });
+		expect(getDefaultConfigForMode('deck').deckSource).toEqual({ type: 'player', playerId: null });
 	});
 
 	it('default deck config shows the full deck with per-board layout blocks', () => {
-		expect(DEFAULT_DECK_CONFIG.board).toBe('full');
-		expect(DEFAULT_DECK_CONFIG.sideboardPlacement).toBe('beside');
-		expect(DEFAULT_DECK_CONFIG.mainboard).toEqual({
+		expect(getDefaultConfigForMode('deck').board).toBe('full');
+		expect(getDefaultConfigForMode('deck').sideboardPlacement).toBe('beside');
+		expect(getDefaultConfigForMode('deck').mainboard).toEqual({
 			view: 'grid',
 			columns: 4,
 			listColumns: 2,
@@ -165,7 +140,7 @@ describe('default config constants', () => {
 			cardGap: 8,
 			stackOverlap: 15,
 		});
-		expect(DEFAULT_DECK_CONFIG.sideboard).toEqual({
+		expect(getDefaultConfigForMode('deck').sideboard).toEqual({
 			view: 'stack',
 			columns: 4,
 			listColumns: 2,
@@ -177,21 +152,21 @@ describe('default config constants', () => {
 	});
 
 	it('default deck config includes Highlander display defaults', () => {
-		expect(DEFAULT_DECK_CONFIG.showDeckMetaPill).toBe(true);
-		expect(DEFAULT_DECK_CONFIG.deckMetaPillSize).toBe('medium');
-		expect(DEFAULT_DECK_CONFIG.deckMetaPillTextColor).toBe('#111827');
-		expect(DEFAULT_DECK_CONFIG.deckMetaPillBgColor).toBe('#ffffff');
-		expect(DEFAULT_DECK_CONFIG.deckMetaPillAccentColor).toBe('#7c3aed');
-		expect(DEFAULT_DECK_CONFIG.showHighlanderTotal).toBe(true);
-		expect(DEFAULT_DECK_CONFIG.showHighlanderPointedCards).toBe(true);
-		expect(DEFAULT_DECK_CONFIG.showHighlanderPoints).toBe(true);
-		expect(DEFAULT_DECK_CONFIG.highlanderPointedCardsSize).toBe('medium');
-		expect(DEFAULT_DECK_CONFIG.highlanderPointedCardsTextColor).toBe('#111827');
-		expect(DEFAULT_DECK_CONFIG.highlanderPointedCardsBgColor).toBe('#ffffff');
-		expect(DEFAULT_DECK_CONFIG.highlanderPointedCardsAccentColor).toBe('#7c3aed');
-		expect(DEFAULT_DECK_CONFIG.highlanderPointedCardsBorderColor).toBeUndefined();
-		expect(DEFAULT_DECK_CONFIG.highlanderPointsPosition).toBe('top-left');
-		expect(DEFAULT_DECK_CONFIG.highlanderPointsSize).toBe('medium');
+		expect(getDefaultConfigForMode('deck').showDeckMetaPill).toBe(true);
+		expect(getDefaultConfigForMode('deck').deckMetaPillSize).toBe('medium');
+		expect(getDefaultConfigForMode('deck').deckMetaPillTextColor).toBe('#111827');
+		expect(getDefaultConfigForMode('deck').deckMetaPillBgColor).toBe('#ffffff');
+		expect(getDefaultConfigForMode('deck').deckMetaPillAccentColor).toBe('#7c3aed');
+		expect(getDefaultConfigForMode('deck').showHighlanderTotal).toBe(true);
+		expect(getDefaultConfigForMode('deck').showHighlanderPointedCards).toBe(true);
+		expect(getDefaultConfigForMode('deck').showHighlanderPoints).toBe(true);
+		expect(getDefaultConfigForMode('deck').highlanderPointedCardsSize).toBe('medium');
+		expect(getDefaultConfigForMode('deck').highlanderPointedCardsTextColor).toBe('#111827');
+		expect(getDefaultConfigForMode('deck').highlanderPointedCardsBgColor).toBe('#ffffff');
+		expect(getDefaultConfigForMode('deck').highlanderPointedCardsAccentColor).toBe('#7c3aed');
+		expect(getDefaultConfigForMode('deck').highlanderPointedCardsBorderColor).toBeUndefined();
+		expect(getDefaultConfigForMode('deck').highlanderPointsPosition).toBe('top-left');
+		expect(getDefaultConfigForMode('deck').highlanderPointsSize).toBe('medium');
 	});
 
 	it('default feature match config has null featureMatchId', () => {
@@ -228,19 +203,19 @@ describe('default config constants', () => {
 	});
 
 	it('default standings config defaults to all view mode', () => {
-		expect(DEFAULT_STANDINGS_CONFIG.viewMode).toBe('all');
+		expect(getDefaultConfigForMode('standings').viewMode).toBe('all');
 	});
 
 	it('default standings config hides archetype colors by default', () => {
-		expect(DEFAULT_STANDINGS_CONFIG.showArchetypeColors).toBe(false);
+		expect(getDefaultConfigForMode('standings').showArchetypeColors).toBe(false);
 	});
 
 	it('default standings config leaves max table width uncapped by default', () => {
-		expect(DEFAULT_STANDINGS_CONFIG.maxTableWidth).toBeUndefined();
+		expect(getDefaultConfigForMode('standings').maxTableWidth).toBeUndefined();
 	});
 
 	it('default standings config defaults to current standings', () => {
-		expect(DEFAULT_STANDINGS_CONFIG.roundId).toBeUndefined();
+		expect(getDefaultConfigForMode('standings').roundId).toBeUndefined();
 	});
 
 	it('default metagame config defaults to archetype view mode', () => {

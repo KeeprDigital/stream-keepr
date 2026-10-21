@@ -21,15 +21,9 @@ import { getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeCo
  */
 const PENDING_MODES: readonly ScreenMode[] = [
 	'background',
-	'card',
-	'deck',
-	'standings',
-	'topCut',
 	'feature-match',
 	'feature-match-overlay',
 	'broadcast-graphics',
-	'top-cards',
-	'player-history',
 ];
 
 const contractModes = SCREEN_MODE_VALUES.filter(mode => screenModeConfigContract(mode) !== undefined);
@@ -87,5 +81,5 @@ describe.each(contractModes)('the %s config contract', (mode) => {
 
 describe('modes pending a config contract', () => {
 	for (const mode of PENDING_MODES)
-		it.todo(`${mode}: move onto its config contract (#588, #589)`);
+		it.todo(`${mode}: move onto its config contract (#589)`);
 });

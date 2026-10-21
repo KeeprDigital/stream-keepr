@@ -166,12 +166,12 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 			});
 
 			for (const screen of [programme, offMode]) {
-				const migrated = await $fetch<ScreenResponse>(
+				const configured = await $fetch<ScreenResponse>(
 					`/api/events/${eventId}/screens/${screen.id}/config/deck`,
 					{
 						method: 'PATCH',
 						body: {
-							playerId: null,
+							deckSource: { type: 'player', playerId: null },
 							board: 'sideboard',
 							showDeckName: false,
 							showHighlanderPoints: false,
@@ -179,14 +179,13 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 						},
 					},
 				);
-				expect(migrated.modeConfigs?.deck).toMatchObject({
+				expect(configured.modeConfigs?.deck).toMatchObject({
 					deckSource: { type: 'player', playerId: null },
 					board: 'sideboard',
 					showDeckName: false,
 					showHighlanderPoints: false,
 					quantityPosition: 'bottom-right',
 				});
-				expect(migrated.modeConfigs?.deck).not.toHaveProperty('playerId');
 
 				const selected = await $fetch<ScreenResponse>(
 					`/api/events/${eventId}/screens/${screen.id}/config/deck`,

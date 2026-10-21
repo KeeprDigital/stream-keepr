@@ -2,14 +2,14 @@
 import type { CardDisplayConfig } from '~~/shared/types/screenConfig';
 import type { MtgCard } from '~/types/card/mtg';
 import { useElementSize } from '@vueuse/core';
-import { DEFAULT_CARD_DISPLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
 
 const props = withDefaults(defineProps<{
 	config?: CardDisplayConfig;
 	screenId: number;
 }>(), {
-	config: () => DEFAULT_CARD_DISPLAY_CONFIG,
+	config: () => getDefaultConfigForMode('card'),
 });
 
 const { overlayContainer } = useScreenContext();

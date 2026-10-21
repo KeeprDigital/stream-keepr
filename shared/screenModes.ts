@@ -1,6 +1,12 @@
 import type { ScreenModeConfigContract } from './screenModeConfigs/contract';
 import type { DisplayType, ScreenMode } from './types/enums';
+import { cardModeConfigContract } from './screenModeConfigs/card';
+import { deckModeConfigContract } from './screenModeConfigs/deck';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
+import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
+import { standingsModeConfigContract } from './screenModeConfigs/standings';
+import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
+import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
@@ -59,7 +65,7 @@ export interface ScreenModeDefinition {
 	 * The mode's config contract: the one source of its config's shape, type, and
 	 * defaults, from which its write forms are derived (#587). Absent while the mode
 	 * is still on the old form, a hand-written type beside a hand-written schema;
-	 * #588 and #589 move every mode onto one.
+	 * every plain overlay mode has one (#588), and #589 moves the rest.
 	 */
 	config?: ScreenModeConfigContract<any>;
 }
@@ -88,10 +94,10 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
  */
 const SCREEN_MODE_DEFINITIONS = {
 	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background' },
-	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true },
-	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true },
-	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true },
-	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true },
+	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract },
+	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract },
+	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract },
+	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract },
 	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls' },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
@@ -117,8 +123,8 @@ const SCREEN_MODE_DEFINITIONS = {
 		},
 	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract },
-	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true },
-	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true },
+	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract },
+	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;

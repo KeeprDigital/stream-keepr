@@ -23,25 +23,10 @@ import {
 import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
-	BOARD_SELECTION_VALUES,
-	CARD_ANIMATION_SPEED_VALUES,
-	DECK_BOARD_VIEW_VALUES,
-	DECK_CARD_SIZE_VALUES,
 	HORIZONTAL_ALIGN_VALUES,
-	METAGAME_CARD_SORT_BY_VALUES,
-	METAGAME_SCOPE_VALUES,
-	PLAYER_HISTORY_COLUMN_KEY_VALUES,
 	PLAYER_SIDE_VALUES,
-	QUANTITY_POSITION_VALUES,
-	QUANTITY_SIZE_VALUES,
-	REVEAL_ORDER_VALUES,
-	REVEAL_TRIGGER_VALUES,
 	SCREEN_COLOR_MODE_VALUES,
 	SCREEN_COMMAND_VALUES,
-	SIDEBOARD_PLACEMENT_VALUES,
-	STANDINGS_COLUMN_KEY_VALUES,
-	STANDINGS_VIEW_MODE_VALUES,
-	TOP_CARDS_STAT_VALUES,
 	VERTICAL_ALIGN_VALUES,
 } from '~~/shared/types/enums';
 import {
@@ -108,7 +93,6 @@ import {
 	FEATURE_MATCH_SOURCE_ROLE_VALUES,
 	mergeScreenModeConfig,
 } from '~~/shared/types/screenConfig';
-import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
 
 const MAX_SCREEN_CONFIG_BYTES = 64 * 1024;
@@ -206,14 +190,6 @@ function createModeConfigPatchSchema<T extends z.ZodRawShape>(schema: z.ZodObjec
  * Mode config Zod schemas (strict — no unknown keys)
  * ──────────────────────────────────────────────── */
 
-// Shared enums
-const deckBoardViewSchema = z.enum(DECK_BOARD_VIEW_VALUES);
-const deckCardSizeSchema = z.enum(DECK_CARD_SIZE_VALUES);
-const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
-const quantitySizeSchema = z.enum(QUANTITY_SIZE_VALUES);
-const boardSelectionSchema = z.enum(BOARD_SELECTION_VALUES);
-const sideboardPlacementSchema = z.enum(SIDEBOARD_PLACEMENT_VALUES);
-const cardAnimationSpeedSchema = z.enum(CARD_ANIMATION_SPEED_VALUES);
 const finiteNumberSchema = z.number().finite();
 const opacitySchema = finiteNumberSchema.min(0).max(1);
 const pixelSizeSchema = finiteNumberSchema.positive().max(MAX_PIXEL_VALUE);
@@ -405,7 +381,10 @@ function declaredModeConfigSchema<M extends ScreenMode, Shape extends z.ZodRawSh
 	return z.object(declared as DeclaredModeConfigShape<M, Shape>).strict();
 }
 
-type ContractModeConfigShape<M extends ConfigContractMode> = DeclaredModeConfigShape<M, ReturnType<typeof screenModeConfigContract<M>>['shape']>;
+// `Extract` keeps the constraint visible once more than one mode is on its
+// contract: indexing the definitions by a generic mode loses that every
+// contract's shape is a zod shape.
+type ContractModeConfigShape<M extends ConfigContractMode> = DeclaredModeConfigShape<M, Extract<ReturnType<typeof screenModeConfigContract<M>>['shape'], z.ZodRawShape>>;
 
 /** A PATCH body: every field optional and nullable, `null` being the "delete this key" sentinel. */
 type ModeConfigPatchShape<Shape extends z.ZodRawShape> = {
@@ -451,136 +430,25 @@ export const backgroundModeConfigSchema = declaredModeConfigSchema('background',
 	layers: backgroundLayerStackSchema,
 }) satisfies z.ZodType<BackgroundModeConfig>;
 
-export const cardDisplayConfigSchema = z.object({
-	scale: z.number().min(0.1).max(5).optional(),
-	animationEnabled: z.boolean().optional(),
-	animationSpeed: cardAnimationSpeedSchema.optional(),
-}).strict();
+const cardModeConfigForms = configContractModeForms('card');
 
-export const cardModeConfigSchema = declaredModeConfigSchema('card', {
-	...cardDisplayConfigSchema.shape,
-	featureMatchId: z.number().int().positive().nullable().optional(),
-});
+/** The complete Card config, its own fields from its config contract (#588). */
+export const cardModeConfigSchema = cardModeConfigForms.schema;
 
-// One board's layout block. Both boards share the shape; visibility is the
-// `board` enum's concern, so a block carries no show/hide of its own.
-const deckBoardLayoutConfigSchema = z.object({
-	view: deckBoardViewSchema.optional(),
-	columns: z.number().int().min(1).max(20).optional(),
-	listColumns: z.number().int().min(1).max(4).optional(),
-	cardSize: deckCardSizeSchema.optional(),
-	dynamicCardSize: z.boolean().optional(),
-	cardGap: z.number().min(0).optional(),
-	stackOverlap: z.number().min(0).optional(),
-}).strict();
+const deckModeConfigForms = configContractModeForms('deck');
 
-export const deckModeConfigSchema = declaredModeConfigSchema('deck', {
-	deckSource: z.discriminatedUnion('type', [
-		z.object({
-			type: z.literal('player'),
-			playerId: z.number().int().positive().nullable(),
-		}).strict(),
-		z.object({
-			type: z.literal('broadcast'),
-			broadcastDeckListId: z.number().int().positive(),
-		}).strict(),
-	]),
-	board: boardSelectionSchema.optional(),
-	sideboardPlacement: sideboardPlacementSchema.optional(),
-	mainboard: deckBoardLayoutConfigSchema.optional(),
-	sideboard: deckBoardLayoutConfigSchema.optional(),
-	showQuantities: z.boolean().optional(),
-	showDeckName: z.boolean().optional(),
-	showDeckColors: z.boolean().optional(),
-	showDeckStats: z.boolean().optional(),
-	showDeckMetaPill: z.boolean().optional(),
-	deckMetaPillSize: quantitySizeSchema.optional(),
-	deckMetaPillTextColor: z.string().max(50).optional(),
-	deckMetaPillBgColor: z.string().max(200).optional(),
-	deckMetaPillAccentColor: z.string().max(50).optional(),
-	deckMetaPillBorderColor: z.string().max(50).optional(),
-	showHighlanderTotal: z.boolean().optional(),
-	showHighlanderPointedCards: z.boolean().optional(),
-	highlanderPointedCardsSize: quantitySizeSchema.optional(),
-	highlanderPointedCardsTextColor: z.string().max(50).optional(),
-	highlanderPointedCardsBgColor: z.string().max(200).optional(),
-	highlanderPointedCardsAccentColor: z.string().max(50).optional(),
-	highlanderPointedCardsBorderColor: z.string().max(50).optional(),
-	showHighlanderPoints: z.boolean().optional(),
-	highlanderPointsPosition: quantityPositionSchema.optional(),
-	highlanderPointsSize: quantitySizeSchema.optional(),
-	highlanderPointsTextColor: z.string().max(50).optional(),
-	highlanderPointsBgColor: z.string().max(50).optional(),
-	quantityPosition: quantityPositionSchema.optional(),
-	quantitySize: quantitySizeSchema.optional(),
-	quantityTextColor: z.string().max(50).optional(),
-	quantityBgColor: z.string().max(50).optional(),
-});
+/** The complete Deck config, its own fields from its config contract (#588). */
+export const deckModeConfigSchema = deckModeConfigForms.schema;
 
-const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSchema)
-	.extend({
-		// The sole legacy boundary: old Deck settings clients PATCH `playerId`.
-		playerId: z.number().int().positive().nullable().optional(),
-	})
-	.superRefine((patch, context) => {
-		if (patch.playerId !== undefined && patch.deckSource !== undefined) {
-			context.addIssue({
-				code: 'custom',
-				message: 'playerId and deckSource cannot be sent together',
-			});
-		}
-	})
-	.transform(({ playerId, ...patch }) => playerId === undefined
-		? patch
-		: { ...patch, deckSource: { type: 'player' as const, playerId } });
+const standingsModeConfigForms = configContractModeForms('standings');
 
-const standingsColumnConfigSchema = z.object({
-	key: z.enum(STANDINGS_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
+/** The complete Standings config, its own fields from its config contract (#588). */
+export const standingsModeConfigSchema = standingsModeConfigForms.schema;
 
-const playerHistoryColumnConfigSchema = z.object({
-	key: z.enum(PLAYER_HISTORY_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
+const topCutModeConfigForms = configContractModeForms('topCut');
 
-export const standingsModeConfigSchema = declaredModeConfigSchema('standings', {
-	viewMode: z.enum(STANDINGS_VIEW_MODE_VALUES),
-
-	columns: z.array(standingsColumnConfigSchema).min(1).max(10),
-	showArchetypeColors: z.boolean(),
-	maxTableWidth: z.number().int().positive().optional(),
-	roundId: z.number().int().positive().optional(),
-
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
-
-	topNCount: z.number().int().min(1).max(500),
-
-	sliceStart: z.number().int().min(1).max(9999),
-	sliceEnd: z.number().int().min(1).max(9999),
-
-	playerListId: z.number().int().positive().optional(),
-
-	revealCount: z.number().int().min(1).max(64),
-	revealOrder: z.enum(REVEAL_ORDER_VALUES),
-	revealTrigger: z.enum(REVEAL_TRIGGER_VALUES),
-	revealIntervalMs: z.number().int().min(1000).max(30000),
-	revealedCount: z.number().int().nonnegative().max(64),
-
-	rowsPerPage: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
-
-	animateEntries: z.boolean(),
-});
-
-export const topCutModeConfigSchema = declaredModeConfigSchema('topCut', {
-	bracketSize: z.number().int().positive().optional(),
-});
+/** The complete Top Cut config, its own fields from its config contract (#588). */
+export const topCutModeConfigSchema = topCutModeConfigForms.schema;
 
 export const matchModeConfigSchema = declaredModeConfigSchema('feature-match', {
 	featureMatchId: z.number().int().positive().nullable(),
@@ -602,17 +470,10 @@ export const matchModeConfigSchema = declaredModeConfigSchema('feature-match', {
 	allowCounterControls: z.boolean().optional(),
 });
 
-export const playerHistoryModeConfigSchema = declaredModeConfigSchema('player-history', {
-	playerId: z.number().int().positive().nullable(),
-	columns: z.array(playerHistoryColumnConfigSchema).min(1).max(6),
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
-	rowsPerPage: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
-});
+const playerHistoryModeConfigForms = configContractModeForms('player-history');
+
+/** The complete Player History config, its own fields from its config contract (#588). */
+export const playerHistoryModeConfigSchema = playerHistoryModeConfigForms.schema;
 
 const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
 const featureMatchOverlayAnchorValueSchema = z.enum(FEATURE_MATCH_OVERLAY_ANCHOR_VALUES);
@@ -1895,58 +1756,38 @@ const metagameModeConfigForms = configContractModeForms('metagame');
 /** The complete Metagame config, its own fields from its config contract (#587). */
 export const metagameModeConfigSchema = metagameModeConfigForms.schema;
 
-export const topCardsModeConfigSchema = declaredModeConfigSchema('top-cards', {
-	scope: z.enum(METAGAME_SCOPE_VALUES),
-	topN: z.number().int().min(1).max(500),
-	playerListId: z.number().int().positive().optional(),
-	archetypeFilter: z.string().max(200).optional(),
-	board: z.enum(BOARD_SELECTION_VALUES),
-	sortBy: z.enum(METAGAME_CARD_SORT_BY_VALUES),
-	limit: z.number().int().min(1).max(60),
-	excludedCardTypes: z.array(z.enum(CARD_TYPE_BUCKET_ORDER)).max(CARD_TYPE_BUCKET_ORDER.length),
-	columns: z.number().int().min(1).max(12),
-	cardSize: deckCardSizeSchema,
-	dynamicCardSize: z.boolean(),
-	cardGap: z.number().int().min(0).max(100),
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
-	showCardNames: z.boolean(),
-	showRankBadges: z.boolean(),
-	rankBadgeTextColor: optionalCssColorSchema,
-	rankBadgeBgColor: optionalCssColorSchema,
-	statBadge: z.enum(TOP_CARDS_STAT_VALUES),
-	statBadgeSize: quantitySizeSchema.optional(),
-	statBadgeTextColor: optionalCssColorSchema,
-	statBadgeBgColor: optionalCssColorSchema,
-});
+const topCardsModeConfigForms = configContractModeForms('top-cards');
+
+/** The complete Top Cards config, its own fields from its config contract (#588). */
+export const topCardsModeConfigSchema = topCardsModeConfigForms.schema;
 
 // Map of mode name to its config schema
 export const modeConfigSchemaMap = {
 	'background': backgroundModeConfigSchema,
-	'card': cardModeConfigSchema,
-	'deck': deckModeConfigSchema,
-	'standings': standingsModeConfigSchema,
-	'topCut': topCutModeConfigSchema,
+	'card': cardModeConfigForms.stored,
+	'deck': deckModeConfigForms.stored,
+	'standings': standingsModeConfigForms.stored,
+	'topCut': topCutModeConfigForms.stored,
 	'feature-match': matchModeConfigSchema,
 	'feature-match-overlay': featureMatchOverlayModeConfigSchema,
 	'broadcast-graphics': broadcastGraphicsModeConfigSchema,
 	'metagame': metagameModeConfigForms.stored,
-	'top-cards': topCardsModeConfigSchema,
-	'player-history': playerHistoryModeConfigSchema,
+	'top-cards': topCardsModeConfigForms.stored,
+	'player-history': playerHistoryModeConfigForms.stored,
 } as const;
 
 export const modeConfigPatchSchemaMap = {
 	'background': createModeConfigPatchSchema(backgroundModeConfigSchema),
-	'card': createModeConfigPatchSchema(cardModeConfigSchema),
-	'deck': deckModeConfigPatchSchema,
-	'standings': createModeConfigPatchSchema(standingsModeConfigSchema),
-	'topCut': createModeConfigPatchSchema(topCutModeConfigSchema),
+	'card': cardModeConfigForms.patch,
+	'deck': deckModeConfigForms.patch,
+	'standings': standingsModeConfigForms.patch,
+	'topCut': topCutModeConfigForms.patch,
 	'feature-match': createModeConfigPatchSchema(matchModeConfigSchema),
 	'feature-match-overlay': createModeConfigPatchSchema(featureMatchOverlayModeConfigSchema),
 	'broadcast-graphics': createModeConfigPatchSchema(broadcastGraphicsModeConfigSchema),
 	'metagame': metagameModeConfigForms.patch,
-	'top-cards': createModeConfigPatchSchema(topCardsModeConfigSchema),
-	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
+	'top-cards': topCardsModeConfigForms.patch,
+	'player-history': playerHistoryModeConfigForms.patch,
 } as const;
 
 /**
