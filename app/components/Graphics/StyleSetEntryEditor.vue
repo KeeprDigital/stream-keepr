@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { GraphicAnimationChannelKey, GraphicAnimationChannels, ShapeGeometryPresetId, ShapeGeometrySize } from '~~/shared/modules/graphics';
-import type { AnimationRecipeGraphicStyleEntryValue, GraphicStyleSetEntry, SurfaceStyleGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
+import type { GraphicAnimationChannelKey, GraphicAnimationChannels, GraphicFillEdit, ShapeGeometryPresetId, ShapeGeometrySize } from '~~/shared/modules/graphics';
+import type { AnimationRecipeGraphicStyleEntryValue, FillGraphicStyleEntryValue, GraphicStyleSetEntry, SurfaceStyleGraphicStyleEntryValue } from '~~/shared/types/graphicStyleSet';
 import type { BorderGlowEdit } from '~/types/borderGlow';
 import type { MediaFieldsValue } from '~/utils/mediaFields';
+import { applyGraphicStyleFillEntryEdit, graphicFillOfStyleEntry } from '~~/shared/modules/graphic-style-sets';
 import { getGraphicItemDefinition, getShapeGeometryPreset, mergeGraphicAnimationRecipeChannel } from '~~/shared/modules/graphics';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
@@ -55,6 +56,15 @@ function patch(fields: Record<string, unknown>) {
 function patchRecipeChannel<K extends GraphicAnimationChannelKey>(channel: K, fields: Partial<GraphicAnimationChannels[K]> | null) {
 	const recipe = props.entry.value as AnimationRecipeGraphicStyleEntryValue;
 	emit('update:value', mergeGraphicAnimationRecipeChannel(recipe, channel, fields));
+}
+
+/**
+ * A Graphic Fill entry takes the same edits as an item's fill, by the same rules,
+ * on palette entry ids: two to four stops, and a change of kind that keeps the
+ * palette entry the author was working with.
+ */
+function editFill(edit: GraphicFillEdit) {
+	emit('update:value', applyGraphicStyleFillEntryEdit(props.entry.value as FillGraphicStyleEntryValue, edit));
 }
 
 /**
@@ -146,98 +156,27 @@ function applyShapeGeometryPreset(presetId: ShapeGeometryPresetId) {
 		</template>
 
 		<template v-else-if="entry.kind === 'fill'">
-			<UFormField label="Kind" size="xs">
-				<USelect
-					:model-value="entry.value.type"
-					:items="[{ label: 'Solid', value: 'solid' }, { label: 'Linear gradient', value: 'linear-gradient' }]"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="style-entry-fill-kind"
-					@update:model-value="$event === 'solid'
-						? emit('update:value', { type: 'solid', colorEntryId: paletteOptions[0]?.value ?? '' })
-						: emit('update:value', {
-							type: 'linear-gradient',
-							angle: 90,
-							stops: [
-								{ colorEntryId: paletteOptions[0]?.value ?? '', position: 0, opacity: 1 },
-								{ colorEntryId: paletteOptions[0]?.value ?? '', position: 1, opacity: 1 },
-							],
-						})"
-				/>
-			</UFormField>
-
-			<UFormField v-if="entry.value.type === 'solid'" label="Colour" size="xs">
-				<USelect
-					:model-value="entry.value.colorEntryId"
-					:items="paletteOptions"
-					value-key="value"
-					size="xs"
-					class="w-full"
-					:disabled="disabled"
-					data-testid="style-entry-fill-color"
-					@update:model-value="patch({ colorEntryId: $event })"
-				/>
-			</UFormField>
-
-			<template v-else>
-				<UFormField label="Angle" size="xs">
-					<UInputNumber
-						:model-value="entry.value.angle"
-						:min="-360"
-						:max="360"
+			<GraphicsFillFields
+				:fill="graphicFillOfStyleEntry(entry.value)"
+				:disabled="disabled"
+				size="xs"
+				test-id-prefix="style-entry-fill"
+				@edit="editFill"
+			>
+				<template #color="{ value, label, testId, update }">
+					<USelect
+						:model-value="value"
+						:items="paletteOptions"
+						value-key="value"
 						size="xs"
+						class="w-full"
+						:aria-label="label"
 						:disabled="disabled"
-						@update:model-value="patch({ angle: $event ?? 0 })"
+						:data-testid="testId"
+						@update:model-value="update($event)"
 					/>
-				</UFormField>
-				<div
-					v-for="(stop, index) in entry.value.stops"
-					:key="index"
-					class="grid grid-cols-3 gap-2"
-				>
-					<UFormField :label="`Stop ${index + 1}`" size="xs">
-						<USelect
-							:model-value="stop.colorEntryId"
-							:items="paletteOptions"
-							value-key="value"
-							size="xs"
-							class="w-full"
-							:disabled="disabled"
-							@update:model-value="patch({
-								stops: (entry.value as { stops: unknown[] }).stops
-									.map((existing, at) => at === index ? { ...(existing as object), colorEntryId: $event } : existing),
-							})"
-						/>
-					</UFormField>
-					<UFormField label="Position" size="xs">
-						<UInputNumber
-							:model-value="stop.position"
-							:min="0"
-							:max="1"
-							:step="0.05"
-							size="xs"
-							:disabled="disabled"
-							@update:model-value="patch({
-								stops: (entry.value as { stops: unknown[] }).stops
-									.map((existing, at) => at === index ? { ...(existing as object), position: $event ?? 0 } : existing),
-							})"
-						/>
-					</UFormField>
-					<UFormField label="Opacity" size="xs">
-						<UIOpacityInput
-							:model-value="stop.opacity"
-							size="xs"
-							:disabled="disabled"
-							@update:model-value="patch({
-								stops: (entry.value as { stops: unknown[] }).stops
-									.map((existing, at) => at === index ? { ...(existing as object), opacity: $event ?? 1 } : existing),
-							})"
-						/>
-					</UFormField>
-				</div>
-			</template>
+				</template>
+			</GraphicsFillFields>
 		</template>
 
 		<template v-else-if="entry.kind === 'surface-style'">

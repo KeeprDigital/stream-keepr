@@ -1,16 +1,19 @@
-import type { BroadcastGraphicConfig } from '../../types/graphics';
+import type { BroadcastGraphicConfig, GraphicFill } from '../../types/graphics';
 import type {
+	FillGraphicStyleEntryValue,
 	GraphicStyleEntryKind,
 	GraphicStyleRefs,
 	GraphicStyleSetEntry,
 	GraphicStyleSlot,
 } from '../../types/graphicStyleSet';
+import type { GraphicFillEdit } from '../graphics/fill';
 import type { GraphicStyleSetResolution } from './entries';
 import type { GraphicStyleOwnerNode } from './slots';
 import {
 	GRAPHIC_STYLE_ENTRY_SCHEMA_VERSION,
 	GRAPHIC_STYLE_SLOT_VALUES,
 } from '../../types/graphicStyleSet';
+import { applyGraphicFillEdit } from '../graphics/fill';
 import { squareShapeGeometry } from '../graphics/shapeGeometry';
 import {
 	applyGraphicStyleSet,
@@ -95,6 +98,43 @@ export function createGraphicStyleEntry(options: {
 				value: { duration: 300, easing: 'ease-out', delay: 0, fade: { opacity: 0 } },
 			};
 	}
+}
+
+/**
+ * A Graphic Fill entry as a Graphic Fill whose colours are its palette entry ids,
+ * which is the shape the one fill fields control and its edits work on.
+ */
+export function graphicFillOfStyleEntry(value: FillGraphicStyleEntryValue): GraphicFill {
+	return value.type === 'solid'
+		? { type: 'solid', color: value.colorEntryId }
+		: {
+				type: 'linear-gradient',
+				angle: value.angle,
+				stops: value.stops.map(({ colorEntryId, ...stop }) => ({ ...stop, color: colorEntryId })),
+			};
+}
+
+function styleEntryOfGraphicFill(fill: GraphicFill): FillGraphicStyleEntryValue {
+	return fill.type === 'solid'
+		? { type: 'solid', colorEntryId: fill.color }
+		: {
+				type: 'linear-gradient',
+				angle: fill.angle,
+				stops: fill.stops.map(({ color, ...stop }) => ({ colorEntryId: color, ...stop })),
+			};
+}
+
+/**
+ * Apply one Graphic Fill edit to a Graphic Fill entry, by the same rules as a
+ * Graphic Item's own fill: two to four stops, and a change of kind that keeps the
+ * palette entry the author was working with. The value is replaced rather than
+ * merged, because a Graphic Fill is a discriminated union.
+ */
+export function applyGraphicStyleFillEntryEdit(
+	value: FillGraphicStyleEntryValue,
+	edit: GraphicFillEdit,
+): FillGraphicStyleEntryValue {
+	return styleEntryOfGraphicFill(applyGraphicFillEdit(graphicFillOfStyleEntry(value), edit));
 }
 
 /** The entries of one kind, which is what a slot's picker offers. */

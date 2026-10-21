@@ -2243,8 +2243,8 @@ describe('graphicsCompositorInspector', () => {
 			// size, shape, or paint, and the authored values survive the switch.
 			const boxes = await mountKind('game-wins');
 			expect(boxes.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(true);
-			expect(boxes.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(true);
-			expect(boxes.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(true);
+			expect(boxes.find('[data-testid="game-wins-box-graphic-fill-color"]').exists()).toBe(true);
+			expect(boxes.find('[data-testid="game-wins-won-box-graphic-fill-color"]').exists()).toBe(true);
 			expect(boxes.find('[data-testid="shape-geometry-preset"]').exists()).toBe(true);
 
 			selectField(boxes, 'game-wins-display-mode')?.vm.$emit('update:modelValue', 'number');
@@ -2252,8 +2252,8 @@ describe('graphicsCompositorInspector', () => {
 
 			const number = await mountKind('game-wins', emittedGraphics(boxes));
 			expect(number.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(false);
-			expect(number.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
-			expect(number.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(false);
+			expect(number.find('[data-testid="game-wins-box-graphic-fill-color"]').exists()).toBe(false);
+			expect(number.find('[data-testid="game-wins-won-box-graphic-fill-color"]').exists()).toBe(false);
 			expect(number.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 		});
 
@@ -2263,7 +2263,7 @@ describe('graphicsCompositorInspector', () => {
 			const wrapper = await mountKind('game-wins');
 
 			wrapper.findAllComponents(UInputStub)
-				.find(input => input.attributes('data-testid') === 'game-wins-box-shape-fill')
+				.find(input => input.attributes('data-testid') === 'game-wins-box-graphic-fill-color')
 				?.vm
 				.$emit('update:modelValue', '#123456');
 			await nextTick();
@@ -2319,7 +2319,7 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(wrapper.find('[data-testid="game-wins-display-mode"]').exists()).toBe(false);
 			expect(wrapper.find('[data-testid="player-life-animation"]').exists()).toBe(false);
-			expect(wrapper.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="game-wins-box-graphic-fill-color"]').exists()).toBe(false);
 		});
 	});
 });

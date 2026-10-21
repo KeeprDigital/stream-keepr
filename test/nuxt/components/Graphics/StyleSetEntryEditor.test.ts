@@ -241,6 +241,69 @@ describe('graphicsStyleSetEntryEditor', () => {
 		});
 	});
 
+	it('grows a Graphic Fill entry\'s gradient to four stops, each a palette entry', async () => {
+		const gradient: GraphicStyleSetEntry = {
+			id: 'accent-fill',
+			kind: 'fill',
+			name: 'Accent fill',
+			schemaVersion: 1,
+			value: {
+				type: 'linear-gradient',
+				angle: 90,
+				stops: [
+					{ colorEntryId: 'brand', position: 0, opacity: 1 },
+					{ colorEntryId: 'ink', position: 1, opacity: 1 },
+					{ colorEntryId: 'ink', position: 1, opacity: 1 },
+				],
+			},
+		};
+		const wrapper = await mountEditor(gradient);
+
+		// The same fill fields an item has: every stop's colour is a palette entry
+		// picker, and no colour input is offered at all.
+		expect(wrapper.findAll('[data-testid="style-entry-fill-stop"]')).toHaveLength(3);
+		expect(wrapper.find('[data-color-picker]').exists()).toBe(false);
+		expect(wrapper.get('[aria-label="Stop 3 colour"]').findAll('option').map(option => option.text())).toEqual(['Brand', 'Ink']);
+
+		await wrapper.get('[data-testid="style-entry-fill-add-stop"]').trigger('click');
+
+		expect(emittedValue(wrapper)).toEqual({
+			...gradient.value,
+			stops: [
+				{ colorEntryId: 'brand', position: 0, opacity: 1 },
+				{ colorEntryId: 'ink', position: 1, opacity: 1 },
+				{ colorEntryId: 'ink', position: 1, opacity: 1 },
+				{ colorEntryId: 'ink', position: 1, opacity: 1 },
+			],
+		});
+
+		await wrapper.get('[aria-label="Stop 1 colour"]').setValue('ink');
+		expect((emittedValue(wrapper).stops as Array<{ colorEntryId: string }>)[0]?.colorEntryId).toBe('ink');
+	});
+
+	it('removes a Graphic Fill entry\'s stop down to two', async () => {
+		const gradient: GraphicStyleSetEntry = {
+			id: 'accent-fill',
+			kind: 'fill',
+			name: 'Accent fill',
+			schemaVersion: 1,
+			value: {
+				type: 'linear-gradient',
+				angle: 90,
+				stops: [
+					{ colorEntryId: 'brand', position: 0, opacity: 1 },
+					{ colorEntryId: 'ink', position: 1, opacity: 1 },
+				],
+			},
+		};
+		const wrapper = await mountEditor(gradient);
+
+		// A Style Set document stored with two stops opens as it always did, and two
+		// is the floor.
+		expect(wrapper.get('[data-testid="style-entry-fill-remove-stop"]').attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-testid="style-entry-fill-add-stop"]').attributes('disabled')).toBeUndefined();
+	});
+
 	it('offers a Graphic Surface Style the Graphic Fill entries, and no colour of its own', async () => {
 		const surface: GraphicStyleSetEntry = {
 			id: 'panel',
