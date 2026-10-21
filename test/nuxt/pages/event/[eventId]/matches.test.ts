@@ -55,6 +55,7 @@ const router = {
 
 const mockEventStore = reactive({
 	eventId: 1,
+	event: null as { meleeEnabled?: boolean } | null,
 	loadEvent: vi.fn(),
 	$reset: vi.fn(),
 });
@@ -67,7 +68,7 @@ const mockMatchStore = reactive({
 });
 
 const mockRoundStore = reactive({
-	rounds: [] as Array<{ id: number; phaseId: number; name: string; lastSyncedAt?: string | Date | null }>,
+	rounds: [] as Array<{ id: number; phaseId: number; name: string; lastSyncedAt?: string | Date | null; externalSource?: string }>,
 	isLoaded: true,
 	loadRoundsByEventId: vi.fn(),
 	getRoundById: vi.fn((id: number) => mockRoundStore.rounds.find(round => round.id === id)),
@@ -124,6 +125,14 @@ const mockPlayerDeckCache = {
 	fetchDeck: vi.fn(),
 };
 
+const mockMeleeStore = reactive({
+	syncingRound: false,
+	syncSpecificRound: vi.fn(async () => ({ success: true })),
+	$reset: vi.fn(),
+});
+
+// The page reads Matches through the Match store only. This spy proves it makes
+// no Event-wide Match list request of its own (#646).
 const mockMatchRepository = {
 	list: vi.fn(),
 };
@@ -152,7 +161,7 @@ mockNuxtImport('usePlayerDeckCache', () => () => mockPlayerDeckCache);
 mockNuxtImport('useEventPageLoading', () => () => ({ eventId, initialLoading: storesLoading, initialError: ref(null), retry: vi.fn() }));
 mockNuxtImport('useScreenStore', () => () => ({ $reset: vi.fn() }));
 mockNuxtImport('useCardStore', () => () => ({ $reset: vi.fn() }));
-mockNuxtImport('useMeleeStore', () => () => ({ $reset: vi.fn() }));
+mockNuxtImport('useMeleeStore', () => () => mockMeleeStore);
 mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
 mockNuxtImport('navigateTo', () => vi.fn());
 mockNuxtImport('watchDebounced', () => (source: any, callback: any) => watch(source, callback));
@@ -270,12 +279,14 @@ describe('matches page', () => {
 		assignmentsByRound.clear();
 		mockPlayerStore.players = [];
 		storesLoading.value = false;
+		mockEventStore.event = null;
+		mockMeleeStore.syncSpecificRound.mockClear();
+		mockRoundStore.loadRoundsByEventId.mockClear();
 		mockMatchStore.loadMatchesByRoundId.mockClear();
 		mockFeatureMatchAssignmentStore.consumeRound.mockClear();
 		mockFeatureMatchAssignmentStore.loadAssignments.mockClear();
 		releaseAssignmentRound.mockClear();
 		mockMatchRepository.list.mockReset();
-		mockMatchRepository.list.mockResolvedValue([]);
 		mockOverlay.create.mockClear();
 		router.replace.mockClear();
 		mockToast.add.mockClear();
@@ -306,7 +317,6 @@ describe('matches page', () => {
 
 	it('shows the navbar Add Match action once matches exist', async () => {
 		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
-		mockMatchRepository.list.mockResolvedValue([{ id: 9, roundId: 2 }]);
 		mockMatchStore.matches = [{ id: 9, roundId: 2, hasResult: false, isBye: false }];
 
 		const wrapper = await mountPage();
@@ -323,10 +333,6 @@ describe('matches page', () => {
 			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
 			{ id: 4, phaseId: 1, name: 'Round 3', lastSyncedAt: null },
 		];
-		mockMatchRepository.list.mockResolvedValue([
-			{ id: 1, roundId: 2 },
-			{ id: 2, roundId: 3 },
-		]);
 
 		await mountPage();
 		await flushPromises();
@@ -339,10 +345,6 @@ describe('matches page', () => {
 			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
 			{ id: 4, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
 		];
-		mockMatchRepository.list.mockResolvedValue([
-			{ id: 1, roundId: 2 },
-			{ id: 2, roundId: 4 },
-		]);
 
 		await mountPage();
 		await flushPromises();
@@ -355,7 +357,6 @@ describe('matches page', () => {
 			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null },
 			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
 		];
-		mockMatchRepository.list.mockResolvedValue([{ id: 1, roundId: 3 }]);
 		mockMatchStore.matches = [{ id: 1, roundId: 3 }];
 
 		const wrapper = await mountPage();
@@ -367,11 +368,6 @@ describe('matches page', () => {
 
 	it('shows all matches for the selected round', async () => {
 		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
-		mockMatchRepository.list.mockResolvedValue([
-			{ id: 11, roundId: 2 },
-			{ id: 12, roundId: 2 },
-			{ id: 13, roundId: 2 },
-		]);
 		mockMatchStore.matches = [
 			{ id: 11, roundId: 2, hasResult: false, isBye: false },
 			{ id: 12, roundId: 2, hasResult: true, isBye: false },
@@ -391,7 +387,6 @@ describe('matches page', () => {
 			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null },
 			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
 		];
-		mockMatchRepository.list.mockResolvedValue([{ id: 13, roundId: 3 }]);
 		mockMatchStore.matches = [{ id: 13, roundId: 3, hasResult: false, isBye: false }];
 		assignmentsByRound.set(2, [{ id: 20, roundId: 2, note: 'Wrong Round' }]);
 		assignmentsByRound.set(3, [{ id: 30, roundId: 3, note: 'Selected Round Note' }]);
@@ -403,5 +398,57 @@ describe('matches page', () => {
 		expect(wrapper.get('[data-testid="match-list"]').attributes('data-assignment-notes')).toBe('Selected Round Note');
 		wrapper.unmount();
 		expect(releaseAssignmentRound).toHaveBeenCalledOnce();
+	});
+
+	it('makes no Event-wide Match list request on load', async () => {
+		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null }];
+
+		await mountPage();
+		await flushPromises();
+
+		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 2);
+		expect(mockMatchRepository.list).not.toHaveBeenCalled();
+	});
+
+	it('holds the loading state and the Round choice until the Rounds load, then keeps the queried Round', async () => {
+		route.query.roundId = '3';
+		buildFullPath();
+		storesLoading.value = true;
+
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false);
+		expect(router.replace).not.toHaveBeenCalled();
+
+		mockRoundStore.rounds = [
+			{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: '2026-04-10T11:00:00.000Z' },
+			{ id: 3, phaseId: 1, name: 'Round 2', lastSyncedAt: null },
+		];
+		storesLoading.value = false;
+		await flushPromises();
+
+		expect(router.replace).not.toHaveBeenCalled();
+		expect(route.query.roundId).toBe('3');
+		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 3);
+	});
+
+	it('re-reads the synced Round\'s Matches and the Rounds after a Round sync, without an Event-wide Match list', async () => {
+		mockEventStore.event = { meleeEnabled: true };
+		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null, externalSource: 'melee' }];
+
+		const wrapper = await mountPage();
+		await flushPromises();
+		mockMatchStore.loadMatchesByRoundId.mockClear();
+
+		const syncButton = wrapper.get('[data-testid="empty-state"]').findAll('button').find(button => button.text().includes('Sync Matches'));
+		expect(syncButton).toBeDefined();
+		await syncButton!.trigger('click');
+		await flushPromises();
+
+		expect(mockMeleeStore.syncSpecificRound).toHaveBeenCalledWith(2);
+		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 2);
+		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
+		expect(mockMatchRepository.list).not.toHaveBeenCalled();
 	});
 });
