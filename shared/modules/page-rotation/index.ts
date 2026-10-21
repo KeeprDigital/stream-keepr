@@ -75,30 +75,38 @@ export function rotationPageSize(declaration: PageRotationDeclaration, config: o
 	return (config as Record<string, unknown>)[declaration.pageSize] as number;
 }
 
-/** The config fields whose edit changes a Page Rotation's shape: how many rows a page holds, and how long it shows. */
-export function pageRotationShapeFields(declaration: PageRotationDeclaration): readonly string[] {
-	return [declaration.pageSize, 'autoPageIntervalMs'];
+/**
+ * The Rotation Anchor that restarts a Page Rotation from page 1 now: enabling
+ * auto-page, or an edit changing the rotation's shape while it runs. Page 1's
+ * anchor is the instant itself, whatever the page duration.
+ */
+export function restartedRotationAnchor(now: number): number {
+	return rotationAnchorForPage({ page: 1, pageDurationMs: 0, now });
 }
 
 /**
- * The write an operator edit of a paginated mode's config makes. An edit that
- * changes the rotation's shape restarts it from page 1: the manually selected
- * page goes back to 1 and, while auto-page is on, the Rotation Anchor moves to
- * now. Any other edit is written as it is; nothing else re-anchors (ADR-0009).
+ * The write an operator edit of a paginated mode's config makes. An edit
+ * changing the rotation's shape, its page size or page duration, restarts it
+ * from page 1: while auto-page is on, the Rotation Anchor moves to now. A page
+ * size edit also resets the manually selected page to 1, since every page
+ * then holds different rows. Any other edit is written as it is; nothing else
+ * re-anchors (ADR-0009).
  *
  * The one place that decides which edits are shape changes, for every mode
  * declaring a Page Rotation.
  */
-export function pageRotationEdit<Patch extends Record<string, unknown>>(
+export function pageRotationEdit<Patch extends object>(
 	declaration: PageRotationDeclaration,
-	rotation: { autoPageEnabled: boolean; autoPageIntervalMs: number },
+	rotation: { autoPageEnabled: boolean },
 	patch: Patch,
 	now: number,
 ): Patch & { currentPage?: number; rotationAnchor?: number } {
-	if (!pageRotationShapeFields(declaration).some(field => field in patch))
+	const resizesPages = declaration.pageSize in patch;
+	if (!resizesPages && !('autoPageIntervalMs' in patch))
 		return patch;
-	const restarted = { ...patch, currentPage: 1 };
-	return rotation.autoPageEnabled
-		? { ...restarted, rotationAnchor: rotationAnchorForPage({ page: 1, pageDurationMs: rotation.autoPageIntervalMs, now }) }
-		: restarted;
+	return {
+		...patch,
+		...(resizesPages ? { currentPage: 1 } : {}),
+		...(rotation.autoPageEnabled ? { rotationAnchor: restartedRotationAnchor(now) } : {}),
+	};
 }

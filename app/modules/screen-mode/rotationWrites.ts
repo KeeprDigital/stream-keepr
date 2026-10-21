@@ -3,7 +3,7 @@ import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { computed } from 'vue';
-import { pageRotationEdit, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
+import { pageRotationEdit, restartedRotationAnchor, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
 import { useProjectedRotationPage } from './pagination';
 
@@ -35,7 +35,9 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	const { getServerTime } = useServerTime();
 	const declaration = screenModePageRotation(options.mode);
 	const rotation = computed<PageRotationConfig>(() => options.config.value);
-	const save = (patch: Partial<PageRotationConfig> | Record<string, unknown>) =>
+	// Every paginated mode's config carries the rotation fields (the Screen Mode
+	// Definitions fail to compile otherwise), so a patch of them is a patch of it.
+	const saveRotation = (patch: Partial<PageRotationConfig>) =>
 		options.saveConfig(patch as Partial<ModeConfigTypeMap[M]>);
 
 	const totalPages = computed(() =>
@@ -55,12 +57,12 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 
 	/** Writes an edit of the mode's config; an edit changing the rotation's shape restarts it from page 1. */
 	function updateConfig(patch: Partial<ModeConfigTypeMap[M]>) {
-		save(pageRotationEdit(declaration, rotation.value, patch as Record<string, unknown>, getServerTime()));
+		options.saveConfig(pageRotationEdit(declaration, rotation.value, patch, getServerTime()));
 	}
 
 	function setAutoPageEnabled(enabled: boolean) {
-		save(enabled
-			? { autoPageEnabled: true, rotationAnchor: rotationAnchorForPage({ page: 1, pageDurationMs: rotation.value.autoPageIntervalMs, now: getServerTime() }) }
+		saveRotation(enabled
+			? { autoPageEnabled: true, rotationAnchor: restartedRotationAnchor(getServerTime()) }
 			: { autoPageEnabled: false });
 	}
 
@@ -69,14 +71,14 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	// auto-page off it persists the page exactly as before.
 	function adminSetPage(page: number) {
 		if (rotation.value.autoPageEnabled) {
-			save({ rotationAnchor: rotationAnchorForPage({
+			saveRotation({ rotationAnchor: rotationAnchorForPage({
 				page,
 				pageDurationMs: rotation.value.autoPageIntervalMs,
 				now: getServerTime(),
 			}) });
 		}
 		else {
-			save({ currentPage: page });
+			saveRotation({ currentPage: page });
 		}
 	}
 

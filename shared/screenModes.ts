@@ -113,7 +113,7 @@ export interface ScreenModeDefinition {
 	 *
 	 * Declared here and nowhere else. The settings editor's rotation writes,
 	 * and the one rule for which edits change the rotation's shape
-	 * (`pageRotationEdit`), and the Screen Output's paging all read it. A
+	 * (`pageRotationEdit`), and every rendering's paging all read it. A
 	 * declaring mode's config must carry the shared Page Rotation fields and a
 	 * numeric page size field, and a mode carrying any rotation field must
 	 * declare it, or the definitions fail to compile (ADR-0039).

@@ -37,10 +37,7 @@ describe('screen Mode Page Rotation', () => {
 	describe.each(paginated)('$mode', ({ mode, pageRotation }) => {
 		const contract = SCREEN_MODES[mode].config;
 		const pageSizeEdit = { [pageRotation.pageSize]: 4 };
-		const shapeEdits = [
-			{ name: 'page size', patch: pageSizeEdit },
-			{ name: 'page duration', patch: { autoPageIntervalMs: 5_000 } },
-		];
+		const durationEdit = { autoPageIntervalMs: 5_000 };
 
 		it('carries the shared rotation fields, validation and defaults', () => {
 			for (const [field, schema] of Object.entries(pageRotationShape))
@@ -49,19 +46,28 @@ describe('screen Mode Page Rotation', () => {
 			expect(contract.defaults).toMatchObject(DEFAULT_PAGE_ROTATION);
 		});
 
-		it.each(shapeEdits)('a $name edit while auto-page is on resets to page 1 and moves the Rotation Anchor', ({ patch }) => {
-			expect(pageRotationEdit(pageRotation, { autoPageEnabled: true, autoPageIntervalMs: 10_000 }, patch, NOW))
-				.toEqual({ ...patch, currentPage: 1, rotationAnchor: 1_000_000 });
+		it('a page size edit while auto-page is on resets to page 1 and moves the Rotation Anchor', () => {
+			expect(pageRotationEdit(pageRotation, { autoPageEnabled: true }, pageSizeEdit, NOW))
+				.toEqual({ ...pageSizeEdit, currentPage: 1, rotationAnchor: 1_000_000 });
 		});
 
-		it.each(shapeEdits)('a $name edit with auto-page off resets to page 1 and writes no anchor', ({ patch }) => {
-			expect(pageRotationEdit(pageRotation, { autoPageEnabled: false, autoPageIntervalMs: 10_000 }, patch, NOW))
-				.toEqual({ ...patch, currentPage: 1 });
+		it('a page size edit with auto-page off resets to page 1 and writes no anchor', () => {
+			expect(pageRotationEdit(pageRotation, { autoPageEnabled: false }, pageSizeEdit, NOW))
+				.toEqual({ ...pageSizeEdit, currentPage: 1 });
+		});
+
+		it('a page duration edit while auto-page is on moves the Rotation Anchor, restarting from page 1', () => {
+			expect(pageRotationEdit(pageRotation, { autoPageEnabled: true }, durationEdit, NOW))
+				.toEqual({ ...durationEdit, rotationAnchor: 1_000_000 });
+		});
+
+		it('a page duration edit with auto-page off is written as it is', () => {
+			expect(pageRotationEdit(pageRotation, { autoPageEnabled: false }, durationEdit, NOW)).toEqual(durationEdit);
 		});
 
 		it('writes any other edit as it is', () => {
 			const patch = { headerText: 'Top 8' };
-			expect(pageRotationEdit(pageRotation, { autoPageEnabled: true, autoPageIntervalMs: 10_000 }, patch, NOW)).toEqual(patch);
+			expect(pageRotationEdit(pageRotation, { autoPageEnabled: true }, patch, NOW)).toEqual(patch);
 		});
 	});
 });

@@ -142,7 +142,7 @@ A user-created, installation-scoped, named Animation Effect selection: one effec
 _Avoid_: Animation Effect Template, linked effect style
 
 **Page Rotation**:
-The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape and restarts it from page 1 (ADR-0039).
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Rotation Anchor**:

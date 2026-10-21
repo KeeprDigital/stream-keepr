@@ -36,7 +36,7 @@ function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number
 		rowCount: computed(() => 20), // 4 pages of 5
 		saveConfig,
 	});
-	return { writes, updateConfig: saveConfig, state };
+	return { writes, saveConfig, state };
 }
 
 describe('useRotationConfigWrites', () => {
@@ -46,53 +46,61 @@ describe('useRotationConfigWrites', () => {
 	});
 
 	it('occasion 1 — enabling auto-page restarts the rotation with an integer anchor now', () => {
-		const { writes, updateConfig } = harness({ autoPageEnabled: false });
+		const { writes, saveConfig } = harness({ autoPageEnabled: false });
 
 		writes.setAutoPageEnabled(true);
 
-		expect(updateConfig).toHaveBeenCalledWith({ autoPageEnabled: true, rotationAnchor: 1_000_000 });
+		expect(saveConfig).toHaveBeenCalledWith({ autoPageEnabled: true, rotationAnchor: 1_000_000 });
 	});
 
 	it('disabling auto-page writes no anchor', () => {
-		const { writes, updateConfig } = harness();
+		const { writes, saveConfig } = harness();
 
 		writes.setAutoPageEnabled(false);
 
-		expect(updateConfig).toHaveBeenCalledWith({ autoPageEnabled: false });
+		expect(saveConfig).toHaveBeenCalledWith({ autoPageEnabled: false });
 	});
 
-	it('occasion 2 — a rotation-shape edit restarts from page 1, re-anchoring while rotating and not otherwise', () => {
+	it('occasion 2 — a rotation-shape edit re-anchors while rotating, and not otherwise', () => {
 		const rotating = harness({ currentPage: 3 });
-		rotating.writes.updateConfig({ rowsPerPage: 8 });
-		expect(rotating.updateConfig).toHaveBeenCalledWith({ rowsPerPage: 8, currentPage: 1, rotationAnchor: 1_000_000 });
+		rotating.writes.updateConfig({ autoPageIntervalMs: 5_000 });
+		expect(rotating.saveConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000, rotationAnchor: 1_000_000 });
 
 		const manual = harness({ autoPageEnabled: false, currentPage: 3 });
 		manual.writes.updateConfig({ autoPageIntervalMs: 5_000 });
-		expect(manual.updateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000, currentPage: 1 });
+		expect(manual.saveConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5_000 });
+	});
+
+	it('a Standings page size edit resets the selected page to 1, as Metagame\'s does', () => {
+		const { writes, saveConfig } = harness({ autoPageEnabled: false, currentPage: 3 });
+
+		writes.updateConfig({ rowsPerPage: 8 });
+
+		expect(saveConfig).toHaveBeenCalledWith({ rowsPerPage: 8, currentPage: 1 });
 	});
 
 	it('writes an edit that leaves the rotation\'s shape alone as it is', () => {
-		const { writes, updateConfig } = harness({ currentPage: 3 });
+		const { writes, saveConfig } = harness({ currentPage: 3 });
 
 		writes.updateConfig({ headerText: 'Top 8' });
 
-		expect(updateConfig).toHaveBeenCalledWith({ headerText: 'Top 8' });
+		expect(saveConfig).toHaveBeenCalledWith({ headerText: 'Top 8' });
 	});
 
 	it('occasion 3 — manual selection while rotating re-anchors so the page holds a full duration', () => {
-		const { writes, updateConfig } = harness({ rotationAnchor: 1_000_000 });
+		const { writes, saveConfig } = harness({ rotationAnchor: 1_000_000 });
 
 		writes.adminSetPage(3);
 
-		expect(updateConfig).toHaveBeenCalledWith({ rotationAnchor: 1_000_000 - 20_000 });
+		expect(saveConfig).toHaveBeenCalledWith({ rotationAnchor: 1_000_000 - 20_000 });
 	});
 
 	it('manual selection with auto-page off persists the page number as before', () => {
-		const { writes, updateConfig } = harness({ autoPageEnabled: false, currentPage: 2 });
+		const { writes, saveConfig } = harness({ autoPageEnabled: false, currentPage: 2 });
 
 		writes.adminNextPage();
 
-		expect(updateConfig).toHaveBeenCalledWith({ currentPage: 3 });
+		expect(saveConfig).toHaveBeenCalledWith({ currentPage: 3 });
 	});
 
 	it('currentPage tracks the live projection while rotating', () => {
