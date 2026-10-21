@@ -164,8 +164,9 @@ async function countOf(database: D1Database, sql: string, label: string) {
  * Every one is an aggregate or a bounded, ordered sample, issued as a fixed set
  * of statements. Nothing here expands rows to count them, so a reading's size
  * and statement count do not grow with the library. Its cost does: the
- * aggregates scan their tables (`graphic_assets` and
- * `graphic_asset_revision_retention` in full), and no latency bound is measured.
+ * aggregates scan their tables (`graphic_assets`,
+ * `graphic_asset_revision_retention` and `graphics_content_quarantine` in
+ * full), and no latency bound is measured.
  */
 export function createD1GraphicsOperationsCockpitCatalogue(
 	database: D1Database,

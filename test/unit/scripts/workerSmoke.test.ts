@@ -227,7 +227,7 @@ describe('the built Worker smoke runner', () => {
 
 	it.each([
 		['without HttpOnly', 'better-auth.session_token=t; Max-Age=604800; Path=/; SameSite=Lax'],
-		['without SameSite=Lax', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=None; Secure'],
+		['without SameSite=Lax', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=None'],
 		['scoped below the root path', 'better-auth.session_token=t; Max-Age=604800; Path=/api; HttpOnly; SameSite=Lax'],
 		['named __Secure- but not Secure', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
 		['Secure but not named __Secure-', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax; Secure'],

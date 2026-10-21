@@ -127,7 +127,7 @@ A Screen Media Source naming media by URL rather than by library revision, fetch
 _Avoid_: hotlink, external asset
 
 **Animation Effect**:
-A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, the Background Screen, and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
+A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, a Background Layer (on the Background Screen and every plain overlay mode), and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
 **Animation Effect Preset**:

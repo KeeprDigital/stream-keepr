@@ -341,7 +341,7 @@ A grep of the pinned `better-auth`, `@better-auth/core` and `@better-auth/teleme
 
 ## ADR-0014: Animation Effects are rebuilt in-house on three.js
 
-Accepted · 2026-08-23 · [#473](https://github.com/KeeprDigital/stream-keepr/issues/473)
+Accepted · 2026-08-23, amended under #621 · [#473](https://github.com/KeeprDigital/stream-keepr/issues/473)
 
 ### Decision
 
@@ -362,7 +362,7 @@ Three hosts use the renderer: the Feature Match Overlay Frame, an Animation Effe
 
 ## ADR-0015: Live overlay show/hide rides feature-match session state
 
-Accepted · 2026-08-24 · [#486](https://github.com/KeeprDigital/stream-keepr/issues/486) (decided under spec #485 / #479, #480, #481)
+Accepted · 2026-08-24, amended under #621 · [#486](https://github.com/KeeprDigital/stream-keepr/issues/486) (decided under spec #485 / #479, #480, #481)
 
 ### Decision
 
@@ -465,7 +465,7 @@ Better Auth admits only the hostnames in `AUTH_ALLOWED_HOSTS` — the production
 
 ## ADR-0019: The migration history is squashed into one baseline before ship
 
-Accepted · 2026-10-13
+Accepted · 2026-10-13, amended under #621
 
 ### Decision
 

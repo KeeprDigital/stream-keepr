@@ -626,7 +626,8 @@ Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the
 contract: add codes, never rename one. Output never contains secrets,
 capability tokens, filenames, object keys, or full URLs, so failing output is
-safe to paste into an issue. Find identities in the installation by route and timestamp instead.
+safe to paste into an issue. Find identities in the installation by route and
+timestamp instead.
 
 Step 2 asserts the installation serves **no** Content Security Policy today:
 `csp-directive-unexpected` fires if one appears. If a restrictive policy is
@@ -872,10 +873,9 @@ each reading issues the same fixed set of D1 statements whatever the library
 holds. Those are aggregates or bounded samples (the recent outcome is counted
 over at most 200 Evidence entries), but the aggregates scan their tables, so a
 reading's cost still grows with the catalogue; no latency limit is measured or
-promised. It reports the
-catalogue and the canonical byte store as separate conditions (`degraded` or
-`unavailable`) and still answers with `outcome: catalogue-unavailable` when D1 is
-down.
+promised. It reports the catalogue and the canonical byte store as separate
+conditions (`degraded` or `unavailable`) and still answers with
+`outcome: catalogue-unavailable` when D1 is down.
 
 - Severities: `critical` (cannot be trusted until someone acts), `warning` (a
   guarantee is at risk or an incident is retryable), `info`. Persistent alerts

@@ -53,11 +53,12 @@ const coverageExclude = [
 // measured locally at ~2s per suite. Watch mode and single-file runs stay
 // uninstrumented.
 //
-// Each floor is over its `include` minus `coverageExclude`, not the whole
+// Each floor is over its `include` minus its `exclude`, not the whole
 // codebase (#621). No `.vue` file is measured, so components, pages and layouts
-// are outside both; so are `server/middleware`, `server/plugins`, `server/db`,
-// `app/middleware`, and every `app/plugins` file but the one listed above. A
-// floor is a fixed minimum, not a ratchet: coverage can fall to it unnoticed.
+// are outside both. Also outside both, among others: `server/middleware`,
+// `server/plugins`, `server/db`, `app/middleware`, every `app/plugins` file but
+// the one listed above, `scripts/`, and `workers/`. A floor is a fixed
+// minimum, not a ratchet: coverage can fall to it unnoticed.
 export const unitCoverageConfig: CoverageOptions = {
 	provider: 'v8',
 	reporter: ['text', 'html', 'json'],
