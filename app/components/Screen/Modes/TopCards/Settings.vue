@@ -9,6 +9,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
@@ -24,6 +25,9 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+const fields = screenModeConfigContract('top-cards').fields;
 
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
@@ -119,7 +123,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard title="Data">
 			<UFormField
-				label="Player scope"
+				:label="fields.scope.label"
 				description="Which players to include in the ranking."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -133,14 +137,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<UFormField
 				v-if="config.scope === 'topN'"
-				label="Top N"
+				:label="fields.topN.label"
 				description="Include the top N players by position."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.topN"
-					:min="1"
-					:max="500"
+					:min="fields.topN.min"
+					:max="fields.topN.max"
 					class="w-32"
 					@update:model-value="updateConfig({ topN: Number($event) })"
 				/>
@@ -167,7 +171,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</template>
 
 			<UFormField
-				label="Board"
+				:label="fields.board.label"
 				description="Count cards from this part of each deck."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -180,7 +184,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 
 			<UFormField
-				label="Rank by"
+				:label="fields.sortBy.label"
 				description="Order cards using this metric."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -193,14 +197,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 
 			<UFormField
-				label="Card count"
+				:label="fields.limit.label"
 				description="How many top cards to show."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.limit"
-					:min="1"
-					:max="60"
+					:min="fields.limit.min"
+					:max="fields.limit.max"
 					class="w-32"
 					@update:model-value="updateConfig({ limit: Number($event) })"
 				/>
@@ -228,7 +232,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 
 			<UFormField
-				label="Archetype filter"
+				:label="fields.archetypeFilter.label"
 				description="Limit cards to a single archetype. Leave empty for all archetypes."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -243,21 +247,21 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 		<ScreenSettingsCard title="Layout">
 			<UFormField
-				label="Columns"
+				:label="fields.columns.label"
 				description="Number of cards per row."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.columns"
-					:min="1"
-					:max="12"
+					:min="fields.columns.min"
+					:max="fields.columns.max"
 					class="w-32"
 					@update:model-value="updateConfig({ columns: Number($event) })"
 				/>
 			</UFormField>
 
 			<ScreenSettingsToggle
-				label="Dynamic card size"
+				:label="fields.dynamicCardSize.label"
 				description="Stretch cards to fill the available width."
 				:model-value="config.dynamicCardSize"
 				@update:model-value="updateConfig({ dynamicCardSize: $event })"
@@ -265,7 +269,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<UFormField
 				v-if="!config.dynamicCardSize"
-				label="Card size"
+				:label="fields.cardSize.label"
 				description="Fixed size for each card."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -278,14 +282,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 
 			<UFormField
-				label="Card gap"
+				:label="fields.cardGap.label"
 				description="Space between cards in pixels."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.cardGap"
-					:min="0"
-					:max="100"
+					:min="fields.cardGap.min"
+					:max="fields.cardGap.max"
 					class="w-32"
 					@update:model-value="updateConfig({ cardGap: Number($event) })"
 				/>
@@ -294,7 +298,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				label="Show header"
+				:label="fields.showHeader.label"
 				description="Show the title above the card grid."
 				:model-value="config.showHeader"
 				@update:model-value="updateConfig({ showHeader: $event })"
@@ -302,7 +306,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<UFormField
 				v-if="config.showHeader"
-				label="Custom header text"
+				:label="fields.headerText.label"
 				description="Leave empty for an auto-generated title."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -317,14 +321,14 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 		<ScreenSettingsCard title="Badges & Labels">
 			<ScreenSettingsToggle
-				label="Show card names"
+				:label="fields.showCardNames.label"
 				description="Show each card's name under its image."
 				:model-value="config.showCardNames"
 				@update:model-value="updateConfig({ showCardNames: $event })"
 			/>
 
 			<ScreenSettingsToggle
-				label="Show rank badges"
+				:label="fields.showRankBadges.label"
 				description="Number each card by its position in the ranking."
 				:model-value="config.showRankBadges"
 				@update:model-value="updateConfig({ showRankBadges: $event })"
@@ -339,11 +343,13 @@ function typeLabel(bucket: CardTypeBucket): string {
 						<UIColorPicker
 							:model-value="config.rankBadgeTextColor"
 							placeholder="Text"
+							:aria-label="fields.rankBadgeTextColor.label"
 							@update:model-value="updateConfig({ rankBadgeTextColor: $event })"
 						/>
 						<UIColorPicker
 							:model-value="config.rankBadgeBgColor"
 							placeholder="Background"
+							:aria-label="fields.rankBadgeBgColor.label"
 							@update:model-value="updateConfig({ rankBadgeBgColor: $event })"
 						/>
 					</div>
@@ -353,7 +359,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			<USeparator />
 
 			<UFormField
-				label="Stat badge"
+				:label="fields.statBadge.label"
 				description="Show one metric on each card."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -367,7 +373,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<template v-if="config.statBadge !== 'none'">
 				<UFormField
-					label="Badge size"
+					:label="fields.statBadgeSize.label"
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<USelect
@@ -386,11 +392,13 @@ function typeLabel(bucket: CardTypeBucket): string {
 						<UIColorPicker
 							:model-value="config.statBadgeTextColor"
 							placeholder="Text"
+							:aria-label="fields.statBadgeTextColor.label"
 							@update:model-value="updateConfig({ statBadgeTextColor: $event })"
 						/>
 						<UIColorPicker
 							:model-value="config.statBadgeBgColor"
 							placeholder="Background"
+							:aria-label="fields.statBadgeBgColor.label"
 							@update:model-value="updateConfig({ statBadgeBgColor: $event })"
 						/>
 					</div>

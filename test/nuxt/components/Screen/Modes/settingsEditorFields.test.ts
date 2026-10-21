@@ -33,7 +33,6 @@ const NOT_YET_GUARDED = new Set<ScreenMode>([
 	'feature-match',
 	'feature-match-overlay',
 	'broadcast-graphics',
-	'top-cards',
 ]);
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
@@ -66,6 +65,8 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		],
 	},
 	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
+	// The Top N scope, and a fixed card size.
+	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false }] },
 };
 
 // ── The editor's environment ──
