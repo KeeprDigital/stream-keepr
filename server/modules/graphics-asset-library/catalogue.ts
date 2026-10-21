@@ -22,6 +22,7 @@ import type { TemplatePackagePreflightState } from './template-package-preflight
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS } from '~~/shared/utils/graphicsAssetReferences';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
@@ -238,7 +239,15 @@ function usageFromRow(row: UsageRow): GraphicAssetUsage {
 	};
 }
 
-function usageSelect() {
+/**
+ * Owner kinds as an SQL list of literals. They are application constants, never
+ * input, so they are spelled into the statement rather than bound.
+ */
+const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
+	.map(kind => `'${kind}'`)
+	.join(', ');
+
+function usageSelect(options: { templatesOnly?: boolean } = {}) {
 	return `
 		SELECT asset_reference.id, asset_reference.asset_id, asset_reference.revision_id,
 			asset_reference.owner_kind, asset_reference.owner_id,
@@ -271,6 +280,7 @@ function usageSelect() {
 			ON asset_reference.owner_kind = 'feature-match-layout-template'
 			AND feature_match_layout_template.id = asset_reference.owner_id
 		WHERE asset_reference.asset_id = ?
+			${options.templatesOnly ? `AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})` : ''}
 		ORDER BY asset_reference.owner_kind, asset_reference.owner_id,
 			asset_reference.owner_slot, asset_reference.id
 	`;
@@ -2445,13 +2455,28 @@ export function createD1GraphicsAssetCatalogue(
 			return result.results.map(assetFromRow);
 		},
 		async retireGraphicAsset(input) {
-			const result = await database.prepare(`
-				UPDATE graphic_assets
-				SET lifecycle_state = 'retired', trash_prior_state = NULL,
-					trashed_at = NULL, trash_recoverable_until = NULL, updated_at = ?
-				WHERE id = ? AND lifecycle_state = 'active'
-			`).bind(new Date(input.updatedAt).getTime(), input.assetId).run();
-			if (!result.success)
+			// Refused while a saved template references any revision of the asset
+			// (ADR-0034): a template keeps its references selectable on every write,
+			// so retiring under one would leave it unrevisable. The condition rides
+			// in the statement that retires, so a template saved after anyone
+			// looked still holds the asset back. A Screen's reference does not: a
+			// Screen keeps an unchanged retired reference resolving.
+			const [result, usage] = await database.batch([
+				database.prepare(`
+					UPDATE graphic_assets
+					SET lifecycle_state = 'retired', trash_prior_state = NULL,
+						trashed_at = NULL, trash_recoverable_until = NULL, updated_at = ?
+					WHERE id = ? AND lifecycle_state = 'active'
+						AND NOT EXISTS (
+							SELECT 1
+							FROM graphic_asset_references asset_reference
+							WHERE asset_reference.asset_id = graphic_assets.id
+								AND asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST})
+						)
+				`).bind(new Date(input.updatedAt).getTime(), input.assetId),
+				database.prepare(usageSelect({ templatesOnly: true })).bind(input.assetId),
+			]);
+			if (!result?.success || !usage?.success)
 				throw new Error('Graphic Asset retirement failed');
 			if (result.meta.changes === 1) {
 				const asset = await readLifecycleTransitionAsset(
@@ -2461,6 +2486,9 @@ export function createD1GraphicsAssetCatalogue(
 				);
 				return { outcome: 'updated', asset };
 			}
+			const templateUsage = (usage.results as unknown as UsageRow[]).map(usageFromRow);
+			if (templateUsage.length > 0)
+				return { outcome: 'in-use', usage: templateUsage };
 			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async trashGraphicAsset(input) {

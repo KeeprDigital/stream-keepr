@@ -5137,6 +5137,11 @@ export function createGraphicsAssetLibrary(
 					'ingestion-operation-not-found',
 				);
 			}
+			// A saved template referencing it holds it back (ADR-0034). Answered as
+			// Trash answers a referenced asset: the usage, so the author can see
+			// which templates to change first.
+			if (transition.outcome === 'in-use')
+				return transition;
 			if (transition.outcome !== 'updated') {
 				throw new GraphicsAssetLibraryError(
 					'Only an active Graphic Asset can be retired',

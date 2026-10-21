@@ -793,6 +793,32 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 	});
 
+	// ADR-0034: a saved template holds Retire back, and the refusal names it.
+	it('names the saved templates that hold back a retirement', async () => {
+		const usage: GraphicAssetUsage[] = [{
+			id: 'usage-template',
+			reference: {
+				assetId: 'asset-1' as never,
+				revisionId: 'revision-1' as never,
+			},
+			owner: {
+				kind: 'broadcast-graphic-template',
+				id: 'template-1',
+				name: 'Lower third',
+				slot: 'graphics.lower-third.items.plate.asset',
+			},
+		}];
+		mockApiFetch.mockResolvedValueOnce({ outcome: 'in-use', usage });
+		const wrapper = await mountPage();
+
+		const retire = wrapper.findAll('button')
+			.find(button => button.text() === 'Retire');
+		await retire!.trigger('click');
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('cannot be retired while a saved template references it: Lower third');
+	});
+
 	it('exposes reversible retirement and Trash actions with blocked usage and recovery facts', async () => {
 		const usage: GraphicAssetUsage[] = [{
 			id: 'usage-lifecycle',

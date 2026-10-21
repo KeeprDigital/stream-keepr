@@ -2,7 +2,10 @@ import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/t
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it, vi } from 'vitest';
-import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import {
+	assertBroadcastGraphicTemplateReferencesSelectable,
+	assertBroadcastGraphicTemplatesReferencesSelectable,
+} from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 
 // The util under test shares a file with a helper that reads the template
@@ -166,6 +169,48 @@ describe('assertBroadcastGraphicTemplateReferencesSelectable', () => {
 				message: 'Broadcast Graphic Template cannot reference these Graphic Asset Revisions: '
 					+ 'graphics.lower-third.items.badge.asset (does not exist)',
 			});
+	});
+});
+
+// ADR-0034: a Graphic Style Set operation rewrites several templates at once, so it
+// asks once for all of them and names each template a refusal belongs to.
+describe('assertBroadcastGraphicTemplatesReferencesSelectable', () => {
+	it('asks the library once for every template and names each refused template', async () => {
+		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, retired, font]);
+		const templates = [
+			{ name: 'Lower third', document: broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]) },
+			{
+				name: 'Score bug',
+				document: {
+					...broadcastGraphic([
+						media('plate', reference('asset-2', 'revision-2')),
+						media('badge', reference('asset-3', 'revision-3')),
+					]),
+					id: 'score-bug',
+				},
+			},
+		];
+
+		await expect(assertBroadcastGraphicTemplatesReferencesSelectable({ inspectGraphicAssetRevisions }, templates))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: 'Broadcast Graphic Template "Score bug" cannot reference these Graphic Asset Revisions: '
+					+ 'graphics.score-bug.items.plate.asset (retired), '
+					+ 'graphics.score-bug.items.badge.asset (is a font, not an image)',
+			});
+		expect(inspectGraphicAssetRevisions).toHaveBeenCalledTimes(1);
+	});
+
+	it('asks the library nothing when no template holds a reference', async () => {
+		const inspectGraphicAssetRevisions = vi.fn();
+
+		await assertBroadcastGraphicTemplatesReferencesSelectable(
+			{ inspectGraphicAssetRevisions },
+			[{ name: 'Empty', document: broadcastGraphic([]) }],
+		);
+
+		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();
 	});
 });
 

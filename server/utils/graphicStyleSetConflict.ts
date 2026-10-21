@@ -1,4 +1,7 @@
-import { GraphicStyleSetRevisionConflict } from '~~/server/services/graphicStyleSet';
+import {
+	GraphicStyleSetRevisionConflict,
+	GraphicStyleSetTemplateReferenceConflict,
+} from '~~/server/services/graphicStyleSet';
 
 /**
  * Turn a lost compare-and-swap on a Graphic Style Set into the answer its author can
@@ -11,7 +14,11 @@ import { GraphicStyleSetRevisionConflict } from '~~/server/services/graphicStyle
  * "edited by another session" on a rename and something else on a publish has to work
  * out whether they are the same problem.
  *
- * Anything that is not a revision conflict is rethrown untouched.
+ * A template reference refusal (ADR-0034) is a different conflict, and no reload
+ * fixes it: a template the operation rewrites holds a reference that stopped being
+ * selectable after the route checked it.
+ *
+ * Anything else is rethrown untouched.
  */
 export function rethrowAsGraphicStyleSetConflict(error: unknown, what: string): never {
 	if (error instanceof GraphicStyleSetRevisionConflict) {
@@ -19,6 +26,13 @@ export function rethrowAsGraphicStyleSetConflict(error: unknown, what: string): 
 			statusCode: 409,
 			statusMessage: 'Conflict',
 			message: `${what} (the draft is now at revision ${error.currentDraftRevision})`,
+		});
+	}
+	if (error instanceof GraphicStyleSetTemplateReferenceConflict) {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: 'A template this operation rewrites references a Graphic Asset Revision that stopped being selectable while it ran. Replace or restore that asset in the template, then try again.',
 		});
 	}
 	throw error;

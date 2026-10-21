@@ -1,4 +1,5 @@
 import type { DbBroadcastGraphicTemplate } from '~~/server/db/schema';
+import type { IndexedGraphicAssetReferenceFacts } from '~~/server/modules/graphic-asset-reference-resolution';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -94,59 +95,47 @@ function templateAssetReferences(document: BroadcastGraphicConfig) {
 	return broadcastGraphicsGraphicAssetReferences({ graphics: [document] });
 }
 
-export function broadcastGraphicTemplateService() {
-	const findAll = async (): Promise<DbBroadcastGraphicTemplate[]> => {
-		return await db
-			.select()
-			.from(broadcastGraphicTemplates)
-			.orderBy(asc(broadcastGraphicTemplates.name));
-	};
+/**
+ * The reference facts one template write is refused on and indexes.
+ *
+ * No reference is allowed to be retired, unlike a Screen's unchanged one: a
+ * template has no retained-reference path (ADR-0034), so every write states every
+ * reference as if it were new. Exported for the Graphic Style Set library-wide
+ * operations, which rewrite templates in their own batch.
+ */
+export function broadcastGraphicTemplateReferenceFacts(
+	document: BroadcastGraphicConfig,
+): IndexedGraphicAssetReferenceFacts[] {
+	return templateAssetReferences(document).map(item => ({
+		...item,
+		id: crypto.randomUUID(),
+		allowRetired: false,
+	}));
+}
 
-	const findById = async (id: string): Promise<DbBroadcastGraphicTemplate | undefined> => {
-		return await db.query.broadcastGraphicTemplates.findFirst({
-			where: eq(broadcastGraphicTemplates.id, id),
-		});
-	};
-
-	/**
-	 * The reference facts one template write is refused on and indexes, as the one
-	 * JSON array both statements bind.
-	 *
-	 * No reference is allowed to be retired, unlike a Screen's unchanged one: a
-	 * template has no retained-reference path (#614), so every write states every
-	 * reference as if it were new.
-	 */
-	const boundReferenceFacts = (document: BroadcastGraphicConfig): string =>
-		boundGraphicAssetReferenceFacts(templateAssetReferences(document).map(item => ({
-			...item,
-			id: crypto.randomUUID(),
-			allowRetired: false,
-		})));
-
-	/**
-	 * The reference-index statements one template write publishes.
-	 *
-	 * The insert reads the same bound array the row write's precondition reads, under
-	 * the same resolution rule, so the row commits only when every reference resolves
-	 * and then every reference is indexed. The version guard keeps both statements a
-	 * no-op whenever the row write did not commit this write's stamp.
-	 */
-	const referenceStatements = (
-		client: typeof db.$client,
-		id: string,
-		/** The bound JSON array `boundReferenceFacts` encoded. */
-		referenceFacts: string,
-		referenceVersion: string,
-		now: number,
-	): D1PreparedStatement[] => [
+/**
+ * The reference-index statements one template write publishes.
+ *
+ * The insert reads the same bound array the row write's precondition reads, under
+ * the same resolution rule, so the row commits only when every reference resolves
+ * and then every reference is indexed. `guard` is the condition saying the row
+ * write committed — this store's own stamp, or a Graphic Style Set operation's —
+ * so both statements are no-ops whenever it did not.
+ */
+export function broadcastGraphicTemplateIndexStatements(
+	client: typeof db.$client,
+	id: string,
+	/** `broadcastGraphicTemplateReferenceFacts`, as `boundGraphicAssetReferenceFacts` encodes them. */
+	referenceFacts: string,
+	now: number,
+	guard: { sql: string; params: readonly unknown[] },
+): D1PreparedStatement[] {
+	return [
 		client.prepare(`
 			DELETE FROM graphic_asset_references
 			WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
-				AND EXISTS (
-					SELECT 1 FROM broadcast_graphic_templates
-					WHERE id = ? AND graphic_asset_reference_version = ?
-				)
-		`).bind(id, id, referenceVersion),
+				AND ${guard.sql}
+		`).bind(id, ...guard.params),
 		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
@@ -162,17 +151,43 @@ export function broadcastGraphicTemplateService() {
 				SELECT 1
 				${jsonElementGraphicAssetRevisionResolution('item')}
 			)
-				AND EXISTS (
-					SELECT 1 FROM broadcast_graphic_templates
-					WHERE id = ? AND graphic_asset_reference_version = ?
-				)
-		`).bind(id, now, now, referenceFacts, id, referenceVersion),
+				AND ${guard.sql}
+		`).bind(id, now, now, referenceFacts, ...guard.params),
 	];
+}
+
+export function broadcastGraphicTemplateService() {
+	const findAll = async (): Promise<DbBroadcastGraphicTemplate[]> => {
+		return await db
+			.select()
+			.from(broadcastGraphicTemplates)
+			.orderBy(asc(broadcastGraphicTemplates.name));
+	};
+
+	const findById = async (id: string): Promise<DbBroadcastGraphicTemplate | undefined> => {
+		return await db.query.broadcastGraphicTemplates.findFirst({
+			where: eq(broadcastGraphicTemplates.id, id),
+		});
+	};
+
+	const referenceStatements = (
+		client: typeof db.$client,
+		id: string,
+		referenceFacts: string,
+		referenceVersion: string,
+		now: number,
+	): D1PreparedStatement[] => broadcastGraphicTemplateIndexStatements(client, id, referenceFacts, now, {
+		sql: `EXISTS (
+			SELECT 1 FROM broadcast_graphic_templates
+			WHERE id = ? AND graphic_asset_reference_version = ?
+		)`,
+		params: [id, referenceVersion],
+	});
 
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const referenceFacts = boundReferenceFacts(input.document);
+		const referenceFacts = boundGraphicAssetReferenceFacts(broadcastGraphicTemplateReferenceFacts(input.document));
 		const client = db.$client;
 
 		const [inserted] = await client.batch([
@@ -233,7 +248,7 @@ export function broadcastGraphicTemplateService() {
 		const document = patch.document ?? existing.document;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
-		const referenceFacts = boundReferenceFacts(document);
+		const referenceFacts = boundGraphicAssetReferenceFacts(broadcastGraphicTemplateReferenceFacts(document));
 		const client = db.$client;
 
 		const [updated] = await client.batch([

@@ -4,6 +4,14 @@ import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { broadcastGraphicTemplates, graphicStyleSets } from '~~/server/db/schema';
+import {
+	boundGraphicAssetReferenceFacts,
+	REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE,
+} from '~~/server/modules/graphic-asset-reference-resolution';
+import {
+	broadcastGraphicTemplateIndexStatements,
+	broadcastGraphicTemplateReferenceFacts,
+} from '~~/server/services/broadcastGraphicTemplate';
 
 /**
  * Storage for the installation's Graphic Style Set library.
@@ -23,6 +31,12 @@ import { broadcastGraphicTemplates, graphicStyleSets } from '~~/server/db/schema
  * `operation_version`, with every later statement guarded on that stamp, so a
  * concurrent edit to any participant leaves the whole operation with nothing written
  * rather than half of it applied.
+ *
+ * **Every rewritten template is held to the template reference rule** (ADR-0034).
+ * The first statement also requires every Graphic Asset Reference each rewritten
+ * document holds to resolve, so one template referencing a retired asset refuses the
+ * whole operation, and each rewrite restates its template's reference index under
+ * the same stamp.
  */
 
 export interface SaveGraphicStyleSet {
@@ -45,6 +59,18 @@ export class GraphicStyleSetRevisionConflict extends Error {
 	constructor(readonly currentDraftRevision: number) {
 		super(`Graphic Style Set is at draft revision ${currentDraftRevision}`);
 		this.name = 'GraphicStyleSetRevisionConflict';
+	}
+}
+
+/**
+ * A template the operation would rewrite holds a reference that no longer resolves:
+ * its revision is gone, its asset was retired or trashed, or it is the wrong kind.
+ * The whole operation wrote nothing.
+ */
+export class GraphicStyleSetTemplateReferenceConflict extends Error {
+	constructor() {
+		super('A template this Graphic Style Set operation rewrites references a Graphic Asset Revision that can no longer be referenced');
+		this.name = 'GraphicStyleSetTemplateReferenceConflict';
 	}
 }
 
@@ -309,6 +335,63 @@ export function graphicStyleSetService() {
 		rewrites.flatMap(rewrite => [rewrite.id, rewrite.revision]);
 
 	/**
+	 * Every rewritten template's reference facts, each encoded once: the index
+	 * statements bind one template's, and the first statement binds them all as one
+	 * array, so the set the operation is refused on and the set it indexes agree.
+	 */
+	const rewriteReferenceFacts = (rewrites: readonly GraphicsTemplateRewrite[]) => {
+		const perTemplate = rewrites.map(rewrite => broadcastGraphicTemplateReferenceFacts(rewrite.document));
+		return {
+			all: boundGraphicAssetReferenceFacts(perTemplate.flat()),
+			perTemplate: perTemplate.map(facts => boundGraphicAssetReferenceFacts(facts)),
+		};
+	};
+
+	/**
+	 * Each rewritten template's reference index, restated under the operation's stamp.
+	 * A Style Set carries no media, so a rewrite should not change what a template
+	 * pins; restating it is what keeps that true rather than assumed.
+	 */
+	const templateReindexStatements = (
+		client: typeof db.$client,
+		rewrites: readonly GraphicsTemplateRewrite[],
+		perTemplateFacts: readonly string[],
+		operation: { styleSetId: string; version: string },
+	) => rewrites.flatMap((rewrite, index) => broadcastGraphicTemplateIndexStatements(
+		client,
+		rewrite.id,
+		perTemplateFacts[index]!,
+		Date.now(),
+		{
+			sql: 'EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ? AND operation_version = ?)',
+			params: [operation.styleSetId, operation.version],
+		},
+	));
+
+	/**
+	 * Which precondition refused an operation that wrote nothing. Every revision it
+	 * read still standing means a template's reference refused it, which no reload
+	 * fixes; anything else moved is an ordinary concurrent edit.
+	 */
+	const refusedByReference = async (
+		id: string,
+		draftRevision: number,
+		rewrites: readonly GraphicsTemplateRewrite[],
+	): Promise<boolean> => {
+		const current = await findById(id);
+		if (current?.draftRevision !== draftRevision)
+			return false;
+		for (const rewrite of rewrites) {
+			const template = await db.query.broadcastGraphicTemplates.findFirst({
+				where: eq(broadcastGraphicTemplates.id, rewrite.id),
+			});
+			if (template?.revision !== rewrite.revision)
+				return false;
+		}
+		return true;
+	};
+
+	/**
 	 * The statements that rewrite one template's document as part of a library-wide
 	 * operation.
 	 *
@@ -323,9 +406,8 @@ export function graphicStyleSetService() {
 	 * stays because a rewrite that ever ran against an unexpected revision should write
 	 * nothing on its own terms too.
 	 *
-	 * The Graphic Asset References a template publishes are deliberately untouched: a
-	 * Style Set carries no media, so no rewrite here can change which asset revisions
-	 * a template pins.
+	 * The Graphic Asset References a template publishes are restated beside these by
+	 * `templateReindexStatements`, under the same stamp.
 	 */
 	const templateRewriteStatements = (
 		client: typeof db.$client,
@@ -377,6 +459,7 @@ export function graphicStyleSetService() {
 		const client = db.$client;
 		const now = Date.now();
 		const operation = { styleSetId: id, version: crypto.randomUUID() };
+		const referenceFacts = rewriteReferenceFacts(options.rewrites);
 		const [changed] = await client.batch([
 			client.prepare(`
 				UPDATE graphic_style_sets
@@ -388,6 +471,7 @@ export function graphicStyleSetService() {
 					updated_at = ?
 				WHERE id = ? AND draft_revision = ?
 					${templatePreconditions(options.rewrites)}
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				JSON.stringify(options.draft),
 				options.published === null ? null : JSON.stringify(options.published),
@@ -396,14 +480,18 @@ export function graphicStyleSetService() {
 				id,
 				options.draftRevision,
 				...templatePreconditionBindings(options.rewrites),
+				referenceFacts.all,
 			),
 			...templateRewriteStatements(client, options.rewrites, id, operation),
+			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation),
 		]);
 
 		// Nothing written means a precondition failed — this row's draft revision or one
 		// of the templates'. Every rewrite behind it is conditional on the stamp this
 		// statement never made, so the whole deletion wrote nothing.
 		if (changed?.meta.changes !== 1) {
+			if (await refusedByReference(id, options.draftRevision, options.rewrites))
+				throw new GraphicStyleSetTemplateReferenceConflict();
 			const current = await findById(id);
 			throw new GraphicStyleSetRevisionConflict(current?.draftRevision ?? options.draftRevision);
 		}
@@ -413,7 +501,8 @@ export function graphicStyleSetService() {
 
 	/**
 	 * Delete a whole Style Set, detaching every template linked to it in the same
-	 * operation.
+	 * operation. Answers false when a concurrent edit refused it, and throws
+	 * `GraphicStyleSetTemplateReferenceConflict` when a template's reference did.
 	 *
 	 * Detaching is not a cascade: each template gets a real new revision whose document
 	 * carries the values it was already rendering, with the provenance removed. A
@@ -426,6 +515,7 @@ export function graphicStyleSetService() {
 	): Promise<boolean> => {
 		const client = db.$client;
 		const operation = { styleSetId: id, version: crypto.randomUUID() };
+		const referenceFacts = rewriteReferenceFacts(options.rewrites);
 		const results = await client.batch([
 			// Every precondition the whole operation has, on one statement, before anything
 			// is written. The row is about to be deleted, so this changes nothing else about
@@ -435,17 +525,20 @@ export function graphicStyleSetService() {
 				SET operation_version = ?, updated_at = ?
 				WHERE id = ? AND draft_revision = ?
 					${templatePreconditions(options.rewrites)}
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				operation.version,
 				Date.now(),
 				id,
 				options.draftRevision,
 				...templatePreconditionBindings(options.rewrites),
+				referenceFacts.all,
 			),
 			// The same rewrite statements every library-wide operation uses. Each detached
 			// document carries no Style Set link, so they write a null link back — which is
 			// the whole difference between deleting a Style Set and deleting one entry.
 			...templateRewriteStatements(client, options.rewrites, null, operation),
+			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation),
 			// Guarded on the stamp rather than on the draft revision, so the deletion cannot
 			// commit behind template rewrites that did not happen. This is the corruption the
 			// stamp exists to prevent: a deleted Style Set whose templates still reference its
@@ -454,7 +547,11 @@ export function graphicStyleSetService() {
 				.bind(id, operation.version),
 		]);
 
-		return results.at(-1)?.meta.changes === 1;
+		if (results.at(-1)?.meta.changes === 1)
+			return true;
+		if (results[0]?.meta.changes !== 1 && await refusedByReference(id, options.draftRevision, options.rewrites))
+			throw new GraphicStyleSetTemplateReferenceConflict();
+		return false;
 	};
 
 	return {

@@ -18,6 +18,18 @@ import type {
 import { BACKGROUND_LAYERS_CAPABLE_MODES } from '../screenModes';
 import { resolveScreenModeConfig } from '../types/screenConfig';
 
+/**
+ * The reference owners that are saved graphics Templates: the two authored
+ * template libraries and the Installed Graphics Templates a Template Package
+ * created. A Graphic Asset any of them references cannot be retired (ADR-0034),
+ * because every template write requires its references to stay selectable.
+ */
+export const GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS = [
+	'broadcast-graphic-template',
+	'feature-match-layout-template',
+	'installed-graphics-template',
+] as const;
+
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;

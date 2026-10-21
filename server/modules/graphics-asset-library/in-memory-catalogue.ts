@@ -22,6 +22,7 @@ import {
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS } from '~~/shared/utils/graphicsAssetReferences';
 import { GraphicsAssetLibraryError } from './errors';
 import {
 	graphicsMultipartCompletedByteLength,
@@ -1112,6 +1113,12 @@ export function createInMemoryGraphicsAssetCatalogue(
 				return { outcome: 'not-found' };
 			if (asset.lifecycle.state !== 'active')
 				return { outcome: 'not-allowed' };
+			const templateUsage = allUsage()
+				.filter(item => item.reference.assetId === input.assetId)
+				.filter(item => (GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS as readonly string[]).includes(item.owner.kind))
+				.map(item => structuredClone(item));
+			if (templateUsage.length > 0)
+				return { outcome: 'in-use', usage: templateUsage };
 			const retired: GraphicAsset = {
 				...asset,
 				lifecycle: { state: 'retired' },

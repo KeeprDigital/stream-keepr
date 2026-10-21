@@ -4,7 +4,11 @@ import type {
 	BroadcastGraphicTemplateSummary,
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
-import type { GraphicAssetUsage, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import type {
+	GraphicAssetLifecycleActionOutcome,
+	GraphicAssetUsage,
+	GraphicsIngestionOperation,
+} from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -855,11 +859,12 @@ describe('broadcast Graphic Template library', () => {
 		expect(saved.status).toBe(201);
 		const retiringTemplateId = (saved.data as BroadcastGraphicTemplateResponse).id;
 
-		await $fetch(`/api/graphics-assets/${retiredAsset.assetId}/lifecycle-actions`, {
-			method: 'POST',
-			headers: { cookie: authorCookie },
-			body: { action: 'retire' },
-		});
+		// Retire is refused while a saved template references the asset (ADR-0034),
+		// so a template holding a retired asset is only reachable as a state written
+		// before that rule — set here directly, the way such a library would hold it.
+		await executeIntegrationD1(
+			`UPDATE graphic_assets SET lifecycle_state = 'retired' WHERE id = '${retiredAsset.assetId}'`,
+		);
 
 		const refused = await place(otherEventId, otherScreenId, { templateId: retiringTemplateId }, authorCookie);
 
@@ -876,8 +881,9 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	// #614: every template write holds each reference to the selectability rule a
-	// Screen applies to a new choice — wrong-kind, retired, and missing alike.
-	it('refuses a revision that pins an asset of the wrong kind for its slot, and a rename once an asset is retired', async () => {
+	// Screen applies to a new choice, and Retire is refused while a saved template
+	// references the asset (ADR-0034).
+	it('refuses a revision that pins an asset of the wrong kind for its slot, and refuses to retire its asset', async () => {
 		const retiring = await ingestImage(sourceEventId, 'template-library-kind', authorCookie);
 		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
 			method: 'POST',
@@ -910,28 +916,27 @@ describe('broadcast Graphic Template library', () => {
 		expect(wrongKind.status).toBe(409);
 		expect(wrongKind.data.message).toContain('kinds-graphic.items.plate.asset (is an image, not a silent video)');
 
-		await $fetch(`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`, {
-			method: 'POST',
-			headers: { cookie: authorCookie },
-			body: { action: 'retire' },
+		const retire = await $fetch<GraphicAssetLifecycleActionOutcome>(
+			`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`,
+			{ method: 'POST', headers: { cookie: authorCookie }, body: { action: 'retire' } },
+		);
+		expect(retire).toMatchObject({
+			outcome: 'in-use',
+			usage: [expect.objectContaining({
+				owner: expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id, name: 'Kinds' }),
+			})],
 		});
+		// Nothing a Screen holds is reported: the source Screen pins the asset too.
+		expect(retire.outcome === 'in-use' && retire.usage.map(entry => entry.owner.kind))
+			.toEqual(['broadcast-graphic-template']);
+
+		// Still active, so the template stays revisable.
 		const renamed = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: { name: 'Renamed', revision: kindsTemplate.revision },
 		});
-		expect(renamed.status).toBe(409);
-		expect(renamed.data.message).toContain('kinds-graphic.items.plate.asset (retired)');
-
-		// Refused writes leave the template where it was, and still pinning its asset.
-		expect(await templateRevision(kindsTemplate.id)).toBe(kindsTemplate.revision);
-		const usage = await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${retiring.assetId}/usage`,
-			{ headers: { cookie: authorCookie } },
-		);
-		expect(usage.map(entry => entry.owner)).toContainEqual(
-			expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id }),
-		);
+		expect(renamed.status).toBe(200);
 
 		await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, { method: 'DELETE', cookie: authorCookie });
 	});

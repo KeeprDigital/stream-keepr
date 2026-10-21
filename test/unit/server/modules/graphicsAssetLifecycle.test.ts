@@ -126,4 +126,31 @@ describe('the Graphics Asset Library recovery window', () => {
 			code: 'ingestion-operation-not-found',
 		});
 	});
+
+	// ADR-0034: a saved template's reference holds Retire back; a Screen's does not.
+	it('keeps the in-memory catalogue refusing to retire an asset a saved template references', async () => {
+		const usage: GraphicAssetUsage[] = [];
+		const { library } = createLifecycleLibrary(usage);
+		const operation = await ingestLifecycleAsset(library);
+		const assetId = operation.result!.assetId;
+		const revisionId = operation.result!.revisionId;
+		usage.push({
+			id: 'template-usage',
+			reference: { assetId, revisionId },
+			owner: {
+				kind: 'feature-match-layout-template',
+				id: 'layout-1',
+				name: 'Feature layout',
+				slot: 'layout.frame.backgroundImage',
+			},
+		});
+
+		await expect(library.retireGraphicAsset({ assetId })).resolves.toEqual({
+			outcome: 'in-use',
+			usage,
+		});
+		await expect(library.listGraphicAssets({ lifecycleStates: ['active'] })).resolves.toEqual([
+			expect.objectContaining({ id: assetId }),
+		]);
+	});
 });

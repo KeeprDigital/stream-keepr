@@ -58,6 +58,20 @@ export async function assertGraphicsTemplateReferencesSelectable(
 	references: readonly ScreenGraphicAssetReference[],
 	artifact: GraphicsTemplateArtifact,
 ): Promise<void> {
+	await assertGraphicsTemplatesReferencesSelectable(library, [{ references }], artifact);
+}
+
+/**
+ * The same question about several templates one operation writes together — a
+ * Graphic Style Set operation rewriting every template it reaches — asked in one
+ * round-trip. A refusal names each template it belongs to.
+ */
+export async function assertGraphicsTemplatesReferencesSelectable(
+	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
+	templates: ReadonlyArray<{ name?: string; references: readonly ScreenGraphicAssetReference[] }>,
+	artifact: GraphicsTemplateArtifact,
+): Promise<void> {
+	const references = templates.flatMap(template => template.references);
 	if (references.length === 0)
 		return;
 
@@ -67,16 +81,24 @@ export async function assertGraphicsTemplateReferencesSelectable(
 			revisionId: graphicAssetRevisionId(item.reference.revisionId),
 		})),
 	});
-	const refused = references.flatMap((item, index) => {
-		const reason = refusal(item, statuses[index]);
-		return reason === null ? [] : [`${item.ownerSlot} (${reason})`];
+	let offset = 0;
+	const refusals = templates.flatMap((template) => {
+		const refused = template.references.flatMap((item, index) => {
+			const reason = refusal(item, statuses[offset + index]);
+			return reason === null ? [] : [`${item.ownerSlot} (${reason})`];
+		});
+		offset += template.references.length;
+		if (refused.length === 0)
+			return [];
+		const subject = template.name === undefined ? artifact : `${artifact} "${template.name}"`;
+		return [`${subject} cannot reference these Graphic Asset Revisions: ${refused.join(', ')}`];
 	});
 
-	if (refused.length > 0) {
+	if (refusals.length > 0) {
 		throw createError({
 			statusCode: 409,
 			statusMessage: 'Conflict',
-			message: `${artifact} cannot reference these Graphic Asset Revisions: ${refused.join(', ')}`,
+			message: refusals.join('; '),
 		});
 	}
 }
