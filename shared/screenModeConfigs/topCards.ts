@@ -10,6 +10,7 @@ import {
 } from '../types/enums';
 import { CARD_TYPE_BUCKET_ORDER } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
+import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
 
 /** A badge colour: any CSS colour, as the server's other colour fields take. */
 const optionalCssColorSchema = z.string().min(1).max(500).optional();
@@ -40,8 +41,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardGap: z.number().int().min(0).max(100),
 
 	// Header
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
+	...headerConfigShape,
 
 	// Card labels & badges
 	showCardNames: z.boolean(),
@@ -68,8 +68,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardSize: 'medium',
 	dynamicCardSize: true,
 	cardGap: 12,
-	showHeader: true,
-	headerText: undefined,
+	...DEFAULT_HEADER_CONFIG,
 	showCardNames: true,
 	showRankBadges: true,
 	rankBadgeTextColor: '#ffffff',

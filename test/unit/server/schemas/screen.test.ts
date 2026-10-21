@@ -1,12 +1,12 @@
-import type { FeatureMatchOverlayModeConfig, ModeConfigsMap, StoredModeConfigs } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	backgroundModeConfigSchema,
 	createScreenSchema,
 	deckModeConfigSchema,
 	featureMatchLayoutConfigSchema,
+	featureMatchModeConfigSchema,
 	featureMatchOverlayModeConfigSchema,
-	matchModeConfigSchema,
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
@@ -297,7 +297,7 @@ describe('deckModeConfigSchema', () => {
 	});
 });
 
-// ──────────────── matchModeConfigSchema ────────────────
+// ──────────────── featureMatchModeConfigSchema ────────────────
 
 describe('standingsModeConfigSchema', () => {
 	const validConfig = {
@@ -812,9 +812,9 @@ describe('modeConfigPatchSchemaMap', () => {
 	});
 });
 
-// ──────────────── matchModeConfigSchema ────────────────
+// ──────────────── featureMatchModeConfigSchema ────────────────
 
-describe('matchModeConfigSchema', () => {
+describe('featureMatchModeConfigSchema', () => {
 	const validConfig = {
 		featureMatchId: 1,
 		showNames: true,
@@ -826,67 +826,67 @@ describe('matchModeConfigSchema', () => {
 	};
 
 	it('accepts valid match mode config', () => {
-		const result = matchModeConfigSchema.safeParse(validConfig);
+		const result = featureMatchModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts null featureMatchId', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, featureMatchId: null });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, featureMatchId: null });
 		expect(result.success).toBe(true);
 	});
 
 	it('validates showNames as boolean', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showNames: 'yes' });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showNames: 'yes' });
 		expect(result.success).toBe(false);
 	});
 
 	it('accepts optional showSeatLabels', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showSeatLabels: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showSeatLabels: true });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional leftSidePlayer', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, leftSidePlayer: 'player1' });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, leftSidePlayer: 'player1' });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional showTurnControls', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showTurnControls: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showTurnControls: true });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional showOvertime', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showOvertime: false });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showOvertime: false });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional showMulliganInfo', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showMulliganInfo: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showMulliganInfo: true });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional showLgs', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showLgs: false });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showLgs: false });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional showTableNumber', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, showTableNumber: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showTableNumber: true });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional allowLifeControls', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, allowLifeControls: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowLifeControls: true });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional allowGameWinControls', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, allowGameWinControls: false });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowGameWinControls: false });
 		expect(result.success).toBe(true);
 	});
 
 	it('accepts optional allowCounterControls', () => {
-		const result = matchModeConfigSchema.safeParse({ ...validConfig, allowCounterControls: true });
+		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowCounterControls: true });
 		expect(result.success).toBe(true);
 	});
 });
@@ -939,7 +939,7 @@ describe('metagameModeConfigSchema', () => {
 	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
 		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
 
-		const resolved = resolveScreenModeConfig({ metagame: validConfig } as StoredModeConfigs, 'metagame');
+		const resolved = resolveScreenModeConfig({ metagame: validConfig } as ModeConfigsMap, 'metagame');
 
 		expect(resolved.minPoints).toBe(9);
 		expect(resolved.archetypeLimit).toBeNull();

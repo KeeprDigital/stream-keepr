@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PlayerDisplayConfig } from '~/types';
-import { DEFAULT_FEATURE_MATCH_CONFIG } from '~~/shared/types/screenConfig';
+import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
 
 const eventStore = useEventStore();
 
@@ -15,7 +15,7 @@ const {
 } = useFeatureMatchModeData();
 
 function allow(key: FeatureMatchBooleanKey): boolean {
-	return config.value[key] ?? DEFAULT_FEATURE_MATCH_CONFIG[key] ?? true;
+	return config.value[key] ?? featureMatchModeConfigContract.defaults[key]!;
 }
 
 const showTurnControls = computed(() => allow('showTurnControls'));

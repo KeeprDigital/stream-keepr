@@ -44,7 +44,7 @@ import {
 	isMediaGraphicInputValue,
 	resolveGraphicInputBindings,
 } from '~~/shared/modules/graphics';
-import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	broadcastGraphicsGraphicAssetReferences,
 	sameScreenGraphicAssetReferences,
@@ -137,8 +137,7 @@ export function broadcastGraphicsLiveSessionModule() {
 	 * than inside the live-state port.
 	 */
 	function authoredStack(screen: DbScreen): BroadcastGraphicsModeConfig {
-		return screen.modeConfigs?.['broadcast-graphics']
-			?? getDefaultConfigForMode('broadcast-graphics');
+		return resolveScreenModeConfig(screen.modeConfigs, 'broadcast-graphics');
 	}
 
 	/** The placed Broadcast Graphic a command addresses. */
@@ -368,8 +367,8 @@ export function broadcastGraphicsLiveSessionModule() {
 	const republishLiveSessionReferences = async (input: {
 		eventId: number;
 		screenId: number;
-		/** The stack as it was before this write, for the retirement rule. */
-		previousStack?: BroadcastGraphicsModeConfig;
+		/** The stored stack as it was before this write, for the retirement rule. */
+		previousStack?: Partial<BroadcastGraphicsModeConfig>;
 	}): Promise<void> => {
 		try {
 			for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -391,7 +390,10 @@ export function broadcastGraphicsLiveSessionModule() {
 					sequence: session.sequence,
 					references: broadcastGraphicsLiveSessionGraphicAssetReferences(stack, session.currentState),
 					previousReferences: input.previousStack
-						? broadcastGraphicsLiveSessionGraphicAssetReferences(input.previousStack, session.currentState)
+						? broadcastGraphicsLiveSessionGraphicAssetReferences(
+								resolveScreenModeConfig({ 'broadcast-graphics': input.previousStack }, 'broadcast-graphics'),
+								session.currentState,
+							)
 						: undefined,
 				});
 

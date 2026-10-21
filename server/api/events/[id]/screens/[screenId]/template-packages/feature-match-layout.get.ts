@@ -2,6 +2,7 @@ import { screenParamsSchema } from '~~/server/schemas/api/screen';
 import { screenService } from '~~/server/services/screen';
 import { requireUserId } from '~~/server/utils/auth';
 import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templatePackageExportApi';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 /**
  * Exports the Feature Match Layout a Screen currently carries as a `.sklayout`
@@ -24,8 +25,7 @@ export default defineEventHandler(async (event) => {
 			message: 'Screen not found',
 		});
 	}
-	const stored = screen.modeConfigs?.['feature-match-overlay'];
-	if (!stored) {
+	if (!screen.modeConfigs?.['feature-match-overlay']) {
 		throw createError({
 			statusCode: 404,
 			statusMessage: 'Not Found',
@@ -36,6 +36,8 @@ export default defineEventHandler(async (event) => {
 	return await exportFeatureMatchLayoutTemplatePackage(event, {
 		identity: `screen-${screenId}-feature-match-layout`,
 		name: screen.name,
-		document: stored.layout,
+		// A stored fragment may lack `layout`; the Screen then renders the default
+		// layout, so that is the layout it exports.
+		document: resolveScreenModeConfig(screen.modeConfigs, 'feature-match-overlay').layout,
 	});
 });

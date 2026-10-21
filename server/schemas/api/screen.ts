@@ -1,7 +1,8 @@
-import type { BackgroundLayersCapableMode, ConfigContractMode } from '~~/shared/screenModes';
+import type { ServerValidatedKeys } from '~~/shared/screenModeConfigs/contract';
+import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
-import type { BackgroundModeConfig, BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
+import type { FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { SCREEN_MODE_VALUES, screens } from '~~/server/db/schema';
@@ -10,7 +11,7 @@ import {
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
 import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
-import { animationEffectSelectionSchema, broadcastGraphicsBackgroundConfigSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
+import { animationEffectSelectionSchema, storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION } from '~~/shared/featureMatchSourceItems';
 import {
 	GRAPHIC_FONT_IDS,
@@ -20,6 +21,7 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
+import { isServerValidatedField } from '~~/shared/screenModeConfigs/contract';
 import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
@@ -41,7 +43,6 @@ import {
 	GRAPHIC_ANIMATION_ORIGIN_VALUES,
 	GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
 	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
-	GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
@@ -132,59 +133,6 @@ export const screenSlugSchema = z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 
 // Patch variant: accepts `null` as a sentinel meaning "delete this key from stored config".
 // Used by the PATCH endpoint to support clearing width/height back to auto.
 export const screenConfigPatchSchema = z.object(screenConfigPatchShape).strict();
-
-function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
-	// Strip defaults before wrapping: zod 4 applies a `.default()` even through
-	// `.optional()`, so a defaulted field left absent from a patch would come out
-	// of `.parse()` carrying its default — and a `null` default is then read by
-	// the merge as the "delete this key" sentinel, wiping the stored value on
-	// every unrelated edit (Metagame's `archetypeLimit`/`minPoints`, before its
-	// config contract moved its defaults out of the schema, #587). Only modes still
-	// on the old form reach this; `configContractModeForms` needs none of it.
-	if (schema instanceof z.ZodDefault) {
-		return createModeConfigPatchFieldSchema(schema.removeDefault());
-	}
-
-	if (schema instanceof z.ZodOptional) {
-		const inner = schema.unwrap();
-		if (inner instanceof z.ZodNullable) {
-			return (inner.unwrap() as any).nullable().optional();
-		}
-
-		return (inner as any).nullable().optional();
-	}
-
-	if (schema instanceof z.ZodNullable) {
-		return (schema.unwrap() as any).nullable().optional();
-	}
-
-	return schema.optional();
-}
-
-/**
- * The schema one mode's PATCH body is validated against.
- *
- * Rebuilt from the full schema's shape, so it carries every field's own bounds
- * and accepts `null` as the "delete this key" sentinel. It deliberately does
- * **not** carry the full schema's object-level checks: a patch is a fragment, and
- * a whole-object rule cannot be evaluated against a fragment — the byte total in
- * particular is a property of the *stored* configuration, not of an edit to it.
- *
- * That used to make object-level rules silently unenforced on this path, which is
- * the defect in #85. What closes it is `parseModeConfigPatchResult`: the
- * configuration a patch would produce is validated against `modeConfigsMapSchema`
- * — the same authoritative schema Screen create and full update use — before
- * anything is written. So dropping the checks here is safe *because* they are
- * applied there, and any object-level rule added in future is enforced on this
- * path automatically, with nobody needing to remember.
- */
-function createModeConfigPatchSchema<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
-	const patchShape = Object.fromEntries(
-		Object.entries(schema.shape).map(([key, fieldSchema]) => [key, createModeConfigPatchFieldSchema(fieldSchema as any)]),
-	) as z.ZodRawShape;
-
-	return z.object(patchShape).strict();
-}
 
 /* ────────────────────────────────────────────────
  * Mode config Zod schemas (strict — no unknown keys)
@@ -360,116 +308,98 @@ const BACKGROUND_LAYERS_CONFIG_SHAPE = {
 	backgroundLayers: backgroundLayerStackSchema.optional(),
 };
 
-type DeclaredModeConfigShape<M extends ScreenMode, Shape extends z.ZodRawShape>
-	= M extends BackgroundLayersCapableMode ? Shape & typeof BACKGROUND_LAYERS_CONFIG_SHAPE : Shape;
+type ContractOf<M extends ScreenMode> = ReturnType<typeof screenModeConfigContract<M>>;
 
-/**
- * One mode's strict config schema: the fields it writes itself, plus the
- * `backgroundLayers` field when its Screen Mode Definition declares a stack.
- *
- * The field is added here rather than spelled on each mode, so a mode that
- * declares a Background Layer stack validates one, and a mode that does not
- * refuses it, without either fact being restated in this file.
- */
-function declaredModeConfigSchema<M extends ScreenMode, Shape extends z.ZodRawShape>(
-	mode: M,
-	shape: Shape,
-) {
-	const declared = screenModeSupportsBackgroundLayers(mode)
-		? { ...shape, ...BACKGROUND_LAYERS_CONFIG_SHAPE }
-		: shape;
-	return z.object(declared as DeclaredModeConfigShape<M, Shape>).strict();
-}
+// `Extract` keeps the constraint visible: indexing the definitions by a generic
+// mode loses that every contract's shape is a zod shape.
+type ContractShape<M extends ScreenMode> = Extract<ContractOf<M>['shape'], z.ZodRawShape>;
 
-// `Extract` keeps the constraint visible once more than one mode is on its
-// contract: indexing the definitions by a generic mode loses that every
-// contract's shape is a zod shape.
-type ContractModeConfigShape<M extends ConfigContractMode> = DeclaredModeConfigShape<M, Extract<ReturnType<typeof screenModeConfigContract<M>>['shape'], z.ZodRawShape>>;
-
-/** A PATCH body: every field optional and nullable, `null` being the "delete this key" sentinel. */
-type ModeConfigPatchShape<Shape extends z.ZodRawShape> = {
-	[K in keyof Shape]: z.ZodOptional<z.ZodNullable<Shape[K]>>;
+/** The schema the server supplies for each server-validated field of a contract, typed to produce that field's type. */
+type ServerFieldSchemas<Shape extends z.ZodRawShape> = {
+	[K in ServerValidatedKeys<Shape>]: z.ZodType<z.output<Shape[K]>>;
 };
 
 /**
- * The forms of a mode on its config contract, all derived from the one declared
- * schema, so none restates a field, a bound, or a default.
- *
- * - `schema` is the complete config: the contract's fields, plus
- *   `backgroundLayers` when the mode declares a stack.
- * - `stored` is what Screen create and full update accept for the mode: a
- *   fragment of `schema`, because that is what storage holds. PATCHes leave
- *   fragments, a display reset leaves every default but the preserved keys, and
- *   the Edit Screen dialog sends `modeConfigs` back as it read them, so requiring
- *   the complete config here would refuse a rename. Readers complete a fragment
- *   from the contract's defaults, so a full write never writes a default into
- *   storage.
- * - `patch` is every field `.nullable().optional()`, `null` being the "delete this
- *   key" sentinel. No wrapper is peeled and no default stripped, because a
- *   contract's fields carry none; `createModeConfigPatchFieldSchema` is what the
- *   old form needs instead.
+ * A mode's complete fields: the contract's, each server-validated one replaced
+ * by the server's schema, plus `backgroundLayers` when the mode declares a stack.
  */
-function configContractModeForms<M extends ConfigContractMode>(mode: M) {
-	const schema = declaredModeConfigSchema(mode, screenModeConfigContract(mode).shape) as z.ZodObject<ContractModeConfigShape<M>, z.core.$strict>;
-	const patchShape = Object.fromEntries(
-		Object.entries(schema.shape).map(([key, field]) => [key, (field as z.ZodType).nullable().optional()]),
-	) as ModeConfigPatchShape<ContractModeConfigShape<M>>;
+type ModeConfigShape<M extends ScreenMode> = Extract<{
+	[K in keyof ContractShape<M>]: K extends ServerValidatedKeys<ContractShape<M>>
+		? z.ZodType<z.output<ContractShape<M>[K]>>
+		: ContractShape<M>[K];
+} & (M extends BackgroundLayersCapableMode ? typeof BACKGROUND_LAYERS_CONFIG_SHAPE : unknown), z.ZodRawShape>;
+
+/**
+ * A PATCH body: every field optional and nullable, `null` being the "delete this
+ * key" sentinel, except an authored stack, which a PATCH may replace but never
+ * delete.
+ */
+type ModeConfigPatchShape<Shape, AuthoredStack extends PropertyKey> = Extract<{
+	[K in keyof Shape]: K extends AuthoredStack
+		? z.ZodOptional<Extract<Shape[K], z.ZodType>>
+		: z.ZodOptional<z.ZodNullable<Extract<Shape[K], z.ZodType>>>;
+}, z.ZodRawShape>;
+
+/**
+ * One mode's write forms, all derived from its config contract, so none restates
+ * a field, a bound, or a default.
+ *
+ * - `schema` is the complete config: the contract's fields, with the server's
+ *   schema for each server-validated one (`serverFields`, required exactly when
+ *   the contract has such a field), plus `backgroundLayers` when the Screen Mode
+ *   Definition declares a stack. That field is added here rather than on each
+ *   contract, so a mode that declares a stack validates one, and a mode that does
+ *   not refuses it, without either fact being restated.
+ * - `stored` is what Screen create and full update accept for the mode: a
+ *   fragment of `schema`, because that is what storage holds (`ModeConfigsMap`).
+ *   PATCHes leave fragments, a display reset leaves every default but the
+ *   preserved keys, and the Edit Screen dialog sends `modeConfigs` back as it read
+ *   them, so requiring the complete config here would refuse a rename. Readers
+ *   complete a fragment from the contract's defaults, so a full write never writes
+ *   a default into storage.
+ * - `patch` is every field `.nullable().optional()`, `null` being the "delete
+ *   this key" sentinel, and each authored stack only `.optional()`, so `null`
+ *   cannot empty it. No wrapper is peeled and no default stripped, because a
+ *   contract's fields carry none.
+ *
+ * `patch` deliberately carries no object-level check: a patch is a fragment, and
+ * a whole-object rule cannot be evaluated against one. That once left
+ * object-level rules silently unenforced on this path (#85). What closes it is
+ * `parseModeConfigPatchResult`, which validates the configuration a patch would
+ * produce against the whole-map rules, and `assertNoUnenforceableModeConfigRules`,
+ * which refuses to boot on a per-mode object-level check, so every per-mode rule
+ * lives on a field.
+ */
+function configContractModeForms<M extends ScreenMode>(
+	mode: M,
+	...[serverFields]: [ServerValidatedKeys<ContractShape<M>>] extends [never] ? [] : [ServerFieldSchemas<ContractShape<M>>]
+) {
+	const contract = screenModeConfigContract(mode);
+	const supplied: Partial<Record<string, z.ZodType>> = serverFields ?? {};
+	const own = Object.fromEntries(Object.entries(contract.shape as Record<string, z.ZodType>).map(([key, field]) => {
+		if (!isServerValidatedField(field))
+			return [key, field];
+		const serverField = supplied[key];
+		if (!serverField)
+			throw new Error(`Screen Mode "${mode}" config field "${key}" is server-validated, but the server supplies no schema for it.`);
+		return [key, serverField];
+	}));
+	const shape = (screenModeSupportsBackgroundLayers(mode) ? { ...own, ...BACKGROUND_LAYERS_CONFIG_SHAPE } : own) as ModeConfigShape<M>;
+	const schema = z.object(shape).strict();
+
+	const authoredStacks: readonly string[] = contract.authoredStacks;
+	const patchShape = Object.fromEntries(Object.entries(shape as Record<string, z.ZodType>).map(([key, field]) => [
+		key,
+		authoredStacks.includes(key) ? field.optional() : field.nullable().optional(),
+	])) as ModeConfigPatchShape<ModeConfigShape<M>, ContractOf<M>['authoredStacks'][number]>;
 
 	return {
 		schema,
-		// Typed as the complete config, as `parseModeConfigPatchResult` types a merged
-		// fragment: `ModeConfigsMap` still calls every stored mode config complete,
-		// and making it say "fragment" belongs with removing the old form (#589).
-		stored: schema.partial() as unknown as typeof schema,
+		stored: schema.partial(),
 		patch: z.object(patchShape).strict(),
 	};
 }
 
-// Per-mode config schemas
-export const backgroundModeConfigSchema = declaredModeConfigSchema('background', {
-	layers: backgroundLayerStackSchema,
-}) satisfies z.ZodType<BackgroundModeConfig>;
-
-const cardModeConfigForms = configContractModeForms('card');
-
-const deckModeConfigForms = configContractModeForms('deck');
-
-/** The complete Deck config, its own fields from its config contract (#588). */
-export const deckModeConfigSchema = deckModeConfigForms.schema;
-
-const standingsModeConfigForms = configContractModeForms('standings');
-
-/** The complete Standings config, its own fields from its config contract (#588). */
-export const standingsModeConfigSchema = standingsModeConfigForms.schema;
-
-const topCutModeConfigForms = configContractModeForms('topCut');
-
-export const matchModeConfigSchema = declaredModeConfigSchema('feature-match', {
-	featureMatchId: z.number().int().positive().nullable(),
-	showNames: z.boolean(),
-	showRecords: z.boolean(),
-	showDeckNames: z.boolean(),
-	showPronouns: z.boolean(),
-	showClock: z.boolean(),
-	showCounters: z.boolean(),
-	showSeatLabels: z.boolean().optional(),
-	leftSidePlayer: z.enum(PLAYER_SIDE_VALUES).optional(),
-	showTurnControls: z.boolean().optional(),
-	showOvertime: z.boolean().optional(),
-	showMulliganInfo: z.boolean().optional(),
-	showLgs: z.boolean().optional(),
-	showTableNumber: z.boolean().optional(),
-	allowLifeControls: z.boolean().optional(),
-	allowGameWinControls: z.boolean().optional(),
-	allowCounterControls: z.boolean().optional(),
-});
-
-const playerHistoryModeConfigForms = configContractModeForms('player-history');
-
-/** The complete Player History config, its own fields from its config contract (#588). */
-export const playerHistoryModeConfigSchema = playerHistoryModeConfigForms.schema;
-
-const featureMatchOverlayPresetIdSchema = z.enum(['full-table', 'left-stacked-player-cams', 'neon-feature-match']);
 const featureMatchOverlayAnchorValueSchema = z.enum(FEATURE_MATCH_OVERLAY_ANCHOR_VALUES);
 
 const featureMatchOverlayRectSchema = z.object({
@@ -792,6 +722,7 @@ export {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 };
+export { MAX_GRAPHIC_CHANNELS_PER_SCREEN } from '~~/shared/screenModeConfigs/broadcastGraphics';
 
 const graphicInputKeySchema = z.string()
 	.min(1)
@@ -1324,17 +1255,6 @@ export const MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT = MAX_GRAPHIC_ITEMS_PER_
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;
 
 /**
- * The Graphic Channel cap.
- *
- * A Graphic Channel exists to make two Broadcast Graphics mutually exclusive, so a
- * channel with one member excludes nothing and a channel with none is not a lane at
- * all. Half the Broadcast Graphic cap is therefore the point past which another
- * channel cannot be given a second member, which makes it the cap that binds on
- * meaning rather than on an arbitrary number.
- */
-export const MAX_GRAPHIC_CHANNELS_PER_SCREEN = 25;
-
-/**
  * The whole-Screen Graphic Item budget, counting Graphic Group children.
  *
  * It binds a product the per-list caps leave unbounded: 50 Broadcast Graphics x 100
@@ -1626,88 +1546,56 @@ const featureMatchLayoutCompositionSchema = z.object({
 export const MAX_FEATURE_MATCH_SOURCE_ITEMS = 20;
 
 /**
- * A Graphic Channel: one optional playout lane, and how it replaces its member.
+ * A Broadcast Graphics Screen's authored stack of Broadcast Graphics: the
+ * server's schema for its config contract's `graphics` field.
  *
- * `handoff` is optional because a Graphic Channel defaults to Overlap, and an absent
- * policy is the only way that default stays true of a channel nobody has configured
- * as well as of one whose author chose it.
+ * Every cap lives on the array itself rather than on the mode object, so it
+ * reaches the PATCH path, which validates each field on its own.
  */
-const graphicChannelConfigSchema = z.object({
-	id: z.string().min(1).max(100),
-	name: z.string().min(1).max(100),
-	handoff: z.enum(GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES).optional(),
-}).strict();
-
-/**
- * Broadcast Graphics mode configuration: the Screen's authored back-to-front
- * stack of Broadcast Graphics, and the Graphic Channels its members join. The
- * Screen's canvas stays in the Screen config.
- */
-export const broadcastGraphicsModeConfigSchema = declaredModeConfigSchema('broadcast-graphics', {
-	// Every cap lives on the array itself rather than on this object: the
-	// mode-configuration patch schema rebuilds each mode from its field schemas,
-	// so an object-level refinement would never reach the write path the editor uses.
-	graphics: z.array(broadcastGraphicConfigSchema)
-		.max(
-			MAX_BROADCAST_GRAPHICS_PER_SCREEN,
-			`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
-		)
-		.refine(
-			graphics => graphics.reduce((total, graphic) => total + countGraphicItems(graphic.items), 0)
-				<= MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
-			`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
-		)
-		.refine(
-			graphics => graphics.reduce((total, graphic) => total + (graphic.inputs?.length ?? 0), 0)
-				<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
-			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
-		)
-		// Bindings are budgeted with the inputs they map, and Graphic Source
-		// Selections with them: all three are per-graphic lists whose product with the
-		// Broadcast Graphic cap would otherwise be unbounded.
-		.refine(
-			graphics => graphics.reduce((total, graphic) => total + (graphic.bindings?.length ?? 0), 0)
-				<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
-			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Input Bindings in total`,
-		)
-		.refine(
-			graphics => graphics.reduce((total, graphic) => total + (graphic.sources?.length ?? 0), 0)
-				<= MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
-			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
-		)
-		.refine(
-			graphics => graphics.reduce(
-				(total, graphic) => total + (graphic.socialProfileProjections?.length ?? 0),
-				0,
-			) <= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
-			`A Broadcast Graphics Screen must not declare more than ${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Social Profile Projections in total`,
-		),
-	channels: z.array(graphicChannelConfigSchema)
-		.max(
-			MAX_GRAPHIC_CHANNELS_PER_SCREEN,
-			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_CHANNELS_PER_SCREEN} Graphic Channels`,
-		)
-		// A Broadcast Graphic joins a channel by id alone, so two channels sharing one id
-		// would leave which policy governs the handoff undecided. On the field for the
-		// same reason every other uniqueness rule here is.
-		.refine(
-			channels => new Set(channels.map(channel => channel.id)).size === channels.length,
-			'Graphic Channel ids must be unique within one Broadcast Graphics Screen',
-		)
-		.optional(),
-	// The Screen's Broadcast Graphics Background: one Animation Effect the stack
-	// composes over, shown or not, at an opacity. The schema is the catalogue's,
-	// so an effect this build does not ship is refused here rather than stored and
-	// silently rendering nothing — the same vocabulary refusal the Frame applies.
-	background: broadcastGraphicsBackgroundConfigSchema.optional(),
-}) satisfies z.ZodType<BroadcastGraphicsModeConfig>;
+const broadcastGraphicsStackSchema = z.array(broadcastGraphicConfigSchema)
+	.max(
+		MAX_BROADCAST_GRAPHICS_PER_SCREEN,
+		`A Broadcast Graphics Screen must not carry more than ${MAX_BROADCAST_GRAPHICS_PER_SCREEN} Broadcast Graphics`,
+	)
+	.refine(
+		graphics => graphics.reduce((total, graphic) => total + countGraphicItems(graphic.items), 0)
+			<= MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
+		`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
+	)
+	.refine(
+		graphics => graphics.reduce((total, graphic) => total + (graphic.inputs?.length ?? 0), 0)
+			<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+		`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
+	)
+	// Bindings are budgeted with the inputs they map, and Graphic Source
+	// Selections with them: all three are per-graphic lists whose product with the
+	// Broadcast Graphic cap would otherwise be unbounded.
+	.refine(
+		graphics => graphics.reduce((total, graphic) => total + (graphic.bindings?.length ?? 0), 0)
+			<= MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN,
+		`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Input Bindings in total`,
+	)
+	.refine(
+		graphics => graphics.reduce((total, graphic) => total + (graphic.sources?.length ?? 0), 0)
+			<= MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+		`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Source Selections in total`,
+	)
+	.refine(
+		graphics => graphics.reduce(
+			(total, graphic) => total + (graphic.socialProfileProjections?.length ?? 0),
+			0,
+		) <= MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
+		`A Broadcast Graphics Screen must not declare more than ${MAX_SOCIAL_PROFILE_PROJECTIONS_PER_BROADCAST_GRAPHICS_SCREEN} Social Profile Projections in total`,
+	);
 
 /**
  * One Feature Match Layout: the Frame, its host-owned Source Items, and the
- * shared item tree.
+ * shared item tree. The server's schema for the Feature Match Overlay config
+ * contract's `layout` field.
  *
  * It sits here, after the Shared Graphics Foundation section, because that tree is
- * the Shared Graphics Foundation vocabulary above.
+ * the Shared Graphics Foundation vocabulary above. Every cap lives on its own array
+ * for the same reason every Broadcast Graphics cap does.
  *
  * Named and exported because it is the boundary of the portable artifact as well
  * as a field of the mode configuration. A Feature Match Layout Template's document
@@ -1731,58 +1619,49 @@ export const featureMatchLayoutConfigSchema = z.object({
 }).strict();
 
 /**
- * Feature Match Overlay mode configuration: one Feature Match Layout, the Feature
- * Match Slot it renders, and the preset it was initialised from.
- *
- * Every cap lives on its own array for the same reason every Broadcast Graphics
- * cap does: the mode-configuration patch schema rebuilds each mode from its field
- * schemas, so an object-level refinement would never reach the write path the
- * editor uses.
+ * Every Screen Mode's write forms, from its config contract. The server supplies
+ * the schema of each field that reaches server-only Graphic Asset ids (ADR-0037).
  */
-export const featureMatchOverlayModeConfigSchema = declaredModeConfigSchema('feature-match-overlay', {
-	featureMatchId: z.number().int().positive().nullable(),
-	presetId: featureMatchOverlayPresetIdSchema,
-	layout: featureMatchLayoutConfigSchema,
-}) satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
+const modeConfigForms = {
+	'background': configContractModeForms('background', { layers: backgroundLayerStackSchema }),
+	'card': configContractModeForms('card'),
+	'deck': configContractModeForms('deck'),
+	'standings': configContractModeForms('standings'),
+	'topCut': configContractModeForms('topCut'),
+	'feature-match': configContractModeForms('feature-match'),
+	'feature-match-overlay': configContractModeForms('feature-match-overlay', { layout: featureMatchLayoutConfigSchema }),
+	'broadcast-graphics': configContractModeForms('broadcast-graphics', { graphics: broadcastGraphicsStackSchema }),
+	'metagame': configContractModeForms('metagame'),
+	'top-cards': configContractModeForms('top-cards'),
+	'player-history': configContractModeForms('player-history'),
+} satisfies Record<ScreenMode, unknown>;
 
-const metagameModeConfigForms = configContractModeForms('metagame');
+type ModeConfigForms = typeof modeConfigForms;
 
-/** The complete Metagame config, its own fields from its config contract (#587). */
-export const metagameModeConfigSchema = metagameModeConfigForms.schema;
+function modeConfigFormMap<Form extends keyof ModeConfigForms[ScreenMode]>(form: Form) {
+	return Object.fromEntries(
+		Object.entries(modeConfigForms).map(([mode, forms]) => [mode, forms[form]]),
+	) as { [M in ScreenMode]: ModeConfigForms[M][Form] };
+}
 
-const topCardsModeConfigForms = configContractModeForms('top-cards');
+/** Each mode's complete config: what a rendering reads once a stored fragment is completed. */
+export const modeConfigCompleteSchemaMap = modeConfigFormMap('schema');
 
-/** The complete Top Cards config, its own fields from its config contract (#588). */
-export const topCardsModeConfigSchema = topCardsModeConfigForms.schema;
+/** What Screen create and full update accept for each mode: a fragment of its complete config. */
+export const modeConfigSchemaMap = modeConfigFormMap('stored');
 
-// Map of mode name to its config schema
-export const modeConfigSchemaMap = {
-	'background': backgroundModeConfigSchema,
-	'card': cardModeConfigForms.stored,
-	'deck': deckModeConfigForms.stored,
-	'standings': standingsModeConfigForms.stored,
-	'topCut': topCutModeConfigForms.stored,
-	'feature-match': matchModeConfigSchema,
-	'feature-match-overlay': featureMatchOverlayModeConfigSchema,
-	'broadcast-graphics': broadcastGraphicsModeConfigSchema,
-	'metagame': metagameModeConfigForms.stored,
-	'top-cards': topCardsModeConfigForms.stored,
-	'player-history': playerHistoryModeConfigForms.stored,
-} as const;
+/** Each mode's PATCH body. */
+export const modeConfigPatchSchemaMap = modeConfigFormMap('patch');
 
-export const modeConfigPatchSchemaMap = {
-	'background': createModeConfigPatchSchema(backgroundModeConfigSchema),
-	'card': cardModeConfigForms.patch,
-	'deck': deckModeConfigForms.patch,
-	'standings': standingsModeConfigForms.patch,
-	'topCut': topCutModeConfigForms.patch,
-	'feature-match': createModeConfigPatchSchema(matchModeConfigSchema),
-	'feature-match-overlay': createModeConfigPatchSchema(featureMatchOverlayModeConfigSchema),
-	'broadcast-graphics': createModeConfigPatchSchema(broadcastGraphicsModeConfigSchema),
-	'metagame': metagameModeConfigForms.patch,
-	'top-cards': topCardsModeConfigForms.patch,
-	'player-history': playerHistoryModeConfigForms.patch,
-} as const;
+export const backgroundModeConfigSchema = modeConfigCompleteSchemaMap.background;
+export const deckModeConfigSchema = modeConfigCompleteSchemaMap.deck;
+export const standingsModeConfigSchema = modeConfigCompleteSchemaMap.standings;
+export const featureMatchModeConfigSchema = modeConfigCompleteSchemaMap['feature-match'];
+export const featureMatchOverlayModeConfigSchema = modeConfigCompleteSchemaMap['feature-match-overlay'];
+export const broadcastGraphicsModeConfigSchema = modeConfigCompleteSchemaMap['broadcast-graphics'];
+export const metagameModeConfigSchema = modeConfigCompleteSchemaMap.metagame;
+export const topCardsModeConfigSchema = modeConfigCompleteSchemaMap['top-cards'];
+export const playerHistoryModeConfigSchema = modeConfigCompleteSchemaMap['player-history'];
 
 /**
  * The rules that are properties of the whole stored mode configuration rather than
@@ -1848,7 +1727,7 @@ export function modeConfigSchemasWithObjectLevelChecks(
 }
 
 function assertNoUnenforceableModeConfigRules(): void {
-	const offenders = modeConfigSchemasWithObjectLevelChecks(modeConfigSchemaMap);
+	const offenders = modeConfigSchemasWithObjectLevelChecks(modeConfigCompleteSchemaMap);
 
 	if (offenders.length > 0) {
 		throw new Error(

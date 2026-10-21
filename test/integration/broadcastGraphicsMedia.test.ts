@@ -325,7 +325,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			headers: { cookie: graphicsAuthorCookie },
 		});
 
-		const savedItem = updated.modeConfigs!['broadcast-graphics']!.graphics[0]!.items[0]!;
+		const savedItem = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
 		expect(savedItem.type === 'media' && savedItem.asset).toEqual(logo);
 		// The owner slot names the Graphic Item that pinned the reference, so a broken
 		// one is diagnosable against the item an author repairs.
@@ -417,7 +417,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 				headers: { cookie: graphicsAuthorCookie },
 			},
 		);
-		expect(overlayConfig.modeConfigs!['feature-match-overlay']!.layout.frame.backgroundImage).toEqual({ kind: 'asset', ...logo });
+		expect(overlayConfig.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...logo });
 
 		function slotsFor(screen: ScreenResponse, usage: GraphicAssetUsage[]) {
 			return usage.filter(item => item.owner.id === String(screen.id)).map(item => item.owner.slot).sort();
@@ -624,7 +624,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			headers: { cookie: graphicsAuthorCookie },
 		});
 
-		const item = updated.modeConfigs!['broadcast-graphics']!.graphics[0]!.items[0]!;
+		const item = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
 		expect(item).toMatchObject({
 			type: 'media',
 			fit: 'contain',
@@ -671,7 +671,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			headers: { cookie: graphicsAuthorCookie },
 		});
 
-		const saved = updated.modeConfigs!['broadcast-graphics']!.graphics[0]!.items[0]!;
+		const saved = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
 		expect(saved.type === 'text' && saved.typography.font).toEqual({ kind: 'asset', reference: font });
 		await expect(usageOf(font)).resolves.toEqual([
 			expect.objectContaining({
@@ -1144,7 +1144,7 @@ describe('media Graphic Input values on air', () => {
 		const stored = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`, {
 			headers: { cookie: graphicsAuthorCookie },
 		});
-		const storedInput = stored.modeConfigs?.['broadcast-graphics']?.graphics[0]?.inputs?.[0];
+		const storedInput = stored.modeConfigs?.['broadcast-graphics']?.graphics?.[0]?.inputs?.[0];
 		expect(storedInput).toMatchObject({ key: 'sting', default: transparent });
 		expect(JSON.stringify(storedInput)).not.toContain('videoCompatibility');
 

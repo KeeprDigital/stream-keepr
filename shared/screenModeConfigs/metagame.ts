@@ -9,16 +9,7 @@ import {
 	METAGAME_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
-
-const metagameArchetypeColumnConfigSchema = z.object({
-	key: z.enum(METAGAME_ARCHETYPE_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
-
-const metagameCardColumnConfigSchema = z.object({
-	key: z.enum(METAGAME_CARD_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationShape } from './subShapes';
 
 /** The Metagame Screen Mode's config contract: its shape, type, and defaults. */
 export const metagameModeConfigContract = defineScreenModeConfigContract({
@@ -37,8 +28,8 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	cardSortBy: z.enum(METAGAME_CARD_SORT_BY_VALUES),
 
 	// Column configuration (ordered arrays — order = display order)
-	archetypeColumns: z.array(metagameArchetypeColumnConfigSchema).min(1).max(10),
-	cardColumns: z.array(metagameCardColumnConfigSchema).min(1).max(12),
+	archetypeColumns: z.array(columnConfigSchema(METAGAME_ARCHETYPE_COLUMN_KEY_VALUES)).min(1).max(10),
+	cardColumns: z.array(columnConfigSchema(METAGAME_CARD_COLUMN_KEY_VALUES)).min(1).max(12),
 
 	// Display limits
 	limit: z.number().int().min(1).max(500),
@@ -47,14 +38,10 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 
 	// Pagination
 	pageSize: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
+	...pageRotationShape,
 
 	// Visibility toggles
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
+	...headerConfigShape,
 
 	// Animation
 	animateEntries: z.boolean(),
@@ -90,10 +77,8 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	archetypeLimit: null,
 	maxTableWidth: undefined,
 	pageSize: 10,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
-	showHeader: true,
-	headerText: undefined,
+	...DEFAULT_PAGE_ROTATION,
+	...DEFAULT_HEADER_CONFIG,
 	animateEntries: true,
 });
 

@@ -9,6 +9,7 @@ import { screenService } from '~~/server/services/screen';
 import { requireUserId } from '~~/server/utils/auth';
 import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
@@ -33,8 +34,7 @@ export default defineEventHandler(async (event) => {
 	if (!screen)
 		throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'Screen not found' });
 
-	const stored = screen.modeConfigs?.['feature-match-overlay'];
-	if (!stored) {
+	if (!screen.modeConfigs?.['feature-match-overlay']) {
 		throw createError({
 			statusCode: 404,
 			statusMessage: 'Not Found',
@@ -42,7 +42,9 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const document = structuredClone(stored.layout);
+	// A stored fragment may lack `layout`; the Screen then renders the default
+	// layout, so that is the layout it saves.
+	const document = structuredClone(resolveScreenModeConfig(screen.modeConfigs, 'feature-match-overlay').layout);
 	await assertFeatureMatchLayoutTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 
 	const template = await featureMatchLayoutTemplateService().create({

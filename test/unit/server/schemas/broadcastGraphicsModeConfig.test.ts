@@ -1097,9 +1097,9 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 
 	it('rejects a null Broadcast Graphics stack, so a patch can never delete the authored stack', () => {
 		// `stripNullConfigKeys` treats null as "delete this key", which would drop
-		// the stack and silently fall back to the empty default. The patch schema
-		// only makes optional or nullable fields nullable, and `graphics` is
-		// required — this pins that, because widening the field would open the hole.
+		// the stack and silently fall back to the empty default. The config contract
+		// declares `graphics` an authored stack, so its PATCH form is only optional —
+		// this pins that, because dropping the declaration would open the hole.
 		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({ graphics: null });
 
 		expect(result.success).toBe(false);
