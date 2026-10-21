@@ -154,7 +154,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	globe: {
 		extremes: [
 			{ name: 'max-size', params: { size: 5 } },
-			{ name: 'markers-off', params: { showDots: false } },
+			{ name: 'markers-off', params: { showPoints: false } },
 		],
 	},
 	halo: {
@@ -197,7 +197,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 				// actually run, which is what `defaults` above measures.
 				floors: { minDarkFraction: 0.05 },
 			},
-			{ name: 'markers-off', params: { showDots: false } },
+			{ name: 'markers-off', params: { showPoints: false } },
 		],
 	},
 	ridgelines: {

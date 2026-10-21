@@ -354,7 +354,7 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 						points: 12,
 						connectionDistance: 34,
 						spacing: 18,
-						showDots: false,
+						showPoints: false,
 					},
 				},
 				borderVisible: true,

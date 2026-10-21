@@ -92,6 +92,7 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
  * - `centerX`/`centerY` move the pattern's centre.
  * - A colour is `<role>Color`, named for what it paints, labelled
  *   "<Role> color"; `backgroundColor` is the colour behind everything.
+ * - A toggle is `show<Thing>`, naming the thing its label shows.
  *
  * So no shader multipliers (`amplitudeFactor`), numbered or bare colours
  * (`color1`, `color`), or offsets, which the catalogue's unit test refuses.
@@ -206,7 +207,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
 			connectionDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
 			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
-			showDots: toggleParam('Point markers', 'Render point markers around the globe.', true),
+			showPoints: toggleParam('Point markers', 'Render point markers around the globe.', true),
 		}),
 	},
 	/**
@@ -264,7 +265,8 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * three 0.185 in unattended Chromium. The port enables vertex colours, so the
 	 * lines render the gradient the fork wrote and the label describes.
 	 * `connectionDistance` is the fork's `maxDistance`, renamed for what it
-	 * bounds (#583), as on globe.
+	 * bounds, and `showPoints` the fork's `showDots`, since its markers sit on
+	 * the `points` (#583), both as on globe.
 	 */
 	net: {
 		label: 'Net',
@@ -274,7 +276,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
 			connectionDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
 			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
-			showDots: toggleParam('Point markers', 'Render point markers at net intersections.', true),
+			showPoints: toggleParam('Point markers', 'Render point markers at net intersections.', true),
 		}),
 	},
 	/**

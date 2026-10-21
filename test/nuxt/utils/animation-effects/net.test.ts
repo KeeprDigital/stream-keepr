@@ -63,8 +63,8 @@ describe('createNetDelegate', () => {
 		}
 	});
 
-	it('builds bare placeholders instead of markers when showDots is off', () => {
-		const { scene } = mountDelegate({ showDots: false });
+	it('builds bare placeholders instead of markers when showPoints is off', () => {
+		const { scene } = mountDelegate({ showPoints: false });
 		expect(dotMeshes(scene).length).toBe(0);
 		// The points still exist for the lines to connect.
 		expect(netGroup(scene).children.length).toBe(11 * 11 * 2 + 1);
@@ -172,7 +172,7 @@ describe('createNetDelegate', () => {
 		delegate.applyParams({ ...context, params: { ...params, points: 4 } });
 		expect(dotMeshes(scene).length).toBe(5 * 5 * 2);
 
-		delegate.applyParams({ ...context, params: { ...params, points: 4, showDots: false } });
+		delegate.applyParams({ ...context, params: { ...params, points: 4, showPoints: false } });
 		expect(dotMeshes(scene).length).toBe(0);
 	});
 

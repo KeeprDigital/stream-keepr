@@ -49,7 +49,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 
 	/**
 	 * (Re)build the waving point plane and its line buffers. Called at build,
-	 * and again when `points`, `spacing`, or `showDots` change — the fork read
+	 * and again when `points`, `spacing`, or `showPoints` change — the fork read
 	 * those only at init, so a live change is given what a fresh mount of the
 	 * same params would show.
 	 */
@@ -60,15 +60,15 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 		dotGeometry?.dispose();
 		dotMaterial?.dispose();
 
-		dotGeometry = current.showDots ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
+		dotGeometry = current.showPoints ? new three.SphereGeometry(0.25, 12, 12) : undefined;
+		dotMaterial = current.showPoints ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
 
 		positions = [];
 		const n = current.points;
 		const spacing = current.spacing;
 		for (let i = 0; i <= n; i++) {
 			for (let j = 0; j <= n; j++) {
-				const holder = current.showDots && dotGeometry && dotMaterial
+				const holder = current.showPoints && dotGeometry && dotMaterial
 					? new three.Mesh(dotGeometry, dotMaterial)
 					: new three.Object3D();
 				holder.position.set((i - n / 2) * spacing, 0, (j - n / 2) * spacing);
@@ -176,7 +176,7 @@ export function createGlobeDelegate(): SceneEffectDelegate<AnimationEffectParams
 		applyParams: ({ three, scene, params }) => {
 			const fieldChanged = params.points !== current.points
 				|| params.spacing !== current.spacing
-				|| params.showDots !== current.showDots;
+				|| params.showPoints !== current.showPoints;
 			const sizeChanged = params.size !== current.size;
 			current = params;
 			scene.background = new three.Color(params.backgroundColor);
