@@ -1,7 +1,10 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
+import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
+import type { ScreenOutputReadScope } from '~/composables/repositories/useScreenOutputReadRepository';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
+import type { Flight } from '~/utils/guardedSequence';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
 import {
@@ -284,9 +287,35 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		}
 	}
 
+	/**
+	 * The Screen and Event this rendering finished loading, or nothing while its
+	 * load is incomplete.
+	 *
+	 * A load is the whole of what a rendering needs: its Screen looked up, its
+	 * Event context read through that Screen, and — for a Screen Output — its
+	 * realtime session started. A Screen lookup alone is not a finished load: an
+	 * output whose Event context failed holds a Screen and renders nothing, and
+	 * treating the held Screen as loaded left it so for good, because its recovery
+	 * only ever re-read the Screen (#705).
+	 */
+	const loadedOn = ref<ScreenOutputReadScope | null>(null);
+	/** Recovery of a loaded rendering; superseded by every new load. */
+	const recoveries = createGuardedSequence();
+
+	/** Forget the finished load and drop any recovery of it, because a new load begins. */
+	function forgetLoad() {
+		loadedOn.value = null;
+		recoveries.supersede();
+	}
+
+	function readScope(evtId: number, screenId: number): ScreenOutputReadScope {
+		return { eventId: evtId, screenId, assetCapability: assetCapability.value };
+	}
+
 	async function loadActiveScreen(slug: string, flight = loads.begin()) {
 		const evtId = resolveEventId();
 
+		forgetLoad();
 		loading.value = true;
 		error.value = null;
 		exportError.value = null;
@@ -309,72 +338,167 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			if (!loadedScreen || screenStore.activeScreen?.id !== loadedScreen.id)
 				throw new Error('Screen not found');
 
-			// The Event context comes through the same Screen, not the operator's
-			// private Event read: an output has no Session for that read to admit
-			// (#604). Rendering waits for it, because every mode reads its Event.
-			const outputEvent = await outputReads.event({
-				eventId: evtId,
-				screenId: loadedScreen.id,
-				assetCapability: assetCapability.value,
-			});
-			if (flight.stale)
-				return;
-			eventStore.setOutputEvent(outputEvent);
-
-			// Only a Screen Output joins its Screen's presence and answers its Screen's
-			// commands. An embedded rendering of either kind is a control surface's own
-			// view — counting it would report the operator's own window back to them as
-			// a client watching, and an Identify meant to locate a display in a venue
-			// would flash the one screen they are already looking at.
-			if (!embed.value) {
-				await screenRealtimeSession.start(evtId, loadedScreen.id);
-			}
-			if (flight.stale)
-				return;
-
-			loading.value = false;
-			await captureDownload();
+			await finishLoad(readScope(evtId, loadedScreen.id), flight);
 		}
 		catch (err) {
-			if (flight.stale)
-				return;
-			console.error('Failed to load screen:', err);
-			error.value = 'Screen not found';
-			loading.value = false;
+			failLoad(err, flight);
 		}
 	}
 
 	/**
-	 * Re-read authoritative Screen state after this output has been out of touch.
+	 * Everything a load does once its Screen is held. Throws on failure, which
+	 * leaves the Screen held and the load incomplete, so the next recovery resumes
+	 * here rather than settling for the Screen.
+	 */
+	async function finishLoad(scope: ScreenOutputReadScope, flight: Flight) {
+		// The Event context comes through the same Screen, not the operator's
+		// private Event read: an output has no Session for that read to admit
+		// (#604). Rendering waits for it, because every mode reads its Event.
+		const outputEvent = await outputReads.event(scope);
+		if (flight.stale)
+			return;
+		eventStore.setOutputEvent(outputEvent);
+
+		// Only a Screen Output joins its Screen's presence and answers its Screen's
+		// commands. An embedded rendering of either kind is a control surface's own
+		// view — counting it would report the operator's own window back to them as
+		// a client watching, and an Identify meant to locate a display in a venue
+		// would flash the one screen they are already looking at.
+		if (!embed.value) {
+			await screenRealtimeSession.start(scope.eventId, scope.screenId);
+		}
+		if (flight.stale)
+			return;
+
+		loadedOn.value = scope;
+		error.value = null;
+		loading.value = false;
+		await captureDownload();
+	}
+
+	function failLoad(err: unknown, flight: Flight) {
+		if (flight.stale)
+			return;
+		console.error('Failed to load screen:', err);
+		error.value = 'Screen not found';
+		loading.value = false;
+	}
+
+	/**
+	 * Finish a load that held its Screen and failed after it. The held Screen is
+	 * re-read by its id first, because it may have changed — or been renamed —
+	 * while this rendering showed nothing. The not-found state stands until the
+	 * load finishes, and a failure leaves it incomplete for the next recovery.
+	 */
+	async function resumeLoad(scope: ScreenOutputReadScope) {
+		const flight = loads.begin();
+		try {
+			const screen = await screenStore.refreshActiveScreen(scope.eventId, scope.screenId, scope.assetCapability);
+			if (flight.stale)
+				return;
+			if (!screen)
+				throw new Error('Screen not found');
+			await finishLoad(scope, flight);
+		}
+		catch (err) {
+			failLoad(err, flight);
+		}
+	}
+
+	/**
+	 * Re-read the Event context a loaded rendering holds. An `event:updated` that
+	 * lands while the read is in flight may be newer or older than its answer, and
+	 * the context carries no revision to tell them apart, so the answer is not
+	 * applied over it and one more read settles which is current — as Screen Mode
+	 * Data Freshness does for a mode's data.
+	 */
+	async function rereadOutputEvent(scope: ScreenOutputReadScope, flight: Flight) {
+		for (;;) {
+			const heldBefore = eventStore.outputEvent;
+			let outputEvent: ScreenOutputEvent;
+			try {
+				outputEvent = await outputReads.event(scope);
+			}
+			catch (err) {
+				if (flight.current)
+					console.warn('Failed to re-read the Event context; keeping the last one:', err);
+				return;
+			}
+			if (flight.stale)
+				return;
+			if (eventStore.outputEvent === heldBefore) {
+				eventStore.setOutputEvent(outputEvent);
+				return;
+			}
+		}
+	}
+
+	/**
+	 * Re-read what a loaded rendering holds: its Screen, by the id it holds, and
+	 * its Event context, both through that Screen with the credential it loaded
+	 * with. Program keeps its last accepted rendering throughout — nothing is
+	 * emptied, and loading and error are left alone — and a read that fails is
+	 * simply not applied, so the next recovery tries again.
+	 */
+	async function recoverLoadedRendering(scope: ScreenOutputReadScope) {
+		const flight = recoveries.begin();
+		await Promise.allSettled([
+			screenStore.refreshActiveScreen(scope.eventId, scope.screenId, scope.assetCapability),
+			rereadOutputEvent(scope, flight),
+		]);
+	}
+
+	/**
+	 * Re-read authoritative state after this rendering has been out of touch.
 	 *
 	 * A Screen announcement carries no sequence number, so unlike a Broadcast
 	 * Graphics notification it cannot tell a client it fell behind — and Ably drops
 	 * message continuity after a couple of minutes suspended. An output that missed
 	 * a mode change while away therefore renders the old mode indefinitely, on
-	 * program, with nothing anywhere reporting it (#307).
+	 * program, with nothing anywhere reporting it (#307). The same holds for an
+	 * `event:updated` it missed: orientation, formatting, defaults and feature
+	 * settings (#705).
 	 *
-	 * An output already rendering takes the non-blanking read, because program must
-	 * not flash while the Screen is fetched. One showing nothing has nothing to
-	 * protect and takes the ordinary load, which is also the one that starts the
-	 * realtime session it never got.
+	 * Three cases, by what this rendering holds:
+	 *
+	 * - A finished load: the non-blanking re-read of the Screen and its Event
+	 *   context, because program must not flash while they are fetched.
+	 * - A Screen but no finished load: resume the load from that Screen.
+	 * - Nothing: the ordinary load, which has nothing on program to protect.
+	 *
+	 * The Screen is addressed by the id it holds, never by the route's slug: a
+	 * rename under an output on program leaves that slug naming nothing (#705).
 	 */
 	function resyncActiveScreen() {
-		const slug = screenSlug.value;
 		const evtId = resolveEventId();
-		if (!slug || !evtId)
+		if (!evtId)
 			return;
 
-		if (!screenStore.activeScreen) {
-			void loadActiveScreen(slug);
+		const held = screenStore.activeScreen;
+		if (!held) {
+			if (screenSlug.value)
+				void loadActiveScreen(screenSlug.value);
 			return;
 		}
-		void screenStore.refreshActiveScreen(evtId, slug, assetCapability.value);
+
+		const loaded = loadedOn.value;
+		if (loaded?.screenId === held.id)
+			void recoverLoadedRendering(loaded);
+		else
+			void resumeLoad(readScope(evtId, held.id));
 	}
 
-	// An output on program hears its Screen's announcements on the Event channel.
-	// One showing nothing listens for none yet, so the connection coming back
-	// retries it.
-	useReconnectResync(resyncActiveScreen, () => screenStore.activeScreen ? resolveEventId() : null, realtime);
+	// A loaded rendering hears its Screen's announcements on the Event channel.
+	// One not loaded listens on none — its Event context, which names the channel,
+	// may be what failed — so the connection coming back retries it.
+	useReconnectResync(resyncActiveScreen, () => loadedOn.value?.eventId ?? null, realtime);
+	// Subscriptions that waited on a token missed what was published meanwhile,
+	// and a first attach over an unbroken connection reports no continuity loss
+	// (ADR-0023), exactly as the Realtime Event Session resyncs on it.
+	watch(() => !!realtime.tokenError, (waiting, wasWaiting) => {
+		if (wasWaiting && !waiting)
+			resyncActiveScreen();
+	});
 
 	onMounted(async () => {
 		await loadActiveScreen(screenSlug.value);
@@ -385,13 +509,17 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			return;
 
 		// Begin before stopping so anything the stop awaits past is already stale.
+		// The load forgets the old one again; forgetting it here as well keeps a
+		// recovery landing during the stop from applying to the Screen being left.
 		const flight = loads.begin();
+		forgetLoad();
 		await screenRealtimeSession.stop();
 		await loadActiveScreen(newSlug, flight);
 	});
 
 	onBeforeUnmount(async () => {
 		loads.supersede();
+		forgetLoad();
 		await screenRealtimeSession.stop();
 	});
 

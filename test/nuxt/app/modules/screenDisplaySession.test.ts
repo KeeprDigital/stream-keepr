@@ -65,9 +65,11 @@ function createHarness(options: {
 		}),
 		// The non-blanking read a resync uses: it never empties `activeScreen`,
 		// because the output taking it is on program (#307).
-		refreshActiveScreen: vi.fn(async (_eventId: number, slug: string) => {
-			order.push(`refresh:${slug}`);
-			const screen = screens[slug];
+		// By the held Screen's id, because a slug can be renamed under an output on
+		// program (#705).
+		refreshActiveScreen: vi.fn(async (_eventId: number, screenId: number) => {
+			order.push(`refresh:${screenId}`);
+			const screen = Object.values(screens).find(candidate => candidate.id === screenId);
 			if (!screen)
 				return null;
 			screenStore.activeScreen = screen;
@@ -76,7 +78,10 @@ function createHarness(options: {
 	});
 	const eventStore = reactive({
 		eventId: options.eventId ?? null,
-		setOutputEvent: vi.fn(),
+		outputEvent: null as unknown,
+		setOutputEvent: vi.fn((outputEvent: unknown) => {
+			eventStore.outputEvent = outputEvent;
+		}),
 	});
 	// The Event context an output reads through its Screen (#604), never the
 	// operator's private Event read.
@@ -90,6 +95,7 @@ function createHarness(options: {
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
+		tokenError: null as Error | null,
 		onContinuityLost,
 	});
 	const realtimeCallbacks: any[] = [];
@@ -134,6 +140,7 @@ function createHarness(options: {
 	return {
 		wrapper,
 		route,
+		screens,
 		screenStore,
 		eventStore,
 		outputReads,
@@ -524,7 +531,7 @@ describe('useScreenDisplaySession', () => {
 			harness.reattach('event:42');
 			await flushPromises();
 
-			expect(harness.order).toEqual(['refresh:main']);
+			expect(harness.order).toEqual(['refresh:7']);
 			expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledTimes(1);
 			// The blanking loader is the wrong one here: a flash of nothing is the one
 			// failure an operator cannot recover from in time.
@@ -556,6 +563,253 @@ describe('useScreenDisplaySession', () => {
 
 			expect(harness.order).toEqual(['load:main']);
 			expect(harness.screenStore.refreshActiveScreen).not.toHaveBeenCalled();
+		});
+
+		it('recovers a renamed Screen by the id it holds, not by the slug it was opened on', async () => {
+			// The route keeps the slug the output was opened on; a rename while it is on
+			// program leaves that slug naming nothing (#705).
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+			delete harness.screens.main;
+			const missedChange = createMockScreen({ id: 7, slug: 'renamed', currentMode: 'standings' });
+			harness.screens.renamed = missedChange;
+
+			harness.reattach('event:42');
+			await flushPromises();
+
+			expect(harness.screenStore.refreshActiveScreen).toHaveBeenCalledWith(42, 7, null);
+			expect(harness.screenStore.activeScreen).toEqual(missedChange);
+			expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledTimes(1);
+		});
+
+		it('re-reads its Event context through its Screen, applying what it missed', async () => {
+			// Orientation, display formatting, Feature Match defaults and feature
+			// settings every mode renders with: an `event:updated` published while away
+			// is never delivered late (#705).
+			const harness = createHarness({
+				route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
+			});
+			await flushPromises();
+			const missed = { id: 42, name: 'Output Event', orientation: 'portrait', featureFlags: { metagame: true } };
+			harness.outputReads.event.mockResolvedValueOnce(missed as any);
+
+			harness.reattach('event:42');
+			await flushPromises();
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+			expect(harness.outputReads.event).toHaveBeenLastCalledWith({
+				eventId: 42,
+				screenId: 7,
+				assetCapability: 'a-screen-output-capability-token',
+			});
+			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith(missed);
+		});
+
+		it('re-reads once more when an Event update lands while its recovery read is in flight', async () => {
+			// The Event context carries no revision, so an answer cannot be ordered
+			// against an `event:updated` heard meanwhile; one more read settles it.
+			const harness = createHarness();
+			await flushPromises();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+
+			harness.reattach('event:42');
+			await flushPromises();
+			harness.eventStore.outputEvent = { id: 42, name: 'Heard meanwhile' };
+			inFlight.resolve({ id: 42, name: 'Answered before or after it' });
+			await flushPromises();
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Answered before or after it' });
+			expect(harness.eventStore.outputEvent).toEqual({ id: 42, name: 'Output Event' });
+		});
+
+		it('re-reads when its subscriptions stop waiting on a token', async () => {
+			// A first attach after a token wait reports no continuity loss (ADR-0023),
+			// yet everything published while it waited was missed.
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.realtime.tokenError = new Error('mint failed') as any;
+			await nextTick();
+			harness.realtime.tokenError = null;
+			await nextTick();
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		});
+
+		it('lets a recovery that arrives mid-load take over the load', async () => {
+			// The load's Event context read may have been lost with the connection;
+			// the recovery resumes the load from the Screen it already holds.
+			const harness = createHarness();
+			const lostRead = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(lostRead.promise);
+			await flushPromises();
+			expect(harness.session.loading.value).toBe(true);
+
+			await suspendAndResume(harness);
+			lostRead.resolve({ id: 42, name: 'Lost read' });
+			await flushPromises();
+
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Lost read' });
+			expect(harness.eventStore.setOutputEvent).toHaveBeenCalledWith({ id: 42, name: 'Output Event' });
+			expect(harness.realtimeSession.start).toHaveBeenCalledOnce();
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.session.error.value).toBeNull();
+		});
+
+		it('holds its last accepted rendering through a recovery that fails, and recovers on the next', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			const onProgram = harness.screenStore.activeScreen;
+			harness.screenStore.refreshActiveScreen.mockResolvedValueOnce(null);
+			harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+
+			harness.reattach('event:42');
+			await flushPromises();
+
+			expect(harness.screenStore.activeScreen).toBe(onProgram);
+			expect(harness.eventStore.setOutputEvent).toHaveBeenCalledTimes(1);
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.session.error.value).toBeNull();
+
+			// Transient: the next loss of continuity tries again.
+			const missedChange = createMockScreen({ id: 7, slug: 'main', currentMode: 'standings' });
+			harness.screens.main = missedChange;
+			harness.reattach('event:42');
+			await flushPromises();
+
+			expect(harness.screenStore.activeScreen).toEqual(missedChange);
+			expect(harness.eventStore.setOutputEvent).toHaveBeenCalledTimes(2);
+		});
+
+		it('drops a recovery that a Screen change superseded', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			const lateContext = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(lateContext.promise);
+
+			harness.reattach('event:42');
+			await flushPromises();
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+			lateContext.resolve({ id: 42, name: 'Read for the old Screen' });
+			await flushPromises();
+
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Read for the old Screen' });
+			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith({ id: 42, name: 'Output Event' });
+			expect(harness.realtimeSession.start).toHaveBeenLastCalledWith(42, 8);
+		});
+
+		/**
+		 * The Screen lookup answered and its Event context did not. The output holds a
+		 * Screen and renders nothing, and listens on no Event channel, because the
+		 * Event context it would name is what failed. Treating the held Screen as a
+		 * finished load left it so for good (#705).
+		 */
+		describe('when its Event context failed after its Screen lookup succeeded', () => {
+			async function failedLoad(options: Parameters<typeof createHarness>[0] = {}) {
+				const harness = createHarness(options);
+				harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+				await flushPromises();
+				expect(harness.screenStore.activeScreen?.id).toBe(7);
+				expect(harness.session.error.value).toBe('Screen not found');
+				harness.order.splice(0);
+				return harness;
+			}
+
+			it('finishes the load on the connection coming back: clears the error and starts realtime', async () => {
+				const harness = await failedLoad({
+					route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
+				});
+
+				await suspendAndResume(harness);
+
+				// Resumed from the Screen it holds, by id, with the same capability.
+				expect(harness.order).toEqual(['refresh:7', 'start:7']);
+				expect(harness.outputReads.event).toHaveBeenLastCalledWith({
+					eventId: 42,
+					screenId: 7,
+					assetCapability: 'a-screen-output-capability-token',
+				});
+				expect(harness.eventStore.setOutputEvent).toHaveBeenCalledWith({ id: 42, name: 'Output Event' });
+				expect(harness.session.error.value).toBeNull();
+				expect(harness.session.loading.value).toBe(false);
+				expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+			});
+
+			it('stays retryable when the resumed load fails too', async () => {
+				const harness = await failedLoad();
+				harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+
+				await suspendAndResume(harness);
+
+				expect(harness.session.error.value).toBe('Screen not found');
+				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+
+				await suspendAndResume(harness);
+
+				expect(harness.session.error.value).toBeNull();
+				expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+			});
+
+			it('listens on its Event channel once loaded, and not before', async () => {
+				const harness = await failedLoad();
+
+				// No Event channel names it yet, so a reattach there finds nothing to do.
+				harness.reattach('event:42');
+				await flushPromises();
+				expect(harness.order).toEqual([]);
+
+				await suspendAndResume(harness);
+				harness.order.splice(0);
+
+				harness.reattach('event:42');
+				await flushPromises();
+				expect(harness.order).toEqual(['refresh:7']);
+			});
+
+			it('finishes a Program monitor\'s load without entering presence', async () => {
+				const harness = await failedLoad({ query: { embed: 'monitor' } });
+
+				await suspendAndResume(harness);
+
+				expect(harness.session.error.value).toBeNull();
+				expect(harness.eventStore.setOutputEvent).toHaveBeenCalledOnce();
+				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+			});
+
+			it('finishes a preview\'s load without entering presence', async () => {
+				const harness = await failedLoad({ query: { embed: 'preview' } });
+
+				await suspendAndResume(harness);
+
+				expect(harness.session.error.value).toBeNull();
+				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+			});
+
+			it('lets a Screen change supersede the resumed load', async () => {
+				const harness = await failedLoad();
+				const lateContext = deferred<any>();
+				harness.outputReads.event.mockReturnValueOnce(lateContext.promise);
+
+				await suspendAndResume(harness);
+				harness.route.params.screenSlug = 'second';
+				await nextTick();
+				await flushPromises();
+				lateContext.resolve({ id: 42, name: 'Read for the old Screen' });
+				await flushPromises();
+
+				expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Read for the old Screen' });
+				expect(harness.realtimeSession.start).toHaveBeenCalledTimes(1);
+				expect(harness.realtimeSession.start).toHaveBeenLastCalledWith(42, 8);
+				expect(harness.session.error.value).toBeNull();
+			});
 		});
 	});
 });

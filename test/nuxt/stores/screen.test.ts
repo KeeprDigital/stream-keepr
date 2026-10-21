@@ -33,6 +33,7 @@ const mockRepo = {
 	list: vi.fn(),
 	getById: vi.fn(),
 	getBySlug: vi.fn(),
+	getScreenOutputById: vi.fn(),
 	create: vi.fn(),
 	update: vi.fn(),
 	updateModeConfig: vi.fn(),
@@ -321,9 +322,9 @@ describe('useScreenStore', () => {
 	 * throw.
 	 */
 	describe('refreshActiveScreen', () => {
-		function deferGetBySlug() {
+		function deferGetScreenOutputById() {
 			let serve!: (screen: unknown) => void;
-			mockRepo.getBySlug.mockReturnValueOnce(new Promise((resolve) => {
+			mockRepo.getScreenOutputById.mockReturnValueOnce(new Promise((resolve) => {
 				serve = resolve;
 			}));
 			return (screen: unknown) => serve(screen);
@@ -332,9 +333,9 @@ describe('useScreenStore', () => {
 		it('never empties what is on program while it fetches', async () => {
 			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
 			store.activeScreen = onProgram;
-			const serve = deferGetBySlug();
+			const serve = deferGetScreenOutputById();
 
-			const refresh = store.refreshActiveScreen(1, 'main');
+			const refresh = store.refreshActiveScreen(1, 7);
 			await Promise.resolve();
 
 			// The whole point of the second loader. A flash of nothing on program is
@@ -351,9 +352,9 @@ describe('useScreenStore', () => {
 			// It shares `activeScreenLoads` with the switching loader, so a real
 			// navigation begun while a resync is in flight wins rather than races.
 			store.activeScreen = createMockScreen({ id: 7, slug: 'main' });
-			const serveRefresh = deferGetBySlug();
+			const serveRefresh = deferGetScreenOutputById();
 
-			const refresh = store.refreshActiveScreen(1, 'main');
+			const refresh = store.refreshActiveScreen(1, 7);
 			const switched = createMockScreen({ id: 8, slug: 'other' });
 			mockRepo.getBySlug.mockResolvedValueOnce(switched);
 			await store.loadScreenBySlug(1, 'other');
@@ -369,9 +370,9 @@ describe('useScreenStore', () => {
 			// save commits can be served after it settles.
 			store.screens = [createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 })];
 			store.activeScreen = createMockScreen({ id: 7, slug: 'main', name: 'Saved', stateVersion: 4 });
-			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
+			mockRepo.getScreenOutputById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main', name: 'Stale', stateVersion: 3 }));
 
-			const refreshed = await store.refreshActiveScreen(1, 'main');
+			const refreshed = await store.refreshActiveScreen(1, 7);
 
 			expect(store.activeScreen!.name).toBe('Saved');
 			expect(refreshed!.name).toBe('Saved');
@@ -383,9 +384,9 @@ describe('useScreenStore', () => {
 			// and program keeps what it last accepted.
 			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
 			store.activeScreen = onProgram;
-			mockRepo.getBySlug.mockRejectedValue(transportFailure({ status: 503 }));
+			mockRepo.getScreenOutputById.mockRejectedValue(transportFailure({ status: 503 }));
 
-			await expect(store.refreshActiveScreen(1, 'main')).resolves.toBeNull();
+			await expect(store.refreshActiveScreen(1, 7)).resolves.toBeNull();
 
 			expect(store.activeScreen).toEqual(onProgram);
 			expect(store.error).toContain('Service Unavailable');
@@ -394,11 +395,34 @@ describe('useScreenStore', () => {
 		it('holds the rendering when the Screen is gone', async () => {
 			const onProgram = createMockScreen({ id: 7, slug: 'main', name: 'On air' });
 			store.activeScreen = onProgram;
-			mockRepo.getBySlug.mockResolvedValue(null);
+			mockRepo.getScreenOutputById.mockResolvedValue(null);
 
-			expect(await store.refreshActiveScreen(1, 'main')).toBeNull();
+			expect(await store.refreshActiveScreen(1, 7)).toBeNull();
 
 			expect(store.activeScreen).toEqual(onProgram);
+		});
+
+		it('reads the held Screen by its id, so a rename under program cannot strand it', async () => {
+			// The slug the output was opened on names nothing once the Screen is renamed
+			// (#705); the id it holds still names the Screen.
+			store.activeScreen = createMockScreen({ id: 7, slug: 'main' });
+			const renamed = createMockScreen({ id: 7, slug: 'renamed', name: 'Missed change' });
+			mockRepo.getScreenOutputById.mockResolvedValue(renamed);
+
+			const refreshed = await store.refreshActiveScreen(1, 7, 'capability');
+
+			expect(mockRepo.getScreenOutputById).toHaveBeenCalledWith(1, 7, 'capability');
+			expect(mockRepo.getBySlug).not.toHaveBeenCalled();
+			expect(refreshed).toEqual(renamed);
+			expect(store.activeScreen).toEqual(renamed);
+		});
+
+		it('drops an answer for a Screen this client no longer holds', async () => {
+			store.activeScreen = createMockScreen({ id: 8, slug: 'other' });
+			mockRepo.getScreenOutputById.mockResolvedValue(createMockScreen({ id: 7, slug: 'main' }));
+
+			expect(await store.refreshActiveScreen(1, 7)).toBeNull();
+			expect(store.activeScreen!.id).toBe(8);
 		});
 	});
 
