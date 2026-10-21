@@ -1437,10 +1437,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 
 		<!--
 			Base typography, offered wherever the selection's Graphic Item Definition
-			says it paints text. A Clock, a
-			Player Life, and a Game Wins Item rendering its win count read their string
-			from the live Feature Match Session rather than from an author — which
-			decides what the item says, and nothing about how it is set.
+			says it paints text. A Clock, a Player Life, and a Game Wins Item rendering
+			its win count read their string from the live Feature Match Session rather
+			than from an author — which decides what the item says, and nothing about
+			how it is set.
 		-->
 		<template v-if="selectedTypography">
 			<GraphicsCompositorStyleRef

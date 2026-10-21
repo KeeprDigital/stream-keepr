@@ -472,10 +472,10 @@ export function ownsTextOverflowPolicy(item: GraphicItemConfig): item is Graphic
  * it paints none: where the Inspector offers typography controls.
  */
 export function paintedGraphicTypography(item: GraphicItemConfig): GraphicTypography | null {
-	if (!ownsGraphicTypography(item))
+	const declaration = getGraphicItemDefinition(item.type).typography;
+	if (!declaration || !ownsGraphicTypography(item))
 		return null;
-	const paintsText = getGraphicItemDefinition(item.type).typography?.paintsText;
-	return paintsText === undefined || paintsText(item) ? item.typography : null;
+	return declaration.paintsText === undefined || declaration.paintsText(item) ? item.typography : null;
 }
 
 export function graphicItemSummary(item: GraphicItemConfig): string {
