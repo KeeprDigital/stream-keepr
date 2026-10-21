@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type {
+	GraphicPlayerSideItem,
 	GraphicsHostContract,
+	GraphicSurfaceStyleSlot,
+	OwnedShapeGeometry,
 } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
@@ -25,7 +28,6 @@ import type {
 	OnAirUpdatePolicy,
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
-	ShapeGeometry,
 	SocialNetworkIconGraphicItemConfig,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
@@ -49,8 +51,11 @@ import {
 	graphicsHostTokenCatalogue,
 	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
+	ownsPlayerSide,
 	ownsTextOverflowPolicy,
+	paintedGraphicSurfaceStyles,
 	paintedGraphicTypography,
+	paintedShapeGeometry,
 	patchBroadcastGraphic,
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
@@ -60,6 +65,7 @@ import {
 	patchGraphicInput,
 	patchGraphicItem,
 	patchGraphicPlaceholderStyle,
+	patchGraphicPlayerSide,
 	patchGraphicTextOverflow,
 	patchGraphicTypography,
 	patchMediaFocalPosition,
@@ -298,18 +304,17 @@ const selectedTextOverflow = computed(() => {
 });
 
 /**
- * The Player a context-gated Graphic Item reads.
+ * The selection when its Graphic Item Definition says it reads one Player's live
+ * state.
  *
  * Its own control rather than part of the shared geometry block, because it is
  * the only property of these kinds that decides *whose* live state renders — a
  * Player Life fixed to `player1` makes a two-player overlay unbuildable, because
  * both sides would show the same total.
  */
-const selectedPlayerSide = computed<PlayerSide | null>(() => {
+const selectedSidedItem = computed<GraphicPlayerSideItem | null>(() => {
 	const item = selectedItem.value;
-	return item?.type === 'player-life' || item?.type === 'game-wins' || item?.type === 'deck-list'
-		? item.playerSide
-		: null;
+	return item && ownsPlayerSide(item) ? item : null;
 });
 
 const PLAYER_SIDE_OPTIONS = [
@@ -318,31 +323,23 @@ const PLAYER_SIDE_OPTIONS = [
 ] satisfies Array<{ label: string; value: PlayerSide }>;
 
 /**
- * The Shape Geometry the geometry controls edit.
+ * The Shape Geometry the geometry controls edit, and the Graphic Style Set slot it
+ * sits in, as the selection's Definition declares them.
  *
  * A Shape Graphic Item and a Graphic Group draw one and always have one. A Media
  * Graphic Item clips to one only while clipping is switched on, so the same
  * controls appear for it exactly when there is a clip to shape. A Game Wins Item's
- * is the shape of one win box: a cut-corner win box is authored with exactly the
- * controls a Shape Graphic Item uses.
+ * is the shape of one win box, offered only while boxes are what renders: the
+ * authored geometry survives a switch to its win count, so going back restores
+ * what the author already set up. The picker above the controls inherits into
+ * whichever geometry they edit.
  */
-const selectedGeometry = computed<ShapeGeometry | null>(() => {
-	const item = selectedItem.value;
-	if (item?.type === 'shape' || item?.type === 'group')
-		return item.geometry;
-	if (item?.type === 'media')
-		return item.clipGeometry ?? null;
-	// Offered only while boxes are what renders. A `number` display mode paints a
-	// win count, which has no box to shape — and the authored geometry survives the
-	// switch, so going back restores what the author already set up.
-	if (item?.type === 'game-wins')
-		return item.displayMode === 'boxes' ? item.boxGeometry : null;
-	return null;
-});
+const selectedShapeGeometry = computed<OwnedShapeGeometry | null>(() =>
+	selectedItem.value ? paintedShapeGeometry(selectedItem.value) : null);
 
-/** Named for what it shapes, because a Game Wins Item's geometry is not its own bounds. */
+/** Named for what it shapes, because a win box's geometry is not the item's own bounds. */
 const geometryTitle = computed(() =>
-	selectedItem.value?.type === 'game-wins' ? 'Win box Shape Geometry' : 'Shape Geometry',
+	selectedShapeGeometry.value?.slot === 'boxGeometry' ? 'Win box Shape Geometry' : 'Shape Geometry',
 );
 
 /** Only a canvas-positioned item has a coordinate and a Graphic Rotation. */
@@ -354,47 +351,20 @@ const isStackedChild = computed(() =>
 );
 
 /**
- * Only an item's own Graphic Surface Style is editable here. A Graphic Group
- * child with none of its own inherits the group's local style default, which is
- * edited on the group itself.
+ * The Graphic Surface Styles the selection has on screen, keyed by slot, as its
+ * Definition declares them — each null where the item holds none of its own yet.
  *
- * A Media Graphic Item never has one: fill, outline, and glow belong to the kinds
- * that paint a surface, and it paints an asset. A Deck List Item renders cards
- * only, so it has none either.
+ * Only an item's own Graphic Surface Style is editable here. A Graphic Group child
+ * with none of its own inherits the group's local style default, which is edited on
+ * the group itself.
  */
-const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
-	const item = selectedItem.value;
-	if (!item || item.type === 'media' || item.type === 'social-network-icon' || item.type === 'deck-list')
-		return null;
-	return item.surfaceStyle ?? null;
-});
+const selectedSurfaces = computed<Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle | null>>>(() =>
+	selectedItem.value ? paintedGraphicSurfaceStyles(selectedItem.value) : {});
 
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 const geometryContainer = computed(() => parentGroup.value
 	? { width: parentGroup.value.width, height: parentGroup.value.height }
 	: { width: props.canvasWidth, height: props.canvasHeight });
-
-/**
- * Which Shape Geometry the geometry controls are editing, named as a Graphic Style
- * Set slot.
- *
- * Three kinds keep one in three different places — a Shape Graphic Item and a
- * Graphic Group draw their own, a Media Graphic Item clips to one, and a Game Wins
- * Graphic Item shapes a win box with one — and `selectedGeometry` already resolves
- * all three into one set of controls. This is the same resolution stated as a slot,
- * so the picker above those controls inherits into whichever geometry they edit
- * rather than into whichever one happens to be named first.
- */
-const geometryStyleSlot = computed<GraphicStyleSlot>(() => {
-	switch (selectedItem.value?.type) {
-		case 'media':
-			return 'clipGeometry';
-		case 'game-wins':
-			return 'boxGeometry';
-		default:
-			return 'geometry';
-	}
-});
 
 /** The Graphic Style Set entry one slot of the selected Graphic Item follows. */
 function styleRefFor(slot: GraphicStyleSlot): GraphicStyleRef | undefined {
@@ -1217,19 +1187,19 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			The Player a Player Life or Game Wins Item reads. Its own control rather
-			than part of the shared geometry block, because it is the only property of
-			these kinds that decides *whose* live state renders.
+			The Player an item reads, wherever its Definition declares one. Its own
+			control rather than part of the shared geometry block, because it is the
+			only property of these kinds that decides *whose* live state renders.
 		-->
-		<UFormField v-if="selectedPlayerSide" label="Player" size="sm">
+		<UFormField v-if="selectedSidedItem" label="Player" size="sm">
 			<USelect
-				:model-value="selectedPlayerSide"
+				:model-value="selectedSidedItem.playerSide"
 				:items="PLAYER_SIDE_OPTIONS"
 				value-key="value"
 				class="w-full"
 				size="sm"
 				data-testid="graphic-item-player-side"
-				@update:model-value="editItem(patchGraphicItem, { playerSide: $event as PlayerSide })"
+				@update:model-value="editItem(patchGraphicPlayerSide, $event as PlayerSide)"
 			/>
 		</UFormField>
 
@@ -1726,23 +1696,23 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</div>
 		</template>
 
-		<template v-if="selectedGeometry">
+		<template v-if="selectedShapeGeometry">
 			<div class="rounded-lg border border-default/70 p-3 space-y-2">
 				<p class="text-xs font-semibold text-muted">
 					{{ geometryTitle }}
 				</p>
 
 				<GraphicsCompositorStyleRef
-					:style-slot="geometryStyleSlot"
+					:style-slot="selectedShapeGeometry.slot"
 					label="Shape Geometry"
 					:entries="styleSet?.entries"
-					:current="styleRefFor(geometryStyleSlot)"
+					:current="styleRefFor(selectedShapeGeometry.slot)"
 					:writable="canAuthor"
-					@bind="entryId => bindStyleRef(geometryStyleSlot, entryId)"
-					@unbind="unbindStyleRef(geometryStyleSlot)"
+					@bind="entryId => bindStyleRef(selectedShapeGeometry!.slot, entryId)"
+					@unbind="unbindStyleRef(selectedShapeGeometry!.slot)"
 				/>
 				<GraphicsShapeGeometryFields
-					:geometry="selectedGeometry"
+					:geometry="selectedShapeGeometry.geometry"
 					@update="editItem(patchShapeGeometry, $event)"
 					@preset="editItem(applyShapeGeometryPreset, $event)"
 				/>
@@ -1750,15 +1720,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			A Media Graphic Item paints an asset, a Social Network Icon paints its
-			application vector, and a Deck List Item renders cards, so none is offered a
-			surface. Every other kind gets them three times over — its own surface,
-			and the two that paint a win box before and after the Player wins it.
+			Each surface the selection's Definition declares and has on screen: its own,
+			and for a Game Wins Item the two that paint a win box before and after the
+			Player wins it.
 		-->
 		<GraphicsCompositorSurfaceStyleFields
-			v-if="selectedItem && selectedItem.type !== 'media' && selectedItem.type !== 'social-network-icon'
-				&& selectedItem.type !== 'deck-list'"
-			:surface-style="ownSurfaceStyle"
+			v-if="'surfaceStyle' in selectedSurfaces"
+			:surface-style="selectedSurfaces.surfaceStyle ?? null"
 			title="Graphic Surface Style"
 			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
 			@edit="editItem(applyGraphicSurfaceStyleEdit, 'surfaceStyle', $event)"
@@ -1790,9 +1758,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</template>
 		</GraphicsCompositorSurfaceStyleFields>
 
-		<template v-if="selectedGameWins && selectedGameWins.displayMode === 'boxes'">
+		<template v-if="'boxSurfaceStyle' in selectedSurfaces">
 			<GraphicsCompositorSurfaceStyleFields
-				:surface-style="selectedGameWins.boxSurfaceStyle"
+				:surface-style="selectedSurfaces.boxSurfaceStyle ?? null"
 				title="Win box"
 				test-id-prefix="game-wins-box"
 				@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
@@ -1809,8 +1777,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</template>
 			</GraphicsCompositorSurfaceStyleFields>
+		</template>
+		<template v-if="'wonBoxSurfaceStyle' in selectedSurfaces">
 			<GraphicsCompositorSurfaceStyleFields
-				:surface-style="selectedGameWins.wonBoxSurfaceStyle"
+				:surface-style="selectedSurfaces.wonBoxSurfaceStyle ?? null"
 				title="Won win box"
 				test-id-prefix="game-wins-won-box"
 				@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"

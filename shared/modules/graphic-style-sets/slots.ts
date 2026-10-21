@@ -9,8 +9,14 @@ import type {
 	GraphicStyleSlot,
 } from '../../types/graphicStyleSet';
 import type { ResolvedGraphicStyleValue } from './entries';
-import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS } from '../graphics/authoring';
-import { createDefaultGraphicSurfaceStyle, ownsGraphicTypography } from '../graphics/itemDefinitions';
+import {
+	createDefaultGraphicSurfaceStyle,
+	getGraphicItemDefinition,
+	graphicShapeGeometry,
+	graphicSurfaceStyleAt,
+	ownsGraphicSurfaceStyle,
+	ownsGraphicTypography,
+} from '../graphics/itemDefinitions';
 
 /**
  * The bridge between a Graphic Style Set entry and the property group it inherits
@@ -123,32 +129,35 @@ function ownerKind(owner: GraphicStyleOwnerNode): GraphicItemConfig['type'] | nu
  */
 export function graphicStyleOwnerSupportsSlot(owner: GraphicStyleOwnerNode, slot: GraphicStyleSlot): boolean {
 	const kind = ownerKind(owner);
+	const item = owner as GraphicItemConfig;
 	switch (slot) {
-		// The item's Definition states whether it owns typography, and the Inspector's
-		// typography controls read the same declaration, so the two cannot drift.
+		// The item's Graphic Item Definition states which typography, surfaces, and Shape
+		// Geometry it owns, and the Inspector's controls and the authoring operations read
+		// the same declarations, so a style reference can never be offered for a group
+		// the item does not have.
 		case 'typography':
-			return kind !== null && ownsGraphicTypography(owner as GraphicItemConfig);
-		// Which kinds own which surface is stated once, by the authoring module that
-		// edits them. A second table here could drift into offering a style reference
-		// for a surface the item does not have.
+			return kind !== null && ownsGraphicTypography(item);
 		case 'surfaceStyle':
 		case 'surfaceStyle.fill':
-			return kind !== null && GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle.includes(kind);
+			return kind !== null && ownsGraphicSurfaceStyle(item, 'surfaceStyle');
+		case 'defaultChildSurfaceStyle':
 		case 'boxSurfaceStyle':
 		case 'wonBoxSurfaceStyle':
-			return kind !== null && GRAPHIC_SURFACE_STYLE_SLOT_KINDS[slot].includes(kind);
-		case 'defaultChildSurfaceStyle':
-			return kind === 'group';
+			return kind !== null && ownsGraphicSurfaceStyle(item, slot);
 		case 'geometry':
-			return kind === 'shape' || kind === 'group';
-		case 'boxGeometry':
-			return kind === 'game-wins';
 		case 'clipGeometry':
+		case 'boxGeometry':
+			return kind !== null && shapeGeometrySlotOf(item) === slot;
 		case 'media':
 			return kind === 'media';
 		default:
 			return graphicStyleSlotPhase(slot) !== null;
 	}
+}
+
+/** The slot an item's Definition keeps its Shape Geometry in, whether or not it holds one now. */
+function shapeGeometrySlotOf(item: GraphicItemConfig): GraphicStyleSlot | undefined {
+	return getGraphicItemDefinition(item.type).shapeGeometry?.slot;
 }
 
 /**
@@ -174,21 +183,18 @@ export function readGraphicStyleSlot(
 		case 'typography':
 			return ownsGraphicTypography(item) ? item.typography : undefined;
 		case 'surfaceStyle':
-			return (item as { surfaceStyle?: unknown }).surfaceStyle;
-		case 'surfaceStyle.fill':
-			return (item as { surfaceStyle?: { fill?: unknown } }).surfaceStyle?.fill;
 		case 'defaultChildSurfaceStyle':
-			return item.type === 'group' ? item.defaultChildSurfaceStyle : undefined;
 		case 'boxSurfaceStyle':
-			return item.type === 'game-wins' ? item.boxSurfaceStyle : undefined;
 		case 'wonBoxSurfaceStyle':
-			return item.type === 'game-wins' ? item.wonBoxSurfaceStyle : undefined;
+			return graphicSurfaceStyleAt(item, slot);
+		case 'surfaceStyle.fill':
+			return graphicSurfaceStyleAt(item, 'surfaceStyle')?.fill;
+		// Supported only on the slot the Definition keeps it in, so the item's geometry
+		// is the one this slot names.
 		case 'geometry':
-			return item.type === 'shape' || item.type === 'group' ? item.geometry : undefined;
 		case 'clipGeometry':
-			return item.type === 'media' ? item.clipGeometry : undefined;
 		case 'boxGeometry':
-			return item.type === 'game-wins' ? item.boxGeometry : undefined;
+			return graphicShapeGeometry(item)?.geometry;
 		case 'media':
 			return item.type === 'media'
 				? {

@@ -1,12 +1,15 @@
 import type { PlayerSide } from '../../types/enums';
 import type {
+	GameWinsGraphicItemConfig,
 	GraphicFill,
 	GraphicItemConfig,
 	GraphicItemKind,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	ShapeGeometry,
 	TextOverflowPolicy,
 } from '../../types/graphics';
+import type { GraphicStyleSlot } from '../../types/graphicStyleSet';
 import type { GraphicsContextKind, GraphicsHostContract, GraphicsHostId } from './hostContract';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
 import { applicationGraphicFont } from '../../types/graphics';
@@ -16,19 +19,20 @@ import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
  * Item kind — stable identifier, configuration version, editor metadata,
- * defaults, summary, and the typography it offers.
+ * defaults, summary, and the property groups it owns: typography, Graphic Surface
+ * Styles, Shape Geometry, and a player side, each with the display mode it is on
+ * screen in.
  *
  * Adding a kind is still a sweep rather than an entry: this table (whose
  * `satisfies` closure forces the new member), the config interface and unions in
  * `shared/types/graphics.ts`, the wire schema arms in `server/schemas/api/screen.ts`,
- * the surface and geometry kind lists in `authoring.ts` and
- * `graphic-style-sets/slots.ts`, the descriptor arms in
- * `app/modules/graphics/renderModel.ts`, and the compositor's `Item.vue` and
- * `Inspector.vue`. What follows this table for free: the definition palette, Template
- * Package requirements, and whether a kind offers typography and a Text Overflow
- * Policy — the Inspector, the Graphic Style Set typography slot, and authoring all
- * read the `typography` declaration below rather than a kind list of their own.
- * Templates never provide executable Definitions.
+ * the descriptor arms in `app/modules/graphics/renderModel.ts`, and the compositor's
+ * `Item.vue` and the Inspector's kind-specific controls. What follows this table for
+ * free: the definition palette, Template Package requirements, and the property
+ * groups — the Inspector, the Graphic Style Set slots, and authoring all read the
+ * declarations below rather than a kind list of their own, and the mapped type on
+ * the `satisfies` closure requires each declaration exactly where the kind's stored
+ * config carries the group. Templates never provide executable Definitions.
  *
  * ## The configuration version is a portability contract, not a changelog
  *
@@ -75,6 +79,16 @@ export interface GraphicItemDefinition {
 	 * all read it, so none of them can offer typography a kind does not have.
 	 */
 	typography?: GraphicTypographyDeclaration;
+	/**
+	 * The Graphic Surface Styles this kind keeps, each under its Graphic Style Set
+	 * slot, absent for a kind that paints none. The Graphic Style Set slots, the
+	 * surface authoring operations, and the Inspector's surface controls all read it.
+	 */
+	surfaceStyles?: Partial<Record<GraphicSurfaceStyleSlot, GraphicDisplayDeclaration>>;
+	/** The one Shape Geometry this kind draws, clips to, or shapes a part with, absent for none. */
+	shapeGeometry?: GraphicShapeGeometryDeclaration;
+	/** Whether this kind reads one player side's live state, which its author chooses. */
+	playerSide?: true;
 }
 
 /** A Graphic Item whose configuration carries base typography. */
@@ -102,6 +116,101 @@ export interface GraphicTypographyDeclaration {
 }
 
 type GraphicItemOfKind<K extends GraphicItemKind> = Extract<GraphicItemConfig, { type: K }>;
+
+/**
+ * The Graphic Item kinds whose stored configuration has a key, optional or not. A
+ * key-based `Extract` would also admit every kind lacking an optional key.
+ */
+type GraphicItemWithKey<P extends PropertyKey, I = GraphicItemConfig> = I extends unknown
+	? P extends keyof I ? I : never
+	: never;
+
+/**
+ * Every place a Graphic Item can keep a Graphic Surface Style, each named as the
+ * Graphic Style Set slot that inherits into it.
+ */
+export type GraphicSurfaceStyleSlot = Extract<
+	GraphicStyleSlot,
+	'surfaceStyle' | 'defaultChildSurfaceStyle' | 'boxSurfaceStyle' | 'wonBoxSurfaceStyle'
+>;
+
+/** Every place a Graphic Item can keep its Shape Geometry, named as its Graphic Style Set slot. */
+export type GraphicShapeGeometrySlot = Extract<GraphicStyleSlot, 'geometry' | 'clipGeometry' | 'boxGeometry'>;
+
+/** A Graphic Item that can keep a Graphic Surface Style in this slot. */
+export type GraphicSurfaceStyleItem<S extends GraphicSurfaceStyleSlot = GraphicSurfaceStyleSlot> = GraphicItemWithKey<S>;
+
+/** A Graphic Item that can keep a Shape Geometry. */
+export type GraphicShapeGeometryItem = GraphicItemWithKey<GraphicShapeGeometrySlot>;
+
+/** A Graphic Item that reads one player side. */
+export type GraphicPlayerSideItem = Extract<GraphicItemConfig, { playerSide: PlayerSide }>;
+
+/**
+ * When a property group the item owns is on screen. `paints` absent means always;
+ * otherwise it is the item's current display mode that decides, as `paintsText` does
+ * for typography. The item owns the group either way, so a Graphic Style Set slot
+ * still binds to it — only the Inspector, which offers controls for what is on
+ * screen, reads this.
+ *
+ * Each Definition narrows the parameter to its own kind, and is only ever called
+ * with an item of that kind.
+ */
+export interface GraphicDisplayDeclaration {
+	paints?: (item: GraphicItemConfig) => boolean;
+}
+
+export interface GraphicShapeGeometryDeclaration extends GraphicDisplayDeclaration {
+	slot: GraphicShapeGeometrySlot;
+	/**
+	 * The item's numeric fields the geometry is drawn inside, and where a preset that
+	 * proposes a height writes it; absent means the item's own `width` and `height`.
+	 */
+	bounds?: { width: string; height: string };
+}
+
+type NumericKeyOf<I> = { [P in keyof I]-?: I[P] extends number ? P : never }[keyof I];
+
+interface GraphicDisplayDeclarationFor<K extends GraphicItemKind> {
+	paints?: (item: GraphicItemOfKind<K>) => boolean;
+}
+
+/**
+ * What a kind's Definition must declare about its Graphic Surface Styles, Shape
+ * Geometry, and player side, decided by its stored configuration exactly as
+ * `GraphicTypographyDeclarationFor` decides typography: a declaration for each
+ * surface key the config has and none it lacks, the one geometry key it has, and a
+ * player side where the config carries one.
+ */
+type GraphicSurfaceStylesDeclarationFor<K extends GraphicItemKind> = [
+	Extract<keyof GraphicItemOfKind<K>, GraphicSurfaceStyleSlot>,
+] extends [never]
+	? { surfaceStyles?: undefined }
+	: { surfaceStyles: { [S in Extract<keyof GraphicItemOfKind<K>, GraphicSurfaceStyleSlot>]: GraphicDisplayDeclarationFor<K> } };
+
+type GraphicShapeGeometryDeclarationFor<K extends GraphicItemKind> = [
+	Extract<keyof GraphicItemOfKind<K>, GraphicShapeGeometrySlot>,
+] extends [never]
+	? { shapeGeometry?: undefined }
+	: {
+			shapeGeometry: GraphicDisplayDeclarationFor<K> & {
+				slot: Extract<keyof GraphicItemOfKind<K>, GraphicShapeGeometrySlot>;
+				bounds?: { width: NumericKeyOf<GraphicItemOfKind<K>>; height: NumericKeyOf<GraphicItemOfKind<K>> };
+			};
+		};
+
+type GraphicPlayerSideDeclarationFor<K extends GraphicItemKind> = K extends GraphicPlayerSideItem['type']
+	? { playerSide: true }
+	: { playerSide?: undefined };
+
+type GraphicItemDefinitionFor<K extends GraphicItemKind> = Omit<
+	GraphicItemDefinition,
+	'typography' | 'surfaceStyles' | 'shapeGeometry' | 'playerSide'
+>
+& GraphicTypographyDeclarationFor<K>
+& GraphicSurfaceStylesDeclarationFor<K>
+& GraphicShapeGeometryDeclarationFor<K>
+& GraphicPlayerSideDeclarationFor<K>;
 
 /**
  * What a kind's Definition must declare about typography, decided by its stored
@@ -172,6 +281,11 @@ function surfaceSummary(style: GraphicSurfaceStyle | undefined): string {
 	return style ? graphicFillSummary(style.fill) : 'inherited style';
 }
 
+/** Whether a Game Wins Item renders win boxes, rather than its win count as text. */
+function rendersWinBoxes(item: GameWinsGraphicItemConfig): boolean {
+	return item.displayMode === 'boxes';
+}
+
 /** The side a context-gated Definition reads, as an author names it. */
 function playerSideLabel(side: PlayerSide): string {
 	return side === 'player1' ? 'Player 1' : 'Player 2';
@@ -184,6 +298,7 @@ const DEFINITIONS = {
 		label: 'Text',
 		icon: 'i-lucide-type',
 		typography: { textOverflowPolicy: true },
+		surfaceStyles: { surfaceStyle: {} },
 		createDefault: options => ({
 			type: 'text',
 			id: options.id,
@@ -203,6 +318,8 @@ const DEFINITIONS = {
 		configurationVersion: 1,
 		label: 'Shape',
 		icon: 'i-lucide-square',
+		surfaceStyles: { surfaceStyle: {} },
+		shapeGeometry: { slot: 'geometry' },
 		createDefault: options => ({
 			type: 'shape',
 			id: options.id,
@@ -222,6 +339,9 @@ const DEFINITIONS = {
 		configurationVersion: 1,
 		label: 'Media',
 		icon: 'i-lucide-image',
+		// Clips to it only while clipping is switched on, which `clipGeometry` being
+		// present already says; with none, there is nothing for the controls to shape.
+		shapeGeometry: { slot: 'clipGeometry' },
 		createDefault: options => ({
 			type: 'media',
 			id: options.id,
@@ -278,6 +398,8 @@ const DEFINITIONS = {
 		configurationVersion: 1,
 		label: 'Group',
 		icon: 'i-lucide-group',
+		surfaceStyles: { surfaceStyle: {}, defaultChildSurfaceStyle: {} },
+		shapeGeometry: { slot: 'geometry' },
 		createDefault: options => ({
 			type: 'group',
 			id: options.id,
@@ -305,6 +427,7 @@ const DEFINITIONS = {
 		icon: 'i-lucide-clock',
 		requiredContext: 'feature-match',
 		typography: { textOverflowPolicy: true },
+		surfaceStyles: { surfaceStyle: {} },
 		createDefault: options => ({
 			type: 'clock',
 			id: options.id,
@@ -327,6 +450,8 @@ const DEFINITIONS = {
 		icon: 'i-lucide-heart-pulse',
 		requiredContext: 'feature-match',
 		typography: { textOverflowPolicy: true },
+		surfaceStyles: { surfaceStyle: {} },
+		playerSide: true,
 		createDefault: options => ({
 			type: 'player-life',
 			id: options.id,
@@ -352,7 +477,17 @@ const DEFINITIONS = {
 		requiredContext: 'feature-match',
 		// Paints text only while it renders its win count, and a count cannot outgrow
 		// its bounds, so no Text Overflow Policy bounds it.
-		typography: { textOverflowPolicy: false, paintsText: item => item.displayMode === 'number' },
+		typography: { textOverflowPolicy: false, paintsText: item => !rendersWinBoxes(item) },
+		// Its own surface frames the indicator in either display mode; the two box
+		// surfaces and the box geometry are on screen only while boxes are. A box
+		// geometry shapes one win box, so a preset sizes against the box.
+		surfaceStyles: {
+			surfaceStyle: {},
+			boxSurfaceStyle: { paints: rendersWinBoxes },
+			wonBoxSurfaceStyle: { paints: rendersWinBoxes },
+		},
+		shapeGeometry: { slot: 'boxGeometry', paints: rendersWinBoxes, bounds: { width: 'boxWidth', height: 'boxHeight' } },
+		playerSide: true,
 		createDefault: options => ({
 			type: 'game-wins',
 			id: options.id,
@@ -394,6 +529,7 @@ const DEFINITIONS = {
 		// Paints text only in its list view; the grid renders cards. Its overflow is a
 		// fixed shrink-then-clip rather than an authored Text Overflow Policy.
 		typography: { textOverflowPolicy: false, paintsText: item => item.view === 'list' },
+		playerSide: true,
 		createDefault: options => ({
 			type: 'deck-list',
 			id: options.id,
@@ -417,7 +553,7 @@ const DEFINITIONS = {
 			? `${playerSideLabel(item.playerSide)} sideboard • ${item.view}`
 			: 'Deck List',
 	},
-} satisfies { [K in GraphicItemKind]: Omit<GraphicItemDefinition, 'typography'> & GraphicTypographyDeclarationFor<K> };
+} satisfies { [K in GraphicItemKind]: GraphicItemDefinitionFor<K> };
 
 /** Definition palette order is the shared vocabulary's own order. */
 export const GRAPHIC_ITEM_KINDS = Object.keys(DEFINITIONS) as readonly GraphicItemKind[];
@@ -426,8 +562,9 @@ export const GRAPHIC_ITEM_KINDS = Object.keys(DEFINITIONS) as readonly GraphicIt
 export const GRAPHIC_GROUP_CHILD_KINDS = GRAPHIC_ITEM_KINDS.filter(kind => kind !== 'group');
 
 export function getGraphicItemDefinition(kind: GraphicItemKind): GraphicItemDefinition {
-	// Each entry's `paintsText` takes only its own kind, which the wide Definition
-	// cannot say; it is only ever called with an item of the kind it was looked up by.
+	// Each entry's `paintsText` and `paints` take only its own kind, which the wide
+	// Definition cannot say; each is only ever called with an item of the kind it was
+	// looked up by.
 	return DEFINITIONS[kind] as GraphicItemDefinition;
 }
 
@@ -476,6 +613,106 @@ export function paintedGraphicTypography(item: GraphicItemConfig): GraphicTypogr
 	if (!declaration || !ownsGraphicTypography(item))
 		return null;
 	return declaration.paintsText === undefined || declaration.paintsText(item) ? item.typography : null;
+}
+
+function isPainted(declaration: GraphicDisplayDeclaration, item: GraphicItemConfig): boolean {
+	return declaration.paints === undefined || declaration.paints(item);
+}
+
+/**
+ * Whether this item keeps a Graphic Surface Style in this slot: what the Graphic
+ * Style Set surface slots and the surface authoring operations accept. Read from the
+ * item's kind, not its fields, since an owned surface may be absent until authored.
+ */
+export function ownsGraphicSurfaceStyle<S extends GraphicSurfaceStyleSlot>(
+	item: GraphicItemConfig,
+	slot: S,
+): item is GraphicSurfaceStyleItem<S> {
+	return getGraphicItemDefinition(item.type).surfaceStyles?.[slot] !== undefined;
+}
+
+/** The Graphic Surface Style this item holds in one slot, or undefined where it owns none or holds none yet. */
+export function graphicSurfaceStyleAt(
+	item: GraphicItemConfig,
+	slot: GraphicSurfaceStyleSlot,
+): GraphicSurfaceStyle | undefined {
+	return ownsGraphicSurfaceStyle(item, slot)
+		? (item as Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle>>)[slot]
+		: undefined;
+}
+
+/**
+ * The Graphic Surface Styles this item has on screen as it is displayed now, keyed
+ * by slot, each null where the item holds none of its own yet: where the Inspector
+ * offers surface controls.
+ */
+export function paintedGraphicSurfaceStyles(
+	item: GraphicItemConfig,
+): Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle | null>> {
+	const declarations = getGraphicItemDefinition(item.type).surfaceStyles ?? {};
+	const painted: Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle | null>> = {};
+	for (const [slot, declaration] of Object.entries(declarations) as [GraphicSurfaceStyleSlot, GraphicDisplayDeclaration][]) {
+		if (isPainted(declaration, item))
+			painted[slot] = graphicSurfaceStyleAt(item, slot) ?? null;
+	}
+	return painted;
+}
+
+/**
+ * Where one item keeps the Shape Geometry a geometry edit means, and what it holds
+ * there now.
+ */
+export interface OwnedShapeGeometry {
+	slot: GraphicShapeGeometrySlot;
+	geometry: ShapeGeometry;
+	/**
+	 * The bounds the geometry is drawn inside. Usually the item's own rectangle — but
+	 * a Game Wins Item's geometry shapes one win box, so a preset sized against the
+	 * whole indicator would be sized against the wrong thing.
+	 */
+	bounds: { width: number; height: number };
+	/** Where a preset that proposes a height writes it. */
+	heightField: string;
+}
+
+/** Whether this item's Definition declares a Shape Geometry: what the geometry authoring operations accept. */
+export function ownsShapeGeometry(item: GraphicItemConfig): item is GraphicShapeGeometryItem {
+	return getGraphicItemDefinition(item.type).shapeGeometry !== undefined;
+}
+
+/**
+ * The Shape Geometry this item keeps, or null where it owns none or holds none now.
+ * A Media Graphic Item's is optional, and absent means it clips to nothing but its
+ * bounds — so a geometry edit aimed at one that is not clipping resolves to nothing,
+ * rather than switching clipping on as a side effect of nudging a corner.
+ */
+export function graphicShapeGeometry(item: GraphicItemConfig): OwnedShapeGeometry | null {
+	const declaration = getGraphicItemDefinition(item.type).shapeGeometry;
+	if (!declaration)
+		return null;
+	const fields = item as unknown as Record<string, unknown>;
+	const geometry = fields[declaration.slot] as ShapeGeometry | undefined;
+	if (!geometry)
+		return null;
+	const width = declaration.bounds?.width ?? 'width';
+	const height = declaration.bounds?.height ?? 'height';
+	return {
+		slot: declaration.slot,
+		geometry,
+		bounds: { width: fields[width] as number, height: fields[height] as number },
+		heightField: height,
+	};
+}
+
+/** The Shape Geometry this item has on screen as it is displayed now: where the Inspector offers geometry controls. */
+export function paintedShapeGeometry(item: GraphicItemConfig): OwnedShapeGeometry | null {
+	const declaration = getGraphicItemDefinition(item.type).shapeGeometry;
+	return declaration && isPainted(declaration, item) ? graphicShapeGeometry(item) : null;
+}
+
+/** Whether this item reads one player side's live state: where the Inspector offers the Player, and what authoring accepts. */
+export function ownsPlayerSide(item: GraphicItemConfig): item is GraphicPlayerSideItem {
+	return getGraphicItemDefinition(item.type).playerSide === true;
 }
 
 export function graphicItemSummary(item: GraphicItemConfig): string {

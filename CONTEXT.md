@@ -686,7 +686,7 @@ _Avoid_: Dummy data, test data
 - The shared base **Graphic Item** kinds are **Text Graphic Item**, **Media Graphic Item**, **Shape Graphic Item**, and **Graphic Group**
 - A **Graphic Group** may contain any context-available **Graphic Item** except another **Graphic Group**
 - A **Shape Graphic Item** renders one **Shape Geometry**; a **Media Graphic Item** or **Graphic Group** may use one as its clipping boundary
-- A **Text Graphic Item**, **Shape Graphic Item**, or **Graphic Group** may have one **Graphic Surface Style**, which may have one **Graphic Fill**
+- A **Text Graphic Item**, **Shape Graphic Item**, **Graphic Group**, **Clock Graphic Item**, **Player Life Graphic Item**, or **Game Wins Graphic Item** may have one **Graphic Surface Style** of its own, which may have one **Graphic Fill**; a **Game Wins Graphic Item** has two more, for an unwon and a won win box. Which surfaces and which **Shape Geometry** a kind has, and whether it reads a player side, are its **Graphic Item Definition**'s to declare
 - A **Broadcast Graphic** and each **Graphic Group** own the **Graphic Layer Order** of their direct Graphic Items
 - Every top-level **Graphic Item** and canvas-positioned **Graphic Group** child has one **Graphic Anchor Point**, and may have one **Graphic Rotation**
 - A **Text Graphic Item** may render a **Graphic Text Template**, may define one **Graphic Placeholder Style** per referenced **Graphic Input**, and has one **Text Overflow Policy**; a **Clock Graphic Item** and a **Player Life Graphic Item** each have one too
