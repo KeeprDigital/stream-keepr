@@ -174,15 +174,14 @@ export const useCardStore = defineStore('card', () => {
 
 	function $reset() {
 		cardSearchRuntime.resetPreviewState();
-		activeCard.value = null;
 		activeScreenId.value = null;
 		cardPageMode.value = 'search';
 		deckListRoundId.value = null;
 		deckListMatchId.value = null;
 		error.value = null;
 		loading.value = false;
-		timeout.reset();
-		activeCardRuntime.clearCardTimeout();
+		// Ends the Event Lifetime for the Card too: a read still out lands nothing (#704).
+		activeCardRuntime.resetActiveCardState();
 		deckSourceRuntime.resetDeckSources();
 	}
 

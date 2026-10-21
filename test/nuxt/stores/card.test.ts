@@ -183,6 +183,275 @@ describe('useCardStore', () => {
 		});
 	});
 
+	// ── Card Read Freshness ──
+
+	/**
+	 * A Card read applies only while nothing newer has reached the Card store's held
+	 * Card (#704). Each row holds a read open, lets something newer land, then answers the
+	 * read: the real store must keep the newer state and arm no timer from the late
+	 * answer.
+	 */
+	describe('card read freshness', () => {
+		function deferredRead() {
+			let resolve!: (card: ReturnType<typeof createMockMtgCard> | null) => void;
+			let reject!: (error: unknown) => void;
+			mockCardRepo.getScreenCard.mockReturnValueOnce(new Promise((res, rej) => {
+				resolve = res;
+				reject = rej;
+			}));
+			return { resolve, reject };
+		}
+
+		const oldCard = (overrides?: Record<string, any>) => createMockMtgCard({ id: 'old', name: 'Old Card', ...overrides });
+		const newCard = () => createMockMtgCard({ id: 'new', name: 'New Card' });
+
+		it('keeps a newer realtime Card over a read answered after it', async () => {
+			store.setActiveScreen(5);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('does not restore a Card after a newer realtime clear', async () => {
+			store.setActiveScreen(5);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5 });
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('keeps an accepted local save over a read answered after it', async () => {
+			store.setActiveScreen(5);
+			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			await store.saveActiveCard(newCard());
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('does not restore a Card after an accepted local clear', async () => {
+			store.setActiveScreen(5);
+			store.activeCard = oldCard();
+			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			await store.clearActiveCard();
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('drops a read that crossed a Screen selection, even back to the same Screen', async () => {
+			store.setActiveScreen(5);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			store.setActiveScreen(6);
+			store.setActiveScreen(5);
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeScreenId).toBe(5);
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('drops a read that crossed the end of its Event Lifetime, even into the same Event', async () => {
+			store.setActiveScreen(5);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			store.$reset();
+			store.setActiveScreen(5);
+			read.resolve(oldCard());
+			await loading;
+
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('keeps the newer of two overlapping reads', async () => {
+			store.setActiveScreen(5);
+			const first = deferredRead();
+			const firstLoading = store.loadActiveCard();
+			const second = deferredRead();
+			const secondLoading = store.loadActiveCard();
+
+			second.resolve(newCard());
+			await secondLoading;
+			first.resolve(oldCard());
+			await firstLoading;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('arms no timer from a superseded read', async () => {
+			vi.useFakeTimers();
+			store.setActiveScreen(5);
+			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			read.resolve(oldCard({
+				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+			}));
+			await loading;
+			await vi.advanceTimersByTimeAsync(1_000);
+
+			expect(store.activeCard?.id).toBe('new');
+			expect(store.timeout.isActive).toBe(false);
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+		});
+
+		it('lands the Card a read brings when a timeout message arrives while it is out', async () => {
+			vi.useFakeTimers();
+			store.setActiveScreen(5);
+			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			ablyCallbacks.card!['card:timeout']!({
+				eventId: 1,
+				screenId: 5,
+				timeoutDuration: 1_000,
+				expiresAt: Date.now() + 1_000,
+			});
+			ablyCallbacks.card!['card:timeout:cancel']!({ eventId: 1, screenId: 5 });
+			read.resolve(newCard());
+			await loading;
+
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('lets a local expiry supersede a read that would bring the expired Card back', async () => {
+			vi.useFakeTimers();
+			store.setActiveScreen(5);
+			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
+			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+			const timed = oldCard({ timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 } });
+			await store.saveActiveCard(timed);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			await vi.advanceTimersByTimeAsync(1_000);
+			read.resolve(timed);
+			await loading;
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(store.activeCard).toBeNull();
+			expect(mockCardRepo.deleteScreenCard).toHaveBeenCalledTimes(1);
+		});
+
+		it('reports no failure from a superseded read and settles loading once it answers', async () => {
+			store.setActiveScreen(5);
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			read.reject(transportFailure({ status: 503, body: { message: 'Unavailable' } }));
+			await loading;
+
+			expect(store.error).toBeNull();
+			expect(store.loading).toBe(false);
+			expect(store.activeCard?.id).toBe('new');
+		});
+
+		it('keeps loading on for a save still out when a superseded read answers', async () => {
+			store.setActiveScreen(5);
+			let acceptSave!: () => void;
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(new Promise<void>((resolve) => {
+				acceptSave = resolve;
+			}));
+			const read = deferredRead();
+			const loading = store.loadActiveCard();
+			const saving = store.saveActiveCard(newCard());
+
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+			read.resolve(oldCard());
+			await loading;
+			expect(store.loading).toBe(true);
+
+			acceptSave();
+			await saving;
+			expect(store.loading).toBe(false);
+		});
+
+		describe('as a Screen Output', () => {
+			const mockOutputRead = vi.fn<() => Promise<any>>();
+			let uninstall: () => void;
+
+			beforeEach(() => {
+				uninstall = store.readActiveCardAsScreenOutput(() => mockOutputRead());
+			});
+
+			afterEach(() => uninstall());
+
+			it('keeps a newer realtime Card over its read answered after it', async () => {
+				let resolve!: (card: unknown) => void;
+				mockOutputRead.mockReturnValueOnce(new Promise((res) => {
+					resolve = res;
+				}));
+				store.setActiveScreen(5);
+				const loading = store.loadActiveCard();
+
+				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+				resolve(oldCard());
+				await loading;
+
+				expect(store.activeCard?.id).toBe('new');
+				expect(mockCardRepo.getScreenCard).not.toHaveBeenCalled();
+			});
+
+			it('arms no timer from its superseded read', async () => {
+				vi.useFakeTimers();
+				let resolve!: (card: unknown) => void;
+				mockOutputRead.mockReturnValueOnce(new Promise((res) => {
+					resolve = res;
+				}));
+				store.setActiveScreen(5);
+				const loading = store.loadActiveCard();
+
+				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: newCard() });
+				resolve(oldCard({ timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 } }));
+				await loading;
+				await vi.advanceTimersByTimeAsync(1_000);
+
+				expect(store.activeCard?.id).toBe('new');
+				expect(store.timeout.isActive).toBe(false);
+			});
+
+			it('still hides its current read\'s Card locally once it expires', async () => {
+				vi.useFakeTimers();
+				mockOutputRead.mockResolvedValueOnce(createMockMtgCard({
+					timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 1_000 },
+				}));
+				store.setActiveScreen(5);
+
+				await store.loadActiveCard();
+				expect(store.activeCard).not.toBeNull();
+				expect(store.timeout.isActive).toBe(true);
+				await vi.advanceTimersByTimeAsync(1_000);
+
+				expect(store.activeCard).toBeNull();
+				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+			});
+		});
+	});
+
 	// ── Save Active Card ──
 
 	describe('saveActiveCard', () => {
