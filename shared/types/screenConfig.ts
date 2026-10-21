@@ -1,14 +1,25 @@
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { CardModeConfig } from '../screenModeConfigs/card';
+import type { DeckModeConfig } from '../screenModeConfigs/deck';
 import type { MetagameModeConfig } from '../screenModeConfigs/metagame';
+import type { PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
+import type { StandingsModeConfig } from '../screenModeConfigs/standings';
+import type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
+import type { TopCutModeConfig } from '../screenModeConfigs/topCut';
 import type { BackgroundLayersCapableMode } from '../screenModes';
-import type { CardTypeBucket } from '../utils/metagame';
-import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameCardSortBy, MetagameScope, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
+import type { HorizontalAlign, PlayerSide, ScreenColorMode, ScreenMode, VerticalAlign } from './enums';
 import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { cardModeConfigContract } from '../screenModeConfigs/card';
+import { deckModeConfigContract } from '../screenModeConfigs/deck';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
+import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
+import { standingsModeConfigContract } from '../screenModeConfigs/standings';
+import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
+import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 
 /**
  * A Screen's media background, a Feature Match Overlay Frame's animation, and a
@@ -41,139 +52,6 @@ export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
 
 // ─── Mode-specific configs ─────────────────────────────────────────────
 
-/**
- * One board's complete layout block. The Mainboard and Sideboard each carry
- * their own (#478): which view renders the board, and the knobs each view
- * reads — grid reads columns/gap/sizing, list reads listColumns, stack reads
- * cardSize and stackOverlap.
- */
-export interface DeckBoardLayoutConfig {
-	view?: DeckBoardView;
-	columns?: number;
-	listColumns?: number;
-	cardSize?: DeckCardSize;
-	dynamicCardSize?: boolean;
-	cardGap?: number;
-	/** Percentage of each stacked card left visible under the next one. */
-	stackOverlap?: number;
-}
-
-export type DeckSource
-	= | { type: 'player'; playerId: number | null }
-		| { type: 'broadcast'; broadcastDeckListId: number };
-
-export interface DeckModeConfig {
-	deckSource: DeckSource;
-	/** Which boards render (#477). "Both hidden" is impossible by construction. */
-	board?: BoardSelection;
-	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
-	sideboardPlacement?: SideboardPlacement;
-	mainboard?: DeckBoardLayoutConfig;
-	sideboard?: DeckBoardLayoutConfig;
-	showQuantities?: boolean;
-	showDeckName?: boolean;
-	showDeckColors?: boolean;
-	showDeckStats?: boolean;
-	showDeckMetaPill?: boolean;
-	deckMetaPillSize?: QuantitySize;
-	deckMetaPillTextColor?: string;
-	deckMetaPillBgColor?: string;
-	deckMetaPillAccentColor?: string;
-	deckMetaPillBorderColor?: string;
-	showHighlanderTotal?: boolean;
-	showHighlanderPointedCards?: boolean;
-	highlanderPointedCardsSize?: QuantitySize;
-	highlanderPointedCardsTextColor?: string;
-	highlanderPointedCardsBgColor?: string;
-	highlanderPointedCardsAccentColor?: string;
-	highlanderPointedCardsBorderColor?: string;
-	showHighlanderPoints?: boolean;
-	highlanderPointsPosition?: QuantityPosition;
-	highlanderPointsSize?: QuantitySize;
-	highlanderPointsTextColor?: string;
-	highlanderPointsBgColor?: string;
-
-	// Quantity badge customization
-	quantityPosition?: QuantityPosition;
-	quantitySize?: QuantitySize;
-	quantityTextColor?: string;
-	quantityBgColor?: string;
-}
-
-export interface CardDisplayConfig {
-	// Card sizing
-	scale?: number; // 0.5 - 2.0 multiplier
-
-	// Animation
-	animationEnabled?: boolean;
-	animationSpeed?: CardAnimationSpeed;
-}
-
-export interface CardModeConfig extends CardDisplayConfig {
-	// Optional feature match binding (for decklist convenience, not required)
-	featureMatchId?: number | null;
-}
-
-export interface StandingsColumnConfig {
-	key: StandingsColumnKey;
-	visible: boolean;
-}
-
-export interface PlayerHistoryColumnConfig {
-	key: PlayerHistoryColumnKey;
-	visible: boolean;
-}
-
-export interface StandingsModeConfig {
-
-	// View mode
-	viewMode: StandingsViewMode;
-
-	// Column configuration (ordered array — order = display order)
-	columns: StandingsColumnConfig[];
-	showArchetypeColors: boolean;
-	maxTableWidth?: number;
-	roundId?: number;
-
-	// Header
-	showHeader: boolean;
-	headerText?: string;
-
-	// Top N mode
-	topNCount: number;
-
-	// Slice mode
-	sliceStart: number;
-	sliceEnd: number;
-
-	// Watchlist mode
-	playerListId?: number;
-
-	// Reveal mode
-	revealCount: number;
-	revealOrder: RevealOrder;
-	revealTrigger: RevealTrigger;
-	revealIntervalMs: number;
-	revealedCount: number;
-
-	// Pagination — currentPage is the manually selected page (auto-page off);
-	// rotationAnchor is the Page Rotation's epoch (auto-page on), written only
-	// by operator surfaces and projected against server time by every rendering.
-	rowsPerPage: number;
-	autoPageEnabled: boolean;
-	autoPageIntervalMs: number;
-	currentPage?: number;
-	rotationAnchor?: number;
-
-	// Animation
-	animateEntries: boolean;
-}
-
-export interface TopCutModeConfig {
-	// Placeholder for top cut mode config
-	bracketSize?: number;
-}
-
 export interface FeatureMatchModeConfig {
 	featureMatchId: number | null;
 	showNames: boolean;
@@ -199,18 +77,6 @@ export interface FeatureMatchModeConfig {
 	allowLifeControls?: boolean;
 	allowGameWinControls?: boolean;
 	allowCounterControls?: boolean;
-}
-
-export interface PlayerHistoryModeConfig {
-	playerId: number | null;
-	columns: PlayerHistoryColumnConfig[];
-	showHeader: boolean;
-	headerText?: string;
-	rowsPerPage: number;
-	autoPageEnabled: boolean;
-	autoPageIntervalMs: number;
-	currentPage?: number;
-	rotationAnchor?: number;
 }
 
 export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
@@ -432,11 +298,19 @@ export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as Fe
 export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 
 /**
- * The Metagame config is inferred from its config contract (#587), which also
- * holds its defaults. Re-exported here because this is where every other mode's
- * config type lives.
+ * The config of every mode on its config contract (ADR-0037: Metagame #587, the
+ * other plain overlay modes #588) is inferred from that contract, which also holds
+ * its defaults. Re-exported here because this is where every mode's config type
+ * lives, beside the Deck board helpers its contract module owns.
  */
+export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
+export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoardLayout, ResolvedDeckBoards } from '../screenModeConfigs/deck';
+export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
+export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
+export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
+export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
+export type { TopCutModeConfig } from '../screenModeConfigs/topCut';
 
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
 
@@ -545,47 +419,6 @@ export interface BroadcastGraphicsModeConfig {
 	background?: BroadcastGraphicsBackgroundConfig;
 }
 
-/**
- * The Top Cards Screen: a ranked grid of the most played cards in the event's
- * metagame, rendered as card images the way the Deck Screen renders a deck.
- * Scoping reuses the Metagame vocabulary; `excludedCardTypes` is applied
- * server-side before `limit`, so a filtered top N still fills N slots.
- */
-export interface TopCardsModeConfig {
-	// Scoping (same vocabulary as the Metagame mode)
-	scope: MetagameScope;
-	topN: number;
-	playerListId?: number;
-	archetypeFilter?: string;
-
-	// Data selection & filtering
-	board: BoardSelection;
-	sortBy: MetagameCardSortBy;
-	limit: number;
-	excludedCardTypes: CardTypeBucket[];
-
-	// Grid layout
-	columns: number;
-	cardSize: DeckCardSize;
-	dynamicCardSize: boolean;
-	cardGap: number;
-
-	// Header
-	showHeader: boolean;
-	headerText?: string;
-
-	// Card labels & badges
-	showCardNames: boolean;
-	showRankBadges: boolean;
-	rankBadgeTextColor?: string;
-	rankBadgeBgColor?: string;
-	/** Which metric the stat badge shows; 'none' hides the badge. */
-	statBadge: TopCardsStat;
-	statBadgeSize?: QuantitySize;
-	statBadgeTextColor?: string;
-	statBadgeBgColor?: string;
-}
-
 // Union type for all mode configs
 export type ScreenModeConfig = DeckModeConfig | CardModeConfig | BackgroundModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | TopCardsModeConfig | PlayerHistoryModeConfig;
 
@@ -602,126 +435,6 @@ export interface BackgroundModeConfig {
 /** A fresh Background Screen starts empty — black until configured. */
 export const DEFAULT_BACKGROUND_CONFIG: BackgroundModeConfig = {
 	layers: [],
-};
-
-export const DEFAULT_CARD_DISPLAY_CONFIG: CardDisplayConfig = {
-	scale: 1,
-	animationEnabled: true,
-	animationSpeed: 'normal',
-};
-
-export const DEFAULT_CARD_CONFIG: CardModeConfig = {
-	featureMatchId: null,
-	...DEFAULT_CARD_DISPLAY_CONFIG,
-};
-
-export type ResolvedDeckBoardLayout = Required<DeckBoardLayoutConfig>;
-
-export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedDeckBoardLayout = {
-	view: 'grid',
-	columns: 4,
-	listColumns: 2,
-	cardSize: 'medium',
-	dynamicCardSize: false,
-	cardGap: 8,
-	stackOverlap: 15,
-};
-
-const DEFAULT_SIDEBOARD_LAYOUT: ResolvedDeckBoardLayout = {
-	...DEFAULT_DECK_BOARD_LAYOUT,
-	view: 'stack',
-};
-
-export interface ResolvedDeckBoards {
-	board: BoardSelection;
-	sideboardPlacement: SideboardPlacement;
-	mainboard: ResolvedDeckBoardLayout;
-	sideboard: ResolvedDeckBoardLayout;
-}
-
-/**
- * Completes a Deck configuration's board selection and board blocks from their
- * defaults. Stored blocks are partial fragments — a PATCH may have written a
- * lone `{ columns: 6 }` — so every rendering and settings surface resolves
- * through this rather than reading the fragments directly.
- */
-export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
-	return {
-		board: config.board ?? 'full',
-		sideboardPlacement: config.sideboardPlacement ?? 'beside',
-		mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...config.mainboard },
-		sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT, ...config.sideboard },
-	};
-}
-
-/** Where each badge sits on a Deck Screen card until an operator moves it. */
-export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
-export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
-
-export const DEFAULT_DECK_CONFIG: DeckModeConfig = {
-	deckSource: { type: 'player', playerId: null },
-	board: 'full',
-	sideboardPlacement: 'beside',
-	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
-	sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT },
-	showQuantities: true,
-	showDeckName: true,
-	showDeckColors: true,
-	showDeckStats: false,
-	showDeckMetaPill: true,
-	deckMetaPillSize: 'medium',
-	deckMetaPillTextColor: '#111827',
-	deckMetaPillBgColor: '#ffffff',
-	deckMetaPillAccentColor: '#7c3aed',
-	showHighlanderTotal: true,
-	showHighlanderPointedCards: true,
-	highlanderPointedCardsSize: 'medium',
-	highlanderPointedCardsTextColor: '#111827',
-	highlanderPointedCardsBgColor: '#ffffff',
-	highlanderPointedCardsAccentColor: '#7c3aed',
-	highlanderPointedCardsBorderColor: undefined,
-	showHighlanderPoints: true,
-	highlanderPointsPosition: DEFAULT_HIGHLANDER_POINTS_POSITION,
-	highlanderPointsSize: 'medium',
-	highlanderPointsTextColor: '#ffffff',
-	highlanderPointsBgColor: '#7c3aed',
-	quantityPosition: DEFAULT_QUANTITY_POSITION,
-	quantitySize: 'medium',
-	quantityTextColor: '#ffffff',
-	quantityBgColor: '#7c3aed',
-};
-
-export const DEFAULT_STANDINGS_CONFIG: StandingsModeConfig = {
-	viewMode: 'all',
-	columns: [
-		{ key: 'position', visible: true },
-		{ key: 'name', visible: true },
-		{ key: 'record', visible: true },
-		{ key: 'points', visible: true },
-		{ key: 'deck', visible: false },
-	],
-	showArchetypeColors: false,
-	maxTableWidth: undefined,
-	roundId: undefined,
-	showHeader: true,
-	headerText: undefined,
-	topNCount: 8,
-	sliceStart: 1,
-	sliceEnd: 16,
-	playerListId: undefined,
-	revealCount: 8,
-	revealOrder: 'bottomUp',
-	revealTrigger: 'manual',
-	revealIntervalMs: 5000,
-	revealedCount: 0,
-	rowsPerPage: 8,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
-	animateEntries: true,
-};
-
-export const DEFAULT_TOPCUT_CONFIG: TopCutModeConfig = {
-	bracketSize: 8,
 };
 
 export const DEFAULT_FEATURE_MATCH_CONFIG: FeatureMatchModeConfig = {
@@ -745,65 +458,23 @@ export const DEFAULT_FEATURE_MATCH_CONFIG: FeatureMatchModeConfig = {
 	allowCounterControls: true,
 };
 
-export const DEFAULT_PLAYER_HISTORY_CONFIG: PlayerHistoryModeConfig = {
-	playerId: null,
-	columns: [
-		{ key: 'round', visible: true },
-		{ key: 'opponent', visible: true },
-		{ key: 'table', visible: true },
-		{ key: 'outcome', visible: true },
-	],
-	showHeader: true,
-	headerText: undefined,
-	rowsPerPage: 8,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
-};
-
 export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {
 	graphics: [],
-};
-
-export const DEFAULT_TOP_CARDS_CONFIG: TopCardsModeConfig = {
-	scope: 'all',
-	topN: 8,
-	playerListId: undefined,
-	archetypeFilter: undefined,
-	board: 'mainboard',
-	sortBy: 'inclusionRate',
-	limit: 10,
-	// Nonbasic lands read as noise in a "most played" ranking; basics never
-	// reach the breakdown at all.
-	excludedCardTypes: ['Land'],
-	columns: 5,
-	cardSize: 'medium',
-	dynamicCardSize: true,
-	cardGap: 12,
-	showHeader: true,
-	headerText: undefined,
-	showCardNames: true,
-	showRankBadges: true,
-	rankBadgeTextColor: '#ffffff',
-	rankBadgeBgColor: '#7c3aed',
-	statBadge: 'inclusionRate',
-	statBadgeSize: 'medium',
-	statBadgeTextColor: '#111827',
-	statBadgeBgColor: '#ffffff',
 };
 
 // Canonical default config map for all screen modes.
 export const DEFAULT_MODE_CONFIGS = {
 	'background': DEFAULT_BACKGROUND_CONFIG,
-	'card': DEFAULT_CARD_CONFIG,
-	'deck': DEFAULT_DECK_CONFIG,
-	'standings': DEFAULT_STANDINGS_CONFIG,
-	'topCut': DEFAULT_TOPCUT_CONFIG,
+	'card': cardModeConfigContract.defaults,
+	'deck': deckModeConfigContract.defaults,
+	'standings': standingsModeConfigContract.defaults,
+	'topCut': topCutModeConfigContract.defaults,
 	'feature-match': DEFAULT_FEATURE_MATCH_CONFIG,
 	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
 	'metagame': metagameModeConfigContract.defaults,
-	'top-cards': DEFAULT_TOP_CARDS_CONFIG,
-	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
+	'top-cards': topCardsModeConfigContract.defaults,
+	'player-history': playerHistoryModeConfigContract.defaults,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };
 
 /**

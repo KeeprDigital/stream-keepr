@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayModeConfig, StoredModeConfigs } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, ModeConfigsMap, StoredModeConfigs } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	backgroundModeConfigSchema,
@@ -11,6 +11,7 @@ import {
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
+	parseModeConfigPatchResult,
 	playerHistoryModeConfigSchema,
 	screenConfigSchema,
 	screenParamsSchema,
@@ -236,17 +237,12 @@ describe('deckModeConfigSchema', () => {
 		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: { type: 'invalid', playerId: 1 } }).success).toBe(false);
 	});
 
-	it('normalizes the one legacy Deck PATCH boundary and removes playerId', () => {
-		const parsed = modeConfigPatchSchemaMap.deck.parse({ playerId: null, showDeckName: false });
-
-		expect(parsed).toEqual({
-			deckSource: { type: 'player', playerId: null },
-			showDeckName: false,
-		});
-		expect(parsed).not.toHaveProperty('playerId');
-	});
-
-	it('rejects a PATCH that carries both legacy and canonical bindings', () => {
+	it('takes its Deck Source in a PATCH only as the canonical source, refusing the retired playerId shorthand', () => {
+		// The Deck PATCH form is derived from the contract like every other mode's
+		// (#588): no client sends `playerId` since #514, so it is an unknown key.
+		expect(modeConfigPatchSchemaMap.deck.parse({ deckSource: { type: 'player', playerId: 3 } }))
+			.toEqual({ deckSource: { type: 'player', playerId: 3 } });
+		expect(modeConfigPatchSchemaMap.deck.safeParse({ playerId: null, showDeckName: false }).success).toBe(false);
 		expect(modeConfigPatchSchemaMap.deck.safeParse({
 			playerId: 1,
 			deckSource: { type: 'player', playerId: 2 },
@@ -782,12 +778,15 @@ describe('modeConfigPatchSchemaMap', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts null to clear nullable deck binding fields', () => {
-		const result = modeConfigPatchSchemaMap.deck.safeParse({
-			playerId: null,
-		});
+	it('accepts null to clear the Deck Source back to no Player', () => {
+		const patch = modeConfigPatchSchemaMap.deck.parse({ deckSource: null }) as Record<string, unknown>;
+		const stored = parseModeConfigPatchResult(
+			{ deck: { deckSource: { type: 'broadcast', broadcastDeckListId: 7 } } } as ModeConfigsMap,
+			'deck',
+			patch,
+		);
 
-		expect(result.success).toBe(true);
+		expect(resolveScreenModeConfig(stored, 'deck').deckSource).toEqual({ type: 'player', playerId: null });
 	});
 
 	it('does not inject defaulted fields into a patch that omits them', () => {
