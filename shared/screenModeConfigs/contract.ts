@@ -1,12 +1,6 @@
 import { z } from 'zod';
 
-/**
- * A field of a mode's config that carries a zod default. Refused: a default lives
- * once, in the contract's `defaults`. A schema default would be a second copy, and
- * zod 4 applies one even through `.optional()`, so it would leak into every PATCH
- * that leaves the field out ("strip zod defaults when deriving mode-config PATCH
- * schemas").
- */
+/** Refuses a field carrying a zod default: a default lives only in `defaults` (ADR-0037). */
 type FieldsWithoutDefaults<Shape extends z.ZodRawShape> = {
 	[K in keyof Shape]: Shape[K] extends z.ZodDefault | z.ZodPrefault ? never : Shape[K];
 };
@@ -18,8 +12,9 @@ type FieldsWithoutDefaults<Shape extends z.ZodRawShape> = {
  * - `shape` is the mode's own fields. It carries no `backgroundLayers`: the
  *   server adds that field to every mode whose Screen Mode Definition declares a
  *   Background Layer stack, as it does for a mode still on the old form.
- * - `schema` is the complete config a rendering reads, once the stored fragment is
- *   completed from `defaults`. The config's type is inferred from it
+ * - `schema` is the strict object of those own fields: what a rendering reads
+ *   once the stored fragment is completed from `defaults`, less any declared
+ *   `backgroundLayers`. The config's type is inferred from it
  *   (`ScreenModeConfigOf`), so type and schema cannot disagree.
  * - `defaults` is a complete config of that type, so a default of the wrong type is
  *   a compile error. Its bounds are checked against `schema` by

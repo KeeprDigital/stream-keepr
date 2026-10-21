@@ -413,12 +413,18 @@ type ModeConfigPatchShape<Shape extends z.ZodRawShape> = {
 };
 
 /**
- * The forms of a mode on its config contract, both derived from the one declared
- * schema, so neither restates a field, a bound, or a default.
+ * The forms of a mode on its config contract, all derived from the one declared
+ * schema, so none restates a field, a bound, or a default.
  *
  * - `schema` is the complete config: the contract's fields, plus
- *   `backgroundLayers` when the mode declares a stack. Screen create and full
- *   update validate the mode against it, as they do a mode on the old form.
+ *   `backgroundLayers` when the mode declares a stack.
+ * - `stored` is what Screen create and full update accept for the mode: a
+ *   fragment of `schema`, because that is what storage holds. PATCHes leave
+ *   fragments, a display reset leaves every default but the preserved keys, and
+ *   the Edit Screen dialog sends `modeConfigs` back as it read them, so requiring
+ *   the complete config here would refuse a rename. Readers complete a fragment
+ *   from the contract's defaults, so a full write never writes a default into
+ *   storage.
  * - `patch` is every field `.nullable().optional()`, `null` being the "delete this
  *   key" sentinel. No wrapper is peeled and no default stripped, because a
  *   contract's fields carry none; `createModeConfigPatchFieldSchema` is what the
@@ -430,7 +436,14 @@ function configContractModeForms<M extends ConfigContractMode>(mode: M) {
 		Object.entries(schema.shape).map(([key, field]) => [key, (field as z.ZodType).nullable().optional()]),
 	) as ModeConfigPatchShape<ContractModeConfigShape<M>>;
 
-	return { schema, patch: z.object(patchShape).strict() };
+	return {
+		schema,
+		// Typed as the complete config, as `parseModeConfigPatchResult` types a merged
+		// fragment: `ModeConfigsMap` still calls every stored mode config complete,
+		// and making it say "fragment" belongs with removing the old form (#589).
+		stored: schema.partial() as unknown as typeof schema,
+		patch: z.object(patchShape).strict(),
+	};
 }
 
 // Per-mode config schemas
@@ -1917,7 +1930,7 @@ export const modeConfigSchemaMap = {
 	'feature-match': matchModeConfigSchema,
 	'feature-match-overlay': featureMatchOverlayModeConfigSchema,
 	'broadcast-graphics': broadcastGraphicsModeConfigSchema,
-	'metagame': metagameModeConfigSchema,
+	'metagame': metagameModeConfigForms.stored,
 	'top-cards': topCardsModeConfigSchema,
 	'player-history': playerHistoryModeConfigSchema,
 } as const;

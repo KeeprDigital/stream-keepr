@@ -1081,9 +1081,9 @@ Accepted · 2026-10-21 · [#587](https://github.com/KeeprDigital/stream-keepr/is
 
 **A default lives only in the contract's `defaults`.** A contract field may not carry a zod `.default()` or `.prefault()`; the type refuses one. A schema default was a second copy, and zod 4 applies it even through `.optional()`, so it leaked into every PATCH that left the field out.
 
-**The write forms are derived on the server without special cases** (`configContractModeForms`). The complete schema is the contract's fields plus `backgroundLayers` when the mode declares a Background Layer stack, and Screen create and full update validate against it. The PATCH form is every field `.nullable().optional()`, with no wrapper peeled and no default stripped.
+**The write forms are derived on the server without special cases** (`configContractModeForms`). The complete schema is the contract's fields plus `backgroundLayers` when the mode declares a Background Layer stack. Screen create and full update accept a fragment of it, because storage holds fragments. The PATCH form is every field `.nullable().optional()`, with no wrapper peeled and no default stripped.
 
-**Each mode moves onto its contract in turn.** Metagame is first (#587), the plain overlay modes follow (#588), then the rest, after which the old form is deleted (#589). `test/unit/server/schemas/screenModeConfigContracts.test.ts` parses every contract's defaults against its schema and both write paths and round-trips them through a PATCH. A mode not yet migrated is named in its pending list, so migrating one without taking it off the list fails.
+**Each mode moves onto its contract in turn.** Until it does, a mode stays on the old form: a hand-written type beside a hand-written schema, its PATCH form derived by `createModeConfigPatchSchema`. Metagame is first (#587), the plain overlay modes follow (#588), then the rest, after which the old form is deleted (#589). `test/unit/server/schemas/screenModeConfigContracts.test.ts` parses every contract's defaults against its schema and both write paths and round-trips them through a PATCH. A mode not yet migrated is named in its pending list, so migrating one without taking it off the list fails.
 
 ### Why
 
@@ -1091,9 +1091,10 @@ Each mode's config was written twice, as a type and as a schema, and its default
 
 ### Consequences
 
-- Readers complete a stored fragment from the contract's defaults (`resolveScreenModeConfig`), as before. A full write no longer fills Metagame's `minPoints` and `archetypeLimit` into storage. A full write of a Metagame config without `minPoints` is refused, as a missing required field of any mode is. No client sends one.
+- Readers complete a stored fragment from the contract's defaults (`resolveScreenModeConfig`), as before. A full write no longer fills Metagame's `minPoints` and `archetypeLimit` into storage, so a later change to either default reaches every Screen that never set it.
+- A full write of a mode on its contract accepts what storage holds: a PATCH-built fragment, or what a display reset leaves, which lacks the preserved keys. The Edit Screen dialog sends `modeConfigs` back as it read them, so a mode still on the old form refuses a rename once its stored config lacks a required field; a mode on its contract does not. Field bounds and unknown keys are still refused.
+- `ModeConfigsMap` still types each stored mode config as complete, as it did for PATCH-written ones. The full write's output is typed to match (`configContractModeForms`); making the map say "fragment" belongs with removing the old form (#589).
 - The contract carries only the mode's own fields. The Background Layer stack stays a server-side addition driven by the Screen Mode Definition's `backgroundLayers` declaration, because its schema depends on server-only asset ids.
-- A full write still validates each mode as a complete config, though storage holds fragments and the Edit Screen dialog sends them back. That pre-existing gap is not changed here.
 
 ### Rejected alternatives
 

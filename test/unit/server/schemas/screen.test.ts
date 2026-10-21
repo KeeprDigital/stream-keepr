@@ -10,6 +10,7 @@ import {
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
+	modeConfigsMapSchema,
 	playerHistoryModeConfigSchema,
 	screenConfigSchema,
 	screenParamsSchema,
@@ -936,7 +937,9 @@ describe('metagameModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('reads a stored config predating minPoints and archetypeLimit with their defaults', () => {
+	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
+		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
+
 		const resolved = resolveScreenModeConfig({ metagame: validConfig } as StoredModeConfigs, 'metagame');
 
 		expect(resolved.minPoints).toBe(9);
