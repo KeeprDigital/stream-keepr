@@ -3,8 +3,8 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { authStaticOptions } from '~~/server/utils/authOptions';
 
 /**
- * An empty in-memory database with every table the server's options name, the
- * rate limiter's included (`rateLimit.storage: 'database'`, #697).
+ * An empty in-memory database for the server's options: the auth tables plus
+ * the rate limiter's (`rateLimit.storage: 'database'`, #697).
  */
 export function throwawayAuthDatabase() {
 	return memoryAdapter({ user: [], session: [], account: [], verification: [], rateLimit: [] });

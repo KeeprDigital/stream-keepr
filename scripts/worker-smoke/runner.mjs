@@ -522,7 +522,9 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 
 	const signInBody = { email: operatorEmail, password: operatorPassword };
 	// Before the probes that sign in without a client header, so their passing
-	// is what shows this scenario left their bucket alone.
+	// is what shows this scenario left their bucket alone. Those header-less
+	// sign-ins share one bucket of three per 10 seconds, and the limiter counts
+	// an origin refusal too, so the two below use two of the three.
 	await expectSignInRateLimit({ origin, fetchRequest, signInBody, signal });
 	await expectStatus({
 		probe: 'auth-origin-refusal',

@@ -218,21 +218,31 @@ describe('the built Worker smoke runner', () => {
 		return answers.map((answer, index) => overrides[index] ?? answer);
 	}
 
-	/** A Worker that bootstraps its operator, then answers the rate-limit scenario with `scenario`. */
-	async function rateLimitAnswering(scenario: Response[]) {
+	/**
+	 * A Worker that is ready, refuses the API boundary, bootstraps its operator,
+	 * then answers the smoke's next requests with `answers`, in order.
+	 */
+	async function bootstrappedWorkerAnswering(answers: Response[]) {
 		const repositoryRoot = await builtRepository();
 		const spawnProcess = vi.fn()
 			.mockImplementationOnce(() => exitedProcess(0))
 			.mockImplementationOnce(() => livingProcess());
-		const fetchRequest = vi.fn()
-			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
-			.mockResolvedValueOnce(new Response(null, { status: 401 }))
-			.mockResolvedValueOnce(Response.json({ outcome: 'created' }));
-		for (const response of scenario)
-			fetchRequest.mockResolvedValueOnce(response);
-		fetchRequest.mockResolvedValueOnce(new Response(null, { status: 500 }));
-		const outcome = await runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }).catch(error => error);
-		return { outcome, fetchRequest };
+		const fetchRequest = vi.fn();
+		for (const answer of [
+			Response.json({ serverTime: Date.now() }),
+			new Response(null, { status: 401 }),
+			Response.json({ outcome: 'created' }),
+			...answers,
+		]) {
+			fetchRequest.mockResolvedValueOnce(answer);
+		}
+		return { run: runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }), fetchRequest };
+	}
+
+	/** Answers the rate-limit scenario with `scenario`, then fails the next probe with a 500. */
+	async function rateLimitAnswering(scenario: Response[]) {
+		const { run, fetchRequest } = await bootstrappedWorkerAnswering([...scenario, new Response(null, { status: 500 })]);
+		return { outcome: await run.catch(error => error), fetchRequest };
 	}
 
 	/**
@@ -295,24 +305,16 @@ describe('the built Worker smoke runner', () => {
 	 * up as the next probe's failure.
 	 */
 	async function signInAnswering(setCookies: string[]) {
-		const repositoryRoot = await builtRepository();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => livingProcess());
 		const signIn = new Response('{}', { status: 200 });
 		for (const value of setCookies)
 			signIn.headers.append('set-cookie', value);
-		const fetchRequest = vi.fn()
-			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
-			.mockResolvedValueOnce(new Response(null, { status: 401 }))
-			.mockResolvedValueOnce(Response.json({ outcome: 'created' }));
-		for (const response of rateLimitScenario())
-			fetchRequest.mockResolvedValueOnce(response);
-		fetchRequest
-			.mockResolvedValueOnce(new Response(null, { status: 403 }))
-			.mockResolvedValueOnce(signIn)
-			.mockResolvedValueOnce(new Response(null, { status: 401 }));
-		return runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest });
+		const { run } = await bootstrappedWorkerAnswering([
+			...rateLimitScenario(),
+			new Response(null, { status: 403 }),
+			signIn,
+			new Response(null, { status: 401 }),
+		]);
+		return await run;
 	}
 
 	/**

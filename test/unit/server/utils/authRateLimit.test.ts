@@ -27,23 +27,24 @@ const OTHER_CLIENT = '198.51.100.8';
 
 let auth: ThrowawayAuth;
 
-async function signIn(on: ThrowawayAuth, headers: Record<string, string>, password = 'not-the-password') {
-	const response = await on.handler(new Request(`${LOCAL_ORIGIN}/api/auth/sign-in/email`, {
+/** One sign-in attempt against `instance`, with a wrong password unless given the right one. */
+async function signIn(instance: ThrowawayAuth, headers: Record<string, string>, password = 'not-the-password') {
+	return await instance.handler(new Request(`${LOCAL_ORIGIN}/api/auth/sign-in/email`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', 'host': LOCAL_HOST, 'origin': LOCAL_ORIGIN, ...headers },
 		body: JSON.stringify({ email: EMAIL, password }),
 	}));
-	return response;
 }
 
-async function exhaust(on: ThrowawayAuth, client: string) {
+/** Spend `client`'s whole sign-in allowance on wrong passwords. */
+async function exhaust(instance: ThrowawayAuth, client: string) {
 	for (let attempt = 0; attempt < ADMITTED_PER_WINDOW; attempt++)
-		expect((await signIn(on, { 'cf-connecting-ip': client })).status).toBe(401);
+		expect((await signIn(instance, { 'cf-connecting-ip': client })).status).toBe(401);
 }
 
-async function withAccount(on: ThrowawayAuth) {
-	await on.api.createUser({ body: { email: EMAIL, password: PASSWORD, name: 'Rate Limit' } });
-	return on;
+async function withAccount(instance: ThrowawayAuth) {
+	await instance.api.createUser({ body: { email: EMAIL, password: PASSWORD, name: 'Rate Limit' } });
+	return instance;
 }
 
 beforeEach(async () => {

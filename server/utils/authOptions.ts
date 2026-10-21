@@ -225,23 +225,15 @@ export const authStaticOptions = {
 	},
 	/**
 	 * Better Auth's rate limiter, on for every server but `nuxt dev` and counted
-	 * in D1 (#697), stated because the inferred answer was off in production.
-	 *
-	 * Unstated, `enabled` is `isProduction` — `NODE_ENV` read at module load,
-	 * which nothing sets in the Worker — so the built Worker admitted every
-	 * sign-in attempt. `import.meta.dev !== true` is the build's answer, for the
-	 * reasons given at `useSecureCookies` above; the unit suite gets production's
-	 * limiter with it. The limits are the library's own (sign-in three per client
-	 * per ten seconds, everything else 100), keyed on `cf-connecting-ip`.
+	 * in D1 (#697), stated because the inferred answer was off in production:
+	 * unstated, `enabled` is `isProduction`, and nothing sets `NODE_ENV` in the
+	 * Worker. `import.meta.dev !== true` is the build's answer, as for
+	 * `useSecureCookies` above, so the unit suite sees production's limiter. The
+	 * limits are the library's, keyed on `cf-connecting-ip`.
 	 *
 	 * Off under `nuxt dev`, where every header-less caller is one loopback
-	 * client, so the integration suite and anyone signing in by hand would
-	 * share a three-attempt bucket.
-	 *
-	 * `'database'` because the default store is a map in module memory, which on
-	 * Workers is per isolate: a client spread over several isolates gets each
-	 * one's allowance. D1 gives the whole installation one count per client. Why
-	 * that is worth a table and a query per auth request: ADR-0012.
+	 * client. `'database'` because the default memory store is per isolate on
+	 * Workers. Both reasons in full, and the rejected stores: ADR-0012.
 	 */
 	rateLimit: {
 		enabled: import.meta.dev !== true,
