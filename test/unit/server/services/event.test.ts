@@ -32,6 +32,14 @@ vi.mock('~~/server/services/featureMatch', () => ({
 vi.mock('~~/server/services/meleeCredentials', () => ({
 	protectMeleeClientSecret,
 }));
+const structureRemovalQuery = { kind: 'structure-removal-query' };
+const buildRemoveImportedStructureQueries = vi.fn(() => ({
+	queries: [structureRemovalQuery],
+	readOutcome: () => ({ keptPhases: [], keptRounds: [], deletedPhaseIds: [], deletedRoundIds: [] }),
+}));
+vi.mock('~~/server/services/importedStructure', () => ({
+	buildRemoveImportedStructureQueries,
+}));
 const clearDeckSourcesQuery = { kind: 'clear-deck-sources-query' };
 const buildClearDeckSourcePlayersQuery = vi.fn(() => clearDeckSourcesQuery);
 vi.mock('~~/server/services/screen', () => ({
@@ -233,8 +241,11 @@ describe('eventService', () => {
 			expect(buildClearImportedMatchDataQueries).toHaveBeenCalledWith(1);
 			expect(mockDb.batch).toHaveBeenCalledWith(expect.arrayContaining([
 				featureResetQuery,
+				structureRemovalQuery,
 				getChain('update'),
 			]));
+			// Every imported Phase and Round, keeping those holding manual structure.
+			expect(buildRemoveImportedStructureQueries).toHaveBeenCalledWith(1, { kind: 'all' });
 			// Ahead of the Player delete, so no Deck Source is left naming a deleted Player.
 			expect(mockDb.batch.mock.calls[0]?.[0][0]).toBe(clearDeckSourcesQuery);
 			expect(buildClearDeckSourcePlayersQuery).toHaveBeenCalledWith(1, expect.anything());

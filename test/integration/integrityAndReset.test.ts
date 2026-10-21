@@ -119,4 +119,40 @@ describe('event integrity and melee reset', () => {
 			bestOf: 3,
 		});
 	});
+
+	it('disabling melee keeps manual Rounds and Matches, and the imported Phase holding them, and says so', async () => {
+		const event = await createEvent('Melee Reset Mixed Provenance Event');
+		const phase = await $fetch(`/api/events/${event.id}/phases`, {
+			method: 'POST',
+			body: { name: 'Swiss', sortOrder: 0 },
+		});
+		const manualRound = await $fetch(`/api/events/${event.id}/rounds`, {
+			method: 'POST',
+			body: { phaseId: phase.id, name: 'Bonus Round', roundNumber: 2 },
+		});
+		const manualMatch = await $fetch(`/api/events/${event.id}/matches`, {
+			method: 'POST',
+			body: { roundId: manualRound.id, tableNumber: 4 },
+		});
+		await executeIntegrationD1(`
+			UPDATE phases SET external_id = 'phase-1', external_source = 'melee' WHERE id = ${phase.id} AND event_id = ${event.id};
+		`);
+
+		const updatedEvent = await $fetch(`/api/events/${event.id}/melee-config`, {
+			method: 'PUT',
+			body: { meleeEnabled: false, meleeEventId: null, meleeClientId: null, meleeClientSecret: null },
+		});
+
+		expect(updatedEvent.warnings).toEqual([
+			'Phase "Swiss" was imported from Melee.gg and holds manual Rounds or Matches, so it was kept as a manual Phase',
+		]);
+		const [phases, rounds, matches] = await Promise.all([
+			$fetch(`/api/events/${event.id}/phases`),
+			$fetch(`/api/events/${event.id}/rounds`),
+			$fetch(`/api/events/${event.id}/matches`),
+		]);
+		expect(phases.phases).toEqual([expect.objectContaining({ id: phase.id, externalId: null, externalSource: 'manual' })]);
+		expect(rounds.rounds).toEqual([expect.objectContaining({ id: manualRound.id, phaseId: phase.id, externalSource: 'manual' })]);
+		expect(matches.matches).toEqual([expect.objectContaining({ id: manualMatch.id, roundId: manualRound.id })]);
+	});
 });

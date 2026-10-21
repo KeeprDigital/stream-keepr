@@ -3,6 +3,7 @@ import type { MeleeConfigInput } from '~~/server/schemas/api/event';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { inspectMeleeGameCompatibility } from '~~/server/modules/melee-sync/gameCompatibility';
 import { eventService } from '~~/server/services/event';
+import { describeKeptStructure } from '~~/server/services/importedStructure';
 import { meleeService } from '~~/server/services/melee';
 import { requireMeleeIntegration } from '~~/server/services/meleeIntegration';
 import { MeleeTransportError } from '~~/server/services/meleeTransport';
@@ -193,7 +194,10 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 				reason: resetReason,
 			});
 		}
-		return response;
+		// The reset keeps imported structure still holding manual Rounds or
+		// Matches (ADR-0040); the answer names each one, as a sync's does.
+		const warnings = resetReason ? describeKeptStructure(updated.keptStructure, resetReason) : [];
+		return { ...response, ...(warnings.length > 0 ? { warnings } : {}) };
 	}
 	finally {
 		try {
