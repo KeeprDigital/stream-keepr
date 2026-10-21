@@ -162,6 +162,22 @@ describe('auth foundation', () => {
 	});
 
 	/**
+	 * The dev server does not rate-limit, so every header-less local caller, all
+	 * one loopback client, is not held to one three-attempt bucket. Every built
+	 * server limits (`rateLimit` in `server/utils/authOptions.ts`, #697;
+	 * observed by `pnpm worker:smoke`).
+	 */
+	it('does not rate-limit repeated sign-in attempts on the dev server', async () => {
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const signIn = await postJson('/api/auth/sign-in/email', {
+				email: FIXTURE_EMAIL,
+				password: 'not-the-password',
+			});
+			expect(signIn.status).toBe(401);
+		}
+	});
+
+	/**
 	 * #410's half, and the reason every request in this file now carries an
 	 * `Origin`: the CSRF defence is live against the mounted handler.
 	 *

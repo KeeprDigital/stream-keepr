@@ -3,6 +3,14 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { authStaticOptions } from '~~/server/utils/authOptions';
 
 /**
+ * An empty in-memory database for the server's options: the auth tables plus
+ * the rate limiter's (`rateLimit.storage: 'database'`, #697).
+ */
+export function throwawayAuthDatabase() {
+	return memoryAdapter({ user: [], session: [], account: [], verification: [], rateLimit: [] });
+}
+
+/**
  * A real Better Auth instance configured exactly as the server configures its
  * own — `authStaticOptions`, the static half `server/utils/auth.ts` spreads —
  * over a memory adapter, so a unit test can hold the library's behaviour to
@@ -10,14 +18,17 @@ import { authStaticOptions } from '~~/server/utils/authOptions';
  *
  * This is the seam the #410 pattern runs through: the suites that pin what the
  * library does with the options this installation states (the origin check,
- * client-IP resolution) all construct one of these, and what makes their
- * assertions honest is that the options object is the server's, not a copy
- * that could drift.
+ * client-IP resolution, the rate limiter) all construct one of these, and what
+ * makes their assertions honest is that the options object is the server's, not
+ * a copy that could drift.
+ *
+ * Each call gets a fresh database unless handed one. Two instances over one
+ * database stand for two Worker isolates over one D1.
  */
-export function throwawayAuth() {
+export function throwawayAuth(database = throwawayAuthDatabase()) {
 	return betterAuth({
 		...authStaticOptions,
-		database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+		database,
 		secret: 'a-throwaway-secret-for-the-unit-suite',
 	});
 }

@@ -203,26 +203,118 @@ describe('the built Worker smoke runner', () => {
 	});
 
 	/**
+	 * What a limiting Worker answers the rate-limit scenario: three refused
+	 * passwords, a 429, then the independent client's sign-in. `overrides`
+	 * replaces answers by position.
+	 */
+	function rateLimitScenario(overrides: Record<number, Response> = {}) {
+		const answers = [
+			new Response(null, { status: 401 }),
+			new Response(null, { status: 401 }),
+			new Response(null, { status: 401 }),
+			new Response('{}', { status: 429, headers: { 'x-retry-after': '10' } }),
+			new Response('{}', { status: 200 }),
+		];
+		return answers.map((answer, index) => overrides[index] ?? answer);
+	}
+
+	/**
+	 * A Worker that is ready, refuses the API boundary, bootstraps its operator,
+	 * then answers the smoke's next requests with `answers`, in order.
+	 */
+	async function bootstrappedWorkerAnswering(answers: Response[]) {
+		const repositoryRoot = await builtRepository();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => livingProcess());
+		const fetchRequest = vi.fn();
+		for (const answer of [
+			Response.json({ serverTime: Date.now() }),
+			new Response(null, { status: 401 }),
+			Response.json({ outcome: 'created' }),
+			...answers,
+		]) {
+			fetchRequest.mockResolvedValueOnce(answer);
+		}
+		return { run: runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest }), fetchRequest };
+	}
+
+	/** Answers the rate-limit scenario with `scenario`, then fails the next probe with a 500. */
+	async function rateLimitAnswering(scenario: Response[]) {
+		const { run, fetchRequest } = await bootstrappedWorkerAnswering([...scenario, new Response(null, { status: 500 })]);
+		return { outcome: await run.catch(error => error), fetchRequest };
+	}
+
+	/**
+	 * Built Workers limit sign-in (#697). The first case is what this artifact
+	 * did before `rateLimit` was stated: every attempt reached the password check.
+	 */
+	it('refuses a Worker that admits a fourth sign-in attempt from one client', async () => {
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 3: new Response(null, { status: 401 }) }));
+
+		expect(outcome).toMatchObject({
+			probe: 'auth-rate-limit-refusal',
+			failureClass: 'unexpected-status',
+			detail: { expected: 429, actual: 401 },
+		});
+	});
+
+	it('refuses a Worker that limits a client it should not have limited yet', async () => {
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 2: new Response(null, { status: 429 }) }));
+
+		expect(outcome).toMatchObject({ probe: 'auth-rate-limit-admitted', failureClass: 'unexpected-status' });
+	});
+
+	it('refuses a 429 that names no retry delay', async () => {
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 3: new Response('{}', { status: 429 }) }));
+
+		expect(outcome).toMatchObject({ probe: 'auth-rate-limit-refusal', failureClass: 'unexpected-body' });
+	});
+
+	it('refuses a Worker whose limit also refuses an independent client', async () => {
+		const { outcome } = await rateLimitAnswering(rateLimitScenario({ 4: new Response(null, { status: 429 }) }));
+
+		expect(outcome).toMatchObject({
+			probe: 'auth-rate-limit-independent-client',
+			failureClass: 'unexpected-status',
+			detail: { expected: 200, actual: 429 },
+		});
+	});
+
+	it('names each client in cf-connecting-ip, varies x-forwarded-for, and keeps both off the probes that follow', async () => {
+		const { outcome, fetchRequest } = await rateLimitAnswering(rateLimitScenario());
+
+		// The first probe after the scenario is the origin refusal, answered 500 here.
+		expect(outcome).toMatchObject({ probe: 'auth-origin-refusal', detail: { actual: 500 } });
+		const headers = fetchRequest.mock.calls.slice(3).map(([, init]) => new Headers(init?.headers));
+		const limited = headers.slice(0, 4);
+		const independent = headers[4]!;
+		const following = headers[5]!;
+
+		expect(new Set(limited.map(each => each.get('cf-connecting-ip'))).size).toBe(1);
+		expect(new Set(limited.map(each => each.get('x-forwarded-for'))).size).toBeGreaterThan(1);
+		expect(independent.get('cf-connecting-ip')).toMatch(/^\d+\.\d+\.\d+\.\d+$/u);
+		expect(independent.get('cf-connecting-ip')).not.toBe(limited[0]!.get('cf-connecting-ip'));
+		expect(following.has('cf-connecting-ip')).toBe(false);
+		expect(following.has('x-forwarded-for')).toBe(false);
+	});
+
+	/**
 	 * A Worker that reaches sign-in and answers it with `setCookies`, then
 	 * refuses the first signed-in request, so a cookie the probe accepts shows
 	 * up as the next probe's failure.
 	 */
 	async function signInAnswering(setCookies: string[]) {
-		const repositoryRoot = await builtRepository();
-		const spawnProcess = vi.fn()
-			.mockImplementationOnce(() => exitedProcess(0))
-			.mockImplementationOnce(() => livingProcess());
 		const signIn = new Response('{}', { status: 200 });
 		for (const value of setCookies)
 			signIn.headers.append('set-cookie', value);
-		const fetchRequest = vi.fn()
-			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
-			.mockResolvedValueOnce(new Response(null, { status: 401 }))
-			.mockResolvedValueOnce(Response.json({ outcome: 'created' }))
-			.mockResolvedValueOnce(new Response(null, { status: 403 }))
-			.mockResolvedValueOnce(signIn)
-			.mockResolvedValueOnce(new Response(null, { status: 401 }));
-		return runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest });
+		const { run } = await bootstrappedWorkerAnswering([
+			...rateLimitScenario(),
+			new Response(null, { status: 403 }),
+			signIn,
+			new Response(null, { status: 401 }),
+		]);
+		return await run;
 	}
 
 	/**

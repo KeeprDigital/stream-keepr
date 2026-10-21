@@ -223,6 +223,22 @@ export const authStaticOptions = {
 		 */
 		useSecureCookies: import.meta.dev !== true,
 	},
+	/**
+	 * Better Auth's rate limiter, on for every server but `nuxt dev` and counted
+	 * in D1 (#697), stated because the inferred answer was off in production:
+	 * unstated, `enabled` is `isProduction`, and nothing sets `NODE_ENV` in the
+	 * Worker. `import.meta.dev !== true` is the build's answer, as for
+	 * `useSecureCookies` above, so the unit suite sees production's limiter. The
+	 * limits are the library's, keyed on `cf-connecting-ip`.
+	 *
+	 * Off under `nuxt dev`, where every header-less caller is one loopback
+	 * client. `'database'` because the default memory store is per isolate on
+	 * Workers. Both reasons in full, and the rejected stores: ADR-0012.
+	 */
+	rateLimit: {
+		enabled: import.meta.dev !== true,
+		storage: 'database',
+	},
 	// Off by default at this version; stated so a bump flipping the default
 	// cannot quietly start publishing from a deployed Worker.
 	telemetry: {
