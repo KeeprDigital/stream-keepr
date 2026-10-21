@@ -19,13 +19,10 @@ const featureMatchStore = useFeatureMatchStore();
 const assignmentStore = useFeatureMatchAssignmentStore();
 const playerStore = usePlayerStore();
 const router = useRouter();
-const matchRepository = useMatchRepository();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
 
 const route = useRoute();
-const roundIdsWithMatches = ref(new Set<number>());
-const roundAvailabilityLoaded = ref(false);
 
 function parseRoundId(value: unknown): number | undefined {
 	const parsed = Number(value);
@@ -96,26 +93,9 @@ const {
 // Matches load per viewed Round below, in whichever scope the store holds.
 useConsumedEventData(['matches']);
 
-watch(eventId, async (id) => {
-	if (!id) {
-		roundIdsWithMatches.value = new Set();
-		roundAvailabilityLoaded.value = true;
-		return;
-	}
-
-	roundAvailabilityLoaded.value = false;
-	try {
-		const matches = await matchRepository.list(id);
-		roundIdsWithMatches.value = new Set(matches.map(match => match.roundId));
-	}
-	finally {
-		roundAvailabilityLoaded.value = true;
-	}
-}, { immediate: true });
-
 // Stays true until rounds AND matches (if a round is selected) have loaded
 const initialLoading = computed(() =>
-	storesLoading.value || !roundAvailabilityLoaded.value || (!!viewedRoundId.value && !matchStore.isLoaded),
+	storesLoading.value || (!!viewedRoundId.value && !matchStore.isLoaded),
 );
 
 // Search state (debounced for table performance)
@@ -135,12 +115,14 @@ watch([eventId, viewedRoundId], async ([activeEventId, roundId], _, onCleanup) =
 	}
 }, { immediate: true });
 
+// Resolve the viewed Round only against loaded Rounds, so a queried Round is
+// not dropped before the Round store answers.
 watch([
 	queryRoundId,
 	() => roundStore.rounds,
-	() => roundAvailabilityLoaded.value,
+	storesLoading,
 ], async () => {
-	if (!roundAvailabilityLoaded.value) {
+	if (storesLoading.value) {
 		return;
 	}
 
@@ -224,8 +206,6 @@ async function handleSyncSelectedRound() {
 				matchStore.loadMatchesByRoundId(eventId.value!, selectedRound.value!.id),
 				roundStore.loadRoundsByEventId(eventId.value!),
 			]);
-			const matches = await matchRepository.list(eventId.value!);
-			roundIdsWithMatches.value = new Set(matches.map(match => match.roundId));
 			return true;
 		},
 		{
