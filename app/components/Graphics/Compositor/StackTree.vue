@@ -156,17 +156,13 @@ function editStack(apply: (graphics: readonly BroadcastGraphicConfig[]) => Broad
  */
 function editShownGraphic(apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig): string | null {
 	const graphicId = selectedGraphic.value?.id;
-	return graphicId !== undefined && edit({ kind: 'graphic', graphicId, apply }) ? graphicId : null;
-}
-
-function select(target: GraphicsSelectionTarget) {
-	emit('update:selectedTarget', target);
+	return graphicId !== undefined && edit({ kind: 'named-graphic', graphicId, apply }) ? graphicId : null;
 }
 
 function addGraphic() {
 	const graphicId = randomUuid();
 	if (editStack(graphics => createBroadcastGraphic(graphics, { id: graphicId }).graphics))
-		select({ type: 'graphic', graphicId });
+		emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function moveGraphic(graphicId: string, delta: 1 | -1) {
@@ -175,7 +171,7 @@ function moveGraphic(graphicId: string, delta: 1 | -1) {
 
 function removeGraphic(graphicId: string) {
 	if (editStack(graphics => deleteBroadcastGraphic(graphics, graphicId)))
-		select({ type: 'canvas' });
+		emit('update:selectedTarget', { type: 'canvas' });
 }
 
 function addItem(kind: GraphicItemKind) {
@@ -187,7 +183,7 @@ function addItem(kind: GraphicItemKind) {
 		canvasHeight: props.canvasHeight,
 	}).graphic);
 	if (graphicId)
-		select({ type: 'item', graphicId, itemId });
+		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
 }
 
 function addChild(kind: GraphicItemKind) {
@@ -200,7 +196,7 @@ function addChild(kind: GraphicItemKind) {
 	const itemId = randomUuid();
 	const graphicId = editShownGraphic(graphic => addGraphicGroupChild(graphic, { kind, groupId: group.id, id: itemId }).graphic);
 	if (graphicId)
-		select({ type: 'item', graphicId, itemId });
+		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
 }
 
 function moveItem(itemId: string, delta: 1 | -1) {
@@ -210,7 +206,7 @@ function moveItem(itemId: string, delta: 1 | -1) {
 function removeItem(itemId: string) {
 	const graphicId = editShownGraphic(graphic => deleteGraphicItem(graphic, itemId));
 	if (graphicId)
-		select({ type: 'graphic', graphicId });
+		emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function presentationGroupProjection(itemId: string) {

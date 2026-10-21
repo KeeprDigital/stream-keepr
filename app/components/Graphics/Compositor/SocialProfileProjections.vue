@@ -101,7 +101,7 @@ watch(talentSources, (sources) => {
  */
 function editSelectedGraphic(apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig): boolean {
 	const graphic = selectedGraphic.value;
-	return graphic !== null && edit({ kind: 'graphic', graphicId: graphic.id, apply });
+	return graphic !== null && edit({ kind: 'named-graphic', graphicId: graphic.id, apply });
 }
 
 function addProjection() {

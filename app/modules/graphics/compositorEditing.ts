@@ -71,8 +71,9 @@ export type BroadcastGraphicOperation<A extends unknown[] = []> = (
  *
  * `author` says what to do for each kind of selection it applies to; a selection it
  * has nothing for refuses the edit. The style-reference edits aim at whichever owner is
- * selected: the Broadcast Graphic itself, or one Graphic Item. `stack` and `graphic`
- * follow no selection, which is what the stack tree's edits need.
+ * selected: the Broadcast Graphic itself, or one Graphic Item. `stack` and
+ * `named-graphic` follow no selection: the stack tree's edits are aimed at the stack,
+ * or at the graphic it shows whether that graphic or one of its items is selected.
  */
 export type CompositorEdit
 	= | {
@@ -94,11 +95,13 @@ export type CompositorEdit
 	}
 	| {
 		/**
-		 * An edit to one Broadcast Graphic the panel names, whatever is selected: the
-		 * stack tree's edits to the Graphic Layer Order of the graphic it is showing.
-		 * A graphic the stack no longer carries refuses the edit.
+		 * An operation on one Broadcast Graphic the panel names, whatever is selected:
+		 * the stack tree's edits to the Graphic Layer Order of the graphic it shows,
+		 * and Social Profile Projections' edits to the graphic it shows, whose shared
+		 * operations take one graphic rather than the stack. A graphic the stack no
+		 * longer carries refuses the edit.
 		 */
-		kind: 'graphic';
+		kind: 'named-graphic';
 		graphicId: string;
 		apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig;
 	};
@@ -140,7 +143,7 @@ function applyEdit(state: CompositorEditingState, edit: CompositorEdit): Broadca
 	switch (edit.kind) {
 		case 'stack':
 			return edit.apply(state.graphics);
-		case 'graphic': {
+		case 'named-graphic': {
 			const graphic = state.graphics.find(candidate => candidate.id === edit.graphicId);
 			return graphic ? replaceBroadcastGraphic(state.graphics, edit.apply(graphic)) : null;
 		}
@@ -152,7 +155,7 @@ function applyEdit(state: CompositorEditingState, edit: CompositorEdit): Broadca
 function applySelectionEdit(
 	state: CompositorEditingState,
 	selection: GraphicsSelection,
-	edit: Exclude<CompositorEdit, { kind: 'stack' | 'graphic' }>,
+	edit: Exclude<CompositorEdit, { kind: 'stack' | 'named-graphic' }>,
 ): BroadcastGraphicConfig[] | null {
 	if (selection.kind !== 'graphic' && selection.kind !== 'item')
 		return null;
