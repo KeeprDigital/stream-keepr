@@ -80,18 +80,54 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 
 	it('no gate reads PR-only state, so none is skipped in the queue for want of a PR', () => {
 		for (const [id, job] of jobs(ci)) {
-			if (id !== 'scope')
+			if (id !== 'scope' && id !== 'record')
 				expect(job, id).not.toContain('github.event.pull_request');
 		}
 	});
 
 	it('each gate is skipped only on the scope job\'s decision', () => {
 		for (const [id, job] of jobs(ci)) {
-			if (id === 'scope' || id === 'passed')
+			if (id === 'scope' || id === 'passed' || id === 'record')
 				continue;
 			expect(job, id).toMatch(/^ {4}needs: scope$/m);
 			expect(job, id).toMatch(/^ {4}if: needs\.scope\.outputs\.(?:code|bundle) == 'true'$/m);
 		}
+	});
+});
+
+describe('a merge group skips the gates only for a tree a full, green PR run verified', () => {
+	const all = jobs(ci);
+	const scope = all.get('scope')!;
+	const record = all.get('record')!;
+	const gates = [...all.keys()].filter(id => !['scope', 'record', 'passed'].includes(id));
+
+	it('the scope job can read the PR runs\' records, their jobs and commits, and nothing more', () => {
+		expect(scope).toMatch(/^ {4}permissions:\n {6}contents: read\n {6}actions: read\n/m);
+		expect(scope).toMatch(/GH_TOKEN: \$\{\{ github\.token \}\}/);
+		expect(scope).toMatch(/^ {6}verified-by: \$\{\{ steps\.scope\.outputs\.verified-by \}\}$/m);
+	});
+
+	it('a PR run records its tree only after every gate ran and passed, never in the queue or for a fork', () => {
+		const needs = record.match(/^ {4}needs: \[(.+)\]$/m)![1]!.split(',').map(id => id.trim());
+		const condition = record.match(/^ {4}if: >-\n((?: {6}.*\n)+)/m)![1]!.split('\n').map(line => line.trim()).filter(Boolean);
+
+		expect(needs.toSorted()).toEqual(['scope', ...gates].toSorted());
+		// No status function: the implicit success() needs every gate to have passed.
+		expect(condition).toEqual([
+			'github.event_name == \'pull_request\'',
+			'&& github.event.pull_request.head.repo.full_name == github.repository',
+			'&& needs.scope.outputs.code == \'true\'',
+			'&& needs.scope.outputs.bundle == \'true\'',
+		]);
+		expect(record).toMatch(/^ {8}run: node scripts\/ci-reuse\.mjs record$/m);
+		expect(record).toMatch(/name: \$\{\{ steps\.record\.outputs\.name \}\}/);
+	});
+
+	it('only the record job can mint an OIDC token, and nothing else in CI can write', () => {
+		expect(code(ci)).toMatch(/^permissions:\n {2}contents: read\n\n/m);
+		for (const [id, job] of all)
+			expect(job.includes('id-token: write'), id).toBe(id === 'record');
+		expect(code(ci)).not.toMatch(/: write$(?<!id-token: write)/m);
 	});
 });
 

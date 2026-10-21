@@ -22,6 +22,11 @@
 #     tests or the other workflows alone. The `scope` job decides, measuring a PR
 #     against its base and a merge group against the queue's base
 #     (scripts/ci-scope.mjs); anything it cannot measure runs everything.
+#   - Not twice on the same tree. A merge group whose tree is byte-identical
+#     to one a full, green PR run verified (one PR, main unchanged since that
+#     run) skips every gate: the `record` job of that PR run left GitHub's
+#     signed word for which commit it ran (scripts/ci-reuse.mjs). Any doubt
+#     runs everything.
 #   - A newer push cancels the PR run it supersedes. Every merge-group entry
 #     has its own ref, so the queue's runs never cancel each other.
 #
@@ -59,9 +64,15 @@ jobs:
     # libraries the browser gates depend on) is a reviewed edit, not a surprise.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # In a merge group: the PR runs' records, their jobs, and the commits
+      # they name (scripts/ci-reuse.mjs).
+      actions: read
     outputs:
       code: ${{ steps.scope.outputs.code }}
       bundle: ${{ steps.scope.outputs.bundle }}
+      verified-by: ${{ steps.scope.outputs.verified-by }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,6 +83,8 @@ jobs:
         with:
           node-version-file: .node-version
       - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/ci-scope.mjs
 
   # Every gate `pnpm test` runs (verify.mjs --tests) appears below as its own step
@@ -159,19 +172,68 @@ jobs:
       # sends the small runtime/bindings/auth/streaming probe set through it.
       - run: pnpm worker:smoke
 
+  # A PR run that ran every gate and passed leaves a record of the tree it
+  # verified, so its merge group can skip running them again on exactly that
+  # tree (scripts/ci-reuse.mjs). The record is an OIDC token GitHub signs for
+  # this job, naming the commit the run executed; the job's own code chooses
+  # only the artifact's name, which nothing trusts. A fork's PR gets no token:
+  # its group runs everything. Recording never fails CI; without a record the
+  # group runs everything.
+  record:
+    name: Record the verified tree
+    needs: [scope, checks, integration, server-and-browser, worker-guard]
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && needs.scope.outputs.code == 'true'
+      && needs.scope.outputs.bundle == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            scripts/ci-reuse.mjs
+            .node-version
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - id: record
+        run: node scripts/ci-reuse.mjs record
+      - if: steps.record.outputs.name != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.record.outputs.name }}
+          path: ${{ steps.record.outputs.path }}
+          retention-days: 30
+          if-no-files-found: ignore
+
   passed:
     name: CI passed
-    needs: [scope, checks, integration, server-and-browser, worker-guard]
+    needs: [scope, checks, integration, server-and-browser, worker-guard, record]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      # Skipped is fine: `scope` decided the job had nothing to prove. Failed or
-      # cancelled is not. A draft PR skips everything and passes here, which is
-      # harmless: a draft cannot be queued, and marking it ready runs CI again.
+      # Skipped is fine: `scope` decided the job had nothing to prove, because
+      # the change cannot affect it or, in a merge group, because a full green
+      # PR run already proved it on exactly this tree (VERIFIED_BY names it).
+      # Failed or cancelled is not. A draft PR skips everything and passes
+      # here, which is harmless: a draft cannot be queued, and marking it ready
+      # runs CI again.
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
+          VERIFIED_BY: ${{ needs.scope.outputs.verified-by }}
         run: |
+          if [ -n "$VERIFIED_BY" ]; then
+            echo "This tree is exactly the one $VERIFIED_BY verified: its gates were not run again."
+          fi
           echo "Job results: $RESULTS"
           for result in $RESULTS; do
             case "$result" in

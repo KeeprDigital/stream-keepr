@@ -12,7 +12,9 @@
 # The Release PR goes through the queue like any other, so the commit
 # release-please tags is the merge group's head, the exact tree CI passed on.
 # The gate step refuses a merged Release PR whose commit no merge-group CI
-# run passed (one merged around the queue), before anything is tagged.
+# run passed (one merged around the queue), before anything is tagged. A
+# group run that reused a PR run's verification of the byte-identical tree
+# counts (ADR-0036).
 #
 # `workflow_dispatch` refreshes the Release PR without a push to main.
 #

@@ -97,7 +97,10 @@ describe('the scope job\'s command line', () => {
 		return { checkout, base, head };
 	}
 
-	function scope(cwd: string, eventName: string, event: unknown) {
+	/** No GitHub to read unless a case supplies one: CI's own test jobs carry GITHUB_REPOSITORY. */
+	const offline = { GH_TOKEN: '', GITHUB_REPOSITORY: '', GITHUB_REPOSITORY_ID: '' };
+
+	function scope(cwd: string, eventName: string, event: unknown, env: Record<string, string> = offline) {
 		const eventPath = join(cwd, '..', `${cwd.split('/').at(-1)}-event.json`);
 		const output = join(cwd, '..', `${cwd.split('/').at(-1)}-output`);
 		directories.push(eventPath, output);
@@ -106,27 +109,45 @@ describe('the scope job\'s command line', () => {
 		const result = spawnSync(process.execPath, [join(repositoryRoot, 'scripts/ci-scope.mjs')], {
 			cwd,
 			encoding: 'utf8',
-			env: { ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: output, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+			env: { ...process.env, ...env, GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: output, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
 		});
 		expect(result.status, result.stderr).toBe(0);
-		return readFileSync(output, 'utf8');
+		return { output: readFileSync(output, 'utf8'), log: result.stdout };
 	}
+
+	it('a merge group that cannot read GitHub for a PR run\'s record is scoped as usual, never skipped', () => {
+		const { checkout, base, head } = mergeGroup('server/api/time.get.ts', 'docs/second.md');
+		const bin = mkdtempSync(join(tmpdir(), 'ci-scope-gh-'));
+		directories.push(bin);
+		writeFileSync(join(bin, 'gh'), '#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n', { mode: 0o755 });
+
+		const { output, log } = scope(checkout, 'merge_group', { merge_group: { base_sha: base, head_sha: head } }, {
+			GH_TOKEN: 'test-token',
+			GITHUB_REPOSITORY: 'KeeprDigital/stream-keepr',
+			GITHUB_REPOSITORY_ID: '1',
+			PATH: `${bin}:${process.env.PATH}`,
+		});
+
+		expect(output).toBe('code=true\nbundle=true\n');
+		expect(log).toMatch(/Could not list the records.*HTTP 502/);
+		expect(log).toMatch(/running the gates/);
+	});
 
 	it('a merge group whose last PR is docs-only still runs the gates its first PR needs', () => {
 		const { checkout, base, head } = mergeGroup('server/api/time.get.ts', 'docs/second.md');
 
-		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: base, head_sha: head } })).toBe('code=true\nbundle=true\n');
+		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: base, head_sha: head } }).output).toBe('code=true\nbundle=true\n');
 	});
 
 	it('a merge group of docs-only PRs skips them', () => {
 		const { checkout, base, head } = mergeGroup('docs/first.md', 'docs/second.md');
 
-		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: base, head_sha: head } })).toBe('code=false\nbundle=false\n');
+		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: base, head_sha: head } }).output).toBe('code=false\nbundle=false\n');
 	});
 
 	it('a base it cannot fetch runs everything', () => {
 		const { checkout, head } = mergeGroup('docs/first.md', 'docs/second.md');
 
-		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: 'f'.repeat(40), head_sha: head } })).toBe('code=true\nbundle=true\n');
+		expect(scope(checkout, 'merge_group', { merge_group: { base_sha: 'f'.repeat(40), head_sha: head } }).output).toBe('code=true\nbundle=true\n');
 	});
 });
