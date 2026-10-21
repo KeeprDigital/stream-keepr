@@ -1,7 +1,13 @@
 import type { DbScreen } from '~~/server/db/schema';
 import type { ScreenResponse } from '~~/shared/api';
 import { mapTimestamps } from '~~/server/utils/mapTimestamps';
+import { clampStoredModeConfigs } from '~~/shared/types/screenConfig';
 
+/**
+ * A Screen as every client receives it. Its mode configurations are read within
+ * their contracts' bounds (`clampStoredModeConfigs`, #498), so an editor never
+ * offers, nor writes back, a stored value its contract no longer accepts.
+ */
 export function mapScreenToResponse(screen: DbScreen): ScreenResponse {
 	const {
 		assetCapabilityDigest: _assetCapabilityDigest,
@@ -10,5 +16,5 @@ export function mapScreenToResponse(screen: DbScreen): ScreenResponse {
 		graphicAssetReferenceVersion: _graphicAssetReferenceVersion,
 		...publicScreen
 	} = screen;
-	return mapTimestamps(publicScreen);
+	return mapTimestamps({ ...publicScreen, modeConfigs: clampStoredModeConfigs(publicScreen.modeConfigs) });
 }

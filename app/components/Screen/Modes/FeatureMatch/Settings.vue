@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
 import { getCounterTypeConfigs, getPlayerIdentityLabel } from '~~/shared/config/games';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
@@ -12,6 +13,9 @@ const props = defineProps<{
 const featureMatchStore = useFeatureMatchStore();
 const featureMatchStateStore = useFeatureMatchStateStore();
 const eventStore = useEventStore();
+
+// Each control's label, read from the mode's config contract (#498).
+const fields = screenModeConfigContract('feature-match').fields;
 
 const identityLabel = computed(() => {
 	const game = eventStore.event?.game;
@@ -129,7 +133,7 @@ async function handleMatchChange(matchId: number | null) {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Show Pronouns"
+				:label="fields.showPronouns.label"
 				description="Show player pronouns next to their name."
 				disabled-description="Enable player pronouns in event settings to use this."
 				:enabled="hasPronouns"
@@ -137,13 +141,13 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showPronouns: $event })"
 			/>
 			<ScreenSettingsToggle
-				:label="`Show ${identityLabel} Names`"
+				:label="fields.showDeckNames.label.replace('Deck', identityLabel)"
 				:description="`Show player ${identityLabel.toLowerCase()} names below their name.`"
 				:model-value="config.showDeckNames"
 				@update:model-value="updateConfig({ showDeckNames: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Player Record"
+				:label="fields.showRecords.label"
 				description="Show the player record or position next to their name."
 				disabled-description="Enable player standings in event settings to use this."
 				:enabled="hasStandings"
@@ -151,7 +155,7 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showRecords: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show LGS"
+				:label="fields.showLgs.label"
 				description="Show the player's Local Game Store."
 				disabled-description="Enable LGS tracking in event settings to use this."
 				:enabled="hasLgs"
@@ -167,13 +171,13 @@ async function handleMatchChange(matchId: number | null) {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Show Clock"
+				:label="fields.showClock.label"
 				description="Show the match clock."
 				:model-value="config.showClock"
 				@update:model-value="updateConfig({ showClock: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Table Number"
+				:label="fields.showTableNumber.label"
 				description="Show the match table number in the header."
 				disabled-description="Enable table numbers in event settings to use this."
 				:enabled="hasTableNumber"
@@ -181,7 +185,7 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showTableNumber: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Seat Labels"
+				:label="fields.showSeatLabels.label"
 				:description="`Show ${isVerticalArena ? 'Top/Bottom' : 'Left/Right'} labels next to player names.`"
 				:model-value="config.showSeatLabels"
 				@update:model-value="updateConfig({ showSeatLabels: $event })"
@@ -195,7 +199,7 @@ async function handleMatchChange(matchId: number | null) {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Show Counters"
+				:label="fields.showCounters.label"
 				description="Show player counters (poison, energy, etc.)."
 				disabled-description="No counter types available for this game."
 				:enabled="hasCounterTypes"
@@ -203,7 +207,7 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showCounters: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Turn Controls"
+				:label="fields.showTurnControls.label"
 				description="Show the turn counter and active player controls."
 				disabled-description="Enable turn or active player tracking in event settings to use this."
 				:enabled="hasTurnTracking"
@@ -211,7 +215,7 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showTurnControls: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Overtime"
+				:label="fields.showOvertime.label"
 				description="Show the extra turns tracker when overtime begins."
 				disabled-description="Enable extra turns in event format settings to use this."
 				:enabled="hasExtraTurns"
@@ -219,7 +223,7 @@ async function handleMatchChange(matchId: number | null) {
 				@update:model-value="updateConfig({ showOvertime: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Mulligan Info"
+				:label="fields.showMulliganInfo.label"
 				description="Show the cards kept indicator during mulligan phase."
 				disabled-description="Enable mulligan tracking in event settings to use this."
 				:enabled="hasMulliganTracking"
@@ -231,7 +235,7 @@ async function handleMatchChange(matchId: number | null) {
 		<!-- Layout -->
 		<ScreenSettingsCard title="Layout">
 			<UFormField
-				label="Left Side of Screen"
+				:label="fields.leftSidePlayer.label"
 				description="Which player seat appears on the left side of the match screen."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -252,19 +256,19 @@ async function handleMatchChange(matchId: number | null) {
 			:saving="saving"
 		>
 			<ScreenSettingsToggle
-				label="Life Total Controls"
+				:label="fields.allowLifeControls.label"
 				description="Allow players to adjust life totals."
 				:model-value="config.allowLifeControls"
 				@update:model-value="updateConfig({ allowLifeControls: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Game Win Controls"
+				:label="fields.allowGameWinControls.label"
 				description="Allow players to record and undo game wins."
 				:model-value="config.allowGameWinControls"
 				@update:model-value="updateConfig({ allowGameWinControls: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Counter Controls"
+				:label="fields.allowCounterControls.label"
 				description="Allow players to add, remove, and adjust counters."
 				disabled-description="No counter types available for this game."
 				:enabled="hasCounterTypes"

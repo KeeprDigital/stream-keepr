@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import {
 	CARD_ANIMATION_SPEED_SELECT_OPTIONS,
 	HORIZONTAL_ALIGN_SELECT_OPTIONS,
@@ -14,6 +15,9 @@ const props = defineProps<{
 }>();
 
 const featureMatchStore = useFeatureMatchStore();
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+const fields = screenModeConfigContract('card').fields;
 
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
@@ -89,15 +93,15 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 		<!-- Display Settings -->
 		<ScreenSettingsCard title="Screen Settings">
 			<UFormField
-				label="Card Scale"
-				description="Scale multiplier for the card size (0.5 - 2.0)."
+				:label="fields.scale.label"
+				:description="`Scale multiplier for the card size (${fields.scale.min?.toFixed(1)} - ${fields.scale.max?.toFixed(1)}).`"
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.scale"
-					:min="0.5"
-					:max="2"
-					:step="0.1"
+					:min="fields.scale.min"
+					:max="fields.scale.max"
+					:step="fields.scale.step"
 					class="w-32"
 					@update:model-value="updateConfig({ scale: Number($event) })"
 				/>
@@ -107,7 +111,7 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 		<!-- Animation Settings -->
 		<ScreenSettingsCard title="Animation">
 			<ScreenSettingsToggle
-				label="Enable Animation"
+				:label="fields.animationEnabled.label"
 				description="Animate card transitions with zoom/fade effect."
 				:model-value="config.animationEnabled"
 				@update:model-value="updateConfig({ animationEnabled: $event })"
@@ -115,7 +119,7 @@ const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 
 			<UFormField
 				v-if="config.animationEnabled"
-				label="Animation Speed"
+				:label="fields.animationSpeed.label"
 				description="Speed of the transition animation."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>

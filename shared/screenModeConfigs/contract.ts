@@ -1,4 +1,6 @@
+import type { ScreenModeConfigFields } from './fields';
 import { z } from 'zod';
+import { clampToShapeBounds, screenModeConfigFields } from './fields';
 
 /** Refuses a field carrying a zod default: a default lives only in `defaults` (ADR-0037). */
 type FieldsWithoutDefaults<Shape extends z.ZodRawShape> = {
@@ -64,6 +66,9 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   recovery path, such as the Broadcast Graphics stack. A display reset leaves
  *   one untouched, and a PATCH may replace one but never delete it with `null`,
  *   which would empty it.
+ * - `fields` is the editor-facing view of every field marked `editorField`: its
+ *   label, control kind, and bounds read back from the schema, so the mode's
+ *   editor offers exactly the range the contract accepts (#498).
  *
  * The write forms are derived from `shape` on the server without special cases
  * (`configContractModeForms`): a full write validates a fragment of the complete
@@ -78,6 +83,13 @@ export interface ScreenModeConfigContract<
 	readonly schema: z.ZodObject<Shape, z.core.$strict>;
 	readonly defaults: z.input<z.ZodObject<Shape, z.core.$strict>>;
 	readonly authoredStacks: readonly AuthoredStack[];
+	readonly fields: ScreenModeConfigFields<Shape>;
+	/**
+	 * A stored fragment as a reader reads it: every number outside its field's
+	 * bounds pulled to the nearest bound (`clampToShapeBounds`). Reads only, so a
+	 * tightened bound never resets or refuses a stored config; writes are refused.
+	 */
+	readonly clampStored: <T extends Record<string, unknown>>(fragment: T) => T;
 }
 
 /** The config type a contract defines: what a rendering of its mode reads. */
@@ -91,5 +103,12 @@ export function defineScreenModeConfigContract<
 	defaults: z.input<z.ZodObject<Shape, z.core.$strict>>,
 	options: { authoredStacks?: readonly AuthoredStack[] } = {},
 ): ScreenModeConfigContract<Shape, AuthoredStack> {
-	return { shape, schema: z.object(shape).strict(), defaults, authoredStacks: options.authoredStacks ?? [] };
+	return {
+		shape,
+		schema: z.object(shape).strict(),
+		defaults,
+		authoredStacks: options.authoredStacks ?? [],
+		fields: screenModeConfigFields(shape),
+		clampStored: fragment => clampToShapeBounds(shape, fragment),
+	};
 }

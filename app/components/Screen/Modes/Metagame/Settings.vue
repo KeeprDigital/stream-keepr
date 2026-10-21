@@ -12,6 +12,7 @@ import type {
 	MetagameCardColumnConfig,
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -27,6 +28,10 @@ const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigU
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+// Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
+const fields = screenModeConfigContract('metagame').fields;
 
 const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
@@ -174,7 +179,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard title="Data">
 			<UFormField
-				label="Display"
+				:label="fields.viewMode.label"
 				description="Choose the metagame table to show."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -187,7 +192,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			</UFormField>
 
 			<UFormField
-				label="Player scope"
+				:label="fields.scope.label"
 				description="Which players to include in the breakdown."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -201,14 +206,14 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<UFormField
 				v-if="config.scope === 'topN'"
-				label="Top N"
+				:label="fields.topN.label"
 				description="Include the top N players by position."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.topN"
-					:min="1"
-					:max="500"
+					:min="fields.topN.min"
+					:max="fields.topN.max"
 					class="w-32"
 					@update:model-value="updateConfig({ topN: Number($event), currentPage: 1 })"
 				/>
@@ -216,14 +221,14 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<UFormField
 				v-if="config.scope === 'minPoints'"
-				label="Minimum points"
+				:label="fields.minPoints.label"
 				description="Include players with at least this many match points."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.minPoints"
-					:min="0"
-					:max="999"
+					:min="fields.minPoints.min"
+					:max="fields.minPoints.max"
 					class="w-32"
 					@update:model-value="updateConfig({ minPoints: Number($event), currentPage: 1 })"
 				/>
@@ -251,7 +256,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<template v-if="config.viewMode === 'archetype'">
 				<UFormField
-					label="Sort archetypes by"
+					:label="fields.sortBy.label"
 					description="Order archetypes using this metric."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -264,15 +269,15 @@ function updateArchetypeLimit(value: number | null | undefined) {
 				</UFormField>
 
 				<UFormField
-					label="Top archetypes"
+					:label="fields.archetypeLimit.label"
 					description="Show the top archetypes and group the remainder as Other. Leave empty to show all."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="config.archetypeLimit"
 						placeholder="All"
-						:min="1"
-						:max="500"
+						:min="fields.archetypeLimit.min"
+						:max="fields.archetypeLimit.max"
 						class="w-32"
 						@update:model-value="updateArchetypeLimit($event)"
 					/>
@@ -281,7 +286,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<template v-else>
 				<UFormField
-					label="Sort cards by"
+					:label="fields.cardSortBy.label"
 					description="Order cards using this metric."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -294,21 +299,21 @@ function updateArchetypeLimit(value: number | null | undefined) {
 				</UFormField>
 
 				<UFormField
-					label="Card limit"
+					:label="fields.limit.label"
 					description="Maximum number of card rows to include."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="config.limit"
-						:min="1"
-						:max="500"
+						:min="fields.limit.min"
+						:max="fields.limit.max"
 						class="w-32"
 						@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
 					/>
 				</UFormField>
 
 				<UFormField
-					label="Archetype filter"
+					:label="fields.archetypeFilter.label"
 					description="Limit cards to a single archetype. Leave empty for all archetypes."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -332,14 +337,14 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			<USeparator />
 
 			<UFormField
-				label="Max table width"
+				:label="fields.maxTableWidth.label"
 				description="Optional cap in pixels. Leave empty to fill the available width."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.maxTableWidth ?? null"
 					placeholder="Auto"
-					:min="1"
+					:min="fields.maxTableWidth.min"
 					class="w-32"
 					@update:model-value="updateMaxTableWidth($event)"
 				/>
@@ -348,7 +353,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				label="Show header"
+				:label="fields.showHeader.label"
 				description="Show the metagame title above the table."
 				:model-value="config.showHeader"
 				@update:model-value="updateConfig({ showHeader: $event })"
@@ -356,7 +361,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<UFormField
 				v-if="config.showHeader"
-				label="Custom header text"
+				:label="fields.headerText.label"
 				description="Leave empty for an auto-generated title."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -371,14 +376,14 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 		<ScreenSettingsCard title="Pagination">
 			<UFormField
-				label="Rows per page"
+				:label="fields.pageSize.label"
 				description="Number of table rows shown per page."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.pageSize"
-					:min="1"
-					:max="100"
+					:min="fields.pageSize.min"
+					:max="fields.pageSize.max"
 					class="w-32"
 					@update:model-value="updateConfig({ pageSize: Number($event) })"
 				/>
@@ -391,7 +396,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Auto-page"
+				:label="fields.autoPageEnabled.label"
 				description="Automatically cycle through table pages."
 				:model-value="config.autoPageEnabled"
 				@update:model-value="setAutoPageEnabled($event === true)"
@@ -399,16 +404,16 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 			<UFormField
 				v-if="config.autoPageEnabled"
-				label="Interval (seconds)"
+				:label="fields.autoPageIntervalMs.label"
 				description="Time between page transitions."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
-					:model-value="Math.round(config.autoPageIntervalMs / 1000)"
-					:min="3"
-					:max="60"
+					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
+					:min="fields.autoPageIntervalMs.min"
+					:max="fields.autoPageIntervalMs.max"
 					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
 				/>
 			</UFormField>
 
@@ -441,7 +446,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 		<ScreenSettingsCard title="Animation">
 			<ScreenSettingsToggle
-				label="Animate entries"
+				:label="fields.animateEntries.label"
 				description="Animate row changes when the table updates."
 				:model-value="config.animateEntries"
 				@update:model-value="updateConfig({ animateEntries: $event })"

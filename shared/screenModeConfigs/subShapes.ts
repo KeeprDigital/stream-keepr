@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { editorField } from './fields';
 
 /**
  * Sub-shapes more than one Screen Mode's config contract repeats, so a bound
@@ -15,8 +16,8 @@ export function columnConfigSchema<const Keys extends readonly [string, ...strin
 
 /** The optional header above a mode's content. */
 export const headerConfigShape = {
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
+	showHeader: editorField(z.boolean(), { label: 'Show header' }),
+	headerText: editorField(z.string().max(200).optional(), { label: 'Custom header text' }),
 };
 
 export const DEFAULT_HEADER_CONFIG = {
@@ -33,8 +34,8 @@ export const DEFAULT_HEADER_CONFIG = {
  * `pageRotationPageSize`.
  */
 export const pageRotationShape = {
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
+	autoPageEnabled: editorField(z.boolean(), { label: 'Auto-page' }),
+	autoPageIntervalMs: editorField(z.number().int().min(3000).max(60000), { label: 'Interval (seconds)', displayScale: 1000 }),
 	currentPage: z.number().int().min(1).optional(),
 	rotationAnchor: z.number().int().nonnegative().optional(),
 };
@@ -48,4 +49,4 @@ export const DEFAULT_PAGE_ROTATION = {
 } as const;
 
 /** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
-export const pageRotationPageSize = z.number().int().min(1).max(100);
+export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page' });
