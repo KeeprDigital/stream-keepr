@@ -8,6 +8,8 @@ import {
 	getDisplayDefaultsForMode,
 	mergeScreenModeConfig,
 	resolveDeckBoards,
+	toModeConfigPatch,
+	toScreenConfigPatch,
 } from '~~/shared/types/screenConfig';
 
 describe('getDefaultConfigForMode', () => {
@@ -251,5 +253,33 @@ describe('default config constants', () => {
 			{ key: 'mainboardCount', visible: true },
 			{ key: 'sideboardCount', visible: true },
 		]);
+	});
+});
+
+/**
+ * An edit as it crosses the wire (#703): a field it names as cleared is sent as the
+ * `null` that deletes it, because JSON omits `undefined` and the server reads an
+ * omitted field as unchanged. A field it does not name stays omitted.
+ */
+describe('toModeConfigPatch', () => {
+	it('sends a cleared field as a deletion and leaves every field it does not name out', () => {
+		expect(toModeConfigPatch('metagame', { archetypeFilter: undefined, headerText: null, topN: 16 }))
+			.toEqual({ archetypeFilter: null, headerText: null, topN: 16 });
+	});
+
+	it('never deletes an authored stack, which leaves it out instead (ADR-0037)', () => {
+		expect(toModeConfigPatch('background', { layers: undefined })).toEqual({});
+		expect(toModeConfigPatch('broadcast-graphics', { graphics: undefined, channels: undefined }))
+			.toEqual({ channels: null });
+	});
+
+	it('sends a mode\'s Background Layer stack cleared as a deletion, as before', () => {
+		expect(toModeConfigPatch('metagame', { backgroundLayers: undefined })).toEqual({ backgroundLayers: null });
+	});
+});
+
+describe('toScreenConfigPatch', () => {
+	it('sends a cleared field as a deletion', () => {
+		expect(toScreenConfigPatch({ width: undefined, background: '#fff' })).toEqual({ width: null, background: '#fff' });
 	});
 });

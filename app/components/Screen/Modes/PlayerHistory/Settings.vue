@@ -121,7 +121,7 @@ watch(() => config.value.playerId, async (playerId) => {
 					:model-value="config.headerText ?? ''"
 					placeholder="Auto"
 					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || undefined })"
+					@update:model-value="updateConfig({ headerText: $event || null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

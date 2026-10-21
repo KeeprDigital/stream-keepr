@@ -423,6 +423,38 @@ export type ScreenModeConfigPatch<M extends ScreenMode> = {
 };
 
 /**
+ * An edit as it must cross the wire. A field an edit names with `undefined` is
+ * one the editor cleared — an optional field set back to its default, or a
+ * display reset restoring a default that is `undefined` — and JSON omits an
+ * `undefined` value, which the server reads as "unchanged", so the old value
+ * used to survive the save (#703). Named, it is sent as the deletion it means.
+ * Omission still means unchanged: only a key the edit names is touched.
+ *
+ * `keep` lists fields that `null` may not delete, an authored stack's (ADR-0037):
+ * an `undefined` one is left out instead, so a clear never empties one.
+ */
+function namedUndefinedAsDeletion(edit: Record<string, unknown>, keep: readonly string[] = []): Record<string, unknown> {
+	const patch: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(edit)) {
+		if (value !== undefined)
+			patch[key] = value;
+		else if (!keep.includes(key))
+			patch[key] = null;
+	}
+	return patch;
+}
+
+/** A mode-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
+export function toModeConfigPatch<M extends ScreenMode>(mode: M, edit: ScreenModeConfigPatch<M>): ScreenModeConfigPatch<M> {
+	return namedUndefinedAsDeletion(edit, MODE_CONFIG_CONTRACTS[mode].authoredStacks) as ScreenModeConfigPatch<M>;
+}
+
+/** A Screen-configuration edit as its PATCH carries it: every cleared field deleted, as `null`. */
+export function toScreenConfigPatch(edit: ScreenConfigPatch): ScreenConfigPatch {
+	return namedUndefinedAsDeletion(edit) as ScreenConfigPatch;
+}
+
+/**
  * Keys a display reset must not touch. Two kinds qualify:
  *
  * - What the Screen points at: every Event Reference its Screen Mode Definition

@@ -492,17 +492,50 @@ describe('useConfigUpdate', () => {
 		first.resolve({ ok: true });
 		await vi.advanceTimersByTimeAsync(200);
 
-		// The queued edit is picked up by the in-flight save's own continuation, so
-		// disposal must not empty the queue out from under it.
+		// The disposal hands the queued edit to the store, which orders it behind the
+		// save in flight; it is sent once, not again by that save's continuation.
 		expect(saveToStore).toHaveBeenCalledTimes(2);
 		expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
 	});
 
-	it('filters out null values from merged config', () => {
-		const { config, updateConfig } = createTestSetup();
+	it('reads a field cleared with null or undefined as its default, not as the stored value', () => {
+		const { config, updateConfig } = createTestSetup({ color: 'blue', size: 20 });
 
 		updateConfig({ color: null } as any);
-		// null values are treated as "unset" and filtered from config
-		expect(config.value.color).toBeUndefined();
+		updateConfig({ size: undefined });
+		expect(config.value).toEqual({ color: 'red', size: 10 });
+	});
+
+	it('hands off an edit queued behind a save in flight when the Event scope ends', async () => {
+		const first = deferred<{ ok: boolean }>();
+		const saveToStore = vi.fn()
+			.mockReturnValueOnce(first.promise)
+			.mockResolvedValue({ ok: true });
+		const scope = effectScope();
+		const { updateConfig, saving } = scope.run(() => useConfigUpdate<TestConfig>({
+			getStoreConfig: () => ({}),
+			saveToStore,
+			defaults: { color: 'red', size: 10 },
+			debounceMs: 100,
+		}))!;
+
+		updateConfig({ color: 'green' });
+		await vi.advanceTimersByTimeAsync(100);
+		updateConfig({ size: 20 });
+		// Its debounce fires while the first save is out, so it waits on that save.
+		await vi.advanceTimersByTimeAsync(200);
+		expect(saveToStore).toHaveBeenCalledOnce();
+
+		resetAllEventStores();
+		// Handed to the store before the stores are gone, not left for the first save's continuation.
+		expect(saveToStore).toHaveBeenCalledTimes(2);
+		expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
+		expect(saving.value).toBe(true);
+
+		first.resolve({ ok: true });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(saveToStore).toHaveBeenCalledTimes(2);
+		expect(saving.value).toBe(false);
+		scope.stop();
 	});
 });

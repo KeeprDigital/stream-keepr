@@ -1248,3 +1248,37 @@ Melee Sync promises to preserve manual structure, and the cascade broke that pro
 - **Refuse the removal while manual descendants exist.** See Why: it blocks a sync or reset on operator clean-up.
 - **Keep the stale record with its Provenance, and skip it in Round Match sync.** Every reader of `isMeleeManagedRound` would need to know about it, and a reset would leave Melee-owned structure with no integration. A sync would also repeat the warning every time until the operator cleaned up.
 - **Change the foreign keys from `cascade` to `restrict`.** Deleting a Phase or Round by hand would then need its children deleted first, and the sync would fail instead of finishing.
+
+## ADR-0041: A Screen write owns only its fields, finishes for its own Event, and sends a cleared field as a deletion
+
+Accepted · 2026-10-21 · [#703](https://github.com/KeeprDigital/stream-keepr/issues/703)
+
+### Decision
+
+**The client shows a Screen as its newest server revision with every unsettled write's fields laid over it** (Field Ownership, in `app/modules/screen/runtime.ts`). Each write owns the fields it names: an ordinary Screen update its top-level fields, a mode-configuration or Screen-configuration write the config fields it patches. A revision from any door — a write's answer, a conflict refresh, an announced reload, a load — replaces only the revision underneath, and only when it is not older than the one held, so nothing moves a Screen's `stateVersion` backwards. A write that settles drops only its own fields. A failed write therefore rolls back to what the server holds now, keeping a remote change that landed meanwhile, and never over a newer local edit. A write answers its caller with the newer of its answer and what is held.
+
+**Every write of one Screen runs in one queue**, whichever part of the Screen it names, and is sent at the revision the write before it was answered with. Independent settings edited at once no longer race each other into a conflict.
+
+**A Screen write keeps what it needs to finish for its own Event after that Event Lifetime ends.** The lifetime records the newest revision of each Screen it held or a write in it was answered with, and a write still queued when the operator moves on is sent, and its conflict retried, at that revision. Its store effects stay gated by the lifetime, as ADR-0024 decided: an answer, rollback or error from a finished lifetime touches nothing of the next one's. The caller is still answered, and a refusal still rejects it.
+
+**A settings surface hands off every queued edit when it ends**, whether or not its debounce has fired and whether or not a save is in flight (`useConfigUpdate`). An edit made during a save used to wait for that save's continuation, which ran after the reset had emptied the store, so it was lost.
+
+**A field an edit names with `undefined` is sent as the `null` that deletes it** (`toModeConfigPatch`, `toScreenConfigPatch`). JSON omits `undefined`, and the server reads an omitted field as unchanged (ADR-0037), so clearing an Archetype filter, custom header or Player List kept the old value. An authored stack named with `undefined` is left out instead, so a clear never empties one. Omission still means unchanged. The edit types (`ScreenModeConfigPatch`, `ScreenConfigPatch`) take `null` for every field without changing the complete config type, and the settings editors write `null` when an optional field is cleared. A cleared field reads as its contract default at once, so it does not snap back.
+
+### Why
+
+A write's v2 answer replaced a v3 the client already held. A failed write restored a whole snapshot from before it, erasing whatever had landed since. Resetting the Event stores during a save dropped the edit queued behind it, and a write retried after the reset was sent at version 0. A cleared optional field reached the server as nothing.
+
+### Consequences
+
+- Every write of a Screen waits its turn, so a mode-configuration and a Screen-configuration write to one Screen no longer run concurrently. Writes to different Screens still do.
+- A loader's revision is laid under unsettled edits too, so a page load cannot take back an edit still out.
+- A display reset now clears a default that is `undefined`, such as a custom header, where it used to leave the stored one.
+- An edit queued behind a save is sent once, by the hand-off, rather than by that save's continuation.
+- `test/nuxt/stores/screenWriteOwnership.test.ts` orders every answer by hand against the store; `test/nuxt/composables/screen/screenSettingsSaves.test.ts` drives the configuration composable through an Event reset and a server that answers through JSON with the real PATCH schema and merge; `test/nuxt/components/Screen/Modes/clearingOptionalSettings.test.ts` clears each optional field in the Metagame, Top Cards, Standings and Player History editors.
+
+### Rejected alternatives
+
+- **Gate write answers on the write's own per-key Flight**, as before. It refused an answer when a newer edit of the same key began, and a newer revision from anywhere else never stopped it.
+- **Drain every write before the reset completes.** Navigation would wait on the network, and a write queued behind another would still need its revision from somewhere.
+- **Treat `undefined` as omission and fix only the editors.** The display reset sends the contract's `undefined` defaults, and any other caller could repeat the mistake; the type system cannot refuse `undefined` without `exactOptionalPropertyTypes`.

@@ -157,7 +157,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 							:model-value="config.playerListId ?? null"
 							:items="playerListOptions"
 							class="w-64"
-							@update:model-value="updateConfig({ playerListId: $event ?? undefined })"
+							@update:model-value="updateConfig({ playerListId: $event ?? null })"
 						/>
 					</UFormField>
 				</template>
@@ -236,7 +236,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.archetypeFilter ?? ''"
 					placeholder="All archetypes"
 					class="w-64"
-					@update:model-value="updateConfig({ archetypeFilter: $event || undefined })"
+					@update:model-value="updateConfig({ archetypeFilter: $event || null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>
@@ -310,7 +310,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.headerText ?? ''"
 					placeholder="Auto"
 					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || undefined })"
+					@update:model-value="updateConfig({ headerText: $event || null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

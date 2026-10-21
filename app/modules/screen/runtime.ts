@@ -11,7 +11,7 @@ import type { MessageData, RealtimePresenceMessage } from '~/types/realtime';
 import type { ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { toRaw } from 'vue';
-import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { getDefaultConfigForMode, toModeConfigPatch, toScreenConfigPatch } from '~~/shared/types/screenConfig';
 import { screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { isStateConflictFetchFailure } from '~~/shared/utils/stateConflict';
 import { createCancelableDebounce } from '~/utils/cancelableDebounce';
@@ -70,6 +70,27 @@ function stripNullValues<T extends Record<string, unknown>>(value: T): Record<st
 	);
 }
 
+/** The fields one unsettled write owns on a Screen, as the write names them. */
+type OwnedFields
+	= | { owner: symbol; kind: 'screen'; patch: Record<string, unknown> }
+		| { owner: symbol; kind: 'mode'; mode: ScreenMode; patch: Record<string, unknown> }
+		| { owner: symbol; kind: 'screen-config'; patch: Record<string, unknown> };
+
+/** A Screen with one write's fields laid over it; a `null` field reads as deleted. */
+function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
+	switch (fields.kind) {
+		case 'screen':
+			return { ...screen, ...fields.patch };
+		case 'mode': {
+			const configs = (screen.modeConfigs ?? {}) as ModeConfigsMap;
+			const current = configs[fields.mode] ?? getDefaultConfigForMode(fields.mode);
+			return { ...screen, modeConfigs: { ...configs, [fields.mode]: stripNullValues({ ...current, ...fields.patch }) } };
+		}
+		case 'screen-config':
+			return { ...screen, screenConfig: stripNullValues({ ...(screen.screenConfig ?? {}), ...fields.patch }) as ScreenConfig };
+	}
+}
+
 /**
  * Screen write/runtime Module.
  *
@@ -88,32 +109,72 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		eventId: number;
 		screenId: number;
 		partialConfig: Record<string, unknown>;
-		original: Screen;
-		flight: Flight;
+		owner: symbol;
+		lifetime: WriteLifetime;
 		deferred: Deferred<Screen>[];
 	}
-	interface PendingModeConfigWrite {
-		eventId: number;
-		screenId: number;
+	interface PendingModeConfigWrite extends PendingScreenConfigWrite {
 		mode: ScreenMode;
-		partialConfig: Record<string, unknown>;
-		original: Screen;
-		flight: Flight;
-		deferred: Deferred<Screen>[];
 	}
 	const pendingScreenConfigWrites = new Map<string, PendingScreenConfigWrite>();
 	const pendingModeConfigWrites = new Map<string, PendingModeConfigWrite>();
-	const writeQueue = createKeyedQueue();
-	const writeFlights = createKeyedGuardedSequence();
 	/**
-	 * The Event Lifetime a create, update or delete belongs to, begun afresh by each
-	 * reset, so its answer or rollback never lands in a later lifetime — even one of the
-	 * same Event (ADR-0024).
+	 * Every write of one Screen, in order, whichever part of it the write names. Each
+	 * is sent at the revision the one before it was answered with, so this client's
+	 * own writes do not race each other into a conflict.
 	 */
-	const lifetimes = createGuardedSequence();
-	let lifetime = lifetimes.begin();
+	const writeQueue = createKeyedQueue<number>();
 
-	function cacheScreen(screen: Screen) {
+	/**
+	 * A Screen as shown while writes to it are out: the newest revision the server
+	 * answered with (`base`), and every unsettled write's fields laid over it, oldest
+	 * first — Field Ownership. A revision arriving from anywhere replaces only `base`,
+	 * so it cannot take back a field a write still owns. A write settling drops only
+	 * its own fields, so a failed one rolls back to what the server holds now, keeping
+	 * a remote change that landed meanwhile, and never over a newer local edit.
+	 */
+	interface OwnedScreen {
+		base: Screen;
+		writes: OwnedFields[];
+	}
+
+	/**
+	 * The Event Lifetime a Screen write belongs to, begun afresh by each reset, so its
+	 * answer or rollback never lands in a later lifetime — even one of the same Event
+	 * (ADR-0024).
+	 *
+	 * It also keeps what a write needs to finish for the Event it was made in after
+	 * that lifetime has ended (#703): the newest revision of each Screen the lifetime
+	 * held or was answered with. A write still queued when the operator moves on is
+	 * sent at it, and its conflict refresh records into it, rather than reading a
+	 * cache that by then holds another Event, or nothing.
+	 */
+	interface WriteLifetime {
+		flight: Flight;
+		versions: Map<number, number>;
+		owned: Map<number, OwnedScreen>;
+	}
+	const lifetimes = createGuardedSequence();
+	function beginLifetime(): WriteLifetime {
+		return { flight: lifetimes.begin(), versions: new Map(), owned: new Map() };
+	}
+	let lifetime = beginLifetime();
+
+	function heard(writeLifetime: WriteLifetime, screen: Screen) {
+		const known = writeLifetime.versions.get(screen.id) ?? 0;
+		writeLifetime.versions.set(screen.id, Math.max(known, screen.stateVersion));
+	}
+
+	/** The revision a write is sent at: the newest one its own lifetime knows of. */
+	function versionToSend(writeLifetime: WriteLifetime, screenId: number): number {
+		const known = writeLifetime.versions.get(screenId) ?? 0;
+		if (writeLifetime.flight.stale)
+			return known;
+		return Math.max(known, cachedRevision(screenId)?.stateVersion ?? 0);
+	}
+
+	/** Put a Screen where this client shows it: `screens`, and `activeScreen` when it is that one. */
+	function show(screen: Screen) {
 		const index = state.screens.value.findIndex(existing => existing.id === screen.id);
 		if (index === -1)
 			state.screens.value.push(screen);
@@ -122,6 +183,67 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 		if (state.activeScreen.value?.id === screen.id)
 			state.activeScreen.value = screen;
+	}
+
+	function own(screenId: number, fields: OwnedFields) {
+		const shown = state.screens.value.find(existing => existing.id === screenId);
+		if (!shown)
+			return;
+		let owned = lifetime.owned.get(screenId);
+		if (!owned) {
+			owned = { base: toRaw(shown), writes: [] };
+			lifetime.owned.set(screenId, owned);
+		}
+		owned.writes.push(fields);
+		show(owned.writes.reduce(applyOwnedFields, owned.base));
+	}
+
+	/** Drop every field `owner` owns, and show what remains. */
+	function release(writeLifetime: WriteLifetime, screenId: number, owner: symbol) {
+		const owned = writeLifetime.owned.get(screenId);
+		if (!owned)
+			return;
+		owned.writes = owned.writes.filter(write => write.owner !== owner);
+		if (owned.writes.length === 0)
+			writeLifetime.owned.delete(screenId);
+		// A Screen deleted meanwhile stays deleted: releasing an edit of it shows nothing.
+		if (writeLifetime.flight.current && holdsScreen(screenId))
+			show(owned.writes.reduce(applyOwnedFields, owned.base));
+	}
+
+	/**
+	 * A server revision as this client should show it: with every field a write still
+	 * owns laid over it. It becomes the base those fields are laid over, so a loader
+	 * holding it through here cannot take back an unsettled edit either.
+	 */
+	function withOwnedFields(screen: Screen): Screen {
+		const owned = lifetime.owned.get(screen.id);
+		if (!owned)
+			return screen;
+		owned.base = screen;
+		return owned.writes.reduce(applyOwnedFields, screen);
+	}
+
+	/**
+	 * Hold a revision the server answered with, unless a newer one is held already.
+	 * Every write answer, conflict refresh and announced reload comes through here, so
+	 * none of them can move a Screen's `stateVersion` backwards (#703).
+	 */
+	function holdRevision(screen: Screen) {
+		if (isSupersededByCache(screen))
+			return;
+		show(withOwnedFields(screen));
+	}
+
+	/**
+	 * What a write answers its caller with: the server's answer, or the newer revision
+	 * this client held by the time it came, so a caller mirroring it cannot regress.
+	 */
+	function answerFor(writeLifetime: WriteLifetime, answer: Screen): Screen {
+		if (writeLifetime.flight.stale)
+			return answer;
+		const cached = cachedRevision(answer.id);
+		return cached && cached.stateVersion > answer.stateVersion ? toRaw(cached) : answer;
 	}
 
 	function resolveAll<T>(deferred: Deferred<T>[], value: T) {
@@ -151,13 +273,56 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		}
 	}
 
-	/** Re-fetch a screen from the API and update local Screen caches, while `flight` is current. */
-	function makeRefreshScreen(eventId: number, screenId: number, flight: Flight) {
+	/**
+	 * Re-fetch a Screen after a lost race. Its write's lifetime hears the revision
+	 * either way, so the retry is sent at it; the caches hold it only while that
+	 * lifetime is current.
+	 */
+	function makeRefreshScreen(eventId: number, screenId: number, writeLifetime: WriteLifetime) {
 		return async () => {
 			const freshScreen = await screenRepo.getById(eventId, screenId);
-			if (freshScreen && flight.current)
-				cacheScreen(freshScreen);
+			if (!freshScreen)
+				return;
+			heard(writeLifetime, freshScreen);
+			if (writeLifetime.flight.current)
+				holdRevision(freshScreen);
 		};
+	}
+
+	/**
+	 * Run one write of a Screen in its turn: sent at the newest revision its lifetime
+	 * knows, retried once onto a refreshed one after a lost race, and its fields
+	 * released however it ends. A failure reaches the caller as a rejection, whatever
+	 * the lifetime; the error banner hears it only while the lifetime is current.
+	 */
+	function runWrite(
+		writeLifetime: WriteLifetime,
+		eventId: number,
+		screenId: number,
+		owner: symbol,
+		send: (stateVersion: number) => Promise<Screen>,
+	): Promise<Screen> {
+		return writeQueue.enqueue(screenId, async () => {
+			const written = await state.executeAction(
+				async () => {
+					try {
+						const answer = await withConflictRetry(
+							() => send(versionToSend(writeLifetime, screenId)),
+							makeRefreshScreen(eventId, screenId, writeLifetime),
+						);
+						heard(writeLifetime, answer);
+						if (writeLifetime.flight.current)
+							holdRevision(answer);
+						return answerFor(writeLifetime, answer);
+					}
+					finally {
+						release(writeLifetime, screenId, owner);
+					}
+				},
+				{ errorRef: state.error, flight: writeLifetime.flight, throwError: true },
+			);
+			return written!;
+		});
 	}
 
 	/**
@@ -166,8 +331,8 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * The answer used to be pushed unconditionally, which made `screens` able to hold
 	 * one id twice — a state #251's review constructed through the public store API,
 	 * and the one in which the version comparison and the revision a refusal answers
-	 * with could name different entries. `cacheScreen` is the discipline that keeps an
-	 * id to one entry (#261).
+	 * with could name different entries. `show` is the discipline that keeps an id to
+	 * one entry (#261).
 	 *
 	 * Which revision survives a collision is the same question `cachedRevision` already
 	 * answers everywhere else, so it is answered by the same comparison rather than by
@@ -187,56 +352,39 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * id is not an answer to it.
 	 */
 	async function createScreen(eventId: number, input: CreateScreenInput) {
-		const flight = lifetime;
+		const flight = lifetime.flight;
 		return state.executeAction(
 			async () => {
 				const createdScreen = await screenRepo.create(eventId, input);
-				if (flight.current && !isSupersededByCache(createdScreen))
-					cacheScreen(createdScreen);
+				if (flight.current)
+					holdRevision(createdScreen);
 				return createdScreen;
 			},
 			{ errorRef: state.error, flight },
 		);
 	}
 
+	/**
+	 * An ordinary Screen update: shown at once, and written in its turn among the
+	 * Screen's other writes. It answers `null` on failure, as it always has.
+	 */
 	async function updateScreen(eventId: number, screenId: number, updates: Omit<UpdateScreenInput, 'stateVersion'>) {
-		const index = state.screens.value.findIndex(s => s.id === screenId);
-		if (index === -1) {
+		if (!state.screens.value.some(s => s.id === screenId)) {
 			state.error.value = 'Screen not found';
 			return null;
 		}
 
-		const currentScreen = state.screens.value[index]!;
-		const original = structuredClone(toRaw(currentScreen));
+		const owner = Symbol('screen-update');
+		const writeLifetime = lifetime;
+		own(screenId, { owner, kind: 'screen', patch: updates });
 
-		state.screens.value[index] = {
-			...currentScreen,
-			...updates,
-		};
-
-		const flight = lifetime;
-		const refreshScreen = makeRefreshScreen(eventId, screenId, flight);
-
-		return state.executeAction(
-			async () => {
-				const updatedScreenData = await withConflictRetry(
-					() => {
-						const screen = state.screens.value.find(s => s.id === screenId);
-						const stateVersion = screen?.stateVersion ?? 0;
-						return screenRepo.update(eventId, screenId, { ...updates, stateVersion });
-					},
-					refreshScreen,
-				);
-				if (flight.current)
-					cacheScreen(updatedScreenData);
-				return updatedScreenData;
-			},
-			{
-				errorRef: state.error,
-				flight,
-				onError: () => cacheScreen(original),
-			},
-		);
+		try {
+			return await runWrite(writeLifetime, eventId, screenId, owner, stateVersion =>
+				screenRepo.update(eventId, screenId, { ...updates, stateVersion }));
+		}
+		catch {
+			return null;
+		}
 	}
 
 	async function setScreenMode(eventId: number, screenId: number, mode: ScreenMode) {
@@ -244,134 +392,79 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function flushModeConfigWrites() {
-		const flushLifetime = lifetime;
-		const entries = [...pendingModeConfigWrites.entries()];
+		const entries = [...pendingModeConfigWrites.values()];
 		pendingModeConfigWrites.clear();
-		for (const [key, entry] of entries) {
-			void writeQueue.enqueue(key, () => state.executeAction(
-				async () => {
-					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId, flushLifetime);
-					const updated = await withConflictRetry(
-						() => {
-							const screen = state.screens.value.find(s => s.id === entry.screenId);
-							const stateVersion = screen?.stateVersion ?? 0;
-							return screenRepo.updateModeConfig(entry.eventId, entry.screenId, entry.mode, entry.partialConfig, stateVersion);
-						},
-						refreshScreen,
-					);
-					if (entry.flight.current)
-						cacheScreen(updated);
-					resolveAll(entry.deferred, updated);
-					return updated;
-				},
-				{
-					errorRef: state.error,
-					onError: (error) => {
-						if (entry.flight.current)
-							cacheScreen(entry.original);
-						rejectAll(entry.deferred, error);
-					},
-				},
-			));
+		for (const entry of entries) {
+			void runWrite(entry.lifetime, entry.eventId, entry.screenId, entry.owner, stateVersion =>
+				screenRepo.updateModeConfig(entry.eventId, entry.screenId, entry.mode, entry.partialConfig, stateVersion))
+				.then(
+					written => resolveAll(entry.deferred, written),
+					error => rejectAll(entry.deferred, error),
+				);
 		}
 	}
 	const modeConfigWriteDebounce = createCancelableDebounce(flushModeConfigWrites, 300, 1000);
 
 	function flushScreenConfigWrites() {
-		const flushLifetime = lifetime;
-		const entries = [...pendingScreenConfigWrites.entries()];
+		const entries = [...pendingScreenConfigWrites.values()];
 		pendingScreenConfigWrites.clear();
-		for (const [key, entry] of entries) {
-			void writeQueue.enqueue(key, () => state.executeAction(
-				async () => {
-					const refreshScreen = makeRefreshScreen(entry.eventId, entry.screenId, flushLifetime);
-					const updated = await withConflictRetry(
-						() => {
-							const screen = state.screens.value.find(s => s.id === entry.screenId);
-							const stateVersion = screen?.stateVersion ?? 0;
-							return screenRepo.updateScreenConfig(entry.eventId, entry.screenId, entry.partialConfig, stateVersion);
-						},
-						refreshScreen,
-					);
-					if (entry.flight.current)
-						cacheScreen(updated);
-					resolveAll(entry.deferred, updated);
-					return updated;
-				},
-				{
-					errorRef: state.error,
-					onError: (error) => {
-						if (entry.flight.current)
-							cacheScreen(entry.original);
-						rejectAll(entry.deferred, error);
-					},
-				},
-			));
+		for (const entry of entries) {
+			void runWrite(entry.lifetime, entry.eventId, entry.screenId, entry.owner, stateVersion =>
+				screenRepo.updateScreenConfig(entry.eventId, entry.screenId, entry.partialConfig, stateVersion))
+				.then(
+					written => resolveAll(entry.deferred, written),
+					error => rejectAll(entry.deferred, error),
+				);
 		}
 	}
 	const screenConfigWriteDebounce = createCancelableDebounce(flushScreenConfigWrites, 300, 1000);
 
+	/**
+	 * Edit one mode's config: shown at once, batched with the edits that follow it
+	 * within the debounce, and written as one PATCH. A field the edit clears is sent
+	 * as the `null` that deletes it (#703).
+	 */
 	async function updateModeConfig<M extends ScreenMode>(
 		eventId: number,
 		screenId: number,
 		mode: M,
 		partialConfig: ScreenModeConfigPatch<M>,
 	) {
-		const index = state.screens.value.findIndex(s => s.id === screenId);
-		if (index === -1) {
+		if (!state.screens.value.some(s => s.id === screenId)) {
 			state.error.value = 'Screen not found';
 			return null;
 		}
 
-		const original = state.screens.value[index]!;
-		const currentConfigs = (original.modeConfigs ?? {}) as ModeConfigsMap;
-		const currentModeConfig = currentConfigs[mode] ?? getDefaultConfigForMode(mode);
-		const optimisticConfigs: ModeConfigsMap = {
-			...currentConfigs,
-			[mode]: stripNullValues({ ...currentModeConfig, ...partialConfig }),
-		};
-		state.screens.value[index] = { ...original, modeConfigs: optimisticConfigs };
+		const patch: Record<string, unknown> = toModeConfigPatch(mode, partialConfig);
+		const key = `mode:${screenId}:${mode}`;
+		const entry: PendingModeConfigWrite = pendingModeConfigWrites.get(key)
+			?? { eventId, screenId, mode, partialConfig: {}, owner: Symbol(key), lifetime, deferred: [] };
+		pendingModeConfigWrites.set(key, entry);
+		entry.partialConfig = { ...entry.partialConfig, ...patch };
+		own(screenId, { owner: entry.owner, kind: 'mode', mode, patch });
 
 		return new Promise<Screen>((resolve, reject) => {
-			const key = `mode:${screenId}:${mode}`;
-			const flight = writeFlights.begin(key);
-			const existing = pendingModeConfigWrites.get(key);
-			if (existing) {
-				existing.partialConfig = { ...existing.partialConfig, ...partialConfig };
-				existing.flight = flight;
-				existing.deferred.push({ resolve, reject });
-			}
-			else {
-				pendingModeConfigWrites.set(key, { eventId, screenId, mode, partialConfig, original, flight, deferred: [{ resolve, reject }] });
-			}
+			entry.deferred.push({ resolve, reject });
 			modeConfigWriteDebounce.schedule();
 		});
 	}
 
 	async function updateScreenConfig(eventId: number, screenId: number, partialConfig: ScreenConfigPatch) {
-		const index = state.screens.value.findIndex(s => s.id === screenId);
-		if (index === -1) {
+		if (!state.screens.value.some(s => s.id === screenId)) {
 			state.error.value = 'Screen not found';
 			return null;
 		}
 
-		const original = state.screens.value[index]!;
-		const currentConfig = (original.screenConfig ?? {}) as ScreenConfig;
-		const optimisticConfig = stripNullValues({ ...currentConfig, ...partialConfig }) as ScreenConfig;
-		state.screens.value[index] = { ...original, screenConfig: optimisticConfig };
+		const patch: Record<string, unknown> = toScreenConfigPatch(partialConfig);
+		const key = `screen-config:${screenId}`;
+		const entry: PendingScreenConfigWrite = pendingScreenConfigWrites.get(key)
+			?? { eventId, screenId, partialConfig: {}, owner: Symbol(key), lifetime, deferred: [] };
+		pendingScreenConfigWrites.set(key, entry);
+		entry.partialConfig = { ...entry.partialConfig, ...patch };
+		own(screenId, { owner: entry.owner, kind: 'screen-config', patch });
 
 		return new Promise<Screen>((resolve, reject) => {
-			const key = `screen-config:${screenId}`;
-			const flight = writeFlights.begin(key);
-			const existing = pendingScreenConfigWrites.get(key);
-			if (existing) {
-				existing.partialConfig = { ...existing.partialConfig, ...partialConfig };
-				existing.flight = flight;
-				existing.deferred.push({ resolve, reject });
-			}
-			else {
-				pendingScreenConfigWrites.set(key, { eventId, screenId, partialConfig, original, flight, deferred: [{ resolve, reject }] });
-			}
+			entry.deferred.push({ resolve, reject });
 			screenConfigWriteDebounce.schedule();
 		});
 	}
@@ -385,7 +478,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 
 		const removed = state.screens.value[index]!;
 		state.screens.value.splice(index, 1);
-		const flight = lifetime;
+		const flight = lifetime.flight;
 
 		return state.executeAction(
 			async () => {
@@ -429,7 +522,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * Both holders are consulted because three loaders each populate only one:
 	 * `loadScreensByEventId` and `getScreenById` write `screens`, `loadScreenBySlug`
 	 * writes `activeScreen`. What keeps them from disagreeing today is not that they
-	 * are kept in step — only `cacheScreen` does that — but that the one route
+	 * are kept in step — only `show` does that — but that the one route
 	 * reaching `loadScreenBySlug` is the Screen Output, which is `layout: false` and
 	 * always its own document: embedded in an iframe or opened in its own window,
 	 * never navigated to in-page. So no single store ever holds both.
@@ -462,7 +555,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * That disjointness is about the two holders, and says nothing about `screens`
 	 * holding one id twice. Nothing this client does builds that state any more —
 	 * `createScreen` was the last door that pushed without checking, and it now
-	 * enters through `cacheScreen` like every other write (#261) — but the reduction
+	 * enters through `show` like every other write (#261) — but the reduction
 	 * is over every matching entry regardless, because a list response is not this
 	 * client's to guarantee, and because one selection that cannot disagree with
 	 * itself is worth more than an argument about reachability. So this returns the
@@ -528,9 +621,9 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 		const flight = remoteScreenLoads.begin(`screen:${screenId}`);
 		try {
 			const screen = await fetchAnnouncedScreen(eventId, screenId);
-			if (flight.stale || !screen || isSupersededByCache(screen))
+			if (flight.stale || !screen)
 				return;
-			cacheScreen(screen);
+			holdRevision(screen);
 		}
 		catch {
 			// Best effort: a notification is not a write, and failing to catch up on
@@ -564,6 +657,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function applyRemoteDeleted(data: MessageData<'screen:deleted'>) {
+		lifetime.owned.delete(data.screenId);
 		state.screens.value = state.screens.value.filter(s => s.id !== data.screenId);
 		if (state.activeScreen.value?.id === data.screenId)
 			state.activeScreen.value = null;
@@ -631,15 +725,20 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	 * The pending config writes are spent rather than discarded. Each one is an edit
 	 * the operator has already been shown as applied — that is what local-first
 	 * means — so cancelling it reverted the setting on the next load with nothing
-	 * anywhere reporting a failure (#308). They are flushed first, while
-	 * `state.screens` still holds the Screen each write reads its `stateVersion`
-	 * from, and `writeFlights` is superseded immediately afterwards so the answers
-	 * they eventually get are not cached back into an Event this client has left.
-	 * Their callers are still answered with the real outcome.
+	 * anywhere reporting a failure (#308). They are flushed first, and the lifetime
+	 * ending hears the revision of every Screen it held, so a write still queued
+	 * behind another is sent for its own Event at the revision that write answers
+	 * with (#703). The lifetime is then superseded, so the answers they eventually
+	 * get are not cached back into an Event this client has left. Their callers are
+	 * still answered with the real outcome.
 	 */
 	function resetRuntime() {
 		modeConfigWriteDebounce.flushIfPending();
 		screenConfigWriteDebounce.flushIfPending();
+		for (const screen of state.screens.value)
+			heard(lifetime, screen);
+		if (state.activeScreen.value)
+			heard(lifetime, state.activeScreen.value);
 		// A queued write with no armed timer is not constructible today — every entry
 		// is inserted in the same breath as a `schedule()` — but an entry left here
 		// would leave its caller's promise waiting forever, so it is settled rather
@@ -651,8 +750,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 			rejectAll(entry.deferred, cancellation);
 		pendingModeConfigWrites.clear();
 		pendingScreenConfigWrites.clear();
-		writeFlights.supersedeAll();
-		lifetime = lifetimes.begin();
+		lifetime = beginLifetime();
 		remoteScreenLoads.supersedeAll();
 		unsubscribeFromAllPresence();
 		state.screens.value = [];
@@ -664,7 +762,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	return {
-		cacheScreen,
+		withOwnedFields,
 		cachedRevision,
 		isSupersededByCache,
 		createScreen,

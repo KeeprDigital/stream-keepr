@@ -96,8 +96,10 @@ export const useScreenStore = defineStore('screen', () => {
 	 * stores, rather than the reactive proxy a read out of the store hands back.
 	 */
 	function keptRevision(fetched: Screen): Screen {
+		// A revision kept is kept with every field a write still owns laid over it, so
+		// a load cannot take back an edit that is still out either (#703).
 		if (!screenRuntime.isSupersededByCache(fetched))
-			return fetched;
+			return screenRuntime.withOwnedFields(fetched);
 		const cached = screenRuntime.cachedRevision(fetched.id);
 		return cached ? toRaw(cached) : fetched;
 	}
@@ -218,8 +220,9 @@ export const useScreenStore = defineStore('screen', () => {
 				if (!screenData) {
 					throw new Error('Screen not found');
 				}
+				const superseded = screenRuntime.isSupersededByCache(screenData);
 				const kept = keptRevision(screenData);
-				if (kept !== screenData) {
+				if (superseded) {
 					// Refused: the cache holds a revision the server sequenced after this
 					// answer, so there is nothing to write and nothing this answer adds.
 					return kept;
@@ -227,12 +230,12 @@ export const useScreenStore = defineStore('screen', () => {
 				// Ensure screen is in the screens array for updateModeConfig to work
 				const existingIndex = screens.value.findIndex(s => s.id === screenId);
 				if (existingIndex === -1) {
-					screens.value.push(screenData);
+					screens.value.push(kept);
 				}
 				else {
-					screens.value[existingIndex] = screenData;
+					screens.value[existingIndex] = kept;
 				}
-				return screenData;
+				return kept;
 			},
 			{ loadingRef: loading, errorRef: error },
 		);
