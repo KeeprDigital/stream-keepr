@@ -311,8 +311,10 @@ How a change reaches `main`, and why:
   tags** ruleset makes `v*` tags immutable. Repository admins can bypass both.
   `CI passed` is one summary job that always reports, so CI can skip what a
   change cannot affect without leaving a required check waiting. The
-  `production` tag is unprotected: the Deploy workflow force-moves it, and
-  GitHub refuses the Actions app as a ruleset bypass actor.
+  `production` and `production-validator` promotion-marker tags
+  ([Promotion markers](#promotion-markers)) are unprotected: every deploy
+  force-moves them, and GitHub refuses the Actions app as a ruleset bypass
+  actor.
 - **Release PRs do not trigger CI** (default-token limitation), so they never
   get the required checks; an admin merges them with the ruleset bypass. They
   change only the version and changelog. Run the workflow by hand
@@ -343,9 +345,12 @@ The production hostname is `https://stream.keepr.digital`, attached as a
    ingestion would fail, #302). It also fails if the bypass name appears in
    generated config.
 3. `pnpm worker:smoke` against that production build.
-4. `pnpm db:migrate:remote`.
-5. `wrangler deploy`.
-6. `pnpm deploy:verify` (`scripts/deploy-verify.mjs`): reads `GET /api/time`
+4. `pnpm deploy:mark-app pending`: moves the `production` marker to this
+   checkout as `pending` before anything remote changes
+   ([Promotion markers](#promotion-markers)). If it cannot, nothing deploys.
+5. `pnpm db:migrate:remote`.
+6. `wrangler deploy`.
+7. `pnpm deploy:verify` (`scripts/deploy-verify.mjs`): reads `GET /api/time`
    and passes only on status 200, `application/json`, and a
    `{ serverTime: <epoch ms> }` body. A redirect fails and is never followed,
    so an Access or login page cannot pass, and neither can an HTML fallback.
@@ -358,8 +363,48 @@ The production hostname is `https://stream.keepr.digital`, attached as a
    auth, R2, KV, Ably or the validator. The deployed gates (Deploy day, step 5)
    cover those. `worker:smoke` runs the same probe against the built Worker.
 
+8. `pnpm deploy:mark-app deployed`: marks the app deployed, only once
+   `deploy:verify` has passed.
+
 Migration and promotion are separate Cloudflare operations, not one
 transaction. Schedule incompatible schema changes for a maintenance window.
+
+`pnpm deploy:validator` deploys the validator the same way: it marks
+`production-validator` `pending` with this checkout's fingerprint, runs
+`wrangler deploy` on `workers/silent-video-validator/wrangler.jsonc`, and then
+marks it `deployed`.
+
+### Promotion markers
+
+The app and the validator are deployed separately and can fail separately.
+Each has its own marker, an annotated git tag on `origin` (ADR-0035):
+
+| Tag                    | Component | Moved by                                                  |
+| ---------------------- | --------- | --------------------------------------------------------- |
+| `production`           | App       | `pnpm run deploy` (steps 4 and 8), or the Deploy workflow |
+| `production-validator` | Validator | `pnpm deploy:validator`, or the Deploy workflow           |
+
+A marker records the component, its state, the commit it was deployed from,
+whether that checkout had uncommitted or untracked changes (`worktree: dirty`),
+who deployed it (a workflow run or `local`), and for the validator its
+**fingerprint**. Every deploy marks its component `pending` before it changes
+anything, and `deployed` once it succeeded. A deploy that died part-way leaves
+`pending`, which means "unconfirmed: either version may be serving". A deploy
+that cannot write its pending marker does not start. `pnpm deploy:status`
+prints both markers and says whether this checkout's validator would deploy.
+It reads `origin`, so it needs network access and nothing else.
+
+The validator fingerprint is a sha256 of what `wrangler deploy` would upload
+and build: the bundle `pnpm validator:dry-run` produces (every import it
+resolves, so a root dependency such as `@cloudflare/containers` or a
+`shared/` module counts), every file in the Container's Docker context
+(`container/`), and its `wrangler.jsonc`. A release's version bump changes none
+of them, so it does not redeploy the validator.
+
+Deploying the validator with bare `wrangler deploy`, or rolling it back from the
+dashboard or with `wrangler rollback`, bypasses its marker. If that happened,
+run the next Deploy with `validator: always`, or `pnpm deploy:validator` from
+the checkout you want.
 
 ### Deploy from GitHub Actions
 
@@ -369,9 +414,17 @@ what `pnpm run deploy` runs, but ships a **released tag**, never `main`'s HEAD:
 - `version`: `latest` (default) or a tag like `v1.2.0`. Rollback is dispatching
   it with the previous tag.
 - `d1_recovery_point`: must be typed `confirmed`.
-- `validator`: `auto` (default) deploys the validator first only if
-  `workers/silent-video-validator/` changed since the commit on the `production`
-  git tag, which each successful deploy moves. `always` and `never` override.
+- `validator`: `auto` (default) deploys the validator first unless
+  `production-validator` records a confirmed deploy with the release's
+  fingerprint. A missing, unreadable or `pending` marker, or a release that
+  cannot be bundled, deploys it. `always` and `never` override; `never` leaves
+  the marker alone.
+
+The run is one step, `scripts/deploy-promotion.mjs promote`: validator first
+when decided, then `pnpm run deploy`, each between its markers. It runs that
+script from the workflow's own commit, not from the release, so rolling back
+to a release from before the markers still keeps them. The step summary
+records the validator decision, and on failure what each marker now says.
 
 It needs the `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, D1:Edit, plus
 Containers when deploying the validator) and `CLOUDFLARE_ACCOUNT_ID` secrets on
@@ -397,18 +450,50 @@ mid-run names the Event it left behind; delete it before rerunning.
    pnpm db:migrations:list:remote
    ```
 
-3. **Deploy.** Deploy the validator first when `workers/silent-video-validator/`
-   changed, or on first deploy, so the service binding resolves:
+3. **Deploy.** Deploy the validator first when `pnpm deploy:status` says it
+   would deploy (it always does on a first deploy), so the service binding
+   resolves:
 
    ```bash
-   pnpm deploy:validator   # when the validator changed
+   pnpm deploy:status      # both markers; whether this validator would deploy
+   pnpm deploy:validator   # when it would
    pnpm run deploy
    ```
 
    If `deploy:verify` fails, stop and roll back: redeploy the previous Worker
    version (dashboard → Workers & Pages → Deployments, or
    `wrangler rollback`), then restore any applied migration from the recovery
-   point.
+   point. The `production` marker stays `pending` until the next deploy
+   confirms one, which is accurate: the rollback is not recorded. Then
+   follow [Recovering from a partial promotion](#recovering-from-a-partial-promotion).
+
+#### Recovering from a partial promotion
+
+A deploy that fails after the validator succeeded leaves the components on
+different releases. Read the markers first (`pnpm deploy:status`, or the failed
+run's step summary). For example, with A in production, a Deploy of B that
+fails in `pnpm run deploy` leaves:
+
+- `production-validator`: `deployed` B: B's validator is serving.
+- `production`: `pending` B if the failure came at or after the D1 migration,
+  so A or B may be serving. It stays `deployed` A if the failure came in the
+  build, dry run or smoke test, before anything remote changed.
+
+Pick the release production should run, then deploy it whole:
+
+- **Back to A**: dispatch Deploy with `version` A. Its fingerprint differs from
+  B's, so `auto` redeploys A's validator before A's app. As in step 3, restore
+  any migration B applied from the recovery point. Releases whose validators are
+  identical have identical fingerprints, so no validator redeploy happens
+  there, and none is needed.
+- **Forward to B**, once fixed: dispatch B again. Its validator is already
+  confirmed, so only the app deploys.
+- **Locally**, when Actions is not an option: check out that release, then
+  `pnpm deploy:validator` (when `pnpm deploy:status` says it would deploy) and
+  `pnpm run deploy`. Both record their markers, `worktree: dirty` included.
+
+A `pending` validator marker means its deploy died part-way, so the next
+`auto` run always redeploys it, even at the same fingerprint.
 
 4. **Set the harness variables:**
 

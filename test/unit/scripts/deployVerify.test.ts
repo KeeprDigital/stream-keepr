@@ -211,31 +211,18 @@ describe('deploy:verify against a local stand-in origin', () => {
 });
 
 /**
- * The probe's exit code is only as good as what waits on it. `pnpm run deploy`
- * must end in it, and the Deploy workflow's `production` tag (the deployed-state
- * marker) must move only after that step succeeded.
+ * The probe's exit code is only as good as what waits on it. In `pnpm run
+ * deploy` only the app's `deployed` promotion marker may follow it, and only
+ * through `&&`. The Deploy workflow's own marker writes are pinned in
+ * deployPromotion.test.ts (#616).
  */
 describe('a failed deploy:verify cannot advance the production marker', () => {
 	const scripts = JSON.parse(readFileSync('package.json', 'utf8')).scripts as Record<string, string>;
 
-	it('pnpm deploy:verify runs this probe, and pnpm run deploy ends in it with nothing to swallow its failure', () => {
+	it('pnpm deploy:verify runs this probe, and pnpm run deploy records the app deployed only after it, with nothing to swallow its failure', () => {
 		expect(scripts['deploy:verify']).toBe(`node ${SCRIPT}`);
 		const deploy = scripts.deploy!;
 		expect(deploy).not.toMatch(/\|\||;|(^|[^&])&([^&]|$)/);
-		expect(deploy.split('&&').map(command => command.trim()).at(-1)).toBe('pnpm deploy:verify');
-	});
-
-	it('the workflow moves the production tag only in a later, unconditional step after the deploy step', () => {
-		const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
-		const steps = workflow.slice(workflow.indexOf('    steps:\n')).split(/^ {6}- /m).slice(1);
-		const deployStep = steps.findIndex(step => /^\s+run: pnpm run deploy$/m.test(step));
-		const markerStep = steps.findIndex(step => /^\s+run: git push \S+ \S*refs\/tags\/production$/m.test(step));
-
-		expect(deployStep).toBeGreaterThanOrEqual(0);
-		expect(markerStep).toBeGreaterThan(deployStep);
-		// A step-level `if:` replaces the implicit `success()`; `continue-on-error`
-		// lets a failure through. Neither may touch the deploy or the marker step.
-		for (const step of [steps[deployStep], steps[markerStep]])
-			expect(step).not.toMatch(/^\s+(if|continue-on-error):/m);
+		expect(deploy.split('&&').map(command => command.trim()).slice(-2)).toEqual(['pnpm deploy:verify', 'pnpm deploy:mark-app deployed']);
 	});
 });
