@@ -1,14 +1,14 @@
 /**
  * One retry, for a request that never reached a verdict (#396).
  *
- * `requestBodyLimits.test.ts` deliberately sends bodies over the ceiling, and the
- * server answers 413 while those bytes are still arriving — so it closes a
- * connection with an unread request body on it, and the next request to reuse that
- * pooled socket dies with ECONNRESET or EPIPE before it reaches a handler at all.
- * Latent before the API boundary and observed twice after it, in both spellings:
- * the boundary resolves a session ahead of the body-limit middleware, which widens
- * the window between "the client is still writing" and "the server has already
- * refused".
+ * Written for `requestBodyLimits.test.ts`, whose 413s left a connection holding
+ * the unread rest of the body: the next request to reuse it died with EPIPE or
+ * ECONNRESET 6 s later, before reaching a handler. That was Nitro's dev proxy
+ * stopping mid-body (#633), and the integration servers now read those bytes
+ * (`./earlyAnswerDrain.mjs`), so that suite no longer retries.
+ * `graphicStyleSets.test.ts` still does: its failure was seen under `pnpm verify`
+ * and has not been reproduced, and its own 413 route did not strand a connection
+ * when probed without the drain, so the drain is not known to cover it.
  *
  * Retrying is not weakening an assertion. These are failures of the socket rather
  * than answers from the server: there is no status to have been wrong about, and a

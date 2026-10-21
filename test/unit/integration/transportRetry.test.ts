@@ -9,9 +9,10 @@ import {
  * The integration suite's one retry, and the promise its first version broke.
  *
  * #396 put a deny-by-default boundary in front of `/api/**`, which widened a
- * latent race in `requestBodyLimits.test.ts`: the server answers 413 with the
- * request body still arriving, closes the connection on the unread bytes, and the
- * next request to reuse that pooled socket dies at the transport.
+ * latent race in `requestBodyLimits.test.ts`: the server answered 413 with the
+ * request body still arriving, and the next request to reuse that pooled socket
+ * died at the transport. That suite no longer needs it (#633);
+ * `graphicStyleSets.test.ts` still uses it (see `transportRetry.ts`).
  *
  * The retry that answers it was first written in two places at once — a thunk
  * wrapper *and* an attempt inside `fetch`/`$fetch` — so a caller that wrapped a
