@@ -552,7 +552,7 @@ A parameterised rectangle with independently square, rounded, or cut corners and
 A structural Graphic Item arranging direct context-available Graphic Items as a row, column, or canvas, optionally coordinating clipping or animation and supplying overridable local style defaults. Graphic Groups do not nest.
 
 **Graphic Surface Style**:
-The shared visual treatment for Text Graphic Items, Shape Graphic Items, and Graphic Groups: fill, fill opacity, a uniform outline around the Shape Geometry, and glow. An independently styled edge is a separate Shape Graphic Item from the rule preset.
+The shared visual treatment for the Graphic Items that paint a surface (Text, Shape, Graphic Group, Clock, Player Life, and Game Wins, which paints its win boxes with two more): fill, fill opacity, a uniform outline around the Shape Geometry, and glow. An independently styled edge is a separate Shape Graphic Item from the rule preset.
 
 **Graphic Fill**:
 A solid colour or a linear gradient with an angle and two to four positioned stops with opacity. Complex surfaces are Media Graphic Items.

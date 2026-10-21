@@ -312,7 +312,7 @@ const selectedTextOverflow = computed(() => {
  * Player Life fixed to `player1` makes a two-player overlay unbuildable, because
  * both sides would show the same total.
  */
-const selectedSidedItem = computed<GraphicPlayerSideItem | null>(() => {
+const selectedPlayerSideItem = computed<GraphicPlayerSideItem | null>(() => {
 	const item = selectedItem.value;
 	return item && ownsPlayerSide(item) ? item : null;
 });
@@ -1191,9 +1191,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			control rather than part of the shared geometry block, because it is the
 			only property of these kinds that decides *whose* live state renders.
 		-->
-		<UFormField v-if="selectedSidedItem" label="Player" size="sm">
+		<UFormField v-if="selectedPlayerSideItem" label="Player" size="sm">
 			<USelect
-				:model-value="selectedSidedItem.playerSide"
+				:model-value="selectedPlayerSideItem.playerSide"
 				:items="PLAYER_SIDE_OPTIONS"
 				value-key="value"
 				class="w-full"

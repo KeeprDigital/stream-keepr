@@ -1280,10 +1280,10 @@ export function patchGraphicGroupDefaultChildSurfaceStyle(
 	itemId: string,
 	patch: Partial<GraphicSurfaceStyle> | null,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, ['group'], item => ({
+	return patchGraphicItemWhere(graphic, itemId, item => ownsGraphicSurfaceStyle(item, 'defaultChildSurfaceStyle'), item => ({
 		defaultChildSurfaceStyle: patch === null
 			? undefined
-			: { ...(item.defaultChildSurfaceStyle ?? createDefaultGraphicSurfaceStyle()), ...patch },
+			: { ...(graphicSurfaceStyleAt(item, 'defaultChildSurfaceStyle') ?? createDefaultGraphicSurfaceStyle()), ...patch },
 	}));
 }
 

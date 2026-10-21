@@ -2459,8 +2459,11 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 		const presence = switchField(wrapper, 'surface-style-own');
 
 		expect(presence !== undefined).toBe(row.ownSurface);
-		if (!presence)
+		if (!presence) {
+			// Nor any surface control beside it: an item that paints none is offered none.
+			expect(wrapper.find('[data-testid="graphic-glow-enabled"]').exists()).toBe(false);
 			return;
+		}
 
 		const before = placedRow(row);
 		await presence.trigger('click');

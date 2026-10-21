@@ -477,7 +477,7 @@ const DEFINITIONS = {
 		requiredContext: 'feature-match',
 		// Paints text only while it renders its win count, and a count cannot outgrow
 		// its bounds, so no Text Overflow Policy bounds it.
-		typography: { textOverflowPolicy: false, paintsText: item => !rendersWinBoxes(item) },
+		typography: { textOverflowPolicy: false, paintsText: item => item.displayMode === 'number' },
 		// Its own surface frames the indicator in either display mode; the two box
 		// surfaces and the box geometry are on screen only while boxes are. A box
 		// geometry shapes one win box, so a preset sizes against the box.
