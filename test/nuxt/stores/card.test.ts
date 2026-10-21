@@ -166,6 +166,33 @@ describe('useCardStore', () => {
 			expect(store.activeCard).toBeNull();
 		});
 
+		// Characterises #707's trace: a rendering's expiry is visible only. The durable
+		// clear is left to an operator client's DELETE or the next read's cleanup.
+		it('hides an expired Card on a rendering without asking the server to clear it', async () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
+			store.activeScreenId = 5;
+			const card = createMockMtgCard({
+				timeoutData: {
+					timeoutStartTimestamp: Date.now() - 2_000,
+					timeoutDuration: 5_000,
+				},
+			});
+			const outputRead = vi.fn().mockResolvedValue(card);
+			const uninstall = store.readActiveCardAsScreenOutput(outputRead);
+
+			await store.loadActiveCard();
+			expect(store.activeCard).toEqual(card);
+			await vi.advanceTimersByTimeAsync(3_000);
+
+			expect(store.activeCard).toBeNull();
+			expect(store.timeout.remaining).toBe(0);
+			expect(outputRead).toHaveBeenCalledTimes(1);
+			expect(mockCardRepo.getScreenCard).not.toHaveBeenCalled();
+			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
+			uninstall();
+		});
+
 		it('ignores a response for a screen that is no longer active', async () => {
 			let resolveCard!: (card: ReturnType<typeof createMockMtgCard>) => void;
 			mockCardRepo.getScreenCard.mockReturnValue(new Promise((resolve) => {

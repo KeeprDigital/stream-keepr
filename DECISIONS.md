@@ -569,7 +569,7 @@ A root-relative path was first accepted wherever it pointed, so an author could 
 
 ## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
 
-Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604)
+Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604) · Amended 2026-10-21 ([#707](https://github.com/KeeprDigital/stream-keepr/issues/707)): a Card's expiry is a clock projection that no read, client or timer writes
 
 ### Decision
 
@@ -584,7 +584,15 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 
 **The Event context is an allowlist** (`SCREEN_OUTPUT_EVENT_FIELDS`): name, game, orientation, display formatting, Feature Match defaults and feature flags. A rendering holds it as `eventStore.outputEvent`; components shared with control pages read `eventStore.displayEvent`.
 
-**A rendering never changes live state by reading it.** A Slot with no Feature Match Session answers `activeSession: null` instead of the output starting one, and an expired Card is hidden locally instead of `DELETE`d (the server's own timeout clears it and announces it).
+**A rendering never changes live state by reading it.** A Slot with no Feature Match Session answers `activeSession: null` instead of the output starting one, and an expired Card is hidden locally instead of `DELETE`d.
+
+**A Card's expiry is a clock projection, not a state transition** (as ADR-0009 makes the current page). A timed Card is expired once server time reaches its `timeoutStartTimestamp + timeoutDuration`, and every holder derives that from the Card itself on the shared clock: `getScreenCard` answers `null` for it, and the operator Card page and every rendering hide it at that instant. Nothing writes as the timeout runs out:
+
+- **No read writes.** The operator and Screen Output Card reads answer the projection and leave the stored Card, its revision and its derived copy as they are.
+- **No client clears on expiry.** The operator Card page hides an expired Card as a rendering does. Its `DELETE` is the operator's explicit Clear only, which still clears, advances the revision and announces `card:cleared`.
+- **No timer exists, and none is needed.** The stored expired Card is inert. It stays until the next save, Clear or Screen deletion replaces or removes it, so a show whose every client disconnected before expiry needs nothing to run.
+- **Only the Card read carries the Card.** A Screen read (the operator list, the Screen by id and by slug) does not ship `activeCard` or `activeCardVersion`, so no surface shows the stored value past its expiry.
+- **Nothing announces expiry.** A holder schedules its hiding from the `timeoutData` that `card:updated` and the Card read already carry. `card:timeout` and `card:timeout:cancel` add nothing to those, and are retired.
 
 **Every rendering reads this way, whatever it holds.** A Program monitor or preview with a Session takes the same paths as a capability-only output. No client chooses a path by credential.
 
@@ -593,6 +601,8 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 The Event middleware loaded the private Event for the output page, got a 401, and sent program to `/`, then to sign-in. That was the first of many private reads: every mode's data, the Live Session snapshot and the Screen-by-id reload behind `screen:updated` were all session-only. The last swallowed its failure, so an output also silently missed every later mode change.
 
 Deriving from configuration keeps the capability's reach equal to what the Screen publishes, the same rule ADR-0010 and the Broadcast Deck List read already apply. A mismatch between a client's held configuration and the saved one self-corrects: the save announces `screen:updated`, the rendering re-reads its Screen, and its mode re-reads.
+
+The Card's expiry was recorded here as the server's own timeout clearing the Card and announcing it (#707). No such timeout ever existed: `cardTimeoutService` only publishes `card:timeout` when a timed Card is saved. The Card was actually cleared by two writers. Every operator Card page holding the Screen sent an unguarded `DELETE` when its timer fired, so a stale one arriving after another operator's replacement cleared the replacement and announced it. And every Card read past expiry, Screen Output reads included, cleared the row under a revision guard without announcing it. Neither write is visible: every holder already hides the Card by the clock, and nothing but that guard reads the revision. So expiry needs no owner. Making it a projection keeps reads observational, leaves `DELETE` to operator intent, and removes the race.
 
 ### Consequences
 
@@ -604,12 +614,17 @@ Deriving from configuration keeps the capability's reach equal to what the Scree
 - Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
 - Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
 - The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.
+- An expired Card's stored value and its KV copy stay until the next save, Clear or Screen deletion. That is one bounded Card per Screen. Reclaiming it buys nothing a holder can observe.
+- A Card read that loaded the row before a concurrent replacement answers what it loaded. Ordering that answer against the newer `card:updated` belongs to the Card's own read freshness ([#704](https://github.com/KeeprDigital/stream-keepr/issues/704)), not to expiry. Once no client clears on expiry, a superseded read that arms a timer can only hide a newer Card locally, never clear it in storage.
+- Until the implementation lands, main still clears on read and on each operator Card page's expiry `DELETE`. `test/unit/server/api/cardExpiry.sqlite.test.ts` pins that behaviour, and the implementation rewrites those rows to this section.
 
 ### Rejected alternatives
 
 - **Admit the capability on the existing `/api/events/**` reads** — the capability would reach its whole Event, decklists included, and every new private route would need a decision about it.
 - **One aggregate "mode data" read per Screen** — each mode's client would be rebuilt around a new payload, and the Live Session and Feature Match Session would lose the snapshot shapes their followers already apply.
 - **Path ids validated against the configuration everywhere** — repeats every query's validation on the server for no reach the derived form lacks.
+- **Guarded expiry cleanup on reads** (what main does at #707) — a Screen Output's capability read becomes a D1 write, which every rendering that boots or resyncs after expiry attempts again. The write is unannounced, so it changes nothing a holder sees. The operator's expiry `DELETE` still needs its own guard, and a client holds no revision to guard it with.
+- **A server-owned expiry timer** (a Durable Object alarm or a sweep that clears and announces) — it adds a scheduler, its failure modes and a redundant `card:cleared` fan-out, all to reclaim a value nothing reads.
 
 ## ADR-0023: A Realtime Subscription is held until disposed, and its Event's recovery re-attempts while one waits
 
