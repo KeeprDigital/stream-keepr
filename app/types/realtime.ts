@@ -75,6 +75,13 @@ export interface RealtimeTransport {
 	 */
 	onContinuityLost: (channel: string, handler: () => void) => () => void;
 	/**
+	 * Call `handler` once, when `channel` next attaches, unless it is attached
+	 * already. A consumer that read before its channel attached may have missed what
+	 * was published in between, and a first attach on an unbroken connection reports
+	 * no continuity loss; it re-reads off this instead (#727, ADR-0023).
+	 */
+	onceAttached: (channel: string, handler: () => void) => () => void;
+	/**
 	 * Enter a channel's presence, or hold the entry through a failure and enter it
 	 * once the channel's Event recovers (ADR-0023). Resolves once entered or held,
 	 * never waiting out an outage.

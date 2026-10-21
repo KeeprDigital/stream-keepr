@@ -7,6 +7,7 @@ import type { ScreenCardDataHealth, ScreenPresenceData } from '~/types/screen';
 import type { Flight } from '~/utils/guardedSequence';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
+import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import {
 	parseScreenEmbed,
 	parseScreenOutput,
@@ -19,6 +20,7 @@ import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
 import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-mode';
+import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 import { useEventStore } from '~/stores/event';
 import { useScreenStore } from '~/stores/screen';
 import { buildFeatureMatchOverlayExportFilename, exportElementPng } from '~/utils/exportElementPng';
@@ -51,6 +53,37 @@ const defaultExportAdapter: ScreenDisplaySessionExportAdapter = {
 	buildFilename: buildFeatureMatchOverlayExportFilename,
 	closeWindow: () => window.close(),
 };
+
+/**
+ * How long a load whose Event context read failed waits before trying again:
+ * the slow cadence Screen Mode Data Freshness retries a failed read on.
+ */
+export const SCREEN_OUTPUT_LOAD_RETRY_MS = SCREEN_MODE_REREAD_MS;
+
+/** Why a load stopped short, which decides what the rendering says about it. */
+type LoadFailure = 'event-missing' | 'screen-missing' | 'event-context-unavailable';
+
+const loadFailureMessages: Record<LoadFailure, { title: string; detail: (screenSlug: string) => string }> = {
+	'event-missing': {
+		title: 'Event not found',
+		detail: () => 'This output\'s address names no event.',
+	},
+	'screen-missing': {
+		title: 'Screen not found',
+		detail: screenSlug => `The screen "${screenSlug}" could not be found for this event.`,
+	},
+	'event-context-unavailable': {
+		title: 'Event details unavailable',
+		detail: screenSlug => `The screen "${screenSlug}" was found, but its event details could not be loaded. Retrying automatically.`,
+	},
+};
+
+/** The Screen was found and its Event context read failed: not a missing Screen. */
+class EventContextUnavailable extends Error {
+	constructor(cause: unknown) {
+		super('Event context unavailable', { cause });
+	}
+}
 
 function firstRouteParam(value: string | string[]): string {
 	return Array.isArray(value) ? value[0] ?? '' : value;
@@ -175,7 +208,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	}, { immediate: true });
 
 	const loading = ref(true);
-	const error = ref<string | null>(null);
+	const loadFailure = ref<LoadFailure | null>(null);
+	const error = computed(() => loadFailure.value ? loadFailureMessages[loadFailure.value].title : null);
+	const errorDetail = computed(() => loadFailure.value ? loadFailureMessages[loadFailure.value].detail(screenSlug.value) : null);
 	const exportError = ref<string | null>(null);
 	const showIdentify = ref(false);
 	const showDebug = ref(false);
@@ -302,10 +337,65 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	/** Recovery of a loaded rendering; superseded by every new load. */
 	const recoveries = createGuardedSequence();
 
-	/** Forget the finished load and drop any recovery of it, because a new load begins. */
+	/** Forget the finished load and drop any recovery or retry of it, because a new load begins. */
 	function forgetLoad() {
 		loadedOn.value = null;
 		recoveries.supersede();
+		cancelLoadRetry();
+	}
+
+	/**
+	 * The current load's wait for its Event channel's first attach.
+	 *
+	 * A load reads before it listens: the Event channel attaches only once the
+	 * Event context names it, after the reads have answered. Whatever was published
+	 * in between reached neither the reads nor any listener, and a first attach on
+	 * an unbroken connection reports no continuity loss (ADR-0023). So a load
+	 * re-reads once off that attach, rather than attaching before it reads, which
+	 * would hold program blank for as long as a token outage lasts (#727).
+	 *
+	 * Begun before the load's first read is sent, and inert when the channel is
+	 * attached already — a Screen change within one Event — because then it was
+	 * listening before the reads went out. (A continuity loss on that channel
+	 * mid-load is not covered: Reconnect Resync listens only once loaded.)
+	 */
+	let stopFirstAttachWait: (() => void) | null = null;
+	/** The load whose Event channel attached while it was still reading, if any. */
+	let loadAttachedMidRead: Flight | null = null;
+
+	function listenForFirstAttach(evtId: number, flight: Flight) {
+		stopListeningForFirstAttach();
+		stopFirstAttachWait = realtime.onceAttached(eventRealtimeChannel(evtId), () => {
+			stopFirstAttachWait = null;
+			if (flight.stale)
+				return;
+			const loaded = loadedOn.value;
+			if (loaded)
+				void recoverLoadedRendering(loaded);
+			else
+				loadAttachedMidRead = flight;
+		});
+	}
+
+	function stopListeningForFirstAttach() {
+		stopFirstAttachWait?.();
+		stopFirstAttachWait = null;
+		loadAttachedMidRead = null;
+	}
+
+	/** The slow retry of a load whose Event context read failed. */
+	let loadRetry: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelLoadRetry() {
+		if (loadRetry)
+			clearTimeout(loadRetry);
+		loadRetry = null;
+	}
+
+	/** Begin one attempt at a load: no retry stands for it, and it listens for its channel's first attach. */
+	function beginLoadAttempt(evtId: number, flight: Flight) {
+		cancelLoadRetry();
+		listenForFirstAttach(evtId, flight);
 	}
 
 	function readScope(evtId: number, screenId: number): ScreenOutputReadScope {
@@ -317,17 +407,18 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 
 		forgetLoad();
 		loading.value = true;
-		error.value = null;
+		loadFailure.value = null;
 		exportError.value = null;
 
 		if (!evtId) {
 			if (flight.current) {
-				error.value = 'Event not found';
+				loadFailure.value = 'event-missing';
 				loading.value = false;
 			}
 			return;
 		}
 
+		beginLoadAttempt(evtId, flight);
 		try {
 			// The capability is this output's credential for the lookup itself since
 			// #397, not only for the media it later resolves. An `embed=preview`
@@ -341,7 +432,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			await finishLoad(readScope(evtId, loadedScreen.id), flight);
 		}
 		catch (err) {
-			failLoad(err, flight);
+			failLoad(err instanceof EventContextUnavailable ? 'event-context-unavailable' : 'screen-missing', err, flight);
 		}
 	}
 
@@ -354,7 +445,13 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		// The Event context comes through the same Screen, not the operator's
 		// private Event read: an output has no Session for that read to admit
 		// (#604). Rendering waits for it, because every mode reads its Event.
-		const outputEvent = await outputReads.event(scope);
+		let outputEvent: ScreenOutputEvent;
+		try {
+			outputEvent = await outputReads.event(scope);
+		}
+		catch (err) {
+			throw new EventContextUnavailable(err);
+		}
 		if (flight.stale)
 			return;
 		eventStore.setOutputEvent(outputEvent);
@@ -371,37 +468,58 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			return;
 
 		loadedOn.value = scope;
-		error.value = null;
+		loadFailure.value = null;
 		loading.value = false;
+		if (loadAttachedMidRead === flight) {
+			loadAttachedMidRead = null;
+			void recoverLoadedRendering(scope);
+		}
 		await captureDownload();
 	}
 
-	function failLoad(err: unknown, flight: Flight) {
+	/**
+	 * A load that stopped short says why. A failed Event context read is not a
+	 * missing Screen, and nothing else retries it while the connection stays up, so
+	 * it retries itself on a slow cadence until the load finishes (#727).
+	 */
+	function failLoad(failure: LoadFailure, err: unknown, flight: Flight) {
 		if (flight.stale)
 			return;
 		console.error('Failed to load screen:', err);
-		error.value = 'Screen not found';
+		stopListeningForFirstAttach();
 		loading.value = false;
+		loadFailure.value = failure;
+		if (failure === 'event-context-unavailable') {
+			loadRetry = setTimeout(() => {
+				loadRetry = null;
+				resyncActiveScreen();
+			}, SCREEN_OUTPUT_LOAD_RETRY_MS);
+		}
 	}
 
 	/**
 	 * Finish a load that held its Screen and failed after it. The held Screen is
 	 * re-read by its id first, because it may have changed — or been renamed —
-	 * while this rendering showed nothing. The not-found state stands until the
+	 * while this rendering showed nothing. The failure it shows stands until the
 	 * load finishes, and a failure leaves it incomplete for the next recovery.
+	 *
+	 * A failure here is never "Screen not found": the Screen was found, and its
+	 * re-read answers nothing for a failed read as for a missing Screen, so one
+	 * that answers nothing is retried like the Event context read it resumes.
 	 */
 	async function resumeLoad(scope: ScreenOutputReadScope) {
 		const flight = loads.begin();
+		beginLoadAttempt(scope.eventId, flight);
 		try {
 			const screen = await screenStore.refreshActiveScreen(scope.eventId, scope.screenId, scope.assetCapability);
 			if (flight.stale)
 				return;
 			if (!screen)
-				throw new Error('Screen not found');
+				throw new Error('The Screen re-read answered nothing');
 			await finishLoad(scope, flight);
 		}
 		catch (err) {
-			failLoad(err, flight);
+			failLoad('event-context-unavailable', err, flight);
 		}
 	}
 
@@ -520,6 +638,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	onBeforeUnmount(async () => {
 		loads.supersede();
 		forgetLoad();
+		stopListeningForFirstAttach();
 		await screenRealtimeSession.stop();
 	});
 
@@ -527,6 +646,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		layoutName,
 		loading,
 		error,
+		errorDetail,
 		exportError,
 		showIdentify,
 		showDebug,

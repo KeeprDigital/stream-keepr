@@ -389,10 +389,12 @@ export default defineNuxtPlugin({
 		 * Each channel's message continuity, and who to tell once it is attached again
 		 * having lost it. `unstarted` until the channel's first attach, `held` once
 		 * attached, and `lost` for one the connection dropped before it ever attached.
+		 * `onNextAttach` is told of the channel's next attach whatever its continuity.
 		 */
 		interface ChannelContinuity {
 			state: 'unstarted' | 'held' | 'lost';
 			readonly onLost: Set<() => void>;
+			readonly onNextAttach: Set<() => void>;
 		}
 
 		const continuity = new Map<string, ChannelContinuity>();
@@ -412,6 +414,7 @@ export default defineNuxtPlugin({
 			const watched: ChannelContinuity = {
 				state: isOutOfTouch(connectionSnapshot.connectionState) ? 'lost' : 'unstarted',
 				onLost: new Set(),
+				onNextAttach: new Set(),
 			};
 			continuity.set(channelName, watched);
 			const onAttached = (stateChange: Ably.ChannelStateChange) => {
@@ -424,6 +427,14 @@ export default defineNuxtPlugin({
 			};
 			channel.on('attached', onAttached);
 			channel.on('update', onAttached);
+			// Only `attached`: an `update` arrives on a channel already attached, and
+			// `onceAttached` never waits on one of those.
+			channel.on('attached', () => {
+				const waiting = [...watched.onNextAttach];
+				watched.onNextAttach.clear();
+				for (const handler of waiting)
+					handler();
+			});
 		}
 
 		function getChannel(channelName: string): Ably.RealtimeChannel {
@@ -441,6 +452,21 @@ export default defineNuxtPlugin({
 			onLost.add(handler);
 			return () => {
 				onLost.delete(handler);
+			};
+		}
+
+		function onceAttached(channelName: string, handler: () => void): Unsubscribe {
+			// `getChannel` is what creates the channel's continuity record.
+			const channel = getChannel(channelName);
+			if (channel.state === 'attached')
+				return () => {};
+			const { onNextAttach } = continuity.get(channelName)!;
+			// Its own entry, so the same handler waiting twice is told twice and
+			// disposing one wait leaves the other.
+			const once = () => handler();
+			onNextAttach.add(once);
+			return () => {
+				onNextAttach.delete(once);
 			};
 		}
 
@@ -873,6 +899,7 @@ export default defineNuxtPlugin({
 					offRoom,
 					onChannel,
 					onContinuityLost,
+					onceAttached,
 					enterPresence,
 					leavePresence,
 					updatePresence,
