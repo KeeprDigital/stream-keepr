@@ -78,7 +78,10 @@ function createHarness(options: {
 	});
 	const eventStore = reactive({
 		eventId: options.eventId ?? null,
-		setOutputEvent: vi.fn(),
+		outputEvent: null as unknown,
+		setOutputEvent: vi.fn((outputEvent: unknown) => {
+			eventStore.outputEvent = outputEvent;
+		}),
 	});
 	// The Event context an output reads through its Screen (#604), never the
 	// operator's private Event read.
@@ -92,6 +95,7 @@ function createHarness(options: {
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
+		tokenError: null as Error | null,
 		onContinuityLost,
 	});
 	const realtimeCallbacks: any[] = [];
@@ -602,6 +606,62 @@ describe('useScreenDisplaySession', () => {
 			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith(missed);
 		});
 
+		it('re-reads once more when an Event update lands while its recovery read is in flight', async () => {
+			// The Event context carries no revision, so an answer cannot be ordered
+			// against an `event:updated` heard meanwhile; one more read settles it.
+			const harness = createHarness();
+			await flushPromises();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+
+			harness.reattach('event:42');
+			await flushPromises();
+			harness.eventStore.outputEvent = { id: 42, name: 'Heard meanwhile' };
+			inFlight.resolve({ id: 42, name: 'Answered before or after it' });
+			await flushPromises();
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Answered before or after it' });
+			expect(harness.eventStore.outputEvent).toEqual({ id: 42, name: 'Output Event' });
+		});
+
+		it('re-reads when its subscriptions stop waiting on a token', async () => {
+			// A first attach after a token wait reports no continuity loss (ADR-0023),
+			// yet everything published while it waited was missed.
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.realtime.tokenError = new Error('mint failed') as any;
+			await nextTick();
+			harness.realtime.tokenError = null;
+			await nextTick();
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		});
+
+		it('lets a recovery that arrives mid-load take over the load', async () => {
+			// The load's Event context read may have been lost with the connection;
+			// the recovery resumes the load from the Screen it already holds.
+			const harness = createHarness();
+			const lostRead = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(lostRead.promise);
+			await flushPromises();
+			expect(harness.session.loading.value).toBe(true);
+
+			await suspendAndResume(harness);
+			lostRead.resolve({ id: 42, name: 'Lost read' });
+			await flushPromises();
+
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Lost read' });
+			expect(harness.eventStore.setOutputEvent).toHaveBeenCalledWith({ id: 42, name: 'Output Event' });
+			expect(harness.realtimeSession.start).toHaveBeenCalledOnce();
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.session.error.value).toBeNull();
+		});
+
 		it('holds its last accepted rendering through a recovery that fails, and recovers on the next', async () => {
 			const harness = createHarness();
 			await flushPromises();
@@ -650,10 +710,10 @@ describe('useScreenDisplaySession', () => {
 		 * The Screen lookup answered and its Event context did not. The output holds a
 		 * Screen and renders nothing, and listens on no Event channel, because the
 		 * Event context it would name is what failed. Treating the held Screen as a
-		 * completed startup left it so for good (#705).
+		 * finished load left it so for good (#705).
 		 */
-		describe('when its Event context failed after the Screen lookup succeeded', () => {
-			async function failedStartup(options: Parameters<typeof createHarness>[0] = {}) {
+		describe('when its Event context failed after its Screen lookup succeeded', () => {
+			async function failedLoad(options: Parameters<typeof createHarness>[0] = {}) {
 				const harness = createHarness(options);
 				harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
 				await flushPromises();
@@ -663,8 +723,8 @@ describe('useScreenDisplaySession', () => {
 				return harness;
 			}
 
-			it('completes startup on the connection coming back: clears the error and starts realtime', async () => {
-				const harness = await failedStartup({
+			it('finishes the load on the connection coming back: clears the error and starts realtime', async () => {
+				const harness = await failedLoad({
 					route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
 				});
 
@@ -683,8 +743,8 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
 			});
 
-			it('stays retryable when the resumed startup fails too', async () => {
-				const harness = await failedStartup();
+			it('stays retryable when the resumed load fails too', async () => {
+				const harness = await failedLoad();
 				harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
 
 				await suspendAndResume(harness);
@@ -698,8 +758,8 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
 			});
 
-			it('listens on its Event channel once started, and not before', async () => {
-				const harness = await failedStartup();
+			it('listens on its Event channel once loaded, and not before', async () => {
+				const harness = await failedLoad();
 
 				// No Event channel names it yet, so a reattach there finds nothing to do.
 				harness.reattach('event:42');
@@ -714,8 +774,8 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.order).toEqual(['refresh:7']);
 			});
 
-			it('completes a Program monitor\'s startup without entering presence', async () => {
-				const harness = await failedStartup({ query: { embed: 'monitor' } });
+			it('finishes a Program monitor\'s load without entering presence', async () => {
+				const harness = await failedLoad({ query: { embed: 'monitor' } });
 
 				await suspendAndResume(harness);
 
@@ -724,8 +784,8 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 			});
 
-			it('completes a preview\'s startup without entering presence', async () => {
-				const harness = await failedStartup({ query: { embed: 'preview' } });
+			it('finishes a preview\'s load without entering presence', async () => {
+				const harness = await failedLoad({ query: { embed: 'preview' } });
 
 				await suspendAndResume(harness);
 
@@ -733,8 +793,8 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 			});
 
-			it('lets a Screen change supersede the resumed startup', async () => {
-				const harness = await failedStartup();
+			it('lets a Screen change supersede the resumed load', async () => {
+				const harness = await failedLoad();
 				const lateContext = deferred<any>();
 				harness.outputReads.event.mockReturnValueOnce(lateContext.promise);
 
