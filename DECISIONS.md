@@ -298,7 +298,7 @@ Rotation is a pure projection of authoritative Broadcast Graphics Live Session s
 
 ## ADR-0012: Environment-dependent library behaviour is stated, tested, or recorded
 
-Accepted · 2026-08-20, census refreshed for 1.7.7 under #621 · [#438](https://github.com/KeeprDigital/stream-keepr/issues/438)
+Accepted · 2026-08-20, census refreshed for 1.7.7 under #621 · [#438](https://github.com/KeeprDigital/stream-keepr/issues/438); secure-cookie prefix amended under [#451](https://github.com/KeeprDigital/stream-keepr/issues/451)
 
 ### Decision
 
@@ -320,7 +320,7 @@ A grep of the pinned `better-auth`, `@better-auth/core` and `@better-auth/teleme
 | `validateSecret` returns early                       | Weak or default secrets admitted silently                                   | **Tested**: `test/unit/server/utils/authSecretValidation.test.ts` constructs the library in a child process with `NODE_ENV=production`                                  |
 | `rateLimit.enabled ?? isProduction`                  | Rate limiter off outside production                                         | **Accepted blindness**                                                                                                                                                  |
 | Client IP: header walk, then loopback under test/dev | Caller-writable `x-forwarded-for` read; header-less callers all `127.0.0.1` | **Split**: header stated as `advanced.ipAddress.ipAddressHeaders: ['cf-connecting-ip']`, pinned by `test/unit/server/utils/authClientIp.test.ts`; loopback **accepted** |
-| Secure-cookie prefix falls back to `isProduction`    | Cookies unprefixed and not `Secure` wherever `NODE_ENV` is not `production` | **Accepted blindness**; the attribute agreement is pinned by `worker:smoke`                                                                                             |
+| Secure-cookie prefix falls back to `isProduction`    | Cookies unprefixed; so was the built Worker's, without `Secure` (#621)      | **Stated**: `advanced.useSecureCookies: import.meta.dev !== true` — `Secure` and `__Secure-` on every built server, neither on `nuxt dev` (#451)                        |
 | Telemetry publishes only when `!isTest()`            | Suppressed                                                                  | **Stated**: `telemetry.enabled: false`                                                                                                                                  |
 | `/error` page blanked in production                  | Suite sees a dev page                                                       | **Accepted blindness** — response shape only                                                                                                                            |
 | Dev-only log lines                                   | Log output differs                                                          | **No action**                                                                                                                                                           |
@@ -330,14 +330,23 @@ A grep of the pinned `better-auth`, `@better-auth/core` and `@better-auth/teleme
 
 - **Rate limiting**: no value preserves behaviour on both sides — `false` disables production's limiter, `true` enables it locally, where every header-less caller shares one `127.0.0.1` bucket and the suite gains flake, not coverage. What the limiter keys on is stated and tested; observing it refuse is a built-Worker job ([#437](https://github.com/KeeprDigital/stream-keepr/issues/437)).
 - **Loopback for header-less callers** is inside the library past every option; nothing keyed on client IP is distinguishable locally. The last case in `authClientIp.test.ts` pins the residual and fails if a bump changes it.
-- **Secure-cookie prefix**: at 1.7.7 the prefix and `Secure` come from `useSecureCookies`, else a static `baseURL`'s scheme, else `isProduction`; this installation's `protocol: 'auto'` reaches the last. That fallback is right on both sides only if a deployed Worker's `NODE_ENV` is `production` (a `__Secure-` cookie cannot be set over `http`), and no option means "secure exactly when the request is https" — `useSecureCookies` would be wrong on one side, and pinning `protocol` was measured and rejected on #410. The suite never sees the prefixed names, and nor does the built Worker under local workerd: measured on 2026-10-21, its sign-in sets an unprefixed `better-auth.session_token` without `Secure`, so `isProduction` is false in that bundle there. `worker:smoke` asserts what plain http can judge: `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` exactly when the name is `__Secure-`-prefixed. Which name and attributes a deployed origin gets is unmeasured ([#451](https://github.com/KeeprDigital/stream-keepr/issues/451)).
 - **Blanked error page**: cosmetic; nothing about admission rides on it.
+
+### Why the secure-cookie prefix is stated after all
+
+It was accepted as a blindness on the premise that the fallback gave production `__Secure-` cookies. It did not: `isProduction` is `NODE_ENV` read at module load, nothing sets `NODE_ENV` in the Worker, and the built Worker under local workerd set an unprefixed `better-auth.session_token` without `Secure` (measured on #621). Stating it restores the premise; it is not a new cookie policy.
+
+- **The value follows the kind of server, not the request.** No option means "secure exactly when the request is https", and the instance is built once. `import.meta.dev` is the build's own answer: Nitro replaces it with a literal (`false` in a build), so the uploaded artifact's value is a constant in its code. Anything not a Nitro dev build, the unit suite included, gets production's cookie.
+- **This contradicts the earlier reasoning that `useSecureCookies` would be wrong on one side.** That held for a constant. `nuxt dev`, where people sign in over `http://localhost` every day, keeps the unprefixed, non-`Secure` cookie it always had, so a browser that does not count loopback as secure for cookies (WebKit has not, historically) still signs in there. What ships is the built artifact, so it alone is held to production's cookie, `pnpm preview` included; Chromium keeps a `Secure` cookie on loopback (measured with the acceptance browser).
+- **Rejected**: `NODE_ENV=production` in the Worker build flips every `isProduction` site in the census at once, the rate limiter among them, to fix one. A Worker var is a deploy setting that a forgotten value silently undoes.
+- **Observed**: `pnpm worker:smoke` refuses a built Worker whose session cookie is not `__Secure-`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`; `test/unit/server/utils/authSessionCookie.test.ts` holds the server's options to it over `http://`; `test/integration/auth.test.ts` pins the dev server's unprefixed cookie. The deployed origin is still #451's to observe.
+- **On deploy, signed-in browsers sign in once more.** Better Auth's session read uses only the name it is configured with, so a leftover unprefixed cookie admits nothing and refuses nothing; its D1 Session lapses under the ordinary 7-day expiry.
 
 ### Consequences
 
-- A Better Auth bump has two tripwires: `authSecretValidation.test.ts` and `authClientIp.test.ts`. Re-run the census (same grep) when an audited package moves majorly; the table is version-pinned, not evergreen.
+- A Better Auth bump has three tripwires: `authSecretValidation.test.ts`, `authClientIp.test.ts` and `authSessionCookie.test.ts`. Re-run the census (same grep) when an audited package moves majorly; the table is version-pinned, not evergreen.
 - Sessions record the Cloudflare-vouched client IP, not whatever `x-forwarded-for` said, and the production limiter's key survives a caller sending their own forwarding header.
-- Anyone noticing the untested limiter, the loopback collapse or the unprefixed cookie names should land here before building a workaround.
+- Anyone noticing the untested limiter or the loopback collapse should land here before building a workaround.
 
 ## ADR-0014: Animation Effects are rebuilt in-house on three.js
 

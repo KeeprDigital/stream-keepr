@@ -162,10 +162,11 @@ export function newOperatorPassword() {
 /**
  * Every cookie a response set, as `name=value` pairs.
  *
- * All of them rather than the session token by name: Better Auth writes the
- * `__Secure-`-prefixed name or the plain one by environment, not by request
- * (ADR-0012), and which one a deployed installation gets is unmeasured (#451),
- * so a harness that matched one spelling could refuse to sign in there.
+ * All of them rather than the session token by name: a built Worker (a
+ * deployment, or `pnpm preview`) writes `__Secure-`-prefixed names and the dev
+ * server writes plain ones (`useSecureCookies`, `server/utils/authOptions.ts`),
+ * and a harness that matched one spelling would sign in against one kind of
+ * server and refuse the other.
  *
  * Pairs rather than one folded header, because both consumers need them
  * separately: a request header joins them with `; `, and the acceptance browser

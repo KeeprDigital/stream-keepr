@@ -86,9 +86,10 @@ async function signIn(email: string, password: string): Promise<string> {
 	if (!response.ok)
 		throw new Error(`The integration suite could not sign in as '${email}': ${response.status}.`);
 
-	// Every cookie the response set, not the session token by name: Better Auth
-	// writes `__Secure-`-prefixed names over https and the suite should not depend
-	// on which scheme its spawned server happened to use.
+	// Every cookie the response set, not the session token by name: the dev
+	// server this suite spawns sets it unprefixed and a built server prefixes it
+	// `__Secure-` (`useSecureCookies`, `server/utils/authOptions.ts`), and the
+	// suite should not depend on which kind of server it is talking to.
 	const cookie = response.headers.getSetCookie()
 		.map(value => value.split(';', 1)[0] ?? '')
 		.filter(pair => pair.includes('='))

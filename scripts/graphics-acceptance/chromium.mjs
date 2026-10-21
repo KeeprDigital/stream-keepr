@@ -212,8 +212,11 @@ async function launch(candidate, extraArgs) {
  * Each cookie is installed in the browser's own jar before anything is
  * navigated, so the page is the initiator from its first request. Its
  * attributes mirror the ones the installation issues (`httpOnly`, path `/`,
- * `SameSite=Strict`, `Secure` over https), because a cookie the browser stores
- * under different rules is a different cookie for the requests that matter.
+ * `SameSite=Strict`, `Secure` over https or under a `__Secure-` name), because
+ * a cookie the browser stores under different rules is a different cookie for
+ * the requests that matter. The name counts because a built Worker issues its
+ * session cookie `__Secure-` and `Secure` even over plain http on loopback
+ * (#451), and a browser refuses that name without `Secure`.
  *
  * @param {string} url The page the cookie has to reach, which decides its scope.
  * @param {string} pair A `name=value` pair as the installation issued it.
@@ -222,13 +225,14 @@ export function browserCookie(url, pair) {
 	const separator = pair.indexOf('=');
 	if (separator < 1)
 		throw new Error('A browser cookie is a name=value pair.');
+	const name = pair.slice(0, separator);
 	return {
-		name: pair.slice(0, separator),
+		name,
 		value: pair.slice(separator + 1),
 		url,
 		path: '/',
 		httpOnly: true,
-		secure: new URL(url).protocol === 'https:',
+		secure: new URL(url).protocol === 'https:' || name.startsWith('__Secure-'),
 		sameSite: 'Strict',
 	};
 }
