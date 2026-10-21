@@ -1,4 +1,5 @@
-import type { ScreenModeConfigContract } from './screenModeConfigs/contract';
+import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
+import type { DeckSource } from './screenModeConfigs/deck';
 import type { DisplayType, ScreenMode } from './types/enums';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
@@ -41,6 +42,24 @@ export interface ScreenModeGraphicsHost {
 	useScreenAlignment?: boolean;
 }
 
+/**
+ * What a field declared as each kind of Event Reference holds. A kind is what
+ * the field names: a Round, a Player, a Player List or a Feature Match Slot by
+ * id, or a whole Deck Source, which names a Player or a Broadcast Deck List.
+ */
+interface EventReferenceValues {
+	round: number | null | undefined;
+	player: number | null | undefined;
+	playerList: number | null | undefined;
+	featureMatchSlot: number | null | undefined;
+	deckSource: DeckSource | undefined;
+}
+
+export type EventReferenceKind = keyof EventReferenceValues;
+
+/** A mode's Event References: each config field naming something in the Screen's Event, and what it names. */
+export type ScreenModeEventReferences = Readonly<Record<string, EventReferenceKind>>;
+
 export interface ScreenModeDefinition {
 	label: string;
 	icon: string;
@@ -71,6 +90,17 @@ export interface ScreenModeDefinition {
 	 * (ADR-0037).
 	 */
 	config: ScreenModeConfigContract<any>;
+	/**
+	 * The mode's Event References: which of its config fields name something
+	 * that must belong to the Screen's Event, and what each names. `{}` declares
+	 * none. Every mode declares it, so a new mode cannot skip the question.
+	 *
+	 * Declared here and nowhere else. The Screen write path derives its Event
+	 * checks from it (`validateScreenModeConfigReferences`), and each field must
+	 * be one of the mode's config fields holding what its kind names, or the
+	 * definitions fail to compile (ADR-0038).
+	 */
+	eventReferences: ScreenModeEventReferences;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -96,12 +126,12 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
  * widened for readers asking about any mode.
  */
 const SCREEN_MODE_DEFINITIONS = {
-	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background', config: backgroundModeConfigContract },
-	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract },
-	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract },
-	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract },
-	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract },
-	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract },
+	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background', config: backgroundModeConfigContract, eventReferences: {} },
+	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
+	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract, eventReferences: { deckSource: 'deckSource' } },
+	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract, eventReferences: { roundId: 'round', playerListId: 'playerList' } },
+	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: {} },
+	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
 		icon: 'i-lucide-panels-top-left',
@@ -113,6 +143,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			canvasHeight: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
 		},
 		config: featureMatchOverlayModeConfigContract,
+		eventReferences: { featureMatchId: 'featureMatchSlot' },
 	},
 	'broadcast-graphics': {
 		label: 'Broadcast Graphics',
@@ -126,10 +157,11 @@ const SCREEN_MODE_DEFINITIONS = {
 			useScreenAlignment: false,
 		},
 		config: broadcastGraphicsModeConfigContract,
+		eventReferences: {},
 	},
-	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract },
-	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract },
-	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract },
+	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract, eventReferences: { playerListId: 'playerList' } },
+	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' } },
+	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;
@@ -151,6 +183,29 @@ export function screenModeSupportsBackgroundLayers(mode: ScreenMode): mode is Ba
 /** The same modes as a list, in Screen Mode order, derived from the declaration. */
 export const BACKGROUND_LAYERS_CAPABLE_MODES: readonly BackgroundLayersCapableMode[]
 	= SCREEN_MODE_VALUES.filter(screenModeSupportsBackgroundLayers);
+
+/** A mode's config, as its contract defines it. */
+type ConfigOfMode<M extends ScreenMode> = ScreenModeConfigOf<typeof SCREEN_MODE_DEFINITIONS[M]['config']>;
+type EventReferencesOfMode<M extends ScreenMode> = typeof SCREEN_MODE_DEFINITIONS[M]['eventReferences'];
+
+/**
+ * Each declared Event Reference that is not one of its mode's config fields, or
+ * whose field does not hold what its kind names, as `mode.field`.
+ */
+type MisdeclaredEventReference = {
+	[M in ScreenMode]: {
+		[F in keyof EventReferencesOfMode<M> & string]: F extends keyof ConfigOfMode<M>
+			? ConfigOfMode<M>[F] extends EventReferenceValues[EventReferencesOfMode<M>[F] & EventReferenceKind] ? never : `${M}.${F}`
+			: `${M}.${F}`;
+	}[keyof EventReferencesOfMode<M> & string];
+}[ScreenMode];
+
+/**
+ * Fails to compile when an Event Reference is misdeclared; the error's
+ * `MisdeclaredEventReference` resolves to each offending `mode.field`.
+ * Exported only so the check is not an unused binding.
+ */
+export const EVENT_REFERENCES_FIT_THEIR_CONFIG: [MisdeclaredEventReference] extends [never] ? true : MisdeclaredEventReference = true;
 
 /** A mode's config contract. */
 export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof SCREEN_MODE_DEFINITIONS[M]['config'] {

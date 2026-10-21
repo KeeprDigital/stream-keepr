@@ -114,7 +114,7 @@ describe('event-scoped reference validation', () => {
 		expect(mockPlayerListFindById).toHaveBeenCalledWith(7, 1);
 	});
 
-	it('validates Screen Mode data-binding references', async () => {
+	it('validates each Screen Mode Event Reference', async () => {
 		await expect(validateScreenModeConfigReferences(1, 'standings', {
 			roundId: 2,
 			playerListId: 7,
