@@ -1070,3 +1070,32 @@ CI ran only on PRs, and the ruleset did not require a PR to be up to date with `
 - **Require PRs to be up to date with `main`** (strict status checks). It verifies the same combined tree, but each PR must be rebased and re-run by hand after every merge ahead of it, and a release still relies on nobody merging out of order.
 - **Verify `main` or the release revision after merge, before publishing.** This catches a broken combination only after it is on `main`, and needs CI on `push` plus a release that waits for it. The queue proves the same revision before it lands.
 - **Skip the title check in the queue** by making it non-required there. Rulesets require the same checks for PRs and merge groups, and the queue's squash subjects are what release-please reads, so checking them is the stronger check.
+
+## ADR-0037: A Screen Mode's config has one contract, and a default lives only in it
+
+Accepted · 2026-10-21 · [#587](https://github.com/KeeprDigital/stream-keepr/issues/587)
+
+### Decision
+
+**A Screen Mode's config is defined once, as a config contract on its Screen Mode Definition** (`config` in `shared/screenModes.ts`, built with `defineScreenModeConfigContract` in `shared/screenModeConfigs/`). The contract holds the mode's own fields as a zod shape and a complete `defaults` value. The config type is inferred from the shape (`ScreenModeConfigOf`), and `defaults` is typed by it, so a type that disagrees with its schema, or a default of the wrong type, is a compile error. `DEFAULT_MODE_CONFIGS` takes the mode's entry from the contract.
+
+**A default lives only in the contract's `defaults`.** A contract field may not carry a zod `.default()` or `.prefault()`; the type refuses one. A schema default was a second copy, and zod 4 applies it even through `.optional()`, so it leaked into every PATCH that left the field out.
+
+**The write forms are derived on the server without special cases** (`configContractModeForms`). The complete schema is the contract's fields plus `backgroundLayers` when the mode declares a Background Layer stack, and Screen create and full update validate against it. The PATCH form is every field `.nullable().optional()`, with no wrapper peeled and no default stripped.
+
+**Each mode moves onto its contract in turn.** Metagame is first (#587), the plain overlay modes follow (#588), then the rest, after which the old form is deleted (#589). `test/unit/server/schemas/screenModeConfigContracts.test.ts` parses every contract's defaults against its schema and both write paths and round-trips them through a PATCH. A mode not yet migrated is named in its pending list, so migrating one without taking it off the list fails.
+
+### Why
+
+Each mode's config was written twice, as a type and as a schema, and its defaults sometimes in both. Only 4 of 11 schemas were compile-checked against their type, and the PATCH form was derived by peeling wrappers, which broke on Metagame's duplicated defaults.
+
+### Consequences
+
+- Readers complete a stored fragment from the contract's defaults (`resolveScreenModeConfig`), as before. A full write no longer fills Metagame's `minPoints` and `archetypeLimit` into storage. A full write of a Metagame config without `minPoints` is refused, as a missing required field of any mode is. No client sends one.
+- The contract carries only the mode's own fields. The Background Layer stack stays a server-side addition driven by the Screen Mode Definition's `backgroundLayers` declaration, because its schema depends on server-only asset ids.
+- A full write still validates each mode as a complete config, though storage holds fragments and the Edit Screen dialog sends them back. That pre-existing gap is not changed here.
+
+### Rejected alternatives
+
+- **Put every default in the schema as `.default()` and derive `defaults` by parsing `{}`.** It needs default stripping on the PATCH path, which is the special case this removes, and a full write would freeze defaults into storage.
+- **Keep the hand-written type and add `satisfies z.ZodType<…>` to each schema.** It catches a mismatch but keeps two copies and leaves defaults unchecked.

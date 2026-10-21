@@ -1,4 +1,4 @@
-import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
+import type { BackgroundLayersCapableMode, ConfigContractMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { BackgroundModeConfig, BroadcastGraphicsModeConfig, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
@@ -20,7 +20,7 @@ import {
 	isKnownGraphicBindingFieldId,
 	readSocialProfileProjectedValueReference,
 } from '~~/shared/modules/graphics';
-import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
+import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	BOARD_SELECTION_VALUES,
@@ -28,12 +28,8 @@ import {
 	DECK_BOARD_VIEW_VALUES,
 	DECK_CARD_SIZE_VALUES,
 	HORIZONTAL_ALIGN_VALUES,
-	METAGAME_ARCHETYPE_COLUMN_KEY_VALUES,
-	METAGAME_CARD_COLUMN_KEY_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
 	METAGAME_SCOPE_VALUES,
-	METAGAME_SORT_BY_VALUES,
-	METAGAME_VIEW_MODE_VALUES,
 	PLAYER_HISTORY_COLUMN_KEY_VALUES,
 	PLAYER_SIDE_VALUES,
 	QUANTITY_POSITION_VALUES,
@@ -158,7 +154,9 @@ function createModeConfigPatchFieldSchema(schema: any): z.ZodTypeAny {
 	// `.optional()`, so a defaulted field left absent from a patch would come out
 	// of `.parse()` carrying its default — and a `null` default is then read by
 	// the merge as the "delete this key" sentinel, wiping the stored value on
-	// every unrelated edit (metagame `archetypeLimit`/`minPoints`).
+	// every unrelated edit (Metagame's `archetypeLimit`/`minPoints`, before its
+	// config contract moved its defaults out of the schema, #587). Only modes still
+	// on the old form reach this; `configContractModeForms` needs none of it.
 	if (schema instanceof z.ZodDefault) {
 		return createModeConfigPatchFieldSchema(schema.removeDefault());
 	}
@@ -407,6 +405,34 @@ function declaredModeConfigSchema<M extends ScreenMode, Shape extends z.ZodRawSh
 	return z.object(declared as DeclaredModeConfigShape<M, Shape>).strict();
 }
 
+type ContractModeConfigShape<M extends ConfigContractMode> = DeclaredModeConfigShape<M, ReturnType<typeof screenModeConfigContract<M>>['shape']>;
+
+/** A PATCH body: every field optional and nullable, `null` being the "delete this key" sentinel. */
+type ModeConfigPatchShape<Shape extends z.ZodRawShape> = {
+	[K in keyof Shape]: z.ZodOptional<z.ZodNullable<Shape[K]>>;
+};
+
+/**
+ * The forms of a mode on its config contract, both derived from the one declared
+ * schema, so neither restates a field, a bound, or a default.
+ *
+ * - `schema` is the complete config: the contract's fields, plus
+ *   `backgroundLayers` when the mode declares a stack. Screen create and full
+ *   update validate the mode against it, as they do a mode on the old form.
+ * - `patch` is every field `.nullable().optional()`, `null` being the "delete this
+ *   key" sentinel. No wrapper is peeled and no default stripped, because a
+ *   contract's fields carry none; `createModeConfigPatchFieldSchema` is what the
+ *   old form needs instead.
+ */
+function configContractModeForms<M extends ConfigContractMode>(mode: M) {
+	const schema = declaredModeConfigSchema(mode, screenModeConfigContract(mode).shape) as z.ZodObject<ContractModeConfigShape<M>, z.core.$strict>;
+	const patchShape = Object.fromEntries(
+		Object.entries(schema.shape).map(([key, field]) => [key, (field as z.ZodType).nullable().optional()]),
+	) as ModeConfigPatchShape<ContractModeConfigShape<M>>;
+
+	return { schema, patch: z.object(patchShape).strict() };
+}
+
 // Per-mode config schemas
 export const backgroundModeConfigSchema = declaredModeConfigSchema('background', {
 	layers: backgroundLayerStackSchema,
@@ -497,16 +523,6 @@ const deckModeConfigPatchSchema = createModeConfigPatchSchema(deckModeConfigSche
 
 const standingsColumnConfigSchema = z.object({
 	key: z.enum(STANDINGS_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
-
-const metagameArchetypeColumnConfigSchema = z.object({
-	key: z.enum(METAGAME_ARCHETYPE_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
-
-const metagameCardColumnConfigSchema = z.object({
-	key: z.enum(METAGAME_CARD_COLUMN_KEY_VALUES),
 	visible: z.boolean(),
 }).strict();
 
@@ -1861,29 +1877,10 @@ export const featureMatchOverlayModeConfigSchema = declaredModeConfigSchema('fea
 	layout: featureMatchLayoutConfigSchema,
 }) satisfies z.ZodType<FeatureMatchOverlayModeConfig>;
 
-export const metagameModeConfigSchema = declaredModeConfigSchema('metagame', {
-	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),
-	scope: z.enum(METAGAME_SCOPE_VALUES),
-	topN: z.number().int().min(1).max(500),
-	minPoints: z.number().int().min(0).max(999).default(9),
-	playerListId: z.number().int().positive().optional(),
-	archetypeFilter: z.string().max(200).optional(),
-	sortBy: z.enum(METAGAME_SORT_BY_VALUES),
-	cardSortBy: z.enum(METAGAME_CARD_SORT_BY_VALUES),
-	archetypeColumns: z.array(metagameArchetypeColumnConfigSchema).min(1).max(10),
-	cardColumns: z.array(metagameCardColumnConfigSchema).min(1).max(12),
-	limit: z.number().int().min(1).max(500),
-	archetypeLimit: z.number().int().min(1).max(500).nullable().default(null),
-	maxTableWidth: z.number().int().min(1).nullable().optional(),
-	pageSize: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
-	animateEntries: z.boolean(),
-});
+const metagameModeConfigForms = configContractModeForms('metagame');
+
+/** The complete Metagame config, its own fields from its config contract (#587). */
+export const metagameModeConfigSchema = metagameModeConfigForms.schema;
 
 export const topCardsModeConfigSchema = declaredModeConfigSchema('top-cards', {
 	scope: z.enum(METAGAME_SCOPE_VALUES),
@@ -1934,7 +1931,7 @@ export const modeConfigPatchSchemaMap = {
 	'feature-match': createModeConfigPatchSchema(matchModeConfigSchema),
 	'feature-match-overlay': createModeConfigPatchSchema(featureMatchOverlayModeConfigSchema),
 	'broadcast-graphics': createModeConfigPatchSchema(broadcastGraphicsModeConfigSchema),
-	'metagame': createModeConfigPatchSchema(metagameModeConfigSchema),
+	'metagame': metagameModeConfigForms.patch,
 	'top-cards': createModeConfigPatchSchema(topCardsModeConfigSchema),
 	'player-history': createModeConfigPatchSchema(playerHistoryModeConfigSchema),
 } as const;

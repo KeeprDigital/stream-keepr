@@ -8,7 +8,6 @@ import {
 	DEFAULT_DECK_CONFIG,
 	DEFAULT_FEATURE_MATCH_CONFIG,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-	DEFAULT_METAGAME_CONFIG,
 	DEFAULT_PLAYER_HISTORY_CONFIG,
 	DEFAULT_SCREEN_CONFIG,
 	DEFAULT_STANDINGS_CONFIG,
@@ -50,10 +49,6 @@ describe('getDefaultConfigForMode', () => {
 
 	it('returns broadcast-graphics config for broadcast-graphics mode', () => {
 		expect(getDefaultConfigForMode('broadcast-graphics')).toEqual(DEFAULT_BROADCAST_GRAPHICS_CONFIG);
-	});
-
-	it('returns metagame config for metagame mode', () => {
-		expect(getDefaultConfigForMode('metagame')).toEqual(DEFAULT_METAGAME_CONFIG);
 	});
 
 	it('returns player-history config for player-history mode', () => {
@@ -249,15 +244,15 @@ describe('default config constants', () => {
 	});
 
 	it('default metagame config defaults to archetype view mode', () => {
-		expect(DEFAULT_METAGAME_CONFIG.viewMode).toBe('archetype');
+		expect(getDefaultConfigForMode('metagame').viewMode).toBe('archetype');
 	});
 
 	it('default metagame config defaults to all scope', () => {
-		expect(DEFAULT_METAGAME_CONFIG.scope).toBe('all');
+		expect(getDefaultConfigForMode('metagame').scope).toBe('all');
 	});
 
 	it('default metagame config includes archetype columns with colors off by default', () => {
-		expect(DEFAULT_METAGAME_CONFIG.archetypeColumns).toEqual([
+		expect(getDefaultConfigForMode('metagame').archetypeColumns).toEqual([
 			{ key: 'archetype', visible: true },
 			{ key: 'count', visible: true },
 			{ key: 'metaShare', visible: true },
@@ -268,7 +263,7 @@ describe('default config constants', () => {
 	});
 
 	it('default metagame config includes card columns with main and side visible', () => {
-		expect(DEFAULT_METAGAME_CONFIG.cardColumns).toEqual([
+		expect(getDefaultConfigForMode('metagame').cardColumns).toEqual([
 			{ key: 'card', visible: true },
 			{ key: 'manaCost', visible: true },
 			{ key: 'type', visible: true },
