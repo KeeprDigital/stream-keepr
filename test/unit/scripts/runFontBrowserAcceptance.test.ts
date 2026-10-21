@@ -55,10 +55,9 @@ function fakeSession() {
  */
 function harnessContext() {
 	return {
-		evidence: { addSecret: vi.fn(), report: vi.fn(), passed: vi.fn(), deferred: vi.fn() },
+		evidence: { addSecret: vi.fn(), report: vi.fn(), passed: vi.fn() },
 		record: vi.fn(),
 		note: vi.fn(),
-		defer: vi.fn(),
 		checks: () => 0,
 		failed: () => false,
 	};

@@ -296,6 +296,13 @@ Screen Deck-source triggers — because drizzle-kit cannot generate either;
 `test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
 drops them.
 
+The squash was a one-time transition. A D1 whose `_hub_migrations` still lists
+the old `0000`–`0031` names reads `0000_baseline` as unapplied and fails on its
+existing tables, so such a database is dropped and recreated once (ADR-0019
+required this of production before the squash deployed). A D1 that has applied
+`0000_baseline` is past the transition: it takes later migrations as they come
+and is never wiped for this.
+
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the
 table has rows, so a missing default passes locally and fails on the first
@@ -306,9 +313,14 @@ or the row's primary key). A migration that alters or rewrites populated tables
 gets a test that holds it back with `createSqliteD1Harness({ throughMigration })`,
 inserts rows, then runs `applyRemainingMigrations()`.
 
-D1 records applied migrations **by name**, so editing an applied migration is a
-no-op wherever it already ran and only changes future replays. Prefer repairing a
-broken migration in place over adding a corrective one.
+D1 records applied migrations **by name**, so editing a migration changes
+nothing wherever it already ran; only a database that has not applied it sees
+the edit. Repair a migration in place only while it is known to be unapplied
+everywhere that matters: still on your branch, or unreleased and run only on
+local stores you will reset. Once a deployed installation has applied it,
+correct it forward with a new migration. An in-place edit would leave that
+installation on the old SQL while fresh replays get the new, and nothing would
+report the difference.
 
 ## Releases
 
@@ -612,10 +624,10 @@ Workflow instances stay, holding facts only.
 
 Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the
-contract: add codes, never rename one. `acceptance deferred` means nothing was
-proved and is never a pass. Output never contains secrets, capability tokens,
-filenames, object keys, or full URLs, so failing output is safe to paste into
-an issue. Find identities in the installation by route and timestamp instead.
+contract: add codes, never rename one. Output never contains secrets,
+capability tokens, filenames, object keys, or full URLs, so failing output is
+safe to paste into an issue. Find identities in the installation by route and
+timestamp instead.
 
 Step 2 asserts the installation serves **no** Content Security Policy today:
 `csp-directive-unexpected` fires if one appears. If a restrictive policy is
@@ -725,10 +737,11 @@ Administrator token.
 - **Create**: makes a password-less account and returns a single-use invite
   link valid for 24 hours. Send it yourself; it is not stored or shown again.
   Always set a name: Graphics Authoring Lease notices name holders by it.
-- **Reset link**: same kind of link for a forgotten password. Using it ends the
-  account's other sessions.
+- **Reset link**: same kind of link for a forgotten password. Using it ends
+  every session the account holds and signs nobody in.
 - **Revoke sessions**: ends every session; the password stays. Sessions slide
-  over 7 days of inactivity, so this is the only way to end one early.
+  over 7 days of inactivity; this, a used reset link, and a ban are what end
+  one early.
 - **Ban**: refuses sign-in and ends all sessions. Unbanning restores the old
   password.
 - **Set password**: for an operator locked out mid-show. Prefer a reset link.
@@ -854,10 +867,15 @@ missed run only delays detection.
 ### Operations cockpit
 
 `/admin/graphics-assets` reads `GET /api/admin/graphics-assets/operations-cockpit`:
-one bounded, constant-cost snapshot composed from durable state. It reports the
-catalogue and the canonical byte store as separate conditions (`degraded` or
-`unavailable`) and still answers with `outcome: catalogue-unavailable` when D1 is
-down.
+one snapshot composed from durable state. Its size is bounded (counts, plus at
+most 20 unfinished ingestion operations and 20 recent Evidence entries), and
+each reading issues the same fixed set of D1 statements whatever the library
+holds. Those are aggregates or bounded samples (the recent outcome is counted
+over at most 200 Evidence entries), but the aggregates scan their tables, so a
+reading's cost still grows with the catalogue; no latency limit is measured or
+promised. It reports the catalogue and the canonical byte store as separate
+conditions (`degraded` or `unavailable`) and still answers with
+`outcome: catalogue-unavailable` when D1 is down.
 
 - Severities: `critical` (cannot be trusted until someone acts), `warning` (a
   guarantee is at risk or an incident is retryable), `info`. Persistent alerts

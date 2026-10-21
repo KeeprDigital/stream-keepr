@@ -539,13 +539,8 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		signal,
 		init: jsonRequest(signInBody, { origin }),
 	});
+	assertSessionCookieAttributes(signIn);
 	const cookie = sessionCookie(signIn);
-	if (!cookie) {
-		throw new WorkerSmokeFailure('auth-sign-in', 'session-cookie-missing', {
-			expected: 'session cookie',
-			actual: 'none',
-		});
-	}
 	sensitiveValues.push(cookie);
 	await expectStatus({
 		probe: 'authenticated-api',
@@ -700,11 +695,53 @@ async function responseJson(response, probe) {
 	}
 }
 
-function sessionCookie(response) {
-	const cookies = typeof response.headers.getSetCookie === 'function'
+function setCookieHeaders(response) {
+	return typeof response.headers.getSetCookie === 'function'
 		? response.headers.getSetCookie()
 		: [response.headers.get('set-cookie')].filter(Boolean);
-	return cookies
+}
+
+const SESSION_TOKEN_COOKIE = /^(?:__Secure-)?better-auth\.session_token$/u;
+
+/**
+ * The Better Auth session cookie's attributes, as far as plain http on
+ * loopback can judge them (#621).
+ *
+ * HttpOnly, `SameSite=Lax` and `Path=/` are right on every origin. Whether the
+ * cookie is `Secure` is not knowable here: over http either answer can be
+ * correct, so this asserts only that the name and the attribute agree, since a
+ * browser refuses a `__Secure-` name without `Secure`. Which one a deployed
+ * origin gets is #451's to observe (ADR-0012).
+ */
+function assertSessionCookieAttributes(response) {
+	const session = setCookieHeaders(response)
+		.map(header => header.split(';').map(part => part.trim()))
+		.find(([pair]) => SESSION_TOKEN_COOKIE.test(pair.split('=', 1)[0]));
+	if (!session) {
+		throw new WorkerSmokeFailure('auth-sign-in', 'session-cookie-missing', {
+			expected: 'better-auth.session_token cookie',
+			actual: 'none',
+		});
+	}
+	const [pair, ...attributes] = session;
+	const named = attributes.map(attribute => attribute.toLowerCase());
+	const prefixed = pair.startsWith('__Secure-');
+	const problems = [
+		!named.includes('httponly') && 'HttpOnly missing',
+		!named.includes('samesite=lax') && 'SameSite not Lax',
+		!named.includes('path=/') && 'Path not /',
+		prefixed !== named.includes('secure') && (prefixed ? '__Secure- name without Secure' : 'Secure without __Secure- name'),
+	].filter(Boolean);
+	if (problems.length > 0) {
+		throw new WorkerSmokeFailure('auth-sign-in', 'session-cookie-attributes', {
+			expected: 'HttpOnly; SameSite=Lax; Path=/; Secure exactly when named __Secure-',
+			actual: problems.join(', '),
+		});
+	}
+}
+
+function sessionCookie(response) {
+	return setCookieHeaders(response)
 		.map(value => value.split(';', 1)[0])
 		.filter(value => value.includes('='))
 		.join('; ');

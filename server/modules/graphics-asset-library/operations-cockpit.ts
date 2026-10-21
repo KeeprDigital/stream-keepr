@@ -84,8 +84,9 @@ export interface GraphicsIngestionAttentionRead {
 
 /**
  * The catalogue capabilities the Operations Cockpit reads. Every one is an
- * aggregate or a bounded, ordered sample, so the cost of one reading does not
- * grow with the size of the library.
+ * aggregate or a bounded, ordered sample, so one reading's size and number of
+ * catalogue statements do not grow with the size of the library; the time the
+ * aggregates take does.
  */
 export interface GraphicsOperationsCockpitCatalogue {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
