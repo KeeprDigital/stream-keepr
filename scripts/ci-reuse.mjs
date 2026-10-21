@@ -19,7 +19,9 @@
  * did not run on. A token that names a commit whose tree is the group's was
  * minted by a run that executed exactly the group's code, CI's own workflow
  * and scripts included: the same code the group's run would execute. Reusing
- * it trusts nothing the group's own run does not.
+ * it trusts nothing the group's own run does not. (A PR that edits this file,
+ * ci-scope.mjs or ci.yml controls its group's run either way; tree equality
+ * keeps that edit in the diff that lands, where review sees it.)
  *
  * Anything else runs everything: no record, an expired or unreadable one, a
  * bad signature or claim, another tree (main moved, or the group holds more
@@ -41,15 +43,19 @@ import { pathToFileURL } from 'node:url';
 
 const ISSUER = 'https://token.actions.githubusercontent.com';
 const JWKS_URL = `${ISSUER}/.well-known/jwks`;
-const ATTESTATION_FILE = 'attestation.jwt';
+const RECORD_FILE = 'record.jwt';
 /** Ours alone: no cloud provider accepts a token minted for it. */
-export const AUDIENCE = 'stream-keepr:ci-verified-tree';
+const AUDIENCE = 'stream-keepr:ci-verified-tree';
 const CI_WORKFLOW = '.github/workflows/ci.yml';
 const COMMIT_ID = /^[0-9a-f]{40}$/;
 /** A minute of 10s reads for a run whose last job passed a moment ago. */
-const DEFAULT_ATTEMPTS = 6;
+const ATTEMPTS = 6;
 const RETRY_DELAY_MS = 10_000;
-/** Newest first: enough for a PR run re-run a few times, few enough that forged records cannot stall the group. */
+/**
+ * Newest first: enough for a PR run re-run a few times, few enough that
+ * forged records cannot stall the group. Forged records can crowd a genuine
+ * one out of these; that costs a full run, never a skip.
+ */
 const MAX_RECORDS = 5;
 /** A token is about a kilobyte; anything far larger is not one, and is not downloaded. */
 const MAX_RECORD_BYTES = 64 * 1024;
@@ -60,7 +66,7 @@ const MAX_RECORD_BYTES = 64 * 1024;
  *
  * @param {string} tree a tree id
  */
-export function attestationName(tree) {
+export function recordName(tree) {
 	return `ci-verified-tree-${tree}`;
 }
 
@@ -155,14 +161,14 @@ function runProblem(run, jobs, { repository, runId }) {
 /**
  * @typedef {{
  *   artifacts: (name: string) => Promise<readonly { name: string, expired: boolean, size_in_bytes?: number, workflow_run?: { id?: number } }[]>,
- *   attestation: (runId: number, name: string) => Promise<string>,
+ *   record: (runId: number, name: string) => Promise<string>,
  *   jwks: () => Promise<unknown>,
  *   run: (runId: number) => Promise<any>,
  *   jobs: (runId: number) => Promise<readonly any[]>,
  *   commitTree: (sha: string) => Promise<string>,
  *   wait: (ms: number) => Promise<void>,
  * }} ReuseIo what it reads from GitHub
- * @typedef {{ tree: string, repository: string, repositoryId: string, io: ReuseIo, attempts?: number }} FindOptions
+ * @typedef {{ tree: string, repository: string, repositoryId: string, io: ReuseIo }} FindOptions
  */
 
 /**
@@ -172,8 +178,8 @@ function runProblem(run, jobs, { repository, runId }) {
  * @param {FindOptions} options
  * @returns {Promise<string | { id: number, url: string }>} the problem, or the run
  */
-async function checkRecord({ runId, name }, { tree, repository, repositoryId, io, attempts = DEFAULT_ATTEMPTS }) {
-	const verified = verifiedClaims(await io.attestation(runId, name), await io.jwks());
+async function checkRecord({ runId, name }, { tree, repository, repositoryId, io }) {
+	const verified = verifiedClaims(await io.record(runId, name), await io.jwks());
 	if ('problem' in verified)
 		return verified.problem;
 	const claimsWrong = claimsProblem(verified.claims, { repository, repositoryId, runId });
@@ -186,7 +192,7 @@ async function checkRecord({ runId, name }, { tree, repository, repositoryId, io
 	if (verifiedTree !== tree)
 		return `it verified ${sha}, whose tree ${verifiedTree} is not the group's`;
 	let run = await io.run(runId);
-	for (let attempt = 1; run?.status !== 'completed' && attempt < attempts; attempt += 1) {
+	for (let attempt = 1; run?.status !== 'completed' && attempt < ATTEMPTS; attempt += 1) {
 		await io.wait(RETRY_DELAY_MS);
 		run = await io.run(runId);
 	}
@@ -206,7 +212,7 @@ export async function findVerifiedRun(options) {
 	const rejected = [];
 	let records;
 	try {
-		records = (await options.io.artifacts(attestationName(options.tree)))
+		records = (await options.io.artifacts(recordName(options.tree)))
 			.filter(artifact => !artifact.expired
 				&& Number.isSafeInteger(artifact.workflow_run?.id)
 				&& typeof artifact.size_in_bytes === 'number' && artifact.size_in_bytes <= MAX_RECORD_BYTES)
@@ -253,15 +259,15 @@ function git(args) {
  * @param {string} repository owner/name
  * @returns {ReuseIo} the reads `findVerifiedRun` makes
  */
-export function githubIo(repository) {
+function githubIo(repository) {
 	/** @param {string} path */
 	const api = path => JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 }));
 	return {
 		artifacts: async name => api(`repos/${repository}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=20`).artifacts,
-		attestation: async (runId, name) => {
+		record: async (runId, name) => {
 			const directory = mkdtempSync(join(tmpdir(), 'ci-reuse-'));
 			execFileSync('gh', ['run', 'download', String(runId), '--repo', repository, '--name', name, '--dir', directory], { stdio: ['ignore', 'ignore', 'pipe'] });
-			return readFileSync(join(directory, ATTESTATION_FILE), 'utf8');
+			return readFileSync(join(directory, RECORD_FILE), 'utf8');
 		},
 		jwks: async () => {
 			const response = await fetch(JWKS_URL, { signal: AbortSignal.timeout(15_000) });
@@ -274,6 +280,36 @@ export function githubIo(repository) {
 		commitTree: async sha => api(`repos/${repository}/git/commits/${sha}`).tree.sha,
 		wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
 	};
+}
+
+/**
+ * The merge group's side, for `ci-scope.mjs`: the PR run of CI that already
+ * verified exactly the tree of `head`, if one did, read from GitHub with the
+ * job's environment (GITHUB_REPOSITORY, GITHUB_REPOSITORY_ID, GH_TOKEN), and
+ * why each record was rejected, logged. `undefined` runs the gates.
+ *
+ * @param {string} head the merge group's head commit
+ * @returns {Promise<{ id: number, url: string } | undefined>} the run, if one verified the tree
+ */
+export async function verifiedRunOnGitHub(head) {
+	const repository = process.env.GITHUB_REPOSITORY;
+	const repositoryId = process.env.GITHUB_REPOSITORY_ID;
+	if (!repository || !repositoryId || !process.env.GH_TOKEN)
+		return undefined;
+	try {
+		const tree = git(['rev-parse', `${head}^{tree}`]);
+		const { run, rejected } = await findVerifiedRun({ tree, repository, repositoryId, io: githubIo(repository) });
+		for (const reason of rejected)
+			console.log(reason);
+		console.log(run
+			? `Tree ${tree} is exactly the tree ${run.url} verified, every gate run and passed: not running them again.`
+			: `No full, green PR run verified tree ${tree}: running the gates.`);
+		return run;
+	}
+	catch (error) {
+		console.log(`::warning::Could not look for a PR run that verified this tree (${messageOf(error)}): running the gates.`);
+		return undefined;
+	}
 }
 
 /**
@@ -300,10 +336,10 @@ async function record() {
 			throw new Error('the OIDC provider returned no token');
 		const directory = join(process.env.RUNNER_TEMP ?? tmpdir(), 'ci-verified-tree');
 		mkdirSync(directory, { recursive: true });
-		writeFileSync(join(directory, ATTESTATION_FILE), value);
+		writeFileSync(join(directory, RECORD_FILE), value);
 		console.log(`Recorded tree ${tree} of ${git(['rev-parse', 'HEAD'])}.`);
 		if (process.env.GITHUB_OUTPUT)
-			appendFileSync(process.env.GITHUB_OUTPUT, `name=${attestationName(tree)}\npath=${join(directory, ATTESTATION_FILE)}\n`);
+			appendFileSync(process.env.GITHUB_OUTPUT, `name=${recordName(tree)}\npath=${join(directory, RECORD_FILE)}\n`);
 	}
 	catch (error) {
 		console.log(`::warning::Could not record the verified tree (${messageOf(error)}): the merge queue will run everything.`);

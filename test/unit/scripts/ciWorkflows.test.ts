@@ -51,8 +51,11 @@ describe('every required check reports in the merge queue as well as on PRs', ()
 		expect(passed).toMatch(/^ {4}name: CI passed$/m);
 		expect(passed).toMatch(/^ {4}if: always\(\)$/m);
 		expect(needs.toSorted()).toEqual([...all.keys()].filter(id => id !== 'passed').toSorted());
-		// A failed or cancelled job fails it; only success and skipped pass.
+		// A failed or cancelled job fails it; only success and skipped pass. The
+		// record job alone only warns: it proves nothing.
 		expect(passed).toContain('success|skipped) ;;');
+		expect(passed).toMatch(/NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
+		expect(passed).toContain('map(select(.key != "record") | .value.result)');
 	});
 
 	it('`Conventional Commit title` has no condition that could skip it in the queue', () => {

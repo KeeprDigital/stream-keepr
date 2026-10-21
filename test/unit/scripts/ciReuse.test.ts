@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it } from 'vitest';
-import { attestationName, findVerifiedRun } from '../../../scripts/ci-reuse.mjs';
+import { findVerifiedRun, recordName } from '../../../scripts/ci-reuse.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../../..');
 
@@ -54,7 +54,7 @@ const JOBS = ['Decide what the change can affect', 'Lint, typecheck, unit and Nu
 
 interface World {
 	artifacts: { id: number; name: string; expired: boolean; size_in_bytes: number; workflow_run: { id: number } }[];
-	attestation: string;
+	record: string;
 	jwks: unknown;
 	run: Record<string, unknown>;
 	jobs: { name: string; status: string; conclusion: string | null }[];
@@ -64,8 +64,8 @@ interface World {
 /** What GitHub holds after a full, green PR run of CI on a merge commit whose tree is the group's. */
 function world(overrides: Partial<World> = {}): World {
 	return {
-		artifacts: [{ id: 7, name: attestationName(GROUP_TREE), expired: false, size_in_bytes: 1200, workflow_run: { id: RUN_ID } }],
-		attestation: token(),
+		artifacts: [{ id: 7, name: recordName(GROUP_TREE), expired: false, size_in_bytes: 1200, workflow_run: { id: RUN_ID } }],
+		record: token(),
 		jwks: githubJwks,
 		run: { id: RUN_ID, path: '.github/workflows/ci.yml', event: 'pull_request', status: 'completed', conclusion: 'success', head_sha: PR_HEAD, repository: { full_name: REPOSITORY }, html_url: `https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}` },
 		jobs: JOBS.map(name => ({ name, status: 'completed', conclusion: 'success' })),
@@ -77,7 +77,7 @@ function world(overrides: Partial<World> = {}): World {
 function io(state: World) {
 	return {
 		artifacts: async (name: string) => state.artifacts.filter(artifact => artifact.name === name),
-		attestation: async (_runId: number, _name: string) => state.attestation,
+		record: async (_runId: number, _name: string) => state.record,
 		jwks: async () => state.jwks,
 		run: async (_runId: number) => state.run,
 		jobs: async (_runId: number) => state.jobs,
@@ -91,8 +91,8 @@ function io(state: World) {
 	};
 }
 
-function find(state: World) {
-	return findVerifiedRun({ tree: GROUP_TREE, repository: REPOSITORY, repositoryId: REPOSITORY_ID, io: io(state) });
+function find(state: World, overrides: Partial<ReturnType<typeof io>> = {}) {
+	return findVerifiedRun({ tree: GROUP_TREE, repository: REPOSITORY, repositoryId: REPOSITORY_ID, io: { ...io(state), ...overrides } });
 }
 
 describe('a merge group reuses a PR run\'s verification only for the exact tree it verified', () => {
@@ -109,7 +109,7 @@ async function expectFullRun(state: World, reason: RegExp) {
 }
 
 describe('which records it considers', () => {
-	const recorded = (id: number, expired = false) => ({ id, name: attestationName(GROUP_TREE), expired, size_in_bytes: 1200, workflow_run: { id } });
+	const recorded = (id: number, expired = false) => ({ id, name: recordName(GROUP_TREE), expired, size_in_bytes: 1200, workflow_run: { id } });
 
 	it('no PR run recorded this tree: a docs-only or failed run, a fork, or a tree no PR run tested', async () => {
 		await expectFullRun(world({ artifacts: [] }), /no .*record/i);
@@ -121,12 +121,7 @@ describe('which records it considers', () => {
 
 	it('a forged record beside a genuine one does not hide the genuine one', async () => {
 		const state = world({ artifacts: [recorded(666), recorded(RUN_ID)] });
-		const result = await findVerifiedRun({
-			tree: GROUP_TREE,
-			repository: REPOSITORY,
-			repositoryId: REPOSITORY_ID,
-			io: { ...io(state), attestation: async (runId: number) => runId === RUN_ID ? token() : token({ run_id: '666' }, { key: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey }) },
-		});
+		const result = await find(state, { record: async (runId: number) => runId === RUN_ID ? token() : token({ run_id: '666' }, { key: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey }) });
 
 		expect(result.run).toMatchObject({ id: RUN_ID });
 		expect(result.rejected.join('\n')).toMatch(/Run 666: .*signature/);
@@ -135,15 +130,10 @@ describe('which records it considers', () => {
 	it('reads only the newest few, so a flood of forged records costs a full run, never a long one', async () => {
 		const reads: number[] = [];
 		const state = world({ artifacts: Array.from({ length: 50 }, (_, index) => recorded(1000 + index)) });
-		await findVerifiedRun({
-			tree: GROUP_TREE,
-			repository: REPOSITORY,
-			repositoryId: REPOSITORY_ID,
-			io: { ...io(state), attestation: async (runId: number) => {
-				reads.push(runId);
-				return 'forged';
-			} },
-		});
+		await find(state, { record: async (runId: number) => {
+			reads.push(runId);
+			return 'forged';
+		} });
 
 		expect(reads.length).toBeLessThanOrEqual(5);
 	});
@@ -151,27 +141,17 @@ describe('which records it considers', () => {
 	it('never downloads a record far larger than a token', async () => {
 		const reads: number[] = [];
 		const state = world({ artifacts: [{ ...recorded(RUN_ID), size_in_bytes: 50 * 1024 * 1024 }] });
-		const result = await findVerifiedRun({
-			tree: GROUP_TREE,
-			repository: REPOSITORY,
-			repositoryId: REPOSITORY_ID,
-			io: { ...io(state), attestation: async (runId: number) => {
-				reads.push(runId);
-				return token();
-			} },
-		});
+		const result = await find(state, { record: async (runId: number) => {
+			reads.push(runId);
+			return token();
+		} });
 
 		expect(result.run).toBeUndefined();
 		expect(reads).toEqual([]);
 	});
 
 	it('the records cannot be listed', async () => {
-		const result = await findVerifiedRun({
-			tree: GROUP_TREE,
-			repository: REPOSITORY,
-			repositoryId: REPOSITORY_ID,
-			io: { ...io(world()), artifacts: async () => { throw new Error('HTTP 502'); } },
-		});
+		const result = await find(world(), { artifacts: async () => Promise.reject(new Error('HTTP 502')) });
 
 		expect(result.run).toBeUndefined();
 		expect(result.rejected.join('\n')).toMatch(/could not list .*HTTP 502/i);
@@ -190,8 +170,8 @@ describe('only GitHub\'s signature makes a record: a PR\'s own workflow code can
 		['with its claims edited after signing', `${header}.${base64url(JSON.stringify({ ...JSON.parse(Buffer.from(payload!, 'base64url').toString()), sha: 'd'.repeat(40) }))}.${token().split('.')[2]}`],
 		['not a token', 'not-a-token'],
 		['empty', ''],
-	])('a token %s', async (_case, attestation) => {
-		await expectFullRun(world({ attestation }), /signature|token/i);
+	])('a token %s', async (_case, record) => {
+		await expectFullRun(world({ record }), /signature|token/i);
 	});
 
 	it('a key set that cannot be read', async () => {
@@ -214,7 +194,7 @@ describe('a genuine token counts only from a job of this repository\'s own CI wo
 		['a self-hosted runner', { runner_environment: 'self-hosted' }],
 		['another run than the one that uploaded it', { run_id: '1' }],
 	])('not from %s', async (_case, claims) => {
-		await expectFullRun(world({ attestation: token(claims) }), /token/i);
+		await expectFullRun(world({ record: token(claims) }), /token/i);
 	});
 });
 
@@ -249,12 +229,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 	it('waits for a run whose last job passed a moment ago to conclude', async () => {
 		const state = world();
 		const runs = [{ ...state.run, status: 'in_progress', conclusion: null }, state.run];
-		const result = await findVerifiedRun({
-			tree: GROUP_TREE,
-			repository: REPOSITORY,
-			repositoryId: REPOSITORY_ID,
-			io: { ...io(state), run: async () => runs.shift() ?? state.run },
-		});
+		const result = await find(state, { run: async () => runs.shift() ?? state.run });
 
 		expect(result.run).toMatchObject({ id: RUN_ID });
 	});

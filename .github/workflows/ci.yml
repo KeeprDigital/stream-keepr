@@ -177,8 +177,8 @@ jobs:
   # tree (scripts/ci-reuse.mjs). The record is an OIDC token GitHub signs for
   # this job, naming the commit the run executed; the job's own code chooses
   # only the artifact's name, which nothing trusts. A fork's PR gets no token:
-  # its group runs everything. Recording never fails CI; without a record the
-  # group runs everything.
+  # its group runs everything. Recording never fails `CI passed`; without a
+  # record the group runs everything.
   record:
     name: Record the verified tree
     needs: [scope, checks, integration, server-and-browser, worker-guard]
@@ -226,14 +226,22 @@ jobs:
       # PR run already proved it on exactly this tree (VERIFIED_BY names it).
       # Failed or cancelled is not. A draft PR skips everything and passes
       # here, which is harmless: a draft cannot be queued, and marking it ready
-      # runs CI again.
+      # runs CI again. `record` proves nothing, so it only warns: it is waited
+      # for so its artifact exists before the PR can be queued, and a failed
+      # record costs the merge group a full run, never the PR its check.
       - env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          NEEDS: ${{ toJSON(needs) }}
           VERIFIED_BY: ${{ needs.scope.outputs.verified-by }}
         run: |
           if [ -n "$VERIFIED_BY" ]; then
             echo "This tree is exactly the one $VERIFIED_BY verified: its gates were not run again."
           fi
+          RECORD=$(jq -r '.record.result' <<<"$NEEDS")
+          case "$RECORD" in
+            success|skipped) ;;
+            *) echo "::warning::Recording the verified tree ended $RECORD: its merge group will run everything." ;;
+          esac
+          RESULTS=$(jq -r 'to_entries | map(select(.key != "record") | .value.result) | join(" ")' <<<"$NEEDS")
           echo "Job results: $RESULTS"
           for result in $RESULTS; do
             case "$result" in

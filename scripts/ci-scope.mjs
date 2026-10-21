@@ -27,14 +27,15 @@
  *   node scripts/ci-scope.mjs   (reads GITHUB_EVENT_NAME, GITHUB_EVENT_PATH,
  *                                and in a merge group GITHUB_REPOSITORY,
  *                                GITHUB_REPOSITORY_ID and GH_TOKEN; appends
- *                                code= and bundle= to GITHUB_OUTPUT)
+ *                                code=, bundle= and, on reuse, verified-by=
+ *                                to GITHUB_OUTPUT)
  */
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
-import { findVerifiedRun, githubIo } from './ci-reuse.mjs';
+import { verifiedRunOnGitHub } from './ci-reuse.mjs';
 
 /**
  * Docs, editor settings and Dependabot's config. Every workflow is code: each
@@ -89,40 +90,11 @@ function git(args) {
 	return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
-/**
- * The PR run of CI that already verified exactly this merge group's tree, if
- * one did (scripts/ci-reuse.mjs); `undefined` runs the gates as usual.
- *
- * @param {string} eventName GITHUB_EVENT_NAME
- * @param {{ base: string, head: string } | undefined} range the group's revisions
- */
-async function verifiedRunOf(eventName, range) {
-	const repository = process.env.GITHUB_REPOSITORY;
-	const repositoryId = process.env.GITHUB_REPOSITORY_ID;
-	if (eventName !== 'merge_group' || range === undefined || !repository || !repositoryId || !process.env.GH_TOKEN)
-		return undefined;
-	try {
-		const tree = git(['rev-parse', `${range.head}^{tree}`]).trim();
-		const { run, rejected } = await findVerifiedRun({ tree, repository, repositoryId, io: githubIo(repository) });
-		for (const reason of rejected)
-			console.log(reason);
-		if (run)
-			console.log(`Tree ${tree} is exactly the tree ${run.url} verified, every gate run and passed: not running them again.`);
-		else
-			console.log(`No full, green PR run verified tree ${tree}: running the gates.`);
-		return run;
-	}
-	catch (error) {
-		console.log(`::warning::Could not look for a PR run that verified this tree (${error instanceof Error ? error.message : error}): running the gates.`);
-		return undefined;
-	}
-}
-
 async function main() {
 	const eventName = process.env.GITHUB_EVENT_NAME ?? '';
 	const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
 	const range = diffRange(eventName, event);
-	const verified = await verifiedRunOf(eventName, range);
+	const verified = eventName === 'merge_group' && range ? await verifiedRunOnGitHub(range.head) : undefined;
 	if (verified) {
 		console.log('code=false bundle=false');
 		if (process.env.GITHUB_OUTPUT)

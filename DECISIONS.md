@@ -1042,7 +1042,7 @@ The one `production` tag stood for both components but moved only after the app 
 
 ## ADR-0036: The merge queue verifies the exact revision that lands, and only such a revision is released
 
-Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/issues/615)
+Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/issues/615) · Amended 2026-10-21: a merge group reuses a full, green PR run's verification of a byte-identical tree
 
 ### Decision
 
@@ -1065,7 +1065,7 @@ Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/is
 
 CI ran only on PRs, and the ruleset did not require a PR to be up to date with `main`. Two PRs that each passed against the same old `main` could merge one after the other, and nothing ever tested the combined tree. A later release could ship it (#615). Squash-only merging does not change that.
 
-Running the queue made most merges run full CI twice on the same tree, about ten minutes each: once on the PR, which the queue requires, and again on the group when `main` had not moved. Reusing the PR run halves that without weakening "the tree that lands passed CI". The record must not be self-attested, though. A `pull_request` run executes the PR's own workflow code, so one push could upload a fake artifact, write a commit status, or claim any tree, then push an honest `ci.yml` back. GitHub's record of a run names only the PR head, not the merge commit it tested. The OIDC token is the one fact about a run that its code cannot choose: GitHub signs which commit the run executed. A PR cannot get a token naming a commit whose tree is the group's unless it actually ran the group's code.
+Running the queue made most merges run full CI twice on the same tree, about ten minutes each: once on the PR, which the queue requires, and again on the group when `main` had not moved. Reusing the PR run halves that without weakening "the tree that lands passed CI". The record must not be self-attested, though. A `pull_request` run executes the PR's own workflow code, so one push could upload a fake artifact, write a commit status, or claim any tree, then push an honest `ci.yml` back. GitHub's record of a run names only the PR head, not the merge commit it tested. The OIDC token is the one fact about a run that its code cannot choose: GitHub signs which commit the run executed. A PR cannot get a token naming a commit whose tree is the group's unless it actually ran the group's code. What remains is what the queue already trusted: a PR that edits `ci.yml`, `ci-scope.mjs` or `ci-reuse.mjs` controls its own group's run, with or without reuse. Because reuse requires tree equality, that edit has to be in the diff that lands, so review is the control, as before.
 
 ### Consequences
 
