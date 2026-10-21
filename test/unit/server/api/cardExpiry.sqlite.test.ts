@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -105,7 +106,7 @@ let screenId: number;
 const SAVED_AT = Date.UTC(2026, 9, 21, 12, 0, 0);
 
 function request(body?: unknown): H3Event {
-	return { params: { id: String(eventId), screenId: String(screenId) }, body } as unknown as H3Event;
+	return stubH3Event({ params: { id: String(eventId), screenId: String(screenId) }, body });
 }
 
 function card(id: string, timeoutDuration?: number) {
@@ -138,7 +139,7 @@ beforeAll(async () => {
 
 let screenSeq = 0;
 beforeEach(async () => {
-	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.useFakeTimers();
 	vi.setSystemTime(SAVED_AT);
 	screenSeq += 1;
 	const [screen] = await realDb.insert(schema.screens)
@@ -178,7 +179,8 @@ describe('saving a timed Card', () => {
 		await putCard(request(card('bolt', 5_000)));
 		published.length = 0;
 
-		// Every client has gone. An hour later, nothing has run.
+		// The save left no timer behind, and an hour after every client has gone nothing has run.
+		expect(vi.getTimerCount()).toBe(0);
 		vi.setSystemTime(SAVED_AT + 60 * 60_000);
 		await vi.runAllTimersAsync();
 

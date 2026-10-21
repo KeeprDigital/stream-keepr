@@ -166,8 +166,9 @@ describe('useCardStore', () => {
 			expect(store.activeCard).toBeNull();
 		});
 
-		// Characterises #707's trace: a rendering's expiry is visible only. The durable
-		// clear is left to an operator client's DELETE or the next read's cleanup.
+		// Characterises #707's trace on main: a rendering's expiry is visible only. The
+		// durable clear is left to an operator client's DELETE or the next read's cleanup;
+		// ADR-0022's amendment keeps this row and makes the operator path match it.
 		it('hides an expired Card on a rendering without asking the server to clear it', async () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
