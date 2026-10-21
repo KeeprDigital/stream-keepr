@@ -1,8 +1,5 @@
-import type { NullableScreenConfig, ScreenConfig } from '~~/shared/types/screenConfig';
+import type { ScreenConfig, ScreenConfigPatch } from '~~/shared/types/screenConfig';
 import { DEFAULT_SCREEN_CONFIG } from '~~/shared/types/screenConfig';
-
-// Update payload allows `null` to signal "delete this key" (e.g. clear width back to auto)
-type ScreenConfigUpdate = Partial<NullableScreenConfig>;
 
 interface UseScreenConfigUpdateOptions {
 	/** Debounce delay in ms before flushing to API. Default: 300 */
@@ -30,7 +27,7 @@ export function useScreenConfigUpdate(
 
 	const screenStore = useScreenStore();
 
-	const { config, saving, saveError, updateConfig, retry } = useConfigUpdate<ScreenConfig, ScreenConfigUpdate>({
+	const { config, saving, saveError, updateConfig, retry } = useConfigUpdate<ScreenConfig, ScreenConfigPatch>({
 		getStoreConfig: () => {
 			const screen = screenStore.screens.find(s => s.id === toValue(screenId));
 			return (screen?.screenConfig ?? {}) as Partial<ScreenConfig>;
@@ -43,7 +40,7 @@ export function useScreenConfigUpdate(
 	});
 
 	/** Reset layout-related screen config while preserving theme colors and color mode. */
-	function resetScreenConfig(overrides?: ScreenConfigUpdate) {
+	function resetScreenConfig(overrides?: ScreenConfigPatch) {
 		updateConfig({ width: null, height: null, paddingX: null, paddingY: null, horizontalAlign: null, verticalAlign: null, ...(overrides ?? {}) });
 	}
 

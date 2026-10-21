@@ -270,7 +270,7 @@ const modeSettingsLabel = computed(() => {
 								:model-value="config.playerListId ?? null"
 								:items="playerListOptions"
 								class="w-64"
-								@update:model-value="updateConfig({ playerListId: $event ?? undefined })"
+								@update:model-value="updateConfig({ playerListId: $event ?? null })"
 							/>
 						</UFormField>
 					</template>
@@ -389,7 +389,7 @@ const modeSettingsLabel = computed(() => {
 					:model-value="config.headerText ?? ''"
 					placeholder="Auto"
 					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || undefined })"
+					@update:model-value="updateConfig({ headerText: $event || null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

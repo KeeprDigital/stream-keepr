@@ -245,7 +245,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 							:model-value="config.playerListId ?? null"
 							:items="playerListOptions"
 							class="w-64"
-							@update:model-value="updateConfig({ playerListId: $event ?? undefined, currentPage: 1 })"
+							@update:model-value="updateConfig({ playerListId: $event ?? null, currentPage: 1 })"
 						/>
 					</UFormField>
 				</template>
@@ -321,7 +321,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 						:model-value="config.archetypeFilter ?? ''"
 						placeholder="All archetypes"
 						class="w-64"
-						@update:model-value="updateConfig({ archetypeFilter: $event || undefined, currentPage: 1 })"
+						@update:model-value="updateConfig({ archetypeFilter: $event || null, currentPage: 1 })"
 					/>
 				</UFormField>
 			</template>
@@ -369,7 +369,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 					:model-value="config.headerText ?? ''"
 					placeholder="Auto"
 					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || undefined })"
+					@update:model-value="updateConfig({ headerText: $event || null })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>

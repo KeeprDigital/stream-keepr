@@ -1,7 +1,7 @@
 import type { ComputedRef } from 'vue';
 import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
-import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
+import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import { computed, ref, watchEffect } from 'vue';
 import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
@@ -169,7 +169,8 @@ export function usePaginatedScreenMode<M extends PageRotationMode, TRow>(options
 	function persist(patch: Partial<PageRotationConfig>) {
 		if (interactive.value && screen.value && eventId.value) {
 			void Promise.resolve(
-				screenStore.updateModeConfig(eventId.value, screen.value.id, options.mode, patch),
+				// Every paginated mode's config carries the rotation fields, so a patch of them is a patch of it.
+				screenStore.updateModeConfig(eventId.value, screen.value.id, options.mode, patch as ScreenModeConfigPatch<M>),
 			).catch(() => {});
 		}
 	}

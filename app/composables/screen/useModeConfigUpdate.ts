@@ -1,5 +1,5 @@
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { ModeConfigsMap, ModeConfigTypeMap } from '~~/shared/types/screenConfig';
+import type { ModeConfigsMap, ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import { getDisplayResetForMode } from '~~/shared/screenModeDefinitions';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
@@ -34,7 +34,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	const screenStore = useScreenStore();
 	const { getServerTime } = useServerTime();
 
-	const { config, saving, saveState, saveError, updateConfig, retry } = useConfigUpdate<ConfigType>({
+	const { config, saving, saveState, saveError, updateConfig, retry } = useConfigUpdate<ConfigType, ScreenModeConfigPatch<M>>({
 		getStoreConfig: () => {
 			const screen = screenStore.screens.find(s => s.id === toValue(screenId));
 			const modeConfigs = (screen?.modeConfigs ?? {}) as ModeConfigsMap;
@@ -53,7 +53,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	 * restarts from page 1.
 	 */
 	function resetConfig() {
-		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as Partial<ConfigType>);
+		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as ScreenModeConfigPatch<M>);
 	}
 
 	return { config, saving, saveState, saveError, updateConfig, resetConfig, retry };

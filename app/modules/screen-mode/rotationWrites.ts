@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref } from 'vue';
 import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
-import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
+import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import { computed } from 'vue';
 import { pageRotationEdit, restartedRotationAnchor, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
@@ -14,7 +14,7 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
 	/** How many rows the mode would show, from which its page count follows. */
 	rowCount: Readonly<Ref<number>>;
 	/** Saves a patch of the mode's config, as `useModeConfigUpdate` does. */
-	saveConfig: (patch: Partial<ModeConfigTypeMap[M]>) => void;
+	saveConfig: (patch: ScreenModeConfigPatch<M>) => void;
 }
 
 /**
@@ -38,7 +38,7 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	// Every paginated mode's config carries the rotation fields (the Screen Mode
 	// Definitions fail to compile otherwise), so a patch of them is a patch of it.
 	const saveRotation = (patch: Partial<PageRotationConfig>) =>
-		options.saveConfig(patch as Partial<ModeConfigTypeMap[M]>);
+		options.saveConfig(patch as ScreenModeConfigPatch<M>);
 
 	const totalPages = computed(() =>
 		Math.max(1, Math.ceil(options.rowCount.value / rotationPageSize(declaration, options.config.value))),
@@ -56,7 +56,7 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	);
 
 	/** Writes an edit of the mode's config; an edit changing the rotation's shape restarts it from page 1. */
-	function updateConfig(patch: Partial<ModeConfigTypeMap[M]>) {
+	function updateConfig(patch: ScreenModeConfigPatch<M>) {
 		options.saveConfig(pageRotationEdit(declaration, rotation.value, patch, getServerTime()));
 	}
 

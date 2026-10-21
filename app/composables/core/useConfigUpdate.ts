@@ -6,7 +6,11 @@ import { registerPendingEditFlush } from '~/utils/eventStores';
 interface UseConfigUpdateOptions<T, U extends Record<string, any> = Partial<T>> {
 	/** How to read current config from the store */
 	getStoreConfig: () => Partial<T>;
-	/** How to persist updates to the store */
+	/**
+	 * How to persist updates to the store. It must order its own writes: when the
+	 * surface ends, a queued edit is handed to it while an earlier save may still
+	 * be out (the Screen store queues each Screen's writes).
+	 */
 	saveToStore: (updates: U) => Promise<any>;
 	/** Default config values */
 	defaults: T;
@@ -42,7 +46,8 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	const { runRequest } = useRequestFeedback();
 
 	const saving = ref(false);
-	const inFlight = ref(false);
+	/** Requests out: one at a time, except for edits handed off at the end of the surface. */
+	const inFlight = ref(0);
 	const hasCommitted = ref(false);
 	const pendingUpdates = ref<U>({} as U);
 	const localOverrides = ref<U>({} as U);
@@ -77,15 +82,17 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	});
 
 	// Merged config: defaults < store < local overrides.
-	// Null values from overrides are treated as "unset" (filtered out).
+	// A cleared override — `null`, the deletion it is saved as, or `undefined` — reads
+	// as the field's default, which is what the store holds once the deletion lands,
+	// so a cleared field never shows the old value in between (#703). Any other
+	// `null` is "unset" unless the default itself is `null`.
 	const config = computed<T>(() => {
-		const merged = {
-			...defaults,
-			...getStoreConfig(),
-			...localOverrides.value,
-		};
+		const defaultValues = defaults as Record<string, unknown>;
+		const merged: Record<string, unknown> = { ...defaults, ...getStoreConfig() };
+		for (const [key, value] of Object.entries(localOverrides.value))
+			merged[key] = value ?? defaultValues[key];
 		return Object.fromEntries(
-			Object.entries(merged).filter(([, v]) => v !== null),
+			Object.entries(merged).filter(([key, v]) => v !== null || defaultValues[key] === null),
 		) as T;
 	});
 
@@ -137,12 +144,18 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		refusedFields.value = refused;
 	}
 
-	async function flushPendingUpdates() {
-		if (inFlight.value)
+	/**
+	 * Send what is pending, one request at a time. `handOff` sends it even while a
+	 * request is out, for the moment the surface ends: the store orders a Screen's
+	 * writes itself, and once the Event's stores are reset an edit still queued
+	 * here would name a Screen the store no longer holds (#703).
+	 */
+	async function flushPendingUpdates(handOff = false) {
+		if (inFlight.value > 0 && !handOff)
 			return;
 
 		if (Object.keys(pendingUpdates.value).length === 0) {
-			if (!inFlight.value)
+			if (inFlight.value === 0)
 				saving.value = false;
 			return;
 		}
@@ -150,7 +163,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		// Snapshot what we're about to send
 		const updates = { ...pendingUpdates.value };
 		pendingUpdates.value = {};
-		inFlight.value = true;
+		inFlight.value++;
 
 		let saved = false;
 		try {
@@ -177,7 +190,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 			));
 		}
 		finally {
-			inFlight.value = false;
+			inFlight.value--;
 		}
 
 		if (saved) {
@@ -192,7 +205,7 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 			return;
 		}
 
-		if (!inFlight.value)
+		if (inFlight.value === 0)
 			saving.value = false;
 	}
 
@@ -235,15 +248,24 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 	 * and is refused. `registerPendingEditFlush` is the earlier moment; the disposal
 	 * covers every ending that is not a navigation, such as a panel closing.
 	 *
-	 * Nothing else is cleared. `pendingUpdates` in particular must survive, because a
-	 * disposal during an in-flight save finds `flushPendingUpdates` early-returning,
-	 * and the queue is what that save's own continuation picks up.
+	 * Either moment hands off everything still queued, whether or not its debounce has
+	 * fired and whether or not a save is in flight. An edit made during a save waits
+	 * here for that save's continuation, and the reset arrives first: leaving it for
+	 * that continuation sent it after the store had forgotten its Screen, so it was
+	 * lost (#703). The store orders it behind the save in flight, for the Event and
+	 * Screen it was made for.
 	 */
-	const unregisterPendingEditFlush = registerPendingEditFlush(() => saveDebounce.flushIfPending());
+	function handOffPendingEdits() {
+		saveDebounce.cancel();
+		if (Object.keys(pendingUpdates.value).length > 0)
+			void flushPendingUpdates(true);
+	}
+
+	const unregisterPendingEditFlush = registerPendingEditFlush(handOffPendingEdits);
 
 	tryOnScopeDispose(() => {
 		unregisterPendingEditFlush();
-		saveDebounce.flushIfPending();
+		handOffPendingEdits();
 	});
 
 	return { config, saving, saveState, saveError, updateConfig, retry };
