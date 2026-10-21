@@ -14,8 +14,8 @@ import { expectResponseStatus } from './responseStatus';
  * request (#633).
  *
  * The route answers a part it already holds without reading the body sent with
- * it. `nuxt dev`'s public listener then stops reading that body and keeps the
- * connection alive. Node's `fetch` reuses a connection once it has written a
+ * it (and, in the last row, a body over its limit). `nuxt dev`'s public
+ * listener then stops reading that body and keeps the connection alive. Node's `fetch` reuses a connection once it has written a
  * whole body, which on CI's larger loopback buffers can happen before the answer
  * arrives: the multipart `complete` it sent next sat behind the unread bytes and
  * died with `read ECONNRESET` when the listener's keep-alive timeout (5 s plus
@@ -110,6 +110,24 @@ describe('an early answer\'s connection', () => {
 			connection.close();
 			// Leave no staged transfer behind for the next file on this server.
 			await $fetch(base, { method: 'DELETE', headers: { cookie } });
+		}
+	}, 30_000);
+
+	// The body-limit refusal answers the same way: 413 on the declared length,
+	// without reading the body. `requestBodyLimits.test.ts` once retried
+	// every request for it (#396), because its next request on a reused connection
+	// died with EPIPE or ECONNRESET 6 s after a 413.
+	it('answers a request sent on the same connection after a 413 on the declared length', async () => {
+		const connection = rawConnection();
+		try {
+			connection.send('POST', '/api/_test/bounded-raw-mutation', new Uint8Array(2 * 1024 * 1024 + 1));
+			expect(await connection.nextResponse(10_000)).toMatchObject({ status: 413 });
+
+			connection.send('GET', '/api/time');
+			expect(await connection.nextResponse(3_000)).toMatchObject({ status: 200 });
+		}
+		finally {
+			connection.close();
 		}
 	}, 30_000);
 });

@@ -107,11 +107,10 @@ function textItem(id: string, typography: object, styleRefs?: object) {
 
 /**
  * Through `throughOneTransportFailure` because of this file's own 413 rows: the
- * server refuses an oversized body while it is still arriving and closes that
- * connection, and the next request to reuse the pooled socket dies with
- * ECONNRESET before reaching a handler (see `transportRetry.ts`). Observed on the
- * first request after them when `pnpm verify` loads the machine. The bodies are
- * strings, so a retry resends them whole.
+ * first request after them died with ECONNRESET before reaching a handler when
+ * `pnpm verify` loaded the machine. Not yet reproduced, and not known to be the
+ * failure #633's drain fixed (see `transportRetry.ts`). The bodies are strings,
+ * so a retry resends them whole.
  */
 async function request(
 	path: string,
