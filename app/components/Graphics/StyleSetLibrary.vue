@@ -99,7 +99,7 @@ const canAuthor = computed(() => props.writable === true);
 const linkedId = computed(() => props.selectedGraphic?.styleSet?.styleSetId ?? null);
 
 const KIND_LABELS: Record<GraphicStyleEntryKind, string> = {
-	'palette': 'Palette Entry',
+	'palette': 'Palette entry',
 	'typography': 'Typography',
 	'fill': 'Graphic Fill',
 	'surface-style': 'Graphic Surface Style',
@@ -205,7 +205,7 @@ function addEntry() {
 	if (!entry) {
 		// An entry that needs a colour cannot be created before there is one to point
 		// at: a reference to nothing is not a value, and the next publish would refuse it.
-		error.value = 'Add a Palette Entry first — typography and Graphic Fill entries reference one rather than storing a colour.';
+		error.value = 'Add a palette entry first — typography and Graphic Fill entries reference one rather than storing a colour.';
 		return;
 	}
 	void saveDraft([...current.draft, entry]);
