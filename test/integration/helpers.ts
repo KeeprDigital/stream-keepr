@@ -10,6 +10,7 @@ import {
 	INTEGRATION_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY,
 } from './environment';
 import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis';
+import { PRELOAD_PATH as INTEGRATION_SERVER_PRELOAD } from './serverConnectionDiagnostics.mjs';
 import { INTEGRATION_MODE_ENV } from './state';
 
 const disableFsWatchImport = fileURLToPath(new URL('./disable-fs-watch.mjs', import.meta.url));
@@ -20,6 +21,9 @@ const nodeOptions = [
 	disableFsWatchImport,
 	'--import',
 	mockScryfallImport,
+	// Connection diagnostics, and reading an early answer's body to its end (#633).
+	'--require',
+	INTEGRATION_SERVER_PRELOAD,
 ].filter(Boolean).join(' ');
 
 /**

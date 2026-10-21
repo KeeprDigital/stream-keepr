@@ -242,6 +242,27 @@ Gotchas:
   saying what R2 or D1 threw. The full log is
   `node_modules/.cache/integration-servers/<server>.log`, overwritten by the
   next run.
+- **An early answer's body is read to its end** (#633). When a route answers
+  without reading its request body (a multipart part already held, a body over
+  its limit), Nitro's dev proxy stops forwarding the rest, and the public
+  listener keeps the connection alive with those bytes unread. A client that
+  reuses it waits behind them until the keep-alive timeout (5 s plus Node's 1 s
+  buffer) resets it, 6 s after the early answer, with nothing logged: CI's
+  `complete` after a duplicate part died that way. The integration servers read
+  and discard such a body (`test/integration/earlyAnswerDrain.mjs`), as Node
+  does for one nobody started reading; a deployed Worker is not served by
+  `nuxt dev`.
+- **A dropped connection leaves an `[integration-server]` line** (#633). Each
+  server runs with `test/integration/serverConnectionDiagnostics.mjs`
+  preloaded, in `nuxt dev`'s main thread (the public listener and Nitro's
+  proxy) and in Nitro's dev worker thread. It writes one line when a request's
+  connection closes before its response finished, a proxy hop fails or is cut
+  off, a socket times out with a request in flight, the public listener's
+  keep-alive timeout closes a connection, a worker thread starts or exits (a
+  dev worker reload), or a thread's event loop stalls for a second or more. A
+  line carries the method, the path without its query, timings and Node's error
+  code; never a header or a body. The failure report also says when the test
+  worker's own event loop stalled.
 - **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
   timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
   Re-run the single file, then the suite with `--no-file-parallelism`, before
