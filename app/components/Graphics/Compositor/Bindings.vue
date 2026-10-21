@@ -7,6 +7,7 @@ import type {
 	GraphicSourceSelectionDeclaration,
 	GraphicSourceSelectionKind,
 } from '~~/shared/types/graphics';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { getGameConfig } from '~~/shared/config/games';
 import {
@@ -30,6 +31,7 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 } from '~~/shared/types/graphics';
+import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
@@ -69,12 +71,17 @@ const props = defineProps<{
 	game?: Game;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
+	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
+	styleSet?: GraphicStyleAuthoringContext;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
 
-/** Fail closed, as everywhere else: an unstated permission is not a granted one. */
-const canAuthor = computed(() => props.writable === true);
+/** Every edit is aimed at the selected Broadcast Graphic, through the compositor editing module. */
+const { editGraphic } = useCompositorEditing(
+	() => props,
+	graphics => emit('update:graphics', graphics),
+);
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 
@@ -122,15 +129,6 @@ watch(() => selectedGraphic.value?.id, () => {
 	draftSourceKeys.value = {};
 });
 
-function applyToGraphic(
-	merge: (graphics: readonly BroadcastGraphicConfig[], graphicId: string) => BroadcastGraphicConfig[],
-) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-	emit('update:graphics', merge(props.graphics, graphic.id));
-}
-
 /**
  * Whether another Graphic Source Selection fits, on this Broadcast Graphic and across
  * the Screen. The control is disabled rather than silently declining, so an author
@@ -141,7 +139,7 @@ const canDeclareSource = computed(() =>
 );
 
 function addSource() {
-	applyToGraphic((graphics, graphicId) => addGraphicSourceSelection(graphics, graphicId, newSourceKind.value));
+	editGraphic(addGraphicSourceSelection, newSourceKind.value);
 }
 
 /**
@@ -155,11 +153,11 @@ function addSource() {
 function renameSource(key: string, label: string) {
 	if (label.trim() === '')
 		return;
-	applyToGraphic((graphics, graphicId) => patchGraphicSourceSelection(graphics, graphicId, key, { label }));
+	editGraphic(patchGraphicSourceSelection, key, { label });
 }
 
 function removeSource(key: string) {
-	applyToGraphic((graphics, graphicId) => deleteGraphicSourceSelection(graphics, graphicId, key));
+	editGraphic(deleteGraphicSourceSelection, key);
 }
 
 function sourceByKey(key: string): GraphicSourceSelectionDeclaration | undefined {
@@ -201,7 +199,7 @@ function derivationOptions(source: GraphicSourceSelectionDeclaration) {
 
 function chooseDerivation(key: string, value: string) {
 	if (value === OPERATOR_SELECTED) {
-		applyToGraphic((graphics, graphicId) => setGraphicSourceDerivation(graphics, graphicId, key, undefined));
+		editGraphic(setGraphicSourceDerivation, key, undefined);
 		return;
 	}
 
@@ -210,7 +208,7 @@ function chooseDerivation(key: string, value: string) {
 	if (!from)
 		return;
 
-	applyToGraphic((graphics, graphicId) => setGraphicSourceDerivation(graphics, graphicId, key, from));
+	editGraphic(setGraphicSourceDerivation, key, from);
 }
 
 /**
@@ -262,7 +260,7 @@ function bindingSourceOptions() {
 function chooseBindingSource(input: GraphicInputDeclaration, sourceKey: string) {
 	if (sourceKey === OPERATOR_SELECTED) {
 		draftSourceKeys.value = { ...draftSourceKeys.value, [input.key]: OPERATOR_SELECTED };
-		applyToGraphic((graphics, graphicId) => deleteGraphicInputBinding(graphics, graphicId, input.key));
+		editGraphic(deleteGraphicInputBinding, input.key);
 		return;
 	}
 
@@ -273,7 +271,7 @@ function chooseBindingSource(input: GraphicInputDeclaration, sourceKey: string) 
 	if (!source || fieldId === undefined)
 		return;
 
-	applyToGraphic((graphics, graphicId) =>
+	editGraphic((graphics, graphicId) =>
 		isGraphicBindingFieldCompatible(source.kind, fieldId, input.type, props.game)
 			? setGraphicInputBinding(graphics, graphicId, { inputKey: input.key, sourceKey, fieldId }, props.game)
 			: deleteGraphicInputBinding(graphics, graphicId, input.key),
@@ -285,14 +283,12 @@ function chooseBindingField(input: GraphicInputDeclaration, fieldId: string) {
 	if (sourceKey === OPERATOR_SELECTED)
 		return;
 
-	applyToGraphic((graphics, graphicId) =>
-		setGraphicInputBinding(graphics, graphicId, { inputKey: input.key, sourceKey, fieldId }, props.game),
-	);
+	editGraphic(setGraphicInputBinding, { inputKey: input.key, sourceKey, fieldId }, props.game);
 }
 
 function clearBinding(inputKey: string) {
 	draftSourceKeys.value = { ...draftSourceKeys.value, [inputKey]: OPERATOR_SELECTED };
-	applyToGraphic((graphics, graphicId) => deleteGraphicInputBinding(graphics, graphicId, inputKey));
+	editGraphic(deleteGraphicInputBinding, inputKey);
 }
 
 /** The fields this Graphic Input may bind to, in the two groups an author reads. */

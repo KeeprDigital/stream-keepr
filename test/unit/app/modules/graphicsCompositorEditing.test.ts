@@ -2,11 +2,17 @@ import type { BroadcastGraphicConfig, GraphicItemConfig } from '~~/shared/types/
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { CompositorEdit, CompositorEditingState } from '~/modules/graphics/compositorEditing';
+import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ref } from 'vue';
 import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 import {
+	createBroadcastGraphic,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
+	moveBroadcastGraphic,
 	patchBroadcastGraphic,
 	patchGraphicItem,
 	patchGraphicTypography,
@@ -38,6 +44,7 @@ function stack(): BroadcastGraphicConfig[] {
 
 const ITEM = { type: 'item', graphicId: 'lower-third', itemId: 'name' } as const;
 const GRAPHIC = { type: 'graphic', graphicId: 'lower-third' } as const;
+const CANVAS = { type: 'canvas' } as const;
 
 function state(overrides: Partial<CompositorEditingState> = {}): CompositorEditingState {
 	return { graphics: stack(), selectedTarget: ITEM, writable: true, ...overrides };
@@ -144,13 +151,58 @@ describe('resolving the selection', () => {
 	it('refuses an edit that has nothing to say about what is selected', () => {
 		expect(editCompositorStack(state({ selectedTarget: GRAPHIC }), setFontSize)).toBeNull();
 		expect(editCompositorStack(state(), rename)).toBeNull();
-		expect(editCompositorStack(state({ selectedTarget: { type: 'canvas' } }), setFontSize)).toBeNull();
+		expect(editCompositorStack(state({ selectedTarget: CANVAS }), setFontSize)).toBeNull();
 	});
 
 	it('refuses an edit to a selection the stack no longer carries', () => {
 		const gone = { type: 'item', graphicId: 'lower-third', itemId: 'deleted' } as const;
 
 		expect(editCompositorStack(state({ selectedTarget: gone }), setFontSize)).toBeNull();
+	});
+});
+
+describe('editing the stack whatever is selected', () => {
+	const addGraphic: CompositorEdit = {
+		kind: 'stack',
+		apply: graphics => createBroadcastGraphic(graphics, { id: 'scorebug', name: 'Scorebug' }).graphics,
+	};
+
+	it('applies a stack edit with anything or nothing selected', () => {
+		for (const selectedTarget of [ITEM, GRAPHIC, CANVAS]) {
+			expect(editCompositorStack(state({ selectedTarget }), addGraphic)?.map(graphic => graphic.id))
+				.toEqual(['lower-third', 'bug', 'scorebug']);
+		}
+	});
+
+	it('applies a stack edit even after the selection has gone', () => {
+		const gone = { type: 'graphic', graphicId: 'deleted' } as const;
+
+		expect(editCompositorStack(state({ selectedTarget: gone }), addGraphic)).toHaveLength(3);
+	});
+
+	it('still refuses a stack edit while this Session does not hold the lease', () => {
+		expect(editCompositorStack(state({ writable: false, selectedTarget: CANVAS }), addGraphic)).toBeNull();
+	});
+});
+
+describe('editing one named Broadcast Graphic whatever is selected', () => {
+	function hide(graphicId: string): CompositorEdit {
+		return { kind: 'named-graphic', graphicId, apply: graphic => ({ ...graphic, name: `${graphic.name} (hidden)` }) };
+	}
+
+	it('applies to the Broadcast Graphic it names, with anything or nothing selected', () => {
+		for (const selectedTarget of [ITEM, GRAPHIC, CANVAS]) {
+			expect(editCompositorStack(state({ selectedTarget }), hide('bug'))?.map(graphic => graphic.name))
+				.toEqual(['Lower Third', 'Bug (hidden)']);
+		}
+	});
+
+	it('refuses to edit a Broadcast Graphic the stack does not carry', () => {
+		expect(editCompositorStack(state(), hide('deleted'))).toBeNull();
+	});
+
+	it('still refuses while this Session does not hold the lease', () => {
+		expect(editCompositorStack(state({ writable: false }), hide('bug'))).toBeNull();
 	});
 });
 
@@ -161,6 +213,14 @@ describe('replacing the stack', () => {
 
 		expect(next?.map(graphic => graphic.id)).toEqual(['lower-third', 'bug']);
 		expect(next?.[1]).toBe(before.graphics[1]);
+	});
+
+	it('answers nothing to commit for an edit that changes nothing', () => {
+		const frontmostForward: CompositorEdit = { kind: 'stack', apply: graphics => moveBroadcastGraphic(graphics, 'bug', 1) };
+		const unchanged: CompositorEdit = { kind: 'named-graphic', graphicId: 'bug', apply: graphic => graphic };
+
+		expect(editCompositorStack(state(), frontmostForward)).toBeNull();
+		expect(editCompositorStack(state(), unchanged)).toBeNull();
 	});
 
 	it('never changes the stack it was given', () => {
@@ -178,20 +238,39 @@ describe('re-capturing Graphic Style Set overrides', () => {
 		expect(typographyRefOf(next)).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
 	});
 
-	it('re-captures an edit aimed at the Broadcast Graphic as well', () => {
-		const resize: CompositorEdit = {
+	/**
+	 * Every kind of edit that can change a value, each from a selection it applies to.
+	 * The style-reference edits are not here: they write provenance themselves, and
+	 * are pinned below under referencing an entry.
+	 */
+	const resize = (graphic: BroadcastGraphicConfig) => patchGraphicTypography(graphic, 'name', { fontSize: 30 });
+	const everyValueEdit: Array<[string, GraphicsSelectionTarget, CompositorEdit]> = [
+		['an item edit', ITEM, setFontSize],
+		['a graphic edit', GRAPHIC, {
 			kind: 'author',
-			graphic: (graphics, graphicId) => graphics.map(graphic => graphic.id === graphicId
-				? patchGraphicTypography(graphic, 'name', { fontSize: 30 })
-				: graphic),
-		};
+			graphic: (graphics, graphicId) => graphics.map(graphic => graphic.id === graphicId ? resize(graphic) : graphic),
+		}],
+		['a stack edit', CANVAS, { kind: 'stack', apply: graphics => graphics.map(resize) }],
+		['an edit to a named Broadcast Graphic', CANVAS, { kind: 'named-graphic', graphicId: 'lower-third', apply: resize }],
+	];
 
-		const next = editCompositorStack(
-			state({ graphics: stranded(), selectedTarget: GRAPHIC, styleSet: styleSet() }),
-			resize,
-		);
+	it.each(everyValueEdit)('re-captures %s, judged against the stored graphic', (_, selectedTarget, edit) => {
+		const next = editCompositorStack(state({ graphics: stranded(), selectedTarget, styleSet: styleSet() }), edit);
 
 		expect(typographyRefOf(next)).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+	});
+
+	it('judges a graphic against the loaded Style Set only when it is linked to that one', () => {
+		const [linked] = stranded();
+		const elsewhere = { ...linked!, id: 'elsewhere', styleSet: { styleSetId: 'another-style', revision: 1 } };
+
+		const next = editCompositorStack(
+			state({ graphics: [linked!, elsewhere], selectedTarget: CANVAS, styleSet: styleSet() }),
+			{ kind: 'stack', apply: graphics => graphics.map(resize) },
+		);
+
+		expect(next?.[0]?.items[0]?.styleRefs?.typography).toEqual({ entryId: 'heading', overrides: { fontSize: 30 } });
+		expect(next?.[1]?.items[0]?.styleRefs?.typography).toEqual({ entryId: 'heading' });
 	});
 
 	it('records nothing on a slot the Style Set has a pending change in, and keeps the value', () => {
@@ -271,6 +350,18 @@ describe('a panel editing through the module', () => {
 		expect(committed[1]![0]!.items[0]!.label).toBe('Talent');
 	});
 
+	it('says whether it committed, so a panel moves the selection only after an admitted edit', () => {
+		const writable = ref(true);
+		const committed: BroadcastGraphicConfig[][] = [];
+		const { edit } = useCompositorEditing(() => state({ writable: writable.value }), graphics => committed.push(graphics));
+		const remove: CompositorEdit = { kind: 'stack', apply: graphics => graphics.filter(graphic => graphic.id !== 'bug') };
+
+		expect(edit(remove)).toBe(true);
+		writable.value = false;
+		expect(edit(remove)).toBe(false);
+		expect(committed).toHaveLength(1);
+	});
+
 	it('commits nothing for a refused edit', () => {
 		const committed: BroadcastGraphicConfig[][] = [];
 		const editing = useCompositorEditing(() => state({ writable: false }), graphics => committed.push(graphics));
@@ -281,5 +372,65 @@ describe('a panel editing through the module', () => {
 
 		expect(editing.canAuthor.value).toBe(false);
 		expect(committed).toEqual([]);
+	});
+});
+
+/**
+ * #598: no compositor panel checks the Graphics Authoring Lease or replaces the stack
+ * itself. A source scan, because what it guards against is a panel quietly growing a
+ * second path to `update:graphics`: that path would work, so no behaviour test of the
+ * panel would notice it skipping the lease guard or the re-capture.
+ *
+ * A panel is any compositor component that emits `update:graphics`. Its script may
+ * emit it in one place only, the commit it hands `useCompositorEditing`; its template
+ * may forward a child panel's commit unchanged.
+ */
+describe('every compositor panel', () => {
+	const directory = fileURLToPath(new URL('../../../../app/components/Graphics/Compositor', import.meta.url));
+	const panels = readdirSync(directory)
+		.filter(name => name.endsWith('.vue'))
+		.map(name => ({ name, source: readFileSync(join(directory, name), 'utf8') }))
+		.filter(({ source }) => source.includes('\'update:graphics\''))
+		.map(({ name, source }) => {
+			const end = source.indexOf('</script>');
+			return { name, script: source.slice(0, end), template: source.slice(end) };
+		});
+
+	const COMMIT = /emit\('update:graphics'/g;
+	const COMMIT_HANDED_TO_THE_MODULE = /useCompositorEditing\(\s*\(\) => props,\s*graphics => emit\('update:graphics', graphics\),\s*\)/;
+
+	it('has every panel to scan', () => {
+		expect(panels.map(panel => panel.name).sort()).toEqual([
+			'Animation.vue',
+			'Bindings.vue',
+			'Inspector.vue',
+			'SocialProfileProjections.vue',
+			'StackTree.vue',
+		]);
+	});
+
+	it('commits the stack only through the compositor editing module', () => {
+		const offenders = panels
+			.filter(({ script }) => script.match(COMMIT)?.length !== 1 || !COMMIT_HANDED_TO_THE_MODULE.test(script))
+			.map(panel => panel.name);
+
+		expect(offenders, 'emit update:graphics only as the commit handed to useCompositorEditing').toEqual([]);
+	});
+
+	it('forwards a child panel\'s commit from its template unchanged', () => {
+		const offenders = panels
+			.filter(({ template }) => (template.match(COMMIT)?.length ?? 0) !== (template.match(/emit\('update:graphics', \$event\)/g)?.length ?? 0))
+			.map(panel => panel.name);
+
+		expect(offenders, 'a template may only re-emit update:graphics with the child\'s own $event').toEqual([]);
+	});
+
+	it('neither checks the lease nor replaces a Broadcast Graphic in the stack itself', () => {
+		const LEASE_READ = /\bprops\.writable\b|\bwritable\s*[!=]==/;
+		const offenders = panels
+			.filter(({ script }) => LEASE_READ.test(script) || /\breplaceBroadcastGraphic\b/.test(script))
+			.map(panel => panel.name);
+
+		expect(offenders, 'the lease guard and the stack replacement belong to the compositor editing module').toEqual([]);
 	});
 });

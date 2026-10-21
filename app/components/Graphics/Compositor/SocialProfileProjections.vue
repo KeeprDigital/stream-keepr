@@ -5,6 +5,7 @@ import type {
 	OnAirUpdatePolicy,
 	SocialProfileTransition,
 } from '~~/shared/types/graphics';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	addSocialProfileProjection,
@@ -12,7 +13,6 @@ import {
 	deleteSocialProfileProjection,
 	graphicInputKeyFromLabel,
 	patchSocialProfileProjection,
-	replaceBroadcastGraphic,
 	socialProfileProjectionConsumerIds,
 } from '~~/shared/modules/graphics';
 import {
@@ -26,6 +26,7 @@ import {
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 } from '~~/shared/types/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
+import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
@@ -41,10 +42,15 @@ const props = defineProps<{
 	canvasWidth: number;
 	canvasHeight: number;
 	writable?: boolean;
+	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
+	styleSet?: GraphicStyleAuthoringContext;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
-const canAuthor = computed(() => props.writable === true);
+const { canAuthor, edit } = useCompositorEditing(
+	() => props,
+	graphics => emit('update:graphics', graphics),
+);
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 const selectedGraphic = computed(() => selection.value.kind === 'graphic' ? selection.value.graphic : null);
 const projections = computed(() => selectedGraphic.value?.socialProfileProjections ?? []);
@@ -88,65 +94,57 @@ watch(talentSources, (sources) => {
 		newSourceKey.value = sources[0]?.key ?? '';
 }, { immediate: true });
 
-function replace(graphic: BroadcastGraphicConfig) {
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, graphic));
+/**
+ * Edit the selected Broadcast Graphic through the compositor editing module. Answers
+ * whether the edit was committed: one that was refused, or that changed nothing,
+ * leaves the form as the author left it.
+ */
+function editSelectedGraphic(apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig): boolean {
+	const graphic = selectedGraphic.value;
+	return graphic !== null && edit({ kind: 'named-graphic', graphicId: graphic.id, apply });
 }
 
 function addProjection() {
-	const graphic = selectedGraphic.value;
-	if (
-		!canAuthor.value
-		|| !graphic
-		|| projectionBudgetFeedback.value
-		|| newLabel.value.trim() === ''
-		|| newSourceKey.value === ''
-	) {
+	if (projectionBudgetFeedback.value || newLabel.value.trim() === '' || newSourceKey.value === '')
 		return;
-	}
-	const projectionKey = graphicInputKeyFromLabel(
-		newLabel.value,
-		(graphic.socialProfileProjections ?? []).map(projection => projection.key),
-	);
-	const updated = newGroupId.value
-		? associateSocialProfileProjection(graphic, {
-				label: newLabel.value,
-				projectionKey,
-				sourceKey: newSourceKey.value,
-				presentationGroupId: newGroupId.value,
-			})
-		: addSocialProfileProjection(graphic, {
-				label: newLabel.value,
-				projectionKey,
-				sourceKey: newSourceKey.value,
-				presentationGroupId: randomUuid(),
-				iconItemId: randomUuid(),
-				handleItemId: randomUuid(),
-				canvasWidth: props.canvasWidth,
-				canvasHeight: props.canvasHeight,
-			});
-	if (updated === graphic)
+	// An admitted add declares exactly one more projection, so the next suggested
+	// label is counted before the edit rather than read off props mid-update.
+	const nextLabel = `Social Profile ${projections.value.length + 2}`;
+	const added = editSelectedGraphic((graphic) => {
+		const projectionKey = graphicInputKeyFromLabel(
+			newLabel.value,
+			(graphic.socialProfileProjections ?? []).map(projection => projection.key),
+		);
+		return newGroupId.value
+			? associateSocialProfileProjection(graphic, {
+					label: newLabel.value,
+					projectionKey,
+					sourceKey: newSourceKey.value,
+					presentationGroupId: newGroupId.value,
+				})
+			: addSocialProfileProjection(graphic, {
+					label: newLabel.value,
+					projectionKey,
+					sourceKey: newSourceKey.value,
+					presentationGroupId: randomUuid(),
+					iconItemId: randomUuid(),
+					handleItemId: randomUuid(),
+					canvasWidth: props.canvasWidth,
+					canvasHeight: props.canvasHeight,
+				});
+	});
+	if (!added)
 		return;
-	replace(updated);
-	newLabel.value = `Social Profile ${(updated.socialProfileProjections?.length ?? 0) + 1}`;
+	newLabel.value = nextLabel;
 	newGroupId.value = '';
 }
 
 function patchProjection(key: string, patch: SocialProfileProjectionPatch) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-	const updated = patchSocialProfileProjection(graphic, key, patch);
-	if (updated !== graphic)
-		replace(updated);
+	editSelectedGraphic(graphic => patchSocialProfileProjection(graphic, key, patch));
 }
 
 function removeProjection(key: string, deletePresentationGroup: boolean) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-	const updated = deleteSocialProfileProjection(graphic, key, { deletePresentationGroup });
-	if (updated !== graphic)
-		replace(updated);
+	editSelectedGraphic(graphic => deleteSocialProfileProjection(graphic, key, { deletePresentationGroup }));
 }
 
 function consumerCount(key: string) {

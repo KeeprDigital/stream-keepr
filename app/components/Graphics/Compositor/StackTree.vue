@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { GraphicsHostContract } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
+import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	addGraphicGroupChild,
@@ -17,9 +18,9 @@ import {
 	graphicItemSummary,
 	moveBroadcastGraphic,
 	moveGraphicItem,
-	replaceBroadcastGraphic,
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
+import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { graphicsSelectionKey } from '~/modules/graphics/selection';
 import GraphicsCompositorReorderControls from './ReorderControls.vue';
 
@@ -55,6 +56,8 @@ const props = defineProps<{
 	 * but is offered no authoring control and emits no change.
 	 */
 	writable?: boolean;
+	/** The published Graphic Style Set the selected Broadcast Graphic is linked to. */
+	styleSet?: GraphicStyleAuthoringContext;
 }>();
 
 const emit = defineEmits<{
@@ -63,11 +66,17 @@ const emit = defineEmits<{
 }>();
 
 /**
- * Fail closed: a caller that does not grant authoring gets a read-only editor.
- * Only a session confirmed to hold the artifact's Graphics Authoring Lease authors
- * it, so an absent prop must never read as permission.
+ * Every edit goes through the compositor editing module, which holds the one fail-closed
+ * lease guard. None of the tree's edits follows the selection: each is aimed at the
+ * stack as a whole, or at the Graphic Layer Order of the graphic the tree is showing,
+ * whether that graphic or one of its items is selected. An add or a delete moves the
+ * selection only once its edit is admitted, so a refused one leaves the author where
+ * they were.
  */
-const canAuthor = computed(() => props.writable === true);
+const { canAuthor, edit } = useCompositorEditing(
+	() => props,
+	graphics => emit('update:graphics', graphics),
+);
 
 /**
  * Whether the tree roots an author-editable stack at all.
@@ -133,76 +142,71 @@ function isSelected(target: GraphicsSelectionTarget) {
 }
 
 /**
- * The stack mutators check the contract as well as the lease. Hiding a control is
- * a presentation decision; refusing to emit is what makes "this host has no stack"
- * a property of the component rather than of its current markup.
+ * The stack edits check the contract as well. Hiding a control is a presentation
+ * decision; refusing to emit is what makes "this host has no stack" a property of the
+ * component rather than of its current markup.
  */
+function editStack(apply: (graphics: readonly BroadcastGraphicConfig[]) => BroadcastGraphicConfig[]): boolean {
+	return showStack.value && edit({ kind: 'stack', apply });
+}
+
+/**
+ * Edit the Graphic Layer Order of the Broadcast Graphic the tree is showing. Answers
+ * that graphic's id once the edit is admitted, and null when nothing was committed.
+ */
+function editShownGraphic(apply: (graphic: BroadcastGraphicConfig) => BroadcastGraphicConfig): string | null {
+	const graphicId = selectedGraphic.value?.id;
+	return graphicId !== undefined && edit({ kind: 'named-graphic', graphicId, apply }) ? graphicId : null;
+}
+
 function addGraphic() {
-	if (!canAuthor.value || !showStack.value)
-		return;
-	const { graphics, graphicId } = createBroadcastGraphic(props.graphics, { id: randomUuid() });
-	emit('update:graphics', graphics);
-	emit('update:selectedTarget', { type: 'graphic', graphicId });
+	const graphicId = randomUuid();
+	if (editStack(graphics => createBroadcastGraphic(graphics, { id: graphicId }).graphics))
+		emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function moveGraphic(graphicId: string, delta: 1 | -1) {
-	if (!canAuthor.value || !showStack.value)
-		return;
-	emit('update:graphics', moveBroadcastGraphic(props.graphics, graphicId, delta));
+	editStack(graphics => moveBroadcastGraphic(graphics, graphicId, delta));
 }
 
 function removeGraphic(graphicId: string) {
-	if (!canAuthor.value || !showStack.value)
-		return;
-	emit('update:graphics', deleteBroadcastGraphic(props.graphics, graphicId));
-	emit('update:selectedTarget', { type: 'canvas' });
+	if (editStack(graphics => deleteBroadcastGraphic(graphics, graphicId)))
+		emit('update:selectedTarget', { type: 'canvas' });
 }
 
 function addItem(kind: GraphicItemKind) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-
-	const { graphic: updated, itemId } = addGraphicItem(graphic, {
+	const itemId = randomUuid();
+	const graphicId = editShownGraphic(graphic => addGraphicItem(graphic, {
 		kind,
-		id: randomUuid(),
+		id: itemId,
 		canvasWidth: props.canvasWidth,
 		canvasHeight: props.canvasHeight,
-	});
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, updated));
-	emit('update:selectedTarget', { type: 'item', graphicId: graphic.id, itemId });
+	}).graphic);
+	if (graphicId)
+		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
 }
 
 function addChild(kind: GraphicItemKind) {
-	const graphic = selectedGraphic.value;
 	const group = selectedGroup.value;
-	if (!canAuthor.value || !graphic || !group || kind === 'group')
+	if (!group || kind === 'group')
 		return;
 
 	// A child is sized against its Graphic Group, not the Screen canvas, so this
 	// deliberately passes no canvas dimensions.
-	const { graphic: updated, itemId } = addGraphicGroupChild(graphic, {
-		kind,
-		groupId: group.id,
-		id: randomUuid(),
-	});
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, updated));
-	emit('update:selectedTarget', { type: 'item', graphicId: graphic.id, itemId });
+	const itemId = randomUuid();
+	const graphicId = editShownGraphic(graphic => addGraphicGroupChild(graphic, { kind, groupId: group.id, id: itemId }).graphic);
+	if (graphicId)
+		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
 }
 
 function moveItem(itemId: string, delta: 1 | -1) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, moveGraphicItem(graphic, itemId, delta)));
+	editShownGraphic(graphic => moveGraphicItem(graphic, itemId, delta));
 }
 
 function removeItem(itemId: string) {
-	const graphic = selectedGraphic.value;
-	if (!canAuthor.value || !graphic)
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, deleteGraphicItem(graphic, itemId)));
-	emit('update:selectedTarget', { type: 'graphic', graphicId: graphic.id });
+	const graphicId = editShownGraphic(graphic => deleteGraphicItem(graphic, itemId));
+	if (graphicId)
+		emit('update:selectedTarget', { type: 'graphic', graphicId });
 }
 
 function presentationGroupProjection(itemId: string) {

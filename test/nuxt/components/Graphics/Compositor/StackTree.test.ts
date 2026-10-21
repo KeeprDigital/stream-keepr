@@ -3,12 +3,13 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
+import ReorderControls from '~/components/Graphics/Compositor/ReorderControls.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -318,6 +319,17 @@ describe('graphicsCompositorStackTree', () => {
 		expect(wrapper.get('[aria-label="Delete Name block"]').attributes('disabled')).toBeDefined();
 		expect(wrapper.get('[data-testid="presentation-group-delete-feedback"]').text())
 			.toContain('delete the projection and Presentation Group together');
+
+		// Asked anyway, the delete changes nothing, so nothing is written and the
+		// selection stays on the group rather than falling back to its graphic.
+		wrapper.findAllComponents(ReorderControls)
+			.find(controls => controls.props('label') === 'Name block')!
+			.vm
+			.$emit('remove');
+		await nextTick();
+
+		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		expect(wrapper.emitted('update:selectedTarget')).toBeUndefined();
 	});
 
 	it('nests the children of a Graphic Group under it as one layer', async () => {

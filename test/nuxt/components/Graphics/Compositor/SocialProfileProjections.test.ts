@@ -2,7 +2,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, nextTick } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 
 enableAutoUnmount(afterEach);
@@ -255,6 +255,22 @@ describe('graphicsCompositorSocialProfileProjections', () => {
 		expect(wrapper.find('[data-testid="social-profile-projection-new"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="social-profile-projection-delete-combined"]').exists()).toBe(false);
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
+	});
+
+	it('writes nothing once this session loses the lease, even from a control still on screen', async () => {
+		const wrapper = await mountComponent();
+		await wrapper.get('[data-testid="social-profile-projection-add"]').trigger('click');
+		await wrapper.setProps({ graphics: [emittedGraphic(wrapper)], writable: false });
+
+		// Emitted by the control itself: a disabled input would swallow a DOM event, and
+		// what is under test is that the edit is refused, not that the control is disabled.
+		const dwell = wrapper.findAllComponents(UInputNumberStub)
+			.find(input => input.attributes('data-testid') === 'social-profile-projection-dwell');
+		dwell!.vm.$emit('update:modelValue', 60);
+		await nextTick();
+
+		expect(dwell!.attributes('disabled')).toBeDefined();
+		expect(wrapper.emitted('update:graphics')).toHaveLength(1);
 	});
 
 	it('names the source prerequisite when no Talent source is declared', async () => {
