@@ -2,33 +2,35 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import { PLAYER_SIDE_VALUES } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
+import { editorField } from './fields';
 
 /** The Feature Match control Screen Mode's config contract: its shape, type, and defaults. */
 export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 	featureMatchId: z.number().int().positive().nullable(),
 	showNames: z.boolean(),
-	showRecords: z.boolean(),
-	showDeckNames: z.boolean(),
-	showPronouns: z.boolean(),
-	showClock: z.boolean(),
-	showCounters: z.boolean(),
-	showSeatLabels: z.boolean().optional(),
+	showRecords: editorField(z.boolean(), { label: 'Show Player Record' }),
+	/** Labelled for Magic; the editor names the game's own player identity in place of "Deck". */
+	showDeckNames: editorField(z.boolean(), { label: 'Show Deck Names' }),
+	showPronouns: editorField(z.boolean(), { label: 'Show Pronouns' }),
+	showClock: editorField(z.boolean(), { label: 'Show Clock' }),
+	showCounters: editorField(z.boolean(), { label: 'Show Counters' }),
+	showSeatLabels: editorField(z.boolean().optional(), { label: 'Show Seat Labels' }),
 	// Layout: which player data slot renders on the left side of the screen
-	leftSidePlayer: z.enum(PLAYER_SIDE_VALUES).optional(),
+	leftSidePlayer: editorField(z.enum(PLAYER_SIDE_VALUES).optional(), { label: 'Left Side of Screen' }),
 	// Turn controls: show the turn/active-player widget
-	showTurnControls: z.boolean().optional(),
+	showTurnControls: editorField(z.boolean().optional(), { label: 'Show Turn Controls' }),
 	// Overtime: show the extra turns tracker when overtime begins
-	showOvertime: z.boolean().optional(),
+	showOvertime: editorField(z.boolean().optional(), { label: 'Show Overtime' }),
 	// Mulligan info: show the cards kept indicator
-	showMulliganInfo: z.boolean().optional(),
+	showMulliganInfo: editorField(z.boolean().optional(), { label: 'Show Mulligan Info' }),
 	// LGS: show the player's Local Game Store
-	showLgs: z.boolean().optional(),
+	showLgs: editorField(z.boolean().optional(), { label: 'Show LGS' }),
 	// Table number: show the feature match table number in the header
-	showTableNumber: z.boolean().optional(),
+	showTableNumber: editorField(z.boolean().optional(), { label: 'Show Table Number' }),
 	// Control permissions: what players can do from the control screen
-	allowLifeControls: z.boolean().optional(),
-	allowGameWinControls: z.boolean().optional(),
-	allowCounterControls: z.boolean().optional(),
+	allowLifeControls: editorField(z.boolean().optional(), { label: 'Life Total Controls' }),
+	allowGameWinControls: editorField(z.boolean().optional(), { label: 'Game Win Controls' }),
+	allowCounterControls: editorField(z.boolean().optional(), { label: 'Counter Controls' }),
 }, {
 	featureMatchId: null,
 	showNames: true,

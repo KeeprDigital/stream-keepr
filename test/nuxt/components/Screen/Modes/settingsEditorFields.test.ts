@@ -30,7 +30,6 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {};
 const NOT_YET_GUARDED = new Set<ScreenMode>([
 	'background',
 	'topCut',
-	'feature-match',
 	'feature-match-overlay',
 	'broadcast-graphics',
 ]);
@@ -38,6 +37,7 @@ const NOT_YET_GUARDED = new Set<ScreenMode>([
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
 	'card': { editor: 'Card', variants: [{}] },
+	'feature-match': { editor: 'FeatureMatch', variants: [{}] },
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
 	'deck': {
 		editor: 'Deck',
