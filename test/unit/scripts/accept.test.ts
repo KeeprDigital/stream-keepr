@@ -75,4 +75,90 @@ describe('pnpm accept', () => {
 			vi.restoreAllMocks();
 		}
 	});
+
+	describe('deploy day', () => {
+		const complete = {
+			STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: 'https://stream.keepr.digital',
+			STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL: 'ops@keepr.digital',
+			STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD: 'their-password',
+			CLOUDFLARE_ACCOUNT_ID: '0123456789abcdef0123456789abcdef',
+		};
+
+		async function deployDay(env: Record<string, string | undefined>) {
+			const exitCode = process.exitCode;
+			const runHarness = vi.fn(async () => 0);
+			const written: string[] = [];
+			vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+			vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+				written.push(String(chunk));
+				return true;
+			});
+			try {
+				await main(['node', 'accept.mjs', 'deployed'], { env, runHarness });
+				return { exitCode: process.exitCode, runHarness, stderr: written.join('') };
+			}
+			finally {
+				process.exitCode = exitCode;
+				vi.restoreAllMocks();
+			}
+		}
+
+		it('runs no gate when the target is incomplete, so the first cannot write before a later one refuses', async () => {
+			// #619: the validator gate used to stage fixtures in production and only
+			// then would graphics-delivery stop for want of an operator.
+			for (const missing of Object.keys(complete)) {
+				const { exitCode, runHarness, stderr } = await deployDay({ ...complete, [missing]: undefined });
+
+				expect(runHarness).not.toHaveBeenCalled();
+				expect(exitCode).toBe(1);
+				expect(stderr).toMatch(/^accept-deployed (?:harness-precondition-unmet|harness-operator-unavailable) /mu);
+			}
+		});
+
+		it('runs no gate against an alternate URL the committed configs do not serve', async () => {
+			const { runHarness, stderr } = await deployDay({ ...complete, STREAM_KEEPR_BROWSER_ACCEPTANCE_URL: 'https://staging.keepr.digital' });
+
+			expect(runHarness).not.toHaveBeenCalled();
+			expect(stderr).toContain('accept-deployed harness-target-inconsistent reason=origin-not-installation');
+		});
+
+		it('cannot start a real runner from an imported main, even for a complete target', async () => {
+			// The regression #619's development hit: an imported `main` with no
+			// injected runner spawned the real deployed gates on the shell's login.
+			vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+			vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+			try {
+				await expect(main(['node', 'accept.mjs', 'deployed'], { env: complete }))
+					.rejects
+					.toThrow(/without a runHarness/u);
+				await expect(main(['node', 'accept.mjs', 'silent-video-validator', '--deployed']))
+					.rejects
+					.toThrow(/without a runHarness/u);
+			}
+			finally {
+				vi.restoreAllMocks();
+			}
+		});
+
+		it('refuses an incomplete target before reaching any runner, injected or not', async () => {
+			const exitCode = process.exitCode;
+			vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+			vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+			try {
+				await main(['node', 'accept.mjs', 'deployed'], { env: {} });
+				expect(process.exitCode).toBe(1);
+			}
+			finally {
+				process.exitCode = exitCode;
+				vi.restoreAllMocks();
+			}
+		});
+
+		it('runs every gate in order once the target is complete', async () => {
+			const { exitCode, runHarness } = await deployDay(complete);
+
+			expect(exitCode).toBeUndefined();
+			expect(runHarness.mock.calls).toEqual(DEPLOY_DAY.map(name => [name, ['--deployed']]));
+		});
+	});
 });

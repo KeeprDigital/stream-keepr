@@ -1,10 +1,23 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import {
+	assertManifestTarget,
+	DEFAULT_CLEANUP_MANIFEST,
+	drainCleanupManifest,
+	isSettledStatus,
+	openCleanupManifest,
+} from './graphics-acceptance/cleanup-manifest.mjs';
+import { loadCommittedInstallation, resolveDeployedTarget, stagingBucketOf } from './graphics-acceptance/deployed-target.mjs';
+import { AcceptanceFailure } from './graphics-acceptance/evidence.mjs';
+import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
+import { openOperatorSession } from './graphics-acceptance/operator.mjs';
+import { createWranglerCommands, RemoteCommandFailure } from './graphics-acceptance/validator-commands.mjs';
 
 /**
  * Acceptance for the silent-video validation runtime.
@@ -14,15 +27,31 @@ import process from 'node:process';
  * and drives the production service-binding contract end to end, including a
  * deterministic metadata rejection.
  *
- * `--deployed` stages the same fixtures in the production staging bucket,
- * triggers the deployed `silent-video-validation` Workflow for each, and
- * verifies decode, playback, seeking, transparency, and the deterministic
- * poster against the exact staged revision before cleaning up.
+ * `--deployed` stages the same fixtures in the target installation's staging
+ * bucket, triggers its `silent-video-validation` Workflow for each, and verifies
+ * decode, playback, seeking, transparency, and the deterministic poster against
+ * the exact staged revision before cleaning up (#619):
+ *
+ * 1. **Preflight, before anything is written.** The shared deployed target
+ *    (`deployed-target.mjs`) resolves the URL, the operator, an explicit
+ *    account, and the bucket and Workflow the installation that URL names
+ *    binds. A cleanup manifest left by an earlier run stops it. The operator
+ *    signs in, and the account is asked read-only whether it holds the bucket
+ *    and the Workflow.
+ * 2. **Every write is recorded first** in the cleanup manifest
+ *    (`cleanup-manifest.mjs`), and deleted at the end whatever the verdict. A
+ *    delete that fails leaves its key listed and fails the run.
+ * 3. **Output is evidence only.** Pass and failure lines go through the shared
+ *    formatter; a failure names its fixture, step and exit code, never a key,
+ *    digest, validation id, Wrangler argument or remote diagnostic.
+ *
+ * `--deployed --cleanup` retries a left manifest's deletes against the same
+ * target, and is safe to repeat.
  */
 
-const deployed = process.argv.includes('--deployed');
-const repoRoot = new URL('..', import.meta.url).pathname;
-const validatorConfig = join(repoRoot, 'workers/silent-video-validator/wrangler.jsonc');
+const HARNESS = 'silent-video-validator-v1';
+
+const FIXTURE_NAMES = ['h264Mp4', 'vp9Webm', 'vp9AlphaWebm'];
 const fixtures = JSON.parse(await readFile(
 	new URL('./silent-video-validator-fixtures.json', import.meta.url),
 	'utf8',
@@ -51,98 +80,100 @@ function validationInput(fixture, operationId) {
 	};
 }
 
+const sourceKey = operationId => `ingestion/${operationId}/source`;
+const posterKey = validationId => `validation/silent-video/${validationId}/poster`;
+
 /**
- * Wrangler colourises even when piped, and ignores NO_COLOR/FORCE_COLOR — an
- * ANSI prefix on the `Status:` line defeats a `^Status:` anchor, which read as
- * "deployed validation did not complete in time" while the workflow had
- * completed in seconds. This output is parsed, so the codes are stripped here,
- * once, for every caller.
+ * Run one adapter command, turning its failure into `code` with `detail` and
+ * the exit code. The failure's own message is never read: it is the adapter's.
  */
-function stripAnsi(text) {
-	// eslint-disable-next-line no-control-regex
-	return text.replace(/\x1B\[[0-9;]*m/g, '');
-}
-
-function wrangler(argumentList, options = {}) {
-	return new Promise((resolve, reject) => {
-		const child = spawn('npx', ['wrangler', ...argumentList], {
-			cwd: repoRoot,
-			stdio: ['ignore', 'pipe', 'pipe'],
-			...options,
-		});
-		let stdout = '';
-		let stderr = '';
-		child.stdout.setEncoding('utf8').on('data', chunk => stdout += chunk);
-		child.stderr.setEncoding('utf8').on('data', chunk => stderr += chunk);
-		child.once('error', reject);
-		child.once('exit', (code) => {
-			if (code === 0)
-				resolve(stripAnsi(stdout));
-			else
-				reject(new Error(`wrangler ${argumentList.join(' ')} exited ${code}: ${stripAnsi(stderr.trim() || stdout.trim())}`));
-		});
-	});
-}
-
-async function seedStagedSource(fixture, operationId, persistTo) {
-	const workspace = await mkdtemp(join(tmpdir(), 'silent-video-acceptance-'));
-	const file = join(workspace, 'source.bin');
+async function remote(code, detail, action) {
 	try {
-		await writeFile(file, Buffer.from(fixture.base64, 'base64'));
-		await wrangler([
-			'r2',
-			'object',
-			'put',
-			`stream-graphics-asset-staging/ingestion/${operationId}/source`,
-			'--file',
-			file,
-			'--content-type',
-			fixture.facts.canonicalMime,
-			...(persistTo ? ['--local', '--persist-to', persistTo] : ['--remote']),
-			'--config',
-			validatorConfig,
-		]);
+		return await action();
 	}
-	finally {
-		await rm(workspace, { recursive: true, force: true });
+	catch (error) {
+		if (error instanceof RemoteCommandFailure)
+			throw new AcceptanceFailure(code, { ...detail, exit: error.exit ?? 'signal' });
+		throw error;
 	}
 }
 
-function assertAccepted(fixture, input, headers, posterBytes, label) {
-	const required = (name) => {
-		const value = headers.get(name);
+/** A fixture's command, named by the one-word step it was. */
+function command(fixture, step, action) {
+	return remote('validator-command-failed', { fixture, step }, action);
+}
+
+const operationIdFor = (suffix, name) => `acceptance-${suffix}-${name.toLowerCase()}`;
+
+function stageFixture(commands, target, name, operationId) {
+	return command(name, 'put', () => commands.putObject({
+		target,
+		key: sourceKey(operationId),
+		bytes: Buffer.from(fixtures[name].base64, 'base64'),
+		contentType: fixtures[name].facts.canonicalMime,
+	}));
+}
+
+/**
+ * The stage a local rejection names is the validator's response text, so only
+ * a word of the shape the validator uses travels.
+ */
+function stageWord(stage) {
+	return typeof stage === 'string' && /^[a-z][a-z-]{0,31}$/.test(stage) ? stage : 'unrecognised';
+}
+
+/** The first field of a settled output that is not an exact acceptance of `input`. */
+function inexactField(fixture, input, output) {
+	if (output.outcome !== 'accepted')
+		return 'outcome';
+	if (output.idempotencyKey !== input.idempotencyKey)
+		return 'idempotencyKey';
+	if (output.mutedInlinePlayback !== true)
+		return 'mutedInlinePlayback';
+	if (output.seeked !== true)
+		return 'seeked';
+	if (fixture.facts.hasAlpha && output.transparencyRendered !== true)
+		return 'transparencyRendered';
+	if (typeof output.posterKey !== 'string' || typeof output.posterDigest !== 'string')
+		return 'poster';
+	return undefined;
+}
+
+function assertAccepted(fixture, input, headers, posterBytes, name) {
+	const required = (header) => {
+		const value = headers.get(header);
 		if (!value)
-			throw new Error(`${label}: response omitted ${name}`);
+			throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'header-missing' });
 		return value;
 	};
+	const unexpected = field => new AcceptanceFailure('validator-output-unexpected', { fixture: name, field });
 	if (required('x-stream-keepr-operation-id') !== input.operationId
 		|| required('x-stream-keepr-idempotency-key') !== input.idempotencyKey
 		|| required('x-stream-keepr-source-digest') !== input.sourceDigest
 		|| required('x-stream-keepr-facts-digest') !== input.factsDigest) {
-		throw new Error(`${label}: response was not bound to the exact validation input`);
+		throw unexpected('binding');
 	}
-	if (required('x-stream-keepr-muted-inline-playback') !== 'true'
-		|| required('x-stream-keepr-seeked') !== 'true') {
-		throw new Error(`${label}: playback and seek proof headers missing`);
-	}
-	const transparency = required('x-stream-keepr-transparency-rendered');
-	if (fixture.facts.hasAlpha && transparency !== 'true')
-		throw new Error(`${label}: VP9 transparency was not proven`);
+	if (required('x-stream-keepr-muted-inline-playback') !== 'true')
+		throw unexpected('mutedInlinePlayback');
+	if (required('x-stream-keepr-seeked') !== 'true')
+		throw unexpected('seeked');
+	if (fixture.facts.hasAlpha && required('x-stream-keepr-transparency-rendered') !== 'true')
+		throw unexpected('transparencyRendered');
 	if (Number(required('x-stream-keepr-video-width')) !== fixture.facts.width
 		|| Number(required('x-stream-keepr-video-height')) !== fixture.facts.height) {
-		throw new Error(`${label}: verified dimensions do not match inspection`);
+		throw unexpected('dimensions');
 	}
 	if (Math.abs(Number(required('x-stream-keepr-video-duration')) - fixture.facts.durationSeconds) > 0.05)
-		throw new Error(`${label}: verified duration does not match inspection`);
+		throw unexpected('duration');
 	if (Math.abs(Number(required('x-stream-keepr-poster-time')) - fixture.facts.posterTimeSeconds) > 0.001)
-		throw new Error(`${label}: poster time does not match the settled selection rule`);
+		throw unexpected('posterTime');
 	if (sha256Hex(posterBytes) !== required('x-stream-keepr-poster-digest'))
-		throw new Error(`${label}: poster bytes do not match their digest`);
+		throw new AcceptanceFailure('validator-poster-mismatch', { fixture: name });
 	if (posterBytes.length <= 0 || posterBytes.length > 2 * 1024 * 1024)
-		throw new Error(`${label}: poster byte length is out of bounds`);
+		throw unexpected('posterLength');
 }
 
-async function driveServiceBinding(baseUrl, fixture, operationId, label) {
+async function driveServiceBinding(baseUrl, fixture, operationId, name) {
 	const input = validationInput(fixture, operationId);
 	for (let attempt = 1; attempt <= 60; attempt++) {
 		const response = await fetch(`${baseUrl}/validate`, {
@@ -160,187 +191,252 @@ async function driveServiceBinding(baseUrl, fixture, operationId, label) {
 		}
 		if (response.status === 422) {
 			const body = await response.json();
-			return { outcome: 'rejected', stage: body.stage, input };
+			return { outcome: 'rejected', stage: stageWord(body?.stage), input };
 		}
 		if (!response.ok)
-			throw new Error(`${label}: unexpected status ${response.status}`);
+			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: response.status });
 		const posterBytes = Buffer.from(await response.arrayBuffer());
-		assertAccepted(fixture, input, response.headers, posterBytes, label);
+		assertAccepted(fixture, input, response.headers, posterBytes, name);
 		return { outcome: 'accepted', input };
 	}
-	throw new Error(`${label}: validation did not settle in time`);
+	throw new AcceptanceFailure('validator-did-not-settle', { fixture: name });
 }
 
-async function runLocalAcceptance() {
-	const persistTo = await mkdtemp(join(tmpdir(), 'silent-video-validator-state-'));
-	const port = 8987;
-	const suffix = Date.now().toString(36);
-	const plan = [
-		['h264Mp4', `acceptance-${suffix}-mp4`],
-		['vp9Webm', `acceptance-${suffix}-webm`],
-		['vp9AlphaWebm', `acceptance-${suffix}-alpha`],
-	];
-	for (const [name, operationId] of plan)
-		await seedStagedSource(fixtures[name], operationId, persistTo);
-	// The tampered case declares WebM facts against staged MP4 bytes.
-	const tamperedOperation = `acceptance-${suffix}-tampered`;
-	await seedStagedSource(fixtures.h264Mp4, tamperedOperation, persistTo);
-
+/** `wrangler dev` for the validator, ready to serve, or a named failure. */
+function startLocalValidator({ validatorConfigPath, persistTo, port, repoRoot }) {
 	const dev = spawn('npx', [
 		'wrangler',
 		'dev',
 		'--config',
-		validatorConfig,
+		validatorConfigPath,
 		'--persist-to',
 		persistTo,
 		'--port',
 		String(port),
 	], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
-	try {
-		await new Promise((resolve, reject) => {
-			const timeout = setTimeout(
-				() => reject(new Error('wrangler dev did not become ready; is Docker running?')),
-				300_000,
-			);
-			let output = '';
-			const watch = (chunk) => {
-				output += chunk;
-				if (output.includes('Ready on')) {
-					clearTimeout(timeout);
-					resolve();
-				}
-			};
-			dev.stdout.setEncoding('utf8').on('data', watch);
-			dev.stderr.setEncoding('utf8').on('data', watch);
-			dev.once('exit', code => reject(new Error(`wrangler dev exited early with ${code}: ${output.trim()}`)));
+	const ready = new Promise((resolve, reject) => {
+		const timeout = setTimeout(
+			() => reject(new AcceptanceFailure('validator-runtime-unavailable', { reason: 'not-ready-is-docker-running' })),
+			300_000,
+		);
+		let output = '';
+		const watch = (chunk) => {
+			output += chunk;
+			if (output.includes('Ready on')) {
+				clearTimeout(timeout);
+				resolve();
+			}
+		};
+		dev.stdout.setEncoding('utf8').on('data', watch);
+		dev.stderr.setEncoding('utf8').on('data', watch);
+		dev.once('exit', (code) => {
+			clearTimeout(timeout);
+			reject(new AcceptanceFailure('validator-runtime-unavailable', { exit: code ?? 'signal' }));
 		});
+	});
+	return {
+		ready,
+		async stop() {
+			dev.kill('SIGTERM');
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			dev.kill('SIGKILL');
+		},
+	};
+}
+
+async function runLocalAcceptance({ record }, { commands, installation, repoRoot, startValidator }) {
+	const persistTo = await mkdtemp(join(tmpdir(), 'silent-video-validator-state-'));
+	const target = {
+		local: persistTo,
+		stagingBucket: stagingBucketOf(installation.validator),
+		validatorConfigPath: installation.validatorConfigPath,
+	};
+	const port = 8987;
+	const suffix = Date.now().toString(36);
+	const plan = FIXTURE_NAMES.map(name => [name, operationIdFor(suffix, name)]);
+	// The tampered case declares WebM facts against staged MP4 bytes.
+	const tamperedOperation = `acceptance-${suffix}-tampered`;
+	let validator;
+	try {
+		for (const [name, operationId] of [...plan, ['h264Mp4', tamperedOperation]])
+			await stageFixture(commands, target, name, operationId);
+		validator = startValidator({ validatorConfigPath: target.validatorConfigPath, persistTo, port, repoRoot });
+		await validator.ready;
 		const baseUrl = `http://127.0.0.1:${port}`;
 		for (const [name, operationId] of plan) {
 			const result = await driveServiceBinding(baseUrl, fixtures[name], operationId, name);
 			if (result.outcome !== 'accepted')
-				throw new Error(`${name}: expected acceptance but got ${result.stage}`);
-			process.stdout.write(`${name}: accepted with playback, seek, and poster proof\n`);
+				throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, stage: result.stage });
+			record([]);
 		}
-		const tampered = await driveServiceBinding(
-			baseUrl,
-			fixtures.vp9Webm,
-			tamperedOperation,
-			'tampered',
-		);
+		const tampered = await driveServiceBinding(baseUrl, fixtures.vp9Webm, tamperedOperation, 'tampered');
 		if (tampered.outcome !== 'rejected' || tampered.stage !== 'metadata')
-			throw new Error(`tampered: expected a metadata rejection but got ${JSON.stringify(tampered)}`);
-		process.stdout.write('tampered: rejected at the metadata stage as required\n');
+			throw new AcceptanceFailure('validator-tamper-not-rejected', { outcome: tampered.outcome, stage: tampered.stage ?? 'none' });
+		record([]);
+		return { mode: 'local', fixtures: plan.length, tampered: 'rejected' };
 	}
 	finally {
-		dev.kill('SIGTERM');
-		await new Promise(resolve => setTimeout(resolve, 2000));
-		dev.kill('SIGKILL');
+		await validator?.stop();
 		await rm(persistTo, { recursive: true, force: true });
 	}
 }
 
-async function runDeployedAcceptance() {
-	const suffix = Date.now().toString(36);
-	const plan = [
-		['h264Mp4', `acceptance-${suffix}-mp4`],
-		['vp9Webm', `acceptance-${suffix}-webm`],
-		['vp9AlphaWebm', `acceptance-${suffix}-alpha`],
-	];
-	for (const [name, operationId] of plan) {
-		const fixture = fixtures[name];
-		await seedStagedSource(fixture, operationId);
-		const input = validationInput(fixture, operationId);
-		const validationId = sha256Hex(Buffer.from(input.idempotencyKey, 'utf8'));
-		try {
-			await wrangler([
-				'workflows',
-				'trigger',
-				'silent-video-validation',
-				JSON.stringify(input),
-				'--id',
-				validationId,
-				'--config',
-				validatorConfig,
-			]);
-			let output;
-			for (let attempt = 1; attempt <= 120; attempt++) {
-				const described = await wrangler([
-					'workflows',
-					'instances',
-					'describe',
-					'silent-video-validation',
-					validationId,
-					'--config',
-					validatorConfig,
-				]);
-				const status = described.match(/^Status:[^\S\n]+(\S[^\n]*)$/m)?.[1] ?? '';
-				if (status.includes('Complete')) {
-					// The final step's Output line carries the workflow return as
-					// an escaped JSON string literal.
-					const outputs = [...described.matchAll(/^\s+Output:\s+("(?:\\.|[^"\\])*")$/gm)];
-					const raw = outputs.at(-1)?.[1];
-					if (!raw)
-						throw new Error(`${name}: completed instance did not expose a step output`);
-					output = JSON.parse(JSON.parse(raw));
-					break;
-				}
-				if (status.includes('Errored') || status.includes('Terminated'))
-					throw new Error(`${name}: deployed validation settled as ${status}`);
-				await new Promise(resolve => setTimeout(resolve, 5000));
-			}
-			if (!output)
-				throw new Error(`${name}: deployed validation did not complete in time`);
-			if (output.outcome !== 'accepted'
-				|| output.idempotencyKey !== input.idempotencyKey
-				|| output.mutedInlinePlayback !== true
-				|| output.seeked !== true
-				|| (fixture.facts.hasAlpha && output.transparencyRendered !== true)) {
-				throw new Error(`${name}: deployed validation output is not an exact acceptance: ${JSON.stringify(output)}`);
-			}
-			const workspace = await mkdtemp(join(tmpdir(), 'silent-video-acceptance-poster-'));
-			const posterFile = join(workspace, 'poster.png');
-			try {
-				await wrangler([
-					'r2',
-					'object',
-					'get',
-					`stream-graphics-asset-staging/${output.posterKey}`,
-					'--file',
-					posterFile,
-					'--remote',
-					'--config',
-					validatorConfig,
-				]);
-				const posterBytes = await readFile(posterFile);
-				if (sha256Hex(posterBytes) !== output.posterDigest)
-					throw new Error(`${name}: deployed poster does not match its digest`);
-			}
-			finally {
-				await rm(workspace, { recursive: true, force: true });
-			}
-			process.stdout.write(`${name}: deployed validation accepted with verified poster\n`);
-		}
-		finally {
-			for (const key of [
-				`ingestion/${operationId}/source`,
-				`validation/silent-video/${validationId}/poster`,
-			]) {
-				await wrangler([
-					'r2',
-					'object',
-					'delete',
-					`stream-graphics-asset-staging/${key}`,
-					'--remote',
-					'--config',
-					validatorConfig,
-				]).catch(() => undefined);
-			}
-		}
+/** Everything a deployed run checks before its first write. */
+async function preflightDeployed({ evidence }, { env, installation, manifest, commands, openSession }) {
+	const target = resolveDeployedTarget({ env, installation });
+	evidence.addSecret(target.accountId);
+	const left = await manifest.read();
+	if (left) {
+		process.stderr.write('An earlier deployed run could not delete everything it staged. Run '
+			+ '`pnpm accept silent-video-validator --deployed --cleanup` with the same target first.\n');
+		throw new AcceptanceFailure('harness-cleanup-pending', { remaining: left.objects?.length ?? 0 });
 	}
+	// Read-only probes before the sign-in, because a bootstrapping sign-in
+	// creates or resets an account and is itself a write.
+	await remote('harness-target-unverified', { step: 'bucket' }, () => commands.probeBucket({ target }));
+	await remote('harness-target-unverified', { step: 'workflow' }, () => commands.probeWorkflow({ target }));
+	for (const cookie of await openSession(target.origin))
+		evidence.addSecret(cookie);
+	return target;
 }
 
-if (deployed)
-	await runDeployedAcceptance();
-else
-	await runLocalAcceptance();
-process.stdout.write(`silent-video validator acceptance passed (${deployed ? 'deployed' : 'local'})\n`);
+async function runDeployedFixture({ commands, manifest, target, pollIntervalMs }, name, suffix) {
+	const fixture = fixtures[name];
+	const operationId = operationIdFor(suffix, name);
+	const input = validationInput(fixture, operationId);
+	const validationId = sha256Hex(Buffer.from(input.idempotencyKey, 'utf8'));
+
+	await manifest.record(sourceKey(operationId));
+	await stageFixture(commands, target, name, operationId);
+	// The Workflow writes its poster under this key, so it is listed before the
+	// Workflow can write it, and stays listed until the instance has settled.
+	await manifest.record(posterKey(validationId), { instance: validationId });
+	await command(name, 'trigger', () => commands.triggerWorkflow({ target, id: validationId, params: input }));
+
+	let output;
+	for (let attempt = 1; attempt <= 120 && !output; attempt++) {
+		const { status, output: settled } = await command(name, 'describe', () =>
+			commands.describeInstance({ target, id: validationId }));
+		if (isSettledStatus(status))
+			await manifest.settle(posterKey(validationId));
+		if (status.includes('Complete')) {
+			if (!settled || typeof settled !== 'object')
+				throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'output' });
+			output = settled;
+		}
+		else if (status.includes('Errored') || status.includes('Terminated')) {
+			throw new AcceptanceFailure('validator-settled-unsuccessfully', { fixture: name, status: status.includes('Errored') ? 'errored' : 'terminated' });
+		}
+		else {
+			await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+		}
+	}
+	if (!output)
+		throw new AcceptanceFailure('validator-did-not-settle', { fixture: name });
+	const field = inexactField(fixture, input, output);
+	if (field)
+		throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field });
+	if (output.posterKey !== posterKey(validationId))
+		throw new AcceptanceFailure('validator-output-unexpected', { fixture: name, field: 'posterKey' });
+
+	const posterBytes = await command(name, 'get', () => commands.getObject({ target, key: output.posterKey }));
+	if (!posterBytes || sha256Hex(posterBytes) !== output.posterDigest)
+		throw new AcceptanceFailure('validator-poster-mismatch', { fixture: name });
+}
+
+async function runDeployedAcceptance(context, dependencies) {
+	const target = await preflightDeployed(context, dependencies);
+	const { manifest, commands } = dependencies;
+	const suffix = Date.now().toString(36);
+
+	manifest.begin(target);
+	let cleaned = 0;
+	try {
+		for (const name of FIXTURE_NAMES) {
+			await runDeployedFixture({ ...dependencies, target }, name, suffix);
+			context.record([]);
+		}
+	}
+	finally {
+		const drained = await drainCleanupManifest({ manifest, commands, target });
+		cleaned = drained.cleaned;
+		if (drained.remaining > 0) {
+			process.stderr.write('Some staged objects could not be deleted, or a Workflow had not settled; they are '
+				+ 'listed in the cleanup manifest. Retry with `pnpm accept silent-video-validator --deployed --cleanup`.\n');
+			context.record([{ code: 'harness-cleanup-incomplete', detail: { remaining: drained.remaining } }]);
+		}
+	}
+	return { fixtures: FIXTURE_NAMES.length, cleaned };
+}
+
+async function runDeployedCleanup(context, { env, installation, manifest, commands }) {
+	const target = resolveDeployedTarget({ env, installation, requireOperator: false });
+	context.evidence.addSecret(target.accountId);
+	const left = await manifest.read();
+	if (!left) {
+		context.record([]);
+		return { cleaned: 0 };
+	}
+	assertManifestTarget(left, target);
+	manifest.resume(left);
+	const { cleaned, remaining } = await drainCleanupManifest({ manifest, commands, target });
+	context.record(remaining > 0 ? [{ code: 'harness-cleanup-incomplete', detail: { remaining } }] : []);
+	return { cleaned };
+}
+
+/** Stands in for any dependency a caller did not inject, so an imported `main` cannot reach Wrangler. */
+const NOT_INJECTED = new Proxy({}, {
+	get: (_, name) => () => {
+		throw new Error(`run-silent-video-validator-acceptance: ${String(name)} was not injected`);
+	},
+});
+
+/**
+ * @param {string[]} [argv]
+ * @param {{
+ *   commands?: ReturnType<typeof createWranglerCommands>,
+ *   env?: Record<string, string | undefined>,
+ *   installation?: Awaited<ReturnType<typeof loadCommittedInstallation>>,
+ *   manifestPath?: string,
+ *   openSession?: (origin: string) => Promise<string[]>,
+ *   startValidator?: typeof startLocalValidator,
+ *   pollIntervalMs?: number,
+ * }} [options]
+ * Only the CLI entry point below passes the real Wrangler commands and session;
+ * an imported `main` without them fails at its first command instead.
+ */
+export async function main(argv = process.argv, options = {}) {
+	const deployed = argv.includes('--deployed');
+	const cleanup = argv.includes('--cleanup');
+	await runAcceptanceHarness({
+		harness: HARNESS,
+		async run(context) {
+			if (cleanup && !deployed)
+				throw new AcceptanceFailure('harness-precondition-unmet', { reason: 'cleanup-needs-deployed' });
+			const dependencies = {
+				commands: options.commands ?? NOT_INJECTED,
+				env: options.env ?? process.env,
+				installation: options.installation ?? await loadCommittedInstallation(),
+				manifest: openCleanupManifest(options.manifestPath ?? DEFAULT_CLEANUP_MANIFEST),
+				openSession: options.openSession ?? NOT_INJECTED.openSession,
+				startValidator: options.startValidator ?? NOT_INJECTED.startValidator,
+				pollIntervalMs: options.pollIntervalMs ?? 5000,
+				repoRoot: fileURLToPath(new URL('..', import.meta.url)),
+			};
+			if (!deployed)
+				return await runLocalAcceptance(context, dependencies);
+			return cleanup
+				? await runDeployedCleanup(context, dependencies)
+				: await runDeployedAcceptance(context, dependencies);
+		},
+	});
+}
+
+if (import.meta.main) {
+	const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+	await main(process.argv, {
+		commands: createWranglerCommands({ repoRoot }),
+		openSession: origin => openOperatorSession(origin, { deployed: true }),
+		startValidator: startLocalValidator,
+	});
+}

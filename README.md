@@ -417,14 +417,24 @@ mid-run names the Event it left behind; delete it before rerunning.
    | `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL`       | The installation to test. Falls back to `STREAM_KEEPR_DEPLOY_HEALTH_URL`.         |
    | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_EMAIL`    | An existing operator account. `/api/**` denies by default, so gates must sign in. |
    | `STREAM_KEEPR_ACCEPTANCE_OPERATOR_PASSWORD` | That account's password.                                                          |
+   | `CLOUDFLARE_ACCOUNT_ID`                     | The installation's account. The validator gate writes with Wrangler on it alone.  |
 
    A `--deployed` harness refuses to start without a URL rather than guessing.
    Without the operator pair it stops with `harness-operator-unavailable`.
    Setting `NUXT_ADMIN_BOOTSTRAP_TOKEN` in the shell also works if that secret is
    armed on the installation for the run.
 
+   The URL must be a host the committed `wrangler.jsonc` serves. The validator
+   gate stages in the bucket and triggers the Workflow that the committed app
+   and validator configs bind, so any other URL stops with
+   `harness-target-inconsistent reason=origin-not-installation` before anything
+   is written (`scripts/graphics-acceptance/deployed-target.mjs`, #619).
+
 5. **Run the gates.** `pnpm accept deployed` runs steps 1–6 in order and
    stops at the first failure; run one alone with `pnpm accept <name> --deployed`.
+   It checks the whole target first (URL, operator, account, config agreement)
+   and runs no gate if any of it is missing, so the first gate cannot write
+   before a later one refuses.
 
    | #   | Harness                             | Proves                                                                                                    |
    | --- | ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -435,6 +445,17 @@ mid-run names the Event it left behind; delete it before rerunning.
    | 5   | `fonts`                             | A library font revision is delivered, loads, and renders its glyphs.                                      |
    | 6   | `graphics-package`                  | Template Package publication is atomic and its retry is idempotent.                                       |
    | 7   | [Fault injection](#fault-injection) | Unavailable content, integrity failure, D1 outage, R2 outage with a warm cache.                           |
+
+**Validator gate cleanup.** The validator gate stages fixtures directly, with
+no Graphics Ingestion Operation that retention could find, so it records every
+key in `.cache/acceptance/silent-video-validator-cleanup.json` (private,
+gitignored) before writing it, and deletes them all at the end. A delete that
+fails leaves the file, fails the run with `harness-cleanup-incomplete`, and
+makes the next run stop with `harness-cleanup-pending`. A poster stays listed
+until its Workflow instance is seen to settle, since the instance may still
+write it. Retry with `pnpm accept silent-video-validator --deployed --cleanup`
+with the same URL and account (no operator needed); it is safe to repeat. The
+Workflow instances stay, holding facts only.
 
 Each harness prints one line on success and stable failure codes on failure.
 The codes, defined in `scripts/graphics-acceptance/evidence.mjs`, are the
@@ -756,6 +777,15 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
   building the Container image (#618).
 - Deploying needs Docker plus Workflows and Containers enabled on the account.
   Fixtures live in `scripts/silent-video-validator-fixtures.json`.
+- Its acceptance gate's preflight, evidence and cleanup (#619) are proved
+  locally against a fake Wrangler adapter
+  (`test/unit/scripts/silentVideoValidatorAcceptance.test.ts`). What is still
+  owed is one human-authorized deployed run: with the Deploy day variables set,
+  `pnpm accept silent-video-validator --deployed` prints its one pass line with
+  `cleaned=6`, leaves no cleanup manifest, and leaves no
+  `ingestion/acceptance-*` object in the staging bucket; the same run with
+  `STREAM_KEEPR_BROWSER_ACCEPTANCE_URL` set to another host, or with
+  `CLOUDFLARE_ACCOUNT_ID` unset, stops before any Wrangler command runs.
 
 ## Graphics notes
 

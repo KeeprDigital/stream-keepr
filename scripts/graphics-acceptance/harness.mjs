@@ -72,7 +72,7 @@ function refusalLine(harness, error) {
  * guards against: a harness that builds a code itself can still misspell one,
  * and this is the difference between a wrong word and a stack trace (#275).
  */
-function reportFailures(evidence, harness, failures) {
+export function reportFailures(evidence, harness, failures) {
 	try {
 		return evidence.report(failures);
 	}
