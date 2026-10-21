@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -20,12 +20,37 @@ import process from 'node:process';
  * the poster as base64; binary payloads never persist beyond the request.
  */
 
-const PORT = 8080;
+// The Container always serves 8080 (the Worker's `defaultPort`); the override
+// exists so tests can run this exact server beside others.
+const PORT = Number(process.env.SILENT_VIDEO_VALIDATOR_PORT ?? 8080);
 const CHROMIUM_BINARY = process.env.CHROMIUM_BIN ?? '/usr/bin/chromium';
 const PAGE_DEADLINE_MILLISECONDS = 90_000;
 const DURATION_TOLERANCE_SECONDS = 0.05;
 
-let activeSession;
+/**
+ * The one validation this Container is running. A validation reserves the
+ * Container synchronously when its request is admitted, before any
+ * asynchronous work, so an overlapping request finds the reservation and is
+ * answered busy (#698). Its unguessable proof token is the only way to its
+ * proof page and source, and only the validation itself releases the
+ * reservation, once its workspace is cleaned up.
+ */
+let activeValidation;
+
+/** Reserve the Container for a new validation, or nothing when one is running. */
+function reserveValidation() {
+	if (activeValidation)
+		return undefined;
+	const validation = { token: randomBytes(16).toString('hex'), expected: undefined, sourcePath: undefined };
+	activeValidation = validation;
+	return validation;
+}
+
+/** Release `validation`'s reservation; any other validation's stays in place. */
+function releaseValidation(validation) {
+	if (activeValidation === validation)
+		activeValidation = undefined;
+}
 
 function rejection(stage, detail) {
 	return { outcome: 'rejected', stage, detail };
@@ -146,9 +171,9 @@ async function verifyCompleteDecode(sourcePath, expected) {
 	return { decodedFrameCount };
 }
 
-function proofPage(expected, sessionToken) {
+function proofPage(expected, proofToken) {
 	const parameters = JSON.stringify({
-		sourceUrl: `/media/${sessionToken}/source`,
+		sourceUrl: `/media/${proofToken}/source`,
 		width: expected.width,
 		height: expected.height,
 		durationSeconds: expected.durationSeconds,
@@ -265,7 +290,7 @@ function proofPage(expected, sessionToken) {
 </html>`;
 }
 
-async function chromiumProof(expected, sessionToken) {
+async function chromiumProof(expected, proofToken) {
 	const profile = await mkdtemp(join(tmpdir(), 'silent-video-profile-'));
 	const child = spawn(CHROMIUM_BINARY, [
 		'--headless=new',
@@ -302,7 +327,7 @@ async function chromiumProof(expected, sessionToken) {
 			});
 		});
 		const browserUrl = new URL(browserWebSocket);
-		const pageUrl = `http://127.0.0.1:${PORT}/media/${sessionToken}/page`;
+		const pageUrl = `http://127.0.0.1:${PORT}/media/${proofToken}/page`;
 		const target = await fetch(
 			`http://${browserUrl.host}/json/new?${encodeURIComponent(pageUrl)}`,
 			{ method: 'PUT' },
@@ -424,15 +449,17 @@ async function generatePoster(sourcePath, posterPath, expected) {
 	return { posterBytes };
 }
 
-async function validate(request, expected) {
-	const workspace = await mkdtemp(join(tmpdir(), 'silent-video-validation-'));
-	const sourcePath = join(workspace, expected.format === 'mp4' ? 'source.mp4' : 'source.webm');
-	const sessionToken = createHash('sha256')
-		.update(`${expected.sourceDigest}:${Date.now()}`)
-		.digest('hex')
-		.slice(0, 32);
-	activeSession = { token: sessionToken, sourcePath, expected };
+/**
+ * Run `validation`, releasing its reservation on every exit, a
+ * workspace that cannot be created or removed included.
+ */
+async function validate(request, validation) {
+	const { expected, token: proofToken } = validation;
+	let workspace;
 	try {
+		workspace = await mkdtemp(join(tmpdir(), 'silent-video-validation-'));
+		const sourcePath = join(workspace, expected.format === 'mp4' ? 'source.mp4' : 'source.webm');
+		validation.sourcePath = sourcePath;
 		let received;
 		try {
 			received = await receiveSource(request, sourcePath, expected);
@@ -452,7 +479,7 @@ async function validate(request, expected) {
 		const decode = await verifyCompleteDecode(sourcePath, expected);
 		if (decode.outcome === 'rejected')
 			return decode;
-		const playback = await chromiumProof(expected, sessionToken);
+		const playback = await chromiumProof(expected, proofToken);
 		if (playback.outcome === 'rejected')
 			return playback;
 		if (expected.hasAlpha && !playback.transparencyRendered)
@@ -474,12 +501,18 @@ async function validate(request, expected) {
 		};
 	}
 	finally {
-		activeSession = undefined;
-		await rm(workspace, { recursive: true, force: true });
+		try {
+			if (workspace)
+				await rm(workspace, { recursive: true, force: true });
+		}
+		finally {
+			releaseValidation(validation);
+		}
 	}
 }
 
-async function serveSource(request, response, sourcePath) {
+async function serveSource(request, response, validation) {
+	const { sourcePath, expected } = validation;
 	const { size } = await stat(sourcePath);
 	const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
 	if (range && (range[1] !== '' || range[2] !== '')) {
@@ -492,7 +525,7 @@ async function serveSource(request, response, sourcePath) {
 			return;
 		}
 		response.writeHead(206, {
-			'content-type': activeSession.expected.sourceContentType,
+			'content-type': expected.sourceContentType,
 			'content-length': end - start + 1,
 			'content-range': `bytes ${start}-${end}/${size}`,
 			'accept-ranges': 'bytes',
@@ -501,7 +534,7 @@ async function serveSource(request, response, sourcePath) {
 		return;
 	}
 	response.writeHead(200, {
-		'content-type': activeSession.expected.sourceContentType,
+		'content-type': expected.sourceContentType,
 		'content-length': size,
 		'accept-ranges': 'bytes',
 	});
@@ -515,36 +548,39 @@ const server = createServer(async (request, response) => {
 			return;
 		}
 		const media = request.url?.match(/^\/media\/([a-f0-9]{32})\/(page|source)$/);
-		if (request.method === 'GET' && media && activeSession?.token === media[1]) {
+		const validation = activeValidation;
+		if (request.method === 'GET' && media && validation?.sourcePath && validation.token === media[1]) {
 			if (media[2] === 'page') {
 				response.writeHead(200, {
 					'content-type': 'text/html; charset=utf-8',
 					'cache-control': 'no-store',
-				}).end(proofPage(activeSession.expected, activeSession.token));
+				}).end(proofPage(validation.expected, validation.token));
 				return;
 			}
-			await serveSource(request, response, activeSession.sourcePath);
+			await serveSource(request, response, validation);
 			return;
 		}
 		if (request.method === 'POST' && request.url === '/validate') {
-			if (activeSession) {
+			// Reserved before anything awaits: the Workflow retries a busy answer.
+			const reserved = reserveValidation();
+			if (!reserved) {
 				response.writeHead(409, { 'content-type': 'application/json' })
 					.end(JSON.stringify({ error: 'validation already in progress' }));
 				return;
 			}
-			let expected;
 			try {
-				expected = JSON.parse(Buffer.from(
+				reserved.expected = JSON.parse(Buffer.from(
 					request.headers['x-validation-request'] ?? '',
 					'base64',
 				).toString('utf8'));
 			}
 			catch {
+				releaseValidation(reserved);
 				response.writeHead(400, { 'content-type': 'application/json' })
 					.end(JSON.stringify({ error: 'invalid validation request' }));
 				return;
 			}
-			const result = await validate(request, expected);
+			const result = await validate(request, reserved);
 			response.writeHead(200, { 'content-type': 'application/json' })
 				.end(JSON.stringify(result));
 			return;
@@ -552,7 +588,6 @@ const server = createServer(async (request, response) => {
 		response.writeHead(404).end();
 	}
 	catch (error) {
-		activeSession = undefined;
 		response.writeHead(500, { 'content-type': 'application/json' })
 			.end(JSON.stringify({ error: String(error?.message ?? error) }));
 	}
