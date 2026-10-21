@@ -385,7 +385,7 @@ The installation-wide storage envelope comprising the Canonical Graphics Quota a
 The limit on deduplicated retained Graphic Asset Content and Graphics Derivative bytes, including retained revision history and Trash.
 
 **Graphics Staging Allowance**:
-The separate limit on provisional bytes held by incomplete Graphics Ingestion Operations.
+The separate limit on provisional bytes held by incomplete Graphics Ingestion Operations, and by terminal ones whose staged input release has not yet been proven: their bytes stay counted, and listed as unreleased staged input, until the byte store confirms the deletes.
 
 **Canonical Capacity Pressure**:
 The normal, warning, critical, or full state derived from use of the Canonical Graphics Quota.

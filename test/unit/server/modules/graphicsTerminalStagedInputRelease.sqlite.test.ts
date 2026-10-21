@@ -1,3 +1,7 @@
+import type {
+	GraphicsObjectIdentity,
+	InMemoryGraphicsStagingObjectStore,
+} from '~~/server/modules/graphics-asset-library/object-store';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { Buffer } from 'node:buffer';
@@ -12,6 +16,7 @@ import {
 import {
 	createBoundedByteStream,
 	graphicsObjectIdentity,
+	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -55,7 +60,17 @@ afterEach(async () => await harness.close());
 function createLibrary() {
 	let currentTime = new Date('2026-10-21T00:00:00.000Z');
 	let nextIdentity = 0;
-	const staging = createInMemoryStagingGraphicsObjectStore();
+	const store = createInMemoryStagingGraphicsObjectStore();
+	/** Identities whose deletes the store refuses, so one release can land partway. */
+	const refusedDeletes = new Set<GraphicsObjectIdentity>();
+	const staging: InMemoryGraphicsStagingObjectStore = {
+		...store,
+		async delete(identity) {
+			return refusedDeletes.has(identity)
+				? unavailableObjectStoreOutcome()
+				: await store.delete(identity);
+		},
+	};
 	const canonical = createInMemoryCanonicalGraphicsObjectStore();
 	const library = createGraphicsAssetLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
@@ -67,6 +82,7 @@ function createLibrary() {
 	return {
 		library,
 		staging,
+		refusedDeletes,
 		canonical,
 		advance(milliseconds: number) {
 			currentTime = new Date(currentTime.getTime() + milliseconds);
@@ -279,6 +295,36 @@ describe('terminal staged input release', () => {
 		await expect(context.staging.readMetadata(stagedSource(rejected.id)))
 			.resolves
 			.toMatchObject({ outcome: 'missing' });
+		expect(await stagedBytesOnBooks(context)).toBe(0);
+		expect((await unreleasedQueue(context)).totalCount).toBe(0);
+	});
+
+	it('keeps the obligation through a release that lands partway, and finishes it once the rest lands', async () => {
+		const context = createLibrary();
+		const poster = (operationId: string) =>
+			graphicsObjectIdentity(`ingestion/${operationId}/video-poster`);
+		// The source delete lands; the store refuses the poster's.
+		context.refusedDeletes.add(poster('terminal-release-1'));
+		const completed = await ingest(context, { idempotencyKey: 'partial-release' });
+		expect(completed.id).toBe('terminal-release-1');
+
+		expect(completed.stage).toBe('completed');
+		await expect(context.staging.readMetadata(stagedSource(completed.id)))
+			.resolves
+			.toMatchObject({ outcome: 'missing' });
+		// Half a release is no release: the books and the queue still hold it.
+		expect(await stagedBytesOnBooks(context)).toBe(pixelPng.byteLength);
+		expect((await unreleasedQueue(context)).totalCount).toBe(1);
+		context.advance(HOUR);
+		expect((await context.library.runGraphicsRetention()).strandedStagedInput)
+			.toEqual({ released: 0 });
+		expect(await stagedBytesOnBooks(context)).toBe(pixelPng.byteLength);
+
+		// The rerun deletes what is left; the already-gone source is no failure.
+		context.refusedDeletes.clear();
+		context.advance(HOUR);
+		expect((await context.library.runGraphicsRetention()).strandedStagedInput)
+			.toEqual({ released: 1 });
 		expect(await stagedBytesOnBooks(context)).toBe(0);
 		expect((await unreleasedQueue(context)).totalCount).toBe(0);
 	});

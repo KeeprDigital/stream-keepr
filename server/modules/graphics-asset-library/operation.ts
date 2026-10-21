@@ -18,6 +18,18 @@ import { graphicsObjectIdentity } from './object-store';
 export const INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION = 1;
 
 /**
+ * An operation nobody will hear from again: completed, cancelled, or failed
+ * for good. The catalogues' `TERMINAL_STAGE_SQL` states the same rule.
+ */
+export function isTerminalIngestionOperation(
+	operation: Pick<GraphicsIngestionOperation, 'stage' | 'failure'>,
+): boolean {
+	return operation.stage === 'completed'
+		|| operation.stage === 'cancelled'
+		|| (operation.stage === 'failed' && operation.failure?.retryable === false);
+}
+
+/**
  * Every staging object one Graphics Ingestion Operation may own. Cancellation,
  * terminal failure, and staged-input expiry all reclaim the same complete set.
  */

@@ -31,6 +31,7 @@ import {
 import {
 	completedGraphicAssetReplacementOperation,
 	INSTALLED_GRAPHICS_TEMPLATE_FIRST_REVISION,
+	isTerminalIngestionOperation,
 	templatePackageInstallationResult,
 } from './operation';
 
@@ -167,12 +168,6 @@ export function createInMemoryGraphicsAssetCatalogue(
 	function releaseCanonicalReservation(operationId: GraphicsIngestionOperationId) {
 		// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
 		canonicalReservations.delete(operationId);
-	}
-
-	function isTerminal(operation: GraphicsIngestionOperation) {
-		return operation.stage === 'completed'
-			|| operation.stage === 'cancelled'
-			|| (operation.stage === 'failed' && operation.failure?.retryable === false);
 	}
 
 	function getCapacity(): GraphicsAssetLibraryCapacity {
@@ -809,13 +804,13 @@ export function createInMemoryGraphicsAssetCatalogue(
 					});
 				}
 			}
-			if (isTerminal(operation))
+			if (isTerminalIngestionOperation(operation))
 				releaseCanonicalReservation(operation.id);
 			return cloneOperation(operation);
 		},
 		async releaseStagedInputBytes(input) {
 			const operation = operations.get(input.operationId);
-			if (!operation || !isTerminal(operation))
+			if (!operation || !isTerminalIngestionOperation(operation))
 				return { released: false, bytesFreed: 0 };
 			const bytesFreed = (stagingUsage.get(input.operationId) ?? 0)
 				+ (stagingReservations.get(input.operationId) ?? 0);

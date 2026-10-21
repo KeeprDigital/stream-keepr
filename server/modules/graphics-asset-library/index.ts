@@ -82,6 +82,7 @@ import type {
 	GraphicsAssetRetentionCatalogue,
 	ReleaseStagedInputBytes,
 	StrandedStagedInputReleaseOutcome,
+	TerminalStagedInputReleaseOutcome,
 } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import type { ResolvedPackagedRevision } from './template-package';
@@ -124,6 +125,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
+import { isTerminalIngestionOperation } from './operation';
 import { createGraphicsOperationalQueues } from './operational-queues';
 import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
@@ -427,7 +429,11 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
 	) => Promise<void>;
-	/** See `releaseTerminalStagedInput`, the only caller outside retention. */
+	/**
+	 * Zeroes a terminal operation's staging accounting once its staged objects
+	 * are proven deleted. Ingestion reaches it only through
+	 * `releaseTerminalStagedInput`, which proves the deletes first.
+	 */
 	releaseStagedInputBytes: ReleaseStagedInputBytes;
 	getTemplatePackagePreflight: (
 		operationId: GraphicsIngestionOperationId,
@@ -2217,18 +2223,14 @@ export function createGraphicsAssetLibrary(
 	 */
 	async function releaseOwedStagedInput(
 		operation: GraphicsIngestionOperation,
-	): Promise<{ released: boolean }> {
-		const terminal = operation.stage === 'completed'
-			|| operation.stage === 'cancelled'
-			|| (operation.stage === 'failed' && operation.failure?.retryable === false);
-		if (!terminal)
-			return { released: false };
+	): Promise<TerminalStagedInputReleaseOutcome | { outcome: 'not-terminal' }> {
+		if (!isTerminalIngestionOperation(operation))
+			return { outcome: 'not-terminal' };
 		try {
-			const released = await releaseTerminalStagedInput(
+			return await releaseTerminalStagedInput(
 				{ catalogue: requireCatalogue(), staging: requireStaging() },
 				{ operationId: operation.id, initiatedBy: operation.initiatedBy },
 			);
-			return { released: released.outcome !== 'unavailable' };
 		}
 		catch (error) {
 			logGraphicsStoreFailure(
@@ -2236,7 +2238,7 @@ export function createGraphicsAssetLibrary(
 				{ operationId: operation.id },
 				error,
 			);
-			return { released: false };
+			return { outcome: 'unavailable' };
 		}
 	}
 
@@ -2257,8 +2259,8 @@ export function createGraphicsAssetLibrary(
 		);
 		if (multipart && !multipart.cleanupPending)
 			return operation;
-		const { released } = await releaseOwedStagedInput(operation);
-		if (!released || !multipart)
+		const release = await releaseOwedStagedInput(operation);
+		if (release.outcome === 'unavailable' || release.outcome === 'not-terminal' || !multipart)
 			return operation;
 		await catalogueRequest(
 			() => catalogue.recordGraphicAssetMultipartCleanupComplete(operation.id, operation.initiatedBy),
@@ -3574,8 +3576,12 @@ export function createGraphicsAssetLibrary(
 					{ cause: catalogueError },
 				);
 			}
-			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled')
+			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled') {
+				// Whatever was interrupted, the operation is terminal and owes its
+				// staged input back; repeating a release that already ran is safe.
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
+			}
 			if (authoritative && authoritative.updatedAt !== operation.updatedAt)
 				return authoritative;
 			return await failOperation(catalogue, authoritative ?? operation, {
@@ -4007,8 +4013,12 @@ export function createGraphicsAssetLibrary(
 					{ cause: error },
 				);
 			}
-			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled')
+			if (authoritative?.stage === 'completed' || authoritative?.stage === 'cancelled') {
+				// Whatever was interrupted, the operation is terminal and owes its
+				// staged input back; repeating a release that already ran is safe.
+				await releaseOwedStagedInput(authoritative);
 				return authoritative;
+			}
 			if (authoritative && authoritative.updatedAt !== operation.updatedAt)
 				return authoritative;
 			return await failOperation(catalogue, authoritative ?? operation, {
