@@ -20,19 +20,6 @@ export type GraphicFillEdit
 		| { kind: 'gradient-stop'; index: number; patch: Partial<GraphicFillStop> }
 		| { kind: 'stop-count'; delta: 1 | -1 };
 
-const GRAPHIC_FILL_EDIT_KINDS: ReadonlySet<string> = new Set<GraphicFillEdit['kind']>([
-	'fill-kind',
-	'solid-fill',
-	'gradient-angle',
-	'gradient-stop',
-	'stop-count',
-]);
-
-/** Whether an edit is a Graphic Fill edit, for a host whose edits also cover more than its fill. */
-export function isGraphicFillEdit<E extends { kind: string }>(edit: E): edit is Extract<E, GraphicFillEdit> {
-	return GRAPHIC_FILL_EDIT_KINDS.has(edit.kind);
-}
-
 export interface ApplyGraphicFillEditOptions {
 	/**
 	 * What a new gradient's end stop starts as. Absent, it is the fill's own colour,

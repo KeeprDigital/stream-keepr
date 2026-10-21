@@ -34,12 +34,10 @@ const emit = defineEmits<{ edit: [edit: GraphicFillEdit] }>();
 defineSlots<{
 	/** Replaces the colour picker for a solid fill's colour and each stop's. */
 	color?: (props: {
-		/** The stop's index, or null for a solid fill's colour. */
-		stop: number | null;
 		value: string;
 		label: string;
 		disabled: boolean;
-		testId: string | undefined;
+		testId: string;
 		update: (value: string) => void;
 	}) => unknown;
 }>();
@@ -56,6 +54,11 @@ function ariaLabel(label: string) {
 
 function testId(suffix: string) {
 	return `${props.testIdPrefix}-${suffix}`;
+}
+
+/** The default picker's colour; a cleared one is black. */
+function pickedColor(value: unknown) {
+	return value?.toString() || '#000000';
 }
 
 function editSolid(color: string) {
@@ -86,7 +89,6 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 		<UFormField v-if="fill.type === 'solid'" label="Fill colour" :size="size">
 			<slot
 				name="color"
-				:stop="null"
 				:value="fill.color"
 				:label="ariaLabel('Fill colour')"
 				:disabled="disabled"
@@ -99,7 +101,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 					:size="size"
 					:aria-label="ariaLabel('Fill colour')"
 					:data-testid="testId('color')"
-					@update:model-value="editSolid($event?.toString() || '#000000')"
+					@update:model-value="editSolid(pickedColor($event))"
 				/>
 			</slot>
 		</UFormField>
@@ -127,11 +129,10 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 				<UFormField :label="`Stop ${index + 1}`" :size="size">
 					<slot
 						name="color"
-						:stop="index"
 						:value="stop.color"
 						:label="ariaLabel(`Stop ${index + 1} colour`)"
 						:disabled="disabled"
-						:test-id="undefined"
+						:test-id="testId('stop-color')"
 						:update="(color: string) => editStop(index, { color })"
 					>
 						<UIColorPicker
@@ -139,7 +140,8 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 							:disabled="disabled"
 							:size="size"
 							:aria-label="ariaLabel(`Stop ${index + 1} colour`)"
-							@update:model-value="editStop(index, { color: $event?.toString() || '#000000' })"
+							:data-testid="testId('stop-color')"
+							@update:model-value="editStop(index, { color: pickedColor($event) })"
 						/>
 					</slot>
 				</UFormField>
