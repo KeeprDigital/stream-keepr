@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -20,12 +20,36 @@ import process from 'node:process';
  * the poster as base64; binary payloads never persist beyond the request.
  */
 
-const PORT = 8080;
+// The Container always serves 8080 (the Worker's `defaultPort`); the override
+// exists so tests can run this exact server beside others.
+const PORT = Number(process.env.SILENT_VIDEO_VALIDATOR_PORT ?? 8080);
 const CHROMIUM_BINARY = process.env.CHROMIUM_BIN ?? '/usr/bin/chromium';
 const PAGE_DEADLINE_MILLISECONDS = 90_000;
 const DURATION_TOLERANCE_SECONDS = 0.05;
 
+/**
+ * The one validation session this Container is running. A session is reserved
+ * synchronously when its request is admitted, before any asynchronous work, so
+ * an overlapping request finds it and is answered busy (#698). Its unguessable
+ * token is the only way to its proof page and source, and only the session
+ * itself releases it, once its workspace is cleaned up.
+ */
 let activeSession;
+
+/** Reserve the Container for a new session, or nothing when one is running. */
+function reserveSession() {
+	if (activeSession)
+		return undefined;
+	const session = { token: randomBytes(16).toString('hex'), expected: undefined, sourcePath: undefined };
+	activeSession = session;
+	return session;
+}
+
+/** Release `session`'s reservation; any other session's stays in place. */
+function releaseSession(session) {
+	if (activeSession === session)
+		activeSession = undefined;
+}
 
 function rejection(stage, detail) {
 	return { outcome: 'rejected', stage, detail };
@@ -424,15 +448,17 @@ async function generatePoster(sourcePath, posterPath, expected) {
 	return { posterBytes };
 }
 
-async function validate(request, expected) {
-	const workspace = await mkdtemp(join(tmpdir(), 'silent-video-validation-'));
-	const sourcePath = join(workspace, expected.format === 'mp4' ? 'source.mp4' : 'source.webm');
-	const sessionToken = createHash('sha256')
-		.update(`${expected.sourceDigest}:${Date.now()}`)
-		.digest('hex')
-		.slice(0, 32);
-	activeSession = { token: sessionToken, sourcePath, expected };
+/**
+ * Run `session`'s validation, releasing its reservation on every exit, a
+ * workspace that cannot be created or removed included.
+ */
+async function validate(request, session) {
+	const { expected, token: sessionToken } = session;
+	let workspace;
 	try {
+		workspace = await mkdtemp(join(tmpdir(), 'silent-video-validation-'));
+		const sourcePath = join(workspace, expected.format === 'mp4' ? 'source.mp4' : 'source.webm');
+		session.sourcePath = sourcePath;
 		let received;
 		try {
 			received = await receiveSource(request, sourcePath, expected);
@@ -474,12 +500,18 @@ async function validate(request, expected) {
 		};
 	}
 	finally {
-		activeSession = undefined;
-		await rm(workspace, { recursive: true, force: true });
+		try {
+			if (workspace)
+				await rm(workspace, { recursive: true, force: true });
+		}
+		finally {
+			releaseSession(session);
+		}
 	}
 }
 
-async function serveSource(request, response, sourcePath) {
+async function serveSource(request, response, session) {
+	const { sourcePath, expected } = session;
 	const { size } = await stat(sourcePath);
 	const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
 	if (range && (range[1] !== '' || range[2] !== '')) {
@@ -492,7 +524,7 @@ async function serveSource(request, response, sourcePath) {
 			return;
 		}
 		response.writeHead(206, {
-			'content-type': activeSession.expected.sourceContentType,
+			'content-type': expected.sourceContentType,
 			'content-length': end - start + 1,
 			'content-range': `bytes ${start}-${end}/${size}`,
 			'accept-ranges': 'bytes',
@@ -501,7 +533,7 @@ async function serveSource(request, response, sourcePath) {
 		return;
 	}
 	response.writeHead(200, {
-		'content-type': activeSession.expected.sourceContentType,
+		'content-type': expected.sourceContentType,
 		'content-length': size,
 		'accept-ranges': 'bytes',
 	});
@@ -515,36 +547,39 @@ const server = createServer(async (request, response) => {
 			return;
 		}
 		const media = request.url?.match(/^\/media\/([a-f0-9]{32})\/(page|source)$/);
-		if (request.method === 'GET' && media && activeSession?.token === media[1]) {
+		const session = activeSession;
+		if (request.method === 'GET' && media && session?.sourcePath && session.token === media[1]) {
 			if (media[2] === 'page') {
 				response.writeHead(200, {
 					'content-type': 'text/html; charset=utf-8',
 					'cache-control': 'no-store',
-				}).end(proofPage(activeSession.expected, activeSession.token));
+				}).end(proofPage(session.expected, session.token));
 				return;
 			}
-			await serveSource(request, response, activeSession.sourcePath);
+			await serveSource(request, response, session);
 			return;
 		}
 		if (request.method === 'POST' && request.url === '/validate') {
-			if (activeSession) {
+			// Reserved before anything awaits: the Workflow retries a busy answer.
+			const reserved = reserveSession();
+			if (!reserved) {
 				response.writeHead(409, { 'content-type': 'application/json' })
 					.end(JSON.stringify({ error: 'validation already in progress' }));
 				return;
 			}
-			let expected;
 			try {
-				expected = JSON.parse(Buffer.from(
+				reserved.expected = JSON.parse(Buffer.from(
 					request.headers['x-validation-request'] ?? '',
 					'base64',
 				).toString('utf8'));
 			}
 			catch {
+				releaseSession(reserved);
 				response.writeHead(400, { 'content-type': 'application/json' })
 					.end(JSON.stringify({ error: 'invalid validation request' }));
 				return;
 			}
-			const result = await validate(request, expected);
+			const result = await validate(request, reserved);
 			response.writeHead(200, { 'content-type': 'application/json' })
 				.end(JSON.stringify(result));
 			return;
@@ -552,7 +587,6 @@ const server = createServer(async (request, response) => {
 		response.writeHead(404).end();
 	}
 	catch (error) {
-		activeSession = undefined;
 		response.writeHead(500, { 'content-type': 'application/json' })
 			.end(JSON.stringify({ error: String(error?.message ?? error) }));
 	}

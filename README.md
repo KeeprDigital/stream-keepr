@@ -966,7 +966,10 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
   playback, seeks, and VP9-alpha transparency (ffprobe, ffmpeg, headless
   Chromium), and renders a deterministic transparent PNG poster fitted to
   640×360.
-- Busy Containers answer 409 and the Workflow step retries. Durable state holds
+- Busy Containers answer 409 and the Workflow step retries. A validation
+  reserves its Container before any asynchronous work and releases it only
+  once its own workspace is cleaned up, whichever way it ends, so an
+  overlapping request is always answered busy (#698). Durable state holds
   facts only, never bytes.
 - Posters land under `validation/silent-video/` in the staging bucket. A
   30-day lifecycle rule, `silent-video-validation-posters`, created once with
