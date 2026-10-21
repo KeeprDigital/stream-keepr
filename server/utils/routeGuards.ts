@@ -1,3 +1,4 @@
+import type { EventReferenceKind } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigsMap, ScreenModeConfig } from '~~/shared/types/screenConfig';
 import { archetypeService } from '~~/server/services/archetype';
@@ -10,6 +11,7 @@ import { playerListService } from '~~/server/services/playerList';
 import { roundService } from '~~/server/services/round';
 import { talentService } from '~~/server/services/talent';
 import { ScreenDeckSourceConflictError } from '~~/server/utils/errors';
+import { SCREEN_MODES } from '~~/shared/screenModes';
 
 function throwReferenceNotFound(message: string): never {
 	throw createError({ statusCode: 404, message });
@@ -122,61 +124,51 @@ export async function validateFeatureMatchAssignmentCreateReferences(
 		throw createError({ statusCode: 400, message: 'Match does not belong to round' });
 }
 
-function configReferenceValue(config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined, key: string): number | null | undefined {
-	if (!config || typeof config !== 'object')
-		return undefined;
-
-	const value = (config as Record<string, unknown>)[key];
+/** A field naming an entity by id; any other value names nothing to check. */
+function referencedId(value: unknown): number | null | undefined {
 	return typeof value === 'number' || value === null ? value : undefined;
 }
 
-function deckSourceValue(config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined) {
-	if (!config || typeof config !== 'object')
-		return undefined;
-	const source = (config as Record<string, unknown>).deckSource;
-	if (!source || typeof source !== 'object')
-		return undefined;
-	return source as Record<string, unknown>;
+async function requireDeckSourceInEvent(eventId: number, value: unknown): Promise<void> {
+	if (!value || typeof value !== 'object')
+		return;
+
+	const source = value as Record<string, unknown>;
+	if (source.type === 'player') {
+		await requirePlayersInEvent(eventId, [referencedId(source.playerId)]);
+	}
+	else if (source.type === 'broadcast') {
+		// A Broadcast Deck Source always names a list; one naming none is never selectable.
+		const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
+		if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
+			throw new ScreenDeckSourceConflictError();
+	}
 }
 
+/** How each kind of Event Reference is proved to belong to the Event. */
+const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: number, value: unknown) => Promise<void> } = {
+	round: (eventId, value) => requireRoundInEvent(eventId, referencedId(value)),
+	player: (eventId, value) => requirePlayersInEvent(eventId, [referencedId(value)]),
+	playerList: (eventId, value) => requirePlayerListInEvent(eventId, referencedId(value)),
+	featureMatchSlot: (eventId, value) => requireFeatureMatchSlotInEvent(eventId, referencedId(value)),
+	deckSource: requireDeckSourceInEvent,
+};
+
+/**
+ * Refuses a mode config whose Event References name something outside the
+ * Event: each field its Screen Mode Definition declares (`eventReferences`) is
+ * checked by its kind (ADR-0038).
+ */
 export async function validateScreenModeConfigReferences(
 	eventId: number,
 	mode: ScreenMode,
 	config: Partial<ScreenModeConfig> | Record<string, unknown> | null | undefined,
 ): Promise<void> {
-	switch (mode) {
-		case 'card':
-		case 'feature-match':
-		case 'feature-match-overlay': {
-			const slotId = configReferenceValue(config, 'featureMatchId');
-			await requireFeatureMatchSlotInEvent(eventId, slotId);
-			break;
-		}
-		case 'deck': {
-			const source = deckSourceValue(config);
-			if (source?.type === 'player') {
-				await requirePlayersInEvent(eventId, [typeof source.playerId === 'number' ? source.playerId : null]);
-			}
-			else if (source?.type === 'broadcast') {
-				const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
-				if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
-					throw new ScreenDeckSourceConflictError();
-			}
-			break;
-		}
-		case 'player-history':
-			await requirePlayersInEvent(eventId, [configReferenceValue(config, 'playerId')]);
-			break;
-		case 'standings':
-			await Promise.all([
-				requireRoundInEvent(eventId, configReferenceValue(config, 'roundId')),
-				requirePlayerListInEvent(eventId, configReferenceValue(config, 'playerListId')),
-			]);
-			break;
-		case 'metagame':
-			await requirePlayerListInEvent(eventId, configReferenceValue(config, 'playerListId'));
-			break;
-	}
+	const fields: Record<string, unknown> = config && typeof config === 'object' ? config : {};
+	await Promise.all(
+		Object.entries(SCREEN_MODES[mode].eventReferences)
+			.map(([field, kind]) => EVENT_REFERENCE_CHECKS[kind](eventId, fields[field])),
+	);
 }
 
 export async function validateScreenModeConfigsReferences(

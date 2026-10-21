@@ -45,7 +45,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 		errorMessage: 'Failed to update screen config',
 	});
 
-	/** Reset all display settings to defaults (preserves data bindings like matchId/playerId). */
+	/** Reset all display settings to defaults (preserves what the Screen points at, such as its Event References). */
 	function resetConfig() {
 		const displayDefaults = getDisplayDefaultsForMode(mode);
 		updateConfig(displayDefaults as Partial<ConfigType>);

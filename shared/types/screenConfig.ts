@@ -412,9 +412,12 @@ export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] 
 /**
  * Keys a display reset must not touch. Two kinds qualify:
  *
- * - Data bindings, such as the selected Feature Match Slot or Player: resetting
- *   display settings should not unpick what the Screen is pointing at. They are
- *   listed here.
+ * - What the Screen points at: every Event Reference its Screen Mode Definition
+ *   declares, such as the selected Feature Match Slot or Player, and the
+ *   selection around them, such as Standings' view mode and slice. Resetting
+ *   display settings should not unpick it. They are listed here, and
+ *   `screenModeEventReferences.sqlite.test.ts` proves every declared Event
+ *   Reference is.
  * - Authored content with no recovery path: a contract's authored stacks, such
  *   as a Broadcast Graphics Screen's stack of Broadcast Graphics, and every
  *   declaring mode's own `backgroundLayers` stack. Neither is listed here: see
@@ -464,8 +467,8 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 
 /**
  * Returns the display-only defaults for a mode. Used by "Reset to Defaults", so
- * it omits every key a reset must preserve — data bindings such as
- * `featureMatchId`, and authored content such as a Broadcast Graphics Screen's
+ * it omits every key a reset must preserve — what the Screen points at, such
+ * as its `featureMatchId` Event Reference, and authored content such as a Broadcast Graphics Screen's
  * stack of Broadcast Graphics.
  */
 export function getDisplayDefaultsForMode<T extends ScreenMode>(mode: T): Partial<ModeConfigTypeMap[T]> {
