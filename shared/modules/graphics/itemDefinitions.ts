@@ -5,6 +5,7 @@ import type {
 	GraphicItemKind,
 	GraphicSurfaceStyle,
 	GraphicTypography,
+	TextOverflowPolicy,
 } from '../../types/graphics';
 import type { GraphicsContextKind, GraphicsHostContract, GraphicsHostId } from './hostContract';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
@@ -15,16 +16,19 @@ import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
 /**
  * Graphic Item Definitions: the application-owned contract for each Graphic
  * Item kind — stable identifier, configuration version, editor metadata,
- * defaults, and summary.
+ * defaults, summary, and the typography it offers.
  *
- * Adding a kind is a sweep, not an entry: this table (whose `satisfies` closure
- * forces the new member), the config interface and unions in
+ * Adding a kind is still a sweep rather than an entry: this table (whose
+ * `satisfies` closure forces the new member), the config interface and unions in
  * `shared/types/graphics.ts`, the wire schema arms in `server/schemas/api/screen.ts`,
- * the kind lists in `authoring.ts` and `graphic-style-sets/slots.ts`, the
- * descriptor arms in `app/modules/graphics/renderModel.ts`, and the compositor's
- * `Item.vue` and `Inspector.vue`. The definition palette and Template Package
- * requirements are definition-driven and follow this table for free. Templates
- * never provide executable Definitions.
+ * the surface and geometry kind lists in `authoring.ts` and
+ * `graphic-style-sets/slots.ts`, the descriptor arms in
+ * `app/modules/graphics/renderModel.ts`, and the compositor's `Item.vue` and
+ * `Inspector.vue`. What follows this table for free: the definition palette, Template
+ * Package requirements, and whether a kind offers typography and a Text Overflow
+ * Policy — the Inspector, the Graphic Style Set typography slot, and authoring all
+ * read the `typography` declaration below rather than a kind list of their own.
+ * Templates never provide executable Definitions.
  *
  * ## The configuration version is a portability contract, not a changelog
  *
@@ -64,7 +68,55 @@ export interface GraphicItemDefinition {
 	requiredHost?: GraphicsHostId;
 	createDefault: (options: GraphicItemDefaultsOptions) => GraphicItemConfig;
 	summary: (item: GraphicItemConfig) => string;
+	/**
+	 * The base typography this kind paints its text with, absent for a kind that paints
+	 * none. Stated once here: the Inspector's typography and Text Overflow Policy
+	 * controls, the Graphic Style Set typography slot, and the authoring operations
+	 * all read it, so none of them can offer typography a kind does not have.
+	 */
+	typography?: GraphicTypographyDeclaration;
 }
+
+/** A Graphic Item whose configuration carries base typography. */
+export type GraphicTypographyItem = Extract<GraphicItemConfig, { typography: GraphicTypography }>;
+
+/** A Graphic Item whose configuration carries a Text Overflow Policy. */
+export type GraphicTextOverflowItem = Extract<GraphicItemConfig, { overflowPolicy: TextOverflowPolicy }>;
+
+export interface GraphicTypographyDeclaration {
+	/**
+	 * Whether a Text Overflow Policy bounds the text: true for a kind whose rendered
+	 * string can exceed its authored bounds.
+	 */
+	textOverflowPolicy: boolean;
+	/**
+	 * Whether the item paints text with its typography in its current display mode;
+	 * absent means always. The item owns its typography either way, so a Graphic Style
+	 * Set slot still binds to it — only the Inspector, which offers controls for what
+	 * is on screen, reads this.
+	 *
+	 * Each Definition narrows the parameter to its own kind, and is only ever called
+	 * with an item of that kind.
+	 */
+	paintsText?: (item: GraphicTypographyItem) => boolean;
+}
+
+type GraphicItemOfKind<K extends GraphicItemKind> = Extract<GraphicItemConfig, { type: K }>;
+
+/**
+ * What a kind's Definition must declare about typography, decided by its stored
+ * configuration: a kind whose config carries typography must declare it, one whose
+ * config carries a Text Overflow Policy must say so, and no other kind may. So a
+ * declaration cannot drift from the schema it describes.
+ */
+type GraphicTypographyDeclarationFor<K extends GraphicItemKind> = K extends GraphicTypographyItem['type']
+	? {
+			typography: {
+				textOverflowPolicy: K extends GraphicTextOverflowItem['type'] ? true : false;
+				paintsText?: (item: GraphicItemOfKind<K>) => boolean;
+			};
+		}
+	: { typography?: undefined };
 
 export const DEFAULT_GRAPHIC_TYPOGRAPHY: GraphicTypography = {
 	font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID),
@@ -131,6 +183,7 @@ const DEFINITIONS = {
 		configurationVersion: 1,
 		label: 'Text',
 		icon: 'i-lucide-type',
+		typography: { textOverflowPolicy: true },
 		createDefault: options => ({
 			type: 'text',
 			id: options.id,
@@ -251,6 +304,7 @@ const DEFINITIONS = {
 		label: 'Clock',
 		icon: 'i-lucide-clock',
 		requiredContext: 'feature-match',
+		typography: { textOverflowPolicy: true },
 		createDefault: options => ({
 			type: 'clock',
 			id: options.id,
@@ -272,6 +326,7 @@ const DEFINITIONS = {
 		label: 'Life',
 		icon: 'i-lucide-heart-pulse',
 		requiredContext: 'feature-match',
+		typography: { textOverflowPolicy: true },
 		createDefault: options => ({
 			type: 'player-life',
 			id: options.id,
@@ -295,6 +350,9 @@ const DEFINITIONS = {
 		label: 'Wins',
 		icon: 'i-lucide-trophy',
 		requiredContext: 'feature-match',
+		// Paints text only while it renders its win count, and a count cannot outgrow
+		// its bounds, so no Text Overflow Policy bounds it.
+		typography: { textOverflowPolicy: false, paintsText: item => item.displayMode === 'number' },
 		createDefault: options => ({
 			type: 'game-wins',
 			id: options.id,
@@ -333,6 +391,9 @@ const DEFINITIONS = {
 		label: 'Deck List',
 		icon: 'i-lucide-list',
 		requiredContext: 'feature-match',
+		// Paints text only in its list view; the grid renders cards. Its overflow is a
+		// fixed shrink-then-clip rather than an authored Text Overflow Policy.
+		typography: { textOverflowPolicy: false, paintsText: item => item.view === 'list' },
 		createDefault: options => ({
 			type: 'deck-list',
 			id: options.id,
@@ -356,7 +417,7 @@ const DEFINITIONS = {
 			? `${playerSideLabel(item.playerSide)} sideboard • ${item.view}`
 			: 'Deck List',
 	},
-} satisfies Record<GraphicItemKind, GraphicItemDefinition>;
+} satisfies { [K in GraphicItemKind]: Omit<GraphicItemDefinition, 'typography'> & GraphicTypographyDeclarationFor<K> };
 
 /** Definition palette order is the shared vocabulary's own order. */
 export const GRAPHIC_ITEM_KINDS = Object.keys(DEFINITIONS) as readonly GraphicItemKind[];
@@ -365,7 +426,9 @@ export const GRAPHIC_ITEM_KINDS = Object.keys(DEFINITIONS) as readonly GraphicIt
 export const GRAPHIC_GROUP_CHILD_KINDS = GRAPHIC_ITEM_KINDS.filter(kind => kind !== 'group');
 
 export function getGraphicItemDefinition(kind: GraphicItemKind): GraphicItemDefinition {
-	return DEFINITIONS[kind];
+	// Each entry's `paintsText` takes only its own kind, which the wide Definition
+	// cannot say; it is only ever called with an item of the kind it was looked up by.
+	return DEFINITIONS[kind] as GraphicItemDefinition;
 }
 
 /** A Definition is offered only where its required context can be supplied. */
@@ -389,6 +452,30 @@ export function graphicGroupChildDefinitionsForHost(
 	contract: GraphicsHostContract,
 ): readonly GraphicItemDefinition[] {
 	return graphicItemDefinitionsForHost(contract).filter(definition => definition.kind !== 'group');
+}
+
+/**
+ * Whether this item owns base typography: what the Graphic Style Set typography slot
+ * and `patchGraphicTypography` accept. Read from the item's kind, not its fields.
+ */
+export function ownsGraphicTypography(item: GraphicItemConfig): item is GraphicTypographyItem {
+	return getGraphicItemDefinition(item.type).typography !== undefined;
+}
+
+/** Whether a Text Overflow Policy bounds this item's text: what `patchGraphicTextOverflow` accepts. */
+export function ownsTextOverflowPolicy(item: GraphicItemConfig): item is GraphicTextOverflowItem {
+	return getGraphicItemDefinition(item.type).typography?.textOverflowPolicy === true;
+}
+
+/**
+ * The base typography this item paints text with as it is displayed now, or null when
+ * it paints none: where the Inspector offers typography controls.
+ */
+export function paintedGraphicTypography(item: GraphicItemConfig): GraphicTypography | null {
+	const declaration = getGraphicItemDefinition(item.type).typography;
+	if (!declaration || !ownsGraphicTypography(item))
+		return null;
+	return declaration.paintsText === undefined || declaration.paintsText(item) ? item.typography : null;
 }
 
 export function graphicItemSummary(item: GraphicItemConfig): string {

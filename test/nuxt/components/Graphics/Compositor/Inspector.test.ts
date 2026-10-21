@@ -4,6 +4,7 @@ import type {
 	GraphicGroupItemConfig,
 	GraphicInputDeclaration,
 	GraphicItemConfig,
+	GraphicItemKind,
 	MediaGraphicInputDeclaration,
 } from '~~/shared/types/graphics';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
@@ -19,6 +20,8 @@ import {
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
+	GRAPHIC_ITEM_KINDS,
+	isGraphicItemDefinitionAvailable,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
@@ -452,7 +455,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(true);
-		expect(wrapper.find('[data-testid="text-overflow-policy"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-item-text"]').exists()).toBe(false);
 	});
 
 	it('offers Text Graphic Item controls but not Shape ones for text', async () => {
@@ -461,7 +464,6 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 
-		expect(wrapper.find('[data-testid="text-overflow-policy"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="graphic-item-text"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 	});
@@ -2169,39 +2171,6 @@ describe('graphicsCompositorInspector', () => {
 			});
 		}
 
-		it.each(['clock', 'player-life', 'game-wins', 'deck-list'] as const)('sets the base typography of a %s Item', async (kind) => {
-			// A Game Wins Item paints text only while it renders its win count.
-			const graphics = featureMatchStack(kind);
-			const item = graphics[0]!.items[0]!;
-			if (item.type === 'game-wins')
-				item.displayMode = 'number';
-
-			const wrapper = await mountKind(kind, graphics);
-			numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 96);
-			await nextTick();
-
-			const patched = itemOf(emittedGraphics(wrapper));
-			expect(patched?.type === kind && patched.typography.fontSize).toBe(96);
-		});
-
-		it.each(['clock', 'player-life'] as const)('bounds a %s Item with a Text Overflow Policy', async (kind) => {
-			const wrapper = await mountKind(kind);
-
-			selectField(wrapper, 'text-overflow-policy')?.vm.$emit('update:modelValue', 'shrink');
-			await nextTick();
-
-			const item = itemOf(emittedGraphics(wrapper));
-			expect(item?.type === kind && item.overflowPolicy).toBe('shrink');
-
-			// The floor a shrink policy stops at only appears once shrinking is what happens.
-			const shrinking = await mountKind(kind, emittedGraphics(wrapper));
-			numberFieldByTestId(shrinking, 'text-min-font-size')?.vm.$emit('update:modelValue', 30);
-			await nextTick();
-
-			const bounded = itemOf(emittedGraphics(shrinking));
-			expect(bounded?.type === kind && bounded.minFontSize).toBe(30);
-		});
-
 		it.each(['clock', 'player-life', 'game-wins'] as const)('gives a %s Item a Graphic Surface Style of its own', async (kind) => {
 			const wrapper = await mountKind(kind);
 
@@ -2223,22 +2192,6 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ type: 'deck-list', view: 'grid' });
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ showQuantities: false });
-		});
-
-		it('offers a Deck List Item typography only in the list view, and never a Text Overflow Policy', async () => {
-			// Typography drives the list view's rows; the grid view renders cards, so
-			// offering it there would be a block of controls that change nothing on
-			// screen. Overflow is a fixed shrink-then-clip, so no policy is authored.
-			const list = await mountKind('deck-list');
-			expect(numberField(list, 'Font size')).toBeDefined();
-			expect(list.find('[data-testid="text-overflow-policy"]').exists()).toBe(false);
-
-			const graphics = featureMatchStack('deck-list');
-			const item = graphics[0]!.items[0]!;
-			if (item.type === 'deck-list')
-				item.view = 'grid';
-			const grid = await mountKind('deck-list', graphics);
-			expect(numberField(grid, 'Font size')).toBeUndefined();
 		});
 
 		it('offers a Deck List Item no Graphic Surface Style of its own', async () => {
@@ -2302,11 +2255,6 @@ describe('graphicsCompositorInspector', () => {
 			expect(number.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
 			expect(number.find('[data-testid="game-wins-won-box-shape-fill"]').exists()).toBe(false);
 			expect(number.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
-			// Typography goes the other way: a Game Wins Item paints text only in the
-			// `number` mode, so offering it beside the boxes would be a whole block of
-			// controls that change nothing on screen.
-			expect(numberField(boxes, 'Font size')).toBeUndefined();
-			expect(numberField(number, 'Font size')).toBeDefined();
 		});
 
 		it('paints a Game Wins Item’s unwon and won boxes independently', async () => {
@@ -2372,8 +2320,111 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.find('[data-testid="game-wins-display-mode"]').exists()).toBe(false);
 			expect(wrapper.find('[data-testid="player-life-animation"]').exists()).toBe(false);
 			expect(wrapper.find('[data-testid="game-wins-box-shape-fill"]').exists()).toBe(false);
-			expect(numberField(wrapper, 'Font size')).toBeUndefined();
 		});
+	});
+});
+
+/**
+ * Typography and the Text Overflow Policy, over every Graphic Item Definition.
+ *
+ * The Inspector has no kind switch for either: it offers what the selected item's
+ * Definition declares. The expectations below are stated independently, so a wrong
+ * declaration or a panel that stops reading it fails here. A Game Wins Item and a
+ * Deck List Item appear once per display mode, because each paints text in only one.
+ */
+describe('typography and the Text Overflow Policy for every Graphic Item Definition', () => {
+	interface Row {
+		name: string;
+		kind: GraphicItemKind;
+		variant?: (item: GraphicItemConfig) => GraphicItemConfig;
+		typography: boolean;
+		textOverflowPolicy: boolean;
+	}
+
+	const ROWS: Row[] = [
+		{ name: 'text', kind: 'text', typography: true, textOverflowPolicy: true },
+		{ name: 'shape', kind: 'shape', typography: false, textOverflowPolicy: false },
+		{ name: 'media', kind: 'media', typography: false, textOverflowPolicy: false },
+		{ name: 'social-network-icon', kind: 'social-network-icon', typography: false, textOverflowPolicy: false },
+		{ name: 'group', kind: 'group', typography: false, textOverflowPolicy: false },
+		{ name: 'clock', kind: 'clock', typography: true, textOverflowPolicy: true },
+		{ name: 'player-life', kind: 'player-life', typography: true, textOverflowPolicy: true },
+		{ name: 'game-wins as boxes', kind: 'game-wins', typography: false, textOverflowPolicy: false },
+		{
+			name: 'game-wins as a number',
+			kind: 'game-wins',
+			variant: item => ({ ...item, displayMode: 'number' }) as GraphicItemConfig,
+			typography: true,
+			textOverflowPolicy: false,
+		},
+		{ name: 'deck-list as a list', kind: 'deck-list', typography: true, textOverflowPolicy: false },
+		{
+			name: 'deck-list as a grid',
+			kind: 'deck-list',
+			variant: item => ({ ...item, view: 'grid' }) as GraphicItemConfig,
+			typography: false,
+			textOverflowPolicy: false,
+		},
+	];
+
+	/** A host that can supply the Definition, since the Inspector serves both. */
+	function contractFor(kind: GraphicItemKind): GraphicsHostContract {
+		const definition = getGraphicItemDefinition(kind);
+		return isGraphicItemDefinitionAvailable(definition, BROADCAST_GRAPHICS_HOST_CONTRACT)
+			? BROADCAST_GRAPHICS_HOST_CONTRACT
+			: FEATURE_MATCH_OVERLAY_HOST_CONTRACT;
+	}
+
+	function mountRow(row: Row, overrides: Partial<GraphicItemConfig> = {}) {
+		const placed = getGraphicItemDefinition(row.kind).createDefault({
+			id: 'item',
+			label: row.name,
+			canvasWidth: 1920,
+			canvasHeight: 1080,
+		});
+		const item = { ...(row.variant?.(placed) ?? placed), ...overrides } as GraphicItemConfig;
+		return mountComponent({
+			graphics: stack([item]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'item' },
+			contract: contractFor(row.kind),
+		});
+	}
+
+	it('covers every Definition', () => {
+		expect([...new Set(ROWS.map(row => row.kind))].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+	});
+
+	it.each(ROWS)('offers $name exactly the typography it paints with', async (row) => {
+		const wrapper = await mountRow(row);
+		const fontSize = numberField(wrapper, 'Font size');
+
+		expect(fontSize !== undefined).toBe(row.typography);
+		if (!fontSize)
+			return;
+
+		fontSize.vm.$emit('update:modelValue', 96);
+		await nextTick();
+		const patched = itemOf(emittedGraphics(wrapper));
+		expect(patched && 'typography' in patched && patched.typography.fontSize).toBe(96);
+	});
+
+	it.each(ROWS)('bounds $name with a Text Overflow Policy only where its text can outgrow its bounds', async (row) => {
+		const wrapper = await mountRow(row);
+		const policy = selectField(wrapper, 'text-overflow-policy');
+
+		expect(policy !== undefined).toBe(row.textOverflowPolicy);
+		if (!policy)
+			return;
+
+		policy.vm.$emit('update:modelValue', 'shrink');
+		await nextTick();
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ overflowPolicy: 'shrink' });
+
+		// The floor a shrink policy stops at appears once shrinking is what happens.
+		const shrinking = await mountRow(row, { overflowPolicy: 'shrink' } as Partial<GraphicItemConfig>);
+		numberFieldByTestId(shrinking, 'text-min-font-size')?.vm.$emit('update:modelValue', 30);
+		await nextTick();
+		expect(itemOf(emittedGraphics(shrinking))).toMatchObject({ minFontSize: 30 });
 	});
 });
 

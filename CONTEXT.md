@@ -518,7 +518,7 @@ Which font a Graphic Item's typography or Graphic Placeholder Style paints with:
 _Avoid_: Font family, font stack
 
 **Text Overflow Policy**:
-The behaviour when a Text Graphic Item's text exceeds its bounds: clip, ellipsis, or shrink to an author-set minimum size and then ellipsis. Text never visibly overflows.
+The behaviour when the text of a Text Graphic Item, Clock Graphic Item, or Player Life Graphic Item exceeds its bounds: clip, ellipsis, or shrink to an author-set minimum size and then ellipsis. Text never visibly overflows. A live string can be longer than the author ever saw, which is why the Clock and Player Life carry one too; whether a kind has one is its Graphic Item Definition's to declare.
 
 **Media Graphic Item**:
 A Graphic Item rendering an image or silent video with a Media Fit, focal position, opacity, and optional Shape Geometry clipping. Video has playback-rate and looping controls and starts from the beginning when its Broadcast Graphic enters.
@@ -686,7 +686,7 @@ _Avoid_: Dummy data, test data
 - A **Text Graphic Item**, **Shape Graphic Item**, or **Graphic Group** may have one **Graphic Surface Style**, which may have one **Graphic Fill**
 - A **Broadcast Graphic** and each **Graphic Group** own the **Graphic Layer Order** of their direct Graphic Items
 - Every top-level **Graphic Item** and canvas-positioned **Graphic Group** child has one **Graphic Anchor Point**, and may have one **Graphic Rotation**
-- A **Text Graphic Item** may render a **Graphic Text Template**, may define one **Graphic Placeholder Style** per referenced **Graphic Input**, and has one **Text Overflow Policy**
+- A **Text Graphic Item** may render a **Graphic Text Template**, may define one **Graphic Placeholder Style** per referenced **Graphic Input**, and has one **Text Overflow Policy**; a **Clock Graphic Item** and a **Player Life Graphic Item** each have one too
 - **Media Graphic Item** playback is independent of **Graphic Animation**
 
 ### Graphic Animation

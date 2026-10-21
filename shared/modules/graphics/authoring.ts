@@ -67,7 +67,14 @@ import { createDefaultGraphicAnimationRecipe, getGraphicAnimationPreset } from '
 import { isGraphicBindingFieldCompatible } from './bindingCatalog';
 import { canDeriveGraphicSource } from './bindingResolution';
 import { createDefaultGraphicInputDeclaration } from './inputs';
-import { createDefaultGraphicSurfaceStyle, getGraphicItemDefinition, GRAPHIC_GROUP_CHILD_KINDS, graphicItemKindLabel } from './itemDefinitions';
+import {
+	createDefaultGraphicSurfaceStyle,
+	getGraphicItemDefinition,
+	GRAPHIC_GROUP_CHILD_KINDS,
+	graphicItemKindLabel,
+	ownsGraphicTypography,
+	ownsTextOverflowPolicy,
+} from './itemDefinitions';
 import { getShapeGeometryPreset, squareShapeGeometry } from './shapeGeometry';
 import { graphicTextTemplateProjectedValueReferences, readSocialProfileProjectedValueReference } from './textTemplate';
 
@@ -1064,12 +1071,26 @@ function patchGraphicItemGroup<K extends GraphicItemKind>(
 	kinds: readonly K[],
 	merge: (item: Extract<GraphicItemConfig, { type: K }>) => Partial<GraphicItemConfig>,
 ): BroadcastGraphicConfig {
-	const location = findGraphicItem(graphic, itemId);
-	const item = location?.item;
-	if (!item || !kinds.includes(item.type as K))
+	return patchGraphicItemWhere(
+		graphic,
+		itemId,
+		(item): item is Extract<GraphicItemConfig, { type: K }> => kinds.includes(item.type as K),
+		merge,
+	);
+}
+
+/** Apply a nested merge to one item, and only when its Definition says it owns the group. */
+function patchGraphicItemWhere<T extends GraphicItemConfig>(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	owns: (item: GraphicItemConfig) => item is T,
+	merge: (item: T) => Partial<GraphicItemConfig>,
+): BroadcastGraphicConfig {
+	const item = findGraphicItem(graphic, itemId)?.item;
+	if (!item || !owns(item))
 		return graphic;
 
-	return patchGraphicItem(graphic, itemId, merge(item as Extract<GraphicItemConfig, { type: K }>));
+	return patchGraphicItem(graphic, itemId, merge(item));
 }
 
 /**
@@ -1111,20 +1132,6 @@ export const GRAPHIC_SURFACE_STYLE_SLOT_KINDS: Record<GraphicSurfaceStyleSlot, r
 
 /** The kinds whose own Graphic Surface Style is optional, so it can be cleared. */
 const SURFACE_KINDS = GRAPHIC_SURFACE_STYLE_SLOT_KINDS.surfaceStyle;
-
-/**
- * The kinds that carry typography. The context-gated Definitions render a live
- * string rather than an authored one, but they render it as text.
- */
-const TYPOGRAPHY_KINDS = ['text', 'clock', 'player-life', 'game-wins', 'deck-list'] as const;
-
-/**
- * The kinds bounded by a Text Overflow Policy: the ones whose rendered string can
- * exceed its authored bounds. A Game Wins Item is absent because its `number`
- * display mode renders a win count, which cannot; a Deck List Item because its
- * overflow is a fixed shrink-then-clip rather than an authored policy.
- */
-const TEXT_OVERFLOW_KINDS = ['text', 'clock', 'player-life'] as const;
 
 type GeometryOwner = Extract<GraphicItemConfig, { type: typeof GEOMETRY_KINDS[number] }>;
 
@@ -1508,14 +1515,15 @@ export function patchTextGraphicItem(
  * Not only a Text Graphic Item's: a Clock, a Player Life, and a Game Wins Item
  * rendering its win count all paint text, and they read the string from the live
  * Feature Match Session rather than from an author. Where the string comes from
- * has no bearing on how it is set.
+ * has no bearing on how it is set. Which kinds own typography is their Graphic Item
+ * Definition's to declare; any other item is returned unchanged.
  */
 export function patchGraphicTypography(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: Partial<GraphicTypography>,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, TYPOGRAPHY_KINDS, item => ({
+	return patchGraphicItemWhere(graphic, itemId, ownsGraphicTypography, item => ({
 		typography: { ...item.typography, ...patch },
 	}));
 }
@@ -1526,14 +1534,15 @@ export function patchGraphicTypography(
  *
  * Text does not render with visible overflow beyond its authored bounds, and a
  * live string can be longer than the author ever saw — which is exactly why a
- * Clock and a Player Life need this as much as a Text Graphic Item does.
+ * Clock and a Player Life need this as much as a Text Graphic Item does. Which kinds
+ * are bounded is their Graphic Item Definition's to declare.
  */
 export function patchGraphicTextOverflow(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
 	patch: { overflowPolicy?: TextOverflowPolicy; minFontSize?: number },
 ): BroadcastGraphicConfig {
-	return patchGraphicItemGroup(graphic, itemId, TEXT_OVERFLOW_KINDS, () => patch);
+	return patchGraphicItemWhere(graphic, itemId, ownsTextOverflowPolicy, () => patch);
 }
 
 /** Replace top-level properties of a Player Life Graphic Item, with its own type checked. */
