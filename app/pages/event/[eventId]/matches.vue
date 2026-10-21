@@ -115,8 +115,8 @@ watch([eventId, viewedRoundId], async ([activeEventId, roundId], _, onCleanup) =
 	}
 }, { immediate: true });
 
-// Resolve the viewed Round only against loaded Rounds, so a queried Round is
-// not dropped before the Round store answers.
+// Resolve the viewed Round once the page's stores (Rounds among them) have
+// loaded, so a queried Round is not dropped before the Round store answers.
 watch([
 	queryRoundId,
 	() => roundStore.rounds,

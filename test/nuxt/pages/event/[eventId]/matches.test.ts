@@ -287,7 +287,6 @@ describe('matches page', () => {
 		mockFeatureMatchAssignmentStore.loadAssignments.mockClear();
 		releaseAssignmentRound.mockClear();
 		mockMatchRepository.list.mockReset();
-		mockMatchRepository.list.mockResolvedValue([]);
 		mockOverlay.create.mockClear();
 		router.replace.mockClear();
 		mockToast.add.mockClear();
@@ -434,7 +433,7 @@ describe('matches page', () => {
 		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 3);
 	});
 
-	it('re-reads the synced Round and the Rounds after a Round sync, without an Event-wide Match list', async () => {
+	it('re-reads the synced Round\'s Matches and the Rounds after a Round sync, without an Event-wide Match list', async () => {
 		mockEventStore.event = { meleeEnabled: true };
 		mockRoundStore.rounds = [{ id: 2, phaseId: 1, name: 'Round 1', lastSyncedAt: null, externalSource: 'melee' }];
 
@@ -443,6 +442,7 @@ describe('matches page', () => {
 		mockMatchStore.loadMatchesByRoundId.mockClear();
 
 		const syncButton = wrapper.get('[data-testid="empty-state"]').findAll('button').find(button => button.text().includes('Sync Matches'));
+		expect(syncButton).toBeDefined();
 		await syncButton!.trigger('click');
 		await flushPromises();
 
