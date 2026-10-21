@@ -28,11 +28,11 @@ const DEFAULT_LOCAL_ORIGIN = 'http://127.0.0.1:8787';
  * silently pointed at the wrong installation would be worse than one that
  * refused to start.
  */
-export function acceptanceOrigin({ deployed }) {
+export function acceptanceOrigin({ deployed, env = process.env }) {
 	if (!deployed)
-		return (process.env.STREAM_KEEPR_LOCAL_ACCEPTANCE_URL ?? DEFAULT_LOCAL_ORIGIN).replace(/\/$/, '');
-	const baseUrl = process.env.STREAM_KEEPR_BROWSER_ACCEPTANCE_URL
-		?? process.env.STREAM_KEEPR_DEPLOY_HEALTH_URL;
+		return (env.STREAM_KEEPR_LOCAL_ACCEPTANCE_URL ?? DEFAULT_LOCAL_ORIGIN).replace(/\/$/, '');
+	const baseUrl = env.STREAM_KEEPR_BROWSER_ACCEPTANCE_URL
+		?? env.STREAM_KEEPR_DEPLOY_HEALTH_URL;
 	if (!baseUrl) {
 		throw new AcceptanceFailure('harness-precondition-unmet', {
 			reason: 'STREAM_KEEPR_BROWSER_ACCEPTANCE_URL is unset',
