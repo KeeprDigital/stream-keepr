@@ -1,0 +1,118 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+/**
+ * The merge queue (ADR-0036) is only as good as the workflows' wiring: these
+ * read the committed workflows. Nothing runs against GitHub; only a queued
+ * merge proves the events arrive.
+ */
+
+/** The `main` ruleset's required status checks: job names, as GitHub reports them. */
+const REQUIRED_CHECKS = ['CI passed', 'Conventional Commit title'];
+
+const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+const prTitle = readFileSync('.github/workflows/pr-title.yml', 'utf8');
+const releasePlease = readFileSync('.github/workflows/release-please.yml', 'utf8');
+
+/** A workflow without its comments, so a mention in prose never passes for wiring. */
+function code(workflow: string) {
+	return workflow.split('\n').filter(line => !/^\s*#/.test(line)).join('\n');
+}
+
+/** Each top-level job's id and its text. */
+function jobs(workflow: string) {
+	const body = code(workflow).slice(code(workflow).indexOf('\njobs:\n') + '\njobs:\n'.length);
+	return new Map(body.split(/^(?= {2}[\w-]+:$)/m).filter(Boolean).map(job => [job.slice(2, job.indexOf(':')), job]));
+}
+
+function triggers(workflow: string) {
+	const on = code(workflow).match(/^on:\n((?: {2}.*\n)+)/m)?.[1] ?? '';
+	return on;
+}
+
+describe('every required check reports in the merge queue as well as on PRs', () => {
+	it.each([['ci.yml', ci], ['pr-title.yml', prTitle]])('%s runs on merge groups and on PRs', (_name, workflow) => {
+		expect(triggers(workflow)).toMatch(/^ {2}merge_group:\n {4}types: \[checks_requested\]$/m);
+		expect(triggers(workflow)).toMatch(/^ {2}pull_request:$/m);
+	});
+
+	it('names each required check exactly once, as a job of a workflow that runs in the queue', () => {
+		const names = [ci, prTitle].flatMap(workflow => [...jobs(workflow).values()].map(job => job.match(/^ {4}name: (.+)$/m)?.[1]));
+
+		for (const check of REQUIRED_CHECKS)
+			expect(names.filter(name => name === check)).toHaveLength(1);
+	});
+
+	it('`CI passed` waits on every other CI job and reports whatever they did', () => {
+		const all = jobs(ci);
+		const passed = all.get('passed')!;
+		const needs = passed.match(/^ {4}needs: \[(.+)\]$/m)![1]!.split(',').map(id => id.trim());
+
+		expect(passed).toMatch(/^ {4}name: CI passed$/m);
+		expect(passed).toMatch(/^ {4}if: always\(\)$/m);
+		expect(needs.toSorted()).toEqual([...all.keys()].filter(id => id !== 'passed').toSorted());
+		// A failed or cancelled job fails it; only success and skipped pass.
+		expect(passed).toContain('success|skipped) ;;');
+	});
+
+	it('`Conventional Commit title` has no condition that could skip it in the queue', () => {
+		const job = jobs(prTitle).get('conventional')!;
+
+		expect(job).not.toMatch(/^\s+if:/m);
+		expect(job).toMatch(/^ {8}run: node scripts\/conventional-title\.mjs$/m);
+		// The title is contributor-controlled: read from the payload by the script.
+		expect(code(prTitle)).not.toContain('github.event.pull_request.title');
+	});
+});
+
+describe('the CI scope decides what a merge group can affect against the queue\'s base', () => {
+	const scope = jobs(ci).get('scope')!;
+
+	it('the scope job runs for every merge group and for ready PRs', () => {
+		expect(scope).toMatch(/^ {4}if: github\.event_name == 'merge_group' \|\| !github\.event\.pull_request\.draft$/m);
+	});
+
+	it('the scope decision is the tested script, not an inline diff of HEAD^1', () => {
+		expect(scope).toMatch(/^ {8}run: node scripts\/ci-scope\.mjs$/m);
+		expect(scope).not.toContain('HEAD^1');
+		expect(scope).toMatch(/node-version-file: \.node-version/);
+	});
+
+	it('no gate reads PR-only state, so none is skipped in the queue for want of a PR', () => {
+		for (const [id, job] of jobs(ci)) {
+			if (id !== 'scope')
+				expect(job, id).not.toContain('github.event.pull_request');
+		}
+	});
+
+	it('each gate is skipped only on the scope job\'s decision', () => {
+		for (const [id, job] of jobs(ci)) {
+			if (id === 'scope' || id === 'passed')
+				continue;
+			expect(job, id).toMatch(/^ {4}needs: scope$/m);
+			expect(job, id).toMatch(/^ {4}if: needs\.scope\.outputs\.(?:code|bundle) == 'true'$/m);
+		}
+	});
+});
+
+describe('release-please releases only what the queue verified', () => {
+	const steps = code(releasePlease).slice(code(releasePlease).indexOf('    steps:\n')).split(/^ {6}- /m).slice(1);
+	const gate = steps.findIndex(step => /^ {8}run: node scripts\/release-gate\.mjs$/m.test(step));
+	const release = steps.findIndex(step => step.startsWith('uses: googleapis/release-please-action@'));
+
+	it('the gate runs before release-please, and nothing lets release-please run past a refusal', () => {
+		expect(gate).toBeGreaterThanOrEqual(0);
+		expect(release).toBeGreaterThan(gate);
+		// A step-level `if:` replaces the implicit `success()`; `continue-on-error` lets a failure through.
+		for (const step of steps)
+			expect(step).not.toMatch(/^\s+(?:if|continue-on-error):/m);
+		expect(code(releasePlease)).not.toMatch(/^\s+(?:if|continue-on-error):/m);
+	});
+
+	it('the gate can read the merge-group runs, and checks out only itself', () => {
+		expect(code(releasePlease)).toMatch(/^ {2}actions: read$/m);
+		expect(steps[gate]).toMatch(/GH_TOKEN: \$\{\{ github\.token \}\}/);
+		expect(steps[0]).toMatch(/sparse-checkout: \|\n {12}scripts\/release-gate\.mjs\n/);
+		expect(steps[0]).toMatch(/persist-credentials: false/);
+	});
+});

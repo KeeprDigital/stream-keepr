@@ -1009,3 +1009,34 @@ The one `production` tag stood for both components but moved only after the app 
 - **Widen the path diff to every input** (the validator folder, `package.json`, `pnpm-lock.yaml`, `shared/`). Release-please bumps `package.json` on every release, so the validator would redeploy every time. Narrowing it to the dependency entries is a list that goes stale silently when the Worker gains an import.
 - **Record the fingerprint in Cloudflare** (`wrangler deploy --tag`) and read the deployed version back. That keeps a dashboard rollback accurate, but whether a Worker version's rollback also rolls its Container back is unverified. Reading it back needs the API in the decision, and none of that can be proven without deploying.
 - **Move one marker after both components succeed.** It still cannot say "B's validator, A's app", which is the state a rollback must repair.
+
+## ADR-0036: The merge queue verifies the exact revision that lands, and only such a revision is released
+
+Accepted · 2026-10-21 · [#615](https://github.com/KeeprDigital/stream-keepr/issues/615)
+
+### Decision
+
+**Every change reaches `main` through GitHub's merge queue.** The queue squashes a PR onto `main` plus every PR queued ahead of it, and CI and the title check run on that combined commit (`merge_group`). `main` fast-forwards to that very commit only if both pass, and each queue entry must pass on its own (`ALLGREEN`). The revision that must pass before it can land is therefore the exact commit `main` moves to.
+
+**A release is cut only from such a revision.** release-please tags the Release PR's merge commit, so the Release PR goes through the queue like any other change. Before release-please runs, `scripts/release-gate.mjs` refuses any merged Release PR still awaiting its tag whose merge commit has no successful `merge_group` run of CI. A release, and so a Deploy candidate, cannot come from a tree the queue did not test, even if a ruleset bypass or a merge while the queue was off put one on `main`.
+
+**Both required checks report in the queue.** `CI passed` (ci.yml) and `Conventional Commit title` (pr-title.yml) run on `merge_group` as well as `pull_request`. A required check that never reports holds the group until the queue's timeout. In the queue, the title check reads the subject of every squash commit the group lands, which is exactly what release-please reads. CI's scope decision measures a merge group against the queue's base (`merge_group.base_sha`), not `HEAD^1`, and runs everything when it cannot measure (`scripts/ci-scope.mjs`). PR runs stay for feedback, and because the queue admits only a PR whose required checks passed.
+
+### Why
+
+CI ran only on PRs, and the ruleset did not require a PR to be up to date with `main`. Two PRs that each passed against the same old `main` could merge one after the other, and nothing ever tested the combined tree. A later release could ship it (#615). Squash-only merging does not change that.
+
+### Consequences
+
+- The ruleset is the enforcement: the merge queue rule, the two required checks, and no bypass actor on `main`. Agents do not change it; the maintainer applies it. The settings are listed in the PR that landed this.
+- Release PRs need a maintainer to approve their CI. release-please writes them with the default workflow token, and GitHub creates the `pull_request` runs that token triggers as `action_required` instead of starting them. A maintainer selects "Approve workflows to run", waits for green, then queues the PR. Before this, Release PRs never got the required checks and an admin merged them through the ruleset bypass, so that bypass is no longer needed. A GitHub App token for release-please would remove the approval step.
+- The scope decision, the title check, the release gate and the workflows' wiring are unit-tested without GitHub (`ciScope.test.ts`, `conventionalTitle.test.ts`, `releaseGate.test.ts`, `ciWorkflows.test.ts`). The scope test runs the script against real shallow git checkouts. That GitHub delivers `merge_group` events, that `main` lands on the tested commit id, and that the queue's squash subjects are PR titles is proven only by an observed queued merge.
+- The release gate runs from `main`'s workflow and blocks every release-please run while an unverified release is pending. Recovery is by hand (README.md § Releases).
+- Every workflow file now counts as code for CI's scope, because each is held by wiring tests that only run when CI does. Editing `deploy.yml`, `pr-title.yml` or `release-please.yml` runs the gates, but not the Worker build.
+- Docs-only changes still skip CI's gates in the queue. That is sound because the queue's base passed its own run.
+
+### Rejected alternatives
+
+- **Require PRs to be up to date with `main`** (strict status checks). It verifies the same combined tree, but each PR must be rebased and re-run by hand after every merge ahead of it, and a release still relies on nobody merging out of order.
+- **Verify `main` or the release revision after merge, before publishing.** This catches a broken combination only after it is on `main`, and needs CI on `push` plus a release that waits for it. The queue proves the same revision before it lands.
+- **Skip the title check in the queue** by making it non-required there. Rulesets require the same checks for PRs and merge groups, and the queue's squash subjects are what release-please reads, so checking them is the stronger check.

@@ -8,14 +8,23 @@
 # brings every branch commit along, and a branch merged twice (locally and by
 # its PR) lists each change twice.
 #
+# A release is cut only from a revision the merge queue verified (ADR-0036).
+# The Release PR goes through the queue like any other, so the commit
+# release-please tags is the merge group's head, the exact tree CI passed on.
+# The gate step refuses a merged Release PR whose commit no merge-group CI
+# run passed (one merged around the queue), before anything is tagged.
+#
 # `workflow_dispatch` refreshes the Release PR without a push to main.
 #
 # Needs the repo setting Settings → Actions → General →
 # "Allow GitHub Actions to create and approve pull requests" enabled, or
-# the action cannot open its PR. Known limitation: PRs created by the
-# default GITHUB_TOKEN do not trigger CI on themselves — harmless while
-# main has no required status checks; if that protection is ever added,
-# feed this action a PAT via `token:` so its PRs run CI.
+# the action cannot open its PR. The Release PR is created and updated with
+# the default GITHUB_TOKEN, so GitHub creates its `pull_request` runs (CI, PR
+# title) in an approval-required state (`action_required`) rather than
+# starting them: that is how it stops a workflow triggering itself. A
+# maintainer selects "Approve workflows to run" on the Release PR before
+# queueing it (README.md § Releases). A GitHub App token passed as `token:`
+# would start them without the approval.
 
 name: Release Please
 
@@ -27,6 +36,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # The gate reads the merge-group CI runs on the release commit.
+  actions: read
 
 concurrency:
   group: release-please
@@ -37,6 +48,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            scripts/release-gate.mjs
+            .node-version
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Refuse a release the merge queue did not verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-gate.mjs
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
