@@ -203,27 +203,23 @@ export const authStaticOptions = {
 		 * (measured under local workerd on #621). ADR-0012 had accepted that
 		 * fallback on the premise that production got `__Secure-` cookies.
 		 *
-		 * `import.meta.dev` is the build's own answer to "is this the dev server",
-		 * replaced by a literal when Nitro bundles the server, so the deployed
-		 * Worker carries `true` in its code rather than in anything read at
-		 * runtime. `pnpm worker:smoke` asserts it on that artifact. It is `!== true`
-		 * rather than negated so that anything which is not a Nitro dev build —
-		 * the unit suite, which defines no `import.meta.dev` — gets production's
-		 * cookie.
+		 * `import.meta.dev` is the build's own answer to "is this the dev server":
+		 * Nitro replaces it with a literal (`false` in a build), so the deployed
+		 * Worker's value is a constant in its code rather than anything read at
+		 * runtime, and `pnpm worker:smoke` asserts it on that artifact. It is
+		 * `!== true` rather than negated so that anything which is not a Nitro dev
+		 * build — the unit suite, which defines no `import.meta.dev` — gets
+		 * production's cookie.
 		 *
-		 * The dev server keeps unprefixed, non-`Secure` cookies because it is the
-		 * one server a browser reaches over plain http by a name that is not
-		 * loopback (`pnpm dev:local`), and the integration and local-auth suites it
-		 * serves read whatever name they are given. A built Worker under `pnpm
-		 * preview` is production's artifact and gets production's cookie; browsers
-		 * treat loopback as a secure origin, so it still signs in there.
+		 * The dev server keeps the unprefixed, non-`Secure` cookie it always had.
+		 * It is where people sign in over `http://localhost` every day, and a
+		 * browser that does not count loopback as a secure origin for cookies
+		 * (WebKit has not, historically) would drop a `Secure` one there. What
+		 * ships is the built artifact, so that is the one held to production's
+		 * cookie, `pnpm preview` included; Chromium keeps it on loopback.
 		 *
-		 * Rejected: `NODE_ENV=production` in the Worker build changes every
-		 * `isProduction` site in ADR-0012's census at once (the rate limiter among
-		 * them) to fix one; a Worker var is a deploy setting a forgotten value
-		 * silently undoes; deriving it from each request's scheme has no option
-		 * (ADR-0012), and would leave the smoke run, which reaches the artifact
-		 * over http, unable to see production's cookie.
+		 * Why not `NODE_ENV=production` in the Worker build, a Worker var, or the
+		 * request's scheme: ADR-0012.
 		 */
 		useSecureCookies: import.meta.dev !== true,
 	},

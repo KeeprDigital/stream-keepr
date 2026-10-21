@@ -725,13 +725,13 @@ function assertSessionCookieAttributes(response) {
 		});
 	}
 	const [pair, ...attributes] = session;
-	const named = attributes.map(attribute => attribute.toLowerCase());
+	const attributeNames = attributes.map(attribute => attribute.toLowerCase());
 	const problems = [
 		!pair.startsWith('__Secure-') && 'name not __Secure- prefixed',
-		!named.includes('secure') && 'Secure missing',
-		!named.includes('httponly') && 'HttpOnly missing',
-		!named.includes('samesite=lax') && 'SameSite not Lax',
-		!named.includes('path=/') && 'Path not /',
+		!attributeNames.includes('secure') && 'Secure missing',
+		!attributeNames.includes('httponly') && 'HttpOnly missing',
+		!attributeNames.includes('samesite=lax') && 'SameSite not Lax',
+		!attributeNames.includes('path=/') && 'Path not /',
 	].filter(Boolean);
 	if (problems.length > 0) {
 		throw new WorkerSmokeFailure('auth-sign-in', 'session-cookie-attributes', {

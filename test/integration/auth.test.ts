@@ -136,12 +136,12 @@ describe('auth foundation', () => {
 	});
 
 	/**
-	 * The dev server is the one server a browser reaches over plain http by a
-	 * non-loopback name (`pnpm dev:local`), so it alone keeps a cookie such a
-	 * browser can store. Every built server sets the `__Secure-` one instead
+	 * The dev server keeps the cookie it always set, so signing in over
+	 * `http://localhost` works in a browser that would drop a `Secure` one there.
+	 * Every built server sets the `__Secure-`, `Secure` one instead
 	 * (`useSecureCookies` in `server/utils/authOptions.ts`, #451).
 	 */
-	it('sets the dev server\'s session cookie unprefixed and not Secure, as plain http needs', async () => {
+	it('sets the dev server\'s session cookie unprefixed and not Secure', async () => {
 		const signIn = await postJson('/api/auth/sign-in/email', {
 			email: FIXTURE_EMAIL,
 			password: FIXTURE_PASSWORD,

@@ -11,10 +11,10 @@ import { LOCAL_HOST, LOCAL_ORIGIN, throwawayAuth } from '~~/test/helpers/throwaw
  * installation's `baseURL.protocol: 'auto'`, from `NODE_ENV` read once at module
  * load. Nothing sets `NODE_ENV` in the Worker, so the built Worker set an
  * unprefixed cookie without `Secure` (measured on #621). `authOptions.ts` now
- * states the option: on everywhere except the `nuxt dev` server, which is the
- * one server reached from a browser over plain http on a LAN address. This suite
- * runs outside a dev server, so it sees production's cookie, and sees it over
- * `http://` — the scheme no longer has a say.
+ * states the option: on everywhere except the `nuxt dev` server, which keeps the
+ * cookie it always had. This suite runs outside a dev server, so it sees
+ * production's cookie, and sees it over `http://` — the scheme no longer has a
+ * say.
  */
 
 const EMAIL = 'session-cookie@keepr.digital';
