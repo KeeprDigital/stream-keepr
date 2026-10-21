@@ -181,8 +181,8 @@ export const useCardStore = defineStore('card', () => {
 		deckListMatchId.value = null;
 		error.value = null;
 		loading.value = false;
-		timeout.reset();
-		activeCardRuntime.clearCardTimeout();
+		// Ends the Event Lifetime for the Card too: a read still out lands nothing (#704).
+		activeCardRuntime.resetActiveCardState();
 		deckSourceRuntime.resetDeckSources();
 	}
 

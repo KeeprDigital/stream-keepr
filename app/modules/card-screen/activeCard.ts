@@ -2,7 +2,9 @@ import type { MaybeRefOrGetter, Ref } from 'vue';
 import type { useAsyncAction } from '~/composables/core/useAsyncAction';
 import type { MtgCard } from '~/types/card/mtg';
 import type { MessageData } from '~/types/realtime';
+import type { Flight } from '~/utils/guardedSequence';
 import { onScopeDispose, toValue } from 'vue';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 
 type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
 
@@ -26,6 +28,13 @@ interface ActiveCardRuntimeState {
  *
  * Owns active Card Screen persistence, local timeout cleanup, and realtime
  * application for the currently selected Screen.
+ *
+ * A Card read is a Flight: it lands only while nothing about the Card has
+ * reached this owner since it began (#704). A newer read, a realtime Card
+ * message, an accepted local save or clear, a Screen selection and the end of
+ * the Event Lifetime each supersede it, before they touch the Card, so a late
+ * answer can neither replace what they put there nor arm a timer that would
+ * later clear it.
  */
 export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	const { saveScreenCard, getScreenCard, deleteScreenCard } = useCardRepository();
@@ -39,6 +48,20 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	 * clears the Card and announces it.
 	 */
 	let screenOutputRead: (() => Promise<MtgCard | null>) | null = null;
+	const reads = createGuardedSequence();
+	/** The read whose answer `state.loading` waits on, while it is current. */
+	let pendingRead: Flight | null = null;
+
+	/**
+	 * Supersede any Card read in flight: called before every change to the held
+	 * Card or its timer that is not a read's own answer.
+	 */
+	function supersedeReads() {
+		if (pendingRead?.current)
+			state.loading.value = false;
+		pendingRead = null;
+		reads.supersede();
+	}
 
 	/** Install the rendering's Card read; the answer uninstalls it when the rendering goes away. */
 	function readAsScreenOutput(read: () => Promise<MtgCard | null>) {
@@ -72,6 +95,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	}
 
 	function resetActiveCardState() {
+		supersedeReads();
 		state.activeCard.value = null;
 		state.timeout.reset();
 		clearCardTimeout();
@@ -133,23 +157,33 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 			return null;
 		}
 		const screenId = state.activeScreenId.value;
+		const flight = reads.begin();
+		pendingRead = flight;
 		return state.executeAction(
 			async () => {
-				const card = screenOutputRead ? await screenOutputRead() : await getScreenCard(eventId, screenId);
-				if (currentEventId() !== eventId || state.activeScreenId.value !== screenId) {
-					return null;
+				let card: MtgCard | null;
+				try {
+					card = screenOutputRead ? await screenOutputRead() : await getScreenCard(eventId, screenId);
 				}
+				finally {
+					if (pendingRead === flight)
+						pendingRead = null;
+				}
+				// Something newer reached the Card while this read was out: it lands nothing.
+				if (flight.stale || currentEventId() !== eventId || state.activeScreenId.value !== screenId)
+					return null;
 				state.activeCard.value = card;
 				if (card) {
 					updateTimeout(card);
 					scheduleLocalTimeout(card);
 				}
 				else {
-					resetActiveCardState();
+					state.timeout.reset();
+					clearCardTimeout();
 				}
 				return card;
 			},
-			{ loadingRef: state.loading, errorRef: state.error },
+			{ loadingRef: state.loading, errorRef: state.error, flight },
 		);
 	}
 
@@ -169,6 +203,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 				await saveScreenCard(eventId, screenId, cardData);
 				if (currentEventId() !== eventId || state.activeScreenId.value !== screenId)
 					return cardData;
+				supersedeReads();
 				state.activeCard.value = cardData;
 				updateTimeout(cardData);
 				scheduleLocalTimeout(cardData);
@@ -195,9 +230,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 				await deleteScreenCard(eventId, screenId);
 				if (currentEventId() !== eventId || state.activeScreenId.value !== screenId)
 					return;
-				state.activeCard.value = null;
-				state.timeout.reset();
-				clearCardTimeout();
+				resetActiveCardState();
 			},
 			{
 				errorRef: state.error,
@@ -212,6 +245,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	function applyRemoteUpdated(data: MessageData<'card:updated'>) {
 		const eventId = currentEventId();
 		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
+			supersedeReads();
 			state.activeCard.value = data.card;
 			if (data.card) {
 				updateTimeout(data.card);
@@ -226,16 +260,14 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 
 	function applyRemoteCleared(data: MessageData<'card:cleared'>) {
 		const eventId = currentEventId();
-		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
-			state.activeCard.value = null;
-			state.timeout.reset();
-			clearCardTimeout();
-		}
+		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data))
+			resetActiveCardState();
 	}
 
 	function applyRemoteTimeout(data: MessageData<'card:timeout'>) {
 		const eventId = currentEventId();
 		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
+			supersedeReads();
 			const remainingMs = Math.max(0, data.expiresAt - getServerTime());
 			if (remainingMs > 0) {
 				state.timeout.start(Math.round(remainingMs / 1000));
@@ -251,6 +283,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	function applyRemoteTimeoutCancel(data: MessageData<'card:timeout:cancel'>) {
 		const eventId = currentEventId();
 		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data)) {
+			supersedeReads();
 			state.timeout.reset();
 			clearCardTimeout();
 		}
