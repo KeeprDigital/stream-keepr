@@ -35,7 +35,10 @@ const FocusPickerStub = defineComponent({
 
 const global = {
 	stubs: {
-		UFormField: defineComponent({ template: '<div><slot /></div>' }),
+		UFormField: defineComponent({
+			props: { error: { type: [String, Boolean], required: false } },
+			template: '<div><slot /><p v-if="typeof error === \'string\'" data-testid="field-error">{{ error }}</p></div>',
+		}),
 		USelect: USelectStub,
 		UInput: UInputStub,
 		GraphicsAssetFocusPicker: FocusPickerStub,
@@ -58,6 +61,20 @@ describe('the Screen Media Source field', () => {
 		await wrapper.find('[data-testid="source-url"]').setValue('https://cdn.example.com/loop.webm');
 
 		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([{ kind: 'url', url: 'https://cdn.example.com/loop.webm' }]);
+	});
+
+	it('refuses a root-relative path the application does not serve as media, and says where library media comes from', () => {
+		const wrapper = mountField({ kind: 'url', url: '/api/graphics-assets/plate/revisions/plate-1/content' });
+
+		const error = wrapper.find('[data-testid="field-error"]');
+		expect(error.exists()).toBe(true);
+		expect(error.text()).toContain('/video/');
+		expect(error.text()).toContain('Asset library');
+	});
+
+	it('shows no refusal for media the application serves, an HTTPS URL, or an unset URL', () => {
+		for (const url of ['/video/loop.mp4', 'https://cdn.example.com/loop.webm', ''])
+			expect(mountField({ kind: 'url', url }).find('[data-testid="field-error"]').exists(), url).toBe(false);
 	});
 
 	it('offers the library without writing anything until an asset is chosen', async () => {

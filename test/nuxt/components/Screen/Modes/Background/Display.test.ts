@@ -125,7 +125,7 @@ describe('screenModesBackgroundDisplay', () => {
 	it('renders a URL-sourced image layer directly and an asset-sourced one through the resolved content URL', async () => {
 		config.value = {
 			layers: [
-				layer({ id: 'remote', type: 'image', source: { kind: 'url', url: '/plates/one.png' }, fit: 'contain' } as Partial<BackgroundLayer> & Pick<BackgroundLayer, 'id' | 'type'>),
+				layer({ id: 'remote', type: 'image', source: { kind: 'url', url: 'https://cdn.example.com/plates/one.png' }, fit: 'contain' } as Partial<BackgroundLayer> & Pick<BackgroundLayer, 'id' | 'type'>),
 				layer({ id: 'library', type: 'image', source: { kind: 'asset', assetId: 'asset-1', revisionId: 'revision-1' }, fit: 'cover' } as never),
 			],
 		};
@@ -134,7 +134,7 @@ describe('screenModesBackgroundDisplay', () => {
 		const images = wrapper.findAll('.background-layer-stack__layer img');
 
 		expect(images).toHaveLength(2);
-		expect(images[0]!.attributes('src')).toBe('/plates/one.png');
+		expect(images[0]!.attributes('src')).toBe('https://cdn.example.com/plates/one.png');
 		expect(images[1]!.attributes('src')).toBe('/resolved/asset-1/revision-1');
 	});
 
@@ -145,7 +145,7 @@ describe('screenModesBackgroundDisplay', () => {
 					id: 'loop',
 					type: 'video',
 					opacity: 0.5,
-					source: { kind: 'url', url: '/loops/rain.mp4' },
+					source: { kind: 'url', url: '/video/rain.mp4' },
 					fit: 'fill',
 					playbackRate: 1.5,
 					loop: false,
@@ -157,7 +157,7 @@ describe('screenModesBackgroundDisplay', () => {
 		const video = wrapper.getComponent(MediaBackgroundStub).props('video');
 
 		expect(video).toEqual({
-			url: '/loops/rain.mp4',
+			url: '/video/rain.mp4',
 			fit: 'fill',
 			playbackRate: 1.5,
 			loop: false,

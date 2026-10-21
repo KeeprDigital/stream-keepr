@@ -157,3 +157,38 @@ describe('a v1 package exported before ADR-0020', () => {
 		expect(JSON.stringify(installed)).not.toContain('videoCompatibility');
 	});
 });
+
+/**
+ * A `.sklayout` carries a root-relative Remote Media URL as data (ADR-0021), so it
+ * resolves against the receiving installation. The receiver reads it through the
+ * same schema as its own Screens, so a package naming one of the receiver's
+ * application routes, rather than media it serves, is refused at install (#582).
+ */
+describe('a `.sklayout` whose Frame names a root-relative Remote Media URL', () => {
+	function withFrameVideoUrl(url: string) {
+		const layout = maximalFeatureMatchLayoutDocument({
+			frameAsset: testGraphicAssetReference('frame-asset', 'frame-revision'),
+			itemAsset: asset,
+		});
+		layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url }, fit: 'cover', opacity: 1, playbackRate: 1, loop: true };
+		return layout;
+	}
+
+	it('installs one naming media the application serves', () => {
+		expect(templatePackagePayloads('sklayout').readInstallableDocument(withFrameVideoUrl('/video/loop.mp4')).outcome).toBe('read');
+	});
+
+	it('refuses one naming an application route, and names the field', () => {
+		const outcome = templatePackagePayloads('sklayout').readInstallableDocument(
+			withFrameVideoUrl('/video/../api/graphics-assets/asset-1/revisions/revision-1/content'),
+		);
+		if (outcome.outcome !== 'rejected')
+			throw new Error('Expected the document to be refused');
+
+		expect(outcome.issues).toEqual([expect.objectContaining({
+			code: 'invalid-template-document',
+			subject: 'frame.mediaBackground.source.url',
+			message: expect.stringContaining('/video/'),
+		})]);
+	});
+});

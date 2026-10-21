@@ -483,7 +483,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 	it('takes a Screen Media Source for the Frame video, from either source', () => {
 		for (const source of [
-			{ kind: 'url', url: '/backgrounds/feature-loop.mp4' },
+			{ kind: 'url', url: '/video/feature-loop.mp4' },
 			{ kind: 'asset', assetId: 'asset-loop', revisionId: 'revision-loop' },
 		])
 			expect(featureMatchOverlayModeConfigSchema.safeParse(withFrameVideo({ ...frameVideo, source })).success, source.kind).toBe(true);
@@ -493,7 +493,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(withFrameVideo({
 			...frameVideo,
 			type: 'video',
-			url: '/backgrounds/feature-loop.mp4',
+			url: '/video/feature-loop.mp4',
 		})).success).toBe(false);
 	});
 
@@ -530,7 +530,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	describe('the Frame video playback rate', () => {
 		function withRate(playbackRate: number) {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url: '/loop.mp4' }, fit: 'cover', opacity: 1, playbackRate, loop: true };
+			config.layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url: '/video/loop.mp4' }, fit: 'cover', opacity: 1, playbackRate, loop: true };
 			return config;
 		}
 
@@ -561,7 +561,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 describe('backgroundModeConfigSchema', () => {
 	const colorLayer = { id: 'wash', type: 'color', enabled: true, opacity: 0.4, color: '#0b1020' };
 	const gradientLayer = { id: 'grad', type: 'gradient', enabled: true, opacity: 1, gradient: 'linear-gradient(180deg, #000, #123)' };
-	const urlImageLayer = { id: 'img-url', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: '/backgrounds/plate.png' }, fit: 'cover' };
+	const urlImageLayer = { id: 'img-url', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url: 'https://cdn.example.com/plate.png' }, fit: 'cover' };
 	const assetImageLayer = { id: 'img-asset', type: 'image', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-1', revisionId: 'rev-1' }, fit: 'contain' };
 	const assetVideoLayer = { id: 'vid-asset', type: 'video', enabled: true, opacity: 1, source: { kind: 'asset', assetId: 'asset-2', revisionId: 'rev-2', videoCompatibility: 'all-supported' }, fit: 'fill', playbackRate: 1.25, loop: true };
 	const animationLayer = { id: 'anim', type: 'animation', enabled: true, opacity: 0.6, animation: { effect: 'fog' } };
@@ -651,6 +651,93 @@ describe('backgroundModeConfigSchema', () => {
 		expect(modeConfigPatchSchemaMap.background.safeParse({
 			layers: [animationLayer],
 		}).success).toBe(true);
+	});
+});
+
+/**
+ * A root-relative Remote Media URL names a file the application serves as media,
+ * and the application serves media only under `/video/` (ADR-0021, #582). Every
+ * other same-origin path — above all the library's own `/api/` content routes,
+ * which preview with the author's session but answer nothing on air and protect
+ * no revision — is refused, by every host of a Screen Media Source.
+ */
+describe('a root-relative Remote Media URL', () => {
+	const hosts: Array<[string, (url: string) => boolean]> = [
+		['a Background Screen image layer', url => backgroundModeConfigSchema.safeParse({
+			layers: [{ id: 'plate', type: 'image', enabled: true, opacity: 1, source: { kind: 'url', url }, fit: 'cover' }],
+		}).success],
+		['a plain overlay mode\'s video layer', url => modeConfigPatchSchemaMap.standings.safeParse({
+			backgroundLayers: [{ id: 'loop', type: 'video', enabled: true, opacity: 1, source: { kind: 'url', url }, fit: 'cover', playbackRate: 1, loop: true }],
+		}).success],
+		['the Frame image', (url) => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.frame.backgroundImage = { kind: 'url', url };
+			return featureMatchOverlayModeConfigSchema.safeParse(config).success;
+		}],
+		['the Frame video', (url) => {
+			const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
+			layout.frame.mediaBackground = { enabled: true, source: { kind: 'url', url }, fit: 'cover', opacity: 1, playbackRate: 1, loop: true };
+			return featureMatchLayoutConfigSchema.safeParse(layout).success;
+		}],
+	];
+
+	it.each(hosts)('is taken under /video/ by %s', (_host, accepts) => {
+		for (const url of ['/video/loop.mp4', '/video/shows/2026/intro-loop.webm', '/video/loop.mp4?v=2'])
+			expect(accepts(url), url).toBe(true);
+	});
+
+	it.each(hosts)('is refused anywhere else by %s', (_host, accepts) => {
+		for (const url of [
+			'/api/graphics-assets/asset-1/revisions/revision-1/content',
+			'/api/events/1/screens',
+			'/fonts/mana.woff2',
+			'/_acceptance/still-image-v1.html',
+			'/favicon.ico',
+			'/backgrounds/plate.png',
+			'/video',
+			'/video/',
+			'/videos/loop.mp4',
+		])
+			expect(accepts(url), url).toBe(false);
+	});
+
+	it.each(hosts)('cannot be walked out of /video/ by %s', (_host, accepts) => {
+		for (const url of [
+			'/video/../api/graphics-assets/asset-1/revisions/revision-1/content',
+			'/video/./../api/events',
+			'/video/%2e%2e/api/events',
+			'/video/%2E%2E/api/events',
+			'/video/.%2e/api/events',
+			'/video/%2e%2e%2fapi/events',
+			'/video/..%2Fapi/events',
+			'/video/..%5capi/events',
+			'/video/%252e%252e/api/events',
+			'/video\\..\\api/events',
+			'/video/..\\api/events',
+			'/\\example.com/video/loop.mp4',
+			'//example.com/video/loop.mp4',
+			'/\t/example.com/video/loop.mp4',
+			'/video/\n../api/events',
+			'/video/%00/loop.mp4',
+		])
+			expect(accepts(url), JSON.stringify(url)).toBe(false);
+	});
+
+	it.each(hosts)('is refused as an https: URL with no authority, which a Screen resolves against its own origin, by %s', (_host, accepts) => {
+		// `https:/api/…` parses alone as host `api`, but a browser resolves it
+		// against the page, so it would name the application's own route.
+		for (const url of [
+			'https:/api/graphics-assets/asset-1/revisions/revision-1/content',
+			'HTTPS:/api/events',
+			'https:\\api/events',
+			'https:api/events',
+		])
+			expect(accepts(url), url).toBe(false);
+	});
+
+	it.each(hosts)('leaves HTTPS and the unset empty string as they were for %s', (_host, accepts) => {
+		expect(accepts('https://cdn.example.com/api/loop.mp4')).toBe(true);
+		expect(accepts('')).toBe(true);
 	});
 });
 

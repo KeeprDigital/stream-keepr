@@ -2,6 +2,7 @@
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ScreenMediaSource } from '~~/shared/types/screenConfig';
 import { screenMediaSourceReference } from '~~/shared/utils/graphicsAssetReferences';
+import { remoteMediaUrlRefusal } from '~~/shared/utils/remoteMediaUrl';
 
 /**
  * Picks one Screen Media Source — a Graphics Asset Library revision or a Remote
@@ -39,6 +40,11 @@ const SOURCE_KIND_OPTIONS = [
 const draftKind = ref<'asset' | 'url'>();
 const kind = computed(() => draftKind.value ?? props.modelValue?.kind ?? 'asset');
 const url = computed(() => props.modelValue?.kind === 'url' ? props.modelValue.url : '');
+/**
+ * The server's own rule, shown as the author types: a refused URL would otherwise
+ * surface only as a failed save of the whole stack or layout (#582).
+ */
+const urlRefusal = computed(() => remoteMediaUrlRefusal(url.value));
 const reference = computed(() => screenMediaSourceReference(props.modelValue) ?? undefined);
 
 function selectKind(next: 'asset' | 'url') {
@@ -74,7 +80,7 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 		/>
 	</UFormField>
 
-	<UFormField v-if="kind === 'url'" label="Remote Media URL">
+	<UFormField v-if="kind === 'url'" label="Remote Media URL" :error="urlRefusal">
 		<UInput
 			:model-value="url"
 			:placeholder="assetKind === 'silent-video' ? 'https://example.com/background.webm' : 'https://example.com/background.png'"
