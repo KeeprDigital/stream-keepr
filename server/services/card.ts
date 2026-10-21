@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
 import { storedCardSchema } from '~~/server/schemas/kv/card';
+import { cardTimeoutRemainingMs } from '~~/shared/utils/card/timeout';
 
 /**
  * Where a Card Screen's derived copy of its card lives: the KV binding Nitro
@@ -78,8 +79,7 @@ export function cardService() {
 		if (!parsed.success)
 			return null;
 
-		const timeout = parsed.data.timeoutData;
-		if (timeout && timeout.timeoutStartTimestamp + timeout.timeoutDuration <= Date.now())
+		if (cardTimeoutRemainingMs(parsed.data.timeoutData, Date.now()) <= 0)
 			return null;
 
 		return parsed.data;

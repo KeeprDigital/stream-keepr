@@ -476,7 +476,11 @@ describe('useCardStore', () => {
 				expect(store.timeout.isActive).toBe(true);
 				await vi.advanceTimersByTimeAsync(1_000);
 
+				// Scenario 4 of #707 for a rendering: no Card, a zero countdown, and no request.
 				expect(store.activeCard).toBeNull();
+				expect(store.timeout.remaining).toBe(0);
+				expect(mockOutputRead).toHaveBeenCalledTimes(1);
+				expect(mockCardRepo.getScreenCard).not.toHaveBeenCalled();
 				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 			});
 		});
@@ -752,7 +756,6 @@ describe('useCardStore', () => {
 			it('cancels the prior expiry when a remote update clears the card', async () => {
 				vi.useFakeTimers();
 				store.activeScreenId = 5;
-				mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
 				ablyCallbacks.card!['card:updated']!({
 					eventId: 1,
 					screenId: 5,

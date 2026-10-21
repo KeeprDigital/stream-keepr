@@ -3,6 +3,7 @@ import type { useAsyncAction } from '~/composables/core/useAsyncAction';
 import type { MtgCard } from '~/types/card/mtg';
 import type { MessageData } from '~/types/realtime';
 import { onScopeDispose, toValue } from 'vue';
+import { cardTimeoutRemainingMs } from '~~/shared/utils/card/timeout';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 type ExecuteAction = ReturnType<typeof useAsyncAction>['executeAction'];
@@ -25,8 +26,8 @@ interface ActiveCardRuntimeState {
 /**
  * Active Card Screen runtime Module.
  *
- * Owns active Screen Card persistence, its local Card Timeout, and realtime
- * application for the currently selected Screen.
+ * Owns active Screen Card persistence, hiding it here when its Card Timeout
+ * runs out, and realtime application for the currently selected Screen.
  *
  * A Card's expiry is a clock projection (ADR-0022): this client holds a timed
  * Card only until server time reaches its `timeoutStartTimestamp +
@@ -85,10 +86,7 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	}
 
 	function remainingMs(card: MtgCard) {
-		if (!card.timeoutData)
-			return Infinity;
-		const { timeoutStartTimestamp, timeoutDuration } = card.timeoutData;
-		return timeoutDuration - (getServerTime() - timeoutStartTimestamp);
+		return cardTimeoutRemainingMs(card.timeoutData, getServerTime());
 	}
 
 	function isExpired(card: MtgCard) {
