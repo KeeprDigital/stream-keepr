@@ -349,10 +349,10 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 					effect: 'net',
 					opacity: 0.34,
 					params: {
-						color: '#d600ff',
+						lineColor: '#d600ff',
 						backgroundColor: '#050008',
 						points: 12,
-						maxDistance: 34,
+						connectionDistance: 34,
 						spacing: 18,
 						showDots: false,
 					},

@@ -120,23 +120,23 @@ export function createDotsDelegate(): SceneEffectDelegate<AnimationEffectParams<
 			position.setUsage(three.DynamicDrawUsage);
 			geometry.setAttribute('position', position);
 			stars = new three.Points(geometry, new three.PointsMaterial({
-				color: params.color,
+				color: params.dotColor,
 				size: params.size,
 			}));
 			scene.add(stars);
 			placeStars(params.spacing);
 
 			syncLines(three, scene, params.showLines);
-			lines?.material.color.set(params.color2);
+			lines?.material.color.set(params.lineColor);
 		},
 
 		applyParams: ({ three, scene, params }) => {
 			scene.background = new three.Color(params.backgroundColor);
-			stars.material.color.set(params.color);
+			stars.material.color.set(params.dotColor);
 			stars.material.size = params.size;
 			placeStars(params.spacing);
 			syncLines(three, scene, params.showLines);
-			lines?.material.color.set(params.color2);
+			lines?.material.color.set(params.lineColor);
 		},
 
 		update: ({ camera, elapsedSeconds }) => {

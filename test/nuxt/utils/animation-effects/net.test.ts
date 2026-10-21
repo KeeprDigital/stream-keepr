@@ -58,7 +58,7 @@ describe('createNetDelegate', () => {
 		expect(dots.length).toBe(11 * 11 * 2);
 		for (const dot of [dots[0]!, dots[100]!, dots.at(-1)!]) {
 			expect(dot.geometry.parameters.radius).toBe(0.25);
-			expect(dot.material.color.getHexString()).toBe(params.color.slice(1));
+			expect(dot.material.color.getHexString()).toBe(params.lineColor.slice(1));
 			expect(Math.abs(dot.position.y)).toBeLessThanOrEqual(18);
 		}
 	});
@@ -82,7 +82,7 @@ describe('createNetDelegate', () => {
 	});
 
 	it('falls back to normal blending when the background is brighter than the line colour', () => {
-		const { scene } = mountDelegate({ color: '#111111', backgroundColor: '#ffffff' });
+		const { scene } = mountDelegate({ lineColor: '#111111', backgroundColor: '#ffffff' });
 		expect(linesMesh(scene).material.blending).toBe(THREE.NormalBlending);
 	});
 
@@ -106,7 +106,7 @@ describe('createNetDelegate', () => {
 		// sit within the maximum connection distance of each other, so every
 		// distinct pair connects. The fork's self-pair segments are skipped and
 		// its heuristic buffer could overflow here; the exact bound cannot.
-		const { delegate, scene, context } = mountDelegate({ points: 2, spacing: 2, maxDistance: 80 });
+		const { delegate, scene, context } = mountDelegate({ points: 2, spacing: 2, connectionDistance: 80 });
 		const lines = linesMesh(scene);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const pointCount = 3 * 3 * 2;
@@ -121,7 +121,7 @@ describe('createNetDelegate', () => {
 		const lines = linesMesh(scene);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const atDefault = lines.geometry.drawRange.count;
-		delegate.applyParams({ ...context, params: { ...params, maxDistance: 1 } });
+		delegate.applyParams({ ...context, params: { ...params, connectionDistance: 1 } });
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		expect(lines.geometry.drawRange.count).toBeLessThan(atDefault);
 	});
@@ -165,7 +165,7 @@ describe('createNetDelegate', () => {
 
 	it('applies colours live, and rebuilds the field when its construction params change', () => {
 		const { delegate, scene, context, params } = mountDelegate();
-		delegate.applyParams({ ...context, params: { ...params, color: '#123456', backgroundColor: '#224466' } });
+		delegate.applyParams({ ...context, params: { ...params, lineColor: '#123456', backgroundColor: '#224466' } });
 		expect((scene.background as THREE.Color).getHexString()).toBe('224466');
 		expect(dotMeshes(scene)[0]!.material.color.getHexString()).toBe('123456');
 
@@ -179,7 +179,7 @@ describe('createNetDelegate', () => {
 	it('recomputes the blending choice live, as a fresh mount of the same params would', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		expect(linesMesh(scene).material.blending).toBe(THREE.AdditiveBlending);
-		delegate.applyParams({ ...context, params: { ...params, color: '#111111', backgroundColor: '#ffffff' } });
+		delegate.applyParams({ ...context, params: { ...params, lineColor: '#111111', backgroundColor: '#ffffff' } });
 		expect(linesMesh(scene).material.blending).toBe(THREE.NormalBlending);
 	});
 });

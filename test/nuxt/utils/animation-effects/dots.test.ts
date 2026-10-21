@@ -73,7 +73,7 @@ describe('createDotsDelegate', () => {
 			expect(position.getY(index)).toBeLessThanOrEqual(-145);
 		}
 		const material = stars.material as THREE.PointsMaterial;
-		expect(material.color.getHexString()).toBe(params.color.slice(1));
+		expect(material.color.getHexString()).toBe(params.dotColor.slice(1));
 		expect(material.size).toBe(params.size);
 	});
 
@@ -81,7 +81,7 @@ describe('createDotsDelegate', () => {
 		const { scene, params } = mountDelegate();
 		const lines = linesMesh(scene);
 		expect(lines).toBeDefined();
-		expect((lines!.material as THREE.LineBasicMaterial).color.getHexString()).toBe(params.color2.slice(1));
+		expect((lines!.material as THREE.LineBasicMaterial).color.getHexString()).toBe(params.lineColor.slice(1));
 		const position = lines!.geometry.getAttribute('position') as THREE.BufferAttribute;
 		expect(position.count).toBe(400);
 		for (const segment of [0, 66, 199]) {
@@ -140,7 +140,7 @@ describe('createDotsDelegate', () => {
 	it('applies colours, size, and spacing to the live scene without a rebuild', () => {
 		const { delegate, scene, context, params } = mountDelegate();
 		const stars = starField(scene);
-		delegate.applyParams({ ...context, params: { ...params, color: '#123456', color2: '#654321', size: 7, spacing: 50 } });
+		delegate.applyParams({ ...context, params: { ...params, dotColor: '#123456', lineColor: '#654321', size: 7, spacing: 50 } });
 		const material = stars.material as THREE.PointsMaterial;
 		expect(material.color.getHexString()).toBe('123456');
 		expect(material.size).toBe(7);

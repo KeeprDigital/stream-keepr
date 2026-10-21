@@ -17,7 +17,7 @@ uniform vec2 iResolution;
 uniform float iTime;
 
 uniform vec3 crestColor;
-uniform vec3 fillColor;
+uniform vec3 ridgeColor;
 uniform vec3 backgroundColor;
 uniform float ridges;
 uniform float relief;
@@ -61,7 +61,7 @@ void main() {
 			continue;
 
 		// Atmospheric perspective: far ridges sink toward the background.
-		vec3 fill = mix(backgroundColor, fillColor, mix(0.30, 1.0, depth));
+		vec3 fill = mix(backgroundColor, ridgeColor, mix(0.30, 1.0, depth));
 
 		// The crest: a bright line at the profile's top edge with a soft glow
 		// falling off below it, both brighter on nearer ridges.
@@ -87,7 +87,7 @@ export default function createRidgelinesEffect(
 		fragmentShader: RIDGELINES_FRAGMENT_SHADER,
 		uniforms: current => ({
 			crestColor: current.crestColor,
-			fillColor: current.fillColor,
+			ridgeColor: current.ridgeColor,
 			backgroundColor: current.backgroundColor,
 			ridges: current.ridges,
 			relief: current.relief,

@@ -7,22 +7,24 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * Ripple: rings of orbiting lights accumulating over a background colour,
  * ported from the retired Vanta fork under its old name. The unused mouse and
  * blur uniforms are gone; centre and pulse frequency are authored controls.
+ * Uniforms carry the catalogue's param names (#583), so the shader's own
+ * per-light radius is `lightRadius` rather than a second `size`.
  */
 const RIPPLE_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
 uniform float iTime;
 
-uniform vec3 color1;
-uniform vec3 color2;
+uniform vec3 highlightColor;
+uniform vec3 lowlightColor;
 uniform vec3 backgroundColor;
-uniform float amplitudeFactor;
-uniform float ringFactor;
-uniform float rotationFactor;
+uniform float size;
+uniform float swingSpeed;
+uniform float drift;
 uniform float centerX;
 uniform float centerY;
 uniform float frequency;
 
-float size = 0.002;
+float lightRadius = 0.002;
 
 void main( void ) {
 	vec2 view = ( gl_FragCoord.xy - iResolution / 2.0 ) / ( iResolution.y / 2.0);
@@ -37,20 +39,20 @@ void main( void ) {
 		for( int i = 0; i < 20; i++ ) {
 			float amplitude = ( cos( rippleTime / 10.0 ) + sin( rippleTime / 5.0 ) );
 
-			amplitude = amplitude * amplitudeFactor;
+			amplitude = amplitude * size;
 
-			float angle =   sin( float(j) * time * 0.05 * ringFactor) * rotationVelocity + 2.0 * 3.14 * float(i) / 20.0;
-			center.x = centerOffset.x + cos( 7.0 * float(j) / 20.0 * 2.0 * 3.14 ) + sin( time / 4.0) * rotationFactor;
-			center.y = centerOffset.y + sin( 3.0 * float(j) / 20.0 * 2.0 * 3.14 )+ cos( time / 8.0) * rotationFactor;
+			float angle =   sin( float(j) * time * 0.05 * swingSpeed) * rotationVelocity + 2.0 * 3.14 * float(i) / 20.0;
+			center.x = centerOffset.x + cos( 7.0 * float(j) / 20.0 * 2.0 * 3.14 ) + sin( time / 4.0) * drift;
+			center.y = centerOffset.y + sin( 3.0 * float(j) / 20.0 * 2.0 * 3.14 )+ cos( time / 8.0) * drift;
 			vec2 light = center + amplitude * vec2( cos( angle ), sin( angle ));
-			float l = size / length( view - light );
+			float l = lightRadius / length( view - light );
 			accumMix += l * 0.5;
 		}
 	}
 	float accumMix1 = pow(clamp(accumMix * 1.2, 0., 1.15), 1.5); // lowlights
 	float accumMix2 = pow(clamp(accumMix1 * 1.2, 0., 1.15), 3.0); // highlights
-	vec3 lowlights = mix(backgroundColor, color2, clamp(accumMix1, -0.1, 1.15));
-	gl_FragColor = vec4(mix(lowlights, color1, clamp(accumMix2, -0.1, 1.15)), 1);
+	vec3 lowlights = mix(backgroundColor, lowlightColor, clamp(accumMix1, -0.1, 1.15));
+	gl_FragColor = vec4(mix(lowlights, highlightColor, clamp(accumMix2, -0.1, 1.15)), 1);
 }
 `;
 
@@ -63,12 +65,12 @@ export default function createRippleEffect(
 		host,
 		fragmentShader: RIPPLE_FRAGMENT_SHADER,
 		uniforms: current => ({
-			color1: current.color1,
-			color2: current.color2,
+			highlightColor: current.highlightColor,
+			lowlightColor: current.lowlightColor,
 			backgroundColor: current.backgroundColor,
-			amplitudeFactor: current.amplitudeFactor,
-			ringFactor: current.ringFactor,
-			rotationFactor: current.rotationFactor,
+			size: current.size,
+			swingSpeed: current.swingSpeed,
+			drift: current.drift,
 			centerX: current.centerX,
 			centerY: current.centerY,
 			frequency: current.frequency,

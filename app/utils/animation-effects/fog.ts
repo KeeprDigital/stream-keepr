@@ -8,7 +8,8 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * its old name. The shader is unchanged apart from dropping the mouse uniform
  * nothing fed — Animation Effects animate from elapsed time alone — and
  * dividing by `scale` where the fork multiplied by `zoom`, so a larger value
- * draws larger features (#503).
+ * draws larger features (#503). Its uniforms carry the catalogue's param
+ * names (#583).
  *
  * Noise construction after http://thebookofshaders.com/13/ (Patricio Gonzalez
  * Vivo), via the fork's fog effect.
@@ -17,8 +18,8 @@ const FOG_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
 uniform float iTime;
 
-uniform float blurFactor;
-uniform vec3 baseColor;
+uniform float softness;
+uniform vec3 backgroundColor;
 uniform vec3 lowlightColor;
 uniform vec3 midtoneColor;
 uniform vec3 highlightColor;
@@ -51,7 +52,7 @@ float noise(in vec2 _st) {
 
 float fbm(in vec2 _st) {
 	float v = 0.0;
-	float a = blurFactor;
+	float a = softness;
 	vec2 shift = vec2(100.0);
 	// Rotate to reduce axial bias
 	mat2 rot = mat2(cos(0.5), sin(0.5),
@@ -59,7 +60,7 @@ float fbm(in vec2 _st) {
 	for (int i = 0; i < NUM_OCTAVES; ++i) {
 		v += a * noise(_st);
 		_st = rot * _st * 2.0 + shift;
-		a *= (1. - blurFactor);
+		a *= (1. - softness);
 	}
 	return v;
 }
@@ -82,7 +83,7 @@ void main() {
 
 	float f = fbm(st + r);
 
-	color = mix(baseColor,
+	color = mix(backgroundColor,
 		lowlightColor,
 		clamp((f * f) * 4.0, 0.0, 1.0));
 
@@ -94,7 +95,7 @@ void main() {
 		highlightColor,
 		clamp(length(r.x), 0.0, 1.0));
 
-	vec3 finalColor = mix(baseColor, color, f * f * f + .6 * f * f + .5 * f);
+	vec3 finalColor = mix(backgroundColor, color, f * f * f + .6 * f * f + .5 * f);
 	gl_FragColor = vec4(finalColor, 1.0);
 }
 `;
@@ -111,8 +112,8 @@ export default function createFogEffect(
 			highlightColor: current.highlightColor,
 			midtoneColor: current.midtoneColor,
 			lowlightColor: current.lowlightColor,
-			baseColor: current.baseColor,
-			blurFactor: current.blurFactor,
+			backgroundColor: current.backgroundColor,
+			softness: current.softness,
 			scale: current.scale,
 		}),
 		timeScale: current => current.speed,

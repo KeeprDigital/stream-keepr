@@ -18,9 +18,9 @@ import type * as THREE from 'three';
  */
 
 export interface ConnectionLineParams {
-	color: string;
+	lineColor: string;
 	backgroundColor: string;
-	maxDistance: number;
+	connectionDistance: number;
 }
 
 export interface ConnectionLineField {
@@ -38,7 +38,7 @@ function luminance(color: THREE.Color): number {
 }
 
 function usesAdditiveBlending(three: typeof THREE, params: ConnectionLineParams): boolean {
-	return luminance(new three.Color(params.color)) > luminance(new three.Color(params.backgroundColor));
+	return luminance(new three.Color(params.lineColor)) > luminance(new three.Color(params.backgroundColor));
 }
 
 export function createConnectionLineField(
@@ -64,7 +64,7 @@ export function createConnectionLineField(
 		mesh,
 		update: (positions, current) => {
 			const backgroundColor = new three.Color(current.backgroundColor);
-			const color = new three.Color(current.color);
+			const color = new three.Color(current.lineColor);
 			const additive = usesAdditiveBlending(three, current);
 			const differenceColor = color.clone().sub(backgroundColor);
 			// One scratch colour reused across the pair loop, which runs thousands
@@ -79,9 +79,9 @@ export function createConnectionLineField(
 				for (let j = i + 1; j < positions.length; j++) {
 					const b = positions[j]!;
 					const distance = a.distanceTo(b);
-					if (distance >= current.maxDistance)
+					if (distance >= current.connectionDistance)
 						continue;
-					const alpha = Math.min(Math.max((1 - distance / current.maxDistance) * 2, 0), 1);
+					const alpha = Math.min(Math.max((1 - distance / current.connectionDistance) * 2, 0), 1);
 					if (additive)
 						lineColor.setScalar(0).lerp(differenceColor, alpha);
 					else

@@ -6,18 +6,18 @@ import { createShaderPlaneEffect } from './shaderPlane';
 /**
  * Cells: a Worley-noise cellular field, ported from the retired Vanta fork
  * under its old name. The shader is unchanged apart from dropping the uniforms
- * nothing read — the mouse pair, and the `blurFactor`, `backgroundColor`,
- * `amplitudeFactor`, `ringFactor`, and `rotationFactor` the fork declared for
- * every shader effect whether or not its fragment used them. The fork's `size`
- * is now `scale`, renormalised so its default of 1 is the old default of 3
- * (#503).
+ * nothing read — the mouse pair, a background colour, and the four
+ * multipliers the fork declared for every shader effect whether or not its
+ * fragment used them — and renaming its colours for their tones (#583). The
+ * fork's `size` is now `scale`, renormalised so its default of 1 is the old
+ * default of 3 (#503).
  */
 const CELLS_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
 uniform float iTime;
 
-uniform vec3 color1;
-uniform vec3 color2;
+uniform vec3 lowlightColor;
+uniform vec3 highlightColor;
 uniform float scale;
 
 float length2(vec2 p) { return dot(p, p); }
@@ -53,8 +53,8 @@ void main() {
 	t *= exp(-length2(abs(0.7*uv - 1.0)));
 
 	float tExp = pow(t, 0.5 - t);
-	vec3 c1 = color1 * (1.0 - t);
-	vec3 c2 = color2 * tExp;
+	vec3 c1 = lowlightColor * (1.0 - t);
+	vec3 c2 = highlightColor * tExp;
 
 	gl_FragColor = vec4(pow(t, 1.0 - t) * (c1 + c2), 1.0);
 }
@@ -69,8 +69,8 @@ export default function createCellsEffect(
 		host,
 		fragmentShader: CELLS_FRAGMENT_SHADER,
 		uniforms: current => ({
-			color1: current.color1,
-			color2: current.color2,
+			lowlightColor: current.lowlightColor,
+			highlightColor: current.highlightColor,
 			scale: current.scale,
 		}),
 		timeScale: current => current.speed,

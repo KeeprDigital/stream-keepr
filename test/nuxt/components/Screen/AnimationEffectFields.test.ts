@@ -98,7 +98,7 @@ describe('screenAnimationEffectFields', () => {
 		expect(selection.effect).toBe('fog');
 		expect(selection.params).toMatchObject({
 			speed: 2,
-			blurFactor: 0.55,
+			softness: 0.55,
 			highlightColor: '#f59e0b',
 		});
 	});

@@ -80,7 +80,7 @@ describe('createWavesDelegate', () => {
 	it('lights and shades the water the way the pre-rebuild application did', () => {
 		const { scene, params } = mountDelegate();
 		const material = wavesMesh(scene).material as THREE.MeshPhongMaterial;
-		expect(material.color.getHexString()).toBe(params.color.slice(1));
+		expect(material.color.getHexString()).toBe(params.waveColor.slice(1));
 		expect(material.shininess).toBe(params.shininess);
 		expect(material.flatShading).toBe(true);
 		expect(material.side).toBe(THREE.DoubleSide);
@@ -133,8 +133,8 @@ describe('createWavesDelegate', () => {
 		expect(position.version).toBeGreaterThan(versionAfterFirst);
 	});
 
-	it('holds the water still at waveSpeed 0, as the fork did', () => {
-		const { delegate, scene, context } = mountDelegate({ waveSpeed: 0 });
+	it('holds the water still at speed 0, as the fork did', () => {
+		const { delegate, scene, context } = mountDelegate({ speed: 0 });
 		const position = wavesMesh(scene).geometry.getAttribute('position') as THREE.BufferAttribute;
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const frozen = Array.from({ length: position.count }, (_, index) => position.getY(index));
@@ -146,7 +146,7 @@ describe('createWavesDelegate', () => {
 	it('applies colour, shininess, and scale to the live scene without a rebuild', () => {
 		const { delegate, scene, camera, context, params } = mountDelegate({ scale: 1 });
 		const material = wavesMesh(scene).material as THREE.MeshPhongMaterial;
-		delegate.applyParams({ ...context, params: { ...params, color: '#123456', shininess: 75, scale: 2 } });
+		delegate.applyParams({ ...context, params: { ...params, waveColor: '#123456', shininess: 75, scale: 2 } });
 		expect(material.color.getHexString()).toBe('123456');
 		expect(material.shininess).toBe(75);
 		expect(camera.position.x).toBeCloseTo(240 / 1.7);
@@ -154,7 +154,7 @@ describe('createWavesDelegate', () => {
 		expect(camera.position.z).toBeCloseTo(390 / 1.7);
 	});
 
-	it('reads waveHeight and waveSpeed changes on the next frame', () => {
+	it('reads waveHeight and speed changes on the next frame', () => {
 		const { delegate, scene, context, params } = mountDelegate({ waveHeight: 20 });
 		const position = wavesMesh(scene).geometry.getAttribute('position') as THREE.BufferAttribute;
 		const restHeights = Array.from({ length: position.count }, (_, index) => position.getY(index));

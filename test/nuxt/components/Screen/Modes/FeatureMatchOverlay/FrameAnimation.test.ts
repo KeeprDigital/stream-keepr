@@ -100,7 +100,7 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		expect(animationMocks.loadAnimationEffect).toHaveBeenCalledWith('fog');
 		expect(factory).toHaveBeenCalledOnce();
 		const [, params] = factory.mock.calls[0] as unknown as [HTMLElement, Record<string, unknown>];
-		expect(params.blurFactor).toBe(0.55);
+		expect(params.softness).toBe(0.55);
 		expect(params.highlightColor).toBe('#f59e0b');
 		expect(instance.resize).toHaveBeenCalledWith(1920, 1080);
 
@@ -119,7 +119,7 @@ describe('featureMatchOverlayFrameAnimation', () => {
 		await flushPromises();
 
 		expect(factory).toHaveBeenCalledOnce();
-		expect(instance.setParams).toHaveBeenCalledWith(expect.objectContaining({ speed: 2, blurFactor: 0.55 }));
+		expect(instance.setParams).toHaveBeenCalledWith(expect.objectContaining({ speed: 2, softness: 0.55 }));
 
 		wrapper.unmount();
 	});

@@ -90,7 +90,7 @@ export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams
 				restHeights[index] = position.getY(index);
 
 			mesh = new three.Mesh(geometry, new three.MeshPhongMaterial({
-				color: params.color,
+				color: params.waveColor,
 				shininess: params.shininess,
 				flatShading: true,
 				side: three.DoubleSide,
@@ -112,13 +112,13 @@ export function createWavesDelegate(): SceneEffectDelegate<AnimationEffectParams
 		applyParams: ({ three, scene, camera, params }) => {
 			current = params;
 			scene.background = new three.Color(params.backgroundColor);
-			mesh.material.color.set(params.color);
+			mesh.material.color.set(params.waveColor);
 			mesh.material.shininess = params.shininess;
 			frameCamera(camera, params.scale);
 		},
 
 		update: ({ elapsedSeconds }) => {
-			const speed = current.waveSpeed;
+			const speed = current.speed;
 			const t = elapsedSeconds * FORK_FRAMES_PER_SECOND;
 			const geometry = mesh.geometry;
 			const position = geometry.getAttribute('position') as THREE.BufferAttribute;

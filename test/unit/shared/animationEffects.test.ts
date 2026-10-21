@@ -36,7 +36,7 @@ describe('animationEffects catalogue', () => {
 		// recorded design spec on #473.
 		expect(animationEffectDefaultParams('ridgelines')).toEqual({
 			crestColor: '#06b6d4',
-			fillColor: '#1e1b4b',
+			ridgeColor: '#1e1b4b',
 			backgroundColor: '#111111',
 			ridges: 7,
 			relief: 1,
@@ -104,26 +104,32 @@ describe('animationEffects catalogue', () => {
 	it('ports cells and ripple under the defaults the pre-rebuild application shipped', () => {
 		// The ports keep their old names and their old on-air look: defaults come
 		// from the retired editor's shared bag, not the fork's own defaultOptions.
-		// Cells' `size` of 3 is renormalised into `scale: 1` (#503).
+		// Cells' `size` of 3 is renormalised into `scale: 1` (#503), and the
+		// fork's numbered colours and multipliers carry semantic names (#583).
 		expect(animationEffectDefaultParams('cells')).toEqual({
-			color1: '#008c8c',
-			color2: '#06b6d4',
+			lowlightColor: '#008c8c',
+			highlightColor: '#06b6d4',
 			scale: 1,
 			speed: 0.6,
 		});
 		expect(animationEffectDefaultParams('ripple')).toEqual({
-			color1: '#008c8c',
-			color2: '#06b6d4',
+			highlightColor: '#008c8c',
+			lowlightColor: '#06b6d4',
 			backgroundColor: '#111111',
-			amplitudeFactor: 1,
-			ringFactor: 1,
-			rotationFactor: 1,
+			size: 1,
+			swingSpeed: 1,
+			drift: 1,
 			centerX: 0,
 			centerY: 0,
 			frequency: 1,
 			speed: 0.6,
 		});
 		expect(animationEffectParamFields('ripple')).toEqual(expect.arrayContaining([
+			// The fork's "Ripple scale" scaled no feature: it sets how fast each
+			// ring's lights swing back and forth round it.
+			expect.objectContaining({ key: 'swingSpeed', label: 'Swing speed', min: 0, max: 12 }),
+			expect.objectContaining({ key: 'size', label: 'Ring size', min: 0, max: 4 }),
+			expect.objectContaining({ key: 'drift', label: 'Ring drift', min: 0, max: 4 }),
 			expect.objectContaining({ key: 'centerX', label: 'Center X', min: -1, max: 1 }),
 			expect.objectContaining({ key: 'centerY', label: 'Center Y', min: -1, max: 1 }),
 			expect.objectContaining({ key: 'frequency', label: 'Ripple frequency', min: 0, max: 4 }),
@@ -132,15 +138,16 @@ describe('animationEffects catalogue', () => {
 
 	it('ports halo under the defaults the pre-rebuild application shipped', () => {
 		// Only the params the halo fragment shader reads survive the port: the
-		// fork's editor also offered color2, ringFactor, and rotationFactor,
-		// which its halo shader declared and never referenced.
+		// fork's editor also offered a second colour and two multipliers,
+		// which its halo shader declared and never referenced. Its "Intensity"
+		// deepened the flower edge's petals, so it is `petalDepth` (#583).
 		expect(animationEffectDefaultParams('halo')).toEqual({
-			baseColor: '#111111',
+			tintColor: '#111111',
 			backgroundColor: '#111111',
-			amplitudeFactor: 1,
+			petalDepth: 1,
 			size: 1,
-			xOffset: 0,
-			yOffset: 0,
+			centerX: 0,
+			centerY: 0,
 			speed: 1,
 		});
 	});
@@ -151,11 +158,11 @@ describe('animationEffects catalogue', () => {
 		// frame's far corners uncovered at low scale. Scale 1 is the pre-rebuild
 		// application's waves-specific zoom fallback of 0.85 (#503).
 		expect(animationEffectDefaultParams('waves')).toEqual({
-			color: '#7c3aed',
+			waveColor: '#7c3aed',
 			backgroundColor: '#111111',
 			shininess: 30,
 			waveHeight: 20,
-			waveSpeed: 1,
+			speed: 1,
 			scale: 1,
 		});
 	});
@@ -167,8 +174,8 @@ describe('animationEffects catalogue', () => {
 		// the frame. The spacing default is the dots-specific fallback of 34, not
 		// the shared bag's 16.
 		expect(animationEffectDefaultParams('dots')).toEqual({
-			color: '#7c3aed',
-			color2: '#06b6d4',
+			dotColor: '#7c3aed',
+			lineColor: '#06b6d4',
 			backgroundColor: '#111111',
 			size: 3,
 			spacing: 34,
@@ -197,14 +204,14 @@ describe('animationEffects catalogue', () => {
 	});
 
 	it('ports net under the defaults the pre-rebuild application shipped', () => {
-		// All six params are read by the renderer: color drives the connection
+		// All six params are read by the renderer: lineColor drives the connection
 		// lines and the point markers, backgroundColor the clear colour and the
 		// line gradient's dark end, and the rest the field's construction.
 		expect(animationEffectDefaultParams('net')).toEqual({
-			color: '#7c3aed',
+			lineColor: '#7c3aed',
 			backgroundColor: '#111111',
 			points: 10,
-			maxDistance: 22,
+			connectionDistance: 22,
 			spacing: 16,
 			showDots: true,
 		});
@@ -221,12 +228,12 @@ describe('animationEffects catalogue', () => {
 		// port: the pre-rebuild editor called `size` "Point size", but the fork
 		// only ever read it as the wireframe globe's radius scale.
 		expect(animationEffectDefaultParams('globe')).toEqual({
-			color: '#7c3aed',
-			color2: '#06b6d4',
+			lineColor: '#7c3aed',
+			accentColor: '#06b6d4',
 			backgroundColor: '#111111',
 			size: 1,
 			points: 10,
-			maxDistance: 22,
+			connectionDistance: 22,
 			spacing: 16,
 			showDots: true,
 		});
@@ -312,6 +319,36 @@ describe('animationEffects catalogue', () => {
 		}
 	});
 
+	it('names every param by what it controls, never by the fork\'s shader quantity', () => {
+		// One rule across the catalogue (ADR-0025, #583): semantic names, colours
+		// named by the role they paint, shared concepts under the shared name.
+		for (const effect of ANIMATION_EFFECT_VALUES) {
+			const fields = animationEffectParamFields(effect);
+			const keys = fields.map(field => field.key);
+			for (const field of fields) {
+				const where = `${effect}.${field.key}`;
+				// No implementation multipliers (`amplitudeFactor`) or numbered keys
+				// (`color1`, `color2`).
+				expect(field.key, where).not.toMatch(/Factor$|\d/);
+				// Pattern position is `centerX`/`centerY`, not a second name for it.
+				expect(field.key, where).not.toMatch(/offset/i);
+				if (field.control === 'color') {
+					// `<role>Color`, so a bare `color` is refused, labelled "<Role> color".
+					expect(field.key, where).toMatch(/^[a-z]+Color$/);
+					const role = field.key.slice(0, -'Color'.length);
+					expect(field.label, where).toBe(`${role[0]!.toUpperCase()}${role.slice(1)} color`);
+				}
+				else {
+					expect(field.key, where).not.toMatch(/Color$/);
+				}
+				// `speed` is an effect's whole motion rate and is never qualified; a
+				// `<motion>Speed` is only ever a second rate beside it.
+				if (field.key !== 'speed' && field.key.endsWith('Speed'))
+					expect(keys, where).toContain('speed');
+			}
+		}
+	});
+
 	it('refuses a parameter no effect schema declares', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const outcome = ANIMATION_EFFECT_CATALOGUE[effect].paramsSchema.safeParse({ mouseDriftEnabled: true });
@@ -353,7 +390,7 @@ describe('animationEffectSelectionSchema', () => {
 
 	it('re-proves a stored selection: parsed through, or null for anything this build does not ship', () => {
 		expect(parseAnimationEffectSelection({ effect: 'fog', params: { speed: 2 } }))
-			.toMatchObject({ effect: 'fog', params: expect.objectContaining({ speed: 2, blurFactor: 0.55 }) });
+			.toMatchObject({ effect: 'fog', params: expect.objectContaining({ speed: 2, softness: 0.55 }) });
 		expect(parseAnimationEffectSelection({ effect: 'not-an-effect' })).toBeNull();
 		expect(parseAnimationEffectSelection(undefined)).toBeNull();
 	});
@@ -364,7 +401,7 @@ describe('animation effect host unions', () => {
 		// Checked by `pnpm typecheck`: the per-effect pairing is the property a
 		// derived declaration could silently collapse into one wide union.
 		interface Rings { backgroundColor: string }
-		interface Cells { color1: string; color2: string; scale: number; speed: number }
+		interface Cells { lowlightColor: string; highlightColor: string; scale: number; speed: number }
 		expectTypeOf<'not-an-effect'>().not.toExtend<AnimationEffectName>();
 		expectTypeOf<AnimationEffectParams<'rings'>>().toEqualTypeOf<Rings>();
 		expectTypeOf<AnimationEffectParams<'cells'>>().toEqualTypeOf<Cells>();
@@ -514,7 +551,7 @@ describe('broadcastGraphicsBackgroundConfigSchema', () => {
 				enabled: true,
 				effect: 'fog',
 				opacity: 0.4,
-				params: expect.objectContaining({ speed: 2, blurFactor: 0.55 }),
+				params: expect.objectContaining({ speed: 2, softness: 0.55 }),
 			});
 		expect(parseBroadcastGraphicsBackgroundConfig({ enabled: true, effect: 'not-an-effect', opacity: 0.4 })).toBeNull();
 		expect(parseBroadcastGraphicsBackgroundConfig(undefined)).toBeNull();

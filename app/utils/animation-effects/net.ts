@@ -73,7 +73,7 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 		dotMaterial?.dispose();
 
 		dotGeometry = current.showDots ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.color }) : undefined;
+		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
 
 		points = [];
 		positions = [];
@@ -129,7 +129,7 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 				buildField(three);
 				return;
 			}
-			dotMaterial?.color.set(params.color);
+			dotMaterial?.color.set(params.lineColor);
 			lines?.applyBlending(params);
 		},
 

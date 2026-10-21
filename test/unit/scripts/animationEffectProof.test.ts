@@ -5,7 +5,7 @@ import {
 	animationEffectProofScenarios,
 	animationEffectSettleScenarios,
 } from '../../../scripts/graphics-acceptance/animation-effect-scenarios.mjs';
-import { ANIMATION_EFFECT_VALUES } from '../../../shared/animationEffects';
+import { ANIMATION_EFFECT_CATALOGUE, ANIMATION_EFFECT_VALUES } from '../../../shared/animationEffects';
 
 /**
  * A measurement of one scenario as the page publishes it, healthy by default so
@@ -89,6 +89,17 @@ describe('the animation effect scenario table', () => {
 			const mounted = scenarios.filter(scenario => scenario.effect === effect);
 			expect(mounted.map(scenario => scenario.scenario)).toContain('defaults');
 			expect(mounted).toHaveLength(1 + ANIMATION_EFFECT_PROOF_SCENARIOS[effect].extremes.length);
+		}
+	});
+
+	it('names only params its effect declares, so no scenario silently proves the defaults', () => {
+		// The page spreads a scenario's params over the defaults without parsing
+		// them, so a key the schema no longer declares (a renamed param, #583)
+		// would mount the defaults under the extreme's name.
+		const scenarios = [...animationEffectProofScenarios(), ...animationEffectSettleScenarios()];
+		for (const { effect, scenario, params } of scenarios) {
+			const outcome = ANIMATION_EFFECT_CATALOGUE[effect as keyof typeof ANIMATION_EFFECT_CATALOGUE].paramsSchema.safeParse(params);
+			expect(outcome.error?.issues, `${effect} ${scenario}`).toBeUndefined();
 		}
 	});
 
