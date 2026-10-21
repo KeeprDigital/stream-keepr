@@ -11,6 +11,8 @@ export default defineConfig({
 		name: 'unit',
 		include: ['test/unit/**/*.test.ts'],
 		environment: 'node',
+		// No suite here reaches Cloudflare; see the file (#619).
+		setupFiles: ['./test/helpers/blockCloudflareCredentials.ts'],
 		server: {
 			deps: {
 				inline: ['@jsquash/jpeg', '@jsquash/webp'],

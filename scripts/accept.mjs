@@ -17,6 +17,8 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { loadCommittedInstallation, resolveDeployedTarget } from './graphics-acceptance/deployed-target.mjs';
+import { AcceptanceFailure, createAcceptanceEvidence } from './graphics-acceptance/evidence.mjs';
 
 /**
  * Name → runner script (and its leading arguments), what it proves, what a
@@ -63,6 +65,7 @@ export const HARNESSES = {
 		script: ['run-silent-video-validator-acceptance.mjs'],
 		proves: 'The validator Workflow and Container accept MP4, WebM, and VP9-alpha WebM',
 		needs: 'Docker',
+		flags: '--cleanup (with --deployed: retry a failed run\'s deletes)',
 	},
 	'graphics-delivery': {
 		script: ['run-graphics-delivery-acceptance.mjs'],
@@ -107,7 +110,53 @@ function list() {
 		+ `deployed  runs ${DEPLOY_DAY.join(', ')} with --deployed, stopping at the first failure\n`);
 }
 
-export async function main(argv = process.argv) {
+/**
+ * The whole deploy-day target, checked once before the first gate (#619).
+ *
+ * Each gate also checks its own prerequisites, but the first gate writes to the
+ * installation, so a later gate refusing a missing setting used to leave the
+ * first one's writes behind for nothing. Pure: nothing is opened or written.
+ */
+async function preflightDeployDay(env) {
+	const evidence = createAcceptanceEvidence({ harness: 'accept-deployed' });
+	try {
+		resolveDeployedTarget({ env, installation: await loadCommittedInstallation() });
+		return true;
+	}
+	catch (error) {
+		const failure = error instanceof AcceptanceFailure
+			? error
+			: new AcceptanceFailure('harness-precondition-unmet', { reason: 'target-unreadable' });
+		let line;
+		try {
+			line = evidence.report([failure]);
+		}
+		catch {
+			line = `accept-deployed ${failure.code} detail=withheld`;
+		}
+		process.stderr.write(`${line}\n\n✗ the deployed target is incomplete; no deploy-day harness ran\n`);
+		return false;
+	}
+}
+
+/**
+ * What `main` runs a harness with unless it is told otherwise: nothing.
+ *
+ * Only the CLI entry point below passes the real spawner. A deployed runner
+ * writes to whatever installation the shell's credentials reach, so a caller
+ * that imported `main` and forgot to inject a fake must fail here rather than
+ * start one (#619, where a test that did exactly that ran the validator gate
+ * against production).
+ */
+async function refuseToSpawn(name) {
+	throw new Error(`accept: main() was called without a runHarness, refusing to start ${name}`);
+}
+
+/**
+ * @param {string[]} [argv]
+ * @param {{ env?: Record<string, string | undefined>, runHarness?: typeof run }} [options]
+ */
+export async function main(argv = process.argv, { env = process.env, runHarness = refuseToSpawn } = {}) {
 	const [name, ...flags] = argv.slice(2);
 
 	if (!name || name === '--list' || name === '--help') {
@@ -116,9 +165,13 @@ export async function main(argv = process.argv) {
 	}
 
 	if (name === 'deployed') {
+		if (!await preflightDeployDay(env)) {
+			process.exitCode = 1;
+			return;
+		}
 		for (const harness of DEPLOY_DAY) {
 			process.stdout.write(`\n▶ accept ${harness} --deployed\n`);
-			const code = await run(harness, ['--deployed']);
+			const code = await runHarness(harness, ['--deployed']);
 			if (code !== 0) {
 				process.stderr.write(`\n✗ ${harness} failed; later deploy-day harnesses did not run\n`);
 				process.exitCode = code;
@@ -140,8 +193,8 @@ export async function main(argv = process.argv) {
 		return;
 	}
 
-	process.exitCode = await run(name, flags);
+	process.exitCode = await runHarness(name, flags);
 }
 
 if (import.meta.main)
-	await main();
+	await main(process.argv, { runHarness: run });

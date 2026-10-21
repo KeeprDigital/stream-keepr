@@ -145,6 +145,31 @@ export const ACCEPTANCE_FAILURE_CODES = Object.freeze([
 	// installation is fine — this run has no credential for it, and the fix is
 	// two environment variables rather than a server to start.
 	'harness-operator-unavailable',
+	// The deployed target does not hang together: the URL names an installation
+	// other than the one whose configs the run would write with, the configs
+	// disagree about the bucket, validator or Workflow, or the account is not the
+	// one they declare. Found before anything is written, so an alternate target
+	// cannot quietly send a gate's writes to production (#619).
+	'harness-target-inconsistent',
+	// The account the run was given does not hold the bucket or Workflow the
+	// target names, checked read-only before the first write (#619).
+	'harness-target-unverified',
+	// A run wrote objects it could not delete. They are listed in the cleanup
+	// manifest, and the run is not a pass while any remain (#619).
+	'harness-cleanup-incomplete',
+	// An earlier run's cleanup manifest still lists objects, so this run refuses
+	// to stage more until a cleanup retry has removed them (#619).
+	'harness-cleanup-pending',
+	// Silent-video validator acceptance (#619). The fixture name and a status
+	// word travel; the staged key, validation id and digests do not.
+	'validator-runtime-unavailable',
+	'validator-staging-failed',
+	'validator-trigger-failed',
+	'validator-did-not-settle',
+	'validator-settled-unsuccessfully',
+	'validator-output-unexpected',
+	'validator-poster-mismatch',
+	'validator-tamper-not-rejected',
 ]);
 
 const FAILURE_CODES = new Set(ACCEPTANCE_FAILURE_CODES);

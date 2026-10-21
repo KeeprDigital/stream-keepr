@@ -7,8 +7,7 @@ vi.mock('../../../scripts/graphics-acceptance/harness.mjs', () => ({
 
 /**
  * Every `run-*` acceptance script and the harness id it runs under. The
- * silent-video validator is absent deliberately: it drives wrangler directly
- * and never uses the harness, so it has no call site to make inert.
+ * silent-video validator joined on #619, when it moved onto the harness.
  */
 const SCRIPTS: ReadonlyArray<readonly [script: string, harness: string, args?: string[]]> = [
 	['run-animation-effect-rendering-acceptance', 'animation-effect-v1'],
@@ -18,6 +17,7 @@ const SCRIPTS: ReadonlyArray<readonly [script: string, harness: string, args?: s
 	['run-graphics-delivery-acceptance', 'graphics-delivery-v1'],
 	['run-graphics-package-acceptance', 'graphics-package-v1'],
 	['run-key-matte-rendering-acceptance', 'key-matte-v1'],
+	['run-silent-video-validator-acceptance', 'silent-video-validator-v1'],
 	['run-still-image-ingestion-acceptance', 'still-image-ingestion-v1'],
 ];
 
