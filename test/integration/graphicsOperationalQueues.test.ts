@@ -13,6 +13,7 @@ import { GRAPHICS_OPERATIONAL_QUEUES } from '../../shared/utils/graphicsOperatio
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
+import { expectPublishedOperation, expectResponseStatus } from './responseStatus';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -82,7 +83,7 @@ describe('the Graphics Asset Library operational queues API', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: bytes,
 			},
-		).then(response => response.json() as Promise<GraphicsIngestionOperation>);
+		).then(expectPublishedOperation);
 	}
 
 	/** The queue's own action: restoration, reported in the outcome vocabulary. */
@@ -99,7 +100,10 @@ describe('the Graphics Asset Library operational queues API', () => {
 			method: 'POST',
 			headers: { ...authorHeaders, 'content-type': 'application/json' },
 			body: JSON.stringify({ action }),
-		}).then(async response => await response.json() as { outcome: string });
+		}).then(async (response) => {
+			await expectResponseStatus(response, 200);
+			return await response.json() as { outcome: string };
+		});
 	}
 
 	it('keeps every queue surface administrator-only', async () => {

@@ -324,6 +324,56 @@ function leakCode(value, secrets) {
 	return undefined;
 }
 
+const PAGE_TEXT_LENGTH = 100;
+const URL_RUN_PATTERN = /[a-z][a-z0-9+.-]*:\/\/\S*/gi;
+const FILENAME_RUN_PATTERN = new RegExp(`\\S*${FILENAME_PATTERN.source}`, 'gi');
+
+/**
+ * Reduce what a page threw or logged to something the formatter will print (#687).
+ *
+ * A browser gate that fails as "the page threw" is only as useful as what it
+ * says the page threw, and #687 lost two failures to a line that said nothing
+ * more. That text is page-authored, so it is not trusted as #340 does not trust
+ * a page's own failure code: only its first line survives (a stack names files),
+ * every URL, filename and token-shaped run is replaced by what it was, and the
+ * rest is shortened to a glance. The formatter still checks the result like any
+ * other value, so a shape this misses is refused rather than printed.
+ *
+ * @param {unknown} text
+ */
+export function pageTextEvidence(text) {
+	const firstLine = String(text ?? '').trim().split('\n', 1)[0].trim();
+	if (!firstLine)
+		return '<none>';
+	const reduced = firstLine
+		.replace(URL_RUN_PATTERN, '<url>')
+		.replace(FILENAME_RUN_PATTERN, '<file>')
+		.replace(TOKEN_RUN_PATTERN, run => carriesOpaqueToken(run) ? '<token>' : run)
+		.replace(/\s+/g, ' ');
+	return reduced.length <= PAGE_TEXT_LENGTH ? reduced : `${reduced.slice(0, PAGE_TEXT_LENGTH - 1)}…`;
+}
+
+/** How many of a page's newest console messages a failure line carries. */
+const PRINTED_CONSOLE_MESSAGES = 3;
+
+/**
+ * A page's diagnostics (`collectPageDiagnostics` in `chromium.mjs`) as detail
+ * fields: the newest uncaught error, then the newest console messages, oldest
+ * first, each reduced by `pageTextEvidence`. A page that said nothing says
+ * `<none>`, so a reader can tell "logged nothing" from "was not asked".
+ *
+ * @param {{ console?: readonly string[], uncaught?: readonly string[] } | undefined} diagnostics
+ */
+export function pageDiagnosticsEvidence(diagnostics) {
+	const uncaught = diagnostics?.uncaught ?? [];
+	const logged = (diagnostics?.console ?? []).slice(-PRINTED_CONSOLE_MESSAGES);
+	return {
+		uncaught: pageTextEvidence(uncaught.at(-1)),
+		...Object.fromEntries((logged.length > 0 ? logged : [undefined])
+			.map((text, index) => [`console${index + 1}`, pageTextEvidence(text)])),
+	};
+}
+
 /**
  * @param {{ harness: string, secrets?: readonly string[] }} options
  */

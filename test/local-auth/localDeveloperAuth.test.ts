@@ -7,7 +7,19 @@ import {
 	LOCAL_DEVELOPER_USER_ID,
 	LOCAL_DEVELOPER_USER_NAME,
 } from '~~/shared/utils/localDeveloperAuth';
+import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { observeChromiumValue } from '../../scripts/graphics-acceptance/chromium.mjs';
+
+/** Text only the protected page renders, and text only the login page renders. */
+const PROTECTED_PAGE_TEXT = 'Graphics Asset Library Operations';
+const LOGIN_PAGE_TEXT = 'Accounts and password resets are issued by an administrator.';
+
+/**
+ * How long a cold `nuxt dev` may take to show either page. Generous because it
+ * is a bound on a compile, not an assertion: the assertion is which page. #687
+ * saw the cold load overrun 25 s at load average 17–30.
+ */
+const PAGE_COLD_START_LIMIT_MS = 120_000;
 
 interface LocalSessionReading {
 	user: { id: string; name: string };
@@ -86,27 +98,33 @@ describe('a dev server with the Local Developer Session enabled', () => {
 	});
 
 	it('enters a protected page through the real browser gate without seeing login', async () => {
+		// The probe settles on whichever page the gate shows first, so a working
+		// bypass answers as soon as the protected page renders and a broken one as
+		// soon as login does. The deadline only bounds "neither yet": this is a cold
+		// `nuxt dev` client load, compiled on demand while `pnpm verify` runs the
+		// integration suite and the browser gates beside it, and a fixed 25 s
+		// cut-off read that compile as "neither page visible" (#687). It is set
+		// in Node and compared against the page's clock, so a redirect that
+		// replaces the document cannot restart it.
+		const deadline = Date.now() + PAGE_COLD_START_LIMIT_MS;
 		const observed = await observeChromiumValue({
 			url: url('/admin/graphics-assets'),
-			timeoutMs: 40_000,
+			timeoutMs: PAGE_COLD_START_LIMIT_MS + 10_000,
 			expression: `(() => {
 				const body = document.body?.innerText ?? '';
-				globalThis.__localAuthProbeStarted ??= Date.now();
-				// The window only bounds the wait: a cold \`nuxt dev\` client load takes
-				// longer than 5s while \`pnpm verify\` runs other suites beside this one,
-				// and a login page still fails the assertion below.
-				if (!body.includes('Graphics Asset Library Operations')
-					&& Date.now() - globalThis.__localAuthProbeStarted < 25000)
-					return undefined;
-				return {
+				const seen = {
 					pathname: location.pathname,
-					protectedPageVisible: body.includes('Graphics Asset Library Operations'),
-					loginPageVisible: body.includes('Sign in to Stream Keepr'),
+					protectedPageVisible: body.includes(${JSON.stringify(PROTECTED_PAGE_TEXT)}),
+					loginPageVisible: location.pathname === ${JSON.stringify(LOGIN_PATH)}
+						|| body.includes(${JSON.stringify(LOGIN_PAGE_TEXT)}),
 				};
+				if (!seen.protectedPageVisible && !seen.loginPageVisible && Date.now() < ${deadline})
+					return undefined;
+				return seen;
 			})()`,
 		});
 
-		expect(observed).toEqual({
+		expect(observed, 'the browser gate showed login, or neither page before the cold-start limit').toEqual({
 			outcome: 'passed',
 			value: {
 				pathname: '/admin/graphics-assets',
@@ -114,7 +132,7 @@ describe('a dev server with the Local Developer Session enabled', () => {
 				loginPageVisible: false,
 			},
 		});
-	}, 45_000);
+	}, PAGE_COLD_START_LIMIT_MS + 30_000);
 
 	it('keeps one User across browsers while giving each browser its own Session', async () => {
 		expect(browserA.reading.user).toMatchObject({

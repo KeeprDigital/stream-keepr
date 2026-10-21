@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '../helpers/backgroundLayerModes';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { expectPublishedOperation } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -93,8 +94,8 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: authorCookie }, body: pixelPng },
 		);
-		const operation = await upload.json() as GraphicsIngestionOperation;
-		return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+		const operation = await expectPublishedOperation(upload);
+		return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 	}
 
 	async function replace(mode: string, assetId: string) {
@@ -120,7 +121,7 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 				body: replacementPng,
 			},
 		);
-		expect((await upload.json() as GraphicsIngestionOperation).result).toBeDefined();
+		await expectPublishedOperation(upload);
 	}
 
 	describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('on a %s Screen', (mode) => {

@@ -17,6 +17,7 @@ import {
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
+import { expectPublishedOperation } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -134,10 +135,10 @@ describe('template Package installation through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: packagePixelPng },
 		);
-		const operation = await uploaded.json() as GraphicsIngestionOperation;
+		const operation = await expectPublishedOperation(uploaded);
 		reference = {
-			assetId: operation.result!.assetId,
-			revisionId: operation.result!.revisionId,
+			assetId: operation.result.assetId,
+			revisionId: operation.result.revisionId,
 		};
 
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);

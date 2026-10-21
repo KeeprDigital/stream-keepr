@@ -12,6 +12,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenC
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
+import { expectPublishedOperation, expectResponseStatus } from './responseStatus';
 
 /**
  * Media Graphic Items on a Broadcast Graphics Screen, through the real API.
@@ -134,8 +135,8 @@ async function ingestImage(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{ method: 'PUT', headers: { cookie }, body: bytes },
 	);
-	const operation = await response.json() as GraphicsIngestionOperation;
-	return { assetId: operation.result!.assetId, revisionId: operation.result!.revisionId };
+	const operation = await expectPublishedOperation(response);
+	return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 }
 
 /**
@@ -211,6 +212,7 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{ method: 'PUT', headers: { cookie, 'content-type': 'font/woff' }, body: bytes },
 	);
+	await expectResponseStatus(response, 200);
 	const awaitingEvidence = await response.json() as GraphicsIngestionOperation;
 	if (awaitingEvidence.report?.outcome !== 'accepted' || awaitingEvidence.report.facts.kind !== 'font')
 		throw new Error('Expected a server-selected font challenge');

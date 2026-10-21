@@ -12,6 +12,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenC
 import { screenMediaSourceReference } from '../../shared/utils/graphicsAssetReferences';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { expectPublishedOperation } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -160,7 +161,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		const original = await step('upload original content', async () => await fetch(
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: pngPixel },
-		).then(response => response.json() as Promise<GraphicsIngestionOperation>));
+		).then(expectPublishedOperation));
 		expect(original.stage).toBe('completed');
 
 		originalReference = {
@@ -206,7 +207,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: replacementPng,
 			},
-		).then(response => response.json() as Promise<GraphicsIngestionOperation>));
+		).then(expectPublishedOperation));
 		expect(replaced.result).toMatchObject({
 			outcome: 'revision-created',
 			assetId: originalReference.assetId,
@@ -331,7 +332,7 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 						headers: { ...authorHeaders, 'content-type': 'image/png' },
 						body: pngPixel,
 					},
-				).then(response => response.json() as Promise<GraphicsIngestionOperation>),
+				).then(expectPublishedOperation),
 			),
 		));
 		expect(concurrentReplacements.map(operation => operation.result?.outcome).sort()).toEqual([

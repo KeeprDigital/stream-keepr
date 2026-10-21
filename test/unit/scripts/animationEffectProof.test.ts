@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { judgeAnimationEffectReport } from '../../../scripts/graphics-acceptance/animation-effect-proof.mjs';
+import { ANIMATION_EFFECT_PROOF_EXPRESSION, judgeAnimationEffectReport } from '../../../scripts/graphics-acceptance/animation-effect-proof.mjs';
 import {
 	ANIMATION_EFFECT_PROOF_SCENARIOS,
 	animationEffectProofScenarios,
@@ -140,6 +140,18 @@ describe('judging an animation effect rendering proof', () => {
 		expect(codes(healthyReport({ pageFailed: true }))).toContain('animation-effect-page-failed');
 	});
 
+	it('says what the page caught when it gave up measuring (#687)', () => {
+		const failures = judgeAnimationEffectReport(healthyReport({
+			pageFailed: true,
+			pageError: 'RangeError: Array buffer allocation failed\n    at captureFrame (http://127.0.0.1:5/_acceptance/animation-effect-v1.js:9:1)',
+		}));
+
+		expect(failures).toContainEqual({
+			code: 'animation-effect-page-failed',
+			detail: { source: 'page', thrown: 'RangeError: Array buffer allocation failed' },
+		});
+	});
+
 	it('reports an effect the catalogue ships and the run never mounted', () => {
 		const report = healthyReport();
 		report.catalogue = report.catalogue.filter(effect => effect !== 'weave');
@@ -263,5 +275,31 @@ describe('judging an accumulating effect settling back to its background', () =>
 	it('reports a settle whose shader failed to compile or would not mount', () => {
 		expect(codes(withSettle({ compileFailures: 1 }))).toContain('animation-effect-shader-compile-failed');
 		expect(codes(withSettle({ mounted: false }))).toEqual(['animation-effect-mount-failed']);
+	});
+});
+
+/**
+ * The run polls from the moment the page is created, and on a loaded machine
+ * the first poll can land before the parser has reached `<body>` (#687). A
+ * stalled response proves it in Chromium: the poll threw `Cannot read
+ * properties of null (reading 'dataset')`, which the run read as a page that
+ * threw and printed as `animation-effect-page-failed`. Still loading is not
+ * finished, and not failed either.
+ */
+describe('the expression the run polls', () => {
+	function poll(document: object) {
+		// eslint-disable-next-line no-new-func
+		return new Function('document', `return (${ANIMATION_EFFECT_PROOF_EXPRESSION})`)(document);
+	}
+
+	it('reads a page whose body has not been parsed yet as still working', () => {
+		expect(poll({ body: null, getElementById: () => null })).toBeUndefined();
+	});
+
+	it('reads the report once the page says it is complete', () => {
+		expect(poll({
+			body: { dataset: { measurements: 'complete' } },
+			getElementById: () => ({ textContent: '{"backend":"swiftshader"}' }),
+		})).toBe('{"backend":"swiftshader"}');
 	});
 });

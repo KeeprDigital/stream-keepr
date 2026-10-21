@@ -19,6 +19,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import { acceptanceProfilePrefix, checkoutProfileMarker } from './chromium-profile.mjs';
 import { ACCEPTANCE_FAILURE_CODES } from './evidence.mjs';
 
 const PUBLISHED_CODES = new Set(ACCEPTANCE_FAILURE_CODES);
@@ -101,16 +103,21 @@ async function connect(webSocketUrl) {
 	});
 	let nextId = 0;
 	const pending = new Map();
+	const listeners = new Map();
 	socket.addEventListener('message', (message) => {
 		const payload = JSON.parse(message.data);
-		if (!payload.id)
+		if (!payload.id) {
+			for (const listener of listeners.get(payload.method) ?? [])
+				listener(payload.params);
 			return;
+		}
 		const handler = pending.get(payload.id);
 		pending.delete(payload.id);
 		handler?.(payload);
 	});
 	return {
 		close: () => socket.close(),
+		on: (method, listener) => listeners.set(method, [...listeners.get(method) ?? [], listener]),
 		command: (method, params = {}) => new Promise((resolve, reject) => {
 			const id = ++nextId;
 			pending.set(id, payload =>
@@ -120,10 +127,181 @@ async function connect(webSocketUrl) {
 	};
 }
 
-async function launch(candidate, extraArgs) {
+/** How many console messages and uncaught errors a page's diagnostics keep. */
+const KEPT_PAGE_MESSAGES = 5;
+
+/**
+ * Keep what a page logged and threw uncaught while it was observed (#687).
+ *
+ * A failed browser gate used to say only that the page failed, so a flake
+ * under load named no cause. The raw text is kept here, in Node; it is
+ * page-authored, so a harness that prints it reduces it first
+ * (`pageTextEvidence`). Only the newest few of each are kept. `page` is
+ * anything answering `on(method, listener)` for CDP events, subscribed before
+ * `Runtime.enable` so nothing the page says first is missed.
+ *
+ * @param {{ on: (method: string, listener: (params: any) => void) => void }} page
+ */
+export function collectPageDiagnostics(page) {
+	const kept = { console: [], uncaught: [] };
+	const keep = (list, text) => {
+		list.push(text);
+		list.splice(0, Math.max(0, list.length - KEPT_PAGE_MESSAGES));
+	};
+	page.on('Runtime.consoleAPICalled', ({ type, args = [] }) => {
+		const text = args.map(arg => arg.value ?? arg.description ?? arg.type).join(' ');
+		keep(kept.console, `${type}: ${text}`);
+	});
+	page.on('Runtime.exceptionThrown', ({ exceptionDetails = {} }) => {
+		keep(kept.uncaught, exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown');
+	});
+	return {
+		read: () => ({ console: [...kept.console], uncaught: [...kept.uncaught] }),
+	};
+}
+
+const CHECKOUT_PROFILE_PREFIX = acceptanceProfilePrefix(
+	checkoutProfileMarker(fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')),
+);
+
+/**
+ * How long a browser is given at each step of being stopped (#687).
+ *
+ * `Browser.close` is the polite ask, SIGTERM the firm one, and SIGKILL the one
+ * it cannot refuse. The browser #687 found leaked had ignored SIGTERM and was
+ * spinning at 100% CPU for an hour and a half, so no step may wait forever and
+ * the last one is never skipped.
+ */
+const CLOSE_GRACE_MS = 5_000;
+const TERMINATE_GRACE_MS = 2_000;
+const KILL_GRACE_MS = 2_000;
+
+/** Every browser this process launched and has not yet seen exit. */
+const liveBrowsers = new Set();
+
+function running(child) {
+	return child.exitCode === null && child.signalCode === null;
+}
+
+/** Resolves true once `child` has exited, or false after `ms`. */
+function exitedWithin(child, ms) {
+	if (!running(child))
+		return Promise.resolve(true);
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => {
+			child.off('exit', onExit);
+			resolve(false);
+		}, ms);
+		function onExit() {
+			clearTimeout(timer);
+			resolve(true);
+		}
+		child.once('exit', onExit);
+	});
+}
+
+function signal(child, name) {
+	try {
+		child.kill(name);
+	}
+	catch {
+		// Already gone.
+	}
+}
+
+/** SIGTERM, then SIGKILL if it is still there after its grace. */
+async function terminate(browser) {
+	signal(browser.child, 'SIGTERM');
+	if (await exitedWithin(browser.child, browser.terminateGraceMs))
+		return;
+	signal(browser.child, 'SIGKILL');
+	await exitedWithin(browser.child, KILL_GRACE_MS);
+}
+
+async function removeProfile(profile) {
+	// Chromium keeps writing its profile until it is gone, so removing the
+	// directory before it exits races with its own shutdown.
+	await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+		.catch(() => undefined);
+}
+
+/**
+ * A runner stopped by a signal takes its browsers with it (#687).
+ *
+ * `verify` stops a gate by signalling its process group, and Chrome is in that
+ * group, but a signal reaches Chrome as a request it can sit on: a browser busy
+ * on its main thread never gets round to it, and once the runner is gone nobody
+ * follows up. So the runner follows up itself, escalating to SIGKILL, and then
+ * dies of the signal it was sent — unless something else in the process
+ * listens for it too, in which case that listener decides how the process ends.
+ */
+function stopOnSignal(name) {
+	const stopping = [...liveBrowsers];
+	void Promise.all(stopping.map(async (browser) => {
+		await terminate(browser);
+		await removeProfile(browser.profile);
+	})).finally(() => {
+		uninstallShutdownHooks();
+		if (process.listenerCount(name) === 0)
+			process.kill(process.pid, name);
+	});
+}
+
+/**
+ * A runner that exits without disposing — `process.exit`, an uncaught throw —
+ * can still kill synchronously on its way out, though not wait or tidy up.
+ */
+function killOnExit() {
+	for (const browser of liveBrowsers)
+		signal(browser.child, 'SIGKILL');
+}
+
+const SHUTDOWN_HOOKS = { SIGINT: stopOnSignal, SIGTERM: stopOnSignal, exit: killOnExit };
+
+function installShutdownHooks() {
+	for (const [event, hook] of Object.entries(SHUTDOWN_HOOKS))
+		process.on(event, hook);
+}
+
+function uninstallShutdownHooks() {
+	for (const [event, hook] of Object.entries(SHUTDOWN_HOOKS))
+		process.off(event, hook);
+}
+
+/** Track a browser until it exits, with the hooks in place only while any is live. */
+function track(browser) {
+	if (liveBrowsers.size === 0)
+		installShutdownHooks();
+	liveBrowsers.add(browser);
+	browser.child.once('exit', () => {
+		liveBrowsers.delete(browser);
+		if (liveBrowsers.size === 0)
+			uninstallShutdownHooks();
+	});
+}
+
+/**
+ * Start one unattended Chromium and wait for its DevTools endpoint.
+ *
+ * Resolves `undefined` when `candidate` is not installed, so a caller can try
+ * the next one. From the moment it is spawned until it is seen to exit, the
+ * browser is stopped however the run ends: `dispose()` on every path a harness
+ * takes, a failed startup here, and the shutdown hooks above for a runner that
+ * is signalled or exits. Its profile is named after this checkout
+ * (`chromium-profile.mjs`), which is how `pnpm reap` finds one that escaped all
+ * of that anyway.
+ *
+ * @param {string} candidate
+ * @param {readonly string[]} extraArgs
+ * @param {{ terminateGraceMs?: number, startupTimeoutMs?: number }} [options]
+ */
+export async function launchChromium(candidate, extraArgs, {
+	terminateGraceMs = TERMINATE_GRACE_MS,
+	startupTimeoutMs = 30_000,
+} = {}) {
 	if (candidate.includes('/') && !existsSync(candidate))
 		return undefined;
-	const profile = await mkdtemp(join(tmpdir(), 'stream-keepr-acceptance-'));
+	const profile = await mkdtemp(join(tmpdir(), CHECKOUT_PROFILE_PREFIX));
 	const child = spawn(candidate, [
 		'--headless=new',
 		'--disable-gpu',
@@ -135,59 +313,75 @@ async function launch(candidate, extraArgs) {
 		`--user-data-dir=${profile}`,
 		...extraArgs,
 	], { stdio: ['ignore', 'ignore', 'pipe'] });
-	const endpoint = await new Promise((resolve, reject) => {
-		let errorOutput = '';
-		// Startup only, not an assertion: a cold Chrome on a 2-core CI runner that
-		// is also serving `nuxt dev` has overrun 15s.
-		const timeout = setTimeout(
-			() => reject(new Error('Chrome DevTools endpoint timed out.')),
-			30_000,
-		);
-		child.stderr.setEncoding('utf8').on('data', (chunk) => {
-			errorOutput += chunk;
-			const match = errorOutput.match(/DevTools listening on (ws:\/\/\S+)/);
-			if (match) {
+	const browser = { child, profile, terminateGraceMs };
+	if (child.pid !== undefined)
+		track(browser);
+
+	let endpoint;
+	try {
+		endpoint = await new Promise((resolve, reject) => {
+			let errorOutput = '';
+			// Startup only, not an assertion: a cold Chrome on a 2-core CI runner that
+			// is also serving `nuxt dev` has overrun 15s.
+			const timeout = setTimeout(
+				() => reject(new Error('Chrome DevTools endpoint timed out.')),
+				startupTimeoutMs,
+			);
+			child.stderr.setEncoding('utf8').on('data', (chunk) => {
+				errorOutput += chunk;
+				const match = errorOutput.match(/DevTools listening on (ws:\/\/\S+)/);
+				if (match) {
+					clearTimeout(timeout);
+					resolve(match[1]);
+				}
+			});
+			child.once('error', (error) => {
 				clearTimeout(timeout);
-				resolve(match[1]);
-			}
+				if (error.code === 'ENOENT')
+					resolve(undefined);
+				else
+					reject(error);
+			});
+			child.once('exit', (code) => {
+				if (code !== 0) {
+					clearTimeout(timeout);
+					reject(new Error(`Chromium exited with ${code}.`));
+				}
+			});
 		});
-		child.once('error', (error) => {
-			clearTimeout(timeout);
-			if (error.code === 'ENOENT')
-				resolve(undefined);
-			else
-				reject(error);
-		});
-		child.once('exit', (code) => {
-			if (code !== 0) {
-				clearTimeout(timeout);
-				reject(new Error(`Chromium exited with ${code}.`));
-			}
-		});
-	});
+	}
+	catch (error) {
+		// A browser too slow to announce itself is still a browser: left running,
+		// it outlives the run that gave up on it.
+		await terminate(browser);
+		await removeProfile(profile);
+		throw error;
+	}
 	if (!endpoint) {
-		child.kill('SIGTERM');
-		await rm(profile, { recursive: true, force: true });
+		await terminate(browser);
+		await removeProfile(profile);
 		return undefined;
 	}
 	return {
 		endpoint,
+		pid: child.pid,
+		profile,
 		async dispose() {
 			// A signal to the launcher does not reliably reach the browser it
 			// spawned, and an acceptance run that leaves orphan browsers behind
 			// makes the next run flaky. Ask it to close over its own protocol
-			// first, and keep the signal only as a backstop.
-			const exited = new Promise(resolve => child.once('exit', resolve));
-			await connect(endpoint)
-				.then(browser => browser.command('Browser.close'))
-				.catch(() => undefined);
-			await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
-			child.kill('SIGTERM');
-			await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 2000))]);
-			// Chromium keeps writing its profile until it is gone, so removing the
-			// directory before it exits races with its own shutdown.
-			await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-				.catch(() => undefined);
+			// first, bounded, because a browser that accepts the connection and
+			// never answers is the busy one this exists for; then escalate.
+			const closing = connect(endpoint)
+				.then(session => session.command('Browser.close'))
+				.then(() => exitedWithin(child, CLOSE_GRACE_MS), () => false);
+			const closed = await Promise.race([
+				closing,
+				new Promise(resolve => setTimeout(resolve, CLOSE_GRACE_MS, false)),
+			]);
+			if (!closed)
+				await terminate(browser);
+			await removeProfile(profile);
 		},
 	};
 }
@@ -330,6 +524,9 @@ export async function observeChromiumVerdict({
  * value. Returning `undefined` means the page is still settling; any other
  * serialisable value is the observation. This is for app-shell acceptance
  * where the page has no purpose-built `data-result` contract of its own.
+ *
+ * An observation that did not pass carries the page's `diagnostics` — its
+ * newest console text and uncaught errors, raw — so the failure can say why.
  */
 export async function observeChromiumValue({
 	url,
@@ -338,7 +535,7 @@ export async function observeChromiumValue({
 	extraArgs = [],
 	cookies = [],
 }) {
-	return await withChromiumPage({ url, extraArgs, cookies }, async (page) => {
+	return await withChromiumPage({ url, extraArgs, cookies }, async (page, diagnostics) => {
 		const deadline = Date.now() + timeoutMs;
 		while (Date.now() < deadline) {
 			const evaluated = await page.command('Runtime.evaluate', {
@@ -350,26 +547,28 @@ export async function observeChromiumValue({
 					outcome: 'failed',
 					detail: evaluated.exceptionDetails.exception?.description
 						?? evaluated.exceptionDetails.text,
+					diagnostics: diagnostics.read(),
 				};
 			}
 			if (Object.hasOwn(evaluated.result ?? {}, 'value'))
 				return { outcome: 'passed', value: evaluated.result.value };
 			await new Promise(resolve => setTimeout(resolve, 100));
 		}
-		return { outcome: 'timed-out' };
+		return { outcome: 'timed-out', diagnostics: diagnostics.read() };
 	});
 }
 
 /**
  * Run one observation against the first available local Chromium: open the page
- * and hand `observe` its DevTools session. Exported for a harness that drives the
- * page itself — a screenshot, an emulation override — rather than polling one
+ * and hand `observe` its DevTools session and the page's diagnostics
+ * (`collectPageDiagnostics`). Exported for a harness that drives the page
+ * itself — a screenshot, an emulation override — rather than polling one
  * expression. Resolves to whatever `observe` returns, or
  * `{ outcome: 'unavailable' }` with no browser.
  */
 export async function withChromiumPage({ url, extraArgs = [], cookies }, observe) {
 	for (const candidate of chromiumCandidates()) {
-		const browser = await launch(candidate, extraArgs);
+		const browser = await launchChromium(candidate, extraArgs);
 		if (!browser)
 			continue;
 		try {
@@ -380,8 +579,9 @@ export async function withChromiumPage({ url, extraArgs = [], cookies }, observe
 			).then(response => response.json());
 			const page = await connect(target.webSocketDebuggerUrl);
 			try {
+				const diagnostics = collectPageDiagnostics(page);
 				await openAuthoredPage(page, { url, cookies });
-				return await observe(page);
+				return await observe(page, diagnostics);
 			}
 			finally {
 				page.close();

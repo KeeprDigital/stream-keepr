@@ -18,6 +18,7 @@ import {
 } from '../helpers/templatePackageArchive';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
+import { expectPublishedOperation } from './responseStatus';
 
 /**
  * A Broadcast Graphic Template travelling as a `.skgraphic` Template Package,
@@ -171,10 +172,10 @@ describe('broadcast Graphic Template Packages', () => {
 				body: pixelPng,
 			},
 		);
-		const operation = await uploaded.json() as GraphicsIngestionOperation;
+		const operation = await expectPublishedOperation(uploaded);
 		asset = {
-			assetId: operation.result!.assetId,
-			revisionId: operation.result!.revisionId,
+			assetId: operation.result.assetId,
+			revisionId: operation.result.revisionId,
 		};
 
 		// Everything the vocabulary allows, so the round trip has something to lose.
