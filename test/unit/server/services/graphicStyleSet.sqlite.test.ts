@@ -1,10 +1,16 @@
-import type { InArgs } from '@libsql/client';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { drizzle } from 'drizzle-orm/d1';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import {
+	graphicAssetContents,
+	graphicAssetReferences,
+	graphicAssetRevisions,
+	graphicAssets,
+} from '~~/server/db/schema/graphicsAsset';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
  * The two library-wide Graphic Style Set operations, against real SQL.
@@ -23,45 +29,72 @@ import * as schema from '~~/server/db/schema';
  * The assertions are therefore all "this row is exactly as it was".
  */
 
-const client = createClient({ url: 'file::memory:' });
-const sqliteDb = drizzle(client, { schema });
-
 /**
- * A D1-shaped façade over the libsql client.
- *
- * The service writes through `db.$client` in D1's own `prepare().bind()` / `batch()`
- * vocabulary, because the atomicity it needs is a property of a D1 batch. libsql
- * offers the same transaction, so the façade is a rename: one `batch(…, 'write')` and
- * `rowsAffected` read back as `meta.changes`.
+ * The real migrations, because the operations hold every rewritten template to the
+ * Graphic Asset Reference rule (ADR-0034), which reads the catalogue's tables.
  */
-const d1Client = {
-	prepare(sql: string) {
-		return {
-			sql,
-			args: [] as unknown[],
-			bind(...args: unknown[]) {
-				return { sql, args };
-			},
-		};
-	},
-	async batch(statements: readonly { sql: string; args: unknown[] }[]) {
-		const results = await client.batch(
-			statements.map(statement => ({ sql: statement.sql, args: statement.args as InArgs })),
-			'write',
-		);
-		return results.map(result => ({ meta: { changes: result.rowsAffected } }));
-	},
-};
-
-Reflect.set(sqliteDb, '$client', d1Client);
+const harness = await createSqliteD1Harness();
+const client = harness.client;
+const sqliteDb = drizzle(harness.database, { schema });
 vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
 
-const { graphicStyleSetService, GraphicStyleSetRevisionConflict } = await import('~~/server/services/graphicStyleSet');
+const {
+	graphicStyleSetService,
+	GraphicStyleSetRevisionConflict,
+	GraphicStyleSetTemplateReferenceConflict,
+} = await import('~~/server/services/graphicStyleSet');
 
 const STYLE_SET_ID = 'show-style';
 const TEMPLATE_ID = 'lower-third';
 /** The revision the template really is at, and the one an operation reads it at. */
 const TEMPLATE_REVISION = 3;
+
+/** The image every document pins, so the operations' reference rule has something to hold. */
+const PLATE = { assetId: 'asset-plate', revisionId: 'revision-plate' } as GraphicAssetReference;
+const PLATE_SLOT = `graphics.${TEMPLATE_ID}.items.plate.asset`;
+
+function plate(): MediaGraphicItemConfig {
+	return {
+		type: 'media',
+		id: 'plate',
+		label: 'plate',
+		visible: true,
+		anchor: 'top-left',
+		x: 0,
+		y: 0,
+		width: 200,
+		height: 100,
+		asset: PLATE,
+		mediaKind: 'image',
+		fit: 'cover',
+		focalPosition: { horizontal: 0.5, vertical: 0.5 },
+		opacity: 1,
+		playbackRate: 1,
+		loop: true,
+	};
+}
+
+/** The reference index row the template's ordinary save would have written. */
+async function indexTemplateReference() {
+	await sqliteDb.insert(graphicAssetReferences).values({
+		id: 'template-plate',
+		assetId: PLATE.assetId,
+		revisionId: PLATE.revisionId,
+		ownerKind: 'broadcast-graphic-template',
+		ownerId: TEMPLATE_ID,
+		ownerSlot: PLATE_SLOT,
+		eventId: null,
+	} as never);
+}
+
+async function indexedTemplateSlots(): Promise<string[]> {
+	const rows = await sqliteDb.select().from(graphicAssetReferences);
+	return rows.filter(row => row.ownerId === TEMPLATE_ID).map(row => row.ownerSlot);
+}
+
+async function retirePlate() {
+	await sqliteDb.update(graphicAssets).set({ lifecycleState: 'retired' } as never);
+}
 
 function entries(): GraphicStyleSetEntry[] {
 	return [
@@ -75,7 +108,7 @@ function linkedDocument(): BroadcastGraphicConfig {
 	return {
 		id: TEMPLATE_ID,
 		name: 'Lower third',
-		items: [],
+		items: [plate()],
 		styleSet: { styleSetId: STYLE_SET_ID, revision: 1 },
 		styleRefs: { 'animation.enter': { entryId: 'brand' } },
 	};
@@ -86,14 +119,14 @@ function entryDetachedDocument(): BroadcastGraphicConfig {
 	return {
 		id: TEMPLATE_ID,
 		name: 'Lower third',
-		items: [],
+		items: [plate()],
 		styleSet: { styleSetId: STYLE_SET_ID, revision: 1 },
 	};
 }
 
 /** What deleting the whole Style Set leaves: no reference and no provenance. */
 function detachedDocument(): BroadcastGraphicConfig {
-	return { id: TEMPLATE_ID, name: 'Lower third', items: [] };
+	return { id: TEMPLATE_ID, name: 'Lower third', items: [plate()] };
 }
 
 async function styleSetRow() {
@@ -113,27 +146,28 @@ async function templateRow() {
 }
 
 describe('graphicStyleSetService library-wide operations', () => {
+	beforeAll(async () => {
+		await sqliteDb.insert(graphicAssetContents).values({
+			digest: 'd'.repeat(64),
+			byteLength: 70,
+			canonicalMime: 'image/png',
+		} as never);
+		await sqliteDb.insert(graphicAssets).values({ id: PLATE.assetId, name: 'Plate', kind: 'image' } as never);
+		await sqliteDb.insert(graphicAssetRevisions).values({
+			id: PLATE.revisionId,
+			assetId: PLATE.assetId,
+			revisionNumber: 1,
+			contentDigest: 'd'.repeat(64),
+			compatibilityProfile: 'still-image-v1',
+			technicalFacts: {},
+		} as never);
+	});
+
 	beforeEach(async () => {
-		for (const statement of [
-			'drop table if exists graphic_style_sets',
-			'drop table if exists broadcast_graphic_templates',
-			`create table graphic_style_sets (
-				id text primary key not null, name text not null, description text,
-				revision integer default 0 not null, draft_revision integer default 1 not null,
-				draft text not null, published text, published_at integer, operation_version text,
-				created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-			`create table broadcast_graphic_templates (
-				id text primary key not null, name text not null, description text,
-				revision integer default 1 not null, document text not null,
-				graphic_asset_reference_version text, style_set_id text, style_set_revision integer,
-				created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-		]) {
-			await client.execute(statement);
-		}
+		await sqliteDb.delete(graphicAssetReferences);
+		await sqliteDb.delete(schema.broadcastGraphicTemplates);
+		await sqliteDb.delete(schema.graphicStyleSets);
+		await sqliteDb.update(graphicAssets).set({ lifecycleState: 'active' } as never);
 
 		await client.execute({
 			sql: `insert into graphic_style_sets (id, name, description, revision, draft_revision, draft, published, published_at)
@@ -141,13 +175,15 @@ describe('graphicStyleSetService library-wide operations', () => {
 			args: [STYLE_SET_ID, 'Show style', JSON.stringify(entries()), JSON.stringify(entries())],
 		});
 		await client.execute({
-			sql: `insert into broadcast_graphic_templates (id, name, revision, document, style_set_id, style_set_revision)
-				values (?, ?, ?, ?, ?, 1)`,
+			sql: `insert into broadcast_graphic_templates
+				(id, name, revision, document, graphic_asset_reference_version, style_set_id, style_set_revision)
+				values (?, ?, ?, ?, 'stamp', ?, 1)`,
 			args: [TEMPLATE_ID, 'Lower third', TEMPLATE_REVISION, JSON.stringify(linkedDocument()), STYLE_SET_ID],
 		});
+		await indexTemplateReference();
 	});
 
-	afterAll(async () => await client.close());
+	afterAll(async () => await harness.close());
 
 	it('deletes an entry and rewrites the template it reaches as one operation', async () => {
 		const updated = await graphicStyleSetService().deleteEntry(STYLE_SET_ID, {
@@ -246,5 +282,83 @@ describe('graphicStyleSetService library-wide operations', () => {
 
 		expect((await styleSetRow())?.draft_revision).toBe(2);
 		expect((await templateRow()).revision).toBe(TEMPLATE_REVISION);
+	});
+
+	// ADR-0034: a library-wide rewrite is a template write like any other, so every
+	// reference a rewritten template holds must still be selectable, and a refusal
+	// writes nothing anywhere.
+	it('keeps every rewritten template indexed', async () => {
+		await graphicStyleSetService().deleteEntry(STYLE_SET_ID, {
+			draftRevision: 2,
+			draft: entries().filter(entry => entry.id !== 'brand'),
+			published: entries().filter(entry => entry.id !== 'brand'),
+			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+		});
+
+		expect(await indexedTemplateSlots()).toEqual([PLATE_SLOT]);
+	});
+
+	it('refuses an entry deletion whose rewritten template references a retired asset, writing nothing', async () => {
+		await retirePlate();
+
+		await expect(graphicStyleSetService().deleteEntry(STYLE_SET_ID, {
+			draftRevision: 2,
+			draft: entries().filter(entry => entry.id !== 'brand'),
+			published: entries().filter(entry => entry.id !== 'brand'),
+			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() }],
+		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
+
+		const styleSet = await styleSetRow();
+		expect(styleSet?.draft_revision).toBe(2);
+		expect(JSON.parse(String(styleSet?.published)).map((entry: GraphicStyleSetEntry) => entry.id))
+			.toEqual(['ink', 'brand']);
+		expect((await templateRow()).revision).toBe(TEMPLATE_REVISION);
+		expect(JSON.parse(String((await templateRow()).document))).toEqual(linkedDocument());
+		expect(await indexedTemplateSlots()).toEqual([PLATE_SLOT]);
+	});
+
+	it('refuses a Style Set deletion whose detached template references a retired asset, keeping the Style Set', async () => {
+		await retirePlate();
+
+		await expect(graphicStyleSetService().remove(STYLE_SET_ID, {
+			draftRevision: 2,
+			rewrites: [{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: detachedDocument() }],
+		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
+
+		expect((await styleSetRow())?.id).toBe(STYLE_SET_ID);
+		expect((await templateRow()).revision).toBe(TEMPLATE_REVISION);
+		expect((await templateRow()).style_set_id).toBe(STYLE_SET_ID);
+		expect(await indexedTemplateSlots()).toEqual([PLATE_SLOT]);
+	});
+
+	it('refuses the whole deletion when one of several rewritten templates is refused, leaving the clean one alone', async () => {
+		const cleanId = 'score-bug';
+		const cleanDocument = (): BroadcastGraphicConfig => ({ ...linkedDocument(), id: cleanId, items: [] });
+		await client.execute({
+			sql: `insert into broadcast_graphic_templates
+				(id, name, revision, document, graphic_asset_reference_version, style_set_id, style_set_revision)
+				values (?, 'Score bug', 1, ?, 'stamp', ?, 1)`,
+			args: [cleanId, JSON.stringify(cleanDocument()), STYLE_SET_ID],
+		});
+		await retirePlate();
+
+		await expect(graphicStyleSetService().deleteEntry(STYLE_SET_ID, {
+			draftRevision: 2,
+			draft: entries().filter(entry => entry.id !== 'brand'),
+			published: entries().filter(entry => entry.id !== 'brand'),
+			rewrites: [
+				{ id: cleanId, revision: 1, document: { ...cleanDocument(), styleRefs: undefined } },
+				{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() },
+			],
+		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
+
+		const clean = await client.execute({
+			sql: 'select revision, document from broadcast_graphic_templates where id = ?',
+			args: [cleanId],
+		});
+		expect(clean.rows[0]?.revision).toBe(1);
+		expect(JSON.parse(String(clean.rows[0]?.document))).toEqual(cleanDocument());
+		expect((await templateRow()).revision).toBe(TEMPLATE_REVISION);
+		expect((await styleSetRow())?.draft_revision).toBe(2);
 	});
 });

@@ -937,3 +937,43 @@ One function ran about ten steps in a fixed order. It published 3+N messages, an
 
 - **Decide and describe in one call from one set of reads.** Either the Reverse Sync runs before the decision, writing to the winner's Slots on a lost promotion where no one is told, or the publication carries data from before the sync.
 - **Publish the Assignment before a fallible Reverse Sync, as before.** The single publication would split in two, with a refresh for each half.
+
+## ADR-0034: Every graphics Template write requires each of its references to be selectable, fenced at the commit
+
+Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614)
+
+### Decision
+
+**A template has no retained-reference path.** Every write of a Broadcast Graphic Template or a Feature Match Layout Template requires each Graphic Asset Reference its stored document holds to name an existing revision, with available content, of an active Graphic Asset whose kind fits its item, input, or typography slot. That covers save, revision, rename, a single-template Style Set update, and the library-wide Graphic Style Set operations that rewrite templates. A write that keeps a reference it already held is held to the same rule as one that introduces it. Anything else is refused with `409`.
+
+**The route asks first and names every refused slot.** `assertGraphicsTemplateReferencesSelectable` (`server/utils/graphicsTemplateReferences.ts`) asks the library once for the whole document and lists each slot with its reason: does not exist, content unavailable, retired, trashed, or the wrong kind. Its several-template form answers for a Graphic Style Set operation, naming each template a refusal belongs to.
+
+**The store asks again in the statement that commits.** The template row's `INSERT` or `UPDATE` carries `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`, the rule the Screen write already uses, with no reference allowed to be retired. The reference-index insert reads the same bound array under the same rule. So a template commits only with every reference resolving, and then every reference is indexed. The rule now lives in `server/modules/graphic-asset-reference-resolution.ts`, shared by the Screen and both template stores. A commit the rule refuses answers its own `409`, told apart from a stale `revision` by the revision still standing.
+
+**A Graphic Style Set operation is refused whole.** Deleting an entry or a whole Style Set already stamps one operation only if every participant is at the revision it read. That first statement now also requires every reference of every template it rewrites to resolve, and each rewrite restates its template's reference index under the same stamp. One template referencing an asset that is no longer selectable refuses the whole operation: the Style Set and every template stay as they were. That refusal is `GraphicStyleSetTemplateReferenceConflict`, told apart from a concurrent edit by every revision still standing. The route asks first and names each refused template; the commit-time refusal only happens when the catalogue moved after that, and its `409` names none.
+
+**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted.
+
+**Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
+
+### Why
+
+Both template stores checked only that a revision existed. An image Media Graphic Item could pin a font, and retired or unavailable content was accepted. The check ran only at the route, and the index insert silently skipped a revision it could not find, so a template could be stored with a reference the index never recorded. No template documents with old references exist yet, so there is nothing to keep a retained-reference exemption for.
+
+Without the Retire guard, the rule would turn retiring an asset into making every template that uses it unrevisable, a rename included.
+
+### Consequences
+
+- A template's references cannot become retired, trashed, pruned, or purged under it. Trash, Revision Pruning, and purge each prove no reference points at a revision, and Retire now proves no template does.
+- Unavailable content can still appear under a saved template. It refuses that template's writes, and any Style Set operation that rewrites it, until Exact-Byte Repair restores the bytes.
+- An Installed Graphics Template does not hold Retire back. It is never revised and cannot be deleted, so counting it would make its assets unretirable for good. Retiring one of its assets leaves it unplaceable until restored, as before.
+- A template already holding a retired reference (written before this rule, or by a direct database change) is refused on every write until the reference is replaced in that write or the asset restored.
+- A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
+- A Template Package Installation writes Installed Graphics Templates through the library's own store, which already maps every reference to one exact local revision.
+
+### Rejected alternatives
+
+- **Exempt a reference the template already held, as a Screen does.** The maintainer chose no distinction (#614): there are no older template documents to protect, and the exemption is what let wrong-kind and retired references through.
+- **Guard only the route.** A retirement between the route's question and the commit would land.
+- **Let Retire proceed and leave the template unrevisable.** That was this ADR's first version. The maintainer chose to refuse Retire instead (#614).
+- **Hold Retire back for Screens too.** It would change existing behaviour nothing here needs to change: a Screen keeps an unchanged retired reference resolving, so a retirement leaves it editable.

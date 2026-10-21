@@ -6,13 +6,15 @@ import {
 	updateBroadcastGraphicTemplateSchema,
 } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import {
+	BroadcastGraphicTemplateReferenceConflict,
 	BroadcastGraphicTemplateRevisionConflict,
 	broadcastGraphicTemplateService,
 } from '~~/server/services/broadcastGraphicTemplate';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertBroadcastGraphicTemplateReferencesExist } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertBroadcastGraphicTemplateReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertBroadcastGraphicTemplateStyleSetResolves } from '~~/server/utils/broadcastGraphicTemplateStyleSet';
 import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -38,10 +40,16 @@ export default defineEventHandler(async (event) => {
 		await readJsonPayloadLimited(event, 512 * 1024, 'Broadcast Graphic Template'),
 	);
 
-	if (body.document) {
-		await assertBroadcastGraphicTemplateReferencesExist(graphicsAssetLibraryForEvent(event), body.document);
+	// Every revision re-states every reference the stored document will hold, so a
+	// rename is held to the rule as much as a new composition is (#614). A rename
+	// built on a stale revision is left to the compare-and-swap, so the author hears
+	// about the revision they missed before anything in a document they never read.
+	const stored = body.document ? undefined : await broadcastGraphicTemplateService().findById(templateId);
+	const document = body.document ?? (stored?.revision === body.revision ? stored.document : undefined);
+	if (document)
+		await assertBroadcastGraphicTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
+	if (body.document)
 		await assertBroadcastGraphicTemplateStyleSetResolves(body.document);
-	}
 
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);
@@ -57,6 +65,8 @@ export default defineEventHandler(async (event) => {
 		return mapBroadcastGraphicTemplateToResponse(template);
 	}
 	catch (error) {
+		if (error instanceof BroadcastGraphicTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Broadcast Graphic Template');
 		// A stale revision is the author's problem to resolve, not an internal fault:
 		// they are told which revision the template is actually at so they can re-read
 		// it rather than retrying blindly.

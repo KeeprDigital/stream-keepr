@@ -3,6 +3,11 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { featureMatchLayoutTemplates } from '~~/server/db/schema';
+import {
+	boundGraphicAssetReferenceFacts,
+	jsonElementGraphicAssetRevisionResolution,
+	REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE,
+} from '~~/server/modules/graphic-asset-reference-resolution';
 import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -15,6 +20,11 @@ import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphi
  * revision the reference index does not know about is a template whose assets the
  * Graphics Asset Library believes nothing uses, and its retention is entitled to act
  * on that belief.
+ *
+ * The same reference rule holds at the commit (#614): every write requires every
+ * reference the stored layout holds to name an existing revision of an active
+ * Graphic Asset whose kind fits its slot, and a layout is stored with every one of
+ * its references indexed, or not at all.
  *
  * What differs is only what a layout is. There is no Graphic Style Set link to
  * denormalise, because nothing in a Feature Match Layout is a linked Style Set
@@ -48,6 +58,18 @@ export class FeatureMatchLayoutTemplateRevisionConflict extends Error {
 }
 
 /**
+ * A reference the layout holds stopped resolving before the write committed: its
+ * revision is gone, its asset was retired or trashed, or it is not the kind its
+ * slot needs.
+ */
+export class FeatureMatchLayoutTemplateReferenceConflict extends Error {
+	constructor() {
+		super('A Graphic Asset Revision this Feature Match Layout Template references can no longer be referenced');
+		this.name = 'FeatureMatchLayoutTemplateReferenceConflict';
+	}
+}
+
+/**
  * The exact revisions one layout references.
  *
  * Discovered by the same walk a Feature Match Overlay Screen's configuration is
@@ -76,17 +98,26 @@ export function featureMatchLayoutTemplateService() {
 	};
 
 	/**
-	 * The reference-index statements one template write publishes.
-	 *
-	 * A row is inserted only for a revision that exists, and deliberately without the
-	 * lifecycle and compatibility conditions the Screen write path applies: a template
-	 * pins revisions an author already selected, and a revision whose asset has since
-	 * been retired keeps resolving.
+	 * The reference facts one template write is refused on and indexes, as the one
+	 * JSON array both statements bind.
+	 * No reference may be retired: a template has no retained-reference path (#614).
+	 */
+	const boundReferenceFacts = (document: FeatureMatchLayoutConfig): string =>
+		boundGraphicAssetReferenceFacts(templateAssetReferences(document).map(item => ({
+			...item,
+			id: crypto.randomUUID(),
+			allowRetired: false,
+		})));
+
+	/**
+	 * The reference-index statements one template write publishes, read from the same
+	 * bound array and resolution rule as the row write's precondition.
 	 */
 	const referenceStatements = (
 		client: typeof db.$client,
 		id: string,
-		document: FeatureMatchLayoutConfig,
+		/** The bound JSON array `boundReferenceFacts` encoded. */
+		referenceFacts: string,
 		referenceVersion: string,
 		now: number,
 	): D1PreparedStatement[] => [
@@ -98,45 +129,43 @@ export function featureMatchLayoutTemplateService() {
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
 		`).bind(id, id, referenceVersion),
-		...templateAssetReferences(document).map(item => client.prepare(`
+		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
 				event_id, created_at, updated_at
 			)
-			SELECT ?, ?, ?, '${OWNER_KIND}', ?, ?, NULL, ?, ?
-			FROM graphic_asset_revisions revision
-			WHERE revision.id = ? AND revision.asset_id = ?
+			SELECT
+				json_extract(item.value, '$.id'),
+				json_extract(item.value, '$.assetId'),
+				json_extract(item.value, '$.revisionId'),
+				'${OWNER_KIND}', ?, json_extract(item.value, '$.ownerSlot'), NULL, ?, ?
+			FROM json_each(?) AS item
+			WHERE EXISTS (
+				SELECT 1
+				${jsonElementGraphicAssetRevisionResolution('item')}
+			)
 				AND EXISTS (
 					SELECT 1 FROM feature_match_layout_templates
 					WHERE id = ? AND graphic_asset_reference_version = ?
 				)
-		`).bind(
-			crypto.randomUUID(),
-			item.reference.assetId,
-			item.reference.revisionId,
-			id,
-			item.ownerSlot,
-			now,
-			now,
-			item.reference.revisionId,
-			item.reference.assetId,
-			id,
-			referenceVersion,
-		)),
+		`).bind(id, now, now, referenceFacts, id, referenceVersion),
 	];
 
 	const create = async (input: SaveFeatureMatchLayoutTemplate): Promise<DbFeatureMatchLayoutTemplate> => {
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
+		const referenceFacts = boundReferenceFacts(input.document);
 		const client = db.$client;
 
-		await client.batch([
+		const [inserted] = await client.batch([
 			client.prepare(`
 				INSERT INTO feature_match_layout_templates (
 					id, name, description, revision, document,
 					graphic_asset_reference_version, created_at, updated_at
 				)
-				VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+				SELECT ?, ?, ?, 1, ?, ?, ?, ?
+				WHERE 1 = 1
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				input.id,
 				input.name,
@@ -145,9 +174,13 @@ export function featureMatchLayoutTemplateService() {
 				referenceVersion,
 				now,
 				now,
+				referenceFacts,
 			),
-			...referenceStatements(client, input.id, input.document, referenceVersion, now),
+			...referenceStatements(client, input.id, referenceFacts, referenceVersion, now),
 		]);
+
+		if (inserted?.meta.changes !== 1)
+			throw new FeatureMatchLayoutTemplateReferenceConflict();
 
 		const created = await findById(input.id);
 		if (!created)
@@ -174,6 +207,7 @@ export function featureMatchLayoutTemplateService() {
 		const document = patch.document ?? existing.document;
 		const referenceVersion = crypto.randomUUID();
 		const now = Date.now();
+		const referenceFacts = boundReferenceFacts(document);
 		const client = db.$client;
 
 		const [updated] = await client.batch([
@@ -182,6 +216,7 @@ export function featureMatchLayoutTemplateService() {
 				SET name = ?, description = ?, document = ?, revision = revision + 1,
 					graphic_asset_reference_version = ?, updated_at = ?
 				WHERE id = ? AND revision = ?
+					${REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE}
 			`).bind(
 				patch.name ?? existing.name,
 				patch.description === undefined ? existing.description : patch.description,
@@ -190,17 +225,20 @@ export function featureMatchLayoutTemplateService() {
 				now,
 				id,
 				patch.revision,
+				referenceFacts,
 			),
-			...referenceStatements(client, id, document, referenceVersion, now),
+			...referenceStatements(client, id, referenceFacts, referenceVersion, now),
 		]);
 
-		// Nothing written means the precondition failed: the template is still there,
-		// at a revision this writer did not expect. Its reference rows are untouched,
-		// because every one of them is conditional on the stamp this write never made.
+		// Nothing written means a precondition failed, and its reference rows are
+		// untouched, because every one of them is conditional on the stamp this write
+		// never made. A revision that still stands means a reference refused it.
 		if (updated?.meta.changes !== 1) {
 			const current = await findById(id);
 			if (!current)
 				return undefined;
+			if (current.revision === patch.revision)
+				throw new FeatureMatchLayoutTemplateReferenceConflict();
 			throw new FeatureMatchLayoutTemplateRevisionConflict(current.revision);
 		}
 

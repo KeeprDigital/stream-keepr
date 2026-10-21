@@ -2,56 +2,23 @@ import type { H3Event } from 'h3';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
-import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
+import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
 import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
- * What a Feature Match Layout Template is allowed to reference.
- *
- * The same rule the Broadcast Graphic Template library applies, for the same
- * reason. A template may pin a revision whose asset has since been retired — a
- * pinned revision keeps resolving, and a design saved months ago is not a selection
- * being made now. What it must never store is a reference to a revision that does
- * not exist at all: nothing would resolve it, the reference index would record
- * nothing, and the library would list a healthy template that fails only when
- * somebody places it.
- *
- * `unavailable` is accepted: the revision exists and its content is temporarily
- * unresolvable, which is a condition of the object store rather than of the
- * reference.
+ * What a Feature Match Layout Template is allowed to reference: the graphics
+ * Template rule (#614), over the same walk a Feature Match Overlay Screen's layout
+ * is discovered by.
  */
-export async function assertFeatureMatchLayoutTemplateReferencesExist(
+export async function assertFeatureMatchLayoutTemplateReferencesSelectable(
 	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
 	document: FeatureMatchLayoutConfig,
 ): Promise<void> {
-	const references = featureMatchLayoutGraphicAssetReferences(document);
-	if (references.length === 0)
-		return;
-
-	// One catalogue round-trip for the whole document, statuses aligned by input
-	// index — the #374 batching, which a template save needs for the same reason a
-	// Screen config save did: its item stacks are the same order of size (#382).
-	const statuses = await library.inspectGraphicAssetRevisions({
-		references: references.map(item => ({
-			assetId: graphicAssetId(item.reference.assetId),
-			revisionId: graphicAssetRevisionId(item.reference.revisionId),
-		})),
-	});
-	// A hole in the batch answer fails closed, as the Screen write path's does: a
-	// reference the library did not answer for has not been shown to exist, and
-	// accepting it would store exactly the unresolvable reference this check
-	// refuses writes to prevent.
-	const missing = references
-		.filter((_, index) => statuses[index] === undefined || statuses[index]?.outcome === 'missing')
-		.map(item => item.ownerSlot);
-
-	if (missing.length > 0) {
-		throw createError({
-			statusCode: 409,
-			statusMessage: 'Conflict',
-			message: `Feature Match Layout Template references Graphic Asset Revisions that do not exist: ${missing.join(', ')}`,
-		});
-	}
+	await assertGraphicsTemplateReferencesSelectable(
+		library,
+		featureMatchLayoutGraphicAssetReferences(document),
+		'Feature Match Layout Template',
+	);
 }
 
 /**

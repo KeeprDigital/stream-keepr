@@ -412,8 +412,11 @@ async function runLifecycleAction(
 		);
 		if (outcome.outcome === 'in-use') {
 			usageByAssetId[asset.id] = outcome.usage;
-			lifecycleErrorByAssetId[asset.id]
-				= 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
+			lifecycleErrorByAssetId[asset.id] = action === 'retire'
+				? `This Graphic Asset cannot be retired while a saved template references it: ${
+					[...new Set(outcome.usage.map(item => item.owner.name ?? item.owner.id))].join(', ')
+				}.`
+				: 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
 			return;
 		}
 		replaceVisibleAsset(outcome.asset);

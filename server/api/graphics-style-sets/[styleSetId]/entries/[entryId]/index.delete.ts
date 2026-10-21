@@ -1,5 +1,6 @@
 import { mapGraphicStyleSetToResponse } from '~~/server/mappers/graphicStyleSet';
 import { planGraphicStyleEntryDeletion } from '~~/server/modules/graphic-style-set';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import {
 	deleteGraphicStyleSetEntrySchema,
 	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
@@ -7,6 +8,7 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { requireUserId } from '~~/server/utils/auth';
+import { assertStyleSetRewritesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -72,6 +74,10 @@ export default defineEventHandler(async (event) => {
 			data: { code: plan.code, ...('entryIds' in plan ? { entryIds: plan.entryIds } : {}) },
 		});
 	}
+
+	// Every template the deletion rewrites gets a new revision, held to the template
+	// reference rule (ADR-0034).
+	await assertStyleSetRewritesReferencesSelectable(graphicsAssetLibraryForEvent(event), plan.rewrites, linked);
 
 	try {
 		const updated = await service.deleteEntry(styleSetId, {

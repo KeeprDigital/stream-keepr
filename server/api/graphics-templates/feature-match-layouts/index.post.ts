@@ -1,10 +1,14 @@
 import { mapFeatureMatchLayoutTemplateToResponse } from '~~/server/mappers/featureMatchLayoutTemplate';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { saveFeatureMatchLayoutTemplateSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
-import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
+import {
+	FeatureMatchLayoutTemplateReferenceConflict,
+	featureMatchLayoutTemplateService,
+} from '~~/server/services/featureMatchLayoutTemplate';
 import { screenService } from '~~/server/services/screen';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertFeatureMatchLayoutTemplateReferencesExist } from '~~/server/utils/featureMatchLayoutTemplateWrites';
+import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
+import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
 import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
@@ -39,13 +43,17 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const document = structuredClone(stored.layout);
-	await assertFeatureMatchLayoutTemplateReferencesExist(graphicsAssetLibraryForEvent(event), document);
+	await assertFeatureMatchLayoutTemplateReferencesSelectable(graphicsAssetLibraryForEvent(event), document);
 
 	const template = await featureMatchLayoutTemplateService().create({
 		id: randomUuid(),
 		name: body.name ?? screen.name,
 		description: body.description ?? null,
 		document,
+	}).catch((error: unknown) => {
+		if (error instanceof FeatureMatchLayoutTemplateReferenceConflict)
+			throw graphicsTemplateReferenceConflict('Feature Match Layout Template');
+		throw error;
 	});
 
 	setResponseStatus(event, 201);

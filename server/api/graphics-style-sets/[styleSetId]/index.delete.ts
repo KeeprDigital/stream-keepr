@@ -1,4 +1,5 @@
 import { planGraphicStyleSetDeletion } from '~~/server/modules/graphic-style-set';
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import {
 	deleteGraphicStyleSetSchema,
 	GRAPHIC_STYLE_SET_COMMAND_BODY_BYTES,
@@ -6,6 +7,8 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { requireUserId } from '~~/server/utils/auth';
+import { assertStyleSetRewritesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
 /**
@@ -45,10 +48,15 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const linked = await service.linkedTemplates(styleSetId);
+	const rewrites = planGraphicStyleSetDeletion(linked);
+	// Every detached template gets a new revision, held to the template reference
+	// rule, and one refusal keeps the Style Set (ADR-0034).
+	await assertStyleSetRewritesReferencesSelectable(graphicsAssetLibraryForEvent(event), rewrites, linked);
+
 	const removed = await service.remove(styleSetId, {
 		draftRevision: body.draftRevision,
-		rewrites: planGraphicStyleSetDeletion(linked),
-	});
+		rewrites,
+	}).catch((error: unknown) => rethrowAsGraphicStyleSetConflict(error, 'The Graphic Style Set changed while it was being deleted'));
 
 	if (!removed) {
 		throw createError({

@@ -1,59 +1,43 @@
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphics-asset-library';
+import {
+	assertGraphicsTemplateReferencesSelectable,
+	assertGraphicsTemplatesReferencesSelectable,
+} from '~~/server/utils/graphicsTemplateReferences';
 import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
- * What a Broadcast Graphic Template is allowed to reference.
- *
- * The rule is narrower than the Screen write path's on purpose, and the difference
- * is the whole point: a Screen refuses a *newly chosen* revision that is not
- * selectable right now, while a template is allowed to pin a revision whose asset
- * has since been retired — a pinned revision keeps resolving, and a template is a
- * design an author saved months ago rather than a selection they are making now.
- *
- * What a template must never store is a reference to a revision that does not
- * exist at all. Nothing would resolve it, the reference index would record nothing
- * (its insert selects from the revisions table), and so no Missing Graphic Asset
- * Reference would be persisted anywhere — the library would show a healthy template
- * that fails only at placement, at which point the failure names a Graphic Item id
- * the author has never seen. Refusing the write is what keeps the library's own
- * listing honest.
- *
- * `unavailable` is deliberately accepted: the revision exists and its content is
- * temporarily unresolvable, which is a retryable condition of the object store
- * rather than a property of the reference.
+ * What a Broadcast Graphic Template is allowed to reference: the graphics Template
+ * rule (#614), over the same walk a Broadcast Graphics Screen's stack is discovered
+ * by, so a template and the copy placed from it agree on what they pin.
  */
-export async function assertBroadcastGraphicTemplateReferencesExist(
+export async function assertBroadcastGraphicTemplateReferencesSelectable(
 	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
 	document: BroadcastGraphicConfig,
 ): Promise<void> {
-	const references = broadcastGraphicsGraphicAssetReferences({ graphics: [document] });
-	if (references.length === 0)
-		return;
+	await assertGraphicsTemplateReferencesSelectable(
+		library,
+		broadcastGraphicsGraphicAssetReferences({ graphics: [document] }),
+		'Broadcast Graphic Template',
+	);
+}
 
-	// One catalogue round-trip for the whole document, statuses aligned by input
-	// index — the #374 batching, which a template save needs for the same reason a
-	// Screen config save did: its item stacks are the same order of size (#382).
-	const statuses = await library.inspectGraphicAssetRevisions({
-		references: references.map(item => ({
-			assetId: graphicAssetId(item.reference.assetId),
-			revisionId: graphicAssetRevisionId(item.reference.revisionId),
+/**
+ * The same rule over every Broadcast Graphic Template one Graphic Style Set
+ * operation rewrites, each refusal naming its template as the library lists it.
+ * One refusal refuses the whole operation (ADR-0034); the batch asks again.
+ */
+export async function assertStyleSetRewritesReferencesSelectable(
+	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
+	rewrites: ReadonlyArray<{ id: string; document: BroadcastGraphicConfig }>,
+	linked: ReadonlyArray<{ id: string; name: string }>,
+): Promise<void> {
+	await assertGraphicsTemplatesReferencesSelectable(
+		library,
+		rewrites.map(rewrite => ({
+			name: linked.find(template => template.id === rewrite.id)?.name ?? rewrite.id,
+			references: broadcastGraphicsGraphicAssetReferences({ graphics: [rewrite.document] }),
 		})),
-	});
-	// A hole in the batch answer fails closed, as the Screen write path's does: a
-	// reference the library did not answer for has not been shown to exist, and
-	// accepting it would store exactly the unresolvable reference this check
-	// refuses writes to prevent.
-	const missing = references
-		.filter((_, index) => statuses[index] === undefined || statuses[index]?.outcome === 'missing')
-		.map(item => item.ownerSlot);
-
-	if (missing.length > 0) {
-		throw createError({
-			statusCode: 409,
-			statusMessage: 'Conflict',
-			message: `Broadcast Graphic Template references Graphic Asset Revisions that do not exist: ${missing.join(', ')}`,
-		});
-	}
+		'Broadcast Graphic Template',
+	);
 }
