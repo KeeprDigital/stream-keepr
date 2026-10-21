@@ -135,9 +135,10 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 
 	const source = value as Record<string, unknown>;
 	if (source.type === 'player') {
-		await requirePlayersInEvent(eventId, [typeof source.playerId === 'number' ? source.playerId : null]);
+		await requirePlayersInEvent(eventId, [referencedId(source.playerId)]);
 	}
 	else if (source.type === 'broadcast') {
+		// A Broadcast Deck Source always names a list; one naming none is never selectable.
 		const listId = typeof source.broadcastDeckListId === 'number' ? source.broadcastDeckListId : 0;
 		if (!await broadcastDeckListService().sourceIsSelectable(listId, eventId))
 			throw new ScreenDeckSourceConflictError();

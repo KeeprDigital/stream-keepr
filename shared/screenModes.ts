@@ -48,12 +48,15 @@ export interface ScreenModeGraphicsHost {
  * id, or a whole Deck Source, which names a Player or a Broadcast Deck List.
  */
 interface EventReferenceValues {
-	round: number | null | undefined;
-	player: number | null | undefined;
-	playerList: number | null | undefined;
-	featureMatchSlot: number | null | undefined;
+	round: EntityIdField;
+	player: EntityIdField;
+	playerList: EntityIdField;
+	featureMatchSlot: EntityIdField;
 	deckSource: DeckSource | undefined;
 }
+
+/** A field naming one entity by id, or none. */
+type EntityIdField = number | null | undefined;
 
 export type EventReferenceKind = keyof EventReferenceValues;
 

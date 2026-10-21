@@ -1148,7 +1148,7 @@ Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/is
 
 **The Screen write path derives its Event checks from the declaration alone.** `validateScreenModeConfigReferences` checks each declared field of the written config by its kind, through one check per kind (`EVENT_REFERENCE_CHECKS`, exhaustive over the kinds). Every Screen write runs it: create, full update and a mode config PATCH. The per-mode switch it replaces is deleted.
 
-**The checks are unchanged.** An id outside the Event is refused with 404, as before. A Deck Source naming another Event's Player is refused with 404, and a Broadcast Deck List that is not selectable with 409 `SCREEN_DECK_SOURCE_CONFLICT`. The Deck Source guard triggers stay, as the proof at the commit.
+**The checks are unchanged.** An id outside the Event is refused with 404, as before. A Deck Source naming another Event's Player is refused with 404, and a Broadcast Deck List that is not selectable with 409 `SCREEN_DECK_SOURCE_CONFLICT`. The Deck Source guard triggers (`screens_deck_source_insert_guard` and `screens_deck_source_update_guard`) stay. They prove the Deck Source again inside the Screen write's own statement, so a Player or Broadcast Deck List that goes away between the check and the write still cannot be saved.
 
 The declarations are Card, Feature Match and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck `deckSource`, Standings `roundId` and `playerListId`, Metagame and Top Cards `playerListId`, and Player History `playerId`. Background, Top Cut and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
 
@@ -1159,7 +1159,7 @@ The switch had no exhaustiveness check, so a mode it forgot was skipped without 
 ### Consequences
 
 - Saving a Top Cards Screen whose Player List belongs to another Event is now refused, as for Metagame. Screens already storing one are not repaired; their next write of Top Cards config must name a Player List in the Event, or none.
-- `test/unit/server/modules/screenModeEventReferences.sqlite.test.ts` runs over every declared field, against real SQLite. It shows that create, full update and PATCH all refuse another Event's entity and accept the Screen's own. A new kind fails to compile there until it has samples. The test also lists the declarations, so adding or dropping one is a visible test change.
+- `test/unit/server/modules/screenModeEventReferences.sqlite.test.ts` runs over every declared field, against real SQLite. It shows that create, full update and PATCH all refuse another Event's entity and accept the Screen's own. A new kind fails to compile there until it has samples. The test also lists the declarations, so adding or dropping one is a visible test change. It also checks that a display reset keeps every declared Event Reference, which `MODE_RESET_PRESERVED_KEYS` still lists by hand, among other preserved keys.
 - The type-level check proves only that each declared field exists and holds an id or a Deck Source. Whether a new id field is an Event Reference is still the author's call, but they now have to make it on the definition.
 
 ### Rejected alternatives

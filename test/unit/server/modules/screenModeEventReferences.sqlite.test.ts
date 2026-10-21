@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import * as schema from '~~/server/db/schema';
 import { SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { getDisplayDefaultsForMode } from '~~/shared/types/screenConfig';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -149,6 +150,11 @@ describe('screen Mode Event References', () => {
 			'top-cards.playerListId: playerList',
 			'player-history.playerId: player',
 		]);
+	});
+
+	it('keeps every Event Reference through a display reset', () => {
+		const reset = declaredFields.filter(({ mode, field }) => field in getDisplayDefaultsForMode(mode));
+		expect(reset.map(({ declared }) => declared)).toEqual([]);
 	});
 
 	it('refuses saving a Top Cards Screen whose Player List belongs to another Event, as for Metagame', async () => {
