@@ -459,10 +459,41 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 	modeConfigs: ModeConfigsMap | null | undefined,
 	mode: T,
 ): ModeConfigTypeMap[T] {
+	const stored = modeConfigs?.[mode];
 	return {
 		...getDefaultConfigForMode(mode),
-		...modeConfigs?.[mode],
+		...(stored && clampStoredModeConfig(mode, stored)),
 	};
+}
+
+/** One mode's stored fragment read within its contract's bounds (`clampStored`, #498). */
+function clampStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
+	return MODE_CONFIG_CONTRACTS[mode].clampStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
+}
+
+/**
+ * Stored mode configurations as every reader reads them: each mode's fragment
+ * with every number outside its contract's bounds pulled to the nearest bound.
+ * A bound tightened after a Screen stored a value outside it reads as that bound,
+ * never as the default, and the read is never refused (#498). The server applies
+ * it to every Screen it sends a client, so an editor writing a value back sends
+ * one in range; writes outside the bounds are still refused. A map already in
+ * bounds is returned as it is.
+ */
+export function clampStoredModeConfigs<T extends ModeConfigsMap | null | undefined>(modeConfigs: T): T {
+	if (!modeConfigs)
+		return modeConfigs;
+	let clamped: Record<string, unknown> | undefined;
+	for (const [mode, stored] of Object.entries(modeConfigs)) {
+		if (!stored || !(mode in MODE_CONFIG_CONTRACTS))
+			continue;
+		const next = clampStoredModeConfig(mode as ScreenMode, stored);
+		if (next !== stored) {
+			clamped ??= { ...modeConfigs };
+			clamped[mode] = next;
+		}
+	}
+	return (clamped ?? modeConfigs) as T;
 }
 
 /**
