@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 const playerStore = usePlayerStore();
-const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
+const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'player-history',
@@ -34,18 +34,17 @@ const columnLabels: Record<PlayerHistoryColumnConfig['key'], string> = {
 	outcome: 'Outcome',
 };
 
-const totalPages = computed(() =>
-	Math.max(1, Math.ceil(Math.max(estimatedRowCount.value, 1) / config.value.rowsPerPage)),
-);
-
 // The live Page Rotation projection and the anchor writes an operator makes.
+// Every edit below goes through its `updateConfig`, which restarts the
+// rotation from page 1 when the edit changes the rotation's shape.
 const {
 	currentPage,
+	totalPages,
+	updateConfig,
 	setAutoPageEnabled,
-	updateRotationShape,
 	adminNextPage,
 	adminPrevPage,
-} = useRotationConfigWrites({ config, totalPages, updateConfig });
+} = useRotationConfigWrites({ mode: 'player-history', config, rowCount: estimatedRowCount, saveConfig });
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['players']);
@@ -138,7 +137,7 @@ watch(() => config.value.playerId, async (playerId) => {
 					:min="1"
 					:max="100"
 					class="w-32"
-					@update:model-value="updateRotationShape({ rowsPerPage: Number($event), currentPage: 1 })"
+					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
 				/>
 			</UFormField>
 
@@ -166,7 +165,7 @@ watch(() => config.value.playerId, async (playerId) => {
 					:min="3"
 					:max="60"
 					class="w-32"
-					@update:model-value="updateRotationShape({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
 				/>
 			</UFormField>
 

@@ -55,3 +55,58 @@ export function msUntilNextRotationFlip(inputs: PageRotationInputs): number | nu
 		return -elapsed + inputs.pageDurationMs;
 	return inputs.pageDurationMs - (elapsed % inputs.pageDurationMs);
 }
+
+/**
+ * What a paginated Screen Mode Definition declares about its Page Rotation
+ * (`pageRotation` in `shared/screenModes.ts`): the config field holding how
+ * many rows a page holds. The rotation's own fields are the shared
+ * `pageRotationShape`, which every declaring mode's config carries.
+ */
+export interface PageRotationDeclaration {
+	readonly pageSize: string;
+}
+
+/**
+ * How many rows a page holds in a paginated mode's config, read from the field
+ * its declaration names. The Screen Mode Definitions fail to compile unless
+ * that field is a number.
+ */
+export function rotationPageSize(declaration: PageRotationDeclaration, config: object): number {
+	return (config as Record<string, unknown>)[declaration.pageSize] as number;
+}
+
+/**
+ * The Rotation Anchor that restarts a Page Rotation from page 1 now: enabling
+ * auto-page, or an edit changing the rotation's shape while it runs. Page 1's
+ * anchor is the instant itself, whatever the page duration.
+ */
+export function restartedRotationAnchor(now: number): number {
+	return rotationAnchorForPage({ page: 1, pageDurationMs: 0, now });
+}
+
+/**
+ * The write an operator edit of a paginated mode's config makes. An edit
+ * changing the rotation's shape, its page size or page duration, restarts it
+ * from page 1: while auto-page is on, the Rotation Anchor moves to now. A page
+ * size edit also resets the manually selected page to 1, since every page
+ * then holds different rows. Any other edit is written as it is; nothing else
+ * re-anchors (ADR-0009).
+ *
+ * The one place that decides which edits are shape changes, for every mode
+ * declaring a Page Rotation.
+ */
+export function pageRotationEdit<Patch extends object>(
+	declaration: PageRotationDeclaration,
+	rotation: { autoPageEnabled: boolean },
+	patch: Patch,
+	now: number,
+): Patch & { currentPage?: number; rotationAnchor?: number } {
+	const resizesPages = declaration.pageSize in patch;
+	if (!resizesPages && !('autoPageIntervalMs' in patch))
+		return patch;
+	return {
+		...patch,
+		...(resizesPages ? { currentPage: 1 } : {}),
+		...(rotation.autoPageEnabled ? { rotationAnchor: restartedRotationAnchor(now) } : {}),
+	};
+}

@@ -5,15 +5,14 @@ import type {
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
-import { useScreenModePagination } from '~/modules/screen-mode/pagination';
+import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 type MetagameDisplayRow = ArchetypeBreakdownResponse['entries'][number] | CardBreakdownResponse['entries'][number];
 
 export function useMetagameModeData() {
-	const { screen, eventId, interactive } = useScreenContext();
+	const { eventId } = useScreenContext();
 	const config = useScreenModeConfig('metagame');
 
-	const screenStore = useScreenStore();
 	const outputReads = useScreenOutputReads();
 
 	// The server derives the breakdown from the saved configuration (#604), so
@@ -104,34 +103,7 @@ export function useMetagameModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = useScreenModePagination({
-		rows: displayRows,
-		pageSize: computed(() => config.value.pageSize),
-		currentPage: computed(() => config.value.currentPage ?? 1),
-		autoPageEnabled: computed(() => config.value.autoPageEnabled),
-		autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
-		rotationAnchor: computed(() => config.value.rotationAnchor),
-		persistPage: (page) => {
-			if (interactive.value && screen.value) {
-				void Promise.resolve(screenStore.updateModeConfig(
-					eventId.value!,
-					screen.value.id,
-					'metagame',
-					{ currentPage: page },
-				)).catch(() => {});
-			}
-		},
-		persistRotationAnchor: (anchor) => {
-			if (interactive.value && screen.value) {
-				void Promise.resolve(screenStore.updateModeConfig(
-					eventId.value!,
-					screen.value.id,
-					'metagame',
-					{ rotationAnchor: anchor },
-				)).catch(() => {});
-			}
-		},
-	});
+	} = usePaginatedScreenMode({ mode: 'metagame', config, rows: displayRows });
 
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);

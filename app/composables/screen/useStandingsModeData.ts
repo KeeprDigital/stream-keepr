@@ -4,7 +4,7 @@ import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
-import { useScreenModePagination } from '~/modules/screen-mode/pagination';
+import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
  * The Event Data Standings are read from: the roster, the Round they are fixed
@@ -33,10 +33,9 @@ function standingsDependencies(watchlistId: () => number | null): ScreenModeDepe
 }
 
 export function useStandingsModeData() {
-	const { screen, eventId, interactive } = useScreenContext();
+	const { eventId } = useScreenContext();
 	const config = useScreenModeConfig('standings');
 
-	const screenStore = useScreenStore();
 	const outputReads = useScreenOutputReads();
 	const eventStore = useEventStore();
 
@@ -148,34 +147,7 @@ export function useStandingsModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = useScreenModePagination({
-		rows: displayRows,
-		pageSize: computed(() => config.value.rowsPerPage),
-		currentPage: computed(() => config.value.currentPage ?? 1),
-		autoPageEnabled: computed(() => config.value.autoPageEnabled),
-		autoPageIntervalMs: computed(() => config.value.autoPageIntervalMs),
-		rotationAnchor: computed(() => config.value.rotationAnchor),
-		persistPage: (page) => {
-			if (interactive.value && screen.value) {
-				void Promise.resolve(screenStore.updateModeConfig(
-					eventId.value!,
-					screen.value.id,
-					'standings',
-					{ currentPage: page },
-				)).catch(() => {});
-			}
-		},
-		persistRotationAnchor: (anchor) => {
-			if (interactive.value && screen.value) {
-				void Promise.resolve(screenStore.updateModeConfig(
-					eventId.value!,
-					screen.value.id,
-					'standings',
-					{ rotationAnchor: anchor },
-				)).catch(() => {});
-			}
-		},
-	});
+	} = usePaginatedScreenMode({ mode: 'standings', config, rows: displayRows });
 
 	// ── Header Text Computation ──
 	function computeHeaderText(): string {

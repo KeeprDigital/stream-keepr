@@ -211,7 +211,7 @@ export function isControlScreenMode(mode: ScreenMode): boolean {
 	return getScreenModeDisplayType(mode) === 'control';
 }
 
-export { useProjectedRotationPage, useScreenModePagination } from './pagination';
+export { usePaginatedScreenMode, useProjectedRotationPage, useScreenModePagination } from './pagination';
 export type { ProjectedRotationPageOptions, ScreenModePaginationOptions } from './pagination';
 export { getScreenModeSelectOptions };
 export type {

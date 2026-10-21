@@ -211,7 +211,7 @@ Accepted · 2026-08-12 · [#312](https://github.com/KeeprDigital/stream-keepr/is
 
 The current page of a paginated Screen Mode (standings, metagame, player history) is a **pure projection of (Rotation Anchor, page duration, page count, server time)**, computed identically by every rendering — Screen Output, Program monitor, operator settings — from one shared function in `shared/modules/page-rotation/`. Nothing writes as the rotation runs; a rendering re-evaluates exactly at each flip boundary.
 
-- **Only operator surfaces write `rotationAnchor`**, on three occasions: enabling auto-page; an edit that changes the rotation's shape (page duration, page size); and a manual page selection while rotating, written so the chosen page is current for one full duration. It rides the existing config write and `screen:updated` announcement.
+- **Only operator surfaces write `rotationAnchor`**, on three occasions: enabling auto-page; an edit that changes the rotation's shape (page duration, page size; decided once by `pageRotationEdit`, ADR-0039); and a manual page selection while rotating, written so the chosen page is current for one full duration. It rides the existing config write and `screen:updated` announcement.
 - **A missing anchor projects from epoch zero**, still deterministic, so older configs rotate without migration.
 - **An unsynced rendering shows the first page statically** — never project on an unknown clock. With auto-page off, the persisted `currentPage` is the manually selected page.
 
@@ -1167,3 +1167,35 @@ The switch had no exhaustiveness check, so a mode it forgot was skipped without 
 - **Declare the references on the config contract** (as `authoredStacks` is). The key check would come for free. But what a field names in the Event is a capability of the mode, not part of its config's shape or defaults (ADR-0037). The Background Layer stack is declared on the definition for the same reason.
 - **Infer references from field names** (`*Id`, `deckSource`). Nothing would have to be declared, but naming would become load-bearing. `presetId` and Graphic Asset ids would match the pattern without being Event References.
 - **Keep the switch and add a `never` default.** That would catch a new mode but not a forgotten field. The ticket asks for the switch to go, not to be wrapped.
+
+## ADR-0039: A paginated Screen Mode Definition declares its Page Rotation, and one rule decides its shape changes
+
+Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/issues/586)
+
+### Decision
+
+**A paginated Screen Mode Definition declares its Page Rotation** (`pageRotation` in `shared/screenModes.ts`, next to `eventReferences`), naming the config field holding how many rows a page holds: Standings `rowsPerPage`, Metagame `pageSize` and Player History `rowsPerPage`. A mode that is not paginated leaves it out. The declaration is optional, as `backgroundLayers` is, because the compile check runs both ways: a declaring mode whose config lacks the shared Page Rotation fields (`pageRotationShape`) or a numeric page size field fails to compile, and so does a mode whose config carries any rotation field without declaring one (`PAGE_ROTATIONS_FIT_THEIR_CONFIG`). So a mode cannot rotate without declaring it, and the other eight need not write "not paginated".
+
+**The rotation fields and their validation are written once**, in `shared/screenModeConfigs/subShapes.ts`: `pageRotationShape` with `DEFAULT_PAGE_ROTATION`, and `pageRotationPageSize` for the page size field each mode names itself. Each paginated contract spreads them (ADR-0037), so the server's write forms validate them identically. The type an operator surface reads them through (`PageRotationConfig`) is inferred from that shape, replacing the hand-written copy.
+
+**One rule decides which edits change the rotation's shape** (`pageRotationEdit` in `shared/modules/page-rotation`): an edit of the declared page size field or of `autoPageIntervalMs`. While auto-page is on, such an edit restarts the rotation from page 1 by writing a Rotation Anchor of now. A page size edit also writes `currentPage: 1`, whether or not auto-page is on, because every page then holds different rows. Any other edit is written as it is, so nothing else re-anchors (ADR-0009).
+
+**Every consumer reads the declaration.** A paginated mode's settings editor writes every edit through `useRotationConfigWrites({ mode, config, rowCount, saveConfig })`, whose `updateConfig` applies the rule and whose `totalPages` counts pages by the declared field; its `updateRotationShape`, which each editor had to remember to call, is deleted. A paginated mode's rendering pages through `usePaginatedScreenMode({ mode, config, rows })`, which reads the page size from the declared field and writes a page selection or Rotation Anchor only from an interactive surface. The three hand-wired copies of that paging and its writes are deleted. Screen Outputs still never write the Rotation Anchor.
+
+### Why
+
+Each paginated editor decided the rule separately, and the copies disagreed: a Standings page size edit re-anchored but left the manually selected page alone, while Metagame and Player History reset it to 1. The rotation's paging was also wired by hand into three renderings and its fields into a fourth type, each naming the page size field anew.
+
+### Consequences
+
+- A Standings page size edit now resets the manually selected page to 1, as Metagame's and Player History's did. Nothing else changes: a page duration edit re-anchors while rotating and leaves the manually selected page, on every paginated mode, as before.
+- Edits that change the row set rather than the rotation's shape, such as a Metagame scope or a Standings Round, still reset the manually selected page in each editor where they did, and never re-anchor.
+- A display reset is not an operator edit through the rule. It turns auto-page off and restores the default page size and duration, and leaves `currentPage` and `rotationAnchor` stored, as before; neither is a display default nor a preserved key.
+- `test/unit/shared/screenModePageRotation.test.ts` lists the declarations, checks that every other mode carries no rotation field, and runs over every declaring mode from `SCREEN_MODES`: it carries the shared fields, validation and defaults, a page size or page duration edit re-anchors only while auto-page is on, and a page size edit resets the manually selected page to 1. `test/nuxt/modules/rotationConfigWrites.test.ts` shows a settings editor's `updateConfig` applies the rule.
+
+### Rejected alternatives
+
+- **A required declaration, `pageRotation: null` on modes that do not rotate.** It makes "not paginated" explicit, as `eventReferences: {}` does, but the reverse compile check already refuses a mode carrying rotation fields without the declaration, so the explicit answer would add eight lines and no check. An Event Reference cannot be detected that way: whether an id field names something in the Event is a judgement (ADR-0038).
+- **Declare the rotation on the config contract and spread its fields from the declaration.** Pagination is a capability of the mode, not part of its config's shape (ADR-0038), and the contract already carries the shared fields.
+- **Rename every page size field to one name, so the declaration needs no field.** It would need a data migration of stored Metagame configs for a name.
+- **Apply the rule in `useModeConfigUpdate`.** Every mode's editor and the display reset would pass through Page Rotation code, and the reset would change behaviour; the rotation writes are already the paginated editor's write path.
