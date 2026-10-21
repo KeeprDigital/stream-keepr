@@ -318,7 +318,9 @@ describe('featureMatchService', () => {
 		 * parameter limit; the real limit is proven in featureMatchSlotCountD1.test.ts.
 		 */
 		function insertsCommitAsOneBatch(created: ReturnType<typeof createMockFeatureMatch>[]) {
-			Object.assign(getChain('insert'), { toSQL: () => ({ params: [] }) });
+			const insert = getChain('insert');
+			Object.assign(insert, { toSQL: () => ({ params: [] }) });
+			insert.returning.mockReturnValue(insert);
 			mockDb.batch.mockResolvedValueOnce([created]);
 		}
 

@@ -70,14 +70,14 @@ export function eventWriteModule() {
 		}
 
 		if (input.numFeatureMatches !== undefined) {
-			const slots = featureMatchService();
+			const slotService = featureMatchService();
 			try {
-				await slots.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
+				await slotService.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
 			}
 			catch (error) {
 				// The count was written first. A Slot change that failed leaves the
 				// Slots it started with (#702), so set the count back to describe them.
-				await runCompensation(error, () => slots.reconcileEventSlotCount(eventId, updatedEvent.numFeatureMatches));
+				await runCompensation(error, () => slotService.reconcileEventSlotCount(eventId, updatedEvent.numFeatureMatches));
 				throw error;
 			}
 		}

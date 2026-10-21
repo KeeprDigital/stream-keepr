@@ -402,8 +402,8 @@ export function featureMatchService() {
 
 			// One D1 batch, so the new Slots are inserted all together or not at
 			// all, in statements each within D1's bound-parameter limit (#702).
-			const [firstInsert, ...restInserts] = chunkRowsWithinParameterBudget(newMatches, rows => db.insert(featureMatches).values(rows))
-				.map(rows => db.insert(featureMatches).values(rows).returning());
+			const insertSlots = (rows: typeof newMatches) => db.insert(featureMatches).values(rows).returning();
+			const [firstInsert, ...restInserts] = chunkRowsWithinParameterBudget(newMatches, insertSlots).map(insertSlots);
 			const createdMatches = firstInsert ? (await db.batch([firstInsert, ...restInserts])).flat() : [];
 			created.push(...createdMatches);
 
