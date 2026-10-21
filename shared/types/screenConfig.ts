@@ -1,12 +1,14 @@
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { MetagameModeConfig } from '../screenModeConfigs/metagame';
 import type { BackgroundLayersCapableMode } from '../screenModes';
 import type { CardTypeBucket } from '../utils/metagame';
-import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameScope, MetagameSortBy, MetagameViewMode, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
+import type { BoardSelection, CardAnimationSpeed, DeckBoardView, DeckCardSize, HorizontalAlign, MetagameCardSortBy, MetagameScope, PlayerHistoryColumnKey, PlayerSide, QuantityPosition, QuantitySize, RevealOrder, RevealTrigger, ScreenColorMode, ScreenMode, SideboardPlacement, StandingsColumnKey, StandingsViewMode, TopCardsStat, VerticalAlign } from './enums';
 import type { MediaFit } from './graphicItem';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 
 /**
  * A Screen's media background, a Feature Match Overlay Frame's animation, and a
@@ -114,16 +116,6 @@ export interface CardModeConfig extends CardDisplayConfig {
 
 export interface StandingsColumnConfig {
 	key: StandingsColumnKey;
-	visible: boolean;
-}
-
-export interface MetagameArchetypeColumnConfig {
-	key: MetagameArchetypeColumnKey;
-	visible: boolean;
-}
-
-export interface MetagameCardColumnConfig {
-	key: MetagameCardColumnKey;
 	visible: boolean;
 }
 
@@ -439,6 +431,13 @@ export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as Fe
  */
 export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 
+/**
+ * The Metagame config is inferred from its config contract (#587), which also
+ * holds its defaults. Re-exported here because this is where every other mode's
+ * config type lives.
+ */
+export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
+
 export type FeatureMatchOverlayPlayerLifeAnimation = 'none' | 'fade' | 'pop' | 'slide' | 'glow';
 
 export interface FeatureMatchOverlayFrameConfig extends FeatureMatchOverlayBorderSides {
@@ -544,46 +543,6 @@ export interface BroadcastGraphicsModeConfig {
 	 * and what keeps an Overlay Output transparent behind its graphics.
 	 */
 	background?: BroadcastGraphicsBackgroundConfig;
-}
-
-export interface MetagameModeConfig {
-
-	// View selection
-	viewMode: MetagameViewMode;
-
-	// Scoping
-	scope: MetagameScope;
-	topN: number;
-	minPoints: number;
-	playerListId?: number;
-	archetypeFilter?: string;
-
-	// Sorting
-	sortBy: MetagameSortBy;
-	cardSortBy: MetagameCardSortBy;
-
-	// Column configuration (ordered arrays — order = display order)
-	archetypeColumns: MetagameArchetypeColumnConfig[];
-	cardColumns: MetagameCardColumnConfig[];
-
-	// Display limits
-	limit: number;
-	archetypeLimit?: number | null;
-	maxTableWidth?: number | null;
-
-	// Pagination
-	pageSize: number;
-	autoPageEnabled: boolean;
-	autoPageIntervalMs: number;
-	currentPage?: number;
-	rotationAnchor?: number;
-
-	// Visibility toggles
-	showHeader: boolean;
-	headerText?: string;
-
-	// Animation
-	animateEntries: boolean;
 }
 
 /**
@@ -805,45 +764,6 @@ export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {
 	graphics: [],
 };
 
-export const DEFAULT_METAGAME_CONFIG: MetagameModeConfig = {
-	viewMode: 'archetype',
-	scope: 'all',
-	topN: 8,
-	minPoints: 9,
-	playerListId: undefined,
-	archetypeFilter: undefined,
-	sortBy: 'metaShare',
-	cardSortBy: 'inclusionRate',
-	archetypeColumns: [
-		{ key: 'archetype', visible: true },
-		{ key: 'count', visible: true },
-		{ key: 'metaShare', visible: true },
-		{ key: 'winRate', visible: true },
-		{ key: 'avgPlace', visible: false },
-		{ key: 'colors', visible: false },
-	],
-	cardColumns: [
-		{ key: 'card', visible: true },
-		{ key: 'manaCost', visible: true },
-		{ key: 'type', visible: true },
-		{ key: 'inclusionRate', visible: true },
-		{ key: 'avgCopies', visible: true },
-		{ key: 'totalCopies', visible: true },
-		{ key: 'deckCount', visible: true },
-		{ key: 'mainboardCount', visible: true },
-		{ key: 'sideboardCount', visible: true },
-	],
-	limit: 50,
-	archetypeLimit: null,
-	maxTableWidth: undefined,
-	pageSize: 10,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
-	showHeader: true,
-	headerText: undefined,
-	animateEntries: true,
-};
-
 export const DEFAULT_TOP_CARDS_CONFIG: TopCardsModeConfig = {
 	scope: 'all',
 	topN: 8,
@@ -881,7 +801,7 @@ export const DEFAULT_MODE_CONFIGS = {
 	'feature-match': DEFAULT_FEATURE_MATCH_CONFIG,
 	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
-	'metagame': DEFAULT_METAGAME_CONFIG,
+	'metagame': metagameModeConfigContract.defaults,
 	'top-cards': DEFAULT_TOP_CARDS_CONFIG,
 	'player-history': DEFAULT_PLAYER_HISTORY_CONFIG,
 } satisfies { [K in ScreenMode]: ScreenModeConfig };

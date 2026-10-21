@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, StoredModeConfigs } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	backgroundModeConfigSchema,
@@ -10,6 +10,7 @@ import {
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
+	modeConfigsMapSchema,
 	playerHistoryModeConfigSchema,
 	screenConfigSchema,
 	screenParamsSchema,
@@ -19,7 +20,7 @@ import {
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
 // ──────────────── createScreenSchema ────────────────
@@ -932,17 +933,17 @@ describe('metagameModeConfigSchema', () => {
 	};
 
 	it('accepts valid metagame config with column arrays', () => {
-		const result = metagameModeConfigSchema.safeParse(validConfig);
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 9 });
 		expect(result.success).toBe(true);
 	});
 
-	it('defaults minPoints and archetypeLimit for stored configs predating them', () => {
-		const result = metagameModeConfigSchema.safeParse(validConfig);
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.minPoints).toBe(9);
-			expect(result.data.archetypeLimit).toBeNull();
-		}
+	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
+		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
+
+		const resolved = resolveScreenModeConfig({ metagame: validConfig } as StoredModeConfigs, 'metagame');
+
+		expect(resolved.minPoints).toBe(9);
+		expect(resolved.archetypeLimit).toBeNull();
 	});
 
 	it('accepts the minPoints scope with explicit minPoints', () => {

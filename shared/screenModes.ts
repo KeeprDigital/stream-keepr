@@ -1,4 +1,6 @@
+import type { ScreenModeConfigContract } from './screenModeConfigs/contract';
 import type { DisplayType, ScreenMode } from './types/enums';
+import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { SCREEN_MODE_VALUES } from './types/enums';
 import {
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
@@ -53,6 +55,13 @@ export interface ScreenModeDefinition {
 	 * Overlay/Key Outputs, so a host-painted layer behind them would break keying.
 	 */
 	backgroundLayers?: true;
+	/**
+	 * The mode's config contract: the one source of its config's shape, type, and
+	 * defaults, from which its write forms are derived (#587). Absent while the mode
+	 * is still on the old form, a hand-written type beside a hand-written schema;
+	 * #588 and #589 move every mode onto one.
+	 */
+	config?: ScreenModeConfigContract<any>;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -107,7 +116,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			useScreenAlignment: false,
 		},
 	},
-	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true },
+	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract },
 	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
@@ -131,6 +140,18 @@ export function screenModeSupportsBackgroundLayers(mode: ScreenMode): mode is Ba
 /** The same modes as a list, in Screen Mode order, derived from the declaration. */
 export const BACKGROUND_LAYERS_CAPABLE_MODES: readonly BackgroundLayersCapableMode[]
 	= SCREEN_MODE_VALUES.filter(screenModeSupportsBackgroundLayers);
+
+/** The Screen Modes whose definition declares a config contract. */
+export type ConfigContractMode = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { config: ScreenModeConfigContract<any> } ? M : never;
+}[ScreenMode];
+
+/** A mode's config contract, or `undefined` while the mode is still on the old form. */
+export function screenModeConfigContract<M extends ConfigContractMode>(mode: M): typeof SCREEN_MODE_DEFINITIONS[M]['config'];
+export function screenModeConfigContract(mode: ScreenMode): ScreenModeConfigContract | undefined;
+export function screenModeConfigContract(mode: ScreenMode): ScreenModeConfigContract | undefined {
+	return SCREEN_MODES[mode].config;
+}
 
 /** Derive which generic Container controls apply to a Screen Mode. */
 export function getContainerControls(mode: ScreenMode): Required<ScreenModeContainerControls> {
