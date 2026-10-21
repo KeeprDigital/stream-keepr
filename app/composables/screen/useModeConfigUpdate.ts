@@ -53,7 +53,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	 * restarts from page 1.
 	 */
 	function resetConfig() {
-		updateConfig(getDisplayResetForMode(mode, getServerTime()) as Partial<ConfigType>);
+		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as Partial<ConfigType>);
 	}
 
 	return { config, saving, saveState, saveError, updateConfig, resetConfig, retry };

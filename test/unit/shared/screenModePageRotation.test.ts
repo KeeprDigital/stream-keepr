@@ -39,7 +39,7 @@ describe('screen Mode Page Rotation', () => {
 		const undeclared = SCREEN_MODE_VALUES.filter(mode => !SCREEN_MODES[mode].pageRotation);
 		for (const mode of undeclared) {
 			for (const field of Object.keys(pageRotationShape))
-				expect(getDisplayResetForMode(mode, NOW), `${mode}.${field}`).not.toHaveProperty(field);
+				expect(getDisplayResetForMode(mode, {}, NOW), `${mode}.${field}`).not.toHaveProperty(field);
 		}
 	});
 
@@ -75,7 +75,9 @@ describe('screen Mode Page Rotation', () => {
 		});
 
 		it('a display reset turns auto-page off, restores the default page size and returns to page 1', () => {
-			const reset = getDisplayResetForMode(mode, NOW);
+			// A rotation running from a manual selection of page 3.
+			const running = { autoPageEnabled: true, currentPage: 3, rotationAnchor: 123 };
+			const reset = getDisplayResetForMode(mode, running as Partial<typeof contract.defaults>, NOW);
 			expect(reset).toMatchObject({
 				autoPageEnabled: false,
 				autoPageIntervalMs: 10_000,

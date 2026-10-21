@@ -60,7 +60,8 @@ export interface SharedScreenModeDefinition<M extends ScreenMode = ScreenMode> {
 	displayType: DisplayType;
 	host: ScreenModeHostDefinition;
 	getDefaultConfig: () => ModeConfigTypeMap[M];
-	getDisplayDefaults: () => Partial<ModeConfigTypeMap[M]>;
+	/** The write a display reset makes (`getDisplayResetForMode`). */
+	getDisplayReset: (current: Partial<ModeConfigTypeMap[M]>, now: number) => Partial<ModeConfigTypeMap[M]>;
 	configurationPolicy: ScreenModeConfigurationPolicy;
 }
 
@@ -184,7 +185,7 @@ export function getScreenModeDefinition<M extends ScreenMode>(mode: M): SharedSc
 		...sharedDefinition,
 		host: getScreenModeHostDefinition(mode),
 		getDefaultConfig: () => getDefaultConfigForMode(mode),
-		getDisplayDefaults: () => getDisplayDefaultsForMode(mode),
+		getDisplayReset: (current, now) => getDisplayResetForMode(mode, current, now),
 		configurationPolicy: getScreenModeConfigurationPolicy(mode),
 	};
 }
@@ -196,15 +197,21 @@ export function getScreenModeDefinition<M extends ScreenMode>(mode: M): SharedSc
  * so the reset goes through the one rule for those (`pageRotationEdit`,
  * ADR-0039): it restarts the rotation from page 1, with a Rotation Anchor of
  * now only if auto-page is on once reset.
+ *
+ * `current` is the mode's config as the reset finds it, which decides
+ * auto-page should a reset ever preserve it.
  */
-export function getDisplayResetForMode<M extends ScreenMode>(mode: M, now: number): Partial<ModeConfigTypeMap[M]> {
+export function getDisplayResetForMode<M extends ScreenMode>(
+	mode: M,
+	current: Partial<ModeConfigTypeMap[M]>,
+	now: number,
+): Partial<ModeConfigTypeMap[M]> {
 	const display = getDisplayDefaultsForMode(mode);
 	const declaration = SCREEN_MODES[mode].pageRotation;
 	if (!declaration)
 		return display;
-	// Auto-page as the reset leaves it: a declaring mode's display defaults carry it.
-	const autoPageEnabled = (display as Partial<Record<keyof PageRotationConfig, unknown>>).autoPageEnabled === true;
-	return pageRotationEdit(declaration, { autoPageEnabled }, display, now);
+	const reset: Partial<Record<keyof PageRotationConfig, unknown>> = { ...current, ...display };
+	return pageRotationEdit(declaration, { autoPageEnabled: reset.autoPageEnabled === true }, display, now);
 }
 
 export function getScreenModeSelectOptions(): ScreenModeSelectOption[] {
