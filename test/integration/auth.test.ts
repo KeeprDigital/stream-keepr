@@ -54,7 +54,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const EXPIRES_IN_DAYS = AUTH_SESSION_EXPIRES_IN_SECONDS * 1000 / DAY_MS;
 const UPDATE_AGE_DAYS = AUTH_SESSION_UPDATE_AGE_SECONDS * 1000 / DAY_MS;
 
-/** The session cookie, under either name a spawned server's scheme gives it (see `client.ts`). */
+/** The session cookie, under either name a server can give it (see `client.ts`). */
 const SESSION_TOKEN_COOKIE = /^(?:__Secure-)?better-auth\.session_token=/;
 
 /** The raw Session token a signed `session_token` cookie carries, as D1 keys it. */
@@ -133,6 +133,24 @@ describe('auth foundation', () => {
 		// browser: the old token answers nothing even when presented again.
 		const afterSignOut = await getSession(cookie);
 		expect(afterSignOut).toBeNull();
+	});
+
+	/**
+	 * The dev server is the one server a browser reaches over plain http by a
+	 * non-loopback name (`pnpm dev:local`), so it alone keeps a cookie such a
+	 * browser can store. Every built server sets the `__Secure-` one instead
+	 * (`useSecureCookies` in `server/utils/authOptions.ts`, #451).
+	 */
+	it('sets the dev server\'s session cookie unprefixed and not Secure, as plain http needs', async () => {
+		const signIn = await postJson('/api/auth/sign-in/email', {
+			email: FIXTURE_EMAIL,
+			password: FIXTURE_PASSWORD,
+		});
+		expect(signIn.status).toBe(200);
+
+		const session = signIn.headers.getSetCookie().find(set => SESSION_TOKEN_COOKIE.test(set));
+		expect(session).toMatch(/^better-auth\.session_token=/);
+		expect(session!.split(';').map(part => part.trim().toLowerCase())).not.toContain('secure');
 	});
 
 	it('rejects a wrong password', async () => {

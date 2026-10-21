@@ -704,14 +704,15 @@ function setCookieHeaders(response) {
 const SESSION_TOKEN_COOKIE = /^(?:__Secure-)?better-auth\.session_token$/u;
 
 /**
- * The Better Auth session cookie's attributes, as far as plain http on
- * loopback can judge them (#621).
+ * The Better Auth session cookie's attributes, held to production's (#451).
  *
- * HttpOnly, `SameSite=Lax` and `Path=/` are right on every origin. Whether the
- * cookie is `Secure` is not knowable here: over http either answer can be
- * correct, so this asserts only that the name and the attribute agree, since a
- * browser refuses a `__Secure-` name without `Secure`. Which one a deployed
- * origin gets is #451's to observe (ADR-0012).
+ * The built Worker is the artifact a deploy uploads, so the cookie it sets
+ * here is the one a deployed installation sets: `HttpOnly`, `SameSite=Lax`,
+ * `Path=/`, `Secure`, and named `__Secure-` so a browser refuses it from
+ * anything but a secure origin. The scheme the smoke run reaches it over has
+ * no say, because `server/utils/authOptions.ts` states `useSecureCookies`
+ * rather than letting Better Auth infer it (ADR-0012). Before that, this
+ * artifact set an unprefixed cookie without `Secure`.
  */
 function assertSessionCookieAttributes(response) {
 	const session = setCookieHeaders(response)
@@ -725,16 +726,16 @@ function assertSessionCookieAttributes(response) {
 	}
 	const [pair, ...attributes] = session;
 	const named = attributes.map(attribute => attribute.toLowerCase());
-	const prefixed = pair.startsWith('__Secure-');
 	const problems = [
+		!pair.startsWith('__Secure-') && 'name not __Secure- prefixed',
+		!named.includes('secure') && 'Secure missing',
 		!named.includes('httponly') && 'HttpOnly missing',
 		!named.includes('samesite=lax') && 'SameSite not Lax',
 		!named.includes('path=/') && 'Path not /',
-		prefixed !== named.includes('secure') && (prefixed ? '__Secure- name without Secure' : 'Secure without __Secure- name'),
 	].filter(Boolean);
 	if (problems.length > 0) {
 		throw new WorkerSmokeFailure('auth-sign-in', 'session-cookie-attributes', {
-			expected: 'HttpOnly; SameSite=Lax; Path=/; Secure exactly when named __Secure-',
+			expected: '__Secure-better-auth.session_token; HttpOnly; SameSite=Lax; Path=/; Secure',
 			actual: problems.join(', '),
 		});
 	}

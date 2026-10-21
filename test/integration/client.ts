@@ -133,9 +133,10 @@ export async function signInAsOperator(
 	if (!signIn.ok)
 		throw new Error(`The integration suite's operator could not sign in: ${signIn.status}.`);
 
-	// Every cookie the response set, not the session token by name: Better Auth
-	// writes `__Secure-`-prefixed names over https, and the suite should not depend
-	// on which scheme its spawned server happened to use.
+	// Every cookie the response set, not the session token by name: the dev
+	// server this suite spawns sets it unprefixed and a built server prefixes it
+	// `__Secure-` (`useSecureCookies`, `server/utils/authOptions.ts`), and the
+	// suite should not depend on which kind of server it is talking to.
 	const cookie = signIn.headers.getSetCookie()
 		.map(value => value.split(';', 1)[0] ?? '')
 		.filter(pair => pair.includes('='))
@@ -163,8 +164,9 @@ export { throughOneTransportFailure } from './transportRetry';
 /**
  * A Better Auth session cookie, under either name it can be issued as.
  *
- * The `__Secure-` prefix is added over https, so which name a run sees depends on
- * the scheme the spawned server happened to use.
+ * Which name depends on the kind of server, not the scheme: the `nuxt dev`
+ * server this suite spawns sets it unprefixed, and a built server sets it
+ * `__Secure-` (`useSecureCookies`, `server/utils/authOptions.ts`).
  */
 const SESSION_COOKIE = /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/;
 

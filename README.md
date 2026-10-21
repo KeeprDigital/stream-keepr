@@ -705,6 +705,23 @@ port. Any other host gets 403 at sign-in. `*.workers.dev` is deliberately absent
 (#410), because admitting the whole subdomain trusts hosts nobody here controls.
 To sign in on one, add that exact hostname and rebuild.
 
+### Session cookies
+
+Every built server, meaning a deployment, `pnpm preview` and `pnpm
+worker:smoke`, sets the Session as `__Secure-better-auth.session_token` with
+`Secure; HttpOnly; SameSite=Lax; Path=/`. Only `nuxt dev` (the `dev` launchers
+and the integration and local-auth suites) sets it unprefixed and without
+`Secure`, so a browser can keep it over plain http on a LAN address. The split
+is `advanced.useSecureCookies` in `server/utils/authOptions.ts`, decided by the
+build rather than by `NODE_ENV` (ADR-0012, #451). Browsers treat loopback as a
+secure origin, so signing in to `pnpm preview` still works. `pnpm worker:smoke`
+fails if the built Worker's cookie lacks any of those attributes. The deployed
+origin's cookie has not been observed yet; that is #451.
+
+The first deploy with this split ends every browser's sign-in once. An older
+unprefixed cookie is ignored rather than refused, so the person simply signs
+in again, and its D1 Session lapses after 7 days.
+
 ### First admin account
 
 Accounts are created by admins and there is no self sign-up, so a new

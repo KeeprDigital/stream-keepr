@@ -126,10 +126,11 @@ export const authStaticOptions = {
 	 *
 	 * What it costs is that `http://stream.keepr.digital` is a trusted origin.
 	 * A deployment answers only over https and Cloudflare redirects the rest, so
-	 * nothing can legitimately be at that address — and a browser will not carry
-	 * a `__Secure-`-prefixed session cookie across schemes to reach it anyway.
-	 * `'https'` was the other option and is worse: it puts that same prefix on
-	 * cookies a local http sign-in cannot then keep.
+	 * nothing can legitimately be at that address — and a browser will not send
+	 * a deployment's `Secure`, `__Secure-`-prefixed session cookie to it anyway.
+	 * The scheme no longer decides cookies: `advanced.useSecureCookies` below is
+	 * stated, because with `'auto'` the library inferred it from `NODE_ENV` and
+	 * got production wrong (#451).
 	 */
 	baseURL: {
 		allowedHosts: AUTH_ALLOWED_HOSTS,
@@ -190,6 +191,41 @@ export const authStaticOptions = {
 		ipAddress: {
 			ipAddressHeaders: ['cf-connecting-ip'],
 		},
+		/**
+		 * `Secure`, `__Secure-`-prefixed cookies on every server but `nuxt dev`
+		 * (#451), stated because the inferred answer was wrong in production.
+		 *
+		 * Unstated, Better Auth takes this from `baseURL`: `'https'` or `'http'`
+		 * decide it, and `'auto'` (above) falls through to `isProduction`, which is
+		 * `NODE_ENV === 'production'` read once when the library's module loads.
+		 * Nothing sets `NODE_ENV` in the Worker, so the built Worker — the artifact
+		 * a deploy uploads — set an unprefixed session cookie without `Secure`
+		 * (measured under local workerd on #621). ADR-0012 had accepted that
+		 * fallback on the premise that production got `__Secure-` cookies.
+		 *
+		 * `import.meta.dev` is the build's own answer to "is this the dev server",
+		 * replaced by a literal when Nitro bundles the server, so the deployed
+		 * Worker carries `true` in its code rather than in anything read at
+		 * runtime. `pnpm worker:smoke` asserts it on that artifact. It is `!== true`
+		 * rather than negated so that anything which is not a Nitro dev build —
+		 * the unit suite, which defines no `import.meta.dev` — gets production's
+		 * cookie.
+		 *
+		 * The dev server keeps unprefixed, non-`Secure` cookies because it is the
+		 * one server a browser reaches over plain http by a name that is not
+		 * loopback (`pnpm dev:local`), and the integration and local-auth suites it
+		 * serves read whatever name they are given. A built Worker under `pnpm
+		 * preview` is production's artifact and gets production's cookie; browsers
+		 * treat loopback as a secure origin, so it still signs in there.
+		 *
+		 * Rejected: `NODE_ENV=production` in the Worker build changes every
+		 * `isProduction` site in ADR-0012's census at once (the rate limiter among
+		 * them) to fix one; a Worker var is a deploy setting a forgotten value
+		 * silently undoes; deriving it from each request's scheme has no option
+		 * (ADR-0012), and would leave the smoke run, which reaches the artifact
+		 * over http, unable to see production's cookie.
+		 */
+		useSecureCookies: import.meta.dev !== true,
 	},
 	// Off by default at this version; stated so a bump flipping the default
 	// cannot quietly start publishing from a deployed Worker.

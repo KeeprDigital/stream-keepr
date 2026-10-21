@@ -225,13 +225,20 @@ describe('the built Worker smoke runner', () => {
 		return runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest });
 	}
 
+	/**
+	 * The built Worker is the artifact a deploy uploads, so its session cookie
+	 * is the production one even though the smoke run reaches it over plain
+	 * http: `Secure` and `__Secure-`-prefixed. The first case is what the built
+	 * Worker actually set before the option was stated, measured on #621.
+	 */
 	it.each([
-		['without HttpOnly', 'better-auth.session_token=t; Max-Age=604800; Path=/; SameSite=Lax'],
-		['without SameSite=Lax', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=None'],
-		['scoped below the root path', 'better-auth.session_token=t; Max-Age=604800; Path=/api; HttpOnly; SameSite=Lax'],
+		['unprefixed and not Secure', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
 		['named __Secure- but not Secure', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
 		['Secure but not named __Secure-', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax; Secure'],
-	])('refuses a session cookie %s', async (_case, setCookie) => {
+		['without HttpOnly', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; Secure; SameSite=Lax'],
+		['without SameSite=Lax', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=None'],
+		['scoped below the root path', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/api; HttpOnly; Secure; SameSite=Lax'],
+	])('refuses a production session cookie %s', async (_case, setCookie) => {
 		await expect(signInAnswering([setCookie])).rejects.toMatchObject({
 			probe: 'auth-sign-in',
 			failureClass: 'session-cookie-attributes',
@@ -245,11 +252,10 @@ describe('the built Worker smoke runner', () => {
 		});
 	});
 
-	it.each([
-		['unprefixed over plain http', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
-		['__Secure- prefixed and Secure', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Lax'],
-	])('accepts a session cookie %s and signs in with it', async (_case, setCookie) => {
-		await expect(signInAnswering([setCookie])).rejects.toMatchObject({
+	it('accepts a __Secure- prefixed, Secure session cookie and signs in with it', async () => {
+		await expect(signInAnswering([
+			'__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Lax',
+		])).rejects.toMatchObject({
 			probe: 'authenticated-api',
 			failureClass: 'unexpected-status',
 		});

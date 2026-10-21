@@ -77,6 +77,17 @@ describe('the author session the acceptance browser is given', () => {
 		expect(browserCookie('http://127.0.0.1:8787/_acceptance/x.html', COOKIE).secure).toBe(false);
 	});
 
+	/**
+	 * A built Worker under `pnpm preview` issues `__Secure-better-auth.session_token`
+	 * with `Secure` over plain http (#451). A browser refuses that name without
+	 * `Secure`, so the prefix decides it; Chromium accepts a `Secure` cookie on
+	 * loopback because it treats loopback as a secure origin.
+	 */
+	it('installs a __Secure- prefixed cookie as Secure even on loopback http', () => {
+		expect(browserCookie('http://127.0.0.1:8787/_acceptance/x.html', `__Secure-${COOKIE}`))
+			.toMatchObject({ name: `__Secure-${COOKIE_NAME}`, secure: true });
+	});
+
 	it('refuses something that is not a name=value pair rather than setting a nameless cookie', () => {
 		expect(() => browserCookie('http://127.0.0.1:8787/', 'nonsense')).toThrow();
 		expect(() => browserCookie('http://127.0.0.1:8787/', '=value')).toThrow();
