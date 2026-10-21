@@ -4,6 +4,8 @@ import type { BoardSelection, DeckBoardView, QuantityPosition, SideboardPlacemen
 import type { DeckBoardLayoutConfig, ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
+import { DECK_BOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import {
@@ -29,6 +31,11 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498):
+// the mode's own fields, and the layout block each board carries.
+const fields = screenModeConfigContract('deck').fields;
+const boardFields = DECK_BOARD_LAYOUT_FIELDS;
 
 // A badge in the centre of a Deck Screen card would cover its art, so the badge
 // position pickers offer every point but this one — which is why what they emit
@@ -255,13 +262,13 @@ const emptyBoardHint = computed(() => {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				label="Show Deck Name"
+				:label="fields.showDeckName.label"
 				description="Show the source name and optional secondary label."
 				:model-value="config.showDeckName"
 				@update:model-value="updateConfig({ showDeckName: $event })"
 			/>
 			<ScreenSettingsToggle
-				label="Show Deck Colors"
+				:label="fields.showDeckColors.label"
 				description="Show the deck's mana colors."
 				:model-value="config.showDeckColors"
 				@update:model-value="updateConfig({ showDeckColors: $event })"
@@ -270,7 +277,7 @@ const emptyBoardHint = computed(() => {
 
 		<ScreenSettingsCard title="Deck Meta">
 			<ScreenSettingsToggle
-				label="Show Deck Stats"
+				:label="fields.showDeckStats.label"
 				description="Show card counts by type (creatures, instants, etc.)."
 				:model-value="config.showDeckStats"
 				@update:model-value="updateConfig({ showDeckStats: $event })"
@@ -278,7 +285,7 @@ const emptyBoardHint = computed(() => {
 
 			<ScreenSettingsToggle
 				v-if="!isBroadcastSource"
-				label="Show Total Points"
+				:label="fields.showHighlanderTotal.label"
 				description="Show the deck's total 7 Point Highlander points in the deck meta row."
 				:model-value="config.showHighlanderTotal"
 				@update:model-value="updateConfig({ showHighlanderTotal: $event })"
@@ -287,7 +294,7 @@ const emptyBoardHint = computed(() => {
 			<USeparator />
 
 			<ScreenSettingsToggle
-				label="Show Deck Meta Pill"
+				:label="fields.showDeckMetaPill.label"
 				description="Wrap available deck metadata in a single pill."
 				:model-value="config.showDeckMetaPill"
 				@update:model-value="updateConfig({ showDeckMetaPill: $event })"
@@ -297,7 +304,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Pill Size"
+					:label="fields.deckMetaPillSize.label"
 					description="Size of the deck meta pill."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -312,7 +319,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Text Color"
+					:label="fields.deckMetaPillTextColor.label"
 					description="Color of the deck meta text."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -324,7 +331,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Background"
+					:label="fields.deckMetaPillBgColor.label"
 					description="Pick a color or enter any CSS background value."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -337,7 +344,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Accent Color"
+					:label="fields.deckMetaPillAccentColor.label"
 					description="Color for counts and highlighted values in the pill."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -349,7 +356,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Border Color"
+					:label="fields.deckMetaPillBorderColor.label"
 					description="Border color of the deck meta pill."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -364,7 +371,7 @@ const emptyBoardHint = computed(() => {
 
 		<ScreenSettingsCard v-if="!isBroadcastSource" title="Pointed Cards">
 			<ScreenSettingsToggle
-				label="Show Pointed Cards"
+				:label="fields.showHighlanderPointedCards.label"
 				description="Show pointed card chips under the deck info."
 				:model-value="config.showHighlanderPointedCards"
 				@update:model-value="updateConfig({ showHighlanderPointedCards: $event })"
@@ -374,7 +381,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Chip Size"
+					:label="fields.highlanderPointedCardsSize.label"
 					description="Size of the pointed card chips."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -389,7 +396,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Text Color"
+					:label="fields.highlanderPointedCardsTextColor.label"
 					description="Color of the pointed card text."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -401,7 +408,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Background Color"
+					:label="fields.highlanderPointedCardsBgColor.label"
 					description="Background color of the pointed card chips."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -413,7 +420,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Border Color"
+					:label="fields.highlanderPointedCardsBorderColor.label"
 					description="Border color of the pointed card chips."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -425,7 +432,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Accent Color"
+					:label="fields.highlanderPointedCardsAccentColor.label"
 					description="Color of the pointed card value."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -440,7 +447,7 @@ const emptyBoardHint = computed(() => {
 
 		<ScreenSettingsCard title="Layout">
 			<UFormField
-				label="Boards"
+				:label="fields.board.label"
 				description="Which boards of the deck are shown."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -462,7 +469,7 @@ const emptyBoardHint = computed(() => {
 
 			<UFormField
 				v-if="board === 'full'"
-				label="Sideboard Placement"
+				:label="fields.sideboardPlacement.label"
 				description="Where the sideboard sits relative to the mainboard."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -481,7 +488,7 @@ const emptyBoardHint = computed(() => {
 			:title="`${section.title} Layout`"
 		>
 			<UFormField
-				label="View"
+				:label="boardFields.view.label"
 				:description="`How the ${section.title.toLowerCase()} cards are shown.`"
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -497,28 +504,28 @@ const emptyBoardHint = computed(() => {
 
 			<template v-if="section.layout.view === 'grid'">
 				<UFormField
-					label="Grid Columns"
+					:label="boardFields.columns.label"
 					description="Number of columns in the card grid."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="section.layout.columns"
-						:min="1"
-						:max="12"
+						:min="boardFields.columns.min"
+						:max="boardFields.columns.max"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { columns: Number($event) })"
 					/>
 				</UFormField>
 
 				<UFormField
-					label="Card Gap"
+					:label="boardFields.cardGap.label"
 					description="Space between cards in pixels."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="section.layout.cardGap"
-						:min="0"
-						:max="48"
+						:min="boardFields.cardGap.min"
+						:max="boardFields.cardGap.max"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { cardGap: Number($event) })"
 					/>
@@ -527,7 +534,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<ScreenSettingsToggle
-					label="Dynamic Card Size"
+					:label="boardFields.dynamicCardSize.label"
 					description="Cards automatically fill the available column width."
 					:model-value="section.layout.dynamicCardSize"
 					@update:model-value="updateBoardLayout(section.key, { dynamicCardSize: $event })"
@@ -535,7 +542,7 @@ const emptyBoardHint = computed(() => {
 
 				<UFormField
 					v-if="!section.layout.dynamicCardSize"
-					label="Card Size"
+					:label="boardFields.cardSize.label"
 					description="Fixed card size when dynamic sizing is disabled."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -550,7 +557,7 @@ const emptyBoardHint = computed(() => {
 
 			<template v-else-if="section.layout.view === 'stack'">
 				<UFormField
-					label="Card Size"
+					:label="boardFields.cardSize.label"
 					description="Size of the stacked cards."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -563,15 +570,15 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Stack Visible %"
-					description="Percentage of each card visible when stacked (5-50%)."
+					:label="boardFields.stackOverlap.label"
+					:description="`Percentage of each card visible when stacked (${boardFields.stackOverlap.min}-${boardFields.stackOverlap.max}%).`"
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="section.layout.stackOverlap"
-						:min="5"
-						:max="50"
-						:step="1"
+						:min="boardFields.stackOverlap.min"
+						:max="boardFields.stackOverlap.max"
+						:step="boardFields.stackOverlap.step"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { stackOverlap: Number($event) })"
 					/>
@@ -580,14 +587,14 @@ const emptyBoardHint = computed(() => {
 
 			<template v-else>
 				<UFormField
-					label="List Columns"
+					:label="boardFields.listColumns.label"
 					description="Number of columns in the list."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="section.layout.listColumns"
-						:min="1"
-						:max="4"
+						:min="boardFields.listColumns.min"
+						:max="boardFields.listColumns.max"
 						class="w-32"
 						@update:model-value="updateBoardLayout(section.key, { listColumns: Number($event) })"
 					/>
@@ -601,7 +608,7 @@ const emptyBoardHint = computed(() => {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Show Quantities"
+				:label="fields.showQuantities.label"
 				description="Show quantity badges on cards with multiple copies."
 				:model-value="config.showQuantities"
 				@update:model-value="updateConfig({ showQuantities: $event })"
@@ -611,7 +618,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Badge Position"
+					:label="fields.quantityPosition.label"
 					description="Where the badge appears on the card."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -624,7 +631,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Badge Size"
+					:label="fields.quantitySize.label"
 					description="Size of the quantity badge."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -639,7 +646,7 @@ const emptyBoardHint = computed(() => {
 				<USeparator />
 
 				<UFormField
-					label="Text Color"
+					:label="fields.quantityTextColor.label"
 					description="Color of the quantity number."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -651,7 +658,7 @@ const emptyBoardHint = computed(() => {
 				</UFormField>
 
 				<UFormField
-					label="Background Color"
+					:label="fields.quantityBgColor.label"
 					description="Background color of the badge."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
@@ -671,7 +678,7 @@ const emptyBoardHint = computed(() => {
 				</p>
 
 				<ScreenSettingsToggle
-					label="Show Point Badges"
+					:label="fields.showHighlanderPoints.label"
 					description="Show 7 Point Highlander point badges on pointed cards."
 					:model-value="config.showHighlanderPoints"
 					@update:model-value="updateConfig({ showHighlanderPoints: $event })"
@@ -681,7 +688,7 @@ const emptyBoardHint = computed(() => {
 					<USeparator />
 
 					<UFormField
-						label="Badge Position"
+						:label="fields.highlanderPointsPosition.label"
 						description="Where the point badge appears on the card in grid mode."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
@@ -694,7 +701,7 @@ const emptyBoardHint = computed(() => {
 					</UFormField>
 
 					<UFormField
-						label="Badge Size"
+						:label="fields.highlanderPointsSize.label"
 						description="Size of the Highlander point badge."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
@@ -709,7 +716,7 @@ const emptyBoardHint = computed(() => {
 					<USeparator />
 
 					<UFormField
-						label="Text Color"
+						:label="fields.highlanderPointsTextColor.label"
 						description="Color of the Highlander point number."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
@@ -721,7 +728,7 @@ const emptyBoardHint = computed(() => {
 					</UFormField>
 
 					<UFormField
-						label="Background Color"
+						:label="fields.highlanderPointsBgColor.label"
 						description="Background color of the Highlander point badge."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>

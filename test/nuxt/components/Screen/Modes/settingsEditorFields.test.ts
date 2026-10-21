@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { screenModeConfigFields, unwrapOptionalField } from '~~/shared/screenModeConfigs/fields';
 import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 /**
  * The guard against an editor drifting from its config contract (ADR-0037, #498).
@@ -29,7 +29,6 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {};
 /** Modes whose editors #498 has yet to move onto their contracts. */
 const NOT_YET_GUARDED = new Set<ScreenMode>([
 	'background',
-	'deck',
 	'topCut',
 	'feature-match',
 	'feature-match-overlay',
@@ -43,6 +42,15 @@ const NOT_YET_GUARDED = new Set<ScreenMode>([
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
 	card: { editor: 'Card', variants: [{}] },
+	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
+	deck: {
+		editor: 'Deck',
+		variants: [
+			{},
+			{ mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' }, sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' } },
+			{ mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' }, sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' } },
+		],
+	},
 };
 
 // ── The editor's environment ──
@@ -117,7 +125,8 @@ function controlStub(kind: ControlKind, next: (props: Record<string, any>) => un
 			return () => h('button', {
 				'type': 'button',
 				'data-guard-control': kind,
-				'data-label': props.label ?? (attrs['aria-label'] as string | undefined) ?? fieldLabel(),
+				'data-label': props.label ?? fieldLabel(),
+				'data-aria-label': attrs['aria-label'] as string | undefined,
 				'data-min': props.min,
 				'data-max': props.max,
 				'data-step': props.step,
@@ -161,11 +170,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The field path a control's first write names: a key, or a key inside a block it rewrote whole. */
-function writtenPath(before: Record<string, unknown>, patch: Record<string, unknown>): string[] {
+/**
+ * The field path a control's first write names: a key, or a key inside a block it
+ * rewrote whole. A bespoke field is named whole, whatever its value.
+ */
+function writtenPath(before: Record<string, unknown>, patch: Record<string, unknown>, bespoke: Set<string>): string[] {
 	const keys = Object.keys(patch).filter(key => !ROTATION_KEYS.has(key));
 	expect(keys, `a control wrote ${JSON.stringify(patch)}: one field per control`).toHaveLength(1);
 	const key = keys[0]!;
+	if (bespoke.has(key))
+		return [key];
 	const value = patch[key];
 	const previous = before[key];
 	if (isPlainObject(value) && isPlainObject(previous)) {
@@ -244,7 +258,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				if (!patch)
 					continue; // not a write of this mode's config, such as a Screen's alignment
 
-				const path = writtenPath(initial, patch);
+				const path = writtenPath(initial, patch, eventReferences);
 				if (path.length === 1 && eventReferences.has(path[0]!))
 					continue; // an Event Reference picker stays bespoke (ADR-0038)
 
@@ -252,9 +266,10 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				const field = fields.get(key);
 				const where = `${mode} editor control writing ${key}`;
 				expect(field, `${where}: its contract field carries no editor metadata`).toBeDefined();
-				const { guardControl, label, min, max, step, values } = (control.element as HTMLElement).dataset;
+				const { guardControl, label, ariaLabel, min, max, step, values } = (control.element as HTMLElement).dataset;
 				expect(guardControl, `${where}: control kind`).toBe(field!.control);
-				expect(label, `${where}: label`).toBe(field!.label);
+				// Labelled by its field, visibly or, inside a group of controls, by its accessible name.
+				expect([label, ariaLabel], `${where}: label`).toContain(field!.label);
 				if (field!.control === 'number') {
 					expect({ min: numberAttr(min), max: numberAttr(max), step: numberAttr(step) }, `${where}: bounds`)
 						.toEqual({ min: field!.min, max: field!.max, step: field!.step });
