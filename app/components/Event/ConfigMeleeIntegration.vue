@@ -77,8 +77,8 @@ async function submit() {
 		const confirmed = await modal.open({
 			title: meleeWillBeDisabled ? 'Disable Melee Integration' : 'Change Melee Event',
 			message: meleeWillBeDisabled
-				? 'Disable Melee integration for this event? Imported Melee phases, rounds, matches, standings, players, and deck data will be removed. Linked feature match pairings from Melee will also be cleared.'
-				: 'Switch this event to a different Melee event? Imported Melee phases, rounds, matches, standings, players, and deck data from the current event will be removed. Linked feature match pairings from Melee will also be cleared.',
+				? 'Disable Melee integration for this event? Imported Melee phases, rounds, matches, standings, players, and deck data will be removed. Linked feature match pairings from Melee will also be cleared. Manual rounds and matches stay, and an imported phase or round holding them is kept as a manual one.'
+				: 'Switch this event to a different Melee event? Imported Melee phases, rounds, matches, standings, players, and deck data from the current event will be removed. Linked feature match pairings from Melee will also be cleared. Manual rounds and matches stay, and an imported phase or round holding them is kept as a manual one.',
 			description: 'This destructive reset cannot be undone.',
 			confirmLabel: meleeWillBeDisabled ? 'Disable and Clear Data' : 'Change Event and Clear Data',
 			confirmColor: 'error',
@@ -93,7 +93,7 @@ async function submit() {
 
 	await runRequest(
 		async () => {
-			const updatedEvent = await eventRepo.updateMeleeConfig(props.eventId, {
+			const { warnings = [], ...updatedEvent } = await eventRepo.updateMeleeConfig(props.eventId, {
 				meleeEnabled: formData.value.meleeEnabled,
 				meleeEventId: formData.value.meleeEventId || null,
 				meleeClientId: formData.value.meleeClientId || null,
@@ -122,21 +122,27 @@ async function submit() {
 			formData.value.meleeClientSecret = '';
 			updateOriginal({ ...formData.value });
 			credentialsConfigured.value = updatedEvent.meleeConfigured;
-			return { localRefreshFailed };
+			return { localRefreshFailed, warnings };
 		},
 		{
 			loadingRef: loading,
-			success: ({ localRefreshFailed }) => localRefreshFailed
+			success: ({ localRefreshFailed, warnings }) => localRefreshFailed
 				? {
 						title: 'Melee configuration updated',
-						description: 'Local synced data could not be refreshed. Reload this page before continuing.',
+						description: ['Local synced data could not be refreshed. Reload this page before continuing.', ...warnings].join(' · '),
 						color: 'warning',
 					}
-				: {
-						title: 'Success',
-						description: 'Melee configuration updated',
-						color: 'success',
-					},
+				: warnings.length > 0
+					? {
+							title: 'Melee configuration updated',
+							description: warnings.join(' · '),
+							color: 'warning',
+						}
+					: {
+							title: 'Success',
+							description: 'Melee configuration updated',
+							color: 'success',
+						},
 			error: {
 				title: 'Error',
 				description: 'Failed to update Melee configuration',

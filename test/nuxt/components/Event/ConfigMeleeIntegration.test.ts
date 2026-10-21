@@ -227,6 +227,28 @@ describe('configMeleeIntegration', () => {
 		expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
 	});
 
+	it('names the imported structure a reset kept for its manual Rounds or Matches, without storing it on the Event', async () => {
+		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
+		mockOverlay.create.mockReturnValue({ open });
+		const kept = 'Phase "Swiss" was imported from Melee.gg and holds manual Rounds or Matches, so it was kept as a manual Phase';
+		mockEventRepo.updateMeleeConfig.mockResolvedValue({ meleeConfigured: false, warnings: [kept] });
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.find('input[type="checkbox"]').setValue(false);
+		await wrapper.find('form').trigger('submit');
+		await flushPromises();
+
+		expect(open).toHaveBeenCalledWith(expect.objectContaining({
+			message: expect.stringContaining('Manual rounds and matches stay'),
+		}));
+		expect(mockEventStore.setEvent).toHaveBeenCalledWith({ meleeConfigured: false });
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			color: 'warning',
+			description: kept,
+		}));
+	});
+
 	it('keeps a committed destructive change successful when the local refresh fails', async () => {
 		const open = vi.fn().mockReturnValue({ result: Promise.resolve(true) });
 		mockOverlay.create.mockReturnValue({ open });

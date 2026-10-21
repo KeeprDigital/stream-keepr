@@ -641,6 +641,7 @@ _Avoid_: Dummy data, test data
 - An **Event** contains **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, **Feature Match Assignments**, **Screens**, broadcast configuration, game-specific settings, and optional **Melee Sync** configuration
 - **Players**, **Phases**, **Rounds**, **Matches**, **Feature Match Slots**, and **Deck Lists** carry **Provenance** when they originate from **Melee Sync**
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
+- **Melee Sync** never removes a manual **Round** or **Match**: an imported **Phase** or **Round** that leaves Melee.gg, or that a Melee data reset would remove, while holding one is kept as a manual one, its **Provenance** cleared, and the operator is told which (ADR-0040)
 - A **Feature Match Slot** belongs to exactly one **Event** and may reference at most one current **Match**
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**

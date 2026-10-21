@@ -49,10 +49,20 @@ describe('eventService Melee config reset SQLite integration', () => {
 				id integer primary key autoincrement, event_id integer not null
 			)`,
 			`create table matches (
-				id integer primary key autoincrement, event_id integer not null, external_source text
+				id integer primary key autoincrement, event_id integer not null, round_id integer,
+				external_source text
 			)`,
 			`create table phases (
-				id integer primary key autoincrement, event_id integer not null, external_source text
+				id integer primary key autoincrement, event_id integer not null, name text not null default '',
+				external_id text, external_source text, updated_at integer
+			)`,
+			`create table rounds (
+				id integer primary key autoincrement, event_id integer not null, phase_id integer not null,
+				name text not null default '', external_id text, external_source text,
+				last_synced_at integer, updated_at integer
+			)`,
+			`create table player_round_standings (
+				id integer primary key autoincrement, event_id integer not null, round_id integer not null
 			)`,
 			`create table players (
 				id integer primary key autoincrement, event_id integer not null, external_source text
@@ -199,6 +209,7 @@ describe('eventService Melee config reset SQLite integration', () => {
 		await client.execute(`drop trigger reject_replacement_session_event`);
 		await expect(eventService().updateMeleeConfig(1, input)).resolves.toEqual({
 			clearedScreens: [expect.objectContaining({ id: 30, stateVersion: 3 })],
+			keptStructure: { keptPhases: [], keptRounds: [] },
 		});
 		expect(await firstRow(`select mode_configs from screens where id = 30`))
 			.toMatchObject({ mode_configs: '{"deck":{"deckSource":{"type":"player","playerId":null}}}' });

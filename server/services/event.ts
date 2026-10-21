@@ -1,10 +1,12 @@
 import type { SQL } from 'drizzle-orm';
 import type { DbEvent, DbEventInsert, DbEventTalent, DbScreen } from '~~/server/db/schema';
+import type { KeptImportedStructure } from '~~/server/services/importedStructure';
 import type { CreateEventInput, MeleeConfigInput, UpdateEventInput } from '~~/shared/api';
 import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { eventCardNameOverrides, events, eventTalents, matches, phases, players, screens } from '~~/server/db/schema';
+import { eventCardNameOverrides, events, eventTalents, matches, players, screens } from '~~/server/db/schema';
 import { buildClearImportedMatchDataQueries } from '~~/server/services/featureMatch';
+import { buildRemoveImportedStructureQueries } from '~~/server/services/importedStructure';
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';
 import { buildClearDeckSourcePlayersQuery } from '~~/server/services/screen';
 import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
@@ -44,6 +46,7 @@ export type MeleeSyncLeaseAcquisition
 export function eventService() {
 	const buildResetMeleeImportedDataQueries = async (eventId: number) => {
 		const featureReset = await buildClearImportedMatchDataQueries(eventId);
+		const structureRemoval = buildRemoveImportedStructureQueries(eventId, { kind: 'all' });
 		const importedPlayers = and(
 			eq(players.eventId, eventId),
 			eq(players.externalSource, 'melee'),
@@ -64,18 +67,24 @@ export function eventService() {
 					eq(matches.eventId, eventId),
 					eq(matches.externalSource, 'melee'),
 				)),
-			db
-				.delete(phases)
-				.where(and(
-					eq(phases.eventId, eventId),
-					eq(phases.externalSource, 'melee'),
-				)),
+			// Every imported Phase and Round goes, except one still holding a manual
+			// Round or Match: that one is kept as manual structure (ADR-0040).
+			...structureRemoval.queries,
 			db
 				.delete(players)
 				.where(importedPlayers),
 			...featureReset.queries,
 		];
-		return { clearDeckSourcesQuery, queries, settle: featureReset.settle };
+		return {
+			clearDeckSourcesQuery,
+			queries,
+			// Offset by the override and Match deletes ahead of the removal.
+			readKeptStructure: (results: readonly unknown[], offset: number) => {
+				const { keptPhases, keptRounds } = structureRemoval.readOutcome(results, offset + 2);
+				return { keptPhases, keptRounds };
+			},
+			settle: featureReset.settle,
+		};
 	};
 
 	const buildWhereClause = (params: FindAllParams) => {
@@ -198,7 +207,7 @@ export function eventService() {
 	 * and the answer names the Screens whose Deck Source that reset cleared;
 	 * `undefined` when the Event does not exist.
 	 */
-	const updateMeleeConfig = async (id: number, data: MeleeConfigInput): Promise<{ clearedScreens: DbScreen[] } | undefined> => {
+	const updateMeleeConfig = async (id: number, data: MeleeConfigInput): Promise<{ clearedScreens: DbScreen[]; keptStructure: KeptImportedStructure } | undefined> => {
 		// Check if event exists and get current meleeEventId
 		const currentEvent = await db.query.events.findFirst({
 			where: eq(events.id, id),
@@ -245,14 +254,14 @@ export function eventService() {
 
 		if (shouldResetImportedData) {
 			const reset = await buildResetMeleeImportedDataQueries(id);
-			const [clearedScreens] = await db.batch([reset.clearDeckSourcesQuery, ...reset.queries, updateEventQuery]);
+			const results = await db.batch([reset.clearDeckSourcesQuery, ...reset.queries, updateEventQuery]);
 			// Announces the cleared Slots' new Sessions, now that they exist.
 			await reset.settle();
-			return { clearedScreens };
+			return { clearedScreens: results[0], keptStructure: reset.readKeptStructure(results, 1) };
 		}
 
 		await updateEventQuery;
-		return { clearedScreens: [] };
+		return { clearedScreens: [], keptStructure: { keptPhases: [], keptRounds: [] } };
 	};
 
 	const updateSyncMetadata = async (

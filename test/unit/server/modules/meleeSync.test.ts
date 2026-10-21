@@ -21,6 +21,7 @@ const mockRoundService = {
 	findByEventId: vi.fn(),
 	findByPhaseId: vi.fn(),
 };
+const mockRemoveImportedStructure = vi.fn();
 const mockPlayerService = {
 	batchUpsertByExternalId: vi.fn(),
 	reconcileMeleeSnapshot: vi.fn(),
@@ -68,6 +69,10 @@ vi.mock('~~/server/services/phase', () => ({
 }));
 vi.mock('~~/server/services/round', () => ({
 	roundService: () => mockRoundService,
+}));
+vi.mock('~~/server/services/importedStructure', async importOriginal => ({
+	...await importOriginal<typeof import('~~/server/services/importedStructure')>(),
+	removeImportedStructure: mockRemoveImportedStructure,
 }));
 vi.mock('~~/server/services/player', () => ({
 	playerService: () => mockPlayerService,
@@ -347,11 +352,11 @@ describe('melee Sync server module', () => {
 		mockRequireMeleeService.mockReturnValue(melee);
 		mockPhaseService.findByEventId.mockResolvedValue([createPhase({ id: 9, name: 'Old Phase', externalId: 'stale-phase' })]);
 		mockRoundService.findByEventId.mockResolvedValue([createRound({ id: 19, phaseId: 9, externalId: 'stale-round' })]);
+		mockRemoveImportedStructure.mockResolvedValue({ keptPhases: [], keptRounds: [], deletedPhaseIds: [9], deletedRoundIds: [19] });
 
 		const result = await meleeSyncModule().syncEventStructure(requestEvent, 1);
 
-		expect(mockPhaseService.remove).toHaveBeenCalledWith(9, 1);
-		expect(mockRoundService.remove).toHaveBeenCalledWith(19, 1);
+		expect(mockRemoveImportedStructure).toHaveBeenCalledWith(1, { kind: 'stale', phaseIds: [9], roundIds: [19] });
 		expect(mockPhaseService.upsertByExternalId).toHaveBeenCalledWith({
 			eventId: 1,
 			name: 'Swiss',
@@ -378,7 +383,7 @@ describe('melee Sync server module', () => {
 			},
 		}, 'origin-1');
 		expect(mockPublishMessage.mock.invocationCallOrder[0]).toBeGreaterThan(
-			mockPhaseService.remove.mock.invocationCallOrder[0]!,
+			mockRemoveImportedStructure.mock.invocationCallOrder[0]!,
 		);
 		expect(mockRecordMeleeSyncSuccess).toHaveBeenCalledWith(requestEvent, 1, { lastEventSyncedAt: expect.any(Date) }, 'lease-token');
 		expect(result).toEqual({
@@ -417,8 +422,7 @@ describe('melee Sync server module', () => {
 
 		expect(mockPhaseService.upsertByExternalId).not.toHaveBeenCalled();
 		expect(mockRoundService.upsertByExternalId).not.toHaveBeenCalled();
-		expect(mockPhaseService.remove).not.toHaveBeenCalled();
-		expect(mockRoundService.remove).not.toHaveBeenCalled();
+		expect(mockRemoveImportedStructure).not.toHaveBeenCalled();
 		expect(mockPublishMessage).not.toHaveBeenCalled();
 		expect(result).toMatchObject({ success: true, phases: 1, rounds: 2 });
 	});

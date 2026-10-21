@@ -8,6 +8,7 @@ import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, RealtimePublicationError } from '~~/server/modules/event-data-publication';
 import { syncMatchesFromMelee } from '~~/server/modules/melee-sync/roundMatches';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
+import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
 import { mtgCardService } from '~~/server/services/mtgCard';
 import { phaseService } from '~~/server/services/phase';
@@ -240,22 +241,27 @@ export function createMeleeSyncWorkflows() {
 			}
 		}
 
-		const staleRounds = existingRounds.filter(round =>
+		const staleRoundIds = existingRounds.filter(round =>
 			round.externalSource === 'melee'
 			&& (!round.externalId || !incomingRoundExternalIds.has(round.externalId)),
-		);
-		for (const staleRound of staleRounds) {
-			if (await roundSvc.remove(staleRound.id, eventId))
-				changes.rounds.deleted.push(staleRound.id);
-		}
-
-		const stalePhases = existingPhases.filter(phase =>
+		).map(round => round.id);
+		const stalePhaseIds = existingPhases.filter(phase =>
 			phase.externalSource === 'melee'
 			&& (!phase.externalId || !incomingPhaseExternalIds.has(phase.externalId)),
-		);
-		for (const stalePhase of stalePhases) {
-			if (await phaseSvc.remove(stalePhase.id, eventId))
-				changes.phases.deleted.push(stalePhase.id);
+		).map(phase => phase.id);
+		if (staleRoundIds.length > 0 || stalePhaseIds.length > 0) {
+			// A stale Phase or Round still holding manual structure is kept as
+			// manual structure rather than deleted through it (ADR-0040).
+			const removal = await removeImportedStructure(eventId, {
+				kind: 'stale',
+				phaseIds: stalePhaseIds,
+				roundIds: staleRoundIds,
+			});
+			changes.rounds.deleted.push(...removal.deletedRoundIds);
+			changes.rounds.updated.push(...removal.keptRounds.map(round => round.id));
+			changes.phases.deleted.push(...removal.deletedPhaseIds);
+			changes.phases.updated.push(...removal.keptPhases.map(phase => phase.id));
+			warnings.push(...describeKeptStructure(removal, 'is no longer on Melee.gg'));
 		}
 
 		if (hasStructureChanges(changes)) {

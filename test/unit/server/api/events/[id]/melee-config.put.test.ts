@@ -72,6 +72,7 @@ const handler = (await import('~~/server/api/events/[id]/melee-config.put')).def
 // was answering apart from any other empty object a careless edit might hand
 // `setResponseHeader`.
 const requestEvent = { __requestEventFor: 'melee-config' } as any;
+const noKeptStructure = { keptPhases: [], keptRounds: [] };
 
 describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	beforeEach(() => {
@@ -84,7 +85,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		mockFindEvent.mockReset()
 			.mockResolvedValueOnce({ id: 1, game: 'mtg', meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
 			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'new-envelope' });
-		mockUpdateMeleeConfig.mockReset().mockResolvedValue({ clearedScreens: [] });
+		mockUpdateMeleeConfig.mockReset().mockResolvedValue({ clearedScreens: [], keptStructure: noKeptStructure });
 		mockFetchMeleeEvent.mockReset().mockResolvedValue({ ID: 123, Game: 'Magic: The Gathering' });
 		mockRequireMeleeIntegration.mockReset().mockResolvedValue({
 			clientId: 'client-id',
@@ -170,6 +171,33 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		});
 	});
 
+	it('names the imported structure a reset kept because it holds manual Rounds or Matches', async () => {
+		mockReadValidatedBody.mockResolvedValue({
+			meleeEnabled: false,
+			meleeEventId: null,
+			meleeClientId: null,
+		});
+		mockFindEvent.mockReset()
+			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
+			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
+		mockUpdateMeleeConfig.mockResolvedValue({
+			clearedScreens: [],
+			keptStructure: {
+				keptPhases: [{ id: 4, name: 'Swiss' }],
+				keptRounds: [{ id: 9, name: 'Round 3', phaseId: 5, phaseName: 'Top Cut' }],
+			},
+		});
+
+		await expect(handler({} as any)).resolves.toEqual({
+			id: 1,
+			meleeConfigured: true,
+			warnings: [
+				'Phase "Swiss" was imported from Melee.gg and holds manual Rounds or Matches, so it was kept as a manual Phase',
+				'Round "Round 3" in "Top Cut" was imported from Melee.gg and holds manual Matches, so it was kept as a manual Round',
+			],
+		});
+	});
+
 	it('announces each Screen whose Deck Source the reset cleared, before the reset itself', async () => {
 		mockReadValidatedBody.mockResolvedValue({
 			meleeEnabled: false,
@@ -180,7 +208,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			.mockResolvedValueOnce({ id: 1, meleeEnabled: true, meleeEventId: '123', meleeClientSecret: 'stored-envelope' })
 			.mockResolvedValueOnce({ id: 1, meleeEnabled: false, meleeEventId: null, meleeClientSecret: null });
 		const cleared = { id: 7, eventId: 1, stateVersion: 3 };
-		mockUpdateMeleeConfig.mockResolvedValue({ clearedScreens: [cleared] });
+		mockUpdateMeleeConfig.mockResolvedValue({ clearedScreens: [cleared], keptStructure: noKeptStructure });
 
 		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
 
