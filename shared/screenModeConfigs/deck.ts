@@ -50,6 +50,10 @@ const DEFAULT_SIDEBOARD_LAYOUT: ResolvedDeckBoardLayout = {
 	view: 'stack',
 };
 
+/** Which boards render, and where the sideboard sits, until an operator changes them. */
+const DEFAULT_BOARD: BoardSelection = 'full';
+const DEFAULT_SIDEBOARD_PLACEMENT: SideboardPlacement = 'beside';
+
 /** Where each badge sits on a Deck Screen card until an operator moves it. */
 export const DEFAULT_QUANTITY_POSITION: QuantityPosition = 'top-right';
 export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
@@ -103,8 +107,8 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	quantityBgColor: z.string().max(50).optional(),
 }, {
 	deckSource: { type: 'player', playerId: null },
-	board: 'full',
-	sideboardPlacement: 'beside',
+	board: DEFAULT_BOARD,
+	sideboardPlacement: DEFAULT_SIDEBOARD_PLACEMENT,
 	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
 	sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT },
 	showQuantities: true,
@@ -152,8 +156,8 @@ export interface ResolvedDeckBoards {
  */
 export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
 	return {
-		board: config.board ?? 'full',
-		sideboardPlacement: config.sideboardPlacement ?? 'beside',
+		board: config.board ?? DEFAULT_BOARD,
+		sideboardPlacement: config.sideboardPlacement ?? DEFAULT_SIDEBOARD_PLACEMENT,
 		mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...config.mainboard },
 		sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT, ...config.sideboard },
 	};

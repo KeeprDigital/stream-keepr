@@ -432,9 +432,6 @@ export const backgroundModeConfigSchema = declaredModeConfigSchema('background',
 
 const cardModeConfigForms = configContractModeForms('card');
 
-/** The complete Card config, its own fields from its config contract (#588). */
-export const cardModeConfigSchema = cardModeConfigForms.schema;
-
 const deckModeConfigForms = configContractModeForms('deck');
 
 /** The complete Deck config, its own fields from its config contract (#588). */
@@ -446,9 +443,6 @@ const standingsModeConfigForms = configContractModeForms('standings');
 export const standingsModeConfigSchema = standingsModeConfigForms.schema;
 
 const topCutModeConfigForms = configContractModeForms('topCut');
-
-/** The complete Top Cut config, its own fields from its config contract (#588). */
-export const topCutModeConfigSchema = topCutModeConfigForms.schema;
 
 export const matchModeConfigSchema = declaredModeConfigSchema('feature-match', {
 	featureMatchId: z.number().int().positive().nullable(),

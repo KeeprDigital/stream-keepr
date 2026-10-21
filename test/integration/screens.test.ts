@@ -85,8 +85,10 @@ describe('screens API', () => {
 	});
 
 	it('renames a Screen whose stored mode configs are PATCH fragments, sending them back as the Edit Screen dialog does', async () => {
-		// Each fragment lacks a field the mode's complete config requires (#588): a
-		// full write of a mode on its config contract accepts what storage holds.
+		// The Deck, Standings, Metagame, Top Cards and Player History fragments each
+		// lack a field the mode's complete config requires, which the old form's full
+		// write refused (#588); Card and Top Cut never required one. A full write of a
+		// mode on its config contract accepts what storage holds.
 		const fragments = {
 			'card': { scale: 1.5 },
 			'deck': { showDeckName: false },
