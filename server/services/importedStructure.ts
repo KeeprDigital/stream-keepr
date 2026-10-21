@@ -32,8 +32,8 @@ export interface KeptImportedStructure {
 export interface ImportedStructureRemoval {
 	/** Run in order inside one batch; each later statement reads what the earlier ones left. */
 	queries: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]];
-	/** Reads the outcome from the batch results, `offset` being where the first of `queries` answered. */
-	readOutcome: (results: readonly unknown[], offset: number) => KeptImportedStructure & {
+	/** Reads the outcome from the results of `batch`, which holds `queries` in order. */
+	readOutcome: (batch: readonly unknown[], results: readonly unknown[]) => KeptImportedStructure & {
 		deletedPhaseIds: number[];
 		deletedRoundIds: number[];
 	};
@@ -104,14 +104,21 @@ export function buildRemoveImportedStructureQueries(
 		db.delete(phases).where(scopedPhases).returning({ id: phases.id }),
 	] as const;
 
+	const byId = <T extends { id: number }>(rows: T[]) => rows.toSorted((a, b) => a.id - b.id);
 	return {
 		queries: [...queries],
-		readOutcome: (results, offset) => ({
-			keptRounds: results[offset + 2] as KeptRound[],
-			deletedRoundIds: (results[offset + 3] as { id: number }[]).map(row => row.id),
-			keptPhases: results[offset + 4] as KeptPhase[],
-			deletedPhaseIds: (results[offset + 5] as { id: number }[]).map(row => row.id),
-		}),
+		readOutcome: (batch, results) => {
+			const offset = batch.indexOf(queries[0]);
+			if (offset < 0)
+				throw new Error('The batch does not hold this imported structure removal');
+			// RETURNING promises no row order, so the outcome sorts its own.
+			return {
+				keptRounds: byId(results[offset + 2] as KeptRound[]),
+				deletedRoundIds: byId(results[offset + 3] as { id: number }[]).map(row => row.id),
+				keptPhases: byId(results[offset + 4] as KeptPhase[]),
+				deletedPhaseIds: byId(results[offset + 5] as { id: number }[]).map(row => row.id),
+			};
+		},
 	};
 }
 
@@ -121,15 +128,24 @@ export function buildRemoveImportedStructureQueries(
 export async function removeImportedStructure(eventId: number, scope: ImportedStructureScope) {
 	const removal = buildRemoveImportedStructureQueries(eventId, scope);
 	const results = await db.batch(removal.queries);
-	return removal.readOutcome(results, 0);
+	return removal.readOutcome(removal.queries, results);
 }
+
+/** Why the imported structure would otherwise have been removed. */
+export type KeptStructureCause = 'stale' | 'disabled' | 'event-changed';
+
+const KEPT_STRUCTURE_CAUSES: Record<KeptStructureCause, string> = {
+	'stale': 'is no longer on Melee.gg',
+	'disabled': 'was imported from Melee.gg',
+	'event-changed': 'came from the previous Melee.gg tournament',
+};
 
 /**
  * The operator-facing account of structure a removal kept, one sentence per
- * kept Phase or Round, naming it so the operator can find it. `reason` says
- * why the imported record would otherwise have gone.
+ * kept Phase or Round, naming it so the operator can find it.
  */
-export function describeKeptStructure(outcome: KeptImportedStructure, reason: string): string[] {
+export function describeKeptStructure(outcome: KeptImportedStructure, cause: KeptStructureCause): string[] {
+	const reason = KEPT_STRUCTURE_CAUSES[cause];
 	return [
 		...outcome.keptPhases.map(phase =>
 			`Phase "${phase.name}" ${reason} and holds manual Rounds or Matches, so it was kept as a manual Phase`),

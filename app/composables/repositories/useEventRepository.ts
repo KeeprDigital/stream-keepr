@@ -162,11 +162,12 @@ export function useEventRepository() {
 	};
 
 	/**
-	 * Answers the saved Event. A reset that kept imported structure because it
-	 * holds manual Rounds or Matches also answers `warnings` naming each one.
+	 * The saved Event. A reset that kept imported structure because it holds
+	 * manual Rounds or Matches also answers `warnings` naming each one.
 	 */
-	const updateMeleeConfig = async (id: number, data: MeleeConfigInput): Promise<Event & { warnings?: string[] }> => {
-		return await eventData.command<Event & { warnings?: string[] }, MeleeConfigInput>(
+	type UpdateMeleeConfigResponse = Event & { warnings?: string[] };
+	const updateMeleeConfig = async (id: number, data: MeleeConfigInput): Promise<UpdateMeleeConfigResponse> => {
+		return await eventData.command<UpdateMeleeConfigResponse, MeleeConfigInput>(
 			{ eventId: id, resourcePath: 'melee-config' },
 			{ method: 'PUT', body: data },
 		);

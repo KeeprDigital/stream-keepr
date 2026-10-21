@@ -78,11 +78,7 @@ export function eventService() {
 		return {
 			clearDeckSourcesQuery,
 			queries,
-			// Offset by the override and Match deletes ahead of the removal.
-			readKeptStructure: (results: readonly unknown[], offset: number) => {
-				const { keptPhases, keptRounds } = structureRemoval.readOutcome(results, offset + 2);
-				return { keptPhases, keptRounds };
-			},
+			structureRemoval,
 			settle: featureReset.settle,
 		};
 	};
@@ -254,10 +250,12 @@ export function eventService() {
 
 		if (shouldResetImportedData) {
 			const reset = await buildResetMeleeImportedDataQueries(id);
-			const results = await db.batch([reset.clearDeckSourcesQuery, ...reset.queries, updateEventQuery]);
+			const batch = [reset.clearDeckSourcesQuery, ...reset.queries, updateEventQuery] as const;
+			const results = await db.batch(batch);
 			// Announces the cleared Slots' new Sessions, now that they exist.
 			await reset.settle();
-			return { clearedScreens: results[0], keptStructure: reset.readKeptStructure(results, 1) };
+			const { keptPhases, keptRounds } = reset.structureRemoval.readOutcome(batch, results);
+			return { clearedScreens: results[0], keptStructure: { keptPhases, keptRounds } };
 		}
 
 		await updateEventQuery;

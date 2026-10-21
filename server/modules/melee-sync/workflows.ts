@@ -261,7 +261,7 @@ export function createMeleeSyncWorkflows() {
 			changes.rounds.updated.push(...removal.keptRounds.map(round => round.id));
 			changes.phases.deleted.push(...removal.deletedPhaseIds);
 			changes.phases.updated.push(...removal.keptPhases.map(phase => phase.id));
-			warnings.push(...describeKeptStructure(removal, 'is no longer on Melee.gg'));
+			warnings.push(...describeKeptStructure(removal, 'stale'));
 		}
 
 		if (hasStructureChanges(changes)) {
