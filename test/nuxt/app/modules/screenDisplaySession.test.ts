@@ -3,8 +3,8 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, reactive, watch } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
-import { useScreenDisplaySession } from '~/modules/screen/displaySession';
+import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/screen/displaySession';
 
 function flushPromises() {
 	return new Promise(resolve => setTimeout(resolve, 0));
@@ -92,11 +92,13 @@ function createHarness(options: {
 		})),
 	};
 	const { onContinuityLost, reattach } = createContinuitySignal();
+	const { onceAttached, attach, detach } = createAttachSignal();
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
 		tokenError: null as Error | null,
 		onContinuityLost,
+		onceAttached,
 	});
 	const realtimeCallbacks: any[] = [];
 	const realtimeSession = {
@@ -146,6 +148,8 @@ function createHarness(options: {
 		outputReads,
 		realtime,
 		reattach,
+		attach,
+		detach,
 		realtimeSession,
 		realtimeCallbacks,
 		exportElementPng,
@@ -210,15 +214,60 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.error.value).toBeNull();
 	});
 
-	it('shows the not-found state, holding no Event, when its Event context is refused', async () => {
+	it('says its Event details are unavailable, holding no Event, when its Event context read fails', async () => {
+		// The Screen was found; saying otherwise sends an operator hunting for a
+		// Screen that exists (#727).
 		const harness = createHarness();
-		harness.outputReads.event.mockRejectedValue(new Error('Not found'));
+		harness.outputReads.event.mockRejectedValue(new Error('503 Service Unavailable'));
 		await flushPromises();
 
 		expect(harness.outputReads.event).toHaveBeenCalled();
 		expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalled();
-		expect(harness.session.error.value).toBe('Screen not found');
+		expect(harness.session.error.value).toBe('Event details unavailable');
+		expect(harness.session.errorDetail.value).toBe('The screen "main" was found, but its event details could not be loaded. Retrying automatically.');
 		expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+	});
+
+	it('still says a genuinely missing Screen is not found', async () => {
+		const harness = createHarness({ screens: {} });
+		await flushPromises();
+
+		expect(harness.outputReads.event).not.toHaveBeenCalled();
+		expect(harness.session.error.value).toBe('Screen not found');
+		expect(harness.session.errorDetail.value).toBe('The screen "main" could not be found for this event.');
+	});
+
+	it('retries a failed Event context read on its own, finishing the load', async () => {
+		vi.useFakeTimers();
+		const harness = createHarness();
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(harness.session.error.value).toBe('Event details unavailable');
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		expect(harness.session.error.value).toBe('Event details unavailable');
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+		expect(harness.session.error.value).toBeNull();
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS * 2);
+		expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+	});
+
+	it('stops retrying once disposed', async () => {
+		vi.useFakeTimers();
+		const harness = createHarness();
+		harness.outputReads.event.mockRejectedValue(new Error('503 Service Unavailable'));
+		await vi.advanceTimersByTimeAsync(0);
+
+		harness.wrapper.unmount();
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS * 2);
+
+		expect(harness.outputReads.event).toHaveBeenCalledOnce();
 	});
 
 	it('reports a missing event when neither the store nor route has an event id', async () => {
@@ -718,7 +767,7 @@ describe('useScreenDisplaySession', () => {
 				harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
 				await flushPromises();
 				expect(harness.screenStore.activeScreen?.id).toBe(7);
-				expect(harness.session.error.value).toBe('Screen not found');
+				expect(harness.session.error.value).toBe('Event details unavailable');
 				harness.order.splice(0);
 				return harness;
 			}
@@ -749,7 +798,7 @@ describe('useScreenDisplaySession', () => {
 
 				await suspendAndResume(harness);
 
-				expect(harness.session.error.value).toBe('Screen not found');
+				expect(harness.session.error.value).toBe('Event details unavailable');
 				expect(harness.realtimeSession.start).not.toHaveBeenCalled();
 
 				await suspendAndResume(harness);
@@ -810,6 +859,141 @@ describe('useScreenDisplaySession', () => {
 				expect(harness.realtimeSession.start).toHaveBeenLastCalledWith(42, 8);
 				expect(harness.session.error.value).toBeNull();
 			});
+		});
+	});
+
+	/**
+	 * The Event channel attaches only once the Event context names it, after the
+	 * initial reads have answered. Whatever was published between a read and that
+	 * attach reached no listener, and a first attach on an unbroken connection
+	 * reports no continuity loss (ADR-0023), so the output re-reads off the attach
+	 * itself (#727).
+	 */
+	describe('its first load, before its Event channel first attached', () => {
+		it('re-reads its Screen and Event context once the channel attaches, reflecting what it missed', async () => {
+			const harness = createHarness({
+				route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
+			});
+			await flushPromises();
+			harness.order.splice(0);
+			const onProgram = harness.screenStore.activeScreen;
+			// Published after the reads answered, before anything listened.
+			const missedScreen = createMockScreen({ id: 7, slug: 'main', currentMode: 'standings' });
+			harness.screens.main = missedScreen;
+			const missedEvent = { id: 42, name: 'Output Event', orientation: 'portrait' };
+			harness.outputReads.event.mockResolvedValueOnce(missedEvent as any);
+
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.screenStore.activeScreen).toEqual(missedScreen);
+			expect(harness.screenStore.activeScreen).not.toBe(onProgram);
+			expect(harness.outputReads.event).toHaveBeenLastCalledWith({
+				eventId: 42,
+				screenId: 7,
+				assetCapability: 'a-screen-output-capability-token',
+			});
+			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith(missedEvent);
+			// The non-blanking re-read: loading and error are left alone.
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.screenStore.loadScreenBySlug).toHaveBeenCalledOnce();
+		});
+
+		it('re-reads once loaded when the channel attached while its Event context read was in flight', async () => {
+			const harness = createHarness();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			await flushPromises();
+
+			harness.attach('event:42');
+			await flushPromises();
+			expect(harness.outputReads.event).toHaveBeenCalledOnce();
+
+			harness.order.splice(0);
+			inFlight.resolve({ id: 42, name: 'Read before the attach' });
+			await flushPromises();
+
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.order).toEqual(['start:7', 'refresh:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith({ id: 42, name: 'Output Event' });
+		});
+
+		it('re-reads only once, not on every later attach', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.attach('event:42');
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.detach('event:42');
+			harness.attach('event:42');
+			await flushPromises();
+
+			// A later loss of continuity is Reconnect Resync's (ADR-0023).
+			expect(harness.order).toEqual([]);
+		});
+
+		it('does not re-read for a load whose Event channel was already attached', async () => {
+			// A Screen change within one Event: the channel listened throughout, so
+			// nothing published during the reads went unheard.
+			const harness = createHarness();
+			await flushPromises();
+			harness.attach('event:42');
+			await flushPromises();
+
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+			harness.order.splice(0);
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual([]);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+		});
+
+		it('re-reads for a Program monitor too, without entering presence', async () => {
+			const harness = createHarness({ query: { embed: 'monitor' } });
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+		});
+
+		it('re-reads for the load that is current, not one a Screen change superseded', async () => {
+			const harness = createHarness();
+			const oldContext = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(oldContext.promise);
+			await flushPromises();
+
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+			oldContext.resolve({ id: 42, name: 'Read for the old Screen' });
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:8']);
+		});
+
+		it('does not re-read when its load failed, since it holds nothing the attach could correct', async () => {
+			const harness = createHarness({ screens: {} });
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual([]);
 		});
 	});
 });

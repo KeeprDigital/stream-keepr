@@ -11,6 +11,7 @@ const {
 	layoutName,
 	loading,
 	error,
+	errorDetail,
 	exportError,
 	showIdentify,
 	showDebug,
@@ -18,8 +19,6 @@ const {
 	debugPanelClass,
 	debugInfo,
 } = session;
-
-const screenSlug = computed(() => debugInfo.value.screenSlug);
 
 provideScreenContext(session.screenContext);
 </script>
@@ -73,7 +72,7 @@ provideScreenContext(session.screenContext);
 				{{ error }}
 			</h2>
 			<p class="text-muted">
-				The screen "{{ screenSlug }}" could not be found for this event.
+				{{ errorDetail }}
 			</p>
 		</div>
 

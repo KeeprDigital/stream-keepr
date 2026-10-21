@@ -25,6 +25,7 @@ export interface MockRealtime {
 	// Channel transport
 	onChannel: ReturnType<typeof vi.fn>;
 	onContinuityLost: ReturnType<typeof vi.fn>;
+	onceAttached: ReturnType<typeof vi.fn>;
 
 	// Presence
 	enterPresence: ReturnType<typeof vi.fn>;
@@ -50,6 +51,7 @@ export function createMockRealtime(): MockRealtime {
 		// Channel transport
 		onChannel: vi.fn().mockReturnValue(() => {}),
 		onContinuityLost: vi.fn().mockReturnValue(() => {}),
+		onceAttached: vi.fn().mockReturnValue(() => {}),
 
 		// Presence
 		enterPresence: vi.fn().mockResolvedValue(undefined),
@@ -78,6 +80,41 @@ export function createContinuitySignal() {
 		reattach(channel: string) {
 			for (const handler of [...handlers.get(channel) ?? []])
 				handler();
+		},
+	};
+}
+
+/**
+ * The transport's next-attach signal, for a stand-in transport: spread
+ * `onceAttached` into it, and `attach` a channel to signal its attach — a
+ * channel `attach`ed once counts as attached for every later registration, as
+ * the transport's does (#727).
+ */
+export function createAttachSignal() {
+	const waiting = new Map<string, Set<() => void>>();
+	const attached = new Set<string>();
+	return {
+		onceAttached: vi.fn((channel: string, handler: () => void) => {
+			if (attached.has(channel))
+				return () => {};
+			if (!waiting.has(channel))
+				waiting.set(channel, new Set());
+			const once = () => handler();
+			waiting.get(channel)!.add(once);
+			return () => {
+				waiting.get(channel)?.delete(once);
+			};
+		}),
+		attach(channel: string) {
+			attached.add(channel);
+			const handlers = [...waiting.get(channel) ?? []];
+			waiting.delete(channel);
+			for (const handler of handlers)
+				handler();
+		},
+		/** The channel detached: the next registration waits on its next attach. */
+		detach(channel: string) {
+			attached.delete(channel);
 		},
 	};
 }

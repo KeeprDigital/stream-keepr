@@ -1031,6 +1031,58 @@ describe('realtime plugin', () => {
 		});
 	});
 
+	/**
+	 * A first attach on an unbroken connection reports no continuity loss, yet a
+	 * consumer that read before it may have missed what was published in between:
+	 * a Screen Output's first load (#727).
+	 */
+	describe('a channel\'s next attach', () => {
+		it('is signalled once, on the first attach of a channel not yet attached', async () => {
+			const realtime = await createTransport();
+			const attached = vi.fn();
+			connectionHandlers.get('connected')?.();
+			realtime.onceAttached('event:7', attached);
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			await settle();
+			expect(attached).not.toHaveBeenCalled();
+
+			channels.get('event:7')!.attached(false);
+			expect(attached).toHaveBeenCalledOnce();
+
+			channels.get('event:7')!.suspend();
+			channels.get('event:7')!.attached(false);
+			expect(attached).toHaveBeenCalledOnce();
+		});
+
+		it('is not signalled for a channel already attached, since nothing goes unheard from now', async () => {
+			const realtime = await createTransport();
+			const attached = vi.fn();
+			connectionHandlers.get('connected')?.();
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			await settle();
+			channels.get('event:7')!.attached(false);
+
+			realtime.onceAttached('event:7', attached);
+			channels.get('event:7')!.attached(false);
+
+			expect(attached).not.toHaveBeenCalled();
+		});
+
+		it('is not signalled once disposed', async () => {
+			const realtime = await createTransport();
+			const attached = vi.fn();
+			connectionHandlers.get('connected')?.();
+			const dispose = realtime.onceAttached('event:7', attached);
+			realtime.onChannel('event:7', 'screen:updated', vi.fn());
+			await settle();
+
+			dispose();
+			channels.get('event:7')!.attached(false);
+
+			expect(attached).not.toHaveBeenCalled();
+		});
+	});
+
 	it('closes the race Reconnect Resync had with the channel reattaching (#641)', async () => {
 		// The transport as it runs, with the module that re-reads through it. Before,
 		// the re-read went out on the connection coming back and was answered before

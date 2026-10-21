@@ -49,8 +49,9 @@ mockNuxtImport('$fetch', () => async (path: string, options: { headers?: Record<
 
 vi.mock('~/composables/core/useRealtime', async () => {
 	const { reactive } = await import('vue');
-	const { createContinuitySignal } = await import('~~/test/helpers/realtime-mock');
+	const { createAttachSignal, createContinuitySignal } = await import('~~/test/helpers/realtime-mock');
 	const continuity = createContinuitySignal();
+	const attaches = createAttachSignal();
 	type Handler = (message: Record<string, unknown>) => void;
 	const handlers = new Map<string, Set<Handler>>();
 	const transport = reactive({
@@ -61,6 +62,7 @@ vi.mock('~/composables/core/useRealtime', async () => {
 		offRoom: () => {},
 		setRoom: () => {},
 		onContinuityLost: continuity.onContinuityLost,
+		onceAttached: attaches.onceAttached,
 		onChannel: (channel: string, type: string, handler: Handler) => {
 			const key = `${channel}|${type}`;
 			if (!handlers.has(key))
@@ -71,6 +73,9 @@ vi.mock('~/composables/core/useRealtime', async () => {
 		watchPresence: () => () => {},
 		/** Signal a channel attached again having lost continuity. */
 		reattach: continuity.reattach,
+		/** Signal a channel's attach; `detach` returns it to not yet attached. */
+		attach: attaches.attach,
+		detach: attaches.detach,
 		/** Deliver one message to whoever listens on its channel, as the transport would. */
 		deliver: (channel: string, type: string, message: Record<string, unknown>) => {
 			for (const handler of handlers.get(`${channel}|${type}`) ?? [])
@@ -174,6 +179,8 @@ function realtime() {
 	return tryUseRealtime() as unknown as {
 		connectionState: string;
 		reattach: (channel: string) => void;
+		attach: (channel: string) => void;
+		detach: (channel: string) => void;
 		deliver: (channel: string, type: string, message: Record<string, unknown>) => void;
 	};
 }
@@ -221,11 +228,28 @@ describe('a capability-only Screen Output', () => {
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
+		realtime().detach('event:42');
 	});
 
 	afterEach(() => {
 		for (const wrapper of mounted.splice(0))
 			wrapper.unmount();
+	});
+
+	it('shows a mode change published before its Event channel first attached, without a reload', async () => {
+		// The Event channel attaches only once the Event context names it, after the
+		// reads answered; a change published in between reached no listener (#727).
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+
+		api.screen = screen({ stateVersion: 2, modeConfigs: { 'player-history': { playerId: 11, headerText: 'Changed Header' } } });
+		realtime().attach('event:42');
+		await settleUntil(() => wrapper.text().includes('Changed Header'));
+
+		expect(wrapper.text()).toContain('Changed Header');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
 	it('boots, loads its mode data and stays off the sign-in page with no session', async () => {
@@ -493,6 +517,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
+		realtime().detach('event:42');
 	});
 
 	afterEach(() => {
