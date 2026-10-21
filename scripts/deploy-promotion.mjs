@@ -48,6 +48,8 @@ const APP_MARKER = 'production';
 const VALIDATOR_MARKER = 'production-validator';
 const MARKER_HEADER = 'stream-keepr promotion marker';
 const FINGERPRINT = /^sha256:[0-9a-f]{64}$/;
+/** The Deploy workflow's `validator` input choices. */
+const MODES = ['auto', 'always', 'never'];
 
 const VALIDATOR_CONFIG = 'workers/silent-video-validator/wrangler.jsonc';
 /** The Docker build context: the Dockerfile's directory, as wrangler.jsonc's `image` leaves it. */
@@ -165,8 +167,8 @@ export function decideValidatorDeploy({ mode, targetFingerprint, markerText }) {
 		return { deploy: true, reason: 'forced by the always input' };
 	if (mode === 'never')
 		return { deploy: false, reason: 'suppressed by the never input' };
-	if (mode !== 'auto')
-		throw new Error(`unknown validator mode ${JSON.stringify(mode)}; expected auto, always or never.`);
+	if (!MODES.includes(mode))
+		throw new Error(`unknown validator mode ${JSON.stringify(mode)}; expected ${MODES.join(', ')}.`);
 	if (targetFingerprint === undefined)
 		return { deploy: true, reason: 'the target validator could not be fingerprinted; deploying is the safe default' };
 	if (markerText === undefined)
@@ -272,7 +274,7 @@ export function promote({ store, mode, fingerprint, deployValidator, deployApp, 
 	const validator = decideValidatorDeploy({ mode, targetFingerprint: target, markerText: store.read(VALIDATOR_MARKER) });
 	log(`Validator deploy: ${validator.deploy} (${validator.reason})`);
 	if (validator.deploy)
-		promoteValidator({ store, fingerprint: () => target ?? fingerprint(), deploy: deployValidator, source, log });
+		promoteValidator({ store, fingerprint: () => target ?? 'unknown', deploy: deployValidator, source, log });
 	markApp({ store, state: 'pending', source });
 	deployApp();
 	markApp({ store, state: 'deployed', source });
@@ -332,8 +334,13 @@ export function describeMarker(text) {
 	const marker = parseMarker(text);
 	if (!marker)
 		return 'unreadable (not a promotion marker; a pre-#616 lightweight tag reads this way)';
-	const details = [marker.fingerprint && `fingerprint ${marker.fingerprint}`, `${marker.worktree} worktree`, `from ${marker.source}`].filter(Boolean);
-	return `${marker.state === 'pending' ? 'pending (started, never confirmed)' : marker.state} ${marker.commit} (${details.join(', ')})`;
+	const details = [
+		marker.fingerprint && `fingerprint ${marker.fingerprint}`,
+		marker.worktree && `${marker.worktree} worktree`,
+		marker.source && `from ${marker.source}`,
+	].filter(Boolean);
+	const state = marker.state === 'pending' ? 'pending (started, never confirmed)' : marker.state ?? '(no state)';
+	return `${state} ${marker.commit ?? '(no commit)'}${details.length ? ` (${details.join(', ')})` : ''}`;
 }
 
 function run(command, args, cwd) {
@@ -342,7 +349,7 @@ function run(command, args, cwd) {
 		throw new Error(`${command} ${args.join(' ')} failed${result.error ? `: ${result.error.message}` : ` with status ${result.status ?? result.signal}`}`);
 }
 
-function source(env) {
+function deployer(env) {
 	return env.GITHUB_ACTIONS === 'true'
 		? `actions ${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
 		: 'local';
@@ -369,13 +376,13 @@ function main(argv, env) {
 	];
 	const [command, argument] = argv;
 
-	if (command === 'promote' && ['auto', 'always', 'never'].includes(argument)) {
+	if (command === 'promote' && MODES.includes(argument)) {
 		const log = (line) => {
 			console.log(line);
 			summary(line);
 		};
 		try {
-			promote({ store, mode: argument, fingerprint, deployValidator, deployApp: () => run('pnpm', ['run', 'deploy'], root), source: source(env), log });
+			promote({ store, mode: argument, fingerprint, deployValidator, deployApp: () => run('pnpm', ['run', 'deploy'], root), source: deployer(env), log });
 		}
 		catch (error) {
 			log(`Promotion stopped: ${error.message}. Markers now (README.md § Recovering from a partial promotion):`);
@@ -391,12 +398,12 @@ function main(argv, env) {
 		return 0;
 	}
 	if (command === 'deploy-validator' && argument === undefined) {
-		const recorded = promoteValidator({ store, fingerprint, deploy: deployValidator, source: source(env) });
+		const recorded = promoteValidator({ store, fingerprint, deploy: deployValidator, source: deployer(env) });
 		console.log(`deploy:validator: deployed; ${VALIDATOR_MARKER} records ${recorded}.`);
 		return 0;
 	}
 	if (command === 'mark-app' && ['pending', 'deployed'].includes(argument)) {
-		markApp({ store, state: argument, source: source(env) });
+		markApp({ store, state: argument, source: deployer(env) });
 		console.log(`deploy-promotion: ${APP_MARKER} marker is ${argument} at ${store.head()}.`);
 		return 0;
 	}

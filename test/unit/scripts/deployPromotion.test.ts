@@ -96,8 +96,9 @@ describe('deciding whether the validator deploys', () => {
  * The fingerprint is what `wrangler deploy` would upload (the bundle) plus what
  * it would build the Container image from (its Docker context) plus the
  * Worker's configuration. These cases stand a fixture checkout in for the
- * repository and a fixed bundle in for wrangler; the last two run the real
- * bundler over the real validator.
+ * repository and a fixed bundle in for wrangler. Wrangler is never run here: a
+ * real bundle's stability (no absolute or temporary paths in the module) was
+ * measured by hand, and an unstable one would only redeploy the validator.
  */
 describe('fingerprinting the validator', () => {
 	const roots: string[] = [];
@@ -220,7 +221,7 @@ function world() {
 		},
 	};
 
-	function check(release: Release, options: { dirty?: boolean } = {}) {
+	function checkOut(release: Release, options: { dirty?: boolean } = {}) {
 		checkout = release;
 		dirty = options.dirty ?? false;
 	}
@@ -243,7 +244,7 @@ function world() {
 
 	/** One Deploy workflow run of `release`. */
 	function dispatch(release: Release, options: { mode?: 'auto' | 'always' | 'never'; fail?: 'validator' | 'app' } = {}) {
-		check(release);
+		checkOut(release);
 		return promote({ store, mode: options.mode ?? 'auto', ...commands(release, options.fail), source: 'actions', log: quiet });
 	}
 
@@ -252,7 +253,7 @@ function world() {
 		return tag && { tagged: tag.commit, ...parseMarker(tag.message) };
 	}
 
-	return { store, production, check, commands, dispatch, marker };
+	return { store, production, checkOut, commands, dispatch, marker };
 }
 
 describe('promoting a release', () => {
@@ -322,7 +323,7 @@ describe('promoting a release', () => {
 		w.dispatch(B);
 
 		// The operator deploys C from a local checkout with uncommitted changes.
-		w.check(C, { dirty: true });
+		w.checkOut(C, { dirty: true });
 		const local = w.commands(C);
 		promoteValidator({ store: w.store, fingerprint: local.fingerprint, deploy: local.deployValidator, source: 'local' });
 		markApp({ store: w.store, state: 'pending', source: 'local' });
@@ -448,6 +449,12 @@ describe('describing a marker', () => {
 		['an unconfirmed one', deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: pending'), `pending (started, never confirmed) ${COMMIT_A}`],
 	])('%s', (_case, text, expected) => {
 		expect(describeMarker(text)).toContain(expected);
+	});
+
+	it('names missing fields rather than printing undefined', () => {
+		const description = describeMarker('stream-keepr promotion marker\n\ncomponent: validator\n');
+
+		expect(description).toBe('(no state) (no commit)');
 	});
 });
 

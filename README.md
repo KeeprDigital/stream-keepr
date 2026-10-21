@@ -392,7 +392,13 @@ anything, and `deployed` once it succeeded. A deploy that died part-way leaves
 `pending`, which means "unconfirmed: either version may be serving". A deploy
 that cannot write its pending marker does not start. `pnpm deploy:status`
 prints both markers and says whether this checkout's validator would deploy.
-It reads `origin`, so it needs network access and nothing else.
+It reads `origin` and bundles the validator (`pnpm validator:dry-run`), so it
+needs network access and installed dependencies, but no Docker or Cloudflare
+credentials.
+
+Markers are force-pushed, and the last writer wins. Deploy runs are serialised,
+but nothing stops a local deploy during one, so don't start one. A local deploy
+from unpushed commits pushes them to `origin` along with its marker tag.
 
 The validator fingerprint is a sha256 of what `wrangler deploy` would upload
 and build: the bundle `pnpm validator:dry-run` produces (every import it
@@ -475,9 +481,11 @@ run's step summary). For example, with A in production, a Deploy of B that
 fails in `pnpm run deploy` leaves:
 
 - `production-validator`: `deployed` B: B's validator is serving.
-- `production`: `pending` B if the failure came at or after the D1 migration,
-  so A or B may be serving. It stays `deployed` A if the failure came in the
-  build, dry run or smoke test, before anything remote changed.
+- `production`: `pending` B, so A or B may be serving. A Deploy run marks it
+  pending before `pnpm run deploy` starts, so this holds whether the failure
+  came in the build or at the verify. A local `pnpm run deploy` that fails in
+  its build, dry run or smoke test leaves it `deployed` A, because that run
+  marks pending only right before the D1 migration.
 
 Pick the release production should run, then deploy it whole:
 
