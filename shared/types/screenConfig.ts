@@ -485,7 +485,7 @@ export function clampStoredModeConfigs<T extends ModeConfigsMap | null | undefin
 		return modeConfigs;
 	let clamped: Record<string, unknown> | undefined;
 	for (const [mode, stored] of Object.entries(modeConfigs)) {
-		if (!stored || !(mode in MODE_CONFIG_CONTRACTS))
+		if (!stored || !Object.hasOwn(MODE_CONFIG_CONTRACTS, mode))
 			continue;
 		const next = clampStoredModeConfig(mode as ScreenMode, stored);
 		if (next !== stored) {

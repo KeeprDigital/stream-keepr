@@ -28,7 +28,19 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
 	'topCut': 'its editor configures nothing yet',
 	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
-	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Animation Effect background, whose params are schema-derived already',
+	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
+};
+
+/**
+ * Values a contract's select field allows that its editor does not offer. An enum
+ * value has no nearest value to clamp a stored one to, so #498 left these for a
+ * maintainer to decide rather than tightening the contract.
+ */
+const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
+	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
+	'metagame.sortBy': ['conversionRate'],
+	// Shared Metagame vocabulary: Top Cards carries no minimum-points field to scope by.
+	'top-cards.scope': ['minPoints'],
 };
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
@@ -96,7 +108,8 @@ vi.mock('~/composables/screen/useScreenConfigUpdate', () => ({
 
 const loaded = { isLoaded: true, $reset: vi.fn() };
 mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlayersByEventId: vi.fn() }));
-mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [], loadByEventId: vi.fn() }));
+// One Player List, so every scope that needs one is offered.
+mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ ...loaded, loadState: vi.fn() }));
@@ -287,8 +300,11 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 					expect({ min: numberAttr(min), max: numberAttr(max), step: numberAttr(step) }, `${where}: bounds`)
 						.toEqual({ min: field!.min, max: field!.max, step: field!.step });
 				}
-				if (field!.control === 'select' && values)
-					expect(field!.values, `${where}: options`).toEqual(expect.arrayContaining(JSON.parse(values)));
+				if (field!.control === 'select' && values) {
+					const notOffered = OPTIONS_NOT_OFFERED[`${mode}.${key}`] ?? [];
+					expect([...new Set(JSON.parse(values) as string[])].sort(), `${where}: options`)
+						.toEqual(field!.values!.filter(value => !notOffered.includes(value)).sort());
+				}
 				rendered.add(key);
 			}
 			wrapper.unmount();

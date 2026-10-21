@@ -8,8 +8,8 @@ import { z } from 'zod';
  */
 export interface ConfigFieldMeta {
 	label: string;
-	/** A string field's control. Every other field's is read from its schema. */
-	control?: 'color' | 'text';
+	/** A colour string's control; any other string is a text input. Every other field's is read from its schema. */
+	control?: 'color';
 	step?: number;
 	/** Stored units per displayed unit: 1000 for a millisecond field edited in seconds. */
 	displayScale?: number;
@@ -76,7 +76,7 @@ function fieldMeta(field: z.ZodType): ConfigFieldMeta | undefined {
  * A number schema's inclusive bounds. An exclusive bound (`.positive()`) has no
  * nearest allowed value to offer or clamp to, so it is not read as one.
  */
-export function inclusiveNumberBounds(schema: z.ZodNumber): { min?: number; max?: number } {
+function inclusiveNumberBounds(schema: z.ZodNumber): { min?: number; max?: number } {
 	const bounds: { min?: number; max?: number } = {};
 	for (const check of schema.def.checks ?? []) {
 		const def = check._zod.def as { check: string; value?: unknown; inclusive?: boolean };
