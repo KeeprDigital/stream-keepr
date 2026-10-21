@@ -156,12 +156,12 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	it('rejects a newly introduced missing reference without changing configuration or usage', async () => {
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
-		config!.layout.frame.backgroundImage = {
+		config!.layout!.frame.backgroundImage = {
 			kind: 'asset',
 			assetId: testGraphicAssetId('missing-asset'),
 			revisionId: testGraphicAssetRevisionId('missing-revision'),
 		};
-		config!.layout.composition.items = config!.layout.composition.items.filter((item: { id: string }) => item.id !== 'sponsor-logo');
+		config!.layout!.composition.items = config!.layout!.composition.items.filter((item: { id: string }) => item.id !== 'sponsor-logo');
 
 		await expect($fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
@@ -187,7 +187,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		`);
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
-		config!.layout.frame.backgroundImageFit = 'contain';
+		config!.layout!.frame.backgroundImageFit = 'contain';
 
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,

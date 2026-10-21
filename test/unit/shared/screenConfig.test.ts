@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-	DEFAULT_BACKGROUND_CONFIG,
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
 	DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH,
-	DEFAULT_BROADCAST_GRAPHICS_CONFIG,
-	DEFAULT_FEATURE_MATCH_CONFIG,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	DEFAULT_SCREEN_CONFIG,
 	getDefaultConfigForMode,
@@ -15,11 +12,16 @@ import {
 
 describe('getDefaultConfigForMode', () => {
 	it('returns background config for background mode', () => {
-		expect(getDefaultConfigForMode('background')).toEqual(DEFAULT_BACKGROUND_CONFIG);
+		expect(getDefaultConfigForMode('background')).toEqual({ layers: [] });
 	});
 
 	it('returns feature-match config for feature-match mode', () => {
-		expect(getDefaultConfigForMode('feature-match')).toEqual(DEFAULT_FEATURE_MATCH_CONFIG);
+		expect(getDefaultConfigForMode('feature-match')).toMatchObject({
+			featureMatchId: null,
+			showNames: true,
+			leftSidePlayer: 'player1',
+			allowCounterControls: true,
+		});
 	});
 
 	it('returns feature-match-overlay config for feature-match-overlay mode', () => {
@@ -27,7 +29,7 @@ describe('getDefaultConfigForMode', () => {
 	});
 
 	it('returns broadcast-graphics config for broadcast-graphics mode', () => {
-		expect(getDefaultConfigForMode('broadcast-graphics')).toEqual(DEFAULT_BROADCAST_GRAPHICS_CONFIG);
+		expect(getDefaultConfigForMode('broadcast-graphics')).toEqual({ graphics: [] });
 	});
 });
 
@@ -56,8 +58,8 @@ describe('getDisplayDefaultsForMode', () => {
 		expect('deckSource' in getDisplayDefaultsForMode('deck')).toBe(false);
 
 		expect(getDisplayDefaultsForMode('feature-match')).toMatchObject({
-			showNames: DEFAULT_FEATURE_MATCH_CONFIG.showNames,
-			showClock: DEFAULT_FEATURE_MATCH_CONFIG.showClock,
+			showNames: true,
+			showClock: true,
 		});
 
 		expect(getDisplayDefaultsForMode('feature-match-overlay')).toMatchObject({
@@ -117,7 +119,7 @@ describe('default config constants', () => {
 	});
 
 	it('default background config starts with an empty layer stack — black until configured', () => {
-		expect(DEFAULT_BACKGROUND_CONFIG).toEqual({ layers: [] });
+		expect(getDefaultConfigForMode('background')).toEqual({ layers: [] });
 	});
 
 	it('default card config has null featureMatchId', () => {
@@ -170,7 +172,7 @@ describe('default config constants', () => {
 	});
 
 	it('default feature match config has null featureMatchId', () => {
-		expect(DEFAULT_FEATURE_MATCH_CONFIG.featureMatchId).toBeNull();
+		expect(getDefaultConfigForMode('feature-match').featureMatchId).toBeNull();
 	});
 
 	it('default feature match overlay config has disabled frame media playback', () => {

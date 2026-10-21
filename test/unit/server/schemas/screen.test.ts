@@ -1,4 +1,4 @@
-import type { FeatureMatchOverlayModeConfig, ModeConfigsMap, StoredModeConfigs } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	backgroundModeConfigSchema,
@@ -939,7 +939,7 @@ describe('metagameModeConfigSchema', () => {
 	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
 		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
 
-		const resolved = resolveScreenModeConfig({ metagame: validConfig } as StoredModeConfigs, 'metagame');
+		const resolved = resolveScreenModeConfig({ metagame: validConfig } as ModeConfigsMap, 'metagame');
 
 		expect(resolved.minPoints).toBe(9);
 		expect(resolved.archetypeLimit).toBeNull();

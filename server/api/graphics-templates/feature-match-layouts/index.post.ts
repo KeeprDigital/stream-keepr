@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'Screen not found' });
 
 	const stored = screen.modeConfigs?.['feature-match-overlay'];
-	if (!stored) {
+	if (!stored?.layout) {
 		throw createError({
 			statusCode: 404,
 			statusMessage: 'Not Found',

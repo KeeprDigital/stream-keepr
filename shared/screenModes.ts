@@ -1,7 +1,11 @@
 import type { ScreenModeConfigContract } from './screenModeConfigs/contract';
 import type { DisplayType, ScreenMode } from './types/enums';
+import { backgroundModeConfigContract } from './screenModeConfigs/background';
+import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from './screenModeConfigs/card';
 import { deckModeConfigContract } from './screenModeConfigs/deck';
+import { featureMatchModeConfigContract } from './screenModeConfigs/featureMatch';
+import { featureMatchOverlayModeConfigContract } from './screenModeConfigs/featureMatchOverlay';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
@@ -62,12 +66,11 @@ export interface ScreenModeDefinition {
 	 */
 	backgroundLayers?: true;
 	/**
-	 * The mode's config contract: the one source of its config's shape, type, and
-	 * defaults, from which its write forms are derived (#587). Absent while the mode
-	 * is still on the old form, a hand-written type beside a hand-written schema;
-	 * every plain overlay mode has one (#588), and #589 moves the rest.
+	 * The mode's config contract: the one source of its config's shape, type,
+	 * defaults, and authored stacks, from which its write forms are derived
+	 * (ADR-0037).
 	 */
-	config?: ScreenModeConfigContract<any>;
+	config: ScreenModeConfigContract<any>;
 }
 
 /** Generic Screen container controls a graphics host replaces with its own canvas and styling. */
@@ -93,12 +96,12 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
  * widened for readers asking about any mode.
  */
 const SCREEN_MODE_DEFINITIONS = {
-	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background' },
+	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background', config: backgroundModeConfigContract },
 	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract },
 	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract },
 	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract },
 	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract },
-	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls' },
+	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
 		icon: 'i-lucide-panels-top-left',
@@ -109,6 +112,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			canvasWidth: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH,
 			canvasHeight: DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT,
 		},
+		config: featureMatchOverlayModeConfigContract,
 	},
 	'broadcast-graphics': {
 		label: 'Broadcast Graphics',
@@ -121,6 +125,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			canvasHeight: DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT,
 			useScreenAlignment: false,
 		},
+		config: broadcastGraphicsModeConfigContract,
 	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract },
 	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract },
@@ -147,16 +152,9 @@ export function screenModeSupportsBackgroundLayers(mode: ScreenMode): mode is Ba
 export const BACKGROUND_LAYERS_CAPABLE_MODES: readonly BackgroundLayersCapableMode[]
 	= SCREEN_MODE_VALUES.filter(screenModeSupportsBackgroundLayers);
 
-/** The Screen Modes whose definition declares a config contract. */
-export type ConfigContractMode = {
-	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { config: ScreenModeConfigContract<any> } ? M : never;
-}[ScreenMode];
-
-/** A mode's config contract, or `undefined` while the mode is still on the old form. */
-export function screenModeConfigContract<M extends ConfigContractMode>(mode: M): typeof SCREEN_MODE_DEFINITIONS[M]['config'];
-export function screenModeConfigContract(mode: ScreenMode): ScreenModeConfigContract | undefined;
-export function screenModeConfigContract(mode: ScreenMode): ScreenModeConfigContract | undefined {
-	return SCREEN_MODES[mode].config;
+/** A mode's config contract. */
+export function screenModeConfigContract<M extends ScreenMode>(mode: M): typeof SCREEN_MODE_DEFINITIONS[M]['config'] {
+	return SCREEN_MODE_DEFINITIONS[mode].config;
 }
 
 /** Derive which generic Container controls apply to a Screen Mode. */

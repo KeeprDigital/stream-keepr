@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 	const stored = screen.modeConfigs?.['feature-match-overlay'];
-	if (!stored) {
+	if (!stored?.layout) {
 		throw createError({
 			statusCode: 404,
 			statusMessage: 'Not Found',

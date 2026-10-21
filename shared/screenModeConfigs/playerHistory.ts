@@ -2,23 +2,15 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import { PLAYER_HISTORY_COLUMN_KEY_VALUES } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
-
-const playerHistoryColumnConfigSchema = z.object({
-	key: z.enum(PLAYER_HISTORY_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationShape } from './subShapes';
 
 /** The Player History Screen Mode's config contract: its shape, type, and defaults. */
 export const playerHistoryModeConfigContract = defineScreenModeConfigContract({
 	playerId: z.number().int().positive().nullable(),
-	columns: z.array(playerHistoryColumnConfigSchema).min(1).max(6),
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
+	columns: z.array(columnConfigSchema(PLAYER_HISTORY_COLUMN_KEY_VALUES)).min(1).max(6),
+	...headerConfigShape,
 	rowsPerPage: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
+	...pageRotationShape,
 }, {
 	playerId: null,
 	columns: [
@@ -27,11 +19,9 @@ export const playerHistoryModeConfigContract = defineScreenModeConfigContract({
 		{ key: 'table', visible: true },
 		{ key: 'outcome', visible: true },
 	],
-	showHeader: true,
-	headerText: undefined,
+	...DEFAULT_HEADER_CONFIG,
 	rowsPerPage: 8,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
+	...DEFAULT_PAGE_ROTATION,
 });
 
 export type PlayerHistoryModeConfig = ScreenModeConfigOf<typeof playerHistoryModeConfigContract>;

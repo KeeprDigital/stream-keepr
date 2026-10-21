@@ -1,20 +1,18 @@
-import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
-import type { CardModeConfig } from '../screenModeConfigs/card';
-import type { DeckModeConfig } from '../screenModeConfigs/deck';
-import type { MetagameModeConfig } from '../screenModeConfigs/metagame';
-import type { PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
-import type { StandingsModeConfig } from '../screenModeConfigs/standings';
-import type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
-import type { TopCutModeConfig } from '../screenModeConfigs/topCut';
+import type { AnimationEffectSelection, FeatureMatchOverlayFrameAnimationConfig } from '../animationEffects';
+import type { ScreenModeConfigOf } from '../screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '../screenModes';
-import type { HorizontalAlign, PlayerSide, ScreenColorMode, ScreenMode, VerticalAlign } from './enums';
+import type { HorizontalAlign, ScreenColorMode, ScreenMode, VerticalAlign } from './enums';
 import type { MediaFit } from './graphicItem';
-import type { BroadcastGraphicConfig, GraphicChannelConfig } from './graphics';
+import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { backgroundModeConfigContract } from '../screenModeConfigs/background';
+import { broadcastGraphicsModeConfigContract } from '../screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from '../screenModeConfigs/card';
 import { deckModeConfigContract } from '../screenModeConfigs/deck';
+import { featureMatchModeConfigContract } from '../screenModeConfigs/featureMatch';
+import { featureMatchOverlayModeConfigContract } from '../screenModeConfigs/featureMatchOverlay';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
@@ -52,34 +50,6 @@ export const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
 
 // ─── Mode-specific configs ─────────────────────────────────────────────
 
-export interface FeatureMatchModeConfig {
-	featureMatchId: number | null;
-	showNames: boolean;
-	showRecords: boolean;
-	showDeckNames: boolean;
-	showPronouns: boolean;
-	showClock: boolean;
-	showCounters: boolean;
-	showSeatLabels?: boolean;
-	// Layout — which player data slot renders on the left side of the screen
-	leftSidePlayer?: PlayerSide;
-	// Turn controls — show the turn/active-player widget
-	showTurnControls?: boolean;
-	// Overtime — show the extra turns tracker when overtime begins
-	showOvertime?: boolean;
-	// Mulligan info — show the cards kept indicator
-	showMulliganInfo?: boolean;
-	// LGS — show the player's Local Game Store
-	showLgs?: boolean;
-	// Table number — show the feature match table number in the header
-	showTableNumber?: boolean;
-	// Control permissions — what players can do from the control screen
-	allowLifeControls?: boolean;
-	allowGameWinControls?: boolean;
-	allowCounterControls?: boolean;
-}
-
-export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
 /** The live rendering variants a graphics Screen Mode Definition exposes. */
 export type ScreenOutput = 'overlay' | 'fill' | 'key';
 export type FeatureMatchOverlayOutput = ScreenOutput;
@@ -298,14 +268,20 @@ export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as Fe
 export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 
 /**
- * The config of every mode on its config contract (ADR-0037: Metagame #587, the
- * other plain overlay modes #588) is inferred from that contract, which also holds
- * its defaults. Re-exported here because this is where every mode's config type
- * lives, beside the Deck board helpers its contract module owns.
+ * Every Screen Mode's config is inferred from its config contract, which also
+ * holds its defaults (ADR-0037). Re-exported here because this is where every
+ * mode's config type lives, beside the Deck board helpers its contract module
+ * owns. The Background Layer, Broadcast Graphic, and Feature Match Layout types
+ * above stay hand-written: the server's schemas for those fields are typed to
+ * produce them.
  */
+export type { BackgroundModeConfig } from '../screenModeConfigs/background';
+export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
 export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
 export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoardLayout, ResolvedDeckBoards } from '../screenModeConfigs/deck';
 export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
+export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
+export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
@@ -386,115 +362,48 @@ export interface FeatureMatchLayoutConfig {
 	composition: BroadcastGraphicConfig;
 }
 
-export interface FeatureMatchOverlayModeConfig {
-	featureMatchId: number | null;
-	presetId: FeatureMatchOverlayPresetId;
-	layout: FeatureMatchLayoutConfig;
-}
-
 export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_WIDTH = 1920;
 export const DEFAULT_BROADCAST_GRAPHICS_CANVAS_HEIGHT = 1080;
 
 /**
- * Screen-owned Broadcast Graphics mode configuration.
- *
- * `graphics` is the Screen's authored back-to-front stack of Broadcast
- * Graphics; concurrent graphics always render in this order. `channels` declares
- * the Screen's Graphic Channels, which each graphic joins by id — a lane is a
- * design decision about the show, so it is authored here, while which member a
- * channel currently holds is derived from the Live Session's playout intents.
- * The Screen's one configurable pixel canvas remains the Screen's own width and
- * height, and playout, inputs, and animation are live state rather than authored
- * configuration.
+ * Every Screen Mode's config contract, which holds its defaults and authored
+ * stacks. The same contracts as the Screen Mode Definitions' `config`, which
+ * `test/unit/server/schemas/screenModeConfigContracts.test.ts` pins; listed here
+ * because the definitions import this module.
  */
-export interface BroadcastGraphicsModeConfig {
-	graphics: BroadcastGraphicConfig[];
-	/** Absent declares no Graphic Channels, so every graphic runs concurrently. */
-	channels?: GraphicChannelConfig[];
-	/**
-	 * The Screen's Broadcast Graphics Background: one Animation Effect the stack
-	 * composes over. Absent is no background, which is what every Screen ships as
-	 * and what keeps an Overlay Output transparent behind its graphics.
-	 */
-	background?: BroadcastGraphicsBackgroundConfig;
-}
+const MODE_CONFIG_CONTRACTS = {
+	'background': backgroundModeConfigContract,
+	'card': cardModeConfigContract,
+	'deck': deckModeConfigContract,
+	'standings': standingsModeConfigContract,
+	'topCut': topCutModeConfigContract,
+	'feature-match': featureMatchModeConfigContract,
+	'feature-match-overlay': featureMatchOverlayModeConfigContract,
+	'broadcast-graphics': broadcastGraphicsModeConfigContract,
+	'metagame': metagameModeConfigContract,
+	'top-cards': topCardsModeConfigContract,
+	'player-history': playerHistoryModeConfigContract,
+} as const;
 
-// Union type for all mode configs
-export type ScreenModeConfig = DeckModeConfig | CardModeConfig | BackgroundModeConfig | StandingsModeConfig | TopCutModeConfig | FeatureMatchModeConfig | FeatureMatchOverlayModeConfig | BroadcastGraphicsModeConfig | MetagameModeConfig | TopCardsModeConfig | PlayerHistoryModeConfig;
-
-/**
- * The Background Screen's configuration: an ordered stack of Background Layers,
- * replacing the former Idle mode's single optional media background. The old
- * `mediaBackground` config resets rather than mapping onto a layer — the
- * ADR-0014 reset precedent, accepted for the same small install base.
- */
-export interface BackgroundModeConfig {
-	layers: BackgroundLayer[];
-}
-
-/** A fresh Background Screen starts empty — black until configured. */
-export const DEFAULT_BACKGROUND_CONFIG: BackgroundModeConfig = {
-	layers: [],
-};
-
-export const DEFAULT_FEATURE_MATCH_CONFIG: FeatureMatchModeConfig = {
-	featureMatchId: null,
-
-	showNames: true,
-	showRecords: true,
-	showDeckNames: true,
-	showPronouns: true,
-	showClock: true,
-	showCounters: true,
-	showSeatLabels: true,
-	showTurnControls: true,
-	showOvertime: true,
-	showMulliganInfo: true,
-	showLgs: true,
-	showTableNumber: true,
-	leftSidePlayer: 'player1',
-	allowLifeControls: true,
-	allowGameWinControls: true,
-	allowCounterControls: true,
-};
-
-export const DEFAULT_BROADCAST_GRAPHICS_CONFIG: BroadcastGraphicsModeConfig = {
-	graphics: [],
-};
-
-// Canonical default config map for all screen modes.
-export const DEFAULT_MODE_CONFIGS = {
-	'background': DEFAULT_BACKGROUND_CONFIG,
-	'card': cardModeConfigContract.defaults,
-	'deck': deckModeConfigContract.defaults,
-	'standings': standingsModeConfigContract.defaults,
-	'topCut': topCutModeConfigContract.defaults,
-	'feature-match': DEFAULT_FEATURE_MATCH_CONFIG,
-	'feature-match-overlay': DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
-	'broadcast-graphics': DEFAULT_BROADCAST_GRAPHICS_CONFIG,
-	'metagame': metagameModeConfigContract.defaults,
-	'top-cards': topCardsModeConfigContract.defaults,
-	'player-history': playerHistoryModeConfigContract.defaults,
-} satisfies { [K in ScreenMode]: ScreenModeConfig };
+/** Any one mode's config. */
+export type ScreenModeConfig = ScreenModeConfigOf<(typeof MODE_CONFIG_CONTRACTS)[ScreenMode]>;
 
 /**
  * Map of mode to config type: each mode's defaults, plus the optional
  * Background Layer stack for every mode whose definition declares one.
  */
 export type ModeConfigTypeMap = {
-	[M in ScreenMode]: (typeof DEFAULT_MODE_CONFIGS)[M]
+	[M in ScreenMode]: ScreenModeConfigOf<(typeof MODE_CONFIG_CONTRACTS)[M]>
 		& (M extends BackgroundLayersCapableMode ? BackgroundLayersModeConfig : unknown);
 };
 
-// Type for the modeConfigs column - partial map keyed by mode
-export type ModeConfigsMap = Partial<ModeConfigTypeMap>;
-
 /**
- * Mode configurations as stored: each one a fragment, because a
- * mode-configuration PATCH writes fragments. `resolveScreenModeConfig`
- * completes one from its mode's defaults.
+ * Mode configurations as stored, the `modeConfigs` column: each one a fragment,
+ * because a mode-configuration PATCH writes fragments and a full write accepts
+ * what storage holds (ADR-0037). `resolveScreenModeConfig` completes one from its
+ * mode's defaults.
  */
-export type StoredModeConfigs = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]> };
+export type ModeConfigsMap = { [M in ScreenMode]?: Partial<ModeConfigTypeMap[M]> };
 
 // ─── Nullable config types (for reset / clear-to-default operations) ───
 // Sending `null` for a field means "delete this key from stored config".
@@ -504,29 +413,28 @@ export type NullableScreenConfig = { [K in keyof ScreenConfig]: ScreenConfig[K] 
  * Keys a display reset must not touch. Two kinds qualify:
  *
  * - Data bindings, such as the selected Feature Match Slot or Player: resetting
- *   display settings should not unpick what the Screen is pointing at.
- * - Authored content with no recovery path, such as a Broadcast Graphics
- *   Screen's stack of Broadcast Graphics. Resetting a Feature Match Layout
- *   restores a Feature Match Overlay Preset — a non-empty design the author can
- *   keep editing — whereas resetting the Broadcast Graphics stack would empty
- *   it, and there is no undo. The two are not the same action.
+ *   display settings should not unpick what the Screen is pointing at. They are
+ *   listed here.
+ * - Authored content with no recovery path: a contract's authored stacks, such
+ *   as a Broadcast Graphics Screen's stack of Broadcast Graphics, and every
+ *   declaring mode's own `backgroundLayers` stack. Neither is listed here: see
+ *   `getDisplayDefaultsForMode`. Resetting a Feature Match Layout restores a
+ *   Feature Match Overlay Preset, a non-empty design the author can keep
+ *   editing, whereas resetting the Broadcast Graphics stack would empty it, and
+ *   there is no undo. The two are not the same action.
  */
 type ModeResetPreservedKeysMap = {
 	[K in ScreenMode]: readonly (keyof ModeConfigTypeMap[K])[];
 };
 
 const MODE_RESET_PRESERVED_KEYS = {
-	// A layer stack is authored content with no recovery path, like the
-	// Broadcast Graphics stack: a display reset must not empty it. A mode's own
-	// `backgroundLayers` stack is the same, and is preserved for every mode that
-	// declares one without being listed here — see `getDisplayDefaultsForMode`.
-	'background': ['layers'],
+	'background': [],
 	'card': ['featureMatchId'],
 	'deck': ['deckSource'],
 	'topCut': [],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
-	'broadcast-graphics': ['graphics'],
+	'broadcast-graphics': [],
 	'standings': ['viewMode', 'topNCount', 'sliceStart', 'sliceEnd', 'playerListId', 'revealCount', 'roundId'],
 	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
@@ -535,7 +443,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 
 // Helper to get default config for a mode
 export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConfigTypeMap[T] {
-	return DEFAULT_MODE_CONFIGS[mode] as ModeConfigTypeMap[T];
+	return MODE_CONFIG_CONTRACTS[mode].defaults as ModeConfigTypeMap[T];
 }
 
 /**
@@ -545,7 +453,7 @@ export function getDefaultConfigForMode<T extends ScreenMode>(mode: T): ModeConf
  * resource a Screen publishes (#604).
  */
 export function resolveScreenModeConfig<T extends ScreenMode>(
-	modeConfigs: StoredModeConfigs | null | undefined,
+	modeConfigs: ModeConfigsMap | null | undefined,
 	mode: T,
 ): ModeConfigTypeMap[T] {
 	return {
@@ -562,14 +470,17 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
  */
 export function getDisplayDefaultsForMode<T extends ScreenMode>(mode: T): Partial<ModeConfigTypeMap[T]> {
 	const full = getDefaultConfigForMode(mode);
-	const preservedKeys = MODE_RESET_PRESERVED_KEYS[mode];
+	const preservedKeys: readonly string[] = [
+		...MODE_RESET_PRESERVED_KEYS[mode],
+		...MODE_CONFIG_CONTRACTS[mode].authoredStacks,
+		// A Background Layer stack is never a display default, whichever mode
+		// declares it, so a reset can neither empty nor replace one.
+		'backgroundLayers',
+	];
 	const display = { ...full } as Record<string, unknown>;
 	for (const key of preservedKeys) {
-		delete display[key as string];
+		delete display[key];
 	}
-	// A Background Layer stack is never a display default, whichever mode
-	// declares it, so a reset can neither empty nor replace one.
-	delete display.backgroundLayers;
 	return display as Partial<ModeConfigTypeMap[T]>;
 }
 

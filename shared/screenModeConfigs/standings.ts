@@ -7,11 +7,7 @@ import {
 	STANDINGS_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
-
-const standingsColumnConfigSchema = z.object({
-	key: z.enum(STANDINGS_COLUMN_KEY_VALUES),
-	visible: z.boolean(),
-}).strict();
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationShape } from './subShapes';
 
 /** The Standings Screen Mode's config contract: its shape, type, and defaults. */
 export const standingsModeConfigContract = defineScreenModeConfigContract({
@@ -19,14 +15,13 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	viewMode: z.enum(STANDINGS_VIEW_MODE_VALUES),
 
 	// Column configuration (ordered array — order = display order)
-	columns: z.array(standingsColumnConfigSchema).min(1).max(10),
+	columns: z.array(columnConfigSchema(STANDINGS_COLUMN_KEY_VALUES)).min(1).max(10),
 	showArchetypeColors: z.boolean(),
 	maxTableWidth: z.number().int().positive().optional(),
 	roundId: z.number().int().positive().optional(),
 
 	// Header
-	showHeader: z.boolean(),
-	headerText: z.string().max(200).optional(),
+	...headerConfigShape,
 
 	// Top N mode
 	topNCount: z.number().int().min(1).max(500),
@@ -45,14 +40,9 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	revealIntervalMs: z.number().int().min(1000).max(30000),
 	revealedCount: z.number().int().nonnegative().max(64),
 
-	// Pagination — currentPage is the manually selected page (auto-page off);
-	// rotationAnchor is the Page Rotation's epoch (auto-page on), written only
-	// by operator surfaces and projected against server time by every rendering.
+	// Pagination
 	rowsPerPage: z.number().int().min(1).max(100),
-	autoPageEnabled: z.boolean(),
-	autoPageIntervalMs: z.number().int().min(3000).max(60000),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
+	...pageRotationShape,
 
 	// Animation
 	animateEntries: z.boolean(),
@@ -68,8 +58,7 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	showArchetypeColors: false,
 	maxTableWidth: undefined,
 	roundId: undefined,
-	showHeader: true,
-	headerText: undefined,
+	...DEFAULT_HEADER_CONFIG,
 	topNCount: 8,
 	sliceStart: 1,
 	sliceEnd: 16,
@@ -80,8 +69,7 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	revealIntervalMs: 5000,
 	revealedCount: 0,
 	rowsPerPage: 8,
-	autoPageEnabled: false,
-	autoPageIntervalMs: 10000,
+	...DEFAULT_PAGE_ROTATION,
 	animateEntries: true,
 });
 

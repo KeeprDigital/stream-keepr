@@ -85,15 +85,20 @@ describe('screens API', () => {
 	});
 
 	it('renames a Screen whose stored mode configs are PATCH fragments, sending them back as the Edit Screen dialog does', async () => {
-		// The Deck, Standings, Metagame, Top Cards and Player History fragments each
-		// lack a field the mode's complete config requires, which the old form's full
-		// write refused (#588); Card and Top Cut never required one. A full write of a
-		// mode on its config contract accepts what storage holds.
+		// Every fragment but Card's and Top Cut's lacks a field the mode's complete
+		// config requires, which the old form's full write refused (#588, #589); Card
+		// and Top Cut never required one. A full write of a mode on its config
+		// contract accepts what storage holds. An empty PATCH leaves the Background
+		// fragment empty, which is also what a display reset leaves.
 		const fragments = {
+			'background': {},
 			'card': { scale: 1.5 },
 			'deck': { showDeckName: false },
 			'standings': { viewMode: 'all' },
 			'topCut': { bracketSize: 16 },
+			'feature-match': { showClock: false },
+			'feature-match-overlay': { presetId: 'full-table' },
+			'broadcast-graphics': { channels: [{ id: 'lower-thirds', name: 'Lower Thirds' }] },
 			'metagame': { topN: 16 },
 			'top-cards': { limit: 12 },
 			'player-history': { rowsPerPage: 5 },

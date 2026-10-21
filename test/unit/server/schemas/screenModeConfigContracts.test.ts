@@ -1,6 +1,6 @@
-import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
 import {
+	modeConfigCompleteSchemaMap,
 	modeConfigPatchSchemaMap,
 	modeConfigSchemaMap,
 	modeConfigsMapSchema,
@@ -11,64 +11,68 @@ import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 /**
- * One config contract per Screen Mode (#587 → #588 → #589).
+ * One config contract per Screen Mode (ADR-0037).
  *
- * Every mode's defaults parse against its schema and round-trip through a PATCH.
- * A mode on its contract has its config type, defaults, and PATCH form from one
- * source. A mode still on the old form is pending: it is named here, so the list
- * shrinks as each one migrates, and moving a mode onto its contract without
- * taking it off this list fails the first test below.
+ * Every mode's config type, defaults, and write forms come from its contract.
+ * Its defaults parse against its complete schema and both write paths and
+ * round-trip through a PATCH; each field's PATCH form takes the field alone, and
+ * `null` puts its default back, except an authored stack, which `null` cannot
+ * delete.
  */
-const PENDING_MODES: readonly ScreenMode[] = [
-	'background',
-	'feature-match',
-	'feature-match-overlay',
-	'broadcast-graphics',
-];
+it('declares the Background Layer stack and the Broadcast Graphics stack authored, and nothing else', () => {
+	const declared = Object.fromEntries(SCREEN_MODE_VALUES
+		.map(mode => [mode, screenModeConfigContract(mode).authoredStacks] as const)
+		.filter(([, stacks]) => stacks.length > 0));
 
-const contractModes = SCREEN_MODE_VALUES.filter(mode => screenModeConfigContract(mode) !== undefined);
-
-it('names every Screen Mode exactly once, as on its config contract or pending', () => {
-	expect([...contractModes, ...PENDING_MODES].toSorted()).toEqual([...SCREEN_MODE_VALUES].toSorted());
+	expect(declared).toEqual({ 'background': ['layers'], 'broadcast-graphics': ['graphics'] });
 });
 
-describe.each(SCREEN_MODE_VALUES)('the %s defaults', (mode) => {
+describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
+	const contract = screenModeConfigContract(mode);
 	const defaults = getDefaultConfigForMode(mode);
 	const patchSchema = modeConfigPatchSchemaMap[mode];
 
-	it('parse unchanged against both write paths', () => {
+	it('is where the mode\'s defaults come from', () => {
+		expect(defaults).toBe(contract.defaults);
+	});
+
+	it('has defaults that parse unchanged against the complete config and both write paths', () => {
+		expect(modeConfigCompleteSchemaMap[mode].parse(defaults)).toEqual(defaults);
 		expect(modeConfigSchemaMap[mode].parse(defaults)).toEqual(defaults);
 		expect(modeConfigsMapSchema.parse({ [mode]: defaults })).toEqual({ [mode]: defaults });
 	});
 
-	it('round-trip through a PATCH onto a new Screen', () => {
+	it('round-trips its defaults through a PATCH onto a new Screen', () => {
 		const patch = patchSchema.parse(defaults) as Record<string, unknown>;
 		const stored = parseModeConfigPatchResult({}, mode, patch);
 
 		expect(patch).toEqual(defaults);
 		expect(resolveScreenModeConfig(stored, mode)).toEqual(defaults);
 	});
-});
-
-describe.each(contractModes)('the %s config contract', (mode) => {
-	const contract = screenModeConfigContract(mode)!;
-	const patchSchema = modeConfigPatchSchemaMap[mode];
-
-	it('is where the mode\'s defaults come from, and they parse against its own schema', () => {
-		expect(getDefaultConfigForMode(mode)).toBe(contract.defaults);
-		expect(contract.schema.parse(contract.defaults)).toEqual(contract.defaults);
-	});
 
 	it('injects nothing a PATCH leaves out', () => {
 		expect(patchSchema.parse({})).toEqual({});
 	});
 
-	it.each(Object.entries(contract.defaults))('takes %s on its own, and null puts its default back', (key, value) => {
+	const authoredStacks: readonly string[] = contract.authoredStacks;
+	const fields = Object.entries(contract.defaults).filter(([key]) => !authoredStacks.includes(key));
+
+	it.each(fields)('takes %s on its own, and null puts its default back', (key, value) => {
 		expect(patchSchema.parse({ [key]: value })).toEqual({ [key]: value });
 
 		const cleared = parseModeConfigPatchResult({}, mode, patchSchema.parse({ [key]: null }) as Record<string, unknown>);
 		expect(Object.keys(cleared[mode] ?? {})).not.toContain(key);
 		expect(resolveScreenModeConfig(cleared, mode)).toEqual(contract.defaults);
+	});
+
+	it.each(authoredStacks)('replaces its authored %s stack, but refuses to delete it with null', (key) => {
+		// `null` deletes a stored key, which would empty an authored stack with no
+		// way back; a display reset leaves one alone for the same reason.
+		const stack = (contract.defaults as Record<string, unknown>)[key];
+
+		expect(patchSchema.parse({ [key]: stack })).toEqual({ [key]: stack });
+		expect(patchSchema.safeParse({ [key]: null }).success).toBe(false);
+		expect(getDisplayDefaultsForMode(mode)).not.toHaveProperty(key);
 	});
 
 	it('saves what storage holds back through a full write unchanged, as the Edit Screen dialog sends it', () => {
@@ -77,9 +81,4 @@ describe.each(contractModes)('the %s config contract', (mode) => {
 		for (const stored of [{}, getDisplayDefaultsForMode(mode)])
 			expect(modeConfigsMapSchema.parse({ [mode]: stored })).toEqual({ [mode]: stored });
 	});
-});
-
-describe('modes pending a config contract', () => {
-	for (const mode of PENDING_MODES)
-		it.todo(`${mode}: move onto its config contract (#589)`);
 });
