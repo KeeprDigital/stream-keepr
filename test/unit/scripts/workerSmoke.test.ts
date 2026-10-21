@@ -202,6 +202,59 @@ describe('the built Worker smoke runner', () => {
 		expect(worker.kill).toHaveBeenCalled();
 	});
 
+	/**
+	 * A Worker that reaches sign-in and answers it with `setCookies`, then
+	 * refuses the first signed-in request, so a cookie the probe accepts shows
+	 * up as the next probe's failure.
+	 */
+	async function signInAnswering(setCookies: string[]) {
+		const repositoryRoot = await builtRepository();
+		const spawnProcess = vi.fn()
+			.mockImplementationOnce(() => exitedProcess(0))
+			.mockImplementationOnce(() => livingProcess());
+		const signIn = new Response('{}', { status: 200 });
+		for (const value of setCookies)
+			signIn.headers.append('set-cookie', value);
+		const fetchRequest = vi.fn()
+			.mockResolvedValueOnce(Response.json({ serverTime: Date.now() }))
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(Response.json({ outcome: 'created' }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(signIn)
+			.mockResolvedValueOnce(new Response(null, { status: 401 }));
+		return runWorkerSmoke({ repositoryRoot, spawnProcess, fetchRequest });
+	}
+
+	it.each([
+		['without HttpOnly', 'better-auth.session_token=t; Max-Age=604800; Path=/; SameSite=Lax'],
+		['without SameSite=Lax', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=None; Secure'],
+		['scoped below the root path', 'better-auth.session_token=t; Max-Age=604800; Path=/api; HttpOnly; SameSite=Lax'],
+		['named __Secure- but not Secure', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
+		['Secure but not named __Secure-', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax; Secure'],
+	])('refuses a session cookie %s', async (_case, setCookie) => {
+		await expect(signInAnswering([setCookie])).rejects.toMatchObject({
+			probe: 'auth-sign-in',
+			failureClass: 'session-cookie-attributes',
+		});
+	});
+
+	it('names a sign-in that sets cookies but no session token', async () => {
+		await expect(signInAnswering(['unrelated=1; Path=/'])).rejects.toMatchObject({
+			probe: 'auth-sign-in',
+			failureClass: 'session-cookie-missing',
+		});
+	});
+
+	it.each([
+		['unprefixed over plain http', 'better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax'],
+		['__Secure- prefixed and Secure', '__Secure-better-auth.session_token=t; Max-Age=604800; Path=/; HttpOnly; Secure; SameSite=Lax'],
+	])('accepts a session cookie %s and signs in with it', async (_case, setCookie) => {
+		await expect(signInAnswering([setCookie])).rejects.toMatchObject({
+			probe: 'authenticated-api',
+			failureClass: 'unexpected-status',
+		});
+	});
+
 	it('escalates cleanup to SIGKILL and waits for the child exit', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 		const repositoryRoot = await builtRepository();

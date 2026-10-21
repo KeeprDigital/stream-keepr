@@ -20,11 +20,13 @@ const PLAYER_SIDES = ['player1', 'player2'] as const;
  * seeing the edge, and a clock.
  *
  * Edge-triggered, never level-triggered: only a flip this client observed
- * animates. The value an output joins on — first load, reload, a reconnect
- * that replays state — resolves the settled frame, the same recovery idiom the
- * composition-lifecycle phases follow. A client whose connection was suspended
- * across the flip therefore plays the motion late rather than never, which on
- * air reads as the reveal arriving, not as a defect.
+ * animates. The value an output joins on — first load, reload, or a reconnect
+ * whose re-read finds the flag unchanged — resolves the settled frame. A
+ * reconnect whose re-read finds it flipped is an edge this client observes
+ * late, so a client suspended across the flip plays the motion late rather
+ * than catching up as the composition-lifecycle phases do; on air that reads
+ * as the reveal arriving, not as a defect. CONTEXT.md records this as the
+ * host-local exception to the authoritative-phase invariant (ADR-0015).
  *
  * The edge watch is `sync` so the trigger lands in the same flush as the flag:
  * a reveal's first rendered frame is then already under its enter's start —

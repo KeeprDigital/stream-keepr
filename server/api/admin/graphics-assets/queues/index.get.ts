@@ -5,7 +5,7 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 /**
  * Every operational queue in one risk-ordered reading. Each queue reports its
  * complete count as an aggregate and carries a bounded, deadline-ordered
- * sample, so one reading costs the same against any size of backlog.
+ * sample, so one reading's size does not grow with the backlog.
  */
 export default defineEventHandler(async (event) => {
 	try {

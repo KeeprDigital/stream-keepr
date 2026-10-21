@@ -96,7 +96,6 @@ export function reportFailures(evidence, harness, failures) {
  *     evidence: ReturnType<typeof createAcceptanceEvidence>,
  *     record: (failures: { code: string, detail?: object }[]) => void,
  *     note: (failure: { code: string, detail?: object }) => void,
- *     defer: (detail: object, instructions?: string) => void,
  *     checks: () => number,
  *     failed: () => boolean,
  *   }) => Promise<object | void>,
@@ -108,7 +107,6 @@ export async function runAcceptanceHarness({ harness, secrets = [], run }) {
 	const notes = [];
 	let checks = 0;
 
-	let deferral;
 	const context = {
 		evidence,
 		record(found) {
@@ -117,14 +115,6 @@ export async function runAcceptanceHarness({ harness, secrets = [], run }) {
 		},
 		note(failure) {
 			notes.push(failure);
-		},
-		/**
-		 * End without proving anything, because a driver the run needs is not
-		 * available. A deferred run is never a pass: it prints what a person
-		 * still has to observe, and says plainly that nothing was proved.
-		 */
-		defer(detail, instructions) {
-			deferral = { detail, instructions };
 		},
 		/**
 		 * Whether anything has been recorded against the run so far. A harness
@@ -159,14 +149,12 @@ export async function runAcceptanceHarness({ harness, secrets = [], run }) {
 	// as the summary it could not print.
 	let closing;
 	try {
-		closing = deferral ? evidence.deferred(deferral.detail) : evidence.passed({ checks, ...summary });
+		closing = evidence.passed({ checks, ...summary });
 	}
 	catch (error) {
 		process.stderr.write(`${harness} acceptance failed:\n${refusalLine(harness, error)}\n`);
 		process.exitCode = 1;
 		return;
 	}
-	if (deferral?.instructions)
-		process.stdout.write(`${deferral.instructions}\n`);
 	process.stdout.write(`${closing}\n`);
 }

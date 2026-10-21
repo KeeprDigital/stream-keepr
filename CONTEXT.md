@@ -234,11 +234,11 @@ While the development bypass is active, each browser receives a synthetic **Loca
 _Avoid_: Graphics Author Session (the retired anonymous identity); login, which names the act.
 
 **Password Reset Link**:
-The single-use, expiring credential a Graphics Administrator hands a person out of band to set their own password — both a new account's first password and a forgotten one's replacement, since the installation sends no email (ADR-0010). It is returned exactly once and never stored; its token travels in the URL fragment. Redeeming it sets the password without creating a Session, ending existing ones, or lifting a ban.
+The single-use, expiring credential a Graphics Administrator hands a person out of band to set their own password — both a new account's first password and a forgotten one's replacement, since the installation sends no email (ADR-0010). It is returned exactly once and never stored; its token travels in the URL fragment. Redeeming it sets the password and ends every Session the account holds, without creating one or lifting a ban.
 _Avoid_: invite token, activation link.
 
 **Graphics Administrator**:
-A signed-in User additionally presenting the installation's administrator credential, authorised to create and manage User accounts, operate the Operations Cockpit and Operational Queues, and change Graphics Asset Library Capacity limits.
+Whoever presents the installation's shared administrator credential, authorised to create and manage User accounts, operate the Operations Cockpit and Operational Queues, and change Graphics Asset Library Capacity limits. The credential alone admits: no Session or User is required, until a roles effort redraws that seam (ADR-0010).
 
 **Graphics Authoring Lease**:
 The exclusive, Session-scoped right to edit one graphics authoring artifact: a Screen's complete graphics Edit workspace or one reusable graphics Template. Other Sessions may observe accepted changes but cannot modify the leased artifact.
@@ -645,6 +645,7 @@ _Avoid_: Dummy data, test data
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame
 - A graphics **Screen Output** uses one stable Screen URL with an output selection; an omitted or invalid selection renders the **Overlay Output**
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying
+- The **Feature Match Overlay**'s Sideboard reveal is the host-local exception: each output plays the **Deck List Graphic Item**'s authored enter or exit on its own clock from when it observes the reveal flag change, so outputs agree within realtime skew rather than at one authoritative time. First load and reload render the settled frame; an output that was disconnected across the change plays the motion late on **Reconnect Resync** rather than catching up (ADR-0015)
 - Application-level output alignment does not promise hardware genlock between browser windows or capture devices
 - A **Screen Output** renders its canvas scaled uniformly to fit its window, letterboxed, whenever its **Screen Mode Definition** registers viewport-fit scaling
 - Every realtime-fed surface re-reads authoritative state on **Reconnect Resync**; a reconnected **Screen Output** renders the current **Screen Mode** without waiting for the next change
@@ -702,7 +703,7 @@ _Avoid_: Dummy data, test data
 - A recipe lasts 50 ms to 10 s and may be delayed or staggered by up to 10 s; recipes in one phase measure delay from one shared phase start
 - A **Broadcast Graphic** or **Graphic Group** may stagger a selected subset of its direct items in list or reverse-list order, adding each item's offset to its own delay
 - A finite phase completes after its latest delayed or staggered recipe completes; an indefinite on-screen recipe does not prevent on-air
-- Every output and **Live Control** projects a phase from one authoritative effective start time; output acknowledgements never gate completion
+- Every output and **Live Control** projects a phase from one authoritative effective start time, except the **Feature Match Overlay**'s host-local Sideboard reveal; output acknowledgements never gate completion
 - An on-screen recipe begins after enter completes, cycles from the resting state to an excursion and back without accumulating, and runs once, a fixed 1–100 times, or until exit, with an optional pause of up to 60 s
 - A **Graphic Item**'s update recipe runs only when its rendered content changes; a **Broadcast Graphic**'s runs when any of its content changes
 - An update recipe cross-transitions old and new renderings: a slide moves old out and new in the same direction; a reveal moves one boundary with new content behind it

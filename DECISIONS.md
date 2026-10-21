@@ -298,7 +298,7 @@ Rotation is a pure projection of authoritative Broadcast Graphics Live Session s
 
 ## ADR-0012: Environment-dependent library behaviour is stated, tested, or recorded
 
-Accepted · 2026-08-20 · [#438](https://github.com/KeeprDigital/stream-keepr/issues/438)
+Accepted · 2026-08-20, census refreshed for 1.7.7 under #621 · [#438](https://github.com/KeeprDigital/stream-keepr/issues/438)
 
 ### Decision
 
@@ -312,7 +312,7 @@ Every test runs against libraries told they are under test: Vitest sets `NODE_EN
 
 ### The census
 
-A grep of the pinned `better-auth@1.6.29`, `@better-auth/core` and `@better-auth/telemetry` dists for `isTest`, `isDevelopment`, `isProduction` and `NODE_ENV`. It did not audit Nitro, h3, Nuxt, Drizzle, Ably or anything else — a floor, not a ceiling. Stated options live in `server/utils/authOptions.ts`, each with its reason.
+A grep of the pinned `better-auth`, `@better-auth/core` and `@better-auth/telemetry` dists for `isTest`, `isDevelopment`, `isProduction` and `NODE_ENV`. First taken at 1.6.29; re-run on 2026-10-21 at 1.7.7, the version `package.json` pins, which found the same sites plus the client store row. It did not audit Nitro, h3, Nuxt, Drizzle, Ably or anything else — a floor, not a ceiling. Stated options live in `server/utils/authOptions.ts`, each with its reason.
 
 | Site                                                 | Under test                                                                  | Decision                                                                                                                                                                |
 | ---------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -320,16 +320,17 @@ A grep of the pinned `better-auth@1.6.29`, `@better-auth/core` and `@better-auth
 | `validateSecret` returns early                       | Weak or default secrets admitted silently                                   | **Tested**: `test/unit/server/utils/authSecretValidation.test.ts` constructs the library in a child process with `NODE_ENV=production`                                  |
 | `rateLimit.enabled ?? isProduction`                  | Rate limiter off outside production                                         | **Accepted blindness**                                                                                                                                                  |
 | Client IP: header walk, then loopback under test/dev | Caller-writable `x-forwarded-for` read; header-less callers all `127.0.0.1` | **Split**: header stated as `advanced.ipAddress.ipAddressHeaders: ['cf-connecting-ip']`, pinned by `test/unit/server/utils/authClientIp.test.ts`; loopback **accepted** |
-| Secure-cookie prefix falls back to `isProduction`    | Cookies unprefixed locally, `__Secure-` in production                       | **Accepted blindness**                                                                                                                                                  |
+| Secure-cookie prefix falls back to `isProduction`    | Cookies unprefixed and not `Secure` wherever `NODE_ENV` is not `production` | **Accepted blindness**; the attribute agreement is pinned by `worker:smoke`                                                                                             |
 | Telemetry publishes only when `!isTest()`            | Suppressed                                                                  | **Stated**: `telemetry.enabled: false`                                                                                                                                  |
 | `/error` page blanked in production                  | Suite sees a dev page                                                       | **Accepted blindness** — response shape only                                                                                                                            |
 | Dev-only log lines                                   | Log output differs                                                          | **No action**                                                                                                                                                           |
+| Vue client store readonly and devtools-registered    | Client session state is a readonly ref outside production                   | **No action** — client-side only                                                                                                                                        |
 
 ### Why the blindnesses are accepted
 
 - **Rate limiting**: no value preserves behaviour on both sides — `false` disables production's limiter, `true` enables it locally, where every header-less caller shares one `127.0.0.1` bucket and the suite gains flake, not coverage. What the limiter keys on is stated and tested; observing it refuse is a built-Worker job ([#437](https://github.com/KeeprDigital/stream-keepr/issues/437)).
 - **Loopback for header-less callers** is inside the library past every option; nothing keyed on client IP is distinguishable locally. The last case in `authClientIp.test.ts` pins the residual and fails if a bump changes it.
-- **Secure-cookie prefix**: the fallback is right on both sides (a `__Secure-` cookie cannot be set over `http`), and no option means "secure exactly when the request is https" — `useSecureCookies` would be wrong on one side, and pinning `protocol` was measured and rejected on #410. The suite never sees the prefixed names; a built-Worker probe does.
+- **Secure-cookie prefix**: at 1.7.7 the prefix and `Secure` come from `useSecureCookies`, else a static `baseURL`'s scheme, else `isProduction`; this installation's `protocol: 'auto'` reaches the last. That fallback is right on both sides only if a deployed Worker's `NODE_ENV` is `production` (a `__Secure-` cookie cannot be set over `http`), and no option means "secure exactly when the request is https" — `useSecureCookies` would be wrong on one side, and pinning `protocol` was measured and rejected on #410. The suite never sees the prefixed names, and nor does the built Worker under local workerd: measured on 2026-10-21, its sign-in sets an unprefixed `better-auth.session_token` without `Secure`, so `isProduction` is false in that bundle there. `worker:smoke` asserts what plain http can judge: `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` exactly when the name is `__Secure-`-prefixed. Which name and attributes a deployed origin gets is unmeasured ([#451](https://github.com/KeeprDigital/stream-keepr/issues/451)).
 - **Blanked error page**: cosmetic; nothing about admission rides on it.
 
 ### Consequences
@@ -346,7 +347,7 @@ Accepted · 2026-08-23 · [#473](https://github.com/KeeprDigital/stream-keepr/is
 
 Animation Effects are built in-house behind a typed, **host-agnostic** contract (`create/setParams/resize/render(t)/dispose`) with per-effect configuration, in `app/utils/animation-effects/`. The nine effects of the vendored, `@ts-nocheck` Vanta.js fork were ported under their existing names and the fork is gone; the vocabulary is `ANIMATION_EFFECT_VALUES` in `shared/animationEffects.ts`. Rendering stays on three.js: five of the original nine are mesh-based (waves, rings, dots, net, globe) and three.js was already a dependency. Shader-only effects use a fullscreen `ShaderMaterial` base; a Canvas2D backend remains possible under the same contract. Effects animate autonomously from elapsed time — the fork's synthetic mouse drift, needed to move on a headless browser source, is retired.
 
-Two hosts use the renderer: the Feature Match Overlay Frame and the Background Screen's animation layer (ADR-0016), so the renderer must not assume either.
+Three hosts use the renderer: the Feature Match Overlay Frame, an Animation Effect Background Layer (in the Background Screen's stack, ADR-0016, and every plain overlay mode's), and the Broadcast Graphics Background, so the renderer must not assume any of them.
 
 ### Consequences
 
@@ -375,6 +376,7 @@ An operator needs a sub-second toggle from the control surface between games. Wr
 
 - The authored `visible` field ANDs with the live flag; the flag cannot resurrect an item its author hid.
 - Show/hide motion reuses the item's authored `enter`/`exit` Graphic Animation Recipes; the flag edge is a small, reusable per-item phase trigger in the overlay host.
+- That trigger is timed host-locally, the one exception to every output projecting a phase from one authoritative effective start time: each output starts the recipe on its own clock when it observes the edge, so outputs agree within realtime skew, and one disconnected across the flip plays it late on Reconnect Resync. The recipes are sub-second and the Host Contract carries no animation timing (#480), so this was accepted rather than designed around; changing it is product work.
 - A host without the Feature Match context (Broadcast Graphics) treats the item as revealed; visibility there stays an authoring concern.
 
 ### Rejected alternatives
@@ -475,7 +477,7 @@ Nothing is live and no database holds data worth keeping, so the history's backf
 
 ### Consequences
 
-- **Production must be wiped before this deploys**: against the old `_hub_migrations`, `0000_baseline` reads as unapplied and fails on existing tables. Every local D1 (`.wrangler/state`) needs the same reset.
+- **Production must be wiped before this deploys**: against the old `_hub_migrations`, `0000_baseline` reads as unapplied and fails on existing tables. Every local D1 (`.wrangler/state`) still holding the old history needs the same reset. The wipe is a one-time transition: a database that has applied `0000_baseline` is past it and takes later migrations normally (README § Database).
 - The per-migration suites and the #310 journal-replay test are gone; `baselineMigration.sqlite.test.ts` pins the hand-written tail and the constraints they used to prove. Future data migrations get their own held-back test (README § Database).
 - The baseline drops `proposed_name`'s `DEFAULT ''` (a backfill device in 0002, not in the schema).
 

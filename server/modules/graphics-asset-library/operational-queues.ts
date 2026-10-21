@@ -10,8 +10,8 @@
  *
  * Nothing here holds state of its own. Every reading is composed from
  * aggregates and bounded, ordered samples the catalogue already owns, so a
- * queue reading costs the same against any size of backlog and is always
- * reproducible from the catalogue.
+ * queue reading's size and statement count do not grow with the backlog, and
+ * it is always reproducible from the catalogue.
  */
 import type {
 	GraphicAssetId,

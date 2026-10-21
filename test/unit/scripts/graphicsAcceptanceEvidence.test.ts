@@ -144,11 +144,6 @@ describe('graphics staging acceptance evidence', () => {
 			.toBe('delivery-v1 acceptance passed checks=24 mode=local');
 	});
 
-	it('never calls an unobserved check a pass', () => {
-		expect(evidence().deferred({ path: 'manual-check-required' }))
-			.toBe('delivery-v1 acceptance deferred path=manual-check-required');
-	});
-
 	/**
 	 * An environment-variable name is thirty-five word characters and was read as
 	 * an opaque token, so the one failure whose whole job is to tell an operator
@@ -380,7 +375,7 @@ describe('a harness printing evidence it cannot format', () => {
 		expect(observed.stderr).toBe('');
 	});
 
-	it('still prints an ordinary pass, and a deferral under its instructions', async () => {
+	it('still prints an ordinary pass', async () => {
 		const passed = await observeHarness(() => runAcceptanceHarness({
 			harness: 'delivery-v1',
 			run: async ({ record }) => {
@@ -390,17 +385,5 @@ describe('a harness printing evidence it cannot format', () => {
 		}));
 		expect(passed.stdout).toBe('delivery-v1 acceptance passed checks=1 mode=local\n');
 		expect(passed.stderr).toBe('');
-
-		const deferred = await observeHarness(() => runAcceptanceHarness({
-			harness: 'delivery-v1',
-			run: async ({ defer }) => {
-				defer({ path: 'manual-check-required' }, 'Observe this by hand.');
-			},
-		}));
-		expect(deferred.stdout).toBe(
-			'Observe this by hand.\n'
-			+ 'delivery-v1 acceptance deferred path=manual-check-required\n',
-		);
-		expect(deferred.stderr).toBe('');
 	});
 });

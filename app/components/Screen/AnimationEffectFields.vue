@@ -10,10 +10,10 @@ import {
 
 /**
  * The shared Animation Effect editor: the effect select plus the schema-driven
- * param loop, under both hosts' editors (the Feature Match Overlay Frame and a
- * Background Layer). What a host adds around the selection — the Frame's
- * enabled/opacity, a layer's own — is the host's editor's business, exactly as
- * it is on the schema side.
+ * param loop, under every host's editor (the Feature Match Overlay Frame, a
+ * Background Layer, and the Broadcast Graphics Background). What a host adds
+ * around the selection — the Frame's enabled/opacity, a layer's own — is the
+ * host's editor's business, exactly as it is on the schema side.
  */
 const props = defineProps<{
 	selection: AnimationEffectSelection;
