@@ -11,7 +11,7 @@ import { testGraphicAssetId, testGraphicAssetRevisionId } from '../helpers/graph
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -69,7 +69,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: referencePixelPng },
 		);
-		operation = await expectPublishedOperation(response);
+		operation = await expectOperationResult(response);
 	});
 
 	afterAll(async () => {
@@ -289,7 +289,7 @@ describe('background Screen exact Graphic Asset References', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: referencePixelPng },
 		);
-		operation = await expectPublishedOperation(response);
+		operation = await expectOperationResult(response);
 	});
 
 	afterAll(async () => {
@@ -444,7 +444,7 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: plainModeLayerPng },
 		);
-		const operation = await expectPublishedOperation(response);
+		const operation = await expectOperationResult(response);
 		reference = { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 	});
 

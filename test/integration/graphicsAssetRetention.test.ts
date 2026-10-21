@@ -19,7 +19,7 @@ import { GRAPHICS_RETENTION_GUARANTEES } from '../../shared/utils/graphicsAssetR
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -86,7 +86,7 @@ describe('the Graphics Asset Library retention API', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: bytes,
 			},
-		).then(expectPublishedOperation);
+		).then(expectOperationResult);
 	}
 
 	async function replace(assetId: string, idempotencyKey: string) {
@@ -111,7 +111,7 @@ describe('the Graphics Asset Library retention API', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: retentionReplacementPng,
 			},
-		).then(expectPublishedOperation);
+		).then(expectOperationResult);
 	}
 
 	it('keeps retention deadlines on the administrator surface', async () => {

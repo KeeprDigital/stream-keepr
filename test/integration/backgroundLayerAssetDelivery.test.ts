@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '../helpers/backgroundLayerModes';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -94,7 +94,7 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: authorCookie }, body: pixelPng },
 		);
-		const operation = await expectPublishedOperation(upload);
+		const operation = await expectOperationResult(upload);
 		return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 	}
 
@@ -121,7 +121,7 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 				body: replacementPng,
 			},
 		);
-		await expectPublishedOperation(upload);
+		await expectOperationResult(upload);
 	}
 
 	describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('on a %s Screen', (mode) => {

@@ -110,16 +110,21 @@ export async function main(argv = process.argv) {
 				// A report that will not parse is the page failing to publish one,
 				// which is the same fact as the page failing to finish — and its text
 				// is never read, so nothing page-authored reaches the evidence line.
+				// A page that gave up says so in its report rather than by throwing,
+				// so its console is carried on that line too (#687).
+				const pageSaid = pageDiagnosticsEvidence(observed.diagnostics);
 				let report;
 				try {
 					report = JSON.parse(observed.value);
 				}
 				catch {
-					record([{ code: 'animation-effect-page-failed' }]);
+					record([{ code: 'animation-effect-page-failed', detail: { source: 'report', ...pageSaid } }]);
 					return { mode: 'local' };
 				}
 
-				record(judgeAnimationEffectReport(report));
+				record(judgeAnimationEffectReport(report).map(failure => failure.code === 'animation-effect-page-failed'
+					? { ...failure, detail: { ...failure.detail, ...pageSaid } }
+					: failure));
 				return {
 					mode: 'local',
 					backend: report.backend,

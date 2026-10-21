@@ -31,11 +31,24 @@ export async function expectResponseStatus(response: Response, expected: number)
 	expect(response.status, `response body: ${body}\n${requestsSoFar()}`).toBe(expected);
 }
 
-/** An operation that published its revision, so `result` is there to read. */
-export type PublishedOperation = GraphicsIngestionOperation & { result: NonNullable<GraphicsIngestionOperation['result']> };
+/** An operation that reached a result — published, reused, or a revision — so `result` is there to read. */
+export type OperationWithResult = GraphicsIngestionOperation & { result: NonNullable<GraphicsIngestionOperation['result']> };
 
 /**
- * Read the operation a content upload answered, requiring that it published.
+ * Require that an operation reached a result, or fail with its stage, what it
+ * answered and the requests made so far (#687). For an answer read some other
+ * way — a `$fetch`, which throws on a refusal but not on a 200 that published
+ * nothing.
+ */
+export function expectResultOf(operation: GraphicsIngestionOperation, answered = JSON.stringify(operation)): OperationWithResult {
+	if (!operation.result)
+		expect.fail(`operation reached no result (stage ${operation.stage}): ${answered}\n${requestsSoFar()}`);
+	return operation as OperationWithResult;
+}
+
+/**
+ * Read the operation a content upload answered, requiring that it reached a
+ * result.
  *
  * The setup helpers that ingest a fixture read `operation.result!.assetId`
  * straight off the answer, so a refused upload under load failed the suite's
@@ -43,11 +56,8 @@ export type PublishedOperation = GraphicsIngestionOperation & { result: NonNulla
  * (#687). This checks the status and the result and fails with the body and
  * the requests instead. It does not retry: a refusal is the finding.
  */
-export async function expectPublishedOperation(response: Response): Promise<PublishedOperation> {
+export async function expectOperationResult(response: Response): Promise<OperationWithResult> {
 	await expectResponseStatus(response, 200);
 	const body = await response.text();
-	const operation = JSON.parse(body) as GraphicsIngestionOperation;
-	if (!operation.result)
-		expect.fail(`upload published no revision (stage ${operation.stage}): ${body}\n${requestsSoFar()}`);
-	return operation as PublishedOperation;
+	return expectResultOf(JSON.parse(body) as GraphicsIngestionOperation, body);
 }

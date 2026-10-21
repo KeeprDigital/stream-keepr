@@ -1,6 +1,7 @@
+import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { requestLedger } from '~~/test/integration/requestLedger';
-import { expectPublishedOperation, expectResponseStatus } from '~~/test/integration/responseStatus';
+import { expectOperationResult, expectResponseStatus, expectResultOf } from '~~/test/integration/responseStatus';
 
 beforeEach(() => requestLedger.clear());
 
@@ -52,11 +53,11 @@ describe('expectResponseStatus', () => {
  * under load failed the suite's `beforeAll` as `Cannot read properties of
  * undefined (reading 'assetId')` and said nothing about why.
  */
-describe('expectPublishedOperation', () => {
+describe('expectOperationResult', () => {
 	const published = { id: 'op-1', stage: 'completed', result: { assetId: 'asset-1', revisionId: 'revision-1' } };
 
 	it('hands back the operation a published upload answered', async () => {
-		const operation = await expectPublishedOperation(Response.json(published));
+		const operation = await expectOperationResult(Response.json(published));
 
 		expect(operation.result.assetId).toBe('asset-1');
 	});
@@ -64,7 +65,7 @@ describe('expectPublishedOperation', () => {
 	it('fails a refused upload with its status and body', async () => {
 		const refused = Response.json({ statusCode: 503, message: 'Graphics staging is temporarily unavailable' }, { status: 503 });
 
-		await expect(expectPublishedOperation(refused)).rejects.toThrow(
+		await expect(expectOperationResult(refused)).rejects.toThrow(
 			/Graphics staging is temporarily unavailable[\s\S]*expected 503 to be 200/,
 		);
 	});
@@ -72,8 +73,16 @@ describe('expectPublishedOperation', () => {
 	it('fails an upload answered 200 that published nothing, naming its stage', async () => {
 		const unpublished = Response.json({ id: 'op-1', stage: 'rejected', report: { code: 'still-image-undecodable' } });
 
-		await expect(expectPublishedOperation(unpublished)).rejects.toThrow(
-			/published no revision \(stage rejected\)[\s\S]*still-image-undecodable/,
+		await expect(expectOperationResult(unpublished)).rejects.toThrow(
+			/reached no result \(stage rejected\)[\s\S]*still-image-undecodable/,
+		);
+	});
+
+	it('fails an operation read some other way that reached no result, with the requests made', async () => {
+		await requestLedger.record('POST /api/graphics-assets/ingestion-operations/op-1/font-browser-evidence', async () => {});
+
+		expect(() => expectResultOf({ id: 'op-1', stage: 'awaiting-confirmation' } as GraphicsIngestionOperation)).toThrow(
+			/reached no result \(stage awaiting-confirmation\)[\s\S]*requests:\n {2}POST \/api\/graphics-assets\/ingestion-operations\/op-1\/font-browser-evidence/,
 		);
 	});
 });

@@ -225,6 +225,10 @@ async function removeProfile(profile) {
 		.catch(() => undefined);
 }
 
+let stoppingOnSignal = false;
+/** The signals something other than these hooks already listened for when they went in. */
+const listenedBeforeHooks = new Set();
+
 /**
  * A runner stopped by a signal takes its browsers with it (#687).
  *
@@ -234,16 +238,31 @@ async function removeProfile(profile) {
  * follows up. So the runner follows up itself, escalating to SIGKILL, and then
  * dies of the signal it was sent — unless something else in the process
  * listens for it too, in which case that listener decides how the process ends.
+ * "Something else" is read both when the hooks went in and when the signal
+ * arrives, because a `process.once` listener has removed itself by the time
+ * this runs. A second signal while the first is still being honoured skips the
+ * grace: everything is killed and the runner goes at once.
  */
 function stopOnSignal(name) {
-	const stopping = [...liveBrowsers];
-	void Promise.all(stopping.map(async (browser) => {
+	const othersListen = listenedBeforeHooks.has(name)
+		|| process.listeners(name).some(listener => listener !== stopOnSignal);
+	const end = () => {
+		uninstallShutdownHooks();
+		if (!othersListen)
+			process.kill(process.pid, name);
+	};
+	if (stoppingOnSignal) {
+		killOnExit();
+		end();
+		return;
+	}
+	stoppingOnSignal = true;
+	void Promise.all([...liveBrowsers].map(async (browser) => {
 		await terminate(browser);
 		await removeProfile(browser.profile);
 	})).finally(() => {
-		uninstallShutdownHooks();
-		if (process.listenerCount(name) === 0)
-			process.kill(process.pid, name);
+		stoppingOnSignal = false;
+		end();
 	});
 }
 
@@ -259,8 +278,12 @@ function killOnExit() {
 const SHUTDOWN_HOOKS = { SIGINT: stopOnSignal, SIGTERM: stopOnSignal, exit: killOnExit };
 
 function installShutdownHooks() {
-	for (const [event, hook] of Object.entries(SHUTDOWN_HOOKS))
+	listenedBeforeHooks.clear();
+	for (const [event, hook] of Object.entries(SHUTDOWN_HOOKS)) {
+		if (event !== 'exit' && process.listenerCount(event) > 0)
+			listenedBeforeHooks.add(event);
 		process.on(event, hook);
+	}
 }
 
 function uninstallShutdownHooks() {
@@ -525,8 +548,9 @@ export async function observeChromiumVerdict({
  * serialisable value is the observation. This is for app-shell acceptance
  * where the page has no purpose-built `data-result` contract of its own.
  *
- * An observation that did not pass carries the page's `diagnostics` — its
- * newest console text and uncaught errors, raw — so the failure can say why.
+ * Every observation carries the page's `diagnostics` — its newest console text
+ * and uncaught errors, raw — so a failure can say why, including one the page
+ * reported in the value it published.
  */
 export async function observeChromiumValue({
 	url,
@@ -551,7 +575,7 @@ export async function observeChromiumValue({
 				};
 			}
 			if (Object.hasOwn(evaluated.result ?? {}, 'value'))
-				return { outcome: 'passed', value: evaluated.result.value };
+				return { outcome: 'passed', value: evaluated.result.value, diagnostics: diagnostics.read() };
 			await new Promise(resolve => setTimeout(resolve, 100));
 		}
 		return { outcome: 'timed-out', diagnostics: diagnostics.read() };

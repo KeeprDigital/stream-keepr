@@ -9,7 +9,7 @@ import { screenOutputAssetCapabilityCookieName } from '../../shared/utils/graphi
 import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -103,7 +103,7 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: pixelPng },
 		);
-		const operation = await expectPublishedOperation(upload);
+		const operation = await expectOperationResult(upload);
 		assetId = operation.result.assetId;
 		revisionId = operation.result.revisionId;
 

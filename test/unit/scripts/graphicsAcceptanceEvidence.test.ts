@@ -181,13 +181,6 @@ describe('graphics staging acceptance evidence', () => {
 });
 
 /**
- * The reporting path is the last thing a harness does and sits outside the
- * `try` that wraps the run, so a refusal raised there escaped as a raw Node
- * error and printed the absolute path of every frame in its stack — the
- * disclosure this module exists to prevent, arriving through this module
- * (#275).
- */
-/**
  * What a page threw or logged, reduced until the formatter accepts it (#687).
  *
  * `accept:animation-effects` failed twice under load as "a page that threw
@@ -228,6 +221,13 @@ describe('page text as evidence', () => {
 	});
 });
 
+/**
+ * The reporting path is the last thing a harness does and sits outside the
+ * `try` that wraps the run, so a refusal raised there escaped as a raw Node
+ * error and printed the absolute path of every frame in its stack — the
+ * disclosure this module exists to prevent, arriving through this module
+ * (#275).
+ */
 describe('a harness printing evidence it cannot format', () => {
 	afterEach(() => {
 		vi.unstubAllEnvs();

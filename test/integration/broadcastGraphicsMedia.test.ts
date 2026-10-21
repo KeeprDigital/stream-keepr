@@ -12,7 +12,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenC
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
-import { expectPublishedOperation, expectResponseStatus } from './responseStatus';
+import { expectOperationResult, expectResponseStatus, expectResultOf } from './responseStatus';
 
 /**
  * Media Graphic Items on a Broadcast Graphics Screen, through the real API.
@@ -135,7 +135,7 @@ async function ingestImage(
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{ method: 'PUT', headers: { cookie }, body: bytes },
 	);
-	const operation = await expectPublishedOperation(response);
+	const operation = await expectOperationResult(response);
 	return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
 }
 
@@ -236,7 +236,8 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 			},
 		},
 	);
-	return { assetId: completed.result!.assetId, revisionId: completed.result!.revisionId };
+	const published = expectResultOf(completed);
+	return { assetId: published.result.assetId, revisionId: published.result.revisionId };
 }
 
 describe('broadcast Graphics Media Graphic Items', () => {

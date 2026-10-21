@@ -213,7 +213,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				body: transparentPixelPng,
 			},
 		);
-		expect(uploadResponse.status).toBe(200);
+		await expectResponseStatus(uploadResponse, 200);
 		const completed = await uploadResponse.json() as GraphicsIngestionOperation;
 		expect(completed).toMatchObject({
 			stage: 'completed',
@@ -722,7 +722,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 			},
 		);
 
-		expect(response.status).toBe(200);
+		await expectResponseStatus(response, 200);
 		const completed = await response.json() as GraphicsIngestionOperation;
 		expect(completed).toMatchObject({
 			stage: 'completed',

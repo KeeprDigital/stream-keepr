@@ -12,7 +12,7 @@ import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { executeIntegrationD1 } from './integrationD1';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -86,7 +86,7 @@ describe('template Package export through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: { cookie: graphicsAuthorCookie }, body: packagePixelPng },
 		);
-		operation = await expectPublishedOperation(response);
+		operation = await expectOperationResult(response);
 	});
 
 	afterAll(async () => {

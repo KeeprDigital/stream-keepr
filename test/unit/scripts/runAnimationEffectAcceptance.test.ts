@@ -65,6 +65,31 @@ describe('the animation effect run\'s failure evidence', () => {
 		expect(process.exitCode).toBe(1);
 	});
 
+	it('carries what the page logged when it gave up measuring and said so in its report', async () => {
+		vi.mocked(observeChromiumValue).mockResolvedValue({
+			outcome: 'passed',
+			value: JSON.stringify({ backend: 'swiftshader', pageFailed: true, pageError: 'RangeError: Array buffer allocation failed\n    at x' }),
+			diagnostics: { console: ['error: WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost'], uncaught: [] },
+		});
+
+		expect(await printedFailure()).toContain([
+			'animation-effect-v1 animation-effect-page-failed source=page thrown=RangeError: Array buffer allocation failed',
+			'uncaught=<none> console1=error: WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost',
+		].join(' '));
+	});
+
+	it('says what the page logged when its report would not parse', async () => {
+		vi.mocked(observeChromiumValue).mockResolvedValue({
+			outcome: 'passed',
+			value: '{"backend":',
+			diagnostics: { console: ['log: published'], uncaught: [] },
+		});
+
+		expect(await printedFailure()).toContain(
+			'animation-effect-v1 animation-effect-page-failed source=report uncaught=<none> console1=log: published',
+		);
+	});
+
 	it('says what the page logged when it never published anything', async () => {
 		vi.mocked(observeChromiumValue).mockResolvedValue({
 			outcome: 'timed-out',

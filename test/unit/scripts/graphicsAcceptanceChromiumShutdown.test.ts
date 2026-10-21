@@ -63,8 +63,8 @@ async function startRunner(...args: string[]) {
 	runners.add(runner);
 	const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve =>
 		runner.once('exit', (code, signal) => resolve({ code, signal })));
+	let output = '';
 	const launched = await new Promise<{ pid: number; profile: string }>((resolve, reject) => {
-		let output = '';
 		runner.stdout!.setEncoding('utf8').on('data', (chunk: string) => {
 			output += chunk;
 			const line = output.split('\n').find(candidate => candidate.startsWith('{'));
@@ -74,7 +74,7 @@ async function startRunner(...args: string[]) {
 		runner.once('exit', () => reject(new Error(`runner exited before launching: ${output}`)));
 	});
 	strays.add(launched.pid);
-	return { runner, exited, ...launched };
+	return { runner, exited, printed: () => output, ...launched };
 }
 
 /** The stand-in, launched through the real launcher with a short SIGTERM grace. */
@@ -122,6 +122,26 @@ describe('the acceptance browser\'s shutdown', () => {
 		expect(await exited).toEqual({ code: null, signal });
 		expect(await gone(pid, 2_000)).toBe(true);
 		expect(existsSync(profile)).toBe(false);
+	});
+
+	it('leaves a runner\'s own SIGTERM handler to finish, and still takes the browser down', async () => {
+		const { runner, exited, pid, printed } = await startRunner('own-cleanup');
+
+		runner.kill('SIGTERM');
+
+		expect(await exited).toEqual({ code: 0, signal: null });
+		expect(printed()).toContain('own cleanup finished');
+		expect(await gone(pid, 2_000)).toBe(true);
+	});
+
+	it('takes the browser down at once on a second signal', async () => {
+		const { runner, exited, pid } = await startRunner();
+
+		runner.kill('SIGINT');
+		runner.kill('SIGINT');
+
+		expect(await exited).toEqual({ code: null, signal: 'SIGINT' });
+		expect(await gone(pid, 1_000)).toBe(true);
 	});
 
 	it('takes the browser down with it when the runner exits without disposing it', async () => {

@@ -17,7 +17,7 @@ import {
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { libraryAssets } from './graphicsLibraryListing';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult, expectResponseStatus } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -70,7 +70,7 @@ async function receivePackage(archive: Uint8Array<ArrayBuffer>) {
 			body: archive,
 		},
 	);
-	expect(response.status).toBe(200);
+	await expectResponseStatus(response, 200);
 	return await response.json() as GraphicsIngestionOperation;
 }
 
@@ -135,7 +135,7 @@ describe('template Package installation through the API boundary', () => {
 			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 			{ method: 'PUT', headers: authorHeaders, body: packagePixelPng },
 		);
-		const operation = await expectPublishedOperation(uploaded);
+		const operation = await expectOperationResult(uploaded);
 		reference = {
 			assetId: operation.result.assetId,
 			revisionId: operation.result.revisionId,

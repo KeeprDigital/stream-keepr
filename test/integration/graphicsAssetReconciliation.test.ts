@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
-import { expectPublishedOperation } from './responseStatus';
+import { expectOperationResult } from './responseStatus';
 
 const transparentPixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -66,7 +66,7 @@ describe('the Graphics Asset Library reconciliation API', () => {
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: reconciliationPixelPng,
 			},
-		).then(expectPublishedOperation);
+		).then(expectOperationResult);
 	}
 
 	it('keeps every reconciliation surface behind administrator authorization', async () => {

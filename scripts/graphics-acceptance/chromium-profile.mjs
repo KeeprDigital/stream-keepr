@@ -4,7 +4,7 @@
  * A Chrome whose runner died is an orphan with nobody to close it. `pnpm reap`
  * finds it by the one thing it carries that a person's own browser never does:
  * its `--user-data-dir`, a temporary profile named after the checkout that
- * launched it. Imports nothing heavier than `node:crypto`, so the reaper can
+ * launched it. Imports only `node:crypto` and `node:fs`, so the reaper can
  * read it without loading the acceptance harness.
  */
 

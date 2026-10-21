@@ -124,7 +124,11 @@ describe('a dev server with the Local Developer Session enabled', () => {
 			})()`,
 		});
 
-		expect(observed, 'the browser gate showed login, or neither page before the cold-start limit').toEqual({
+		const { diagnostics, ...verdict } = observed as typeof observed & { diagnostics?: unknown };
+		expect(
+			verdict,
+			`the browser gate showed login, or neither page before the cold-start limit; the page said ${JSON.stringify(diagnostics)}`,
+		).toEqual({
 			outcome: 'passed',
 			value: {
 				pathname: '/admin/graphics-assets',
