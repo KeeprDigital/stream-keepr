@@ -87,7 +87,7 @@ function toggleParam(label: string, description: string, defaultValue: boolean) 
  * Every other param follows the same rule: its name says what the operator
  * sees change, and a shared concept keeps the shared name (ADR-0025, #583):
  * - `speed` is the effect's whole motion rate, never qualified; a second rate
- *   for one motion inside the effect is `<motion>Speed` (ripple's `spinSpeed`).
+ *   for one motion inside the effect is `<motion>Speed` (ripple's `swingSpeed`).
  * - `intensity` is brightness or glow strength, and nothing else.
  * - `centerX`/`centerY` move the pattern's centre.
  * - A colour is `<role>Color`, named for what it paints, labelled
@@ -204,7 +204,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			backgroundColor: colorParam('Background color', '#111111'),
 			size: numberParam('Globe size', { min: 0.2, max: 5, step: 0.1, default: 1 }),
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
-			maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+			connectionDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
 			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
 			showDots: toggleParam('Point markers', 'Render point markers around the globe.', true),
 		}),
@@ -255,14 +255,16 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	/**
 	 * Net: a slowly orbiting point field strung with distance-faded connection
 	 * lines, ported from the retired fork under its old name. Every param is read:
-	 * `lineColor` drives the lines and the point markers, `backgroundColor` the clear
-	 * colour and the line gradient's dark end, and the rest the field's
+	 * `lineColor` drives the lines and the point markers, `backgroundColor` the
+	 * clear colour and the line gradient's dark end, and the rest the field's
 	 * construction. One knowing restoration rides the port: the fork passed the
 	 * `THREE.VertexColors` constant that three had removed, so on air its
 	 * per-vertex line gradient silently degraded to flat default-white lines and
 	 * "Line color" coloured only the dots — proven by running the fork against
 	 * three 0.185 in unattended Chromium. The port enables vertex colours, so the
 	 * lines render the gradient the fork wrote and the label describes.
+	 * `connectionDistance` is the fork's `maxDistance`, renamed for what it
+	 * bounds (#583), as on globe.
 	 */
 	net: {
 		label: 'Net',
@@ -270,7 +272,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			lineColor: colorParam('Line color', '#7c3aed'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			points: numberParam('Point count', { min: 2, max: 30, step: 1, default: 10 }),
-			maxDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
+			connectionDistance: numberParam('Connection distance', { min: 1, max: 80, step: 1, default: 22 }),
 			spacing: numberParam('Spacing', { min: 2, max: 80, step: 1, default: 16 }),
 			showDots: toggleParam('Point markers', 'Render point markers at net intersections.', true),
 		}),
@@ -281,12 +283,14 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * A new effect (no fork ancestry), so the params carry semantic names and the
 	 * defaults are the recorded design's (#473). `ridges` counts the silhouettes,
 	 * `relief` scales every profile's amplitude, `glow` the crest-line halo.
+	 * `ridgeColor` fills the silhouettes; it was `fillColor`, whose role its own
+	 * label already called "Ridge color" (#583).
 	 */
 	ridgelines: {
 		label: 'Ridgelines',
 		paramsSchema: z.strictObject({
 			crestColor: colorParam('Crest color', '#06b6d4'),
-			fillColor: colorParam('Ridge color', '#1e1b4b'),
+			ridgeColor: colorParam('Ridge color', '#1e1b4b'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			ridges: numberParam('Ridge count', { min: 3, max: 12, step: 1, default: 7 }),
 			relief: numberParam('Relief', { min: 0.2, max: 2, step: 0.1, default: 1 }),
@@ -314,11 +318,13 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 	 * Ripple: rings of orbiting lights accumulating over a background colour,
 	 * ported from the retired fork under its old name and the pre-rebuild
 	 * application's defaults. The fork's multipliers are named for what they
-	 * move (#583): `size` is each ring's radius (its "Intensity"), `spinSpeed`
-	 * how fast each ring's lights swing round it (its "Ripple scale", which was
-	 * never spatial), and `drift` how far the ring centres wander (its
-	 * "Rotation"). `highlightColor` takes the densest light, `lowlightColor` the
-	 * softer glow around it.
+	 * move (#583): `size` is each ring's radius (its "Intensity"), `swingSpeed`
+	 * how fast each ring's lights swing back and forth round it (its "Ripple
+	 * scale", which sized no feature, though the swing's phase varies with
+	 * distance from the centre), and `drift` how far the ring centres wander
+	 * (its "Rotation"). `highlightColor` takes the densest light and
+	 * `lowlightColor` the softer glow around it; their defaults keep the old
+	 * on-air look, which puts the darker teal on the highlights.
 	 */
 	ripple: {
 		label: 'Ripple',
@@ -327,7 +333,7 @@ export const ANIMATION_EFFECT_CATALOGUE = {
 			lowlightColor: colorParam('Lowlight color', '#06b6d4'),
 			backgroundColor: colorParam('Background color', '#111111'),
 			size: numberParam('Ring size', { min: 0, max: 4, step: 0.1, default: 1 }),
-			spinSpeed: numberParam('Spin speed', { min: 0, max: 12, step: 0.1, default: 1 }),
+			swingSpeed: numberParam('Swing speed', { min: 0, max: 12, step: 0.1, default: 1 }),
 			drift: numberParam('Ring drift', { min: 0, max: 4, step: 0.1, default: 1 }),
 			centerX: numberParam('Center X', { min: -1, max: 1, step: 0.05, default: 0 }),
 			centerY: numberParam('Center Y', { min: -1, max: 1, step: 0.05, default: 0 }),

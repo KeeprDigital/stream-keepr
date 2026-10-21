@@ -695,13 +695,14 @@ The ported fork names that broke it are renamed, each new key keeping the old ra
 - cells: `color1`, `color2` → `lowlightColor`, `highlightColor`.
 - dots: `color`, `color2` ("Accent color") → `dotColor`, `lineColor` ("Line color").
 - fog: `blurFactor`, `baseColor` → `softness`, `backgroundColor`.
-- globe: `color`, `color2` → `lineColor`, `accentColor`.
+- globe: `color`, `color2`, `maxDistance` → `lineColor`, `accentColor`, `connectionDistance`.
 - halo: `amplitudeFactor` ("Intensity"), `baseColor`, `xOffset`/`yOffset` → `petalDepth` ("Petal depth"), `tintColor`, `centerX`/`centerY`.
-- net: `color` → `lineColor`.
-- ripple: `amplitudeFactor` ("Intensity"), `ringFactor` ("Ripple scale"), `rotationFactor` ("Rotation"), `color1`, `color2` → `size` ("Ring size"), `spinSpeed` ("Spin speed"), `drift` ("Ring drift"), `highlightColor`, `lowlightColor`.
+- net: `color`, `maxDistance` → `lineColor`, `connectionDistance`.
+- ripple: `amplitudeFactor` ("Intensity"), `ringFactor` ("Ripple scale"), `rotationFactor` ("Rotation"), `color1`, `color2` → `size` ("Ring size"), `swingSpeed` ("Swing speed"), `drift` ("Ring drift"), `highlightColor`, `lowlightColor`.
 - waves: `color`, `waveSpeed` → `waveColor`, `speed`.
+- ridgelines (not a port, but its key disagreed with its own label): `fillColor` ("Ridge color") → `ridgeColor`.
 
-A catalogue unit test refuses `*Factor`, digits, offsets, a colour key that is not `<role>Color` or a label that is not "<Role> color", and a `<motion>Speed` beside no `speed`. Whether a label describes what the knob does stays a reviewer's check against the shader.
+A catalogue unit test refuses `*Factor`, digits, offsets, a colour key that is not `<role>Color` or whose label is not "<Role> color" for that role, and a `<motion>Speed` beside no `speed`. Whether a label describes what the knob does stays a reviewer's check against the shader.
 
 ### Why
 
@@ -710,7 +711,7 @@ The catalogue had three names for one concept (`size`, `scale`, `zoom`) and two 
 ### Consequences
 
 - **Stored params, Animation Effect Presets, and Template Packages naming the old keys stop parsing**: the strict schemas refuse them and the renderer falls back to defaults. That is acceptable before ship only. No format-version bump, for the reason ADR-0014 gives.
-- Ripple's `ringFactor` ("Ripple scale") was a motion knob, not a spatial one, so #503 left it alone; #583 made it `spinSpeed`.
+- Ripple's `ringFactor` ("Ripple scale") was a motion knob, not a spatial one, so #503 left it alone; #583 made it `swingSpeed`: it sets how fast each ring's lights swing back and forth round it.
 - Halo's and ripple's `amplitudeFactor` were both labelled "Intensity" but neither changes brightness: halo's deepens the petals of its flower edge, ripple's sets each ring's radius. So ripple's becomes `size` under the spatial standard (its twenty rings are fixed), and halo's becomes `petalDepth`.
 - Shader uniforms carry the catalogue's names, so a reader follows one name from the editor to the GLSL.
 - The #583 renames carry no stored-config migration, for the same reason as #503's: the first consequence above accepts the reset before ship, ADR-0014 needs no format-version bump for it, nothing is live (ADR-0019), and no shipped preset, seed, or proof scenario keeps an old key. After first ship, a rename like these needs a migration or a reset accepted in its own ADR.

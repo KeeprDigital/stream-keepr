@@ -8,13 +8,13 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * buffer, ported from the retired Vanta fork under its old name — the first
  * effect on the shader-plane base's feedback buffer. The live shader path is
  * unchanged apart from the mouse pair (the ring now sits at the frame centre
- * moved by `centerX`/`centerY`, where the fork eased it toward a pointer no headless
- * browser source has) and folding the retired `iDpr` uniform into
- * `iResolution`, which the base already supplies in device pixels. The fork's
- * large commented-out blocks and the helpers only they called, its unused
+ * moved by `centerX`/`centerY`, where the fork eased it toward a pointer no
+ * headless browser source has), folding the retired `iDpr` uniform into
+ * `iResolution`, which the base already supplies in device pixels, and
+ * uniforms renamed to the catalogue's param names (#583). The fork's large
+ * commented-out blocks and the helpers only they called, its unused
  * `spectrum`/`factor` locals, and the uniforms the shader declared but never
  * read (a second colour, two multipliers, and `shape`) do not make the trip.
- * Its uniforms carry the catalogue's param names (#583).
  */
 const HALO_FRAGMENT_SHADER = `
 uniform vec2 iResolution;
@@ -67,7 +67,7 @@ void main() {
 	float dist = length(pixel) * 8. + sin(iTime) * .01;
 
 	// Flowery shapes
-	float flowerPeaks = 0.05 * petalDepth * size;
+	float flowerPeaks = .05 * petalDepth * size;
 	float flowerPetals = 7.;
 	float edge = abs((dist + sin(angle * flowerPetals + iTime * 0.5) * sin(iTime * 1.5) * flowerPeaks) * 0.65 / size);
 

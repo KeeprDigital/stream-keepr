@@ -103,10 +103,10 @@ export const ANIMATION_EFFECT_PROOF_FRAME = Object.freeze({
  *   `intensity: 0`.
  * - **Centres that carry the effect out of frame**, such as halo at
  *   `centerX`/`centerY` of ±1.
- * - **Two measured cases**: fog at the bottom of its Softness range is flat base
- *   colour by construction (the fbm's first octave is that amplitude), and
- *   ripple at the top of its Ring drift range swings its orbiting lights clear of
- *   the frame for seconds at a time.
+ * - **Two measured cases**: fog at the bottom of its Softness range is flat
+ *   background colour by construction (the fbm's first octave is that
+ *   amplitude), and ripple at the top of its Ring drift range swings its
+ *   orbiting lights clear of the frame for seconds at a time.
  *
  * None of these is a rendering defect, and none can be asserted about here: a
  * scenario asserting that an effect renders nothing would fail the day someone
@@ -188,7 +188,7 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 		extremes: [
 			{
 				name: 'max-points',
-				params: { points: 30, maxDistance: 80 },
+				params: { points: 30, connectionDistance: 80 },
 				// Thirty points strung at the top of the connection range is a mesh
 				// that covers the frame — measured at only 0.21 dark, and correctly so:
 				// the operator asked for every point joined to every other. The lowered
@@ -214,8 +214,8 @@ export const ANIMATION_EFFECT_PROOF_SCENARIOS = Object.freeze({
 	},
 	ripple: {
 		extremes: [
-			{ name: 'max-rings', params: { spinSpeed: 12, size: 4 } },
-			{ name: 'no-spin-or-drift', params: { spinSpeed: 0, drift: 0 } },
+			{ name: 'max-swing-and-size', params: { swingSpeed: 12, size: 4 } },
+			{ name: 'no-swing-or-drift', params: { swingSpeed: 0, drift: 0 } },
 		],
 	},
 	shards: {

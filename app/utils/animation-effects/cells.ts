@@ -8,9 +8,9 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * under its old name. The shader is unchanged apart from dropping the uniforms
  * nothing read — the mouse pair, a background colour, and the four
  * multipliers the fork declared for every shader effect whether or not its
- * fragment used them. The fork's `size`
- * is now `scale`, renormalised so its default of 1 is the old default of 3
- * (#503).
+ * fragment used them — and renaming its colours for their tones (#583). The
+ * fork's `size` is now `scale`, renormalised so its default of 1 is the old
+ * default of 3 (#503).
  */
 const CELLS_FRAGMENT_SHADER = `
 uniform vec2 iResolution;

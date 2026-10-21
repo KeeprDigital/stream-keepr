@@ -36,7 +36,7 @@ describe('animationEffects catalogue', () => {
 		// recorded design spec on #473.
 		expect(animationEffectDefaultParams('ridgelines')).toEqual({
 			crestColor: '#06b6d4',
-			fillColor: '#1e1b4b',
+			ridgeColor: '#1e1b4b',
 			backgroundColor: '#111111',
 			ridges: 7,
 			relief: 1,
@@ -117,7 +117,7 @@ describe('animationEffects catalogue', () => {
 			lowlightColor: '#06b6d4',
 			backgroundColor: '#111111',
 			size: 1,
-			spinSpeed: 1,
+			swingSpeed: 1,
 			drift: 1,
 			centerX: 0,
 			centerY: 0,
@@ -125,9 +125,9 @@ describe('animationEffects catalogue', () => {
 			speed: 0.6,
 		});
 		expect(animationEffectParamFields('ripple')).toEqual(expect.arrayContaining([
-			// The fork's "Ripple scale" was never spatial: it sets how fast each
-			// ring's lights swing round it.
-			expect.objectContaining({ key: 'spinSpeed', label: 'Spin speed', min: 0, max: 12 }),
+			// The fork's "Ripple scale" scaled no feature: it sets how fast each
+			// ring's lights swing back and forth round it.
+			expect.objectContaining({ key: 'swingSpeed', label: 'Swing speed', min: 0, max: 12 }),
 			expect.objectContaining({ key: 'size', label: 'Ring size', min: 0, max: 4 }),
 			expect.objectContaining({ key: 'drift', label: 'Ring drift', min: 0, max: 4 }),
 			expect.objectContaining({ key: 'centerX', label: 'Center X', min: -1, max: 1 }),
@@ -211,7 +211,7 @@ describe('animationEffects catalogue', () => {
 			lineColor: '#7c3aed',
 			backgroundColor: '#111111',
 			points: 10,
-			maxDistance: 22,
+			connectionDistance: 22,
 			spacing: 16,
 			showDots: true,
 		});
@@ -233,7 +233,7 @@ describe('animationEffects catalogue', () => {
 			backgroundColor: '#111111',
 			size: 1,
 			points: 10,
-			maxDistance: 22,
+			connectionDistance: 22,
 			spacing: 16,
 			showDots: true,
 		});
@@ -334,8 +334,9 @@ describe('animationEffects catalogue', () => {
 				expect(field.key, where).not.toMatch(/offset/i);
 				if (field.control === 'color') {
 					// `<role>Color`, so a bare `color` is refused, labelled "<Role> color".
-					expect(field.key, where).toMatch(/^[a-z][a-zA-Z]*Color$/);
-					expect(field.label, where).toMatch(/^\S+ color$/);
+					expect(field.key, where).toMatch(/^[a-z]+Color$/);
+					const role = field.key.slice(0, -'Color'.length);
+					expect(field.label, where).toBe(`${role[0]!.toUpperCase()}${role.slice(1)} color`);
 				}
 				else {
 					expect(field.key, where).not.toMatch(/Color$/);

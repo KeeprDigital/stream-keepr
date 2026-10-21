@@ -8,7 +8,8 @@ import { createShaderPlaneEffect } from './shaderPlane';
  * its old name. The shader is unchanged apart from dropping the mouse uniform
  * nothing fed — Animation Effects animate from elapsed time alone — and
  * dividing by `scale` where the fork multiplied by `zoom`, so a larger value
- * draws larger features (#503).
+ * draws larger features (#503). Its uniforms carry the catalogue's param
+ * names (#583).
  *
  * Noise construction after http://thebookofshaders.com/13/ (Patricio Gonzalez
  * Vivo), via the fork's fog effect.

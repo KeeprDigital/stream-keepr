@@ -106,7 +106,7 @@ describe('createNetDelegate', () => {
 		// sit within the maximum connection distance of each other, so every
 		// distinct pair connects. The fork's self-pair segments are skipped and
 		// its heuristic buffer could overflow here; the exact bound cannot.
-		const { delegate, scene, context } = mountDelegate({ points: 2, spacing: 2, maxDistance: 80 });
+		const { delegate, scene, context } = mountDelegate({ points: 2, spacing: 2, connectionDistance: 80 });
 		const lines = linesMesh(scene);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const pointCount = 3 * 3 * 2;
@@ -121,7 +121,7 @@ describe('createNetDelegate', () => {
 		const lines = linesMesh(scene);
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		const atDefault = lines.geometry.drawRange.count;
-		delegate.applyParams({ ...context, params: { ...params, maxDistance: 1 } });
+		delegate.applyParams({ ...context, params: { ...params, connectionDistance: 1 } });
 		delegate.update({ ...context, elapsedSeconds: 1 });
 		expect(lines.geometry.drawRange.count).toBeLessThan(atDefault);
 	});

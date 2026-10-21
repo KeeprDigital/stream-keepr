@@ -20,7 +20,7 @@ import type * as THREE from 'three';
 export interface ConnectionLineParams {
 	lineColor: string;
 	backgroundColor: string;
-	maxDistance: number;
+	connectionDistance: number;
 }
 
 export interface ConnectionLineField {
@@ -79,9 +79,9 @@ export function createConnectionLineField(
 				for (let j = i + 1; j < positions.length; j++) {
 					const b = positions[j]!;
 					const distance = a.distanceTo(b);
-					if (distance >= current.maxDistance)
+					if (distance >= current.connectionDistance)
 						continue;
-					const alpha = Math.min(Math.max((1 - distance / current.maxDistance) * 2, 0), 1);
+					const alpha = Math.min(Math.max((1 - distance / current.connectionDistance) * 2, 0), 1);
 					if (additive)
 						lineColor.setScalar(0).lerp(differenceColor, alpha);
 					else
