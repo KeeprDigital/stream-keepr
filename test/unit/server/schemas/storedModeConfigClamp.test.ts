@@ -1,3 +1,4 @@
+import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
 import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { modeConfigPatchSchemaMap } from '~~/server/schemas/api/screen';
@@ -30,5 +31,26 @@ describe('a stored mode config outside its contract\'s bounds', () => {
 
 	it('is still refused as a write', () => {
 		expect(modeConfigPatchSchemaMap.standings.safeParse({ topNCount: 900 }).success).toBe(false);
+	});
+});
+
+/**
+ * Every bound #498 tightened to its editor's range: a value the former contract
+ * accepted, as production may hold, reads as the nearest bound of the new range,
+ * keeps the rest of its fragment, and is refused as a new write.
+ */
+const TIGHTENED_BOUNDS = [
+	{ mode: 'card', field: 'scale', stored: { scale: 4, animationSpeed: 'fast' }, reads: { scale: 2, animationSpeed: 'fast' } },
+	{ mode: 'card', field: 'scale', stored: { scale: 0.1 }, reads: { scale: 0.5 } },
+] as const satisfies readonly { mode: ScreenMode; field: string; stored: Record<string, unknown>; reads: Record<string, unknown> }[];
+
+describe.each(TIGHTENED_BOUNDS)('a $mode config storing $field outside its tightened bound', ({ mode, stored, reads }) => {
+	it('reads clamped into the editor\'s range, keeping the rest of its fragment', () => {
+		expect(resolveScreenModeConfig({ [mode]: stored }, mode)).toMatchObject(reads);
+		expect(mapScreenToResponse(createMockScreen({ modeConfigs: { [mode]: stored } })).modeConfigs).toEqual({ [mode]: reads });
+	});
+
+	it('is refused as a new write', () => {
+		expect(modeConfigPatchSchemaMap[mode].safeParse(stored).success).toBe(false);
 	});
 });
