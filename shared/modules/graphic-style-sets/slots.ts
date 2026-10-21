@@ -10,7 +10,7 @@ import type {
 } from '../../types/graphicStyleSet';
 import type { ResolvedGraphicStyleValue } from './entries';
 import { GRAPHIC_SURFACE_STYLE_SLOT_KINDS } from '../graphics/authoring';
-import { createDefaultGraphicSurfaceStyle } from '../graphics/itemDefinitions';
+import { createDefaultGraphicSurfaceStyle, ownsGraphicTypography } from '../graphics/itemDefinitions';
 
 /**
  * The bridge between a Graphic Style Set entry and the property group it inherits
@@ -110,10 +110,6 @@ function ownerKind(owner: GraphicStyleOwnerNode): GraphicItemConfig['type'] | nu
 	return 'type' in owner ? owner.type : null;
 }
 
-/** The Graphic Item kinds that carry base typography. */
-const TYPOGRAPHY_KINDS: readonly GraphicItemConfig['type'][]
-	= ['text', 'clock', 'player-life', 'game-wins', 'deck-list'];
-
 /**
  * Whether one owner can hold this slot at all.
  *
@@ -128,8 +124,10 @@ const TYPOGRAPHY_KINDS: readonly GraphicItemConfig['type'][]
 export function graphicStyleOwnerSupportsSlot(owner: GraphicStyleOwnerNode, slot: GraphicStyleSlot): boolean {
 	const kind = ownerKind(owner);
 	switch (slot) {
+		// The item's Definition states whether it owns typography, and the Inspector's
+		// typography controls read the same declaration, so the two cannot drift.
 		case 'typography':
-			return kind !== null && TYPOGRAPHY_KINDS.includes(kind);
+			return kind !== null && ownsGraphicTypography(owner as GraphicItemConfig);
 		// Which kinds own which surface is stated once, by the authoring module that
 		// edits them. A second table here could drift into offering a style reference
 		// for a surface the item does not have.
@@ -174,7 +172,7 @@ export function readGraphicStyleSlot(
 	const item = owner as GraphicItemConfig;
 	switch (slot) {
 		case 'typography':
-			return (item as { typography?: unknown }).typography;
+			return ownsGraphicTypography(item) ? item.typography : undefined;
 		case 'surfaceStyle':
 			return (item as { surfaceStyle?: unknown }).surfaceStyle;
 		case 'surfaceStyle.fill':

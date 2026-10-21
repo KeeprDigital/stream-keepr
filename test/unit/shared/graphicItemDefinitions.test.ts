@@ -1,17 +1,25 @@
+import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
+import { graphicStyleOwnerSupportsSlot } from '~~/shared/modules/graphic-style-sets';
 import {
 	authorsGraphicInputs,
 	authorsGraphicStack,
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
+	GRAPHIC_ITEM_KINDS,
 	graphicFillSummary,
 	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
 	graphicItemSummary,
 	graphicsHostTokenCatalogue,
 	isGraphicItemDefinitionAvailable,
+	ownsGraphicTypography,
+	ownsTextOverflowPolicy,
+	paintedGraphicTypography,
+	patchGraphicTextOverflow,
+	patchGraphicTypography,
 } from '~~/shared/modules/graphics';
 
 describe('graphicItemDefinitions', () => {
@@ -342,5 +350,78 @@ describe('graphicItemDefinitions', () => {
 
 		expect(graphicItemSummary(text)).toBe('Text');
 		expect(graphicItemSummary({ ...text, text: '   ' })).toBe('Empty text');
+	});
+
+	describe('typography and the Text Overflow Policy', () => {
+		/**
+		 * What each kind offers, stated independently of the Definitions so a wrong
+		 * declaration fails here. The context-gated kinds render a live string, but
+		 * they render it as text; a Game Wins Item's win count cannot outgrow its
+		 * bounds, and a Deck List's overflow is a fixed shrink-then-clip.
+		 */
+		const OFFERS: Record<GraphicItemKind, { typography: boolean; textOverflowPolicy: boolean }> = {
+			'text': { typography: true, textOverflowPolicy: true },
+			'shape': { typography: false, textOverflowPolicy: false },
+			'media': { typography: false, textOverflowPolicy: false },
+			'social-network-icon': { typography: false, textOverflowPolicy: false },
+			'group': { typography: false, textOverflowPolicy: false },
+			'clock': { typography: true, textOverflowPolicy: true },
+			'player-life': { typography: true, textOverflowPolicy: true },
+			'game-wins': { typography: true, textOverflowPolicy: false },
+			'deck-list': { typography: true, textOverflowPolicy: false },
+		};
+
+		function placed(kind: GraphicItemKind): GraphicItemConfig {
+			return getGraphicItemDefinition(kind).createDefault({ id: kind, label: kind, canvasWidth: 1920, canvasHeight: 1080 });
+		}
+
+		function composition(item: GraphicItemConfig): BroadcastGraphicConfig {
+			return { id: 'graphic', name: 'Graphic', items: [item] };
+		}
+
+		it('covers every Definition', () => {
+			expect(Object.keys(OFFERS).sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
+		});
+
+		it.each(GRAPHIC_ITEM_KINDS)('declares on the %s Definition what authoring, slots, and defaults then honour', (kind) => {
+			const offers = OFFERS[kind];
+			const item = placed(kind);
+
+			expect(ownsGraphicTypography(item)).toBe(offers.typography);
+			expect(ownsTextOverflowPolicy(item)).toBe(offers.textOverflowPolicy);
+			// The Graphic Style Set typography slot exists exactly where the item owns
+			// typography, so a style reference can never be bound to text nothing paints.
+			expect(graphicStyleOwnerSupportsSlot(item, 'typography')).toBe(offers.typography);
+			// A new item carries what its Definition declares, and nothing it does not.
+			expect('typography' in item).toBe(offers.typography);
+			expect('overflowPolicy' in item).toBe(offers.textOverflowPolicy);
+
+			const graphic = composition(item);
+			const typed = patchGraphicTypography(graphic, kind, { fontSize: 97 });
+			expect(typed !== graphic).toBe(offers.typography);
+			const bounded = patchGraphicTextOverflow(graphic, kind, { overflowPolicy: 'shrink' });
+			expect(bounded !== graphic).toBe(offers.textOverflowPolicy);
+		});
+
+		it('offers typography in the Inspector only while the item paints text with it', () => {
+			// A Game Wins Item paints text only in its `number` display mode, and a Deck
+			// List Item only in its list view. Either still owns the typography, so a
+			// Style Set slot binds to it whatever is on screen.
+			const wins = placed('game-wins');
+			const deck = placed('deck-list');
+			if (wins.type !== 'game-wins' || deck.type !== 'deck-list')
+				throw new Error('expected the context-gated Definitions');
+
+			expect(paintedGraphicTypography(wins)).toBeNull();
+			expect(paintedGraphicTypography({ ...wins, displayMode: 'number' })).toBe(wins.typography);
+			expect(paintedGraphicTypography(deck)).toBe(deck.typography);
+			expect(paintedGraphicTypography({ ...deck, view: 'grid' })).toBeNull();
+			expect(graphicStyleOwnerSupportsSlot(wins, 'typography')).toBe(true);
+
+			for (const kind of ['text', 'clock', 'player-life'] as const)
+				expect(paintedGraphicTypography(placed(kind))).not.toBeNull();
+			for (const kind of ['shape', 'media', 'social-network-icon', 'group'] as const)
+				expect(paintedGraphicTypography(placed(kind))).toBeNull();
+		});
 	});
 });

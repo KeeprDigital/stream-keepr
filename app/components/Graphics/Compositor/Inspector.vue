@@ -49,6 +49,8 @@ import {
 	graphicsHostTokenCatalogue,
 	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
+	ownsTextOverflowPolicy,
+	paintedGraphicTypography,
 	patchBroadcastGraphic,
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
@@ -279,44 +281,18 @@ const selectedDeckList = computed<DeckListGraphicItemConfig | null>(() =>
 );
 
 /**
- * The base typography of whatever the selection paints text with.
- *
- * A Clock, a Player Life, and a Game Wins Item rendering its win count all paint
- * text; they read the string from the live Feature Match Session rather than from
- * an author, which decides what the item says and nothing about how it is set. So
- * one typography block serves all four kinds rather than one per kind.
- *
- * A Game Wins Item paints text only in its `number` display mode; in `boxes` it
- * paints boxes, and offering typography there would be a whole block of controls
- * that change nothing on screen.
+ * The base typography of whatever the selection paints text with, as its Graphic
+ * Item Definition declares — including in which display mode it paints any, since
+ * typography controls beside boxes or cards would change nothing on screen. The
+ * Graphic Style Set typography slot reads the same declaration.
  */
-const selectedTypography = computed<GraphicTypography | null>(() => {
-	const item = selectedItem.value;
-	if (
-		!item
-		|| item.type === 'shape'
-		|| item.type === 'media'
-		|| item.type === 'social-network-icon'
-		|| item.type === 'group'
-	) {
-		return null;
-	}
-	if (item.type === 'game-wins')
-		return item.displayMode === 'number' ? item.typography : null;
-	// A Deck List Item paints text only in its list view; the grid renders cards.
-	if (item.type === 'deck-list')
-		return item.view === 'list' ? item.typography : null;
-	return item.typography;
-});
+const selectedTypography = computed<GraphicTypography | null>(() =>
+	selectedItem.value ? paintedGraphicTypography(selectedItem.value) : null);
 
-/**
- * The Text Overflow Policy of a selection whose rendered text can exceed its
- * authored bounds. A live string can be longer than the author ever saw, which is
- * exactly why a Clock and a Player Life are bounded like a Text Graphic Item.
- */
+/** The Text Overflow Policy of a selection whose Definition says its text can outgrow its bounds. */
 const selectedTextOverflow = computed(() => {
 	const item = selectedItem.value;
-	if (item?.type !== 'text' && item?.type !== 'clock' && item?.type !== 'player-life')
+	if (!item || !ownsTextOverflowPolicy(item))
 		return null;
 	return { overflowPolicy: item.overflowPolicy, minFontSize: item.minFontSize };
 });
@@ -1460,7 +1436,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</template>
 
 		<!--
-			Base typography, offered wherever the selection paints text. A Clock, a
+			Base typography, offered wherever the selection's Graphic Item Definition
+			says it paints text. A Clock, a
 			Player Life, and a Game Wins Item rendering its win count read their string
 			from the live Feature Match Session rather than from an author — which
 			decides what the item says, and nothing about how it is set.
@@ -1525,7 +1502,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			Text does not render with visible overflow beyond its authored bounds, and a
 			string from a live Feature Match Session can be longer than the author ever
 			saw — so a Clock and a Player Life are bounded by the same policy a Text
-			Graphic Item is.
+			Graphic Item is. Which kinds are bounded is their Definition's to say.
 		-->
 		<template v-if="selectedTextOverflow">
 			<UFormField label="Text Overflow Policy" size="sm">
