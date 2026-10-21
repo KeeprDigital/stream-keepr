@@ -12,14 +12,14 @@ import type {
 	FeatureMatchSourceSnapshot,
 } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, players } from '~~/server/db/schema';
 import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
 import { publishMessage } from '~~/server/utils/ably';
-import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
+import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
 import {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
@@ -244,7 +244,7 @@ export function featureMatchStateService() {
 		return await db.query.featureMatchSessions.findMany({
 			where: and(
 				eq(featureMatchSessions.eventId, eventId),
-				inArray(featureMatchSessions.slotId, [...slotIds]),
+				inJsonArray(featureMatchSessions.slotId, slotIds),
 				eq(featureMatchSessions.status, 'active'),
 			),
 		});
@@ -260,7 +260,7 @@ export function featureMatchStateService() {
 		select ${featureMatches.id}
 		from ${featureMatches}
 		where ${featureMatches.eventId} = ${eventId}
-			and ${featureMatches.id} in (select value from json_each(${JSON.stringify(slotIds)}))
+			and ${inJsonArray(featureMatches.id, slotIds)}
 			and ${slotCondition ?? sql`1`}
 	`;
 
@@ -418,7 +418,7 @@ export function featureMatchStateService() {
 		if (slotIds.length === 0)
 			return new Map();
 		const slots = await db.query.featureMatches.findMany({
-			where: and(eq(featureMatches.eventId, eventId), inArray(featureMatches.id, [...slotIds])),
+			where: and(eq(featureMatches.eventId, eventId), inJsonArray(featureMatches.id, slotIds)),
 		});
 		if (slots.length === 0)
 			return new Map();

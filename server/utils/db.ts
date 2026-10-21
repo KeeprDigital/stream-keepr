@@ -21,6 +21,18 @@ export const D1_MAX_PARAMS = 100;
 export const SAFE_INARRAY_SIZE = 50;
 
 /**
+ * `column in (…values)` bound as one JSON array, so it costs one parameter at
+ * any list length where `inArray()` costs one per value. Use it for a list that
+ * grows with the data, such as an Event's Slots.
+ *
+ * @example
+ * db.query.featureMatches.findMany({ where: inJsonArray(featureMatches.id, slotIds) })
+ */
+export function inJsonArray(column: SQLiteColumn, values: readonly (string | number)[]): SQL {
+	return sql`${column} in (select value from json_each(${JSON.stringify(values)}))`;
+}
+
+/**
  * Conservative application-level limits for JSON-bound bulk statements.
  *
  * A JSON array is bound as one SQLite parameter and expanded with
