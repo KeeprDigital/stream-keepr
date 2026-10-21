@@ -95,6 +95,11 @@ function templateAssetReferences(document: BroadcastGraphicConfig) {
 	return broadcastGraphicsGraphicAssetReferences({ graphics: [document] });
 }
 
+/** Which committed stamp a template's reference-index statements are conditional on. */
+export type BroadcastGraphicTemplateIndexGuard
+	= | { kind: 'template-write'; referenceVersion: string }
+		| { kind: 'style-set-operation'; styleSetId: string; operationVersion: string };
+
 /**
  * The reference facts one template write is refused on and indexes.
  *
@@ -118,9 +123,9 @@ export function broadcastGraphicTemplateReferenceFacts(
  *
  * The insert reads the same bound array the row write's precondition reads, under
  * the same resolution rule, so the row commits only when every reference resolves
- * and then every reference is indexed. `guard` is the condition saying the row
- * write committed — this store's own stamp, or a Graphic Style Set operation's —
- * so both statements are no-ops whenever it did not.
+ * and then every reference is indexed. `guard` names the stamp saying the row
+ * write committed — this store's own, or a Graphic Style Set operation's — so both
+ * statements are no-ops whenever it did not.
  */
 export function broadcastGraphicTemplateIndexStatements(
 	client: typeof db.$client,
@@ -128,14 +133,23 @@ export function broadcastGraphicTemplateIndexStatements(
 	/** `broadcastGraphicTemplateReferenceFacts`, as `boundGraphicAssetReferenceFacts` encodes them. */
 	referenceFacts: string,
 	now: number,
-	guard: { sql: string; params: readonly unknown[] },
+	guard: BroadcastGraphicTemplateIndexGuard,
 ): D1PreparedStatement[] {
+	const condition = guard.kind === 'template-write'
+		? {
+				sql: 'EXISTS (SELECT 1 FROM broadcast_graphic_templates WHERE id = ? AND graphic_asset_reference_version = ?)',
+				params: [id, guard.referenceVersion],
+			}
+		: {
+				sql: 'EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ? AND operation_version = ?)',
+				params: [guard.styleSetId, guard.operationVersion],
+			};
 	return [
 		client.prepare(`
 			DELETE FROM graphic_asset_references
 			WHERE owner_kind = '${OWNER_KIND}' AND owner_id = ?
-				AND ${guard.sql}
-		`).bind(id, ...guard.params),
+				AND ${condition.sql}
+		`).bind(id, ...condition.params),
 		client.prepare(`
 			INSERT INTO graphic_asset_references (
 				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
@@ -151,8 +165,8 @@ export function broadcastGraphicTemplateIndexStatements(
 				SELECT 1
 				${jsonElementGraphicAssetRevisionResolution('item')}
 			)
-				AND ${guard.sql}
-		`).bind(id, now, now, referenceFacts, ...guard.params),
+				AND ${condition.sql}
+		`).bind(id, now, now, referenceFacts, ...condition.params),
 	];
 }
 
@@ -176,13 +190,13 @@ export function broadcastGraphicTemplateService() {
 		referenceFacts: string,
 		referenceVersion: string,
 		now: number,
-	): D1PreparedStatement[] => broadcastGraphicTemplateIndexStatements(client, id, referenceFacts, now, {
-		sql: `EXISTS (
-			SELECT 1 FROM broadcast_graphic_templates
-			WHERE id = ? AND graphic_asset_reference_version = ?
-		)`,
-		params: [id, referenceVersion],
-	});
+	): D1PreparedStatement[] => broadcastGraphicTemplateIndexStatements(
+		client,
+		id,
+		referenceFacts,
+		now,
+		{ kind: 'template-write', referenceVersion },
+	);
 
 	const create = async (input: SaveBroadcastGraphicTemplate): Promise<DbBroadcastGraphicTemplate> => {
 		const referenceVersion = crypto.randomUUID();

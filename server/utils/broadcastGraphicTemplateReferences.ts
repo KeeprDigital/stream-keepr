@@ -24,17 +24,19 @@ export async function assertBroadcastGraphicTemplateReferencesSelectable(
 
 /**
  * The same rule over every Broadcast Graphic Template one Graphic Style Set
- * operation rewrites, each refusal naming its template.
+ * operation rewrites, each refusal naming its template as the library lists it.
+ * One refusal refuses the whole operation (ADR-0034); the batch asks again.
  */
-export async function assertBroadcastGraphicTemplatesReferencesSelectable(
+export async function assertStyleSetRewritesReferencesSelectable(
 	library: Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>,
-	templates: ReadonlyArray<{ name: string; document: BroadcastGraphicConfig }>,
+	rewrites: ReadonlyArray<{ id: string; document: BroadcastGraphicConfig }>,
+	linked: ReadonlyArray<{ id: string; name: string }>,
 ): Promise<void> {
 	await assertGraphicsTemplatesReferencesSelectable(
 		library,
-		templates.map(template => ({
-			name: template.name,
-			references: broadcastGraphicsGraphicAssetReferences({ graphics: [template.document] }),
+		rewrites.map(rewrite => ({
+			name: linked.find(template => template.id === rewrite.id)?.name ?? rewrite.id,
+			references: broadcastGraphicsGraphicAssetReferences({ graphics: [rewrite.document] }),
 		})),
 		'Broadcast Graphic Template',
 	);

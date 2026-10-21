@@ -19,16 +19,22 @@ import { BACKGROUND_LAYERS_CAPABLE_MODES } from '../screenModes';
 import { resolveScreenModeConfig } from '../types/screenConfig';
 
 /**
- * The reference owners that are saved graphics Templates: the two authored
- * template libraries and the Installed Graphics Templates a Template Package
- * created. A Graphic Asset any of them references cannot be retired (ADR-0034),
- * because every template write requires its references to stay selectable.
+ * The reference owners that are saved, revisable graphics Templates: the two
+ * authored template libraries. A Graphic Asset either references cannot be
+ * retired (ADR-0034), because every template write requires its references to
+ * stay selectable. An Installed Graphics Template is not one: it is never revised
+ * and cannot be deleted, so counting it would make its assets unretirable for good.
  */
 export const GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS = [
 	'broadcast-graphic-template',
 	'feature-match-layout-template',
-	'installed-graphics-template',
 ] as const;
+
+export function isGraphicsTemplateReferenceOwnerKind(
+	kind: string,
+): kind is typeof GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS[number] {
+	return (GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS as readonly string[]).includes(kind);
+}
 
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;

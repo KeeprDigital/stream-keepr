@@ -797,7 +797,7 @@ _Avoid_: Dummy data, test data
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
 - An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
 - Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template**, including a **Graphic Style Set** operation that rewrites it, requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held; a Style Set operation refused for one template writes nothing (ADR-0034)
-- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, or **Installed Graphics Template** references any of its revisions, and the refusal names them; a **Screen**'s reference does not hold it back (ADR-0034)
+- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template** or **Feature Match Layout Template** references any of its revisions, and the refusal names them; a **Screen**'s or **Installed Graphics Template**'s reference does not hold it back (ADR-0034)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
 - A **Broadcast Graphic Template** or **Feature Match Layout Template** links to at most one **Graphic Style Set**, adopted by selecting entries in existing property controls; unselected properties stay local

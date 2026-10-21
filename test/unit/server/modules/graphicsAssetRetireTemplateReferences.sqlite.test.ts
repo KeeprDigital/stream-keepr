@@ -18,8 +18,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
  *
  * A template keeps every reference it holds selectable on every write
  * (ADR-0034), so an asset retired under one would leave it unrevisable. Retire
- * therefore refuses while any Broadcast Graphic Template, Feature Match Layout
- * Template, or Installed Graphics Template references any revision of the asset,
+ * therefore refuses while any Broadcast Graphic Template or Feature Match Layout
+ * Template references any revision of the asset,
  * and the refusal names them. The condition sits in the statement that retires,
  * so a template saved after anyone looked still holds it back. A Screen's
  * reference does not: a Screen keeps an unchanged retired reference resolving.
@@ -108,7 +108,6 @@ describe('retiring a Graphic Asset a saved template references', () => {
 	it.each([
 		['a Broadcast Graphic Template', 'broadcast-graphic-template'],
 		['a Feature Match Layout Template', 'feature-match-layout-template'],
-		['an Installed Graphics Template', 'installed-graphics-template'],
 	])('is refused while %s references it, naming the template', async (_, ownerKind) => {
 		await reference(ownerKind, 'template-1');
 
@@ -149,6 +148,21 @@ describe('retiring a Graphic Asset a saved template references', () => {
 		expect(outcome.outcome).toBe('in-use');
 		expect(outcome.outcome === 'in-use' && outcome.usage.map(item => item.owner.kind))
 			.toEqual(['feature-match-layout-template']);
+	});
+
+	// An Installed Graphics Template is never revised and cannot be deleted, so
+	// counting it would make its assets unretirable for good.
+	it('still retires an asset only an Installed Graphics Template references', async () => {
+		await reference('installed-graphics-template', 'installed-1');
+
+		expect((await retire()).outcome).toBe('retired');
+	});
+
+	it('answers not-allowed, not in-use, for an asset already retired', async () => {
+		expect((await retire()).outcome).toBe('retired');
+		await reference('broadcast-graphic-template', 'template-1');
+
+		await expect(retire()).rejects.toMatchObject({ code: 'graphic-asset-lifecycle-action-not-allowed' });
 	});
 
 	it('still retires an asset only a Screen references', async () => {

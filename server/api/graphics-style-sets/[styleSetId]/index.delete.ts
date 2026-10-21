@@ -7,7 +7,7 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertBroadcastGraphicTemplatesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertStyleSetRewritesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -49,16 +49,9 @@ export default defineEventHandler(async (event) => {
 
 	const linked = await service.linkedTemplates(styleSetId);
 	const rewrites = planGraphicStyleSetDeletion(linked);
-	// Every detached template gets a new revision, so each one is held to the template
-	// reference rule, and one refusal keeps the Style Set (ADR-0034). Asked here so the
-	// refusal names the templates; the batch asks again.
-	await assertBroadcastGraphicTemplatesReferencesSelectable(
-		graphicsAssetLibraryForEvent(event),
-		rewrites.map(rewrite => ({
-			name: linked.find(candidate => candidate.id === rewrite.id)?.name ?? rewrite.id,
-			document: rewrite.document,
-		})),
-	);
+	// Every detached template gets a new revision, held to the template reference
+	// rule, and one refusal keeps the Style Set (ADR-0034).
+	await assertStyleSetRewritesReferencesSelectable(graphicsAssetLibraryForEvent(event), rewrites, linked);
 
 	const removed = await service.remove(styleSetId, {
 		draftRevision: body.draftRevision,

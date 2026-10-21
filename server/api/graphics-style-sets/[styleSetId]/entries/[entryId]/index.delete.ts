@@ -8,7 +8,7 @@ import {
 } from '~~/server/schemas/api/graphicStyleSet';
 import { graphicStyleSetService } from '~~/server/services/graphicStyleSet';
 import { requireUserId } from '~~/server/utils/auth';
-import { assertBroadcastGraphicTemplatesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
+import { assertStyleSetRewritesReferencesSelectable } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { rethrowAsGraphicStyleSetConflict } from '~~/server/utils/graphicStyleSetConflict';
 import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 
@@ -75,16 +75,9 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	// Every template the deletion rewrites gets a new revision, so each one is held to
-	// the template reference rule, and one refusal refuses the whole deletion
-	// (ADR-0034). Asked here so the refusal names the templates; the batch asks again.
-	await assertBroadcastGraphicTemplatesReferencesSelectable(
-		graphicsAssetLibraryForEvent(event),
-		plan.rewrites.map(rewrite => ({
-			name: linked.find(candidate => candidate.id === rewrite.id)?.name ?? rewrite.id,
-			document: rewrite.document,
-		})),
-	);
+	// Every template the deletion rewrites gets a new revision, held to the template
+	// reference rule (ADR-0034).
+	await assertStyleSetRewritesReferencesSelectable(graphicsAssetLibraryForEvent(event), plan.rewrites, linked);
 
 	try {
 		const updated = await service.deleteEntry(styleSetId, {

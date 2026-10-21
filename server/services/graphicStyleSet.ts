@@ -357,15 +357,13 @@ export function graphicStyleSetService() {
 		rewrites: readonly GraphicsTemplateRewrite[],
 		perTemplateFacts: readonly string[],
 		operation: { styleSetId: string; version: string },
+		now: number,
 	) => rewrites.flatMap((rewrite, index) => broadcastGraphicTemplateIndexStatements(
 		client,
 		rewrite.id,
 		perTemplateFacts[index]!,
-		Date.now(),
-		{
-			sql: 'EXISTS (SELECT 1 FROM graphic_style_sets WHERE id = ? AND operation_version = ?)',
-			params: [operation.styleSetId, operation.version],
-		},
+		now,
+		{ kind: 'style-set-operation', styleSetId: operation.styleSetId, operationVersion: operation.version },
 	));
 
 	/**
@@ -483,7 +481,7 @@ export function graphicStyleSetService() {
 				referenceFacts.all,
 			),
 			...templateRewriteStatements(client, options.rewrites, id, operation),
-			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation),
+			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation, now),
 		]);
 
 		// Nothing written means a precondition failed — this row's draft revision or one
@@ -538,7 +536,7 @@ export function graphicStyleSetService() {
 			// document carries no Style Set link, so they write a null link back — which is
 			// the whole difference between deleting a Style Set and deleting one entry.
 			...templateRewriteStatements(client, options.rewrites, null, operation),
-			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation),
+			...templateReindexStatements(client, options.rewrites, referenceFacts.perTemplate, operation, Date.now()),
 			// Guarded on the stamp rather than on the draft revision, so the deletion cannot
 			// commit behind template rewrites that did not happen. This is the corruption the
 			// stamp exists to prevent: a deleted Style Set whose templates still reference its

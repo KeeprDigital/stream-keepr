@@ -4,7 +4,7 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	assertBroadcastGraphicTemplateReferencesSelectable,
-	assertBroadcastGraphicTemplatesReferencesSelectable,
+	assertStyleSetRewritesReferencesSelectable,
 } from '~~/server/utils/broadcastGraphicTemplateReferences';
 import { assertFeatureMatchLayoutTemplateReferencesSelectable } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 
@@ -174,13 +174,13 @@ describe('assertBroadcastGraphicTemplateReferencesSelectable', () => {
 
 // ADR-0034: a Graphic Style Set operation rewrites several templates at once, so it
 // asks once for all of them and names each template a refusal belongs to.
-describe('assertBroadcastGraphicTemplatesReferencesSelectable', () => {
+describe('assertStyleSetRewritesReferencesSelectable', () => {
 	it('asks the library once for every template and names each refused template', async () => {
 		const inspectGraphicAssetRevisions = vi.fn().mockResolvedValue([available, retired, font]);
-		const templates = [
-			{ name: 'Lower third', document: broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]) },
+		const rewrites = [
+			{ id: 'template-1', document: broadcastGraphic([media('logo', reference('asset-1', 'revision-1'))]) },
 			{
-				name: 'Score bug',
+				id: 'template-2',
 				document: {
 					...broadcastGraphic([
 						media('plate', reference('asset-2', 'revision-2')),
@@ -191,7 +191,9 @@ describe('assertBroadcastGraphicTemplatesReferencesSelectable', () => {
 			},
 		];
 
-		await expect(assertBroadcastGraphicTemplatesReferencesSelectable({ inspectGraphicAssetRevisions }, templates))
+		const linked = [{ id: 'template-1', name: 'Lower third' }, { id: 'template-2', name: 'Score bug' }];
+
+		await expect(assertStyleSetRewritesReferencesSelectable({ inspectGraphicAssetRevisions }, rewrites, linked))
 			.rejects
 			.toMatchObject({
 				statusCode: 409,
@@ -205,9 +207,10 @@ describe('assertBroadcastGraphicTemplatesReferencesSelectable', () => {
 	it('asks the library nothing when no template holds a reference', async () => {
 		const inspectGraphicAssetRevisions = vi.fn();
 
-		await assertBroadcastGraphicTemplatesReferencesSelectable(
+		await assertStyleSetRewritesReferencesSelectable(
 			{ inspectGraphicAssetRevisions },
-			[{ name: 'Empty', document: broadcastGraphic([]) }],
+			[{ id: 'template-1', document: broadcastGraphic([]) }],
+			[{ id: 'template-1', name: 'Empty' }],
 		);
 
 		expect(inspectGraphicAssetRevisions).not.toHaveBeenCalled();

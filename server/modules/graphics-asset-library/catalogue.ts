@@ -2486,9 +2486,16 @@ export function createD1GraphicsAssetCatalogue(
 				);
 				return { outcome: 'updated', asset };
 			}
+			// Only an active asset can be held back; one already retired or trashed
+			// answers not-allowed, as the in-memory catalogue does.
 			const templateUsage = (usage.results as unknown as UsageRow[]).map(usageFromRow);
-			if (templateUsage.length > 0)
-				return { outcome: 'in-use', usage: templateUsage };
+			if (templateUsage.length > 0) {
+				const current = await database.prepare(
+					'SELECT lifecycle_state FROM graphic_assets WHERE id = ?',
+				).bind(input.assetId).first<{ lifecycle_state: string }>();
+				if (current?.lifecycle_state === 'active')
+					return { outcome: 'in-use', usage: templateUsage };
+			}
 			return await classifyLifecycleTransitionMiss(database, input.assetId);
 		},
 		async trashGraphicAsset(input) {

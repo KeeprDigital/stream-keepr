@@ -330,4 +330,35 @@ describe('graphicStyleSetService library-wide operations', () => {
 		expect((await templateRow()).style_set_id).toBe(STYLE_SET_ID);
 		expect(await indexedTemplateSlots()).toEqual([PLATE_SLOT]);
 	});
+
+	it('refuses the whole deletion when one of several rewritten templates is refused, leaving the clean one alone', async () => {
+		const cleanId = 'score-bug';
+		const cleanDocument = (): BroadcastGraphicConfig => ({ ...linkedDocument(), id: cleanId, items: [] });
+		await client.execute({
+			sql: `insert into broadcast_graphic_templates
+				(id, name, revision, document, graphic_asset_reference_version, style_set_id, style_set_revision)
+				values (?, 'Score bug', 1, ?, 'stamp', ?, 1)`,
+			args: [cleanId, JSON.stringify(cleanDocument()), STYLE_SET_ID],
+		});
+		await retirePlate();
+
+		await expect(graphicStyleSetService().deleteEntry(STYLE_SET_ID, {
+			draftRevision: 2,
+			draft: entries().filter(entry => entry.id !== 'brand'),
+			published: entries().filter(entry => entry.id !== 'brand'),
+			rewrites: [
+				{ id: cleanId, revision: 1, document: { ...cleanDocument(), styleRefs: undefined } },
+				{ id: TEMPLATE_ID, revision: TEMPLATE_REVISION, document: entryDetachedDocument() },
+			],
+		})).rejects.toThrow(GraphicStyleSetTemplateReferenceConflict);
+
+		const clean = await client.execute({
+			sql: 'select revision, document from broadcast_graphic_templates where id = ?',
+			args: [cleanId],
+		});
+		expect(clean.rows[0]?.revision).toBe(1);
+		expect(JSON.parse(String(clean.rows[0]?.document))).toEqual(cleanDocument());
+		expect((await templateRow()).revision).toBe(TEMPLATE_REVISION);
+		expect((await styleSetRow())?.draft_revision).toBe(2);
+	});
 });
