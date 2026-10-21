@@ -14,6 +14,7 @@ import {
 	LOCAL_DEVELOPER_SESSION_ID_PREFIX,
 	LOCAL_DEVELOPER_USER_ID,
 } from '../../shared/utils/localDeveloperAuth.ts';
+import { DeployVerifyFailure, verifyDeployment } from '../deploy-verify.mjs';
 
 const PIXEL_PNG = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -630,6 +631,26 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 		fetchRequest,
 		signal,
 	});
+
+	await expectDeployVerifyPasses({ origin, fetchRequest, signal });
+}
+
+/**
+ * The production bundle must pass the probe `pnpm run deploy` gates on, so a
+ * stricter `deploy:verify` can never first fail on deploy day (#617).
+ */
+async function expectDeployVerifyPasses({ origin, fetchRequest, signal }) {
+	try {
+		await verifyDeployment({ baseUrl: origin, fetchRequest, attempts: 1, signal });
+	}
+	catch (error) {
+		if (!(error instanceof DeployVerifyFailure))
+			throw error;
+		throw new WorkerSmokeFailure('deploy-verify', 'probe-rejected', {
+			expected: 'GET /api/time accepted by scripts/deploy-verify.mjs',
+			actual: redactSmokeText(error.message),
+		});
+	}
 }
 
 function jsonRequest(body, headers = {}) {
