@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pageRotationEdit } from '~~/shared/modules/page-rotation';
 import { DEFAULT_PAGE_ROTATION, pageRotationPageSize, pageRotationShape } from '~~/shared/screenModeConfigs/subShapes';
+import { getDisplayResetForMode } from '~~/shared/screenModeDefinitions';
 import { SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
@@ -34,6 +35,14 @@ describe('screen Mode Page Rotation', () => {
 		}
 	});
 
+	it('a display reset of any other mode writes no rotation field', () => {
+		const undeclared = SCREEN_MODE_VALUES.filter(mode => !SCREEN_MODES[mode].pageRotation);
+		for (const mode of undeclared) {
+			for (const field of Object.keys(pageRotationShape))
+				expect(getDisplayResetForMode(mode, {}, NOW), `${mode}.${field}`).not.toHaveProperty(field);
+		}
+	});
+
 	describe.each(paginated)('$mode', ({ mode, pageRotation }) => {
 		const contract = SCREEN_MODES[mode].config;
 		const pageSizeEdit = { [pageRotation.pageSize]: 4 };
@@ -63,6 +72,20 @@ describe('screen Mode Page Rotation', () => {
 
 		it('a page duration edit with auto-page off is written as it is', () => {
 			expect(pageRotationEdit(pageRotation, { autoPageEnabled: false }, durationEdit, NOW)).toEqual(durationEdit);
+		});
+
+		it('a display reset turns auto-page off, restores the default page size and returns to page 1', () => {
+			// A rotation running from a manual selection of page 3.
+			const running = { autoPageEnabled: true, currentPage: 3, rotationAnchor: 123 };
+			const reset = getDisplayResetForMode(mode, running as Partial<typeof contract.defaults>, NOW);
+			expect(reset).toMatchObject({
+				autoPageEnabled: false,
+				autoPageIntervalMs: 10_000,
+				[pageRotation.pageSize]: (contract.defaults as Record<string, unknown>)[pageRotation.pageSize],
+				currentPage: 1,
+			});
+			// Auto-page is off once reset, so the reset writes no Rotation Anchor.
+			expect(reset).not.toHaveProperty('rotationAnchor');
 		});
 
 		it('writes any other edit as it is', () => {

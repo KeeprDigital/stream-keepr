@@ -184,7 +184,7 @@ export const graphicStyleSetEntrySchema = z.discriminatedUnion('kind', [
  * A whole draft.
  *
  * Written whole rather than as a stream of entry operations. A draft is one JSON
- * document and its edits are unordered — an author adds a palette colour, renames a
+ * document and its edits are unordered — an author adds a Palette Entry, renames an
  * entry, and deletes an unused one in any sequence — so a per-entry API would need
  * its own concurrency story on top of the one the Style Set already has. The
  * `revision` compare-and-swap on the write is that story.

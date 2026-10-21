@@ -73,7 +73,7 @@ const USwitchStub = defineComponent({
 	template: `<input type="checkbox" :checked="modelValue" :disabled="disabled" @change="$emit('update:modelValue', $event.target.checked)" />`,
 });
 
-/** The draft the pickers offer from: two palette colours, a fill, and a geometry. */
+/** The draft the pickers offer from: two Palette Entries, a fill, and a geometry. */
 const DRAFT: GraphicStyleSetEntry[] = [
 	{ id: 'brand', kind: 'palette', name: 'Brand', schemaVersion: 1, value: { color: '#ff0044' } },
 	{ id: 'ink', kind: 'palette', name: 'Ink', schemaVersion: 1, value: { color: '#101014' } },
@@ -159,7 +159,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 	it('gives a palette entry the only colour input there is', async () => {
 		const wrapper = await mountEditor(DRAFT[0]!);
 
-		// The shared colour picker, hex-only: a palette colour is always a concrete colour.
+		// The shared colour picker, hex-only: a Palette Entry always holds a concrete colour.
 		const color = wrapper.get<HTMLInputElement>('[data-testid="style-entry-palette-color"]');
 		expect(color.attributes('data-color-picker')).toBeDefined();
 		expect(color.attributes('data-hex-only')).toBe('true');

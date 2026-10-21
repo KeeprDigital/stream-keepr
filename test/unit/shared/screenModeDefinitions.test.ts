@@ -19,7 +19,7 @@ describe('screen Mode Definition module', () => {
 			expect(definition.description).toBeTruthy();
 			expect(definition.displayType).toMatch(/^(overlay|control)$/);
 			expect(definition.getDefaultConfig()).toBeTruthy();
-			expect(definition.getDisplayDefaults()).toBeTruthy();
+			expect(definition.getDisplayReset(definition.getDefaultConfig(), 0)).toBeTruthy();
 			expect(definition.host.kind).toMatch(/^(overlay|control)$/);
 			expect(definition.configurationPolicy.displayType).toBe(definition.displayType);
 			expect(selectOptions).toContainEqual({ label: definition.label, value: mode, icon: definition.icon });

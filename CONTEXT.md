@@ -146,7 +146,7 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Rotation Anchor**:
-The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape, or when an operator selects a page mid-rotation. A Screen Output never writes it.
+The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape (a display reset among them), or when an operator selects a page mid-rotation. A Screen Output never writes it.
 
 **Screen Output**:
 A live rendering variant exposed by a Screen Mode Definition, such as overlay, fill, or key.
@@ -331,12 +331,16 @@ The synchronized visual change between profiles in a Social Profile Rotation: Cu
 
 **Graphic Style Set**:
 A named reusable authoring resource, shared across the graphics template libraries, holding Graphic Style Set Entries that keep a cohesive visual and motion language across Broadcast Graphic Templates and Feature Match Layout Templates. Events consume but never own one.
-Its entry kinds are palette colour, typography, Graphic Fill, Graphic Surface Style, media treatment, Shape Geometry, and Graphic Animation Recipe. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
+Its entry kinds are palette (each one a Palette Entry), typography, Graphic Fill, Graphic Surface Style, media treatment, Shape Geometry, and Graphic Animation Recipe. It never holds Graphic Item trees, layout structure, or Graphics Asset Library content; typography references application fonts only (ADR-0001).
 Edits accumulate in a working draft and become a Style Set revision only through an explicit atomic publish (deleting a published entry is the one exception). Linked templates receive an update to review and apply as a new template revision, preserving their property-level overrides; placed graphics never change automatically.
 
 **Graphic Style Set Entry**:
 One named, bounded value in a Graphic Style Set that templates link to rather than copy, so a published change reaches them as a reviewable update.
 _Avoid_: Preset — which initialises a value by copying it, with no link.
+
+**Palette Entry**:
+A Graphic Style Set Entry holding one freely named colour, with no opacity and no fixed role: the consuming property owns opacity, and what the colour does is decided by whatever references it. Every other colour-bearing entry, such as a typography, Graphic Fill or Graphic Surface Style entry, stores a Palette Entry's id rather than a colour, so a brand colour changed once reaches every entry linking to it.
+_Avoid_: palette colour (the colour a Palette Entry holds, not the entry), colour role (the palette is open-ended and assigns none).
 
 **Graphic Style Set Package**:
 A single-Style-Set portable `.skstyle` archive, carrying one published revision and no templates or asset files; it declares the application fonts it needs and a receiver missing one refuses it. It follows the Template Package principles; an import never field-merges and may always install as an independent copy.

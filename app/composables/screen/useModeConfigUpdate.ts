@@ -1,6 +1,7 @@
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigsMap, ModeConfigTypeMap } from '~~/shared/types/screenConfig';
-import { getDefaultConfigForMode, getDisplayDefaultsForMode } from '~~/shared/types/screenConfig';
+import { getDisplayResetForMode } from '~~/shared/screenModeDefinitions';
+import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 interface UseModeConfigUpdateOptions<M extends ScreenMode> {
 	/** Debounce delay in ms before flushing to API. Default: 300 */
@@ -31,6 +32,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	const { debounceMs = 300, defaults = getDefaultConfigForMode(mode) } = options;
 
 	const screenStore = useScreenStore();
+	const { getServerTime } = useServerTime();
 
 	const { config, saving, saveState, saveError, updateConfig, retry } = useConfigUpdate<ConfigType>({
 		getStoreConfig: () => {
@@ -45,10 +47,13 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 		errorMessage: 'Failed to update screen config',
 	});
 
-	/** Reset all display settings to defaults (preserves what the Screen points at, such as its Event References). */
+	/**
+	 * Reset all display settings to defaults (preserves what the Screen points
+	 * at, such as its Event References). A paginated mode's Page Rotation
+	 * restarts from page 1.
+	 */
 	function resetConfig() {
-		const displayDefaults = getDisplayDefaultsForMode(mode);
-		updateConfig(displayDefaults as Partial<ConfigType>);
+		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as Partial<ConfigType>);
 	}
 
 	return { config, saving, saveState, saveError, updateConfig, resetConfig, retry };
