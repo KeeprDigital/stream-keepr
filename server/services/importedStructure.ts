@@ -2,6 +2,7 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { matches, phases, playerRoundStandings, rounds } from '~~/server/db/schema';
+import { inJsonArray } from '~~/server/utils/db';
 
 /**
  * Which imported Phases and Rounds a removal covers: the stale ones a Melee
@@ -39,12 +40,6 @@ export interface ImportedStructureRemoval {
 	};
 }
 
-function idsIn(column: typeof rounds.id | typeof phases.id, ids: readonly number[]) {
-	// One bound JSON array rather than one parameter per id, within D1's
-	// bound-parameter ceiling at any count.
-	return sql`${column} in (select value from json_each(${JSON.stringify(ids)}))`;
-}
-
 /**
  * Removes imported (Melee-owned) Phases and Rounds without ever removing manual
  * structure beneath them (ADR-0040). The schema cascades a Phase delete through
@@ -69,8 +64,8 @@ export function buildRemoveImportedStructureQueries(
 ): ImportedStructureRemoval {
 	const importedRound = and(eq(rounds.eventId, eventId), eq(rounds.externalSource, 'melee'));
 	const importedPhase = and(eq(phases.eventId, eventId), eq(phases.externalSource, 'melee'));
-	const scopedRounds = scope.kind === 'all' ? importedRound : and(importedRound, idsIn(rounds.id, scope.roundIds));
-	const scopedPhases = scope.kind === 'all' ? importedPhase : and(importedPhase, idsIn(phases.id, scope.phaseIds));
+	const scopedRounds = scope.kind === 'all' ? importedRound : and(importedRound, inJsonArray(rounds.id, scope.roundIds));
+	const scopedPhases = scope.kind === 'all' ? importedPhase : and(importedPhase, inJsonArray(phases.id, scope.phaseIds));
 	const scopedRoundIds = db.select({ id: rounds.id }).from(rounds).where(scopedRounds);
 	const now = new Date();
 

@@ -17,8 +17,23 @@ export const D1_MAX_PARAMS = 100;
 /**
  * Safe upper bound for `inArray()` calls.
  * Conservative — leaves headroom for other parameters in the same query.
+ * A list that grows with the data needs no chunking: bind it with `inJsonArray`.
  */
 export const SAFE_INARRAY_SIZE = 50;
+
+/**
+ * `column in (…values)` bound as one JSON array, so it costs one parameter at
+ * any list length where `inArray()` costs one per value. Use it for a list that
+ * grows with the data, such as an Event's Slots. Hand-written D1 statements
+ * get the same shape from `valuesFromJsonArray` in the Graphics Asset Library's
+ * `catalogue-sql.ts`.
+ *
+ * @example
+ * db.query.featureMatches.findMany({ where: inJsonArray(featureMatches.id, slotIds) })
+ */
+export function inJsonArray(column: SQLiteColumn, values: readonly (string | number)[]): SQL {
+	return sql`${column} in (select value from json_each(${JSON.stringify(values)}))`;
+}
 
 /**
  * Conservative application-level limits for JSON-bound bulk statements.

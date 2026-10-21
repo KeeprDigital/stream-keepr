@@ -7,7 +7,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkRowsWithinParameterBudget, observedValue } from '~~/server/utils/db';
+import { chunkRowsWithinParameterBudget, inJsonArray, observedValue } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -30,11 +30,6 @@ export interface ImportedFeatureMatchResetPlan {
 	clearedSlotCount: number;
 	/** Run once the batch carrying `queries` has committed, to announce the replacement Sessions. */
 	settle: () => Promise<unknown>;
-}
-
-/** The Slots named, as one bound JSON array: within D1's parameter limit at any Slot count. */
-function slotIdIn(slotIds: readonly number[]) {
-	return sql`${featureMatches.id} in (select value from json_each(${JSON.stringify(slotIds)}))`;
 }
 
 /**
@@ -102,7 +97,7 @@ export async function buildClearImportedMatchDataQueries(
 		.where(and(
 			eq(featureMatches.eventId, eventId),
 			stillMeleeOwned,
-			slotIdIn(importedSlots.map(slot => slot.id)),
+			inJsonArray(featureMatches.id, importedSlots.map(slot => slot.id)),
 		));
 
 	return {
@@ -416,7 +411,7 @@ export function featureMatchService() {
 				// this call created, so the Event holds only the Slots it held before.
 				await runCompensation(error, () => db.delete(featureMatches).where(and(
 					eq(featureMatches.eventId, eventId),
-					slotIdIn(createdMatches.map(match => match.id)),
+					inJsonArray(featureMatches.id, createdMatches.map(match => match.id)),
 				)));
 				throw error;
 			}
@@ -432,7 +427,7 @@ export function featureMatchService() {
 				.where(
 					and(
 						eq(featureMatches.eventId, eventId),
-						slotIdIn(idsToDelete),
+						inJsonArray(featureMatches.id, idsToDelete),
 					),
 				);
 
