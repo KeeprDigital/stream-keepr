@@ -54,6 +54,9 @@ const fixtures = JSON.parse(await readFile(
 	'utf8',
 )) as Record<string, Fixture>;
 
+// `validate-in-container` retries 5 times after its first attempt.
+const CONTAINER_ATTEMPTS = 6;
+
 const BUSY = () => Response.json({ error: 'validation already in progress' }, { status: 409 });
 
 function validationParams() {
@@ -142,9 +145,9 @@ describe('silent-video validation Workflow and a busy Container', () => {
 	});
 
 	it('leaves a validation that is busy on every attempt unsettled, not rejected', async () => {
-		const { outcome, step } = await runWorkflow(Array.from<() => Response>({ length: 6 }).fill(BUSY));
+		const { outcome, step } = await runWorkflow(Array.from<() => Response>({ length: CONTAINER_ATTEMPTS }).fill(BUSY));
 		await expect(outcome).rejects.toThrow('Validation container failed with status 409');
-		expect(step.failures).toHaveLength(6);
+		expect(step.failures).toHaveLength(CONTAINER_ATTEMPTS);
 		expect(step.failures.every(({ error }) => !(error instanceof NonRetryableError))).toBe(true);
 	});
 });

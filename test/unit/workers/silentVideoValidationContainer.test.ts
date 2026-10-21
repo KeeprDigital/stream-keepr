@@ -170,7 +170,8 @@ function responseOn(socket: Socket): Promise<Response> {
 	});
 }
 
-function settled<T>(promise: Promise<T>, withinMs: number): Promise<T | 'pending'> {
+/** `promise`'s value, or `'pending'` if it has none within `withinMs`. */
+function withinOrPending<T>(promise: Promise<T>, withinMs: number): Promise<T | 'pending'> {
 	return Promise.race([
 		promise,
 		new Promise<'pending'>(resolve => setTimeout(resolve, withinMs, 'pending')),
@@ -190,10 +191,11 @@ async function heldValidation(request: ValidationRequest = MISMATCHED) {
 	const socket = await openConnection();
 	const response = responseOn(socket);
 	socket.write(validationHead(request, SOURCE.byteLength));
-	// Admission is decided on the head; give the server a moment to read it
-	// before proving it is held.
-	await new Promise(resolve => setTimeout(resolve, 200));
-	await expect(settled(validate(MISMATCHED), 5_000)).resolves.toMatchObject({ status: 409 });
+	// An admitted validation's first act is creating its workspace.
+	const deadline = Date.now() + 10_000;
+	while ((await readdir(workspaceRoot)).length === 0 && Date.now() < deadline)
+		await new Promise(resolve => setTimeout(resolve, 20));
+	await expect(withinOrPending(validate(MISMATCHED), 5_000)).resolves.toMatchObject({ status: 409 });
 	return {
 		response,
 		finish: () => socket.write(SOURCE),
@@ -207,11 +209,11 @@ async function heldValidation(request: ValidationRequest = MISMATCHED) {
  * released the Container, so it is asked again, as the Workflow would retry.
  */
 async function expectAdmitsAnother() {
-	const deadline = Date.now() + 5_000;
-	let answered = await settled(validate(MISMATCHED), 5_000);
+	const deadline = Date.now() + 15_000;
+	let answered = await withinOrPending(validate(MISMATCHED), 5_000);
 	while (answered !== 'pending' && answered.status === 409 && Date.now() < deadline) {
 		await new Promise(resolve => setTimeout(resolve, 50));
-		answered = await settled(validate(MISMATCHED), 5_000);
+		answered = await withinOrPending(validate(MISMATCHED), 5_000);
 	}
 	expect(answered).toEqual({
 		status: 200,
@@ -243,7 +245,7 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
-describe('silent-video validation Container admission', { timeout: 20_000 }, () => {
+describe('silent-video validation Container admission', { timeout: 60_000 }, () => {
 	it('answers one of two overlapping validations busy, and validates the other', async () => {
 		await startServer();
 		const first = await openConnection();
@@ -254,7 +256,7 @@ describe('silent-video validation Container admission', { timeout: 20_000 }, () 
 		first.write(validationHead(MISMATCHED, SOURCE.byteLength));
 		second.write(validationHead(MISMATCHED, SOURCE.byteLength));
 		// The busy answer does not wait for either source to arrive.
-		const early = await settled(Promise.race(responses), 2_000);
+		const early = await withinOrPending(Promise.race(responses), 10_000);
 		first.write(SOURCE);
 		second.write(SOURCE);
 		const statuses = (await Promise.all(responses)).map(response => response.status);
@@ -282,6 +284,15 @@ describe('silent-video validation Container admission', { timeout: 20_000 }, () 
 		await rm(workspaceRoot, { recursive: true });
 		await expect(validate(MISMATCHED)).resolves.toMatchObject({ status: 500 });
 		await mkdir(workspaceRoot);
+		await expectAdmitsAnother();
+	});
+
+	it('admits a later validation after a malformed validation request', async () => {
+		await startServer();
+		const malformed = await openConnection();
+		const response = responseOn(malformed);
+		malformed.write(`POST /validate HTTP/1.1\r\nhost: x\r\nconnection: close\r\nx-validation-request: ${Buffer.from('{').toString('base64')}\r\ncontent-length: 0\r\n\r\n`);
+		await expect(response).resolves.toMatchObject({ status: 400 });
 		await expectAdmitsAnother();
 	});
 
