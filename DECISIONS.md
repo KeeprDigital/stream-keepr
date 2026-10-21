@@ -688,6 +688,7 @@ Each new range is the old range mapped through the change, so the extremes the p
 - **`intensity`** is brightness or glow strength, and nothing else.
 - **`centerX`/`centerY`** move the pattern's centre.
 - **A colour is `<role>Color`**, named for what it paints and labelled "<Role> color". `backgroundColor` is the colour behind everything; a tonal ramp uses `highlightColor`/`lowlightColor`.
+- **A toggle is `show<Thing>`**, naming the thing its label shows.
 - **No shader quantities**: no `*Factor` multipliers, numbered keys, or bare `color`.
 
 The ported fork names that broke it are renamed, each new key keeping the old range and default:
@@ -695,14 +696,14 @@ The ported fork names that broke it are renamed, each new key keeping the old ra
 - cells: `color1`, `color2` → `lowlightColor`, `highlightColor`.
 - dots: `color`, `color2` ("Accent color") → `dotColor`, `lineColor` ("Line color").
 - fog: `blurFactor`, `baseColor` → `softness`, `backgroundColor`.
-- globe: `color`, `color2`, `maxDistance` → `lineColor`, `accentColor`, `connectionDistance`.
+- globe: `color`, `color2`, `maxDistance`, `showDots` → `lineColor`, `accentColor`, `connectionDistance`, `showPoints`.
 - halo: `amplitudeFactor` ("Intensity"), `baseColor`, `xOffset`/`yOffset` → `petalDepth` ("Petal depth"), `tintColor`, `centerX`/`centerY`.
-- net: `color`, `maxDistance` → `lineColor`, `connectionDistance`.
+- net: `color`, `maxDistance`, `showDots` → `lineColor`, `connectionDistance`, `showPoints`.
 - ripple: `amplitudeFactor` ("Intensity"), `ringFactor` ("Ripple scale"), `rotationFactor` ("Rotation"), `color1`, `color2` → `size` ("Ring size"), `swingSpeed` ("Swing speed"), `drift` ("Ring drift"), `highlightColor`, `lowlightColor`.
 - waves: `color`, `waveSpeed` → `waveColor`, `speed`.
 - ridgelines (not a port, but its key disagreed with its own label): `fillColor` ("Ridge color") → `ridgeColor`.
 
-A catalogue unit test refuses `*Factor`, digits, offsets, a colour key that is not `<role>Color` or whose label is not "<Role> color" for that role, and a `<motion>Speed` beside no `speed`. Whether a label describes what the knob does stays a reviewer's check against the shader.
+A catalogue unit test refuses `*Factor`, digits, offsets, a colour key that is not `<role>Color` or whose label is not "<Role> color" for that role, a `<motion>Speed` beside no `speed`, and a toggle that is not `show<Thing>` naming the thing its label does. Whether a label describes what the knob does stays a reviewer's check against the shader.
 
 ### Why
 

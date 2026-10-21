@@ -45,7 +45,7 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 	let dotMaterial: THREE.MeshLambertMaterial | undefined;
 
 	function addPoint(three: typeof THREE, x: number, y: number, z: number) {
-		const holder = current.showDots && dotGeometry && dotMaterial
+		const holder = current.showPoints && dotGeometry && dotMaterial
 			? new three.Mesh(dotGeometry, dotMaterial)
 			: new three.Object3D();
 		holder.position.set(x, y, z);
@@ -62,7 +62,7 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 	/**
 	 * (Re)build the point field and line buffers for the current construction
 	 * params. Called at build, and again when `points`, `spacing`, or
-	 * `showDots` change — the fork read those only at init, so a live change is
+	 * `showPoints` change — the fork read those only at init, so a live change is
 	 * given what a fresh mount of the same params would show.
 	 */
 	function buildField(three: typeof THREE) {
@@ -72,8 +72,8 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 		dotGeometry?.dispose();
 		dotMaterial?.dispose();
 
-		dotGeometry = current.showDots ? new three.SphereGeometry(0.25, 12, 12) : undefined;
-		dotMaterial = current.showDots ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
+		dotGeometry = current.showPoints ? new three.SphereGeometry(0.25, 12, 12) : undefined;
+		dotMaterial = current.showPoints ? new three.MeshLambertMaterial({ color: current.lineColor }) : undefined;
 
 		points = [];
 		positions = [];
@@ -122,7 +122,7 @@ export function createNetDelegate(): SceneEffectDelegate<AnimationEffectParams<'
 		applyParams: ({ three, scene, params }) => {
 			const fieldChanged = params.points !== current.points
 				|| params.spacing !== current.spacing
-				|| params.showDots !== current.showDots;
+				|| params.showPoints !== current.showPoints;
 			current = params;
 			scene.background = new three.Color(params.backgroundColor);
 			if (fieldChanged) {

@@ -213,10 +213,10 @@ describe('animationEffects catalogue', () => {
 			points: 10,
 			connectionDistance: 22,
 			spacing: 16,
-			showDots: true,
+			showPoints: true,
 		});
-		const showDots = animationEffectParamFields('net').find(field => field.key === 'showDots');
-		expect(showDots).toMatchObject({
+		const showPoints = animationEffectParamFields('net').find(field => field.key === 'showPoints');
+		expect(showPoints).toMatchObject({
 			control: 'toggle',
 			defaultValue: true,
 			description: 'Render point markers at net intersections.',
@@ -235,11 +235,11 @@ describe('animationEffects catalogue', () => {
 			points: 10,
 			connectionDistance: 22,
 			spacing: 16,
-			showDots: true,
+			showPoints: true,
 		});
 		const fields = animationEffectParamFields('globe');
 		expect(fields.find(field => field.key === 'size')?.label).toBe('Globe size');
-		expect(fields.find(field => field.key === 'showDots')).toMatchObject({
+		expect(fields.find(field => field.key === 'showPoints')).toMatchObject({
 			control: 'toggle',
 			defaultValue: true,
 			description: 'Render point markers around the globe.',
@@ -340,6 +340,13 @@ describe('animationEffects catalogue', () => {
 				}
 				else {
 					expect(field.key, where).not.toMatch(/Color$/);
+				}
+				if (field.control === 'toggle') {
+					// `show<Thing>`, naming the same thing its label does: net's and
+					// globe's markers sit on their `points`, so `showPoints`.
+					expect(field.key, where).toMatch(/^show[A-Z][a-z]+$/);
+					const thing = field.key.slice('show'.length).toLowerCase().replace(/s$/, '');
+					expect(field.label.toLowerCase(), where).toContain(thing);
 				}
 				// `speed` is an effect's whole motion rate and is never qualified; a
 				// `<motion>Speed` is only ever a second rate beside it.

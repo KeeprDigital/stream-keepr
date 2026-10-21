@@ -125,8 +125,8 @@ describe('createGlobeDelegate', () => {
 		expect(lines!.geometry.drawRange.count).toBeGreaterThan(0);
 	});
 
-	it('builds bare placeholders when showDots is off, and the lines still string', () => {
-		const { delegate, scene, context } = mountDelegate({ showDots: false });
+	it('builds bare placeholders when showPoints is off, and the lines still string', () => {
+		const { delegate, scene, context } = mountDelegate({ showPoints: false });
 		expect(fieldDots(scene).length).toBe(0);
 		expect(fieldGroup(scene).children.length).toBe(11 * 11 + 1);
 		delegate.update({ ...context, elapsedSeconds: 1 });
