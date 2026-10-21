@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import type {
 	GraphicsHostContract,
-	GraphicSurfaceStyleEdit,
-	GraphicSurfaceStyleSlot,
-	ShapeGeometryPresetId,
 } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { Game, PlayerSide } from '~~/shared/types/enums';
-import type { GraphicFocalPosition } from '~~/shared/types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
 	DeckListGraphicItemConfig,
@@ -19,10 +15,8 @@ import type {
 	GraphicFontSource,
 	GraphicGroupChildSizing,
 	GraphicGroupItemConfig,
-	GraphicInputChoiceOption,
 	GraphicInputDeclaration,
 	GraphicInputType,
-	GraphicItemConfig,
 	GraphicMediaKind,
 	GraphicPlaceholderStyle,
 	GraphicSurfaceStyle,
@@ -41,11 +35,6 @@ import type { GraphicStyleRef, GraphicStyleSlot } from '~~/shared/types/graphicS
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
-import {
-	bindGraphicStyleRef,
-	recaptureGraphicStyleOverrides,
-	unbindGraphicStyleRef,
-} from '~~/shared/modules/graphic-style-sets';
 import {
 	addGraphicInput,
 	applyGraphicSurfaceStyleEdit,
@@ -76,7 +65,6 @@ import {
 	patchPlayerLifeGraphicItem,
 	patchShapeGeometry,
 	patchTextGraphicItem,
-	replaceBroadcastGraphic,
 	selectMediaGraphicItemAsset,
 	setGraphicInputChoiceOptions,
 	setGraphicInputMediaKind,
@@ -103,6 +91,7 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
+import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import GraphicsGeometryFields from '../GeometryFields.vue';
@@ -165,11 +154,16 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
 
 /**
- * Fail closed: a caller that does not grant authoring gets a read-only editor.
- * Only a session confirmed to hold the artifact's Graphics Authoring Lease authors
- * it, so an absent prop must never read as permission.
+ * Every edit here goes through the compositor editing module. It checks the Graphics
+ * Authoring Lease (fail closed: a caller that does not grant authoring gets a
+ * read-only editor), resolves the selection, applies the authoring operation,
+ * re-captures Graphic Style Set overrides, and replaces the stack. The controls below
+ * write values and hand it the authoring operation that writes them.
  */
-const canAuthor = computed(() => props.writable === true);
+const { canAuthor, editItem, editGraphic, bindStyleRef, unbindStyleRef } = useCompositorEditing(
+	() => props,
+	graphics => emit('update:graphics', graphics),
+);
 
 const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Clip', value: 'clip' },
@@ -264,12 +258,12 @@ const invalidSocialNetworkIconProjection = computed(() => {
 
 function updateSocialNetworkIconSource(source: 'static' | 'projection') {
 	if (source === 'static') {
-		patchSelectedItem({ network: 'twitch' });
+		editItem(patchGraphicItem, { network: 'twitch' });
 		return;
 	}
 	const projectionKey = socialProfileProjectionOptions.value[0]?.value;
 	if (projectionKey)
-		patchSelectedItem({ network: { projectionKey } });
+		editItem(patchGraphicItem, { network: { projectionKey } });
 }
 const selectedGroup = computed<GraphicGroupItemConfig | null>(() =>
 	selectedItem.value?.type === 'group' ? selectedItem.value : null,
@@ -347,10 +341,6 @@ const PLAYER_SIDE_OPTIONS = [
 	{ label: 'Player 2', value: 'player2' },
 ] satisfies Array<{ label: string; value: PlayerSide }>;
 
-function updatePlayerSide(playerSide: PlayerSide) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicItem(graphic, itemId, { playerSide }));
-}
-
 /**
  * The Shape Geometry the geometry controls edit.
  *
@@ -403,56 +393,10 @@ const ownSurfaceStyle = computed<GraphicSurfaceStyle | null>(() => {
 	return item.surfaceStyle ?? null;
 });
 
-/**
- * Apply one Graphic Surface Style edit to one of the selection's surfaces.
- *
- * Which surface is this panel's decision rather than the controls': a Game Wins
- * Item has three, and the controls for all three are identical.
- */
-function applySurfaceStyleEdit(slot: GraphicSurfaceStyleSlot, edit: GraphicSurfaceStyleEdit) {
-	applyToSelectedGraphic((graphic, itemId) => applyGraphicSurfaceStyleEdit(graphic, itemId, slot, edit));
-}
-
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 const geometryContainer = computed(() => parentGroup.value
 	? { width: parentGroup.value.width, height: parentGroup.value.height }
 	: { width: props.canvasWidth, height: props.canvasHeight });
-
-/**
- * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
- * into line with what it now holds.
- *
- * This is the single place a property edit becomes an explicit property-level
- * override. The controls below write *values* — an author drags a font size on an
- * item whose typography is inherited — and nothing about them knows about
- * provenance. Re-deriving the deviations here means every control participates
- * without any of them being taught to, and an author who edits a value and puts it
- * back is left with no override rather than one pinning it.
- *
- * With no Style Set loaded it is the identity, so an unlinked composition is
- * untouched.
- *
- * The composition as `props.graphics` still holds it is what says which slots had a
- * pending Style Set change before this edit — the edited copy cannot, since the edit
- * itself is a difference from the entry (#198).
- */
-function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
-	const context = props.styleSet;
-	const stored = props.graphics.find(candidate => candidate.id === graphic.id);
-	return context && stored
-		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
-		: graphic;
-}
-
-function patchSelectedItem(patch: Partial<GraphicItemConfig>) {
-	const current = selection.value;
-	if (!canAuthor.value || current.kind !== 'item')
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		withRecapturedStyleOverrides(patchGraphicItem(current.graphic, current.item.id, patch)),
-	));
-}
 
 /**
  * Which Shape Geometry the geometry controls are editing, named as a Graphic Style
@@ -479,44 +423,6 @@ const geometryStyleSlot = computed<GraphicStyleSlot>(() => {
 /** The Graphic Style Set entry one slot of the selected Graphic Item follows. */
 function styleRefFor(slot: GraphicStyleSlot): GraphicStyleRef | undefined {
 	return selectedItem.value?.styleRefs?.[slot];
-}
-
-function bindStyleRef(slot: GraphicStyleSlot, entryId: string) {
-	const current = selection.value;
-	const context = props.styleSet;
-	if (!canAuthor.value || current.kind !== 'item' || !context)
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		bindGraphicStyleRef(current.graphic, current.item.id, slot, entryId, context.resolution),
-	));
-}
-
-function unbindStyleRef(slot: GraphicStyleSlot) {
-	const current = selection.value;
-	if (!canAuthor.value || current.kind !== 'item')
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		unbindGraphicStyleRef(current.graphic, current.item.id, slot),
-	));
-}
-
-/** Nested property groups go through their own merge, so a single-field edit keeps its siblings. */
-function applyToSelectedGraphic(
-	merge: (graphic: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
-) {
-	const current = selection.value;
-	if (!canAuthor.value || current.kind !== 'item')
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		withRecapturedStyleOverrides(merge(current.graphic, current.item.id)),
-	));
-}
-
-function updateTypography(patch: Partial<GraphicTypography>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicTypography(graphic, itemId, patch));
 }
 
 /**
@@ -553,79 +459,26 @@ function updateFontSource(source: GraphicFontSource) {
 		return;
 	fontSourceOverride.value = source;
 	if (source === 'application' && selectedFont.value?.kind === 'asset')
-		updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+		editItem(patchGraphicTypography, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 /** Pin one exact font Graphic Asset Revision, as a Media Graphic Item pins content. */
 function selectFontAsset(_asset: GraphicAsset, reference: GraphicAssetReference) {
-	updateTypography({ font: { kind: 'asset', reference } });
+	editItem(patchGraphicTypography, { font: { kind: 'asset', reference } });
 }
 
 /** Unpinning a library font leaves the item on an application font rather than none. */
 function clearFontAsset() {
-	updateTypography({ font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
-}
-
-function updateGeometry(patch: Partial<ShapeGeometry>) {
-	applyToSelectedGraphic((graphic, itemId) => patchShapeGeometry(graphic, itemId, patch));
-}
-
-function applyPreset(presetId: ShapeGeometryPresetId) {
-	applyToSelectedGraphic((graphic, itemId) => applyShapeGeometryPreset(graphic, itemId, presetId));
-}
-
-function updateGroup(patch: Partial<Omit<GraphicGroupItemConfig, 'type' | 'id' | 'children'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroup(graphic, itemId, patch));
-}
-
-function updateDefaultChildStyle(patch: Partial<GraphicSurfaceStyle> | null) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroupDefaultChildSurfaceStyle(graphic, itemId, patch));
-}
-
-function updateChildSizing(patch: Partial<GraphicGroupChildSizing>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicGroupChildSizing(graphic, itemId, patch));
-}
-
-function updateTextItem(patch: Partial<Omit<TextGraphicItemConfig, 'type' | 'id'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchTextGraphicItem(graphic, itemId, patch));
-}
-
-/** Shared by every kind whose rendered text can exceed its authored bounds. */
-function updateTextOverflow(patch: { overflowPolicy?: TextGraphicItemConfig['overflowPolicy']; minFontSize?: number }) {
-	applyToSelectedGraphic((graphic, itemId) => patchGraphicTextOverflow(graphic, itemId, patch));
-}
-
-function updatePlayerLifeItem(patch: Partial<Omit<PlayerLifeGraphicItemConfig, 'type' | 'id'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchPlayerLifeGraphicItem(graphic, itemId, patch));
-}
-
-function updateGameWinsItem(patch: Partial<Omit<GameWinsGraphicItemConfig, 'type' | 'id'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchGameWinsGraphicItem(graphic, itemId, patch));
-}
-
-function updateDeckListItem(patch: Partial<Omit<DeckListGraphicItemConfig, 'type' | 'id'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchDeckListGraphicItem(graphic, itemId, patch));
-}
-
-function updateMediaItem(patch: Partial<Omit<MediaGraphicItemConfig, 'type' | 'id'>>) {
-	applyToSelectedGraphic((graphic, itemId) => patchMediaGraphicItem(graphic, itemId, patch));
-}
-
-function updateFocalPosition(patch: Partial<GraphicFocalPosition>) {
-	applyToSelectedGraphic((graphic, itemId) => patchMediaFocalPosition(graphic, itemId, patch));
+	editItem(patchGraphicTypography, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 /** A cleared opacity is opaque again and a cleared playback rate is normal speed. */
 function updateMediaFields(patch: MediaFieldsPatch) {
 	const { focalPosition, ...rest } = resolveMediaFieldsPatch(patch);
 	if (focalPosition)
-		updateFocalPosition(focalPosition);
+		editItem(patchMediaFocalPosition, focalPosition);
 	else
-		updateMediaItem(rest);
-}
-
-function updateMediaClipping(clipping: boolean) {
-	applyToSelectedGraphic((graphic, itemId) => setMediaClipGeometry(graphic, itemId, clipping));
+		editItem(patchMediaGraphicItem, rest);
 }
 
 /**
@@ -633,21 +486,10 @@ function updateMediaClipping(clipping: boolean) {
  * the item's media kind.
  */
 function selectMediaAsset(asset: GraphicAsset, reference: GraphicAssetReference) {
-	applyToSelectedGraphic((graphic, itemId) => selectMediaGraphicItemAsset(graphic, itemId, {
+	editItem(selectMediaGraphicItemAsset, {
 		asset: reference,
 		mediaKind: asset.kind === 'silent-video' ? 'silent-video' : 'image',
-	}));
-}
-
-function clearMediaAsset() {
-	applyToSelectedGraphic((graphic, itemId) => clearMediaGraphicItemAsset(graphic, itemId));
-}
-
-function updateGraphicName(value: string) {
-	const current = selection.value;
-	if (!canAuthor.value || current.kind !== 'graphic')
-		return;
-	emit('update:graphics', patchBroadcastGraphic(props.graphics, current.graphic.id, { name: value }));
+	});
 }
 
 /* ────────────────────────────────────────────────
@@ -761,15 +603,6 @@ const MEDIA_KIND_OPTIONS = [
  */
 const NO_CHOICE_DEFAULT = '';
 
-function applyToGraphicInputs(
-	merge: (graphics: readonly BroadcastGraphicConfig[], graphicId: string) => BroadcastGraphicConfig[],
-) {
-	const current = selection.value;
-	if (!canAuthor.value || current.kind !== 'graphic')
-		return;
-	emit('update:graphics', merge(props.graphics, current.graphic.id));
-}
-
 const newInputType = ref<GraphicInputType>('text');
 
 /** A Graphic Input key written the way a Graphic Text Template names it. */
@@ -787,16 +620,12 @@ function placeholderToken(key: string): string {
  */
 function appendHostToken(key: string) {
 	const item = selectedTextItem.value;
-	if (!canAuthor.value || !item)
+	if (!item)
 		return;
 
 	const next = `${item.text}${placeholderToken(key)}`;
 	if (next.length <= MAX_GRAPHIC_TEXT_LENGTH)
-		updateTextItem({ text: next });
-}
-
-function addInput() {
-	applyToGraphicInputs((graphics, graphicId) => addGraphicInput(graphics, graphicId, newInputType.value));
+		editItem(patchTextGraphicItem, { text: next });
 }
 
 /**
@@ -810,15 +639,7 @@ function addInput() {
 function updateInput(key: string, patch: Partial<Omit<GraphicInputDeclaration, 'key' | 'type'>>) {
 	if (patch.label !== undefined && patch.label.trim() === '')
 		return;
-	applyToGraphicInputs((graphics, graphicId) => patchGraphicInput(graphics, graphicId, key, patch));
-}
-
-function removeInput(key: string) {
-	applyToGraphicInputs((graphics, graphicId) => deleteGraphicInput(graphics, graphicId, key));
-}
-
-function updateChoiceOptions(key: string, options: GraphicInputChoiceOption[]) {
-	applyToGraphicInputs((graphics, graphicId) => setGraphicInputChoiceOptions(graphics, graphicId, key, options));
+	editGraphic(patchGraphicInput, key, patch);
 }
 
 /**
@@ -846,7 +667,7 @@ function parseChoiceOptions(key: string, value: string) {
 		})
 		.filter(option => option.value.length > 0);
 
-	updateChoiceOptions(key, options.slice(0, MAX_GRAPHIC_INPUT_CHOICE_OPTIONS));
+	editGraphic(setGraphicInputChoiceOptions, key, options.slice(0, MAX_GRAPHIC_INPUT_CHOICE_OPTIONS));
 }
 
 /**
@@ -871,10 +692,6 @@ function choiceDefaultOptions(input: GraphicInputDeclaration) {
 
 function updateChoiceDefault(key: string, value: string) {
 	updateInput(key, { default: value === NO_CHOICE_DEFAULT ? null : value });
-}
-
-function updateMediaKind(key: string, mediaKind: GraphicMediaKind) {
-	applyToGraphicInputs((graphics, graphicId) => setGraphicInputMediaKind(graphics, graphicId, key, mediaKind));
 }
 
 /**
@@ -914,12 +731,6 @@ function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
 	return selectedTextItem.value?.placeholderStyles?.[inputKey] ?? {};
 }
 
-function updatePlaceholderStyle(inputKey: string, patch: Partial<GraphicPlaceholderStyle> | null) {
-	applyToSelectedGraphic((graphic, itemId) =>
-		patchGraphicPlaceholderStyle(graphic, itemId, inputKey, patch),
-	);
-}
-
 /**
  * Which arm each placeholder's author is editing, when its stored style cannot say.
  *
@@ -950,9 +761,9 @@ function updatePlaceholderFontSource(inputKey: string, source: GraphicFontSource
 	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: source };
 	const current = placeholderStyleFor(inputKey).font;
 	if (source === 'base' && current)
-		updatePlaceholderStyle(inputKey, { font: undefined });
+		editItem(patchGraphicPlaceholderStyle, inputKey, { font: undefined });
 	else if (source === 'application' && current?.kind !== 'application')
-		updatePlaceholderStyle(inputKey, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
+		editItem(patchGraphicPlaceholderStyle, inputKey, { font: applicationGraphicFont(DEFAULT_GRAPHIC_FONT_ID) });
 }
 
 /** Pin one exact font Graphic Asset Revision for one placeholder. */
@@ -961,7 +772,7 @@ function selectPlaceholderFontAsset(
 	_asset: GraphicAsset,
 	reference: GraphicAssetReference,
 ) {
-	updatePlaceholderStyle(inputKey, { font: { kind: 'asset', reference } });
+	editItem(patchGraphicPlaceholderStyle, inputKey, { font: { kind: 'asset', reference } });
 }
 
 /**
@@ -974,7 +785,7 @@ function selectPlaceholderFontAsset(
  */
 function clearPlaceholderFontAsset(inputKey: string) {
 	placeholderFontSourceOverrides.value = { ...placeholderFontSourceOverrides.value, [inputKey]: 'asset' };
-	updatePlaceholderStyle(inputKey, { font: undefined });
+	editItem(patchGraphicPlaceholderStyle, inputKey, { font: undefined });
 }
 </script>
 
@@ -982,8 +793,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 	<!--
 		A disabled fieldset is what makes the read-only editor read-only in the
 		browser rather than merely discouraging: every native control it contains
-		stops accepting input. The guards above are the same rule stated where a
-		programmatic change would otherwise slip through.
+		stops accepting input. The compositor editing module's lease guard is the
+		same rule stated where a programmatic change would otherwise slip through.
 	-->
 	<fieldset class="min-w-0 space-y-4" :disabled="!canAuthor">
 		<div class="border-b border-default/70 pb-3">
@@ -1010,7 +821,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:model-value="selection.graphic.name"
 				class="w-full"
 				data-testid="broadcast-graphic-name"
-				@update:model-value="updateGraphicName(String($event))"
+				@update:model-value="editGraphic(patchBroadcastGraphic, { name: String($event) })"
 			/>
 		</UFormField>
 
@@ -1039,7 +850,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					variant="soft"
 					icon="i-lucide-plus"
 					data-testid="graphic-input-add"
-					@click="addInput()"
+					@click="editGraphic(addGraphicInput, newInputType)"
 				>
 					Declare
 				</UButton>
@@ -1070,7 +881,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						icon="i-lucide-trash-2"
 						aria-label="Stop declaring this Graphic Input"
 						data-testid="graphic-input-delete"
-						@click="removeInput(input.key)"
+						@click="editGraphic(deleteGraphicInput, input.key)"
 					/>
 				</div>
 
@@ -1188,7 +999,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							class="w-full"
 							size="sm"
 							data-testid="graphic-input-media-kind"
-							@update:model-value="updateMediaKind(input.key, $event as GraphicMediaKind)"
+							@update:model-value="editGraphic(setGraphicInputMediaKind, input.key, $event as GraphicMediaKind)"
 						/>
 					</UFormField>
 					<UFormField label="Default" size="xs">
@@ -1241,7 +1052,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					:model-value="selectedItem.label"
 					class="w-full"
 					data-testid="graphic-item-label"
-					@update:model-value="patchSelectedItem({ label: String($event) })"
+					@update:model-value="editItem(patchGraphicItem, { label: String($event) })"
 				/>
 			</UFormField>
 
@@ -1249,7 +1060,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				<USwitch
 					:model-value="selectedItem.visible"
 					data-testid="graphic-item-visible"
-					@update:model-value="patchSelectedItem({ visible: $event })"
+					@update:model-value="editItem(patchGraphicItem, { visible: $event })"
 				/>
 			</UFormField>
 
@@ -1260,8 +1071,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:anchor="selectedItem.anchor"
 				:stacked="!isCanvasPositioned"
 				anchor-label="Graphic Anchor Point"
-				@update:anchor="patchSelectedItem({ anchor: $event })"
-				@update="patchSelectedItem($event)"
+				@update:anchor="editItem(patchGraphicItem, { anchor: $event })"
+				@update="editItem(patchGraphicItem, $event)"
 			/>
 
 			<UFormField v-if="isCanvasPositioned" label="Graphic Rotation" size="sm">
@@ -1273,7 +1084,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					class="w-full"
 					data-testid="graphic-item-rotation"
 					aria-label="Graphic Rotation"
-					@update:model-value="patchSelectedItem({ rotation: $event ?? 0 })"
+					@update:model-value="editItem(patchGraphicItem, { rotation: $event ?? 0 })"
 				/>
 			</UFormField>
 		</template>
@@ -1290,7 +1101,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="graphic-group-child-sizing-mode"
-						@update:model-value="updateChildSizing({ mode: $event as GraphicGroupChildSizing['mode'] })"
+						@update:model-value="editItem(patchGraphicGroupChildSizing, { mode: $event as GraphicGroupChildSizing['mode'] })"
 					/>
 				</UFormField>
 				<UFormField
@@ -1304,7 +1115,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Fixed main axis size"
-						@update:model-value="updateChildSizing({ size: $event ?? 0 })"
+						@update:model-value="editItem(patchGraphicGroupChildSizing, { size: $event ?? 0 })"
 					/>
 				</UFormField>
 				<UFormField v-else label="Fill weight" size="sm">
@@ -1315,7 +1126,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Fill weight"
-						@update:model-value="updateChildSizing({ weight: $event ?? 1 })"
+						@update:model-value="editItem(patchGraphicGroupChildSizing, { weight: $event ?? 1 })"
 					/>
 				</UFormField>
 			</div>
@@ -1333,7 +1144,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="graphic-group-arrangement"
-						@update:model-value="updateGroup({ arrangement: $event as never })"
+						@update:model-value="editItem(patchGraphicGroup, { arrangement: $event as never })"
 					/>
 				</UFormField>
 				<div class="grid grid-cols-2 gap-2">
@@ -1344,7 +1155,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							size="sm"
 							class="w-full"
 							aria-label="Group padding"
-							@update:model-value="updateGroup({ padding: $event ?? 0 })"
+							@update:model-value="editItem(patchGraphicGroup, { padding: $event ?? 0 })"
 						/>
 					</UFormField>
 					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Gap" size="sm">
@@ -1354,7 +1165,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							size="sm"
 							class="w-full"
 							aria-label="Group gap"
-							@update:model-value="updateGroup({ gap: $event ?? 0 })"
+							@update:model-value="editItem(patchGraphicGroup, { gap: $event ?? 0 })"
 						/>
 					</UFormField>
 					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Align" size="sm">
@@ -1363,7 +1174,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							:items="ALIGN_OPTIONS"
 							value-key="value"
 							class="w-full"
-							@update:model-value="updateGroup({ align: $event as never })"
+							@update:model-value="editItem(patchGraphicGroup, { align: $event as never })"
 						/>
 					</UFormField>
 					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Justify" size="sm">
@@ -1372,7 +1183,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							:items="JUSTIFY_OPTIONS"
 							value-key="value"
 							class="w-full"
-							@update:model-value="updateGroup({ justify: $event as never })"
+							@update:model-value="editItem(patchGraphicGroup, { justify: $event as never })"
 						/>
 					</UFormField>
 				</div>
@@ -1380,14 +1191,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<USwitch
 						:model-value="selectedGroup.clip"
 						data-testid="graphic-group-clip"
-						@update:model-value="updateGroup({ clip: $event })"
+						@update:model-value="editItem(patchGraphicGroup, { clip: $event })"
 					/>
 				</UFormField>
 				<UFormField label="Child style default" size="sm">
 					<USwitch
 						:model-value="selectedGroup.defaultChildSurfaceStyle !== undefined"
 						data-testid="graphic-group-child-style-default"
-						@update:model-value="updateDefaultChildStyle($event ? {} : null)"
+						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, $event ? {} : null)"
 					/>
 				</UFormField>
 				<GraphicsCompositorStyleRef
@@ -1410,7 +1221,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Child fill opacity"
-						@update:model-value="updateDefaultChildStyle({ fillOpacity: $event ?? 1 })"
+						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
 					/>
 				</UFormField>
 				<UFormField
@@ -1421,7 +1232,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<UIColorPicker
 						:model-value="selectedGroup.defaultChildSurfaceStyle.fill.color"
 						data-testid="graphic-group-child-fill"
-						@update:model-value="updateDefaultChildStyle({ fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
+						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
 					/>
 				</UFormField>
 			</div>
@@ -1440,7 +1251,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				class="w-full"
 				size="sm"
 				data-testid="graphic-item-player-side"
-				@update:model-value="updatePlayerSide($event as PlayerSide)"
+				@update:model-value="editItem(patchGraphicItem, { playerSide: $event as PlayerSide })"
 			/>
 		</UFormField>
 
@@ -1461,7 +1272,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					value-key="value"
 					class="w-full"
 					data-testid="player-life-animation"
-					@update:model-value="updatePlayerLifeItem({ lifeAnimation: $event as PlayerLifeAnimation })"
+					@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimation: $event as PlayerLifeAnimation })"
 				/>
 			</UFormField>
 			<div class="grid grid-cols-2 gap-2">
@@ -1474,7 +1285,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						class="w-full"
 						data-testid="player-life-animation-duration"
 						aria-label="Life change duration"
-						@update:model-value="updatePlayerLifeItem({ lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
+						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
 					/>
 				</UFormField>
 				<!-- Tinted by a glow or slide change only; the others ignore it. -->
@@ -1482,7 +1293,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<UIColorPicker
 						:model-value="selectedPlayerLife.lifeAnimationAccentColor"
 						data-testid="player-life-animation-accent"
-						@update:model-value="updatePlayerLifeItem({ lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
+						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
 					/>
 				</UFormField>
 			</div>
@@ -1505,7 +1316,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="game-wins-display-mode"
-						@update:model-value="updateGameWinsItem({ displayMode: $event as GameWinsDisplayMode })"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { displayMode: $event as GameWinsDisplayMode })"
 					/>
 				</UFormField>
 				<UFormField v-if="selectedGameWins.displayMode === 'boxes'" label="Box orientation" size="sm">
@@ -1515,7 +1326,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="game-wins-box-orientation"
-						@update:model-value="updateGameWinsItem({ boxOrientation: $event as GameWinsBoxOrientation })"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxOrientation: $event as GameWinsBoxOrientation })"
 					/>
 				</UFormField>
 			</div>
@@ -1527,7 +1338,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Win box width"
-						@update:model-value="updateGameWinsItem({ boxWidth: Math.max(1, $event ?? 1) })"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxWidth: Math.max(1, $event ?? 1) })"
 					/>
 				</UFormField>
 				<UFormField label="Box height" size="sm">
@@ -1537,7 +1348,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Win box height"
-						@update:model-value="updateGameWinsItem({ boxHeight: Math.max(1, $event ?? 1) })"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxHeight: Math.max(1, $event ?? 1) })"
 					/>
 				</UFormField>
 				<UFormField label="Box gap" size="sm">
@@ -1547,7 +1358,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						class="w-full"
 						aria-label="Win box gap"
-						@update:model-value="updateGameWinsItem({ boxGap: $event ?? 0 })"
+						@update:model-value="editItem(patchGameWinsGraphicItem, { boxGap: $event ?? 0 })"
 					/>
 				</UFormField>
 			</div>
@@ -1570,14 +1381,14 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="deck-list-view"
-						@update:model-value="updateDeckListItem({ view: $event as DeckListView })"
+						@update:model-value="editItem(patchDeckListGraphicItem, { view: $event as DeckListView })"
 					/>
 				</UFormField>
 				<UFormField label="Show quantities" size="sm">
 					<USwitch
 						:model-value="selectedDeckList.showQuantities"
 						data-testid="deck-list-show-quantities"
-						@update:model-value="updateDeckListItem({ showQuantities: $event })"
+						@update:model-value="editItem(patchDeckListGraphicItem, { showQuantities: $event })"
 					/>
 				</UFormField>
 			</div>
@@ -1591,7 +1402,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					:maxlength="MAX_GRAPHIC_TEXT_LENGTH"
 					class="w-full"
 					data-testid="graphic-item-text"
-					@update:model-value="updateTextItem({ text: String($event) })"
+					@update:model-value="editItem(patchTextGraphicItem, { text: String($event) })"
 				/>
 			</UFormField>
 
@@ -1668,7 +1479,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			<GraphicsTypographyFields
 				:typography="selectedTypography"
 				test-id-prefix="typography"
-				@update="updateTypography"
+				@update="editItem(patchGraphicTypography, $event)"
 			>
 				<!--
 					A font is either one that ships with Stream Keepr or one exact font
@@ -1685,7 +1496,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						size="sm"
 						test-id-prefix="typography"
 						@update:source="updateFontSource"
-						@application="updateTypography({ font: applicationGraphicFont($event) })"
+						@application="editItem(patchGraphicTypography, { font: applicationGraphicFont($event) })"
 						@select="selectFontAsset"
 						@clear="clearFontAsset"
 					/>
@@ -1697,13 +1508,13 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							:items="TEXT_ALIGN_OPTIONS"
 							value-key="value"
 							class="w-full"
-							@update:model-value="updateTypography({ textAlign: $event as never })"
+							@update:model-value="editItem(patchGraphicTypography, { textAlign: $event as never })"
 						/>
 					</UFormField>
 					<UFormField label="Colour" size="sm">
 						<UIColorPicker
 							:model-value="selectedTypography.color"
-							@update:model-value="updateTypography({ color: $event?.toString() || '#ffffff' })"
+							@update:model-value="editItem(patchGraphicTypography, { color: $event?.toString() || '#ffffff' })"
 						/>
 					</UFormField>
 				</template>
@@ -1724,7 +1535,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					value-key="value"
 					class="w-full"
 					data-testid="text-overflow-policy"
-					@update:model-value="updateTextOverflow({ overflowPolicy: $event })"
+					@update:model-value="editItem(patchGraphicTextOverflow, { overflowPolicy: $event })"
 				/>
 			</UFormField>
 
@@ -1741,7 +1552,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					class="w-full"
 					data-testid="text-min-font-size"
 					aria-label="Minimum font size"
-					@update:model-value="updateTextOverflow({ minFontSize: $event ?? 1 })"
+					@update:model-value="editItem(patchGraphicTextOverflow, { minFontSize: $event ?? 1 })"
 				/>
 			</UFormField>
 		</template>
@@ -1766,7 +1577,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						variant="ghost"
 						color="neutral"
 						data-testid="graphic-placeholder-style-clear"
-						@click="updatePlaceholderStyle(inputKey, null)"
+						@click="editItem(patchGraphicPlaceholderStyle, inputKey, null)"
 					>
 						Use base
 					</UButton>
@@ -1776,7 +1587,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					inheritable
 					size="xs"
 					test-id-prefix="graphic-placeholder-style"
-					@update="updatePlaceholderStyle(inputKey, $event)"
+					@update="editItem(patchGraphicPlaceholderStyle, inputKey, $event)"
 				>
 					<!--
 						A placeholder's own Graphic Font Selection. The same control as the base
@@ -1795,7 +1606,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							size="xs"
 							test-id-prefix="graphic-placeholder-style"
 							@update:source="source => updatePlaceholderFontSource(inputKey, source)"
-							@application="updatePlaceholderStyle(inputKey, { font: applicationGraphicFont($event) })"
+							@application="editItem(patchGraphicPlaceholderStyle, inputKey, { font: applicationGraphicFont($event) })"
 							@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
 							@clear="clearPlaceholderFontAsset(inputKey)"
 						/>
@@ -1805,7 +1616,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							<UIColorPicker
 								:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
 								data-testid="graphic-placeholder-style-color"
-								@update:model-value="updatePlaceholderStyle(inputKey, { color: $event?.toString() || undefined })"
+								@update:model-value="editItem(patchGraphicPlaceholderStyle, inputKey, { color: $event?.toString() || undefined })"
 							/>
 						</UFormField>
 					</template>
@@ -1835,7 +1646,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="social-network-icon-network"
-						@update:model-value="patchSelectedItem({ network: $event as SupportedSocialNetwork })"
+						@update:model-value="editItem(patchGraphicItem, { network: $event as SupportedSocialNetwork })"
 					/>
 				</UFormField>
 				<UFormField v-else label="Social Profile Projection" size="sm">
@@ -1845,7 +1656,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						value-key="value"
 						class="w-full"
 						data-testid="social-network-icon-projection"
-						@update:model-value="patchSelectedItem({ network: { projectionKey: String($event) } })"
+						@update:model-value="editItem(patchGraphicItem, { network: { projectionKey: String($event) } })"
 					/>
 				</UFormField>
 				<p
@@ -1860,7 +1671,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						<UIColorPicker
 							:model-value="selectedSocialNetworkIcon.color"
 							data-testid="social-network-icon-color"
-							@update:model-value="patchSelectedItem({ color: $event?.toString() || '#ffffff' })"
+							@update:model-value="editItem(patchGraphicItem, { color: $event?.toString() || '#ffffff' })"
 						/>
 					</UFormField>
 					<UFormField label="Opacity" size="sm">
@@ -1870,7 +1681,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							class="w-full"
 							data-testid="social-network-icon-opacity"
 							aria-label="Social network icon opacity"
-							@update:model-value="patchSelectedItem({ opacity: $event ?? 1 })"
+							@update:model-value="editItem(patchGraphicItem, { opacity: $event ?? 1 })"
 						/>
 					</UFormField>
 				</div>
@@ -1905,7 +1716,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						:event-id="eventId"
 						field-label="Media Graphic Item"
 						:asset-kind="['image', 'silent-video']"
-						@update:model-value="$event ? undefined : clearMediaAsset()"
+						@update:model-value="$event ? undefined : editItem(clearMediaGraphicItemAsset)"
 						@select="selectMediaAsset"
 					/>
 				</UFormField>
@@ -1930,7 +1741,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<USwitch
 						:model-value="selectedMediaItem.clipGeometry !== undefined"
 						data-testid="media-clip-enabled"
-						@update:model-value="updateMediaClipping($event)"
+						@update:model-value="editItem(setMediaClipGeometry, $event)"
 					/>
 				</UFormField>
 			</div>
@@ -1953,8 +1764,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				/>
 				<GraphicsShapeGeometryFields
 					:geometry="selectedGeometry"
-					@update="updateGeometry"
-					@preset="applyPreset"
+					@update="editItem(patchShapeGeometry, $event)"
+					@preset="editItem(applyShapeGeometryPreset, $event)"
 				/>
 			</div>
 		</template>
@@ -1971,7 +1782,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			:surface-style="ownSurfaceStyle"
 			title="Graphic Surface Style"
 			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
-			@edit="applySurfaceStyleEdit('surfaceStyle', $event)"
+			@edit="editItem(applyGraphicSurfaceStyleEdit, 'surfaceStyle', $event)"
 		>
 			<template #style-ref>
 				<!--
@@ -2005,7 +1816,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:surface-style="selectedGameWins.boxSurfaceStyle"
 				title="Win box"
 				test-id-prefix="game-wins-box"
-				@edit="applySurfaceStyleEdit('boxSurfaceStyle', $event)"
+				@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
 			>
 				<template #style-ref>
 					<GraphicsCompositorStyleRef
@@ -2023,7 +1834,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:surface-style="selectedGameWins.wonBoxSurfaceStyle"
 				title="Won win box"
 				test-id-prefix="game-wins-won-box"
-				@edit="applySurfaceStyleEdit('wonBoxSurfaceStyle', $event)"
+				@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"
 			>
 				<template #style-ref>
 					<GraphicsCompositorStyleRef

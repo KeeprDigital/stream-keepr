@@ -11,11 +11,6 @@ import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
-	bindGraphicStyleRef,
-	recaptureGraphicStyleOverrides,
-	unbindGraphicStyleRef,
-} from '~~/shared/modules/graphic-style-sets';
-import {
 	applyBroadcastGraphicAnimationPreset,
 	applyGraphicItemAnimationPreset,
 	enableBroadcastGraphicAnimationPhase,
@@ -28,7 +23,6 @@ import {
 	patchGraphicItemAnimationChannel,
 	patchGraphicItemAnimationRecipe,
 	patchGraphicItemAnimationStagger,
-	replaceBroadcastGraphic,
 	setBroadcastGraphicAnimationRecipe,
 	setGraphicItemAnimationRecipe,
 	toggleBroadcastGraphicStaggerMember,
@@ -39,6 +33,7 @@ import {
 	GRAPHIC_ANIMATION_STAGGER_ORDER_VALUES,
 	MAX_GRAPHIC_ANIMATION_STAGGER_STEP_MS,
 } from '~~/shared/types/graphics';
+import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
@@ -78,8 +73,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
 
-/** Fail closed: an unstated permission is never permission. */
-const canAuthor = computed(() => props.writable === true);
+/**
+ * Every edit here goes through the compositor editing module, which checks the
+ * Graphics Authoring Lease, re-captures Graphic Style Set overrides, and replaces the
+ * stack. These controls write recipe values, and an edit to a phase whose recipe is
+ * inherited is a deviation by definition, so it is recorded as an override.
+ */
+const { canAuthor, edit, bindStyleRef, unbindStyleRef } = useCompositorEditing(
+	() => props,
+	graphics => emit('update:graphics', graphics),
+);
 
 const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
 
@@ -101,41 +104,6 @@ function styleRefFor(phase: GraphicAnimationPhase) {
 	if (current.kind === 'item')
 		return current.item.styleRefs?.[styleSlotFor(phase)];
 	return undefined;
-}
-
-/** The owner a reference is written against: null is the Broadcast Graphic itself. */
-function styleOwnerId(): string | null | undefined {
-	const current = selection.value;
-	if (current.kind === 'graphic')
-		return null;
-	return current.kind === 'item' ? current.item.id : undefined;
-}
-
-function bindStyleRef(phase: GraphicAnimationPhase, entryId: string) {
-	const current = selection.value;
-	const context = props.styleSet;
-	const ownerId = styleOwnerId();
-	if (!canAuthor.value || ownerId === undefined || !context)
-		return;
-	if (current.kind !== 'graphic' && current.kind !== 'item')
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		bindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase), entryId, context.resolution),
-	));
-}
-
-function unbindStyleRef(phase: GraphicAnimationPhase) {
-	const current = selection.value;
-	const ownerId = styleOwnerId();
-	if (!canAuthor.value || ownerId === undefined)
-		return;
-	if (current.kind !== 'graphic' && current.kind !== 'item')
-		return;
-	emit('update:graphics', replaceBroadcastGraphic(
-		props.graphics,
-		unbindGraphicStyleRef(current.graphic, ownerId, styleSlotFor(phase)),
-	));
 }
 
 const STAGGER_ORDER_OPTIONS = [
@@ -191,77 +159,35 @@ const ownerLabel = computed(() => {
 	return '';
 });
 
-/**
- * One edit, aimed at whichever owner is selected.
- *
- * A Broadcast Graphic's animation lives on the stack entry and an item's inside
- * its graphic, so the two take different helpers; everything above this line is
- * written once for both.
+/*
+ * Each edit below names an authoring operation for both owners it may be aimed at: a
+ * Broadcast Graphic's animation lives on the stack entry and an item's inside its
+ * graphic, so the two take different operations.
  */
-function apply(
-	onGraphic: (graphics: readonly BroadcastGraphicConfig[], graphicId: string) => BroadcastGraphicConfig[],
-	onItem: (graphic: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
-) {
-	const current = selection.value;
-	if (!canAuthor.value)
-		return;
-	if (current.kind === 'graphic') {
-		const graphics = onGraphic(props.graphics, current.graphic.id);
-		const edited = graphics.find(graphic => graphic.id === current.graphic.id);
-		emit('update:graphics', edited
-			? graphics.map(graphic => graphic.id === edited.id ? withRecapturedStyleOverrides(edited) : graphic)
-			: graphics);
-	}
-	else if (current.kind === 'item') {
-		emit('update:graphics', replaceBroadcastGraphic(
-			props.graphics,
-			withRecapturedStyleOverrides(onItem(current.graphic, current.item.id)),
-		));
-	}
-}
-
-/**
- * One edited Broadcast Graphic, with its Graphic Style Set overrides brought back
- * into line with what it now holds.
- *
- * The same funnel the inspector's property controls go through, for the same reason:
- * these controls write recipe *values*, and an edit to a phase whose recipe is
- * inherited is a deviation by definition. Deriving it here is what makes it the
- * explicit property-level override the glossary requires — without it, the author's
- * change would be silently reverted by the next applied Style Set update.
- *
- * The composition as `props.graphics` still holds it is what says which slots had a
- * pending Style Set change before this edit — the edited copy cannot, since the edit
- * itself is a difference from the entry (#198).
- */
-function withRecapturedStyleOverrides(graphic: BroadcastGraphicConfig): BroadcastGraphicConfig {
-	const context = props.styleSet;
-	const stored = props.graphics.find(candidate => candidate.id === graphic.id);
-	return context && stored
-		? recaptureGraphicStyleOverrides(graphic, context.resolution, context.publishedRevision, stored)
-		: graphic;
-}
 
 function setPhaseEnabled(phase: GraphicAnimationPhase, enabled: boolean) {
 	if (enabled) {
-		apply(
-			(graphics, graphicId) => enableBroadcastGraphicAnimationPhase(graphics, graphicId, phase),
-			(graphic, itemId) => enableGraphicItemAnimationPhase(graphic, itemId, phase),
-		);
+		edit({
+			kind: 'author',
+			graphic: (graphics, graphicId) => enableBroadcastGraphicAnimationPhase(graphics, graphicId, phase),
+			item: (graphic, itemId) => enableGraphicItemAnimationPhase(graphic, itemId, phase),
+		});
 		return;
 	}
 
-	apply(
-		(graphics, graphicId) => setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, null),
-		(graphic, itemId) => setGraphicItemAnimationRecipe(graphic, itemId, phase, null),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, null),
+		item: (graphic, itemId) => setGraphicItemAnimationRecipe(graphic, itemId, phase, null),
+	});
 }
 
 function updateRecipe(phase: GraphicAnimationPhase, patch: Partial<GraphicOnScreenAnimationRecipe>) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, patch),
-		(graphic, itemId) => patchGraphicItemAnimationRecipe(graphic, itemId, phase, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationRecipe(graphic, itemId, phase, patch),
+	});
 }
 
 function updateChannel<K extends GraphicAnimationChannelKey>(
@@ -269,31 +195,35 @@ function updateChannel<K extends GraphicAnimationChannelKey>(
 	channel: K,
 	patch: Partial<GraphicAnimationChannels[K]> | null,
 ) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch),
-		(graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch),
+	});
 }
 
 function applyPreset(phase: GraphicAnimationPhase, presetId: string) {
-	apply(
-		(graphics, graphicId) => applyBroadcastGraphicAnimationPreset(graphics, graphicId, phase, presetId),
-		(graphic, itemId) => applyGraphicItemAnimationPreset(graphic, itemId, phase, presetId),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => applyBroadcastGraphicAnimationPreset(graphics, graphicId, phase, presetId),
+		item: (graphic, itemId) => applyGraphicItemAnimationPreset(graphic, itemId, phase, presetId),
+	});
 }
 
 function updateStagger(phase: GraphicAnimationPhase, patch: Partial<GraphicAnimationStagger> | null) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationStagger(graphics, graphicId, phase, patch),
-		(graphic, itemId) => patchGraphicItemAnimationStagger(graphic, itemId, phase, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationStagger(graphics, graphicId, phase, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationStagger(graphic, itemId, phase, patch),
+	});
 }
 
 function toggleStaggerMember(phase: GraphicAnimationPhase, memberId: string, selected: boolean) {
-	apply(
-		(graphics, graphicId) => toggleBroadcastGraphicStaggerMember(graphics, graphicId, phase, memberId, selected),
-		(graphic, itemId) => toggleGraphicItemStaggerMember(graphic, itemId, phase, memberId, selected),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => toggleBroadcastGraphicStaggerMember(graphics, graphicId, phase, memberId, selected),
+		item: (graphic, itemId) => toggleGraphicItemStaggerMember(graphic, itemId, phase, memberId, selected),
+	});
 }
 
 function presetOptions(phase: GraphicAnimationPhase) {
@@ -352,8 +282,8 @@ function staggerOf(phase: GraphicAnimationPhase) {
 					:entries="styleSet?.entries"
 					:current="styleRefFor(phase)"
 					:writable="canAuthor"
-					@bind="entryId => bindStyleRef(phase, entryId)"
-					@unbind="unbindStyleRef(phase)"
+					@bind="entryId => bindStyleRef(styleSlotFor(phase), entryId)"
+					@unbind="unbindStyleRef(styleSlotFor(phase))"
 				/>
 
 				<UFormField label="Preset" size="xs">
