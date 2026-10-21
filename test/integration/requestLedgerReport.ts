@@ -32,12 +32,16 @@ const SERVER_LOG_SETTLE_LIMIT_MILLISECONDS = 3_000;
 const serverLog = createServerLogWindow(integrationServerLogPath(getIntegrationWranglerPersistDir()));
 
 /**
- * This test worker's own stalls (#633). A request the worker wrote just before
- * it stopped turning can meet a socket its server has since timed out, so a
- * transport failure here is read beside them.
+ * This test worker's own stalls (#633), the newest ten. A request the worker
+ * wrote just before it stopped turning can meet a socket its server has since
+ * timed out, so a transport failure here is read beside them.
  */
+const REPORTED_STALLS = 10;
 let testWorkerStalls: number[] = [];
-monitorEventLoopStalls(gap => testWorkerStalls.push(gap));
+monitorEventLoopStalls((gap) => {
+	testWorkerStalls.push(gap);
+	testWorkerStalls.splice(0, Math.max(0, testWorkerStalls.length - REPORTED_STALLS));
+});
 
 async function settledServerLog(): Promise<string[]> {
 	const sleep = () => new Promise(resolve => setTimeout(resolve, SERVER_LOG_QUIET_MILLISECONDS));

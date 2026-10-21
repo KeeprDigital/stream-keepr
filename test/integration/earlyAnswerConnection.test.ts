@@ -42,7 +42,8 @@ function rawConnection() {
 
 	/**
 	 * The next whole response, or `closed` if the connection ended first, or
-	 * `silent` if neither happened within `milliseconds`.
+	 * `silent` if neither happened within `milliseconds`. The route's answers
+	 * carry a Content-Length; anything else fails loudly rather than misparse.
 	 */
 	async function nextResponse(milliseconds: number): Promise<{ status: number; headers: string } | 'closed' | 'silent'> {
 		const deadline = Date.now() + milliseconds;
@@ -50,7 +51,10 @@ function rawConnection() {
 			const headerEnd = received.indexOf('\r\n\r\n');
 			if (headerEnd !== -1) {
 				const headers = received.subarray(0, headerEnd).toString('latin1');
-				const length = Number(/^content-length:\s*(\d+)/im.exec(headers)?.[1] ?? 0);
+				const declared = /^content-length:\s*(\d+)/im.exec(headers)?.[1];
+				if (declared === undefined)
+					throw new Error(`This reader takes only answers with a Content-Length; got:\n${headers}`);
+				const length = Number(declared);
 				if (received.length >= headerEnd + 4 + length) {
 					received = received.subarray(headerEnd + 4 + length);
 					return { status: Number(headers.split(' ', 2)[1]), headers };
@@ -73,7 +77,7 @@ function rawConnection() {
 }
 
 describe('an early answer\'s connection', () => {
-	it('answers or closes, but never strands, a request sent after a duplicate part', async () => {
+	it('answers a request sent on the same connection after a duplicate part', async () => {
 		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
 		const firstPart = bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES);
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
@@ -99,8 +103,8 @@ describe('an early answer\'s connection', () => {
 			// The next request on the same connection, written as soon as the answer
 			// is in, as a reusing client writes it.
 			connection.send('PUT', `${base}/multipart/parts/2`, bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES));
-			const next = await connection.nextResponse(3_000);
-			expect(['closed', 200]).toContain(typeof next === 'object' ? next.status : next);
+			// Closed is no better than stranded: the request was already written.
+			expect(await connection.nextResponse(3_000)).toMatchObject({ status: 200 });
 		}
 		finally {
 			connection.close();

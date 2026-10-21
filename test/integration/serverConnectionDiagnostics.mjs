@@ -15,7 +15,7 @@ import workerThreads, { isMainThread, threadId } from 'node:worker_threads';
  * `./requestLedgerReport.ts` prints them under a failed test.
  *
  * What a line carries is bounded and safe to print: the method and path without
- * its query (a Screen Output capability travels in one), the elapsed time, and a
+ * its query (a Screen Output Asset Capability travels in one), the elapsed time, and a
  * Node error's code and message. Never a header or a body.
  *
  * Imports only Node built-ins, so `test/unit/integration/serverConnectionDiagnostics.test.ts`
@@ -87,7 +87,13 @@ export function installServerConnectionDiagnostics(options = {}) {
 	if (options.announce && isMainThread)
 		report(`connection diagnostics installed (pid ${process.pid})`);
 
-	/** @type {WeakMap<import('node:net').Socket, { inFlight: number, lastResponse?: { label: string, finishedAt: number } }>} */
+	/**
+	 * What a server connection is carrying: its requests still in flight, and
+	 * the last one it answered.
+	 *
+	 * @typedef {{ inFlight: number, lastResponse?: { label: string, finishedAt: number } }} ConnectionState
+	 */
+	/** @type {WeakMap<import('node:net').Socket, ConnectionState>} */
 	const connections = new WeakMap();
 
 	/**
@@ -134,12 +140,13 @@ export function installServerConnectionDiagnostics(options = {}) {
 	 * @param {import('node:net').Socket} socket
 	 */
 	function watchConnection(socket) {
+		/** @type {ConnectionState} */
 		const connection = { inFlight: 0 };
 		connections.set(socket, connection);
 		if (!isMainThread)
 			return;
 		socket.on('timeout', () => {
-			const { inFlight, lastResponse } = /** @type {{ inFlight: number, lastResponse?: { label: string, finishedAt: number } }} */ (connection);
+			const { inFlight, lastResponse } = connection;
 			if (inFlight === 0 && lastResponse)
 				report(`keep-alive connection closed by its timeout ${Date.now() - lastResponse.finishedAt}ms after its last response (${lastResponse.label})`);
 		});
