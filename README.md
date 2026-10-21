@@ -742,6 +742,16 @@ The first deploy with this split ends every browser's sign-in once. An older
 unprefixed cookie is ignored rather than refused, so the person simply signs
 in again, and its D1 Session lapses after 7 days.
 
+### Sign-in rate limit
+
+Every built server limits Better Auth's routes per client, keyed on
+`cf-connecting-ip` and counted in D1's `rateLimit` table: three sign-in
+attempts per 10 seconds, then 429 with `X-Retry-After`. `nuxt dev` does not
+limit. The policy is `rateLimit` in `server/utils/authOptions.ts` (ADR-0012,
+#697), and `pnpm worker:smoke` fails if the built Worker admits a fourth
+attempt. Under `pnpm preview` every local caller is one client, so a fourth
+sign-in within 10 seconds is refused there too.
+
 ### First admin account
 
 Accounts are created by admins and there is no self sign-up, so a new

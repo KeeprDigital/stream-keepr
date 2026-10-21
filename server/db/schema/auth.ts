@@ -73,3 +73,15 @@ export const verification = sqliteTable('verification', {
 }, table => [
 	index('verification_identifier_idx').on(table.identifier),
 ]);
+
+/**
+ * The rate limiter's counts, one row per client and auth path
+ * (`rateLimit.storage: 'database'`, #697; why D1: ADR-0012). `lastRequest` is
+ * epoch milliseconds, written by the library like every other timestamp here.
+ */
+export const rateLimit = sqliteTable('rateLimit', {
+	id: text('id').primaryKey(),
+	key: text('key').notNull().unique(),
+	count: integer('count').notNull(),
+	lastRequest: integer('last_request').notNull(),
+});

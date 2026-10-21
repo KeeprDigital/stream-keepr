@@ -521,6 +521,9 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 	});
 
 	const signInBody = { email: operatorEmail, password: operatorPassword };
+	// Before the probes that sign in without a client header, so their passing
+	// is what shows this scenario left their bucket alone.
+	await expectSignInRateLimit({ origin, fetchRequest, signInBody, signal });
 	await expectStatus({
 		probe: 'auth-origin-refusal',
 		expected: 403,
@@ -628,6 +631,71 @@ async function runProductProbes({ origin, fetchRequest, generated, sensitiveValu
 	});
 
 	await expectDeployVerifyPasses({ origin, fetchRequest, signal });
+}
+
+/** Better Auth's own sign-in rule: three requests per client per 10 seconds. */
+const SIGN_IN_ADMITTED_PER_WINDOW = 3;
+
+/**
+ * Sign-in refused once a client exceeds its limit, on the artifact a deploy
+ * uploads (#697).
+ *
+ * Before `server/utils/authOptions.ts` stated `rateLimit`, Better Auth enabled
+ * its limiter only under `NODE_ENV=production`, which nothing sets in the
+ * Worker, so this artifact admitted every attempt. Each client is a generated
+ * documentation address in `cf-connecting-ip`, the header the limiter keys on,
+ * so this run's buckets are its own: the limited client sends a different
+ * `x-forwarded-for` each time and is still refused, and an independent client
+ * signs in straight after. The probes that follow send no client header and
+ * share none of these buckets.
+ */
+async function expectSignInRateLimit({ origin, fetchRequest, signInBody, signal }) {
+	const limitedClient = documentationAddress('203.0.113');
+	const independentClient = documentationAddress('198.51.100');
+	const wrongPassword = { ...signInBody, password: randomBytes(24).toString('base64url') };
+	const limitedAttempt = () => jsonRequest(wrongPassword, {
+		'origin': origin,
+		'cf-connecting-ip': limitedClient,
+		'x-forwarded-for': documentationAddress('192.0.2'),
+	});
+
+	for (let attempt = 0; attempt < SIGN_IN_ADMITTED_PER_WINDOW; attempt++) {
+		await expectStatus({
+			probe: 'auth-rate-limit-admitted',
+			expected: 401,
+			origin,
+			path: '/api/auth/sign-in/email',
+			fetchRequest,
+			signal,
+			init: limitedAttempt(),
+		});
+	}
+	const refused = await expectStatus({
+		probe: 'auth-rate-limit-refusal',
+		expected: 429,
+		origin,
+		path: '/api/auth/sign-in/email',
+		fetchRequest,
+		signal,
+		init: limitedAttempt(),
+	});
+	if (!/^[1-9]\d*$/u.test(refused.headers.get('x-retry-after') ?? ''))
+		throwShapeFailure('auth-rate-limit-refusal', 'positive X-Retry-After seconds');
+
+	await expectStatus({
+		probe: 'auth-rate-limit-independent-client',
+		expected: 200,
+		origin,
+		path: '/api/auth/sign-in/email',
+		fetchRequest,
+		signal,
+		init: jsonRequest(signInBody, { 'origin': origin, 'cf-connecting-ip': independentClient }),
+	});
+}
+
+/** A random host in one of RFC 5737's documentation networks, given as its first three octets. */
+function documentationAddress(network) {
+	return `${network}.${1 + randomBytes(1)[0] % 254}`;
 }
 
 /**
