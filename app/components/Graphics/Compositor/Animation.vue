@@ -9,7 +9,6 @@ import type {
 } from '~~/shared/types/graphics';
 import type { GraphicStyleSlot } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
-import type { BroadcastGraphicOperation, GraphicItemOperation } from '~/modules/graphics/compositorEditing';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import {
 	applyBroadcastGraphicAnimationPreset,
@@ -81,12 +80,7 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
  * inherited is a deviation by definition, so it is recorded as an override.
  */
 const { canAuthor, edit, bindStyleRef, unbindStyleRef } = useCompositorEditing(
-	() => ({
-		graphics: props.graphics,
-		selectedTarget: props.selectedTarget,
-		writable: props.writable,
-		styleSet: props.styleSet,
-	}),
+	() => props,
 	graphics => emit('update:graphics', graphics),
 );
 
@@ -165,40 +159,35 @@ const ownerLabel = computed(() => {
 	return '';
 });
 
-/**
- * One edit, aimed at whichever owner is selected.
- *
- * A Broadcast Graphic's animation lives on the stack entry and an item's inside
- * its graphic, so the two take different authoring operations; everything above
- * this line is written once for both.
+/*
+ * Each edit below names an authoring operation for both owners it may be aimed at: a
+ * Broadcast Graphic's animation lives on the stack entry and an item's inside its
+ * graphic, so the two take different operations.
  */
-function apply(
-	onGraphic: BroadcastGraphicOperation,
-	onItem: GraphicItemOperation,
-) {
-	edit({ kind: 'author', graphic: onGraphic, item: onItem });
-}
 
 function setPhaseEnabled(phase: GraphicAnimationPhase, enabled: boolean) {
 	if (enabled) {
-		apply(
-			(graphics, graphicId) => enableBroadcastGraphicAnimationPhase(graphics, graphicId, phase),
-			(graphic, itemId) => enableGraphicItemAnimationPhase(graphic, itemId, phase),
-		);
+		edit({
+			kind: 'author',
+			graphic: (graphics, graphicId) => enableBroadcastGraphicAnimationPhase(graphics, graphicId, phase),
+			item: (graphic, itemId) => enableGraphicItemAnimationPhase(graphic, itemId, phase),
+		});
 		return;
 	}
 
-	apply(
-		(graphics, graphicId) => setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, null),
-		(graphic, itemId) => setGraphicItemAnimationRecipe(graphic, itemId, phase, null),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => setBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, null),
+		item: (graphic, itemId) => setGraphicItemAnimationRecipe(graphic, itemId, phase, null),
+	});
 }
 
 function updateRecipe(phase: GraphicAnimationPhase, patch: Partial<GraphicOnScreenAnimationRecipe>) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, patch),
-		(graphic, itemId) => patchGraphicItemAnimationRecipe(graphic, itemId, phase, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationRecipe(graphics, graphicId, phase, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationRecipe(graphic, itemId, phase, patch),
+	});
 }
 
 function updateChannel<K extends GraphicAnimationChannelKey>(
@@ -206,31 +195,35 @@ function updateChannel<K extends GraphicAnimationChannelKey>(
 	channel: K,
 	patch: Partial<GraphicAnimationChannels[K]> | null,
 ) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch),
-		(graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationChannel(graphics, graphicId, phase, channel, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationChannel(graphic, itemId, phase, channel, patch),
+	});
 }
 
 function applyPreset(phase: GraphicAnimationPhase, presetId: string) {
-	apply(
-		(graphics, graphicId) => applyBroadcastGraphicAnimationPreset(graphics, graphicId, phase, presetId),
-		(graphic, itemId) => applyGraphicItemAnimationPreset(graphic, itemId, phase, presetId),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => applyBroadcastGraphicAnimationPreset(graphics, graphicId, phase, presetId),
+		item: (graphic, itemId) => applyGraphicItemAnimationPreset(graphic, itemId, phase, presetId),
+	});
 }
 
 function updateStagger(phase: GraphicAnimationPhase, patch: Partial<GraphicAnimationStagger> | null) {
-	apply(
-		(graphics, graphicId) => patchBroadcastGraphicAnimationStagger(graphics, graphicId, phase, patch),
-		(graphic, itemId) => patchGraphicItemAnimationStagger(graphic, itemId, phase, patch),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => patchBroadcastGraphicAnimationStagger(graphics, graphicId, phase, patch),
+		item: (graphic, itemId) => patchGraphicItemAnimationStagger(graphic, itemId, phase, patch),
+	});
 }
 
 function toggleStaggerMember(phase: GraphicAnimationPhase, memberId: string, selected: boolean) {
-	apply(
-		(graphics, graphicId) => toggleBroadcastGraphicStaggerMember(graphics, graphicId, phase, memberId, selected),
-		(graphic, itemId) => toggleGraphicItemStaggerMember(graphic, itemId, phase, memberId, selected),
-	);
+	edit({
+		kind: 'author',
+		graphic: (graphics, graphicId) => toggleBroadcastGraphicStaggerMember(graphics, graphicId, phase, memberId, selected),
+		item: (graphic, itemId) => toggleGraphicItemStaggerMember(graphic, itemId, phase, memberId, selected),
+	});
 }
 
 function presetOptions(phase: GraphicAnimationPhase) {

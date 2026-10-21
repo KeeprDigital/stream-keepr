@@ -161,12 +161,7 @@ const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[
  * write values and hand it the authoring operation that writes them.
  */
 const { canAuthor, editItem, editGraphic, bindStyleRef, unbindStyleRef } = useCompositorEditing(
-	() => ({
-		graphics: props.graphics,
-		selectedTarget: props.selectedTarget,
-		writable: props.writable,
-		styleSet: props.styleSet,
-	}),
+	() => props,
 	graphics => emit('update:graphics', graphics),
 );
 

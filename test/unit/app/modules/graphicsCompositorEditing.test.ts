@@ -3,13 +3,15 @@ import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { CompositorEdit, CompositorEditingState } from '~/modules/graphics/compositorEditing';
 import { describe, expect, it } from 'vitest';
+import { ref } from 'vue';
 import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
 import {
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	patchBroadcastGraphic,
+	patchGraphicItem,
 	patchGraphicTypography,
 } from '~~/shared/modules/graphics';
-import { editCompositorStack } from '~/modules/graphics/compositorEditing';
+import { editCompositorStack, useCompositorEditing } from '~/modules/graphics/compositorEditing';
 
 const textItem: GraphicItemConfig = {
 	type: 'text',
@@ -218,6 +220,27 @@ describe('referencing a Graphic Style Set entry', () => {
 		expect(fontSizeOf(next)).toBe(64);
 	});
 
+	it('keeps another owner\'s recorded override when it binds', () => {
+		const pinned = { entryId: 'heading', overrides: { fontSize: 30 } };
+		const graphics = [applyGraphicStyleSet(
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				styleSet: { styleSetId: 'show-style', revision: PUBLISHED },
+				items: [textItem, { ...textItem, id: 'role', styleRefs: { typography: pinned } }],
+			},
+			resolveGraphicStyleSet(entries()),
+		)];
+
+		const next = editCompositorStack(
+			state({ graphics, styleSet: styleSet() }),
+			{ kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' },
+		);
+
+		expect(typographyRefOf(next)).toEqual({ entryId: 'heading' });
+		expect(next?.[0]?.items[1]?.styleRefs?.typography).toEqual(pinned);
+	});
+
 	it('refuses to bind without a loaded Style Set to bind to', () => {
 		expect(editCompositorStack(state(), { kind: 'bind-style-ref', slot: 'typography', entryId: 'heading' })).toBeNull();
 	});
@@ -230,5 +253,33 @@ describe('referencing a Graphic Style Set entry', () => {
 
 		expect(typographyRefOf(next)).toBeUndefined();
 		expect(fontSizeOf(next)).toBe(64);
+	});
+});
+
+describe('a panel editing through the module', () => {
+	it('commits each admitted edit, starting from the stack the panel shows now', () => {
+		const current = ref(state());
+		const committed: BroadcastGraphicConfig[][] = [];
+		const { editItem } = useCompositorEditing(current, graphics => committed.push(graphics));
+
+		editItem(patchGraphicTypography, { fontSize: 30 });
+		current.value = { ...current.value, graphics: committed[0]! };
+		editItem(patchGraphicItem, { label: 'Talent' });
+
+		expect(committed).toHaveLength(2);
+		expect(fontSizeOf(committed[1]!)).toBe(30);
+		expect(committed[1]![0]!.items[0]!.label).toBe('Talent');
+	});
+
+	it('commits nothing for a refused edit', () => {
+		const committed: BroadcastGraphicConfig[][] = [];
+		const editing = useCompositorEditing(() => state({ writable: false }), graphics => committed.push(graphics));
+
+		editing.editItem(patchGraphicTypography, { fontSize: 30 });
+		editing.editGraphic(patchBroadcastGraphic, { name: 'Talent' });
+		editing.unbindStyleRef('typography');
+
+		expect(editing.canAuthor.value).toBe(false);
+		expect(committed).toEqual([]);
 	});
 });

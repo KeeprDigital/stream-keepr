@@ -13,8 +13,10 @@ import { replaceBroadcastGraphic } from '~~/shared/modules/graphics';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
- * The compositor editing module: the one editing chain every compositor panel's edit
- * to a Broadcast Graphic stack goes through.
+ * The compositor editing module: one editing chain for a compositor panel's edits to
+ * a Broadcast Graphic stack. The item Inspector and the Animation panel edit through
+ * it; the stack tree, Graphic Input Bindings, and Social Profile Projections panels
+ * still run their own guard until they move to it (#598).
  *
  * 1. The fail-closed Graphics Authoring Lease check.
  * 2. Resolving the selection the edit is aimed at.
@@ -81,7 +83,7 @@ export type CompositorEdit
 	| { kind: 'unbind-style-ref'; slot: GraphicStyleSlot };
 
 /** The one Graphics Authoring Lease guard: fail closed. */
-export function canAuthorCompositor(state: Pick<CompositorEditingState, 'writable'>): boolean {
+function canAuthorCompositor(state: Pick<CompositorEditingState, 'writable'>): boolean {
 	return state.writable === true;
 }
 
@@ -100,7 +102,7 @@ export function editCompositorStack(
 	if (!canAuthorCompositor(state))
 		return null;
 	const next = applyEdit(state, resolveGraphicsSelection(state.graphics, state.selectedTarget), edit);
-	return next && recaptured(state, next);
+	return next && recaptureEditedGraphics(state, next);
 }
 
 function applyEdit(
@@ -144,7 +146,7 @@ function applyEdit(
  * edit is itself a difference from the entry (#198). A graphic the edit added has no
  * stored version and nothing to re-capture.
  */
-function recaptured(state: CompositorEditingState, next: BroadcastGraphicConfig[]): BroadcastGraphicConfig[] {
+function recaptureEditedGraphics(state: CompositorEditingState, next: BroadcastGraphicConfig[]): BroadcastGraphicConfig[] {
 	const context = state.styleSet;
 	if (!context)
 		return next;
