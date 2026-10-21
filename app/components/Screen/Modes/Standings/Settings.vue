@@ -2,6 +2,7 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -17,6 +18,10 @@ const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigU
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+// Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
+const fields = screenModeConfigContract('standings').fields;
 
 // ── Stores ──
 const playerStore = usePlayerStore();
@@ -190,7 +195,7 @@ const modeSettingsLabel = computed(() => {
 			<USeparator />
 
 			<UFormField
-				label="Mode"
+				:label="fields.viewMode.label"
 				description="How standings are filtered and displayed."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -211,14 +216,14 @@ const modeSettingsLabel = computed(() => {
 
 				<UFormField
 					v-if="config.viewMode === 'topN'"
-					label="Number of players"
+					:label="fields.topNCount.label"
 					description="Show the top N players by position."
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
 						:model-value="config.topNCount"
-						:min="1"
-						:max="500"
+						:min="fields.topNCount.min"
+						:max="fields.topNCount.max"
 						class="w-32"
 						@update:model-value="updateConfig({ topNCount: Number($event) })"
 					/>
@@ -226,28 +231,28 @@ const modeSettingsLabel = computed(() => {
 
 				<template v-else-if="config.viewMode === 'slice'">
 					<UFormField
-						label="Start position"
+						:label="fields.sliceStart.label"
 						description="First position to include."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
 						<UInputNumber
 							:model-value="config.sliceStart"
-							:min="1"
-							:max="9999"
+							:min="fields.sliceStart.min"
+							:max="fields.sliceStart.max"
 							class="w-32"
 							@update:model-value="updateConfig({ sliceStart: Number($event) })"
 						/>
 					</UFormField>
 
 					<UFormField
-						label="End position"
+						:label="fields.sliceEnd.label"
 						description="Last position to include."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
 						<UInputNumber
 							:model-value="config.sliceEnd"
-							:min="1"
-							:max="9999"
+							:min="fields.sliceEnd.min"
+							:max="fields.sliceEnd.max"
 							class="w-32"
 							@update:model-value="updateConfig({ sliceEnd: Number($event) })"
 						/>
@@ -276,21 +281,21 @@ const modeSettingsLabel = computed(() => {
 
 				<template v-else-if="config.viewMode === 'reveal'">
 					<UFormField
-						label="Players to reveal"
+						:label="fields.revealCount.label"
 						description="Total number of players in the reveal."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
 						<UInputNumber
 							:model-value="config.revealCount"
-							:min="1"
-							:max="64"
+							:min="fields.revealCount.min"
+							:max="fields.revealCount.max"
 							class="w-32"
 							@update:model-value="updateConfig({ revealCount: Number($event) })"
 						/>
 					</UFormField>
 
 					<UFormField
-						label="Reveal order"
+						:label="fields.revealOrder.label"
 						description="Direction players are revealed."
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
@@ -342,7 +347,7 @@ const modeSettingsLabel = computed(() => {
 				<USeparator />
 
 				<ScreenSettingsToggle
-					label="Show Archetype Colors"
+					:label="fields.showArchetypeColors.label"
 					description="Show mana colors inline after the archetype name in the deck column."
 					:model-value="config.showArchetypeColors"
 					@update:model-value="updateConfig({ showArchetypeColors: $event })"
@@ -352,14 +357,14 @@ const modeSettingsLabel = computed(() => {
 			<USeparator />
 
 			<UFormField
-				label="Max table width"
+				:label="fields.maxTableWidth.label"
 				description="Optional cap in pixels. Leave empty to fill the available width."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.maxTableWidth ?? null"
 					placeholder="Auto"
-					:min="1"
+					:min="fields.maxTableWidth.min"
 					class="w-32"
 					@update:model-value="updateMaxTableWidth($event)"
 				/>
@@ -368,7 +373,7 @@ const modeSettingsLabel = computed(() => {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				label="Show header"
+				:label="fields.showHeader.label"
 				description="Show the standings header above the table."
 				:model-value="config.showHeader"
 				@update:model-value="updateConfig({ showHeader: $event })"
@@ -376,7 +381,7 @@ const modeSettingsLabel = computed(() => {
 
 			<UFormField
 				v-if="config.showHeader"
-				label="Custom header text"
+				:label="fields.headerText.label"
 				description="Leave empty for auto-generated header based on view mode."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -391,14 +396,14 @@ const modeSettingsLabel = computed(() => {
 
 		<ScreenSettingsCard title="Pagination">
 			<UFormField
-				label="Rows per page"
+				:label="fields.rowsPerPage.label"
 				description="Number of players shown per page."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.rowsPerPage"
-					:min="1"
-					:max="100"
+					:min="fields.rowsPerPage.min"
+					:max="fields.rowsPerPage.max"
 					class="w-32"
 					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
 				/>
@@ -411,7 +416,7 @@ const modeSettingsLabel = computed(() => {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Auto-page"
+				:label="fields.autoPageEnabled.label"
 				description="Automatically cycle through pages on the display."
 				:model-value="config.autoPageEnabled"
 				@update:model-value="setAutoPageEnabled($event === true)"
@@ -419,16 +424,16 @@ const modeSettingsLabel = computed(() => {
 
 			<UFormField
 				v-if="config.autoPageEnabled"
-				label="Interval (seconds)"
+				:label="fields.autoPageIntervalMs.label"
 				description="Time between page transitions."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
-					:model-value="Math.round(config.autoPageIntervalMs / 1000)"
-					:min="3"
-					:max="60"
+					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
+					:min="fields.autoPageIntervalMs.min"
+					:max="fields.autoPageIntervalMs.max"
 					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
 				/>
 			</UFormField>
 
@@ -461,7 +466,7 @@ const modeSettingsLabel = computed(() => {
 
 		<ScreenSettingsCard title="Animation">
 			<ScreenSettingsToggle
-				label="Animate entries"
+				:label="fields.animateEntries.label"
 				description="Animate row transitions on the display."
 				:model-value="config.animateEntries"
 				@update:model-value="updateConfig({ animateEntries: $event })"

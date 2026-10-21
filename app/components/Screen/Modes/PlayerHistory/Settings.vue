@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -17,6 +18,10 @@ const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigU
 );
 
 defineExpose({ resetConfig, saving });
+
+// Each control's label and bounds, read from the mode's config contract (#498).
+// Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
+const fields = screenModeConfigContract('player-history').fields;
 
 const playerOptions = computed(() => [
 	{ label: 'Select a player…', value: null },
@@ -105,7 +110,7 @@ watch(() => config.value.playerId, async (playerId) => {
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
-				label="Show header"
+				:label="fields.showHeader.label"
 				description="Show the player name and record above the match history."
 				:model-value="config.showHeader"
 				@update:model-value="updateConfig({ showHeader: $event })"
@@ -113,7 +118,7 @@ watch(() => config.value.playerId, async (playerId) => {
 
 			<UFormField
 				v-if="config.showHeader"
-				label="Custom header text"
+				:label="fields.headerText.label"
 				description="Leave empty for the player's name and match history."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
@@ -128,14 +133,14 @@ watch(() => config.value.playerId, async (playerId) => {
 
 		<ScreenSettingsCard title="Pagination">
 			<UFormField
-				label="Rows per page"
+				:label="fields.rowsPerPage.label"
 				description="Number of match rows shown per page."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
 					:model-value="config.rowsPerPage"
-					:min="1"
-					:max="100"
+					:min="fields.rowsPerPage.min"
+					:max="fields.rowsPerPage.max"
 					class="w-32"
 					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
 				/>
@@ -148,7 +153,7 @@ watch(() => config.value.playerId, async (playerId) => {
 			</p>
 
 			<ScreenSettingsToggle
-				label="Auto-page"
+				:label="fields.autoPageEnabled.label"
 				description="Automatically cycle through match history pages."
 				:model-value="config.autoPageEnabled"
 				@update:model-value="setAutoPageEnabled($event === true)"
@@ -156,16 +161,16 @@ watch(() => config.value.playerId, async (playerId) => {
 
 			<UFormField
 				v-if="config.autoPageEnabled"
-				label="Interval (seconds)"
+				:label="fields.autoPageIntervalMs.label"
 				description="Time between page transitions."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<UInputNumber
-					:model-value="Math.round(config.autoPageIntervalMs / 1000)"
-					:min="3"
-					:max="60"
+					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
+					:min="fields.autoPageIntervalMs.min"
+					:max="fields.autoPageIntervalMs.max"
 					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * 1000 })"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
 				/>
 			</UFormField>
 

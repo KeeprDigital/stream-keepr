@@ -33,17 +33,14 @@ const NOT_YET_GUARDED = new Set<ScreenMode>([
 	'feature-match',
 	'feature-match-overlay',
 	'broadcast-graphics',
-	'standings',
-	'metagame',
 	'top-cards',
-	'player-history',
 ]);
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Record<string, unknown>[] }>> = {
-	card: { editor: 'Card', variants: [{}] },
+	'card': { editor: 'Card', variants: [{}] },
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
-	deck: {
+	'deck': {
 		editor: 'Deck',
 		variants: [
 			{},
@@ -51,6 +48,24 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 			{ mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'stack' }, sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' } },
 		],
 	},
+	// Each view mode's settings; the archetype colours show with the deck column.
+	'standings': {
+		editor: 'Standings',
+		variants: [
+			{ viewMode: 'topN' },
+			{ viewMode: 'slice' },
+			{ viewMode: 'reveal', autoPageEnabled: true, columns: [{ key: 'deck', visible: true }] },
+		],
+	},
+	// Each scope's and each view's settings.
+	'metagame': {
+		editor: 'Metagame',
+		variants: [
+			{ scope: 'topN', autoPageEnabled: true },
+			{ scope: 'minPoints', viewMode: 'cards' },
+		],
+	},
+	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
 };
 
 // ── The editor's environment ──

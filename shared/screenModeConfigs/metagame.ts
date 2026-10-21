@@ -9,32 +9,33 @@ import {
 	METAGAME_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
+import { editorField } from './fields';
 import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
 
 /** The Metagame Screen Mode's config contract: its shape, type, and defaults. */
 export const metagameModeConfigContract = defineScreenModeConfigContract({
 	// View selection
-	viewMode: z.enum(METAGAME_VIEW_MODE_VALUES),
+	viewMode: editorField(z.enum(METAGAME_VIEW_MODE_VALUES), { label: 'Display' }),
 
 	// Scoping
-	scope: z.enum(METAGAME_SCOPE_VALUES),
-	topN: z.number().int().min(1).max(500),
-	minPoints: z.number().int().min(0).max(999),
+	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), { label: 'Player scope' }),
+	topN: editorField(z.number().int().min(1).max(500), { label: 'Top N' }),
+	minPoints: editorField(z.number().int().min(0).max(999), { label: 'Minimum points' }),
 	playerListId: z.number().int().positive().optional(),
-	archetypeFilter: z.string().max(200).optional(),
+	archetypeFilter: editorField(z.string().max(200).optional(), { label: 'Archetype filter' }),
 
 	// Sorting
-	sortBy: z.enum(METAGAME_SORT_BY_VALUES),
-	cardSortBy: z.enum(METAGAME_CARD_SORT_BY_VALUES),
+	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), { label: 'Sort archetypes by' }),
+	cardSortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), { label: 'Sort cards by' }),
 
 	// Column configuration (ordered arrays — order = display order)
 	archetypeColumns: z.array(columnConfigSchema(METAGAME_ARCHETYPE_COLUMN_KEY_VALUES)).min(1).max(10),
 	cardColumns: z.array(columnConfigSchema(METAGAME_CARD_COLUMN_KEY_VALUES)).min(1).max(12),
 
 	// Display limits
-	limit: z.number().int().min(1).max(500),
-	archetypeLimit: z.number().int().min(1).max(500).nullable().optional(),
-	maxTableWidth: z.number().int().min(1).nullable().optional(),
+	limit: editorField(z.number().int().min(1).max(500), { label: 'Card limit' }),
+	archetypeLimit: editorField(z.number().int().min(1).max(500).nullable().optional(), { label: 'Top archetypes' }),
+	maxTableWidth: editorField(z.number().int().min(1).nullable().optional(), { label: 'Max table width' }),
 
 	// Pagination
 	pageSize: pageRotationPageSize,
@@ -44,7 +45,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	...headerConfigShape,
 
 	// Animation
-	animateEntries: z.boolean(),
+	animateEntries: editorField(z.boolean(), { label: 'Animate entries' }),
 }, {
 	viewMode: 'archetype',
 	scope: 'all',
