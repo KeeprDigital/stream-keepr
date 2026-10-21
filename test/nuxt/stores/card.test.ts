@@ -188,9 +188,7 @@ describe('useCardStore', () => {
 			expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 		});
 
-		// Characterises #707's trace on main: a rendering's expiry is visible only. The
-		// durable clear is left to an operator client's DELETE or the next read's cleanup;
-		// ADR-0022's amendment keeps this row and makes the operator path match it.
+		// Scenario 4 of #707 for a rendering: no Card, a zero countdown, and no request.
 		it('hides an expired Card on a rendering without asking the server to clear it', async () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
@@ -476,11 +474,7 @@ describe('useCardStore', () => {
 				expect(store.timeout.isActive).toBe(true);
 				await vi.advanceTimersByTimeAsync(1_000);
 
-				// Scenario 4 of #707 for a rendering: no Card, a zero countdown, and no request.
 				expect(store.activeCard).toBeNull();
-				expect(store.timeout.remaining).toBe(0);
-				expect(mockOutputRead).toHaveBeenCalledTimes(1);
-				expect(mockCardRepo.getScreenCard).not.toHaveBeenCalled();
 				expect(mockCardRepo.deleteScreenCard).not.toHaveBeenCalled();
 			});
 		});

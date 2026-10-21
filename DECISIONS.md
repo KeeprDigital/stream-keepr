@@ -626,8 +626,8 @@ This section first named a server-side timeout as expiry's owner. None exists: `
 - Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
 - The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.
 - An expired Card's stored value and its KV copy stay until the next save, Clear, or Screen or Event deletion. That is one bounded Card per Screen. Reclaiming it buys nothing a holder can observe.
-- A Card read that loaded the row before a concurrent replacement answers what it loaded. Ordering that answer against the newer `card:updated` belongs to the Card's own read freshness ([#704](https://github.com/KeeprDigital/stream-keepr/issues/704)), not to expiry. Once no client clears on expiry, a superseded read that arms a timer can only hide a newer Card locally, never clear it in storage. That local stale-read failure stays open until #704 lands.
-- Until the implementation lands, main still does three things this section rules out: it clears on read, each operator Card page sends an expiry `DELETE`, and Screen reads ship `activeCard` and `activeCardVersion`. `test/unit/server/api/cardExpiry.sqlite.test.ts` pins that behaviour, and the implementation rewrites those rows to this section.
+- A Card read that loaded the row before a concurrent replacement answers what it loaded. Ordering that answer against the newer `card:updated` belongs to the Card's own read freshness ([#704](https://github.com/KeeprDigital/stream-keepr/issues/704)), not to expiry. Once no client clears on expiry, a superseded read that arms a timer can only hide a newer Card locally, never clear it in storage. #704's read Flight closes that too: a superseded read lands nothing and arms no timer.
+- `test/unit/server/api/cardExpiry.sqlite.test.ts` pins #707's acceptance scenarios over the real Card and Screen routes ([#725](https://github.com/KeeprDigital/stream-keepr/issues/725)).
 
 ### Rejected alternatives
 
