@@ -27,6 +27,10 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+// Imported statically, not inside the mount helper: transforming the panel's
+// component tree takes ~0.5s alone and far longer under parallel suite load, and a
+// dynamic import charged all of it to the first test's 5s timeout (#778).
+import Inspector from '~/components/Graphics/Compositor/Inspector.vue';
 
 enableAutoUnmount(afterEach);
 // The Geometry Unit is remembered per browser; no test inherits another's choice.
@@ -221,9 +225,6 @@ async function mountComponent(options: {
 	/** The published Graphic Style Set this composition authors against, if any. */
 	styleSet?: GraphicStyleAuthoringContext;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
-	const { default: Inspector } = await import(componentPath);
-
 	return mount(Inspector, {
 		props: {
 			graphics: options.graphics,
