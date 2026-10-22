@@ -59,14 +59,8 @@ const estimatedGridRowCount = computed(() => topCardsGridRowCount(config.value.l
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape. An edit
 // changing which cards each page holds returns to page 1 as well.
-const {
-	currentPage,
-	totalPages,
-	updateConfig,
-	setAutoPageEnabled,
-	adminNextPage,
-	adminPrevPage,
-} = useRotationConfigWrites({ mode: 'top-cards', config, rowCount: estimatedGridRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'top-cards', config, rowCount: estimatedGridRowCount, saveConfig });
+const { updateConfig } = rotation;
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -240,77 +234,11 @@ function typeLabel(bucket: CardTypeBucket): string {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Pagination">
-			<UFormField
-				:label="fields.rowsPerPage.label"
-				description="Grid rows shown per page, each holding one card per column."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.rowsPerPage"
-					:min="fields.rowsPerPage.min"
-					:max="fields.rowsPerPage.max"
-					class="w-32"
-					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
-				/>
-			</UFormField>
-
-			<USeparator />
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Automatic Paging
-			</p>
-
-			<ScreenSettingsToggle
-				:label="fields.autoPageEnabled.label"
-				description="Automatically cycle through pages of cards."
-				:model-value="config.autoPageEnabled"
-				@update:model-value="setAutoPageEnabled($event === true)"
-			/>
-
-			<UFormField
-				v-if="config.autoPageEnabled"
-				:label="fields.autoPageIntervalMs.label"
-				description="Time between page transitions."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
-					:min="fields.autoPageIntervalMs.min"
-					:max="fields.autoPageIntervalMs.max"
-					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
-				/>
-			</UFormField>
-
-			<USeparator />
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Manual Page Controls
-			</p>
-
-			<div class="flex items-center justify-center gap-2 max-sm:flex-wrap">
-				<UButton
-					icon="i-lucide-chevron-left"
-					variant="outline"
-					size="sm"
-					aria-label="Previous page"
-					:disabled="totalPages <= 1"
-					@click="adminPrevPage"
-				/>
-				<span class="text-sm text-muted px-2">
-					Page {{ currentPage }} of {{ totalPages }}
-				</span>
-				<UButton
-					icon="i-lucide-chevron-right"
-					variant="outline"
-					size="sm"
-					aria-label="Next page"
-					:disabled="totalPages <= 1"
-					@click="adminNextPage"
-				/>
-			</div>
-		</ScreenSettingsCard>
+		<ScreenPaginationSettingsCard
+			:rotation="rotation"
+			page-size-description="Grid rows shown per page, each holding one card per column."
+			auto-page-description="Automatically cycle through pages of cards."
+		/>
 
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
