@@ -20,13 +20,21 @@
  * instead would see the failure only after the rejection settles, which is
  * the late, misattributed signal this replaces.
  *
+ * Its reach is `@nuxt/icon`'s default css mode, the only one the app uses. An
+ * svg-mode icon (`mode="svg"`) loads through Iconify's own component, which
+ * never calls the exported `loadIcon`: unbundled, it renders blank and logs
+ * nothing, so it escapes this guard but cannot cause the teardown error.
+ * Attribution is to the test running when the icon first renders; a re-render
+ * that lands after its test ended is pinned on the next one.
+ *
  * `vitest.nuxt.config.ts` runs this before the test-utils entry, so the mock
  * is in place before the app first imports `@nuxt/icon`.
  */
 
 import { afterAll, afterEach, expect, vi } from 'vitest';
 
-const unbundled: string[] = [];
+/** Each icon that missed the bundle, with the test it rendered in, if any. */
+const unbundled: { name: string; testName: string | undefined }[] = [];
 
 vi.mock('@iconify/vue', async (importOriginal) => {
 	const iconify = await importOriginal<typeof import('@iconify/vue')>();
@@ -34,8 +42,7 @@ vi.mock('@iconify/vue', async (importOriginal) => {
 	return {
 		...iconify,
 		loadIcon: (name: string) => {
-			const test = expect.getState().currentTestName;
-			unbundled.push(test ? `\`${name}\` (rendered in "${test}")` : `\`${name}\``);
+			unbundled.push({ name, testName: expect.getState().currentTestName });
 			return Promise.resolve(null);
 		},
 	};
@@ -48,7 +55,9 @@ vi.mock('@iconify/vue', async (importOriginal) => {
 export function assertEveryIconBundled(): void {
 	if (unbundled.length === 0)
 		return;
-	const icons = unbundled.splice(0).join(', ');
+	const icons = unbundled.splice(0)
+		.map(({ name, testName }) => testName ? `\`${name}\` (rendered in "${testName}")` : `\`${name}\``)
+		.join(', ');
 	throw new Error(
 		`Icon not in the test client bundle: ${icons}. Name it where `
 		+ '`clientBundle.scan` in nuxt.config.ts can find it, or add it to `clientBundle.icons`.',

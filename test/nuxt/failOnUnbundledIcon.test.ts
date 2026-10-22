@@ -8,12 +8,23 @@
 
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFailed, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { UIcon } from '#components';
 import { assertEveryIconBundled } from './failOnUnbundledIcon';
 
 const UNBUNDLED = 'i-lucide-not-in-the-client-bundle';
+
+/**
+ * Long enough for an unguarded load to have failed and logged: Iconify rejects
+ * a missing icon within a few ticks, and without the guard this window caught
+ * the `[Icon] failed to load icon` line every time.
+ */
+async function settle() {
+	await flushPromises();
+	await new Promise(resolve => setTimeout(resolve, 50));
+	await flushPromises();
+}
 
 function iconHost(name: string) {
 	return defineComponent({
@@ -38,15 +49,25 @@ describe('unbundled icon guard', () => {
 		const warn = vi.spyOn(console, 'warn');
 
 		await mountSuspended(iconHost(UNBUNDLED));
-		await flushPromises();
-		await new Promise(resolve => setTimeout(resolve, 50));
+		await settle();
 
 		expect(warn).not.toHaveBeenCalled();
 		expect(() => assertEveryIconBundled()).toThrow();
 	});
 
-	// The end-to-end proof: left to the guard's own `afterEach`, the test fails.
-	it.fails('fails the test that renders an unbundled icon', async () => {
-		await mountSuspended(iconHost(UNBUNDLED));
+	describe('left to the guard\'s own afterEach', () => {
+		let failure: string | undefined;
+
+		it.fails('fails the test that renders an unbundled icon', async () => {
+			onTestFailed(({ task }) => {
+				failure = task.result?.errors?.map(error => error.message).join('\n');
+			});
+			await mountSuspended(iconHost(UNBUNDLED));
+		});
+
+		it('names the icon and the test that rendered it', () => {
+			expect(failure).toContain('`lucide:not-in-the-client-bundle`');
+			expect(failure).toContain('rendered in "unbundled icon guard > left to the guard\'s own afterEach > fails the test that renders an unbundled icon"');
+		});
 	});
 });

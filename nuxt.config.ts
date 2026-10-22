@@ -101,9 +101,8 @@ export default defineNuxtConfig({
 		provider: process.env.NODE_ENV === 'test' ? 'none' : undefined,
 		clientBundle: {
 			icons: supportedSocialNetworkIcons,
-			// So the bundle holds every icon the app names. Without it, an unbundled
-			// icon's failure is logged asynchronously, and a log landing as a file
-			// closes fails the run under load (vitest-dev/vitest#11153).
+			// So the bundle holds every icon the app names: a component test that
+			// renders an unbundled icon fails (`test/nuxt/failOnUnbundledIcon.ts`).
 			// The default globs skip `.ts`, so the app's and shared modules' icon
 			// names (a Shape Geometry preset's, a Screen Mode Definition's) are
 			// added; replacing the defaults means restating them.
