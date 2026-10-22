@@ -2,9 +2,9 @@ import type { RecordSeparator } from '../types/enums';
 
 /** A Player's wins, losses and draws, any of which may be unknown. */
 export interface PlayerRecordFacts {
-	wins: number | null | undefined;
-	losses: number | null | undefined;
-	draws: number | null | undefined;
+	wins?: number | null;
+	losses?: number | null;
+	draws?: number | null;
 }
 
 /** How an Event displays records. */
