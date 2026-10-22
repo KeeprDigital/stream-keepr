@@ -1,4 +1,5 @@
 import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
+import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ArchetypeBreakdownResponse, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
 
 /**
@@ -32,6 +33,17 @@ export interface ScreenOutputStandingsResponse {
 	roundStandings: ScreenOutputRoundStanding[] | null;
 	/** The watchlist's name and members; `null` unless the view is a watchlist of a list that exists. */
 	watchlist: { name: string; playerIds: number[] } | null;
+}
+
+/**
+ * What a Top Cut Screen renders from: the Phase its configuration names, and
+ * the bracket derived from that Phase's Rounds and their Matches (#752). A
+ * Phase outside the Event, or one since deleted, answers `null` and an empty
+ * bracket.
+ */
+export interface ScreenOutputTopCutResponse {
+	phase: PhaseResponse | null;
+	bracket: TopCutBracket;
 }
 
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */

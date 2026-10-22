@@ -1,7 +1,8 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { ScreenOutputFeatureMatchResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
+import { $fetchRaw } from './helpers';
 
 /**
  * A Screen Output reads everything it renders with its Screen Output Asset
@@ -375,6 +376,68 @@ describe('capability-only Screen Output reads', () => {
 			await setMode('background');
 			expect((await asOutput('player-history')).status).toBe(404);
 			expect((await asOutput('standings')).status).toBe(404);
+		});
+	});
+	describe('top Cut', () => {
+		it('reads the bracket of the Phase the Screen names, with each result as last reported', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Top 4' } });
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Top 4 Semifinals', roundNumber: 1 },
+			});
+			const semifinal = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: { roundId: round.id, tableNumber: 1, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+			});
+			await $fetch(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: { roundId: round.id, tableNumber: 2, player1Data: { name: 'Cara' }, player2Data: { name: 'Dan' } },
+			});
+			const topCut = await outputScreen('topCut');
+
+			const unconfigured = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(unconfigured.status).toBe(200);
+			expect(unconfigured.data).toEqual({ phase: null, bracket: { size: 0, columns: [], champion: null } });
+
+			await topCut.configure({ phaseId: phase.id });
+			const pending = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(pending.status).toBe(200);
+			expect(pending.data.phase).toMatchObject({ id: phase.id, name: 'Top 4' });
+			expect(pending.data.bracket.columns.map(column => [column.roundId, column.name, column.slots.length])).toEqual([
+				[round.id, 'Top 4 Semifinals', 2],
+				[null, 'Final', 1],
+			]);
+			expect(pending.data.bracket.columns[0]!.slots[0]).toMatchObject({
+				matchId: semifinal.id,
+				entrants: [{ playerId: null, name: 'Alice' }, { playerId: null, name: 'Bob' }],
+				status: 'unreported',
+			});
+
+			await $fetch(`/api/events/${eventId}/matches/${semifinal.id}`, {
+				method: 'PATCH',
+				body: { hasResult: true, player1GameWins: 1, player2GameWins: 2 },
+			});
+			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(reported.data.bracket.columns[0]!.slots[0]).toMatchObject({ status: 'reported', winner: 1, gameWins: [1, 2] });
+			expect(reported.data.bracket.columns[1]!.slots[0]!.entrants).toEqual([{ playerId: null, name: 'Bob' }, null]);
+		});
+
+		it('refuses to name another Event\'s Phase', async () => {
+			const otherEvent = await $fetch<{ id: number }>('/api/events', {
+				method: 'POST',
+				body: { name: 'Top Cut Other Event', game: 'mtg', featureMatchOrientation: 'vertical' },
+			});
+			try {
+				const foreignPhase = await $fetch<{ id: number }>(`/api/events/${otherEvent.id}/phases`, { method: 'POST', body: { name: 'Foreign Top 8' } });
+				const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}/config/topCut`, {
+					method: 'PATCH',
+					body: { phaseId: foreignPhase.id },
+				});
+				expect(res.status).toBe(404);
+			}
+			finally {
+				await $fetch(`/api/events/${otherEvent.id}`, { method: 'DELETE' });
+			}
 		});
 	});
 });

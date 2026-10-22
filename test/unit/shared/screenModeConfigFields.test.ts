@@ -92,24 +92,24 @@ describe('a config contract\'s stored-fragment clamp', () => {
 	});
 
 	it('pulls a stored number outside its bounds to the nearest bound', () => {
-		expect(contract.clampStored({ scale: 4 })).toEqual({ scale: 2 });
-		expect(contract.clampStored({ scale: 0.1 })).toEqual({ scale: 0.5 });
+		expect(contract.readStored({ scale: 4 })).toEqual({ scale: 2 });
+		expect(contract.readStored({ scale: 0.1 })).toEqual({ scale: 0.5 });
 	});
 
 	it('clamps inside a nested block and keeps the block\'s other keys', () => {
-		expect(contract.clampStored({ board: { columns: 16, view: 'list' } })).toEqual({ board: { columns: 12, view: 'list' } });
+		expect(contract.readStored({ board: { columns: 16, view: 'list' } })).toEqual({ board: { columns: 12, view: 'list' } });
 	});
 
 	it('returns an in-range fragment as it is', () => {
 		const fragment = { scale: 1.5, board: { columns: 3 }, featureMatchId: 7 };
 
-		expect(contract.clampStored(fragment)).toBe(fragment);
+		expect(contract.readStored(fragment)).toBe(fragment);
 	});
 
 	it('leaves what it cannot clamp to the reader: other types, exclusive bounds, and unknown keys', () => {
 		const fragment = { scale: 'big', featureMatchId: 0, label: 'too long', retired: 99 } as Record<string, unknown>;
 
-		expect(contract.clampStored(fragment)).toEqual(fragment);
+		expect(contract.readStored(fragment)).toEqual(fragment);
 	});
 
 	it('does not loosen a write: the schema still refuses the value it clamps on read', () => {

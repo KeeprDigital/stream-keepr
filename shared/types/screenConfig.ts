@@ -483,7 +483,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'background': [],
 	'card': ['featureMatchId'],
 	'deck': ['deckSource'],
-	'topCut': [],
+	'topCut': ['phaseId'],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': [],
@@ -511,18 +511,19 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 	const stored = modeConfigs?.[mode];
 	return {
 		...getDefaultConfigForMode(mode),
-		...(stored && clampStoredModeConfig(mode, stored)),
+		...(stored && readStoredModeConfig(mode, stored)),
 	};
 }
 
-/** One mode's stored fragment read within its contract's bounds (`clampStored`, #498). */
-function clampStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
-	return MODE_CONFIG_CONTRACTS[mode].clampStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
+/** One mode's stored fragment as its contract reads it: without its former fields, and within its bounds (`readStored`, #498, #752). */
+function readStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
+	return MODE_CONFIG_CONTRACTS[mode].readStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
 }
 
 /**
  * Stored mode configurations as every reader reads them: each mode's fragment
- * with every number outside its contract's bounds pulled to the nearest bound.
+ * without its contract's former fields (#752), and with every number outside
+ * its contract's bounds pulled to the nearest bound.
  * A bound tightened after a Screen stored a value outside it reads as that bound,
  * never as the default, and the read is never refused (#498). The server applies
  * it to every Screen it sends a client, so an editor writing a value back sends
@@ -536,7 +537,7 @@ export function clampStoredModeConfigs<T extends ModeConfigsMap | null | undefin
 	for (const [mode, stored] of Object.entries(modeConfigs)) {
 		if (!stored || !Object.hasOwn(MODE_CONFIG_CONTRACTS, mode))
 			continue;
-		const next = clampStoredModeConfig(mode as ScreenMode, stored);
+		const next = readStoredModeConfig(mode as ScreenMode, stored);
 		if (next !== stored) {
 			clamped ??= { ...modeConfigs };
 			clamped[mode] = next;
@@ -585,8 +586,9 @@ export function mergeScreenModeConfig<M extends ScreenMode>(
 	partialConfig: Record<string, unknown>,
 ): ModeConfigsMap {
 	const currentModeConfig = currentConfigs[mode] ?? {};
+	// A write of a mode's config also drops what its contract no longer holds (#752).
 	return {
 		...currentConfigs,
-		[mode]: stripNullConfigKeys({ ...currentModeConfig, ...partialConfig }),
+		[mode]: MODE_CONFIG_CONTRACTS[mode].withoutFormerFields(stripNullConfigKeys({ ...currentModeConfig, ...partialConfig })),
 	};
 }

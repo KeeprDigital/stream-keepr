@@ -37,6 +37,7 @@ const loaded = { isLoaded: true, $reset: vi.fn() };
 mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [{ id: 5, name: 'Ada' }], loadPlayersByEventId: vi.fn() }));
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [{ id: 3, name: 'Top 8', sortOrder: 1 }], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
 
 // ── Controls, each found by the label of the form field around it ──
@@ -123,6 +124,10 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 	['PlayerHistory', 'player-history', {}, [
 		['Custom header text', 'headerText', 'Match History'],
 		['Player', 'playerId', 5],
+	]],
+	['TopCut', 'topCut', {}, [
+		['Custom header text', 'headerText', 'Championship Bracket'],
+		['Phase', 'phaseId', 3],
 	]],
 ])('the %s settings editor', (editor, mode, variant, fields) => {
 	beforeEach(() => {
