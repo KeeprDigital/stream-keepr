@@ -157,7 +157,7 @@ The single-elimination bracket a Top Cut Screen shows, derived from the Phase it
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
 **Seed**:
-A Player's final position before a Top Cut Bracket's Phase began: their position in the Round Standings of the last Round, in the Event's Round order, before that Phase's first Round that holds Round Standings. A Player absent from that Round, or a Phase no such Round precedes, has none. Derived from stored Round Standings, never imported.
+A Player's final position before a Top Cut Bracket's Phase began: their position in the Round Standings of the last Round holding Round Standings before that Phase's first Round, in the Event's Round order. A Player absent from that Round, or a Phase no such Round precedes, has none. Derived from stored Round Standings, never imported.
 _Avoid_: rank, bracket position (a Bracket Position is where a Match sits)
 
 **Rotation Anchor**:

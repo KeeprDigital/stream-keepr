@@ -112,11 +112,11 @@ describe('findPhaseBracket', () => {
 		const result = await findPhaseBracket(eventId, topCutId);
 
 		const entrants = result.bracket.columns[0]!.positions.flatMap(position => position.entrants);
-		expect(entrants.every(entrant => entrant != null && !('seed' in entrant) && !('archetype' in entrant))).toBe(true);
+		expect(entrants.every(entrant => entrant != null && !('seed' in entrant) && !('deck' in entrant))).toBe(true);
 	});
 
 	it('seeds each Player by their final position in the last Round Standings before the Phase', async () => {
-		const result = await findPhaseBracket(eventId, topCutId, { seeds: true });
+		const result = await findPhaseBracket(eventId, topCutId, { showSeeds: true });
 
 		expect(result.bracket.columns.map(column => column.positions.map(position => position.entrants.map(entrant => entrant?.seed ?? null)))).toEqual([
 			[[1, null], [4, 5], [2, 7], [3, null]],
@@ -126,9 +126,9 @@ describe('findPhaseBracket', () => {
 	});
 
 	it('names each Player\'s Archetype from their assigned Archetype or their Deck List, blank when they have neither', async () => {
-		const result = await findPhaseBracket(eventId, topCutId, { archetypes: true });
+		const result = await findPhaseBracket(eventId, topCutId, { showArchetypes: true });
 
-		expect(result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.archetype ?? null))).toEqual([
+		expect(result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.deck ?? null))).toEqual([
 			[{ name: 'Izzet Prowess', colors: 'UR' }, null],
 			[null, null],
 			[{ name: 'Mono-Green Landfall', colors: 'G' }, null],
@@ -137,7 +137,7 @@ describe('findPhaseBracket', () => {
 	});
 
 	it('has no seeds for a Phase no earlier Round Standings precede', async () => {
-		const result = await findPhaseBracket(eventId, swissId, { seeds: true });
+		const result = await findPhaseBracket(eventId, swissId, { showSeeds: true });
 
 		expect(result.bracket.columns[0]!.positions[0]!.entrants.map(entrant => entrant?.seed)).toEqual([null, null]);
 	});

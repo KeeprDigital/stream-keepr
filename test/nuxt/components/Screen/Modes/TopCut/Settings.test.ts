@@ -108,13 +108,13 @@ describe('screenModesTopCutSettings', () => {
 	it('leaves seeds and Archetypes off for a Screen that never set them, so it renders as before', async () => {
 		const wrapper = await mountEditor();
 
-		expect(toggle(wrapper, 'Show seeds').attributes('data-on')).toBe('false');
-		expect(toggle(wrapper, 'Show archetypes').attributes('data-on')).toBe('false');
+		expect(toggle(wrapper, 'Show Seeds').attributes('data-on')).toBe('false');
+		expect(toggle(wrapper, 'Show Archetypes').attributes('data-on')).toBe('false');
 	});
 
 	it.each([
-		['Show seeds', 'showSeeds'],
-		['Show archetypes', 'showArchetypes'],
+		['Show Seeds', 'showSeeds'],
+		['Show Archetypes', 'showArchetypes'],
 	])('writes %s as the Screen\'s %s', async (label, field) => {
 		const wrapper = await mountEditor();
 

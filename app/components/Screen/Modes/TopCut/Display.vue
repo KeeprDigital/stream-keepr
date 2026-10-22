@@ -78,7 +78,7 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 									<span v-if="config.showSeeds" class="bracket-entrant-seed broadcast-table-numeric">{{ position.entrants[side]?.seed ?? '' }}</span>
 									<div class="bracket-entrant-identity">
 										<span class="bracket-entrant-name">{{ entrantLabel(position, side) }}</span>
-										<span v-if="config.showArchetypes" class="bracket-entrant-archetype">{{ position.entrants[side]?.archetype?.name ?? '' }}</span>
+										<span v-if="config.showArchetypes" class="bracket-entrant-archetype">{{ position.entrants[side]?.deck?.name ?? '' }}</span>
 									</div>
 									<span v-if="position.gameWins[side] != null" class="bracket-entrant-score broadcast-table-numeric">{{ position.gameWins[side] }}</span>
 								</div>

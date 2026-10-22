@@ -482,8 +482,8 @@ describe('capability-only Screen Output reads', () => {
 			await topCut.configure({ showSeeds: true, showArchetypes: true });
 			const detailed = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(detailed.data.bracket.columns[0]!.positions[0]!.entrants).toEqual([
-				{ playerId: null, name: 'Alice', seed: null, archetype: null },
-				{ playerId: null, name: 'Bob', seed: null, archetype: null },
+				{ playerId: null, name: 'Alice', seed: null, deck: null },
+				{ playerId: null, name: 'Bob', seed: null, deck: null },
 			]);
 		});
 

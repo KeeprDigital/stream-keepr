@@ -16,8 +16,8 @@ import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
  */
 export const topCutModeConfigContract = defineScreenModeConfigContract({
 	phaseId: z.number().int().positive().optional(),
-	showSeeds: editorField(z.boolean(), { label: 'Show seeds' }),
-	showArchetypes: editorField(z.boolean(), { label: 'Show archetypes' }),
+	showSeeds: editorField(z.boolean(), { label: 'Show Seeds' }),
+	showArchetypes: editorField(z.boolean(), { label: 'Show Archetypes' }),
 	...headerConfigShape,
 }, {
 	phaseId: undefined,

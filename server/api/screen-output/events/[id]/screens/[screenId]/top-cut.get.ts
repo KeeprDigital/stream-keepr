@@ -10,8 +10,5 @@ import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
  */
 export default defineEventHandler(async (event): Promise<ScreenOutputTopCutResponse> => {
 	const { eventId, config } = await requireScreenOutputModeRead(event, 'topCut');
-	return await findPhaseBracket(eventId, config.phaseId, {
-		seeds: config.showSeeds,
-		archetypes: config.showArchetypes,
-	});
+	return await findPhaseBracket(eventId, config.phaseId, config);
 });

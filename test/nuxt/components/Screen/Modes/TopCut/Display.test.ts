@@ -143,8 +143,8 @@ describe('screenModesTopCutDisplay', () => {
 				roundId: 1,
 				name: 'Semifinals',
 				matches: [
-					match(1, 1, { ...player(1), seed: 1, archetype: { name: 'Izzet Prowess', colors: 'UR' } }, { ...player(4), seed: null, archetype: null }),
-					match(2, 2, { ...player(2), seed: 2, archetype: null }, { ...player(3), seed: 3, archetype: { name: 'Mono-Green Landfall', colors: 'G' } }),
+					match(1, 1, { ...player(1), seed: 1, deck: { name: 'Izzet Prowess', colors: 'UR' } }, { ...player(4), seed: null, deck: null }),
+					match(2, 2, { ...player(2), seed: 2, deck: null }, { ...player(3), seed: 3, deck: { name: 'Mono-Green Landfall', colors: 'G' } }),
 				],
 			}]);
 		}

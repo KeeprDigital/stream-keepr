@@ -1,5 +1,6 @@
-import type { BracketEntrant, BracketRoundInput } from '~~/shared/modules/top-cut-bracket';
-import type { ScreenOutputMatchSide, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { BracketEntrant, BracketRoundInput, NamedPlayerDeckIdentity } from '~~/shared/modules/top-cut-bracket';
+import type { TopCutModeConfig } from '~~/shared/screenModeConfigs/topCut';
+import type { ScreenOutputMatchSide, ScreenOutputRoundMatch, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, players } from '~~/server/db/schema';
@@ -12,12 +13,7 @@ import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/to
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
 
 /** What a Top Cut Screen shows beside each Player's name (#759). */
-export interface TopCutEntrantDetails {
-	seeds?: boolean;
-	archetypes?: boolean;
-}
-
-type EntrantArchetype = NonNullable<BracketEntrant['archetype']>;
+export type TopCutEntrantDetails = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes'>>;
 
 /** Each Player's seed: their position in the Round Standings that seed the Phase. */
 async function findSeeds(eventId: number, phaseId: number): Promise<Map<number, number | null>> {
@@ -25,8 +21,8 @@ async function findSeeds(eventId: number, phaseId: number): Promise<Map<number, 
 	return new Map(standings?.positions.map(({ playerId, position }) => [playerId, position]));
 }
 
-/** Each of these Players' Archetype as a broadcast names it, absent when they have none. */
-async function findArchetypes(eventId: number, playerIds: readonly number[]): Promise<Map<number, EntrantArchetype>> {
+/** Each of these Players' deck as a broadcast names it, absent when nothing names one. */
+async function findDecks(eventId: number, playerIds: readonly number[]): Promise<Map<number, NamedPlayerDeckIdentity>> {
 	if (playerIds.length === 0)
 		return new Map();
 	const rows = await db
@@ -40,7 +36,7 @@ async function findArchetypes(eventId: number, playerIds: readonly number[]): Pr
 		.leftJoin(archetypes, eq(players.archetypeId, archetypes.id))
 		.where(and(eq(players.eventId, eventId), inArray(players.id, [...playerIds])));
 
-	const byPlayer = new Map<number, EntrantArchetype>();
+	const byPlayer = new Map<number, NamedPlayerDeckIdentity>();
 	for (const row of rows) {
 		const { name, colors } = resolvePlayerDeckIdentity(
 			row.archetypeName == null ? null : { name: row.archetypeName, colors: row.archetypeColors },
@@ -52,6 +48,18 @@ async function findArchetypes(eventId: number, playerIds: readonly number[]): Pr
 	return byPlayer;
 }
 
+/** Every Player of the Event these Matches seat. */
+function seatedPlayerIds(matchesByRound: ReadonlyMap<number, readonly ScreenOutputRoundMatch[]>): number[] {
+	const ids = new Set<number>();
+	for (const match of [...matchesByRound.values()].flat()) {
+		for (const side of [match.player1, match.player2]) {
+			if (side?.id != null)
+				ids.add(side.id);
+		}
+	}
+	return [...ids];
+}
+
 /**
  * A Phase's Top Cut Bracket: its Rounds in order and their Matches, derived
  * into one column per Round (#752). The Top Cut Screen Output's read. Naming
@@ -59,8 +67,8 @@ async function findArchetypes(eventId: number, playerIds: readonly number[]): Pr
  * bracket. Each side is named as Pairings names it: its Player by their
  * current name, or the Match's own record of a side no Player holds.
  *
- * Each Player's seed and Archetype are read only when `details` asks for
- * them (#759), so a Screen that shows neither pays for neither.
+ * Each Player's seed and deck are read only when `details` asks for them
+ * (#759), so a Screen that shows neither pays for neither.
  */
 export async function findPhaseBracket(
 	eventId: number,
@@ -73,20 +81,20 @@ export async function findPhaseBracket(
 
 	const rounds = await roundService().findByPhaseId(phase.id, eventId);
 	const matchesByRound = await findMatchesByRound(eventId, rounds.map(round => round.id));
-	const playerIds = [...new Set([...matchesByRound.values()].flat().flatMap(match => [match.player1?.id, match.player2?.id]).filter(id => id != null))];
-	const [seeds, archetypesByPlayer] = await Promise.all([
-		details.seeds ? findSeeds(eventId, phase.id) : null,
-		details.archetypes ? findArchetypes(eventId, playerIds) : null,
+	const [seeds, decks] = await Promise.all([
+		details.showSeeds ? findSeeds(eventId, phase.id) : null,
+		details.showArchetypes ? findDecks(eventId, seatedPlayerIds(matchesByRound)) : null,
 	]);
 
 	function entrant(side: ScreenOutputMatchSide | null): BracketEntrant | null {
 		if (!side)
 			return null;
 		const seated: BracketEntrant = { playerId: side.id, name: side.name };
+		const of = <T>(byPlayer: Map<number, T>) => side.id == null ? null : byPlayer.get(side.id) ?? null;
 		if (seeds)
-			seated.seed = side.id == null ? null : seeds.get(side.id) ?? null;
-		if (archetypesByPlayer)
-			seated.archetype = side.id == null ? null : archetypesByPlayer.get(side.id) ?? null;
+			seated.seed = of(seeds);
+		if (decks)
+			seated.deck = of(decks);
 		return seated;
 	}
 

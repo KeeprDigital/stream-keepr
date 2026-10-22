@@ -9,6 +9,8 @@
  * entrants the winners advancing into it so far.
  */
 
+import type { PlayerDeckIdentity } from '../../utils/gameData';
+
 /** One side of a Match: its Player, or the Match's own record of a side no Player holds. */
 export interface BracketEntrant {
 	/** The seated Player; `null` when the side names no Player of the Event. */
@@ -21,12 +23,15 @@ export interface BracketEntrant {
 	 */
 	seed?: number | null;
 	/**
-	 * The Player's Archetype as a broadcast names it: their assigned Archetype,
-	 * else their Deck List's deck name (#759). `null` when they have neither;
-	 * absent when the Screen does not show Archetypes.
+	 * The Player's deck as a broadcast names it: their assigned Archetype, else
+	 * their Deck List's deck name (#759). `null` when they have neither; absent
+	 * when the Screen does not show Archetypes.
 	 */
-	archetype?: { name: string; colors: string | null } | null;
+	deck?: NamedPlayerDeckIdentity | null;
 }
+
+/** A Player's deck identity that names a deck. */
+export type NamedPlayerDeckIdentity = PlayerDeckIdentity & { name: string };
 
 /** One Match of a Round, as the bracket reads it. */
 export interface BracketMatchInput {
