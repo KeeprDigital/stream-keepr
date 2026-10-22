@@ -19,6 +19,10 @@ const props = defineProps<{
 	canvasHeight: number;
 	/** A solid colour behind the viewport; omitted, it shows transparency. */
 	background?: string;
+	/** The tallest a fitted viewport is drawn, as a CSS length. Default: 46vh. */
+	fitHeight?: string;
+	/** Whether the panel can be collapsed. Default: true. */
+	collapsible?: boolean;
 }>();
 
 const output = defineModel<ScreenOutput>('output', { default: 'overlay' });
@@ -31,7 +35,9 @@ const viewportStyle = computed(() => [
 	zoom.value === 'fit'
 		? {
 				aspectRatio: `${props.canvasWidth} / ${props.canvasHeight}`,
-				width: `${46 * props.canvasWidth / props.canvasHeight}vh`,
+				width: props.fitHeight
+					? `calc(${props.fitHeight} * ${props.canvasWidth / props.canvasHeight})`
+					: `${46 * props.canvasWidth / props.canvasHeight}vh`,
 				maxWidth: '100%',
 			}
 		: {
@@ -44,15 +50,31 @@ const viewportStyle = computed(() => [
 </script>
 
 <template>
-	<ScreenSettingsCard title="Preview" :default-open="true">
+	<ScreenSettingsCard title="Preview" :default-open="true" :collapsible="collapsible !== false">
 		<template #actions="{ open }">
 			<div v-if="open" class="flex flex-wrap items-center gap-3">
-				<UFormField label="Item guides" size="xs" class="flex items-center gap-2">
-					<USwitch v-model="itemGuides" size="sm" data-testid="preview-item-guides" />
-				</UFormField>
-				<UFormField label="Safe areas" size="xs" class="flex items-center gap-2">
-					<USwitch v-model="safeAreaGuides" size="sm" data-testid="preview-safe-area-guides" />
-				</UFormField>
+				<UFieldGroup size="sm">
+					<UButton
+						icon="i-lucide-square-dashed"
+						:color="itemGuides ? 'primary' : 'neutral'"
+						:variant="itemGuides ? 'subtle' : 'outline'"
+						aria-label="Item guides"
+						:aria-pressed="itemGuides"
+						title="Item guides"
+						data-testid="preview-item-guides"
+						@click="() => { itemGuides = !itemGuides }"
+					/>
+					<UButton
+						icon="i-lucide-scan"
+						:color="safeAreaGuides ? 'primary' : 'neutral'"
+						:variant="safeAreaGuides ? 'subtle' : 'outline'"
+						aria-label="Safe areas"
+						:aria-pressed="safeAreaGuides"
+						title="Action-safe and title-safe guides"
+						data-testid="preview-safe-area-guides"
+						@click="() => { safeAreaGuides = !safeAreaGuides }"
+					/>
+				</UFieldGroup>
 				<UFieldGroup size="sm">
 					<UButton
 						v-for="option in SCREEN_OUTPUT_OPTIONS"

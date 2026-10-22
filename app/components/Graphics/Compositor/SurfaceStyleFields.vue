@@ -33,6 +33,10 @@ const props = defineProps<{
 	 * the switch is then not offered.
 	 */
 	presenceLabel?: string;
+	/** Drop the bordered box, for a host that already frames the fields in a section. */
+	flat?: boolean;
+	/** Keep the title as a subheading while flat, where several surfaces share one section. */
+	showTitle?: boolean;
 	/**
 	 * Distinguishes this surface's controls from a sibling's. Empty for an item's
 	 * own Graphic Surface Style, which is the one every host has always had.
@@ -61,8 +65,8 @@ function editBorderGlow(edit: BorderGlowEdit) {
 </script>
 
 <template>
-	<div class="rounded-lg border border-default/70 p-3 space-y-2">
-		<p class="text-xs font-semibold text-muted">
+	<div :class="flat ? 'space-y-2' : 'rounded-lg border border-default/70 p-3 space-y-2'">
+		<p v-if="!flat || showTitle" class="text-xs font-semibold text-muted">
 			{{ title }}
 		</p>
 
