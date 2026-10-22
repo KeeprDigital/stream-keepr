@@ -11,6 +11,13 @@ import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
+// The rows the Screen pages, read as its Screen Output reads them, are not
+// under test here (the Pairings and Most Played Cards editors' tests cover them).
+vi.mock('~/modules/screen-mode/editorModeData', async () => {
+	const { ref } = await import('vue');
+	return { useEditedScreenModeData: () => ({ rowCount: ref(0), loading: ref(false) }) };
+});
+
 /**
  * The guard against an editor drifting from its config contract (ADR-0037, #498).
  *

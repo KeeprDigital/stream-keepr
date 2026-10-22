@@ -5,7 +5,7 @@ import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { useConsumedEventData } from '~/modules/event-data/resync';
-import { useMetagameClient } from '~/modules/metagame/client';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -27,7 +27,6 @@ const fields = screenModeConfigContract('archetype-spotlight').fields;
 
 const archetypeStore = useArchetypeStore();
 const playerListStore = usePlayerListStore();
-const metagameClient = useMetagameClient();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['archetypes', 'playerLists']);
@@ -59,44 +58,18 @@ const boardOptions = [
 	{ label: 'Sideboard', value: 'sideboard' },
 ];
 
-// How many pilots the Archetype has in the scope, for the manual page controls:
-// the archetype page's own read for the same scope.
-const pilotCount = ref(0);
-const loadingPilots = ref(false);
-let requestId = 0;
-
-watch(
-	() => [config.value.archetypeId, config.value.scope, config.value.topN, config.value.minPoints, config.value.playerListId] as const,
-	async ([archetypeId, scope, topN, minPoints, playerListId]) => {
-		const id = ++requestId;
-		pilotCount.value = 0;
-
-		if (archetypeId == null || !props.eventId)
-			return;
-
-		loadingPilots.value = true;
-		try {
-			const detail = await metagameClient.loadArchetypeDetail(props.eventId, archetypeId, { scope, topN, minPoints, playerListId });
-			if (id === requestId)
-				pilotCount.value = detail.playerCount ?? 0;
-		}
-		catch (error) {
-			// The count only enables the manual page controls; without it they stay on one page.
-			console.error('Failed to count the Archetype\'s pilots', error);
-		}
-		finally {
-			if (id === requestId)
-				loadingPilots.value = false;
-		}
-	},
-	{ immediate: true },
+// The Archetype's pilots the Screen pages, read and followed as its Screen Output reads and follows them, so
+// the page count is the one it renders (#780).
+const { rowCount, loading: loadingPilots } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId },
+	useArchetypeSpotlightModeData,
 );
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape. An edit
 // changing which pilots show returns to page 1 as well.
-const rotation = useRotationConfigWrites({ mode: 'archetype-spotlight', config, rowCount: pilotCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'archetype-spotlight', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 function isTypeExcluded(bucket: CardTypeBucket): boolean {

@@ -89,7 +89,7 @@ export function usePlayerHistoryModeData() {
 	const isEmpty = computed(() => !loading.value && (!config.value.playerId || rows.value.length === 0));
 	const emptyMessage = computed(() => !config.value.playerId ? 'Select a player to show match history.' : 'No matches found for this player.');
 
-	const { pageData } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
+	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'player-history', config, rows });
 
 	function formatOutcome(row: PlayerMatchHistoryEntry) {
 		if (row.outcome === 'bye')
@@ -102,5 +102,5 @@ export function usePlayerHistoryModeData() {
 		return row.resultString ?? 'Result';
 	}
 
-	return { config, loading, error, isEmpty, emptyMessage, headerText, pageData, player, formatOutcome };
+	return { config, loading, error, isEmpty, emptyMessage, headerText, pageData, rowCount, player, formatOutcome };
 }

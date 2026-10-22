@@ -107,7 +107,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;
 
 /** How many grid rows `cardCount` cards fill, in rows of `columns` cards. */
-export function topCardsGridRowCount(cardCount: number, columns: number): number {
+function topCardsGridRowCount(cardCount: number, columns: number): number {
 	return Math.ceil(cardCount / Math.max(1, columns));
 }
 

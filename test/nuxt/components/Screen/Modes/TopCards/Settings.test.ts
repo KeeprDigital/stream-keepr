@@ -1,6 +1,6 @@
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { eventDataResync } from '~/modules/event-data/resync';
@@ -54,6 +54,19 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 		...patch,
 	};
 });
+
+// The Screen's ranking, read as its Screen Output reads it.
+const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
+mockNuxtImport('$fetch', () => mockFetch);
+mockNuxtImport('tryUseRealtime', () => () => null);
+
+/** A ranking of `count` cards, as the server answers it once it has applied the filters. */
+function ranking(count: number) {
+	return {
+		totalDecks: 8,
+		entries: Array.from({ length: count }, (_, index) => ({ id: `card-${index + 1}`, name: `Card ${index + 1}` })),
+	};
+}
 
 // Server time is the Page Rotation's clock.
 mockNuxtImport('useServerTime', () => () => ({
@@ -133,9 +146,10 @@ async function mountComponent() {
 	const componentPath = '../../../../../../app/components/Screen/Modes/TopCards/Settings.vue';
 	const { default: Settings } = await import(componentPath);
 
-	return mount(Settings, {
+	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			// Saved as edited: the Screen reads through its saved configuration.
+			screen: { id: 1, modeConfigs: { 'top-cards': mockConfig.value } } as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
@@ -152,6 +166,8 @@ async function mountComponent() {
 			},
 		},
 	});
+	await flushPromises();
+	return wrapper;
 }
 
 describe('screenTopCardsSettings', () => {
@@ -160,6 +176,8 @@ describe('screenTopCardsSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
+		mockFetch.mockReset();
+		mockFetch.mockResolvedValue(ranking(10));
 	});
 
 	it('renders a filter chip per card-type bucket', async () => {
@@ -237,13 +255,26 @@ describe('screenTopCardsSettings', () => {
 	});
 
 	describe('page rotation', () => {
-		it('counts pages of whole grid rows from the card count and columns', async () => {
+		it('counts pages of whole grid rows from the cards the Screen reads and its columns', async () => {
 			mockConfig.value = { ...mockConfig.value, limit: 12, columns: 5, rowsPerPage: 1 };
+			mockFetch.mockResolvedValue(ranking(12));
 
 			const wrapper = await mountComponent();
 
+			expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());
 			// 12 cards in rows of 5 is 3 grid rows, one per page.
 			expect(wrapper.text()).toContain('Page 1 of 3');
+		});
+
+		it('counts the cards the filters leave, not the configured limit (#780)', async () => {
+			mockConfig.value = { ...mockConfig.value, limit: 12, columns: 5, rowsPerPage: 1, excludedCardTypes: ['Land', 'Creature'] };
+			// Only 7 cards are left once Lands and Creatures are excluded.
+			mockFetch.mockResolvedValue(ranking(7));
+
+			const wrapper = await mountComponent();
+
+			// 7 cards in rows of 5 is 2 grid rows, one per page, as the Screen renders.
+			expect(wrapper.text()).toContain('Page 1 of 2');
 		});
 
 		it('restarts the rotation from page 1 when the rows per page change while it runs', async () => {

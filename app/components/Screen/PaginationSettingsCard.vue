@@ -9,7 +9,8 @@ import type { PageRotationControls } from '~/modules/screen-mode/rotationWrites'
  * which restart the rotation from page 1 on a shape change (ADR-0009).
  *
  * The page count is the rotation's `totalPages`, counted from the row count
- * the editor gives `useRotationConfigWrites`; the card never estimates it.
+ * the editor gives `useRotationConfigWrites` — the rows the Screen Output
+ * renders, from the mode's own data (#780); the card never estimates it.
  */
 const props = defineProps<{
 	/** The mode's Page Rotation, from its editor's `useRotationConfigWrites`. */
