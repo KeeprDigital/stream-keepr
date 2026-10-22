@@ -1,19 +1,28 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
+import type { PositionChange } from '~~/shared/utils/standingsPositionChange';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
+import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
+import { formatPositionChange, positionChange } from '~~/shared/utils/standingsPositionChange';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
  * The Event Data Standings are read from: the roster, the Round they are fixed
- * at and its snapshot, and the watchlist they filter to. Every Player is a
- * row, and Melee syncs rewrite records and snapshots wholesale, so any of them
- * re-reads.
+ * at and its snapshot, the watchlist they filter to, and, while the Position
+ * Change column shows, the previous Round in the Event's Round order. Every
+ * Player is a row, and Melee syncs rewrite records and snapshots wholesale, so
+ * any of them re-reads. Any Round or Phase edit may reorder the Event's Rounds,
+ * so while that column shows, each one re-reads. A new Round holds no Round
+ * Standings until a Melee sync writes them, which re-reads already.
  */
-function standingsDependencies(watchlistId: () => number | null): ScreenModeDependencies<ScreenOutputStandingsResponse> {
+function standingsDependencies(
+	watchlistId: () => number | null,
+	showsPositionChange: () => boolean,
+): ScreenModeDependencies<ScreenOutputStandingsResponse> {
 	const holdsRound = (held: ScreenOutputStandingsResponse, roundId: number) => held.round?.id === roundId;
 	const isWatchlist = (listId: number) => listId === watchlistId();
 
@@ -21,8 +30,10 @@ function standingsDependencies(watchlistId: () => number | null): ScreenModeDepe
 		'player:created': true,
 		'player:updated': true,
 		'player:deleted': true,
-		'round:updated': ({ round }, held) => holdsRound(held, round.id),
-		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId),
+		'round:updated': ({ round }, held) => holdsRound(held, round.id) || showsPositionChange(),
+		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId) || showsPositionChange(),
+		'phase:updated': () => showsPositionChange(),
+		'phase:deleted': () => showsPositionChange(),
 		'playerList:updated': ({ playerList }) => isWatchlist(playerList.id),
 		'playerList:deleted': ({ listId }) => isWatchlist(listId),
 		'playerList:membersChanged': ({ listId }) => isWatchlist(listId),
@@ -41,6 +52,7 @@ export function useStandingsModeData() {
 	const eventStore = useEventStore();
 
 	const selectedWatchlistId = () => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null;
+	const showsPositionChange = () => isColumnVisible(config.value.columns, 'positionChange');
 
 	// ── Data Loading ──
 	/**
@@ -51,12 +63,12 @@ export function useStandingsModeData() {
 	const freshness = useScreenModeFreshness<ScreenOutputStandingsResponse>({
 		eventId,
 		source: () => outputReads.scopeKey.value
-			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}`
+			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}:${showsPositionChange()}`
 			: null,
 		read: () => outputReads.standings(),
-		initialData: { players: [], round: null, roundStandings: null, watchlist: null },
+		initialData: { players: [], round: null, roundStandings: null, watchlist: null, previousRoundPositions: null },
 		errorMessage: 'Failed to load standings data',
-		dependsOn: standingsDependencies(selectedWatchlistId),
+		dependsOn: standingsDependencies(selectedWatchlistId, showsPositionChange),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
@@ -66,6 +78,10 @@ export function useStandingsModeData() {
 	const roundSnapshotMap = computed(() => {
 		const standings = freshness.data.value.roundStandings;
 		return standings ? new Map(standings.map(({ playerId, ...snapshot }) => [playerId, snapshot])) : null;
+	});
+	const previousRoundPositionMap = computed(() => {
+		const previous = freshness.data.value.previousRoundPositions;
+		return previous ? new Map(previous.positions.map(({ playerId, position }) => [playerId, position])) : null;
 	});
 
 	// ── Header ──
@@ -174,6 +190,12 @@ export function useStandingsModeData() {
 		}
 	}
 
+	// ── Position Change ──
+	/** How far a row's Player moved since the previous Round (#755). */
+	function positionChangeOf(player: Player): PositionChange {
+		return positionChange(player.id, player.position, previousRoundPositionMap.value);
+	}
+
 	// ── Cell Formatting ──
 	function formatCell(player: Player, key: StandingsColumnKey): string {
 		const event = eventStore.displayEvent;
@@ -190,6 +212,8 @@ export function useStandingsModeData() {
 			case 'deck': {
 				return getMtgGameData(player.gameData).deckName ?? '-';
 			}
+			case 'positionChange':
+				return formatPositionChange(positionChangeOf(player));
 		}
 	}
 
@@ -227,5 +251,6 @@ export function useStandingsModeData() {
 		prevPage,
 		setPage,
 		formatCell,
+		positionChangeOf,
 	};
 }

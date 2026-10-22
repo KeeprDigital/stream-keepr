@@ -254,7 +254,7 @@ describe('capability-only Screen Output reads', () => {
 
 			expect(current.status).toBe(200);
 			expect(current.data.players.map(player => player.id)).toEqual(expect.arrayContaining([alpha.id, beta.id]));
-			expect(current.data).toMatchObject({ round: null, roundStandings: null, watchlist: null });
+			expect(current.data).toMatchObject({ round: null, roundStandings: null, watchlist: null, previousRoundPositions: null });
 
 			await setModeConfig('standings', { viewMode: 'watchlist', playerListId: list.id, roundId: round.id });
 			const fixed = await asOutput<ScreenOutputStandingsResponse>('standings');
@@ -265,6 +265,25 @@ describe('capability-only Screen Output reads', () => {
 				watchlist: { name: 'Watch', playerIds: [beta.id] },
 			});
 			expect((await asOutput('standings', null)).status).toBe(404);
+		});
+
+		it('measures a Position Change column against nothing when no earlier Round holds Round Standings', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Position Change Swiss' } });
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
+			});
+
+			await setMode('standings');
+			await setModeConfig('standings', {
+				viewMode: 'all',
+				roundId: round.id,
+				columns: [{ key: 'name', visible: true }, { key: 'positionChange', visible: true }],
+			});
+			const read = await asOutput<ScreenOutputStandingsResponse>('standings');
+
+			expect(read.status).toBe(200);
+			expect(read.data).toMatchObject({ round: { id: round.id }, previousRoundPositions: null });
 		});
 	});
 

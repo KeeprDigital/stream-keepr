@@ -57,6 +57,7 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 		{ key: 'record', visible: true },
 		{ key: 'points', visible: true },
 		{ key: 'deck', visible: false },
+		{ key: 'positionChange', visible: false },
 	],
 	showArchetypeColors: false,
 	maxTableWidth: undefined,

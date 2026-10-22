@@ -25,6 +25,10 @@ A Match's game wins and game draws read from one of its Players' side, theirs fi
 **Round Standings**:
 The standings for Players as of a specific Round.
 
+**Position Change**:
+How many positions a Player moved since the previous Round's Round Standings: the nearest earlier Round, in the Event's Round order (Phase sort order, then round number), that holds Round Standings. Current standings stand as the latest Round holding them, so they compare with the one before it. A Player absent from that Round is new; with no such Round, or no position to compare, there is no Position Change. Derived from stored Round Standings, never imported.
+_Avoid_: movement, rank delta.
+
 **Player**:
 A competitor in an Event.
 

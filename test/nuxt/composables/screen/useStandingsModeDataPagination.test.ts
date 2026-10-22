@@ -91,7 +91,7 @@ mockNuxtImport('useServerTime', () => () => ({
 
 /** The Standings Screen Output read's answer; by default, the roster as it stands. */
 function standingsRead(overrides: Record<string, unknown> = {}) {
-	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, ...overrides };
+	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, previousRoundPositions: null, ...overrides };
 }
 
 const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
