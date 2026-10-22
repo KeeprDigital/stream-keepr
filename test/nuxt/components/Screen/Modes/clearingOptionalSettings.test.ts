@@ -37,6 +37,7 @@ const loaded = { isLoaded: true, $reset: vi.fn() };
 mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [{ id: 5, name: 'Ada' }], loadPlayersByEventId: vi.fn() }));
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [{ id: 31, name: 'Round 4' }], loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [{ id: 3, name: 'Top 8', sortOrder: 1 }], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([{ label: 'Table 1', value: 4 }]));
@@ -137,6 +138,10 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 	['HeadToHead', 'head-to-head', { playerSource: 'players' }, [
 		['First Player', 'player1Id', 7],
 		['Second Player', 'player2Id', 8],
+	]],
+	['TopCut', 'topCut', {}, [
+		['Custom header text', 'headerText', 'Championship Bracket'],
+		['Phase', 'phaseId', 3],
 	]],
 ])('the %s settings editor', (editor, mode, variant, fields) => {
 	beforeEach(() => {

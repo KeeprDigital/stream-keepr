@@ -48,10 +48,12 @@ export interface ScreenModeGraphicsHost {
 
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
- * the field names: a Round, a Player, a Player List or a Feature Match Slot by
- * id, or a whole Deck Source, which names a Player or a Broadcast Deck List.
+ * the field names: a Phase, a Round, a Player, a Player List or a Feature Match
+ * Slot by id, or a whole Deck Source, which names a Player or a Broadcast Deck
+ * List.
  */
 interface EventReferenceValues {
+	phase: EntityIdField;
 	round: EntityIdField;
 	player: EntityIdField;
 	playerList: EntityIdField;
@@ -150,7 +152,7 @@ const SCREEN_MODE_DEFINITIONS = {
 	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract, eventReferences: { deckSource: 'deckSource' } },
 	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract, eventReferences: { roundId: 'round', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
-	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: {} },
+	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: { phaseId: 'phase' } },
 	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
