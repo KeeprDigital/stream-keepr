@@ -11,6 +11,7 @@ import {
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
+	pairingsModeConfigSchema,
 	parseModeConfigPatchResult,
 	playerHistoryModeConfigSchema,
 	screenConfigSchema,
@@ -21,7 +22,7 @@ import {
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
 // ──────────────── createScreenSchema ────────────────
@@ -1008,6 +1009,41 @@ describe('topCardsModeConfigSchema', () => {
 
 	it('is strict about unknown keys', () => {
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, pageSize: 10 }).success).toBe(false);
+	});
+});
+
+// ──────────────── Pairings ────────────────
+
+describe('pairingsModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('pairings');
+
+	it('defaults to no Round, the generic header, ten rows a page and no auto-page', () => {
+		expect(defaults).toEqual({
+			roundId: undefined,
+			showHeader: true,
+			headerText: undefined,
+			rowsPerPage: 10,
+			autoPageEnabled: false,
+			autoPageIntervalMs: 10000,
+		});
+		expect(pairingsModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('names its Round by a positive id', () => {
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 31 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 0 }).success).toBe(false);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 1.5 }).success).toBe(false);
+	});
+
+	it('holds rows per page between 1 and 100', () => {
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 1 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 100 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 0 }).success).toBe(false);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 101 }).success).toBe(false);
+	});
+
+	it('takes a cleared Round as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap.pairings.safeParse({ roundId: null }).success).toBe(true);
 	});
 });
 

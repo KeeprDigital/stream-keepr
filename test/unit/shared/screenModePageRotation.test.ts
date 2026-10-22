@@ -25,6 +25,7 @@ describe('screen Mode Page Rotation', () => {
 			'metagame.pageSize',
 			'top-cards.rowsPerPage',
 			'player-history.rowsPerPage',
+			'pairings.rowsPerPage',
 		]);
 	});
 

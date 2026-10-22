@@ -3,6 +3,7 @@ import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import { useElementSize } from '@vueuse/core';
+import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 
 const { screen } = useScreenContext();
 const { config, error, isEmpty, headerText, pageData, player, formatOutcome } = usePlayerHistoryModeData();
@@ -12,9 +13,15 @@ const columnWidths: Record<PlayerHistoryColumnKey, string> = {
 	opponent: 'minmax(16rem, 2fr)',
 	table: 'minmax(7rem, auto)',
 	outcome: 'minmax(8rem, auto)',
+	opponentArchetype: 'minmax(12rem, 1.5fr)',
+	gameScore: 'minmax(6rem, auto)',
 };
 
 const visibleColumns = computed(() => config.value.columns.filter(column => column.visible));
+// A fact with its own column shows there rather than twice: the opponent's deck
+// under their name, and the game score on the outcome badge.
+const showsArchetypeColumn = computed(() => visibleColumns.value.some(column => column.key === 'opponentArchetype'));
+const showsGameScoreColumn = computed(() => visibleColumns.value.some(column => column.key === 'gameScore'));
 const gridStyle = computed(() => ({
 	gridTemplateColumns: visibleColumns.value.map(column => columnWidths[column.key]).join(' '),
 }));
@@ -93,14 +100,8 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 						</div>
 						<div v-else-if="column.key === 'opponent'" class="opponent" :style="primaryTextStyle">
 							<div>vs {{ row.opponentName }}</div>
-							<div v-if="row.opponentDeckName" class="opponent-deck" :style="secondaryTextStyle">
-								{{ row.opponentDeckName }}
-								<MtgManaColorDisplay
-									v-if="row.opponentDeckColors"
-									:colors="row.opponentDeckColors"
-									size="sm"
-									class="inline-flex ml-2 align-middle"
-								/>
+							<div v-if="row.opponentDeckName && !showsArchetypeColumn" class="opponent-deck" :style="secondaryTextStyle">
+								<ScreenModesPlayerHistoryOpponentDeck :name="row.opponentDeckName" :colors="row.opponentDeckColors" />
 							</div>
 						</div>
 						<div v-else-if="column.key === 'table'" class="table" :style="secondaryTextStyle">
@@ -109,8 +110,14 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 						<div v-else-if="column.key === 'outcome'" class="outcome">
 							<span class="outcome-badge" :class="outcomeClass(row.outcome)">
 								<span class="outcome-label">{{ outcomeParts(row).label }}</span>
-								<span v-if="outcomeParts(row).score" class="outcome-score">{{ outcomeParts(row).score }}</span>
+								<span v-if="outcomeParts(row).score && !showsGameScoreColumn" class="outcome-score">{{ outcomeParts(row).score }}</span>
 							</span>
+						</div>
+						<div v-else-if="column.key === 'opponentArchetype'" class="opponent-archetype" :style="secondaryTextStyle">
+							<ScreenModesPlayerHistoryOpponentDeck v-if="row.opponentDeckName" :name="row.opponentDeckName" :colors="row.opponentDeckColors" />
+						</div>
+						<div v-else-if="column.key === 'gameScore'" class="game-score" :style="primaryTextStyle">
+							{{ formatGameScore(row) ?? '' }}
 						</div>
 					</template>
 				</div>
@@ -141,6 +148,15 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 }
 .opponent {
 	font-weight: 800;
+}
+.opponent-archetype {
+	font-weight: 500;
+}
+.game-score {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	font-weight: 800;
+	text-align: right;
 }
 .opponent-deck {
 	font-size: 0.72em;

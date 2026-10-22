@@ -1,10 +1,13 @@
 import type { MatchResponse } from '~~/shared/api';
+import type { MatchSide } from '~~/shared/utils/matchFromPlayerSide';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
+import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
-export interface PlayerMatchHistoryEntry {
+/** One of a Player's Matches, its result read from that Player's side. */
+export interface PlayerMatchHistoryEntry extends MatchSide {
 	id: number;
 	roundId: number;
 	roundName: string;
@@ -15,11 +18,6 @@ export interface PlayerMatchHistoryEntry {
 	opponentName: string;
 	opponentDeckName: string | null;
 	opponentDeckColors: string | null;
-	outcome: 'win' | 'loss' | 'draw' | 'bye' | 'pending';
-	playerGameWins: number | null;
-	opponentGameWins: number | null;
-	gameDraws: number | null;
-	hasResult: boolean;
 	resultString: string | null;
 }
 
@@ -98,8 +96,9 @@ export function usePlayerHistoryModeData() {
 			return 'BYE';
 		if (!row.hasResult)
 			return 'Pending';
-		if (row.playerGameWins != null && row.opponentGameWins != null)
-			return `${row.outcome.toUpperCase()} ${row.playerGameWins}-${row.opponentGameWins}${row.gameDraws ? `-${row.gameDraws}` : ''}`;
+		const score = formatGameScore(row);
+		if (score)
+			return `${row.outcome.toUpperCase()} ${score}`;
 		return row.resultString ?? 'Result';
 	}
 
