@@ -105,7 +105,7 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, or Player History.
+A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, or Pairings.
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.

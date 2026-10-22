@@ -34,6 +34,33 @@ export interface ScreenOutputStandingsResponse {
 	watchlist: { name: string; playerIds: number[] } | null;
 }
 
+/** One side of a Match as Pairings names it: its Player, or the Match's own record of a side no Player holds. */
+export interface ScreenOutputPairingSide {
+	id: number | null;
+	name: string;
+}
+
+/** One Match of a Round, as Pairings lists it. */
+export interface ScreenOutputPairing {
+	matchId: number;
+	tableNumber: number | null;
+	/** `null` for a side no Player and no name fills, such as a bye's second seat. */
+	player1: ScreenOutputPairingSide | null;
+	player2: ScreenOutputPairingSide | null;
+	isBye: boolean;
+	hasResult: boolean;
+	player1GameWins: number | null;
+	player2GameWins: number | null;
+	gameDraws: number | null;
+	resultString: string | null;
+}
+
+/** What a Pairings Screen renders from: its Round, and that Round's Matches in table order. */
+export interface ScreenOutputPairingsResponse {
+	round: RoundResponse;
+	pairings: ScreenOutputPairing[];
+}
+
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */
 export interface ScreenOutputFeatureMatchResponse {
 	slot: FeatureMatchResponse;
