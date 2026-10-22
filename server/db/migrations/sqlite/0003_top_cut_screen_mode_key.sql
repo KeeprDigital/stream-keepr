@@ -3,11 +3,12 @@
 -- and as the root of the owner slots its Top Cut Bracket Background Layers index under.
 UPDATE `screens` SET `current_mode` = 'top-cut' WHERE `current_mode` = 'topCut';
 --> statement-breakpoint
+-- json_insert leaves a `top-cut` config already there, as a Screen write keeps the current key's.
 UPDATE `screens`
-SET `mode_configs` = json_set(
+SET `mode_configs` = json_insert(
 	json_remove(`mode_configs`, '$.topCut'),
 	'$."top-cut"',
-	json(json_extract(`mode_configs`, '$.topCut'))
+	json(`mode_configs` -> '$.topCut')
 )
 WHERE CASE WHEN json_valid(`mode_configs`) THEN json_type(`mode_configs`, '$.topCut') IS NOT NULL ELSE 0 END;
 --> statement-breakpoint

@@ -1,5 +1,7 @@
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { afterEach, describe, expect, it } from 'vitest';
+import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -82,6 +84,11 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 				'standings': { rowsPerPage: 8 },
 			},
 		});
+
+		// Read as every Top Cut Bracket rendering and the Screen Output read do.
+		const { currentMode, modeConfigs } = await readScreen(1);
+		expect(SCREEN_MODE_VALUES).toContain(currentMode);
+		expect(resolveScreenModeConfig(modeConfigs, 'top-cut')).toMatchObject({ phaseId: 4, showHeader: false });
 	});
 
 	it('moves a Top Cut Bracket config held by a Screen in another mode, and leaves Screens without one alone', async () => {
@@ -96,6 +103,16 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		expect(await readScreen(1)).toEqual({ currentMode: 'standings', modeConfigs: { 'top-cut': { phaseId: 4 } } });
 		expect(await readScreen(2)).toEqual({ currentMode: 'top-cards', modeConfigs: { 'top-cards': { columns: 4 } } });
 		expect(await readScreen(3)).toEqual({ currentMode: 'background', modeConfigs: null });
+	});
+
+	it('keeps the top-cut config of a Screen holding both keys, as a Screen write does', async () => {
+		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		await insertEvent();
+		await insertScreen(1, 'topCut', { 'topCut': { phaseId: 4 }, 'top-cut': { phaseId: 5 } });
+
+		await harness.applyRemainingMigrations();
+
+		expect(await readScreen(1)).toEqual({ currentMode: 'top-cut', modeConfigs: { 'top-cut': { phaseId: 5 } } });
 	});
 
 	it('re-roots a Screen\'s Top Cut Bracket Background Layer references, and only those', async () => {

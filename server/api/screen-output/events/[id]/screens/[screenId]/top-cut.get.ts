@@ -3,7 +3,7 @@ import { findPhaseBracket } from '~~/server/services/topCutBracket';
 import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
 
 /**
- * The Top Cut Bracket of the Phase this Screen's Top Cut mode names (#752),
+ * The Top Cut Bracket of the Phase this Screen's Top Cut Bracket mode names (#752),
  * derived from that Phase's Rounds and their Matches. A Screen naming no
  * Phase answers an empty bracket.
  */
