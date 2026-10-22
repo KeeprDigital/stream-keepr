@@ -973,6 +973,9 @@ describe('topCardsModeConfigSchema', () => {
 		cardSize: 'medium' as const,
 		dynamicCardSize: true,
 		cardGap: 12,
+		rowsPerPage: 60,
+		autoPageEnabled: false,
+		autoPageIntervalMs: 10000,
 		showHeader: true,
 		showCardNames: true,
 		showRankBadges: true,
@@ -998,6 +1001,10 @@ describe('topCardsModeConfigSchema', () => {
 
 	it('rejects the stat badge showing an unknown metric', () => {
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, statBadge: 'winRate' }).success).toBe(false);
+	});
+
+	it('rejects a page of more grid rows than the shared page size bound', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, rowsPerPage: 101 }).success).toBe(false);
 	});
 
 	it('is strict about unknown keys', () => {
@@ -1047,6 +1054,7 @@ describe('page rotation config fields', () => {
 		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 		expect(playerHistoryModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 		expect(metagameModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
+		expect(topCardsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 	});
 
 	it('rejects a negative or fractional rotationAnchor', () => {

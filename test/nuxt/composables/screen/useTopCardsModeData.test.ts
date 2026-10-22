@@ -45,6 +45,11 @@ const defaultConfig = {
 	cardSize: 'medium' as const,
 	dynamicCardSize: true,
 	cardGap: 12,
+	rowsPerPage: 60,
+	autoPageEnabled: false,
+	autoPageIntervalMs: 10000,
+	currentPage: undefined as number | undefined,
+	rotationAnchor: undefined as number | undefined,
 	showHeader: true,
 	headerText: undefined as string | undefined,
 	showCardNames: true,
@@ -63,6 +68,19 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
+// Server time is the Page Rotation's clock; synced and controllable here.
+let mockServerNow = 1_000_000;
+mockNuxtImport('useServerTime', () => () => ({
+	isSynced: ref(true),
+	serverTimeOffset: ref(0),
+	getServerTime: () => mockServerNow,
+}));
+
+/** `count` ranked cards, named by their rank. */
+function rankedCards(count: number) {
+	return Array.from({ length: count }, (_, i) => ({ id: i + 1, name: `Card ${i + 1}` }));
+}
+
 const scopes: EffectScope[] = [];
 
 function makeTopCardsModeData() {
@@ -77,6 +95,7 @@ describe('useTopCardsModeData', () => {
 		vi.clearAllMocks();
 		Object.assign(mutableConfig, defaultConfig, { excludedCardTypes: ['Land'] });
 		mockEventId.value = 1;
+		mockServerNow = 1_000_000;
 		mockRealtime.connectionState = 'connected';
 		mockRealtime.tokenError = null;
 		mockFetch.mockResolvedValue({ entries: [], totalDecks: 0, scope: 'all' });
@@ -187,6 +206,60 @@ describe('useTopCardsModeData', () => {
 		await flushPromises();
 
 		expect(emptyMessage.value).toBe('No card data available');
+	});
+
+	describe('page rotation', () => {
+		/** The cards a page shows, as `rank:name`. */
+		function shown(page: { entry: { name: string }; rank: number }[]) {
+			return page.map(({ entry, rank }) => `${rank}:${entry.name}`);
+		}
+
+		it('shows every card on one page when a Screen never set its page size', async () => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(12), totalDecks: 5, scope: 'all' });
+			mutableConfig.columns = 1;
+
+			const { pageEntries, totalPages } = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(totalPages.value).toBe(1);
+			expect(pageEntries.value).toHaveLength(12);
+			expect(shown(pageEntries.value).at(-1)).toBe('12:Card 12');
+		});
+
+		it('pages the grid by whole rows of columns cards, keeping each card\'s overall rank', async () => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(5), totalDecks: 5, scope: 'all' });
+			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 2 });
+
+			const { pageEntries, currentPage, totalPages } = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(totalPages.value).toBe(3);
+			expect(currentPage.value).toBe(2);
+			expect(shown(pageEntries.value)).toEqual(['3:Card 3', '4:Card 4']);
+		});
+
+		it('ends on a partial last page', async () => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(5), totalDecks: 5, scope: 'all' });
+			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 2, currentPage: 2 });
+
+			const { pageEntries, totalPages } = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(totalPages.value).toBe(2);
+			expect(shown(pageEntries.value)).toEqual(['5:Card 5']);
+		});
+
+		it('shows the page projected from the Rotation Anchor while auto-page is on', async () => {
+			mockFetch.mockResolvedValue({ entries: rankedCards(6), totalDecks: 5, scope: 'all' });
+			// 25s into 10s pages: the third page, whatever page was last selected by hand.
+			Object.assign(mutableConfig, { columns: 2, rowsPerPage: 1, currentPage: 1, autoPageEnabled: true, rotationAnchor: mockServerNow - 25_000 });
+
+			const { pageEntries, currentPage } = makeTopCardsModeData();
+			await flushPromises();
+
+			expect(currentPage.value).toBe(3);
+			expect(shown(pageEntries.value)).toEqual(['5:Card 5', '6:Card 6']);
+		});
 	});
 
 	describe('freshness', () => {

@@ -4,12 +4,17 @@ import type { ScreenConfig } from '~~/shared/types/screenConfig';
 
 const { screen } = useScreenContext();
 
-const { config, error, isEmpty, headerText, entries } = useTopCardsModeData();
+const { config, error, isEmpty, headerText, pageEntries, currentPage, totalPages } = useTopCardsModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
 const primaryTextStyle = computed(() => {
 	return screenConfig.value.primaryTextColor
 		? { color: screenConfig.value.primaryTextColor }
+		: {};
+});
+const secondaryTextStyle = computed(() => {
+	return screenConfig.value.secondaryTextColor
+		? { color: screenConfig.value.secondaryTextColor }
 		: {};
 });
 
@@ -86,10 +91,10 @@ function statText(entry: CardBreakdownEntry): string | null {
 				data-testid="top-cards-grid"
 			>
 				<ScreenModesTopCardsCard
-					v-for="(entry, index) in entries"
+					v-for="{ entry, rank } in pageEntries"
 					:key="entry.id"
 					:entry="entry"
-					:rank="index + 1"
+					:rank="rank"
 					:size-class="cardSizeClass"
 					:dynamic-size="config.dynamicCardSize"
 					:show-name="config.showCardNames"
@@ -100,6 +105,15 @@ function statText(entry: CardBreakdownEntry): string | null {
 					:stat-badge-class="statBadgeClass"
 					:stat-badge-style="statBadgeStyle"
 				/>
+			</div>
+
+			<div
+				v-if="totalPages > 1"
+				class="broadcast-table-page-indicator"
+				:style="secondaryTextStyle"
+				data-testid="top-cards-page-indicator"
+			>
+				{{ currentPage }} / {{ totalPages }}
 			</div>
 		</div>
 	</ScreenModeBase>
