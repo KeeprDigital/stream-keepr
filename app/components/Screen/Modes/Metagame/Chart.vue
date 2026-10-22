@@ -6,7 +6,8 @@ import { useElementSize } from '@vueuse/core';
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
  * bars, each labelled with its name, mana colours and share. HTML rather than
  * a canvas chart, so its text takes the Screen's fonts and text colours and
- * stays crisp at any output size.
+ * stays crisp at any output size. Its text colour is the Metagame Display's
+ * `--metagame-primary-text`, set by the Display that hosts it.
  */
 const props = defineProps<{
 	bars: MetagameChartBar[];
@@ -29,9 +30,9 @@ const layoutStyle = computed(() => {
 });
 
 function fillOf(bar: MetagameChartBar): string {
-	return bar.colourSlot == null
+	return bar.colorSlot == null
 		? 'var(--metagame-chart-other)'
-		: `var(--metagame-chart-series-${bar.colourSlot})`;
+		: `var(--metagame-chart-series-${bar.colorSlot})`;
 }
 </script>
 
@@ -44,35 +45,33 @@ function fillOf(bar: MetagameChartBar): string {
 		data-testid="metagame-chart"
 		:style="layoutStyle"
 	>
-		<TransitionGroup name="metagame-row" :css="animate">
-			<div
-				v-for="(bar, index) in bars"
-				:key="bar.id"
-				class="metagame-chart-row"
-				role="listitem"
-				data-testid="metagame-chart-bar"
-				:style="{ '--row-index': index }"
-			>
-				<div class="metagame-chart-label">
-					<span class="metagame-chart-name" data-testid="metagame-chart-name">{{ bar.name }}</span>
-					<MtgManaColorDisplay
-						v-if="bar.colors"
-						:colors="bar.colors"
-						size="sm"
-						class="metagame-chart-mana"
-					/>
-				</div>
-				<div class="metagame-chart-track">
-					<div
-						class="metagame-chart-fill"
-						:class="{ 'is-animated': animate }"
-						data-testid="metagame-chart-fill"
-						:style="{ '--bar-length': bar.length, 'background': fillOf(bar) }"
-					/>
-					<span class="metagame-chart-share" data-testid="metagame-chart-share">{{ bar.metaShare }}%</span>
-				</div>
+		<div
+			v-for="bar in bars"
+			:key="bar.id"
+			class="metagame-chart-row"
+			role="listitem"
+			data-testid="metagame-chart-bar"
+		>
+			<div class="metagame-chart-label">
+				<span class="metagame-chart-name" data-testid="metagame-chart-name">{{ bar.name }}</span>
+				<MtgManaColorDisplay
+					v-if="bar.colors"
+					:colors="bar.colors"
+					size="sm"
+					class="metagame-chart-mana"
+				/>
 			</div>
-		</TransitionGroup>
+			<div class="metagame-chart-track">
+				<!-- A live update grows or shrinks each bar in place when entries animate. -->
+				<div
+					class="metagame-chart-fill"
+					:class="{ 'is-animated': animate }"
+					data-testid="metagame-chart-fill"
+					:style="{ '--bar-length': bar.length, 'background': fillOf(bar) }"
+				/>
+				<span class="metagame-chart-share" data-testid="metagame-chart-share">{{ bar.metaShare }}%</span>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -95,13 +94,12 @@ function fillOf(bar: MetagameChartBar): string {
 	--metagame-chart-other: #898781;
 	--metagame-chart-value-width: 5.5em;
 
-	position: relative;
 	flex: 1 1 0;
 	min-height: 0;
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
-	padding: 0.5rem var(--metagame-row-padding-x, 1rem);
+	padding: 0.5rem 1rem;
 	font-size: var(--metagame-chart-font-size, 1rem);
 }
 
@@ -167,30 +165,5 @@ function fillOf(bar: MetagameChartBar): string {
 .metagame-chart-share {
 	padding-left: 0.5em;
 	font-weight: 700;
-}
-
-.metagame-row-enter-active {
-	transition: all 0.4s ease;
-	transition-delay: calc(var(--row-index) * 0.05s);
-}
-
-.metagame-row-enter-from {
-	opacity: 0;
-	transform: translateX(-20px);
-}
-
-.metagame-row-leave-active {
-	transition: all 0.3s ease;
-	position: absolute;
-	left: 0;
-	right: 0;
-}
-
-.metagame-row-leave-to {
-	opacity: 0;
-}
-
-.metagame-row-move {
-	transition: transform 0.4s ease;
 }
 </style>

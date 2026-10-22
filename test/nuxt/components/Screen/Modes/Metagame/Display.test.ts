@@ -146,9 +146,9 @@ describe('screenMetagameDisplay', () => {
 		beforeEach(() => {
 			config.value = { ...config.value, viewMode: 'chart' };
 			chartBars.value = [
-				{ id: 4, name: 'Boros Energy', colors: 'RW', count: 6, metaShare: 50, length: 1, isOther: false, colourSlot: 4 },
-				{ id: 9, name: 'Eldrazi Ramp', colors: null, count: 4, metaShare: 33.33, length: 0.6666, isOther: false, colourSlot: 1 },
-				{ id: -1, name: 'Other', colors: null, count: 2, metaShare: 16.67, length: 0.3334, isOther: true, colourSlot: null },
+				{ id: 4, name: 'Boros Energy', colors: 'RW', metaShare: 50, length: 1, colorSlot: 4 },
+				{ id: 9, name: 'Eldrazi Ramp', colors: null, metaShare: 33.33, length: 0.6666, colorSlot: 1 },
+				{ id: -1, name: 'Other', colors: null, metaShare: 16.67, length: 0.3334, colorSlot: null },
 			];
 		});
 

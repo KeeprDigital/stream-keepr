@@ -375,7 +375,7 @@ describe('useMetagameModeData', () => {
 
 			expect(headerText.value).toBe('Full Field Metagame');
 			expect(isEmpty.value).toBe(false);
-			expect(chartBars.value.map(bar => [bar.name, bar.metaShare, bar.isOther])).toEqual([
+			expect(chartBars.value.map(bar => [bar.name, bar.metaShare, bar.colorSlot === null])).toEqual([
 				['Boros Energy', 50, false],
 				['Eldrazi Ramp', 33.33, false],
 				['Other', 16.67, true],

@@ -1,5 +1,6 @@
 import type { ArchetypeBreakdownEntry, ArchetypeBreakdownResponse } from '~~/shared/types/metagame';
 import { describe, expect, it } from 'vitest';
+import { OTHER_ARCHETYPE_ID } from '~~/shared/types/metagame';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { METAGAME_CHART_MAX_ARCHETYPES, projectMetagameChart } from '~~/shared/utils/metagameChart';
 import { metagameScreenQuery } from '~~/shared/utils/metagameQuery';
@@ -54,8 +55,8 @@ describe('projectMetagameChart', () => {
 			entry(-1, 'Other', 4, { metaShare: 40 }),
 		], 10));
 
-		expect(bars.at(-1)).toMatchObject({ name: 'Other', isOther: true, colourSlot: null, metaShare: 40 });
-		expect(bars[0]).toMatchObject({ isOther: false });
+		expect(bars.at(-1)).toMatchObject({ id: OTHER_ARCHETYPE_ID, name: 'Other', colorSlot: null, metaShare: 40 });
+		expect(bars[0]!.colorSlot).not.toBeNull();
 	});
 
 	it(`folds archetypes past the ${METAGAME_CHART_MAX_ARCHETYPES}th into Other, with the server's Other`, () => {
@@ -65,12 +66,12 @@ describe('projectMetagameChart', () => {
 		expect(bars).toHaveLength(METAGAME_CHART_MAX_ARCHETYPES + 1);
 		expect(bars.slice(0, -1).map(bar => bar.name)).toEqual(named.slice(0, 8).map(item => item.name));
 		// Archetypes 9 and 10 (one Player each) join the server's Other (two Players): 4 of 12.
-		expect(bars.at(-1)).toMatchObject({ name: 'Other', isOther: true, count: 4, metaShare: 33.33, colourSlot: null });
+		expect(bars.at(-1)).toMatchObject({ id: OTHER_ARCHETYPE_ID, name: 'Other', metaShare: 33.33, colorSlot: null });
 	});
 
 	it('gives every archetype on the chart a distinct colour', () => {
 		const named = Array.from({ length: 8 }, (_, index) => entry((index + 1) * 8, `Archetype ${index}`, 1));
-		const slots = projectMetagameChart(breakdown(named, 8)).map(bar => bar.colourSlot);
+		const slots = projectMetagameChart(breakdown(named, 8)).map(bar => bar.colorSlot);
 
 		expect(new Set(slots).size).toBe(8);
 		expect(slots.every(slot => slot != null && slot >= 1 && slot <= METAGAME_CHART_MAX_ARCHETYPES)).toBe(true);
@@ -88,7 +89,7 @@ describe('projectMetagameChart', () => {
 			entry(7, 'Eldrazi Ramp', 2),
 		], 10));
 
-		const slotsOf = (bars: typeof first) => Object.fromEntries(bars.map(bar => [bar.name, bar.colourSlot]));
+		const slotsOf = (bars: typeof first) => Object.fromEntries(bars.map(bar => [bar.name, bar.colorSlot]));
 		expect(slotsOf(reordered)).toEqual(slotsOf(first));
 	});
 
@@ -103,10 +104,27 @@ describe('projectMetagameChart', () => {
 			entry(12, 'Domain Zoo', 2),
 		], 7));
 
-		expect(after.find(bar => bar.name === 'Domain Zoo')?.colourSlot)
-			.toBe(before.find(bar => bar.name === 'Domain Zoo')?.colourSlot);
-		expect(after.find(bar => bar.name === 'Boros Energy')?.colourSlot)
-			.toBe(before.find(bar => bar.name === 'Boros Energy')?.colourSlot);
+		expect(after.find(bar => bar.name === 'Domain Zoo')?.colorSlot)
+			.toBe(before.find(bar => bar.name === 'Domain Zoo')?.colorSlot);
+		expect(after.find(bar => bar.name === 'Boros Energy')?.colorSlot)
+			.toBe(before.find(bar => bar.name === 'Boros Energy')?.colorSlot);
+	});
+
+	it('moves only the archetype sharing a leaving archetype\'s preferred colour', () => {
+		// Ids 1 and 9 both prefer slot 1; 9 yields to 1, and takes it back once 1 leaves.
+		const before = projectMetagameChart(breakdown([
+			entry(1, 'Boros Energy', 5),
+			entry(9, 'Eldrazi Ramp', 3),
+			entry(4, 'Domain Zoo', 2),
+		], 10));
+		const after = projectMetagameChart(breakdown([
+			entry(9, 'Eldrazi Ramp', 3),
+			entry(4, 'Domain Zoo', 2),
+		], 5));
+
+		const slotsOf = (bars: typeof before) => Object.fromEntries(bars.map(bar => [bar.name, bar.colorSlot]));
+		expect(slotsOf(before)).toEqual({ 'Boros Energy': 1, 'Eldrazi Ramp': 2, 'Domain Zoo': 4 });
+		expect(slotsOf(after)).toEqual({ 'Eldrazi Ramp': 1, 'Domain Zoo': 4 });
 	});
 
 	it('draws nothing for an empty breakdown', () => {
