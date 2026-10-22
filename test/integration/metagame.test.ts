@@ -520,9 +520,20 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 			status: 200,
 			data: {
 				viewMode: 'archetype',
-				breakdown: await $fetch(`/api/events/${eventId}/metagame/archetypes`, { query: { scope: 'all', sortBy: 'metaShare', limit: 5 } }),
+				breakdown: await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+					query: { scope: 'all', sortBy: 'metaShare', limit: 5, conversionMetric: 'topN', conversionThreshold: 8 },
+				}),
 			},
 		});
 		expect(limited.data.breakdown.entries).toHaveLength(6);
+
+		// The Conversion Rate column reads what the Metagame page shows for the same scope and target.
+		await configure({ archetypeLimit: null, conversionMetric: 'minPoints', conversionThreshold: 3 });
+		const converted = await outputBreakdown();
+		const page = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+			query: { scope: 'all', sortBy: 'metaShare', conversionMetric: 'minPoints', conversionThreshold: 3 },
+		});
+		expect(converted.data.breakdown).toEqual(page);
+		expect(page.entries.some(entry => entry.conversionRate != null)).toBe(true);
 	});
 });

@@ -930,23 +930,34 @@ describe('metagameModeConfigSchema', () => {
 		headerText: 'Full Field Metagame',
 		animateEntries: true,
 	};
+	const conversionTarget = { conversionMetric: 'topN' as const, conversionThreshold: 8 };
 
 	it('accepts valid metagame config with column arrays', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 9 });
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9 });
 		expect(result.success).toBe(true);
 	});
 
-	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
+	it('saves a stored config predating minPoints, archetypeLimit and Conversion Rate as it is, and reads them with their defaults', () => {
 		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
 
 		const resolved = resolveScreenModeConfig({ metagame: validConfig } as ModeConfigsMap, 'metagame');
 
 		expect(resolved.minPoints).toBe(9);
 		expect(resolved.archetypeLimit).toBeNull();
+		expect(resolved).toMatchObject(conversionTarget);
+		expect(resolved.archetypeColumns).toEqual(validConfig.archetypeColumns);
+	});
+
+	it('accepts a Conversion Rate column and refuses a conversion threshold out of bounds', () => {
+		const archetypeColumns = [...validConfig.archetypeColumns, { key: 'conversionRate', visible: true }];
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 }))
+			.toEqual({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 });
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ conversionThreshold: 1000 }).success).toBe(false);
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ conversionMetric: 'cashRate' }).success).toBe(false);
 	});
 
 	it('accepts the minPoints scope with explicit minPoints', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, scope: 'minPoints', minPoints: 12 });
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, scope: 'minPoints', minPoints: 12 });
 		expect(result.success).toBe(true);
 		if (result.success)
 			expect(result.data.minPoints).toBe(12);

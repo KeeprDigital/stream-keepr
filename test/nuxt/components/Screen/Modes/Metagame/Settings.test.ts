@@ -213,8 +213,55 @@ describe('screenMetagameSettings', () => {
 				{ key: 'winRate', visible: true },
 				{ key: 'avgPlace', visible: false },
 				{ key: 'colors', visible: true },
+				{ key: 'conversionRate', visible: false },
 			],
 		});
+	});
+
+	it('offers a Conversion Rate column to a column list saved before it existed, hidden at the end', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.findAll('[data-testid="column-label"]').map(label => label.text()))
+			.toEqual(['Archetype', 'Count', 'Share', 'Win Rate', 'Avg Place', 'Colors', 'Conversion Rate']);
+
+		await wrapper.findAll('[data-testid="u-switch"]')[6]!.trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({
+			archetypeColumns: [
+				...defaultConfig.archetypeColumns,
+				{ key: 'conversionRate', visible: true },
+			],
+		});
+	});
+
+	it('asks for the conversion target only while the Conversion Rate column shows, and persists it', async () => {
+		const hidden = await mountComponent();
+		await flushPromises();
+		expect(hidden.text()).not.toContain('Conversion target');
+		hidden.unmount();
+
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			archetypeColumns: [...defaultConfig.archetypeColumns, { key: 'conversionRate', visible: true }],
+			conversionMetric: 'topN',
+			conversionThreshold: 8,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const fields = wrapper.findAll('[data-testid="form-field"]');
+		const target = fields.find(field => field.text().includes('Conversion target'))!;
+		expect(target.text()).toContain('Top N placement|Minimum points');
+		target.getComponent(USelectStub).vm.$emit('update:modelValue', 'minPoints');
+
+		const threshold = fields.find(field => field.text().includes('Conversion threshold'))!;
+		expect(threshold.getComponent(UInputNumberStub).props('modelValue')).toBe(8);
+		threshold.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 15);
+		await nextTick();
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ conversionMetric: 'minPoints' });
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ conversionThreshold: 15 });
 	});
 
 	it('offers the Minimum Points player scope', async () => {

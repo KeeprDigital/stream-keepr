@@ -3,6 +3,7 @@ import type {
 	MetagameArchetypeColumnKey,
 	MetagameCardColumnKey,
 	MetagameCardSortBy,
+	MetagameConversionMetric,
 	MetagameScope,
 	MetagameSortBy,
 	MetagameViewMode,
@@ -12,6 +13,7 @@ import type {
 	MetagameCardColumnConfig,
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -80,6 +82,11 @@ const playerListOptions = computed(() => [
 	})),
 ]);
 
+const conversionMetricOptions = [
+	{ label: 'Top N placement', value: 'topN' },
+	{ label: 'Minimum points', value: 'minPoints' },
+];
+
 const sortByOptions = [
 	{ label: 'Meta Share', value: 'metaShare' },
 	{ label: 'Count', value: 'count' },
@@ -101,6 +108,7 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 	winRate: 'Win Rate',
 	avgPlace: 'Avg Place',
 	colors: 'Colors',
+	conversionRate: 'Conversion Rate',
 	card: 'Card',
 	manaCost: 'Cost',
 	type: 'Type',
@@ -112,10 +120,16 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 	sideboardCount: 'Side',
 };
 
+const { defaults } = screenModeConfigContract('metagame');
+
 const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 	config.value.viewMode === 'cards'
-		? config.value.cardColumns
-		: config.value.archetypeColumns,
+		? withEveryColumn(config.value.cardColumns, defaults.cardColumns)
+		: withEveryColumn(config.value.archetypeColumns, defaults.archetypeColumns),
+);
+
+const showsConversionRate = computed(() =>
+	config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
 );
 
 const estimatedRowCount = computed(() => {
@@ -267,6 +281,35 @@ function updateArchetypeLimit(value: number | null | undefined) {
 						@update:model-value="updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
 					/>
 				</UFormField>
+
+				<template v-if="showsConversionRate">
+					<UFormField
+						:label="fields.conversionMetric.label"
+						description="What a player in the scope must reach to count as converted. It never narrows the scope."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<USelect
+							:model-value="config.conversionMetric"
+							:items="conversionMetricOptions"
+							class="w-48"
+							@update:model-value="updateConfig({ conversionMetric: $event as MetagameConversionMetric })"
+						/>
+					</UFormField>
+
+					<UFormField
+						:label="fields.conversionThreshold.label"
+						:description="config.conversionMetric === 'topN' ? 'Converted at this placement or better.' : 'Converted at this many match points or more.'"
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="config.conversionThreshold"
+							:min="fields.conversionThreshold.min"
+							:max="fields.conversionThreshold.max"
+							class="w-32"
+							@update:model-value="updateConfig({ conversionThreshold: Number($event) })"
+						/>
+					</UFormField>
+				</template>
 
 				<UFormField
 					:label="fields.archetypeLimit.label"

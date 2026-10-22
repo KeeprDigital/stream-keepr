@@ -14,6 +14,23 @@ export function columnConfigSchema<const Keys extends readonly [string, ...strin
 	}).strict();
 }
 
+/**
+ * A stored column list as its editor offers it: every column the mode's defaults
+ * name that the list lacks is appended, hidden. A list saved before a column
+ * existed renders without it, since it is not stored, so the editor offers it
+ * hidden too, and the operator's first show, hide or reorder stores it.
+ */
+export function withEveryColumn<Column extends { key: string; visible: boolean }>(
+	columns: readonly Column[],
+	defaults: readonly Column[],
+): Column[] {
+	const stored = new Set(columns.map(column => column.key));
+	return [
+		...columns,
+		...defaults.filter(column => !stored.has(column.key)).map(column => ({ ...column, visible: false })),
+	];
+}
+
 /** The optional header above a mode's content. */
 export const headerConfigShape = {
 	showHeader: editorField(z.boolean(), { label: 'Show header' }),
