@@ -65,12 +65,13 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 			{ viewMode: 'reveal', autoPageEnabled: true, columns: [{ key: 'deck', visible: true }] },
 		],
 	},
-	// Each scope's and each view's settings.
+	// Each scope's and each view's settings, and the conversion target a shown Conversion Rate column asks for.
 	'metagame': {
 		editor: 'Metagame',
 		variants: [
 			{ scope: 'topN', autoPageEnabled: true },
 			{ scope: 'minPoints', viewMode: 'cards' },
+			{ archetypeColumns: [{ key: 'archetype', visible: true }, { key: 'conversionRate', visible: true }] },
 		],
 	},
 	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },

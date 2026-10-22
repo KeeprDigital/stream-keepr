@@ -132,6 +132,8 @@ export function metagameScreenQuery(config: MetagameModeConfig) {
 				query: buildArchetypeBreakdownQuery(scope, {
 					sortBy: config.sortBy,
 					limit: config.archetypeLimit ?? undefined,
+					conversionMetric: config.conversionMetric,
+					conversionThreshold: config.conversionThreshold,
 				}),
 			};
 }

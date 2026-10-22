@@ -230,7 +230,7 @@ describe('default config constants', () => {
 		expect(getDefaultConfigForMode('metagame').scope).toBe('all');
 	});
 
-	it('default metagame config includes archetype columns with colors off by default', () => {
+	it('default metagame config includes archetype columns with colors and Conversion Rate off by default', () => {
 		expect(getDefaultConfigForMode('metagame').archetypeColumns).toEqual([
 			{ key: 'archetype', visible: true },
 			{ key: 'count', visible: true },
@@ -238,7 +238,14 @@ describe('default config constants', () => {
 			{ key: 'winRate', visible: true },
 			{ key: 'avgPlace', visible: false },
 			{ key: 'colors', visible: false },
+			{ key: 'conversionRate', visible: false },
 		]);
+	});
+
+	it('default metagame Conversion Rate target is a Top 8 placement, as on the Metagame page', () => {
+		const config = getDefaultConfigForMode('metagame');
+		expect({ metric: config.conversionMetric, threshold: config.conversionThreshold })
+			.toEqual({ metric: 'topN', threshold: 8 });
 	});
 
 	it('default metagame config includes card columns with main and side visible', () => {
