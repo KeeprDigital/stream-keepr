@@ -14,7 +14,7 @@ import {
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
-import { CANVAS_SELECTION, editorSelectionExists, editorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
+import { CANVAS_SELECTION, editorSelectionExists, editorSelectionFrame, editorSelectionLabel } from '~/modules/feature-match-overlay/editorSelection';
 import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { nudgeRect } from '~/modules/graphics/canvasManipulation';
 
@@ -23,6 +23,9 @@ interface LayoutSnapshot {
 	layout: FeatureMatchOverlayModeConfig['layout'];
 	presetId: FeatureMatchOverlayModeConfig['presetId'];
 }
+
+/** The fields every layer has, Source Item and Graphic Item alike. */
+type LayerPatch = Partial<GraphicRect> & { label?: string; visible?: boolean };
 
 export interface FeatureMatchLayoutEditOptions {
 	/**
@@ -248,43 +251,37 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		return true;
 	}
 
-	function toggleVisible(target: FeatureMatchLayoutEditorSelection = selection.value) {
-		const visible = !isVisible(target);
+	/**
+	 * Patch what a Source Item and a Graphic Item both have, through each kind's
+	 * own write: the Source Item list's, or the composition's.
+	 */
+	function patchLayer(target: FeatureMatchLayoutEditorSelection, patch: LayerPatch, editOptions: FeatureMatchLayoutEditOptions = {}) {
 		if (target.type === 'source')
-			editLayout(layout => layoutWriter.patchSource(layout, target.itemId, { visible }));
+			editLayout(layout => layoutWriter.patchSource(layout, target.itemId, patch), editOptions);
 		else if (target.type === 'item')
-			editComposition(composition => patchGraphicItem(composition, target.itemId, { visible }));
+			editComposition(composition => patchGraphicItem(composition, target.itemId, patch), editOptions);
 	}
 
-	function labelOf(target: FeatureMatchLayoutEditorSelection): string | undefined {
-		if (target.type === 'source')
-			return config.value.layout.sources.find(item => item.id === target.itemId)?.label;
-		if (target.type === 'item')
-			return findGraphicItem(config.value.layout.composition, target.itemId)?.item.label;
-		return undefined;
+	function toggleVisible(target: FeatureMatchLayoutEditorSelection = selection.value) {
+		patchLayer(target, { visible: !isVisible(target) });
 	}
 
 	/**
-	 * Rename a layer as one undo step, through the same writes as its property
-	 * panel's name field. The name is trimmed; a blank one, or the name it already
-	 * has, writes nothing. Answers whether it renamed.
+	 * Rename a layer as one undo step of its own, through the writes its property
+	 * panel's name field uses. Unlike that field, which writes as the author types,
+	 * this takes a finished name: trimmed, and a blank one, or the name the layer
+	 * already has, writes nothing.
 	 */
-	function rename(target: FeatureMatchLayoutEditorSelection, name: string): boolean {
+	function rename(target: FeatureMatchLayoutEditorSelection, name: string) {
 		const label = name.trim();
-		const current = labelOf(target);
-		if (target.type === 'canvas' || label === '' || current === undefined || label === current)
-			return false;
-		if (target.type === 'source')
-			return editLayout(layout => layoutWriter.patchSource(layout, target.itemId, { label }));
-		return editComposition(composition => patchGraphicItem(composition, target.itemId, { label }));
+		const current = editorSelectionLabel(config.value.layout, target);
+		if (label !== '' && current !== undefined && label !== current)
+			patchLayer(target, { label });
 	}
 
 	/** Set a layer's stored rectangle, as the canvas moves or resizes it. */
 	function setRect(target: FeatureMatchLayoutEditorSelection, rect: GraphicRect, editOptions: FeatureMatchLayoutEditOptions = {}) {
-		if (target.type === 'source')
-			editLayout(layout => layoutWriter.patchSource(layout, target.itemId, rect), editOptions);
-		else if (target.type === 'item')
-			editComposition(composition => patchGraphicItem(composition, target.itemId, rect), editOptions);
+		patchLayer(target, rect, editOptions);
 	}
 
 	function nudge(delta: { x: number; y: number }) {

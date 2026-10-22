@@ -206,39 +206,75 @@ function startRename(row: LayerRow) {
 	});
 }
 
-/**
- * End the rename, writing the typed name or not. Either way the row is a button
- * again; after Enter or Escape focus goes back to it, but not after a blur, which
- * already put focus wherever the author went.
- */
-function finishRename(commit: boolean, refocus: boolean) {
+/** End the rename, the row a button again. Answers the row it ended, if any. */
+function endRename(): LayerRow | null {
 	const row = renaming.value;
-	if (!row)
-		return;
 	renaming.value = null;
-	if (commit)
-		props.editor.rename(row.target, draft.value);
-	if (refocus) {
-		void nextTick(() => {
-			rowElements.get(row.key)?.querySelector<HTMLElement>('[data-testid="layer-select"]')?.focus();
-		});
-	}
+	return row;
 }
 
-/** Rows are buttons, so Enter selects; Enter on the row already selected, or F2, renames it. */
+function refocusRow(row: LayerRow) {
+	void nextTick(() => {
+		rowElements.get(row.key)?.querySelector<HTMLElement>('[data-testid="layer-select"]')?.focus();
+	});
+}
+
+/**
+ * Write the typed name. After Enter focus goes back to the row; after a blur it
+ * stays wherever the author went.
+ */
+function commitRename(options: { refocus: boolean }) {
+	const row = endRename();
+	if (!row)
+		return;
+	props.editor.rename(row.target, draft.value);
+	if (options.refocus)
+		refocusRow(row);
+}
+
+function cancelRename() {
+	const row = endRename();
+	if (row)
+		refocusRow(row);
+}
+
+/** A row that leaves the list mid-rename takes its rename with it. */
+watch(() => [...itemRows.value, ...sourceRows.value].map(row => row.key), (keys) => {
+	if (renaming.value && !keys.includes(renaming.value.key))
+		endRename();
+});
+
+/**
+ * Rows are buttons, so Enter selects; Enter on the row already selected, or F2,
+ * renames it. A held Enter repeats, and its repeats are not a second press.
+ */
 function rowKeydown(event: KeyboardEvent, row: LayerRow) {
+	if (event.repeat)
+		return;
 	if (event.key === 'F2' || (event.key === 'Enter' && row.key === selectedKey.value)) {
 		event.preventDefault();
 		startRename(row);
 	}
 }
 
-/** Every key typed into the name stays there, out of the editor's canvas shortcuts. */
+/**
+ * Every key typed into the name stays there. The editor's canvas shortcuts
+ * already pass over a key typed into an input, so this is belt and braces:
+ * Escape here must cancel the rename, never also select the canvas.
+ *
+ * The Enter that confirms an input method's composition is not the author's.
+ */
 function renameKeydown(event: KeyboardEvent) {
 	event.stopPropagation();
-	if (event.key === 'Enter' || event.key === 'Escape') {
+	if (event.isComposing)
+		return;
+	if (event.key === 'Enter') {
 		event.preventDefault();
-		finishRename(event.key === 'Enter', true);
+		commitRename({ refocus: true });
+	}
+	else if (event.key === 'Escape') {
+		event.preventDefault();
+		cancelRename();
 	}
 }
 </script>
@@ -301,7 +337,7 @@ function renameKeydown(event: KeyboardEvent) {
 							:aria-label="`Rename ${row.label}`"
 							data-testid="layer-rename"
 							@keydown="renameKeydown"
-							@blur="finishRename(true, false)"
+							@blur="commitRename({ refocus: false })"
 						>
 					</div>
 					<button

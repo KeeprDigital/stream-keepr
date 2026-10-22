@@ -166,18 +166,47 @@ describe('featureMatchOverlayLayerList', () => {
 			expect(editor.canUndo.value).toBe(false);
 		});
 
-		it('renames a Source Item from F2 on its row', async () => {
-			const { wrapper, config, sync } = await mountList();
+		it('renames a Source Item from F2 on its row, committing on blur, as one undo step', async () => {
+			const { wrapper, config, editor, sync } = await mountList();
 			const source = config.value.layout.sources[0]!;
 			const row = `[data-layer-key="source:${source.id}"]`;
 
 			await wrapper.get(`${row} [data-testid="layer-select"]`).trigger('keydown', { key: 'F2' });
 			const input = wrapper.get(`${row} [data-testid="layer-rename"]`);
-			await input.setValue('Player 1 camera');
+			await input.setValue('Player 1 feed');
 			await input.trigger('blur');
 			await sync();
 
-			expect(config.value.layout.sources[0]!.label).toBe('Player 1 camera');
+			expect(config.value.layout.sources[0]!.label).toBe('Player 1 feed');
+			editor.undo();
+			expect(config.value.layout.sources[0]!.label).toBe(source.label);
+			expect(editor.canUndo.value).toBe(false);
+		});
+
+		it('waits out an input method\'s composition before Enter commits', async () => {
+			const { wrapper, config } = await mountList();
+			const before = itemLabel(config, 'back');
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			const input = wrapper.get('[data-testid="layer-rename"]');
+			await input.setValue('ロゴ');
+			await input.trigger('keydown', { key: 'Enter', isComposing: true });
+
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(true);
+			expect(itemLabel(config, 'back')).toBe(before);
+		});
+
+		it('drops a rename whose row leaves the list, so the row comes back as a button', async () => {
+			const { wrapper, editor, sync } = await mountList();
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			editor.remove({ type: 'item', itemId: 'back' });
+			await sync();
+			editor.undo();
+			await sync();
+
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			expect(wrapper.find('[data-layer-key="item:back"] [data-testid="layer-select"]').exists()).toBe(true);
 		});
 
 		it('selects on Enter, and renames on Enter once the row is selected', async () => {
@@ -203,6 +232,7 @@ describe('featureMatchOverlayLayerList', () => {
 			await wrapper.get('[data-testid="layer-rename"]').setValue('Discarded');
 			await wrapper.get('[data-testid="layer-rename"]').trigger('keydown', { key: 'Escape' });
 			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			expect(itemLabel(config, 'back')).toBe(before);
 
 			await wrapper.get(button).trigger('dblclick');
 			await wrapper.get('[data-testid="layer-rename"]').setValue('   ');
