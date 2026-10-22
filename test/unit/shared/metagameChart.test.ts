@@ -133,18 +133,20 @@ describe('projectMetagameChart', () => {
 });
 
 describe('metagameScreenQuery for the chart display', () => {
-	it('reads the archetype table\'s breakdown: the same scope, sort and Top archetypes limit', () => {
+	it('reads the archetype table\'s breakdown: the same scope, sort, Top archetypes limit and conversion target', () => {
 		const config = {
 			...getDefaultConfigForMode('metagame'),
 			scope: 'topN' as const,
 			topN: 16,
 			sortBy: 'count' as const,
 			archetypeLimit: 5,
+			conversionMetric: 'minPoints' as const,
+			conversionThreshold: 12,
 		};
 
 		expect(metagameScreenQuery({ ...config, viewMode: 'chart' })).toEqual({
 			viewMode: 'archetype',
-			query: { scope: 'topN', topN: 16, sortBy: 'count', limit: 5 },
+			query: { scope: 'topN', topN: 16, sortBy: 'count', limit: 5, conversionMetric: 'minPoints', conversionThreshold: 12 },
 		});
 		expect(metagameScreenQuery({ ...config, viewMode: 'chart' }))
 			.toEqual(metagameScreenQuery({ ...config, viewMode: 'archetype' }));
