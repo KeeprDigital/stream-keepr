@@ -10,8 +10,14 @@ export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
-export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'topCut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
-/** Where a Head-to-head Screen takes its two Players from (#760). */
+export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'top-cut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
+/**
+ * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).
+ * A migration moved stored Screens; a Screen write accepts the former key from a
+ * client built before the rename and stores the current one.
+ */
+export const FORMER_SCREEN_MODE_KEYS: Readonly<Record<string, ScreenMode>> = { topCut: 'top-cut' };
+/** Where a Head-to-Head Screen takes its two Players from (#760). */
 export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players'] as const;
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup'] as const;

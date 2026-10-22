@@ -288,7 +288,7 @@ describe('capability-only Screen Output reads', () => {
 		});
 	});
 
-	describe('metagame and Top Cards', () => {
+	describe('metagame and Most Played Cards', () => {
 		it('reads the breakdown the saved Metagame view renders, following a change of view', async () => {
 			await setMode('metagame');
 			await setModeConfig('metagame', { viewMode: 'archetype', scope: 'all' });
@@ -304,7 +304,7 @@ describe('capability-only Screen Output reads', () => {
 			expect(cards).toEqual({ status: 200, data: { viewMode: 'cards', breakdown: operatorCards } });
 		});
 
-		it('reads the card breakdown the saved Top Cards configuration renders', async () => {
+		it('reads the card breakdown the saved Most Played Cards configuration renders', async () => {
 			await setMode('top-cards');
 			await setModeConfig('top-cards', { scope: 'all', limit: 5 });
 			const { status, data } = await asOutput('top-cards');
@@ -359,7 +359,7 @@ describe('capability-only Screen Output reads', () => {
 	});
 
 	describe('deck', () => {
-		it('reads the selected Player\'s decks only while the Deck mode selects them', async () => {
+		it('reads the selected Player\'s decks only while the Deck List mode selects them', async () => {
 			const selected = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name: 'Deck Player' } });
 			const deck = await outputScreen('deck');
 
@@ -488,7 +488,7 @@ describe('capability-only Screen Output reads', () => {
 				method: 'POST',
 				body: { roundId: round.id, tableNumber: 2, player1Data: { name: 'Cara' }, player2Data: { name: 'Dan' } },
 			});
-			const topCut = await outputScreen('topCut');
+			const topCut = await outputScreen('top-cut');
 
 			const unconfigured = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(unconfigured.status).toBe(200);
@@ -533,7 +533,7 @@ describe('capability-only Screen Output reads', () => {
 			});
 			try {
 				const foreignPhase = await $fetch<{ id: number }>(`/api/events/${otherEvent.id}/phases`, { method: 'POST', body: { name: 'Foreign Top 8' } });
-				const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}/config/topCut`, {
+				const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}/config/top-cut`, {
 					method: 'PATCH',
 					body: { phaseId: foreignPhase.id },
 				});

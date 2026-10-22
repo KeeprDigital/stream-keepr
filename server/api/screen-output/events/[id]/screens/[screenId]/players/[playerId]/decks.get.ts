@@ -15,7 +15,7 @@ const querySchema = z.object({
 });
 
 /**
- * A Player this Screen renders, with their decks (#604): the Deck mode's
+ * A Player this Screen renders, with their decks (#604): the Deck List mode's
  * selected Player, or a side of the Feature Match Slot the Screen shows.
  *
  * A capability reaches no other Player, so it cannot read the Event's

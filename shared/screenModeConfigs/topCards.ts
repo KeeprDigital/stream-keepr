@@ -16,17 +16,17 @@ import { DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRo
 /** A badge colour: any CSS colour, as the server's other colour fields take. */
 const optionalCssColorSchema = z.string().min(1).max(500).optional();
 
-/** The most cards a Top Cards Screen ranks. */
+/** The most cards a Most Played Cards Screen ranks. */
 const TOP_CARDS_MAX_LIMIT = 60;
 
 /**
- * The most grid rows a Top Cards grid can have: every card a Screen can rank,
+ * The most grid rows a Most Played Cards grid can have: every card a Screen can rank,
  * in one column. As the default page size, it holds any grid on one page.
  */
 const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
 
 /**
- * The Top Cards Screen Mode's config contract: a ranked grid of the most played
+ * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
  * renders a deck. Scoping reuses the Metagame vocabulary; `excludedCardTypes` is
  * applied server-side before `limit`, so a filtered top N still fills N slots.

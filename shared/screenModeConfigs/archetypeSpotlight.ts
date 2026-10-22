@@ -50,7 +50,7 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 	conversionThreshold: 8,
 	board: 'full',
 	cardLimit: 8,
-	// Nonbasic lands read as noise among an Archetype's signature cards, as on Top Cards.
+	// Nonbasic lands read as noise among an Archetype's signature cards, as on Most Played Cards.
 	excludedCardTypes: ['Land'],
 	...DEFAULT_HEADER_CONFIG,
 	rowsPerPage: 8,

@@ -41,7 +41,7 @@ const stats = computed(() => {
 	];
 });
 
-// Top Cards' default stat badge, so a card's inclusion rate reads the same on
+// Most Played Cards' default stat badge, so a card's inclusion rate reads the same on
 // both Screens. Cards carry no rank badge here: their order is the ranking.
 const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 </script>
