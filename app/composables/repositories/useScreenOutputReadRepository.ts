@@ -7,6 +7,7 @@ import type {
 	ScreenOutputPairingsResponse,
 	ScreenOutputPlayerDecksResponse,
 	ScreenOutputStandingsResponse,
+	ScreenOutputTopCutResponse,
 } from '~~/shared/types/screenOutputReads';
 import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
@@ -49,6 +50,7 @@ export function useScreenOutputReadRepository() {
 		pairings: (scope: ScreenOutputReadScope) => read<ScreenOutputPairingsResponse>(scope, 'pairings'),
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
+		topCut: (scope: ScreenOutputReadScope) => read<ScreenOutputTopCutResponse>(scope, 'top-cut'),
 		featureMatchSlot: (scope: ScreenOutputReadScope, slotId: number) =>
 			read<ScreenOutputFeatureMatchResponse>(scope, `feature-match-slots/${slotId}`),
 		playerDecks: (scope: ScreenOutputReadScope, playerId: number, selection: { deckId?: number } = {}) =>

@@ -204,6 +204,7 @@ describe('the public surface, counted against the routes on disk', () => {
 			'server/api/screen-output/events/[id]/screens/[screenId]/players/[playerId]/decks.get.ts',
 			'server/api/screen-output/events/[id]/screens/[screenId]/standings.get.ts',
 			'server/api/screen-output/events/[id]/screens/[screenId]/top-cards.get.ts',
+			'server/api/screen-output/events/[id]/screens/[screenId]/top-cut.get.ts',
 			'server/api/screen-output/events/[id]/screens/slug/[slug].get.ts',
 			'server/api/screen-output/screens/[screenId]/asset-capability-session.post.ts',
 			'server/api/screen-output/screens/[screenId]/assets/[assetId]/revisions/[revisionId]/content.get.ts',
