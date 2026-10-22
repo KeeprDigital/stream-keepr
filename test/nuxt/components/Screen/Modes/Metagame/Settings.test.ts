@@ -252,7 +252,7 @@ describe('screenMetagameSettings', () => {
 
 		const fields = wrapper.findAll('[data-testid="form-field"]');
 		const target = fields.find(field => field.text().includes('Conversion target'))!;
-		expect(target.text()).toContain('Top N placement|Minimum points');
+		expect(target.text()).toContain('Top N|Minimum Points');
 		target.getComponent(USelectStub).vm.$emit('update:modelValue', 'minPoints');
 
 		const threshold = fields.find(field => field.text().includes('Conversion threshold'))!;

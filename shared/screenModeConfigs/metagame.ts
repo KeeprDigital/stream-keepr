@@ -25,9 +25,10 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	playerListId: z.number().int().positive().optional(),
 	archetypeFilter: editorField(z.string().max(200).optional(), { label: 'Archetype filter' }),
 
-	// Conversion Rate target: a numerator condition inside the scope, never narrowing it
+	// Conversion Rate target: a numerator condition inside the scope, never narrowing it.
+	// The threshold sits inside the archetype read's bounds, which the Screen Output parses it through.
 	conversionMetric: editorField(z.enum(METAGAME_CONVERSION_METRIC_VALUES), { label: 'Conversion target' }),
-	conversionThreshold: editorField(z.number().int().min(0).max(999), { label: 'Conversion threshold' }),
+	conversionThreshold: editorField(z.number().int().min(1).max(999), { label: 'Conversion threshold' }),
 
 	// Sorting
 	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), { label: 'Sort archetypes by' }),

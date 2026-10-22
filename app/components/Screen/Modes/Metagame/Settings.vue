@@ -83,8 +83,8 @@ const playerListOptions = computed(() => [
 ]);
 
 const conversionMetricOptions = [
-	{ label: 'Top N placement', value: 'topN' },
-	{ label: 'Minimum points', value: 'minPoints' },
+	{ label: 'Top N', value: 'topN' },
+	{ label: 'Minimum Points', value: 'minPoints' },
 ];
 
 const sortByOptions = [

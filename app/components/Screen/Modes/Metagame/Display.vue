@@ -52,6 +52,7 @@ const archetypeColumnDefinitions: Record<MetagameArchetypeColumnKey, TableColumn
 	winRate: { key: 'winRate', label: 'Win Rate', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
 	avgPlace: { key: 'avgPlace', label: 'Avg Place', width: '7rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
 	colors: { key: 'colors', label: 'Colors', width: '6rem', headerClass: 'is-center', cellClass: 'is-center' },
+	// Headed 'Conversion', as on the Metagame page's archetype table.
 	conversionRate: { key: 'conversionRate', label: 'Conversion', width: '8rem', headerClass: 'is-numeric', cellClass: 'is-numeric' },
 };
 
