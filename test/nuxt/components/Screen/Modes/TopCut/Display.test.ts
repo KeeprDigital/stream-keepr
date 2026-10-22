@@ -63,8 +63,8 @@ async function mountComponent() {
 function columnTexts(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return wrapper.findAll('.bracket-column').map(column => ({
 		name: column.find('.bracket-column-name').text(),
-		slots: column.findAll('.bracket-slot').map(slot =>
-			slot.findAll('.bracket-entrant').map(entrant => entrant.findAll('span').map(part => part.text()).join(' '))),
+		positions: column.findAll('.bracket-position').map(position =>
+			position.findAll('.bracket-entrant').map(entrant => entrant.findAll('span').map(part => part.text()).join(' '))),
 	}));
 }
 
@@ -76,7 +76,7 @@ describe('screenModesTopCutDisplay', () => {
 		headerText.value = 'Top 8';
 	});
 
-	it('renders one column per Round, each Match\'s Players and result, and the winners advancing into pending slots', async () => {
+	it('renders one column per Round, each Match\'s Players and result, and the winners advancing into pending positions', async () => {
 		bracket.value = deriveTopCutBracket([{
 			roundId: 1,
 			name: 'Quarterfinals',
@@ -91,17 +91,17 @@ describe('screenModesTopCutDisplay', () => {
 
 		expect(wrapper.find('.broadcast-table-title').text()).toBe('Top 8');
 		expect(columnTexts(wrapper)).toEqual([
-			{ name: 'Quarterfinals', slots: [['Seed 1 2', 'Seed 8 1'], ['Seed 4 0', 'Seed 5 2'], ['Seed 2', 'Seed 7'], ['Seed 3', 'Seed 6']] },
-			{ name: 'Semifinals', slots: [['Seed 1', 'Seed 5'], ['TBD', 'TBD']] },
-			{ name: 'Final', slots: [['TBD', 'TBD']] },
+			{ name: 'Quarterfinals', positions: [['Seed 1 2', 'Seed 8 1'], ['Seed 4 0', 'Seed 5 2'], ['Seed 2', 'Seed 7'], ['Seed 3', 'Seed 6']] },
+			{ name: 'Semifinals', positions: [['Seed 1', 'Seed 5'], ['TBD', 'TBD']] },
+			{ name: 'Final', positions: [['TBD', 'TBD']] },
 		]);
 
-		const firstMatch = wrapper.findAll('.bracket-column')[0]!.findAll('.bracket-slot')[0]!;
+		const firstMatch = wrapper.findAll('.bracket-column')[0]!.findAll('.bracket-position')[0]!;
 		expect(firstMatch.findAll('.bracket-entrant').map(entrant => entrant.classes())).toEqual([
 			expect.arrayContaining(['is-winner']),
 			expect.arrayContaining(['is-eliminated']),
 		]);
-		expect(wrapper.findAll('.bracket-column')[1]!.findAll('.bracket-slot').map(slot => slot.attributes('data-status')))
+		expect(wrapper.findAll('.bracket-column')[1]!.findAll('.bracket-position').map(position => position.attributes('data-status')))
 			.toEqual(['awaiting', 'awaiting']);
 		expect(wrapper.find('.bracket-champion').exists()).toBe(false);
 	});
@@ -114,8 +114,8 @@ describe('screenModesTopCutDisplay', () => {
 		}]);
 		const wrapper = await mountComponent();
 
-		expect(columnTexts(wrapper)[0]!.slots[0]).toEqual(['Seed 1', 'Bye']);
-		expect(columnTexts(wrapper)[1]!.slots[0]).toEqual(['Seed 1', 'TBD']);
+		expect(columnTexts(wrapper)[0]!.positions[0]).toEqual(['Seed 1', 'Bye']);
+		expect(columnTexts(wrapper)[1]!.positions[0]).toEqual(['Seed 1', 'TBD']);
 	});
 
 	it('crowns the Final\'s winner', async () => {
@@ -128,11 +128,11 @@ describe('screenModesTopCutDisplay', () => {
 		expect(wrapper.find('.bracket-champion').text()).toContain('Seed 2');
 	});
 
-	it.each([4, 8, 16])('renders every slot of a Top %i, sized to its first column', async (size) => {
+	it.each([4, 8, 16])('renders every position of a Top %i, sized to its first column', async (size) => {
 		bracket.value = unplayed(size);
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('.bracket-slot')).toHaveLength(size - 1);
+		expect(wrapper.findAll('.bracket-position')).toHaveLength(size - 1);
 		expect(wrapper.find('.topcut-display').attributes('style')).toContain(`--bracket-rows: ${size / 2}`);
 	});
 

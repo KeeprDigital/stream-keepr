@@ -78,16 +78,16 @@ describe('findPhaseBracket', () => {
 			[semifinalsId, 'Semifinals'],
 			[null, 'Final'],
 		]);
-		expect(result.bracket.columns.map(column => column.slots.map(slot => slot.entrants.map(entrant => entrant?.name ?? null)))).toEqual([
+		expect(result.bracket.columns.map(column => column.positions.map(position => position.entrants.map(entrant => entrant?.name ?? null)))).toEqual([
 			[['Seed 1', 'Seed 8'], ['Seed 4', 'Seed 5'], ['Seed 2', 'Seed 7'], ['Seed 3', 'Unlinked Sixth']],
 			[['Seed 1', 'Seed 5'], [null, null]],
 			[[null, null]],
 		]);
-		expect(result.bracket.columns[0]!.slots[3]!.entrants).toEqual([
+		expect(result.bracket.columns[0]!.positions[3]!.entrants).toEqual([
 			{ playerId: playerIds[2], name: 'Seed 3' },
 			{ playerId: null, name: 'Unlinked Sixth' },
 		]);
-		expect(result.bracket.columns[0]!.slots[0]).toMatchObject({ status: 'reported', winner: 0, gameWins: [2, 1] });
+		expect(result.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 0, gameWins: [2, 1] });
 	});
 
 	it('answers no Phase and an empty bracket for a Phase outside the Event, or one that is gone', async () => {

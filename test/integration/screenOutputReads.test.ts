@@ -403,11 +403,11 @@ describe('capability-only Screen Output reads', () => {
 			const pending = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(pending.status).toBe(200);
 			expect(pending.data.phase).toMatchObject({ id: phase.id, name: 'Top 4' });
-			expect(pending.data.bracket.columns.map(column => [column.roundId, column.name, column.slots.length])).toEqual([
+			expect(pending.data.bracket.columns.map(column => [column.roundId, column.name, column.positions.length])).toEqual([
 				[round.id, 'Top 4 Semifinals', 2],
 				[null, 'Final', 1],
 			]);
-			expect(pending.data.bracket.columns[0]!.slots[0]).toMatchObject({
+			expect(pending.data.bracket.columns[0]!.positions[0]).toMatchObject({
 				matchId: semifinal.id,
 				entrants: [{ playerId: null, name: 'Alice' }, { playerId: null, name: 'Bob' }],
 				status: 'unreported',
@@ -418,8 +418,8 @@ describe('capability-only Screen Output reads', () => {
 				body: { hasResult: true, player1GameWins: 1, player2GameWins: 2 },
 			});
 			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
-			expect(reported.data.bracket.columns[0]!.slots[0]).toMatchObject({ status: 'reported', winner: 1, gameWins: [1, 2] });
-			expect(reported.data.bracket.columns[1]!.slots[0]!.entrants).toEqual([{ playerId: null, name: 'Bob' }, null]);
+			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 1, gameWins: [1, 2] });
+			expect(reported.data.bracket.columns[1]!.positions[0]!.entrants).toEqual([{ playerId: null, name: 'Bob' }, null]);
 		});
 
 		it('refuses to name another Event\'s Phase', async () => {

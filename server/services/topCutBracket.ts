@@ -25,15 +25,17 @@ function entrant(joinedName: string | null, playerId: number | null, slot: Playe
 }
 
 /**
- * A Phase's Top Cut bracket: its Rounds in order and their Matches, derived
- * into one column per Round (#752). The Top Cut Screen Output's read.
+ * A Phase's Top Cut Bracket: its Rounds in order and their Matches, derived
+ * into one column per Round (#752). The Top Cut Screen Output's read. Naming
+ * no Phase, or one the Event does not hold, answers no Phase and an empty
+ * bracket.
  */
-export async function findPhaseBracket(eventId: number, phaseId: number): Promise<ScreenOutputTopCutResponse> {
-	const phase = await phaseService().findById(phaseId, eventId);
+export async function findPhaseBracket(eventId: number, phaseId: number | undefined): Promise<ScreenOutputTopCutResponse> {
+	const phase = phaseId ? await phaseService().findById(phaseId, eventId) : undefined;
 	if (!phase)
 		return { phase: null, bracket: EMPTY_TOP_CUT_BRACKET };
 
-	const rounds = await roundService().findByPhaseId(phaseId, eventId);
+	const rounds = await roundService().findByPhaseId(phase.id, eventId);
 	const rows = rounds.length === 0
 		? []
 		: await db

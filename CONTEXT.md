@@ -145,6 +145,10 @@ _Avoid_: Animation Effect Template, linked effect style
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
+**Top Cut Bracket**:
+The single-elimination bracket a Top Cut Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size; a Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+_Avoid_: bracket slot (a Slot is a Feature Match Slot)
+
 **Rotation Anchor**:
 The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape (a display reset among them), or when an operator selects a page mid-rotation. A Screen Output never writes it.
 

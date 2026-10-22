@@ -10,12 +10,12 @@ function holdsRound(held: ScreenOutputTopCutResponse, roundId: number): boolean 
 }
 
 function holdsMatch(held: ScreenOutputTopCutResponse, matchId: number): boolean {
-	return held.bracket.columns.some(column => column.slots.some(slot => slot.matchId === matchId));
+	return held.bracket.columns.some(column => column.positions.some(position => position.matchId === matchId));
 }
 
 function holdsPlayer(held: ScreenOutputTopCutResponse, playerId: number): boolean {
-	return held.bracket.columns.some(column => column.slots.some(slot =>
-		slot.entrants.some(entrant => entrant?.playerId === playerId)));
+	return held.bracket.columns.some(column => column.positions.some(position =>
+		position.entrants.some(entrant => entrant?.playerId === playerId)));
 }
 
 /**

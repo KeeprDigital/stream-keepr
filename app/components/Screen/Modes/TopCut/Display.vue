@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BracketSlot } from '~~/shared/modules/top-cut-bracket';
+import type { BracketPosition } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 
 const { screen } = useScreenContext();
@@ -7,29 +7,29 @@ const { config, error, isEmpty, headerText, bracket } = useTopCutModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
 
-/** Each column's slots in the pairs whose winners meet in the next column. */
+/** Each column's positions in the pairs whose winners meet in the next column. */
 const columns = computed(() => bracket.value.columns.map(column => ({
 	...column,
-	pairs: Array.from({ length: Math.ceil(column.slots.length / 2) }, (_, index) => column.slots.slice(index * 2, index * 2 + 2)),
+	pairs: Array.from({ length: Math.ceil(column.positions.length / 2) }, (_, index) => column.positions.slice(index * 2, index * 2 + 2)),
 })));
 
 // The first column seats the most Matches, so it sets the type size that keeps
-// every slot of a Top 16 on screen.
+// every position of a Top 16 on screen.
 const layoutStyle = computed(() => ({
-	'--bracket-rows': String(Math.max(bracket.value.columns[0]?.slots.length ?? 1, 1)),
+	'--bracket-rows': String(Math.max(bracket.value.columns[0]?.positions.length ?? 1, 1)),
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
 }));
 
-function entrantLabel(slot: BracketSlot, side: 0 | 1): string {
-	return slot.entrants[side]?.name ?? (slot.status === 'bye' ? 'Bye' : 'TBD');
+function entrantLabel(position: BracketPosition, side: 0 | 1): string {
+	return position.entrants[side]?.name ?? (position.status === 'bye' ? 'Bye' : 'TBD');
 }
 
-function entrantClass(slot: BracketSlot, side: 0 | 1) {
+function entrantClass(position: BracketPosition, side: 0 | 1) {
 	return {
-		'is-winner': slot.winner === side,
-		'is-eliminated': slot.winner != null && slot.winner !== side,
-		'is-unknown': !slot.entrants[side],
+		'is-winner': position.winner === side,
+		'is-eliminated': position.winner != null && position.winner !== side,
+		'is-unknown': !position.entrants[side],
 	};
 }
 </script>
@@ -61,19 +61,19 @@ function entrantClass(slot: BracketSlot, side: 0 | 1) {
 							:class="{ 'is-joined': pair.length === 2 }"
 						>
 							<div
-								v-for="(slot, slotIndex) in pair"
-								:key="slot.matchId ?? `slot-${pairIndex}-${slotIndex}`"
-								class="bracket-slot"
-								:data-status="slot.status"
+								v-for="(position, positionIndex) in pair"
+								:key="position.matchId ?? `position-${pairIndex}-${positionIndex}`"
+								class="bracket-position"
+								:data-status="position.status"
 							>
 								<div
 									v-for="side in ([0, 1] as const)"
 									:key="side"
 									class="bracket-entrant"
-									:class="entrantClass(slot, side)"
+									:class="entrantClass(position, side)"
 								>
-									<span class="bracket-entrant-name">{{ entrantLabel(slot, side) }}</span>
-									<span v-if="slot.gameWins[side] != null" class="bracket-entrant-score broadcast-table-numeric">{{ slot.gameWins[side] }}</span>
+									<span class="bracket-entrant-name">{{ entrantLabel(position, side) }}</span>
+									<span v-if="position.gameWins[side] != null" class="bracket-entrant-score broadcast-table-numeric">{{ position.gameWins[side] }}</span>
 								</div>
 							</div>
 						</div>
@@ -102,7 +102,7 @@ function entrantClass(slot: BracketSlot, side: 0 | 1) {
 	gap: var(--bracket-gap);
 	min-height: 0;
 	padding: 0.75rem 1rem;
-	/* Two entrant rows and their spacing per slot, so a Top 16's eight first-column slots fit. */
+	/* Two entrant rows and their spacing per position, so a Top 16's eight first-column positions fit. */
 	font-size: clamp(0.7rem, calc(100cqh / var(--bracket-rows) / 4.6), 2rem);
 }
 
@@ -141,7 +141,7 @@ function entrantClass(slot: BracketSlot, side: 0 | 1) {
 	position: relative;
 }
 
-/* The bracket line joining a pair's two slots to the slot their winners meet in. */
+/* The bracket line joining a pair's two positions to the position their winners meet in. */
 .bracket-pair.is-joined::after {
 	border: 2px solid rgba(255, 255, 255, 0.25);
 	border-left: none;
@@ -154,14 +154,14 @@ function entrantClass(slot: BracketSlot, side: 0 | 1) {
 	width: calc(var(--bracket-gap) / 2);
 }
 
-.bracket-slot {
+.bracket-position {
 	background: rgba(255, 255, 255, 0.06);
 	border: 1px solid rgba(255, 255, 255, 0.14);
 	border-radius: 0.3em;
 	overflow: hidden;
 }
 
-.bracket-slot[data-status='awaiting'] {
+.bracket-position[data-status='awaiting'] {
 	border-style: dashed;
 }
 

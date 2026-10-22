@@ -398,11 +398,10 @@ function configContractModeForms<M extends ScreenMode>(
 
 	// A former field may still be in what a client read, so a write naming one
 	// is accepted without storing it (#752); every other unknown key is refused.
-	const withoutFormerFields = (value: unknown) => contract.withoutFormerFields(value);
 	return {
 		schema,
-		stored: z.preprocess(withoutFormerFields, schema.partial()),
-		patch: z.preprocess(withoutFormerFields, z.object(patchShape).strict()),
+		stored: z.preprocess(contract.withoutFormerFields, schema.partial()),
+		patch: z.preprocess(contract.withoutFormerFields, z.object(patchShape).strict()),
 	};
 }
 

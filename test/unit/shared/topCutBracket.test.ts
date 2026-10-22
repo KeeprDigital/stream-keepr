@@ -5,7 +5,7 @@ import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 /**
  * A Top Cut bracket is derived from a Phase's Rounds, in order, and their
  * Matches (#752): one column per Round, Matches paired so each one's winner
- * advances into the next column, and every slot no Match fills yet pending.
+ * advances into the next column, and every position no Match fills yet pending.
  */
 
 let nextMatchId = 1;
@@ -32,10 +32,10 @@ function round(roundId: number, name: string, matches: BracketMatchInput[]): Bra
 	return { roundId, name, matches };
 }
 
-/** Each column as its slots' entrant names, `-` for an empty seat. */
+/** Each column as its positions' entrant names, `-` for an empty seat. */
 function seats(bracket: TopCutBracket): string[][] {
-	return bracket.columns.map(column => column.slots.map(slot =>
-		slot.entrants.map(entrant => entrant?.name ?? '-').join(' v ')));
+	return bracket.columns.map(column => column.positions.map(position =>
+		position.entrants.map(entrant => entrant?.name ?? '-').join(' v ')));
 }
 
 describe('deriveTopCutBracket', () => {
@@ -60,13 +60,13 @@ describe('deriveTopCutBracket', () => {
 			['P1 v P5', 'P2 v -'],
 			['- v -'],
 		]);
-		expect(bracket.columns[0]!.slots.map(slot => [slot.status, slot.winner])).toEqual([
+		expect(bracket.columns[0]!.positions.map(position => [position.status, position.winner])).toEqual([
 			['reported', 0],
 			['reported', 1],
 			['reported', 0],
 			['unreported', null],
 		]);
-		expect(bracket.columns[1]!.slots.map(slot => [slot.status, slot.matchId])).toEqual([
+		expect(bracket.columns[1]!.positions.map(position => [position.status, position.matchId])).toEqual([
 			['awaiting', null],
 			['awaiting', null],
 		]);
@@ -94,7 +94,7 @@ describe('deriveTopCutBracket', () => {
 			['- v P2'],
 		]);
 		expect(bracket.columns.map(column => column.roundId)).toEqual([10, 11, null]);
-		expect(bracket.columns[1]!.slots.map(slot => slot.status)).toEqual(['unreported', 'reported']);
+		expect(bracket.columns[1]!.positions.map(position => position.status)).toEqual(['unreported', 'reported']);
 	});
 
 	it('seats each Match\'s first side above its second, and crowns the Final\'s winner once it is reported', () => {
@@ -113,7 +113,7 @@ describe('deriveTopCutBracket', () => {
 		const drawn = deriveTopCutBracket([round(1, 'Final', [match(1, player(1), player(2), [1, 1])])]);
 
 		expect(unreported.champion).toBeNull();
-		expect(drawn.columns[0]!.slots[0]).toMatchObject({ status: 'reported', winner: null, gameWins: [1, 1] });
+		expect(drawn.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: null, gameWins: [1, 1] });
 		expect(drawn.champion).toBeNull();
 	});
 
@@ -128,7 +128,7 @@ describe('deriveTopCutBracket', () => {
 		]);
 
 		expect(bracket.size).toBe(8);
-		expect(bracket.columns[0]!.slots.map(slot => slot.status)).toEqual(['reported', 'unreported', 'bye', 'bye']);
+		expect(bracket.columns[0]!.positions.map(position => position.status)).toEqual(['reported', 'unreported', 'bye', 'bye']);
 		expect(seats(bracket)).toEqual([
 			['P4 v P5', 'P3 v P6', 'P1 v -', 'P2 v -'],
 			['P4 v -', 'P1 v P2'],
@@ -156,13 +156,45 @@ describe('deriveTopCutBracket', () => {
 			['P1 v P5', 'P2 v P3'],
 			['- v -'],
 		]);
-		expect(bracket.columns[0]!.slots.map(slot => [slot.status, slot.winner])).toEqual([
+		expect(bracket.columns[0]!.positions.map(position => [position.status, position.winner])).toEqual([
 			['bye', 0],
 			['reported', 1],
 			['bye', 0],
 			['reported', 0],
 		]);
 		expect(bracket.columns[2]).toMatchObject({ roundId: 3, name: 'Final' });
+	});
+
+	it('sizes a bracket whose first Round leaves its byes out from the Round after it, before the Final exists', () => {
+		const bracket = deriveTopCutBracket([
+			round(1, 'Quarterfinals', [
+				match(1, player(3), player(6), [2, 0]),
+				match(2, player(4), player(5), [0, 2]),
+			]),
+			round(2, 'Semifinals', [
+				match(1, player(1), player(5)),
+				match(2, player(2), player(3)),
+			]),
+		]);
+
+		expect(bracket.size).toBe(8);
+		expect(bracket.columns.map(column => [column.name, column.positions.length])).toEqual([
+			['Quarterfinals', 4],
+			['Semifinals', 2],
+			['Final', 1],
+		]);
+		expect(bracket.columns[0]!.positions.map(position => position.status)).toEqual(['bye', 'reported', 'bye', 'reported']);
+	});
+
+	it('shows no Round past the Final, such as a playoff for third place', () => {
+		const bracket = deriveTopCutBracket([
+			round(1, 'Semifinals', [match(1, player(1), player(4), [2, 0]), match(2, player(2), player(3), [2, 0])]),
+			round(2, 'Final', [match(1, player(1), player(2))]),
+			round(3, 'Third Place', [match(1, player(4), player(3))]),
+		]);
+
+		expect(bracket.size).toBe(4);
+		expect(seats(bracket)).toEqual([['P1 v P4', 'P2 v P3'], ['P1 v P2']]);
 	});
 
 	it('follows a side the Match records by name alone', () => {
@@ -187,13 +219,13 @@ describe('deriveTopCutBracket', () => {
 
 		expect(bracket.size).toBe(size);
 		expect(bracket.columns.map(column => column.name)).toEqual(names);
-		expect(bracket.columns.map(column => column.slots.length)).toEqual(names.map((_, column) => size / 2 ** (column + 1)));
+		expect(bracket.columns.map(column => column.positions.length)).toEqual(names.map((_, column) => size / 2 ** (column + 1)));
 	});
 
 	it('shows a Phase whose Rounds hold no Matches yet as wholly pending', () => {
 		const bracket = deriveTopCutBracket([round(1, 'Top 8', []), round(2, 'Top 4', []), round(3, 'Finals', [])]);
 
-		expect(bracket.columns.map(column => [column.name, column.slots.map(slot => slot.status)])).toEqual([
+		expect(bracket.columns.map(column => [column.name, column.positions.map(position => position.status)])).toEqual([
 			['Top 8', ['awaiting', 'awaiting', 'awaiting', 'awaiting']],
 			['Top 4', ['awaiting', 'awaiting']],
 			['Finals', ['awaiting']],

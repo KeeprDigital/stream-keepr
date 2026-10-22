@@ -3,9 +3,9 @@
  *
  * Nothing marks a Phase as a top cut: the operator chooses one, and its Rounds,
  * in order, are the bracket's columns. Its first Round sets the bracket's size.
- * Each Match is placed so its winner advances into the next column's slot
+ * Each Match is placed so its winner advances into the next column's position
  * above it, which the next Round's pairings decide where they exist and table
- * order decides where they do not. A slot no Match fills yet is pending, its
+ * order decides where they do not. A position no Match fills yet is pending, its
  * entrants the winners advancing into it so far.
  */
 
@@ -42,11 +42,11 @@ export interface BracketRoundInput {
  * - `bye`: one entrant advances unplayed, whether the Round records the bye as
  *   a Match or leaves the seat empty.
  * - `unreported`: the Match is paired and has no result yet.
- * - `awaiting`: no Match fills the slot yet.
+ * - `awaiting`: no Match fills the position yet.
  */
-export type BracketSlotStatus = 'reported' | 'bye' | 'unreported' | 'awaiting';
+export type BracketPositionStatus = 'reported' | 'bye' | 'unreported' | 'awaiting';
 
-export interface BracketSlot {
+export interface BracketPosition {
 	matchId: number | null;
 	tableNumber: number | null;
 	entrants: [BracketEntrant | null, BracketEntrant | null];
@@ -54,18 +54,18 @@ export interface BracketSlot {
 	gameDraws: number | null;
 	/** Which entrant advances; `null` while undecided, or for a drawn Match. */
 	winner: 0 | 1 | null;
-	status: BracketSlotStatus;
+	status: BracketPositionStatus;
 }
 
 export interface BracketColumn {
 	/** The Round this column shows; `null` for one the Phase does not hold yet. */
 	roundId: number | null;
 	name: string;
-	slots: BracketSlot[];
+	positions: BracketPosition[];
 }
 
 export interface TopCutBracket {
-	/** How many entrants the first column seats: the first Round's Matches, rounded up to a whole bracket. */
+	/** How many entrants the first column seats: the first Round's Matches and the byes it leaves out, rounded up to a whole bracket. */
 	size: number;
 	columns: BracketColumn[];
 	/** The winner of the Final, once it has one. */
@@ -82,14 +82,14 @@ function nextPowerOfTwo(value: number): number {
 }
 
 /** A column the Phase does not hold yet, named by how many Matches it seats. */
-function pendingColumnName(slotCount: number): string {
-	if (slotCount === 1)
+function pendingColumnName(positionCount: number): string {
+	if (positionCount === 1)
 		return 'Final';
-	if (slotCount === 2)
+	if (positionCount === 2)
 		return 'Semifinals';
-	if (slotCount === 4)
+	if (positionCount === 4)
 		return 'Quarterfinals';
-	return `Round of ${slotCount * 2}`;
+	return `Round of ${positionCount * 2}`;
 }
 
 function sameEntrant(a: BracketEntrant, b: BracketEntrant): boolean {
@@ -115,7 +115,7 @@ function matchWinner(match: BracketMatchInput): 0 | 1 | null {
 	return match.player1GameWins > match.player2GameWins ? 0 : 1;
 }
 
-function matchSlot(match: BracketMatchInput): BracketSlot {
+function matchPosition(match: BracketMatchInput): BracketPosition {
 	return {
 		matchId: match.matchId,
 		tableNumber: match.tableNumber,
@@ -127,42 +127,42 @@ function matchSlot(match: BracketMatchInput): BracketSlot {
 	};
 }
 
-function awaitingSlot(entrants: [BracketEntrant | null, BracketEntrant | null]): BracketSlot {
+function awaitingPosition(entrants: [BracketEntrant | null, BracketEntrant | null]): BracketPosition {
 	return { matchId: null, tableNumber: null, entrants, gameWins: [null, null], gameDraws: null, winner: null, status: 'awaiting' };
 }
 
-function byeSlot(entrant: BracketEntrant): BracketSlot {
+function byePosition(entrant: BracketEntrant): BracketPosition {
 	return { matchId: null, tableNumber: null, entrants: [entrant, null], gameWins: [null, null], gameDraws: null, winner: 0, status: 'bye' };
 }
 
-function advancing(slot: BracketSlot | undefined): BracketEntrant | null {
-	return slot?.winner == null ? null : slot.entrants[slot.winner];
+function advancing(position: BracketPosition | undefined): BracketEntrant | null {
+	return position?.winner == null ? null : position.entrants[position.winner];
 }
 
 /**
  * Places each Round's Matches into its column, latest Round first: a Match in
- * a later column pulls the Matches its entrants came from into the two slots
- * that feed it, and every Match nothing pulls takes the first free slot in
+ * a later column pulls the Matches its entrants came from into the two positions
+ * that feed it, and every Match nothing pulls takes the first free position in
  * table order.
  */
-function placeMatches(rounds: readonly BracketRoundInput[], slotCounts: readonly number[]): Array<Array<BracketMatchInput | null>> {
-	const placed = slotCounts.map(count => Array.from<BracketMatchInput | null>({ length: count }).fill(null));
+function placeMatches(rounds: readonly BracketRoundInput[], positionCounts: readonly number[]): Array<Array<BracketMatchInput | null>> {
+	const placed = positionCounts.map(count => Array.from<BracketMatchInput | null>({ length: count }).fill(null));
 
 	for (let column = rounds.length - 1; column >= 0; column--) {
-		const slots = placed[column]!;
+		const positions = placed[column]!;
 		for (const match of inTableOrder(rounds[column]!.matches)) {
-			if (slots.includes(match))
+			if (positions.includes(match))
 				continue;
-			const free = slots.indexOf(null);
+			const free = positions.indexOf(null);
 			if (free >= 0)
-				slots[free] = match;
+				positions[free] = match;
 		}
 
 		if (column === 0)
 			continue;
 		const feeders = placed[column - 1]!;
 		const earlier = inTableOrder(rounds[column - 1]!.matches);
-		slots.forEach((match, position) => {
+		positions.forEach((match, position) => {
 			[match?.player1, match?.player2].forEach((entrant, side) => {
 				const target = position * 2 + side;
 				if (!entrant || target >= feeders.length || feeders[target])
@@ -178,30 +178,45 @@ function placeMatches(rounds: readonly BracketRoundInput[], slotCounts: readonly
 }
 
 /**
- * The bracket of one Phase, from its Rounds in order. Its first Round sets the
- * size; a Phase holding more Rounds than that size needs (its byes left out of
- * the first Round) widens the first columns to fit them.
+ * How many positions the first column needs: the first Round's Matches, and
+ * each bye it leaves out, which the next Round reveals by seating a Player no
+ * first-Round Match seated. Until that Round exists such a bye cannot be told
+ * from a smaller bracket.
+ */
+function firstColumnEntries(rounds: readonly BracketRoundInput[]): number {
+	const firstRound = rounds[0]?.matches ?? [];
+	const leftOut = (rounds[1]?.matches ?? [])
+		.flatMap(match => [match.player1, match.player2])
+		.filter(entrant => entrant != null && !firstRound.some(match => seats(match, entrant)));
+	return firstRound.length + leftOut.length;
+}
+
+/**
+ * The bracket of one Phase, from its Rounds in order. Its first Round, with
+ * the byes it leaves out, sets the size, and so how many columns lead to the
+ * Final. A Round past the Final, such as a playoff for third place, is not
+ * shown, nor is a Match beyond its column's positions. A Phase whose Rounds
+ * hold no Matches yet is one column per Round, all pending.
  */
 export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCutBracket {
-	const firstRoundMatches = rounds[0]?.matches.length ?? 0;
-	const columnsForSize = firstRoundMatches > 0 ? Math.log2(nextPowerOfTwo(firstRoundMatches)) + 1 : 0;
-	const columnCount = Math.max(rounds.length, columnsForSize);
+	const entries = firstColumnEntries(rounds);
+	const columnCount = entries > 0 ? Math.log2(nextPowerOfTwo(entries)) + 1 : rounds.length;
 	if (columnCount === 0)
 		return EMPTY_TOP_CUT_BRACKET;
 
-	const slotCounts = Array.from({ length: columnCount }, (_, column) =>
-		Math.max(2 ** (columnCount - 1 - column), rounds[column]?.matches.length ?? 0));
-	const placed = placeMatches(rounds, slotCounts);
+	const shown = rounds.slice(0, columnCount);
+	const positionCounts = Array.from({ length: columnCount }, (_, column) => 2 ** (columnCount - 1 - column));
+	const placed = placeMatches(shown, positionCounts);
 
 	const columns: BracketColumn[] = [];
 	for (let column = 0; column < columnCount; column++) {
-		const round = rounds[column];
-		const previous = columns[column - 1]?.slots;
-		const slots = Array.from({ length: slotCounts[column]! }, (_, position) => {
+		const round = shown[column];
+		const previous = columns[column - 1]?.positions;
+		const positions = Array.from({ length: positionCounts[column]! }, (_, position) => {
 			const match = placed[column]?.[position];
 			if (match)
-				return matchSlot(match);
-			const entrants: BracketSlot['entrants'] = previous
+				return matchPosition(match);
+			const entrants: BracketPosition['entrants'] = previous
 				? [advancing(previous[position * 2]), advancing(previous[position * 2 + 1])]
 				: [null, null];
 			if (!entrants[0] && !entrants[1]) {
@@ -209,16 +224,16 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[]): TopCu
 				const next = placed[column + 1]?.[Math.floor(position / 2)];
 				const seeded = next && (position % 2 === 0 ? next.player1 : next.player2);
 				if (seeded)
-					return byeSlot(seeded);
+					return byePosition(seeded);
 			}
-			return awaitingSlot(entrants);
+			return awaitingPosition(entrants);
 		});
-		columns.push({ roundId: round?.roundId ?? null, name: round?.name ?? pendingColumnName(slots.length), slots });
+		columns.push({ roundId: round?.roundId ?? null, name: round?.name ?? pendingColumnName(positions.length), positions });
 	}
 
-	const final = columns.at(-1)!.slots;
+	const final = columns.at(-1)!.positions;
 	return {
-		size: slotCounts[0]! * 2,
+		size: positionCounts[0]! * 2,
 		columns,
 		champion: final.length === 1 ? advancing(final[0]) : null,
 	};
