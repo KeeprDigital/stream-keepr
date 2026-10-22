@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { metagameArchetypeDetailQuerySchema, metagameArchetypesQuerySchema } from '~~/server/schemas/api/metagame';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
-import { archetypeSpotlightScreenQuery, metagameScreenQuery } from '~~/shared/utils/metagameQuery';
+import { archetypeSpotlightScreenQuery, metagameScreenQuery, topCardsScreenQuery } from '~~/shared/utils/metagameQuery';
 
 function screenQuery(stored: ModeConfigsMap['metagame']) {
 	return metagameScreenQuery(resolveScreenModeConfig({ metagame: stored }, 'metagame'));
@@ -71,5 +71,32 @@ describe('archetypeSpotlightScreenQuery', () => {
 	it('scopes to its Player List only while the scope names one', () => {
 		expect(spotlightQuery({ archetypeId: 7, scope: 'playerList', playerListId: 3 })?.query).toMatchObject({ scope: 'playerList', playerListId: 3 });
 		expect(spotlightQuery({ archetypeId: 7, scope: 'all', playerListId: 3 })?.query).not.toHaveProperty('playerListId');
+	});
+});
+
+describe('topCardsScreenQuery', () => {
+	function topCardsQuery(stored: ModeConfigsMap['top-cards']) {
+		return topCardsScreenQuery(resolveScreenModeConfig({ 'top-cards': stored }, 'top-cards'));
+	}
+
+	it('asks the card breakdown for every Player by default', () => {
+		expect(topCardsQuery({})).toEqual({ scope: 'all', sortBy: 'inclusionRate', limit: 10, board: 'mainboard', excludeTypes: 'Land' });
+	});
+
+	it('asks for the Screen\'s own scope, and its Player List only while the scope names one', () => {
+		expect(topCardsQuery({ scope: 'topN', topN: 16 })).toMatchObject({ scope: 'topN', topN: 16 });
+		expect(topCardsQuery({ scope: 'playerList', playerListId: 3 })).toMatchObject({ scope: 'playerList', playerListId: 3 });
+		expect(topCardsQuery({ scope: 'all', playerListId: 3 })).not.toHaveProperty('playerListId');
+	});
+
+	it('scopes the same way the Metagame card breakdown does', () => {
+		const stored = { scope: 'playerList', playerListId: 3, archetypeFilter: 'Rakdos Midrange' } as const;
+		const { scope, playerListId, archetype } = screenQuery({ ...stored, viewMode: 'cards' }).query as Record<string, unknown>;
+
+		expect(topCardsQuery(stored)).toMatchObject({ scope, playerListId, archetype });
+	});
+
+	it('reads a Minimum Points scope, which it never offered, with no minimum', () => {
+		expect(topCardsQuery({ scope: 'minPoints' })).not.toHaveProperty('minPoints');
 	});
 });
