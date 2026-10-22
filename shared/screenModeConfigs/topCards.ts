@@ -20,6 +20,12 @@ const optionalCssColorSchema = z.string().min(1).max(500).optional();
 const TOP_CARDS_MAX_LIMIT = 60;
 
 /**
+ * The most grid rows a Top Cards grid can have: every card a Screen can rank,
+ * in one column. As the default page size, it holds any grid on one page.
+ */
+const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
+
+/**
  * The Top Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
  * renders a deck. Scoping reuses the Metagame vocabulary; `excludedCardTypes` is
@@ -80,7 +86,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	cardSize: 'medium',
 	dynamicCardSize: true,
 	cardGap: 12,
-	rowsPerPage: TOP_CARDS_MAX_LIMIT,
+	rowsPerPage: TOP_CARDS_MAX_GRID_ROWS,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 	showCardNames: true,
@@ -94,3 +100,15 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;
+
+/** How many grid rows `cardCount` cards fill, in rows of `columns` cards. */
+export function topCardsGridRowCount(cardCount: number, columns: number): number {
+	return Math.ceil(cardCount / Math.max(1, columns));
+}
+
+/** `cards` laid out as the grid's rows of `columns` cards, the last row possibly short. */
+export function topCardsGridRows<T>(cards: readonly T[], columns: number): T[][] {
+	const width = Math.max(1, columns);
+	return Array.from({ length: topCardsGridRowCount(cards.length, width) }, (_, row) =>
+		cards.slice(row * width, (row + 1) * width));
+}

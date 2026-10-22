@@ -9,6 +9,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
+import { topCardsGridRowCount } from '~~/shared/screenModeConfigs/topCards';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -51,8 +52,9 @@ onMounted(async () => {
 	}
 });
 
-// The grid rows the Screen would show: a page holds `rowsPerPage` of them.
-const estimatedGridRowCount = computed(() => Math.ceil(config.value.limit / Math.max(1, config.value.columns)));
+// The grid rows the Screen would show at its full card count: a page holds
+// `rowsPerPage` of them.
+const estimatedGridRowCount = computed(() => topCardsGridRowCount(config.value.limit, config.value.columns));
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the

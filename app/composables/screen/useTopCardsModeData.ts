@@ -1,4 +1,5 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
+import { topCardsGridRows } from '~~/shared/screenModeConfigs/topCards';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -43,16 +44,10 @@ export function useTopCardsModeData() {
 	// ── Pagination ──
 	// A Page Rotation over the grid's rows, so each page holds whole rows of
 	// `columns` cards and `rowsPerPage` (the declared page size) counts them.
-	const gridRows = computed<RankedTopCard[][]>(() => {
-		const columns = Math.max(1, config.value.columns);
-		const rows: RankedTopCard[][] = [];
-		entries.value.forEach((entry, index) => {
-			if (index % columns === 0)
-				rows.push([]);
-			rows.at(-1)!.push({ entry, rank: index + 1 });
-		});
-		return rows;
-	});
+	const gridRows = computed(() => topCardsGridRows<RankedTopCard>(
+		entries.value.map((entry, index) => ({ entry, rank: index + 1 })),
+		config.value.columns,
+	));
 	const {
 		pageData,
 		totalPages,
