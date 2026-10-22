@@ -32,6 +32,9 @@ const defaultConfig = {
 	cardSize: 'medium' as const,
 	dynamicCardSize: true,
 	cardGap: 12,
+	rowsPerPage: 60,
+	autoPageEnabled: false,
+	autoPageIntervalMs: 10000,
 	showHeader: true,
 	headerText: undefined,
 	showCardNames: true,
@@ -51,6 +54,13 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 		...patch,
 	};
 });
+
+// Server time is the Page Rotation's clock.
+mockNuxtImport('useServerTime', () => () => ({
+	isSynced: ref(true),
+	serverTimeOffset: ref(0),
+	getServerTime: () => 1_000_000.25,
+}));
 
 mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
@@ -104,6 +114,21 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :data-variant="variant" @click="$emit(\'click\')">{{ label }}</button>',
 });
 
+const UInputNumberStub = defineComponent({
+	props: {
+		modelValue: { type: Number, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<div data-testid="u-input-number">{{ modelValue }}</div>',
+});
+
+/** The number input under the form field labelled `label`. */
+function numberInput(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string) {
+	const field = wrapper.findAll('[data-testid="form-field"]').find(item => item.text().includes(label));
+	expect(field, label).toBeDefined();
+	return field!.getComponent(UInputNumberStub);
+}
+
 async function mountComponent() {
 	const componentPath = '../../../../../../app/components/Screen/Modes/TopCards/Settings.vue';
 	const { default: Settings } = await import(componentPath);
@@ -121,7 +146,7 @@ async function mountComponent() {
 				USelect: USelectStub,
 				UButton: UButtonStub,
 				UInput: true,
-				UInputNumber: true,
+				UInputNumber: UInputNumberStub,
 				USeparator: true,
 				UIColorPicker: true,
 			},
@@ -157,7 +182,7 @@ describe('screenTopCardsSettings', () => {
 
 		await wrapper.get('[data-testid="top-cards-type-Land"]').trigger('click');
 
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ excludedCardTypes: [] });
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ excludedCardTypes: [], currentPage: 1 });
 	});
 
 	it('excludes an included type on click', async () => {
@@ -165,7 +190,7 @@ describe('screenTopCardsSettings', () => {
 
 		await wrapper.get('[data-testid="top-cards-type-Creature"]').trigger('click');
 
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ excludedCardTypes: ['Land', 'Creature'] });
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ excludedCardTypes: ['Land', 'Creature'], currentPage: 1 });
 	});
 
 	it('hides the fixed card size select while dynamic sizing is on', async () => {
@@ -209,5 +234,52 @@ describe('screenTopCardsSettings', () => {
 
 		wrapper.unmount();
 		eventDataResync.reset();
+	});
+
+	describe('page rotation', () => {
+		it('counts pages of whole grid rows from the card count and columns', async () => {
+			mockConfig.value = { ...mockConfig.value, limit: 12, columns: 5, rowsPerPage: 1 };
+
+			const wrapper = await mountComponent();
+
+			// 12 cards in rows of 5 is 3 grid rows, one per page.
+			expect(wrapper.text()).toContain('Page 1 of 3');
+		});
+
+		it('restarts the rotation from page 1 when the rows per page change while it runs', async () => {
+			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true };
+			const wrapper = await mountComponent();
+
+			numberInput(wrapper, 'Rows per page').vm.$emit('update:modelValue', 2);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ rowsPerPage: 2, currentPage: 1, rotationAnchor: 1_000_000 });
+		});
+
+		it('restarts the rotation when its interval changes, editing it in seconds', async () => {
+			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true };
+			const wrapper = await mountComponent();
+
+			numberInput(wrapper, 'Interval (seconds)').vm.$emit('update:modelValue', 5);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoPageIntervalMs: 5000, rotationAnchor: 1_000_000 });
+		});
+
+		it('anchors the rotation when auto-page is switched on', async () => {
+			const wrapper = await mountComponent();
+
+			const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(item => item.text() === 'Auto-page');
+			await toggle!.trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoPageEnabled: true, rotationAnchor: 1_000_000 });
+		});
+
+		it('returns to page 1 when the columns change which cards each page holds, without re-anchoring', async () => {
+			mockConfig.value = { ...mockConfig.value, autoPageEnabled: true, currentPage: 2 };
+			const wrapper = await mountComponent();
+
+			numberInput(wrapper, 'Columns').vm.$emit('update:modelValue', 4);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ columns: 4, currentPage: 1 });
+		});
 	});
 });

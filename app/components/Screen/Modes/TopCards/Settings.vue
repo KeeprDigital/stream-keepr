@@ -9,16 +9,18 @@ import type {
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
+import { topCardsGridRowCount } from '~~/shared/screenModeConfigs/topCards';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
 
-const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
+const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'top-cards',
@@ -27,6 +29,7 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 defineExpose({ resetConfig, saving });
 
 // Each control's label and bounds, read from the mode's config contract (#498).
+// Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('top-cards').fields;
 
 const playerStore = usePlayerStore();
@@ -48,6 +51,23 @@ onMounted(async () => {
 		await playerListStore.loadByEventId(props.eventId);
 	}
 });
+
+// The grid rows the Screen would show at its full card count: a page holds
+// `rowsPerPage` of them.
+const estimatedGridRowCount = computed(() => topCardsGridRowCount(config.value.limit, config.value.columns));
+
+// The live Page Rotation projection and the anchor writes an operator makes.
+// Every edit below goes through its `updateConfig`, which restarts the
+// rotation from page 1 when the edit changes the rotation's shape. An edit
+// changing which cards each page holds returns to page 1 as well.
+const {
+	currentPage,
+	totalPages,
+	updateConfig,
+	setAutoPageEnabled,
+	adminNextPage,
+	adminPrevPage,
+} = useRotationConfigWrites({ mode: 'top-cards', config, rowCount: estimatedGridRowCount, saveConfig });
 
 const scopeOptions = computed(() => {
 	const options = [
@@ -111,7 +131,7 @@ function toggleType(bucket: CardTypeBucket) {
 		? config.value.excludedCardTypes.filter(type => type !== bucket)
 		: [...config.value.excludedCardTypes, bucket];
 
-	updateConfig({ excludedCardTypes: excluded });
+	updateConfig({ excludedCardTypes: excluded, currentPage: 1 });
 }
 
 function typeLabel(bucket: CardTypeBucket): string {
@@ -131,7 +151,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.scope"
 					:items="scopeOptions"
 					class="w-48"
-					@update:model-value="updateConfig({ scope: $event as MetagameScope })"
+					@update:model-value="updateConfig({ scope: $event as MetagameScope, currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -146,7 +166,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.topN.min"
 					:max="fields.topN.max"
 					class="w-32"
-					@update:model-value="updateConfig({ topN: Number($event) })"
+					@update:model-value="updateConfig({ topN: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -161,7 +181,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 							:model-value="config.playerListId ?? null"
 							:items="playerListOptions"
 							class="w-64"
-							@update:model-value="updateConfig({ playerListId: $event ?? null })"
+							@update:model-value="updateConfig({ playerListId: $event ?? null, currentPage: 1 })"
 						/>
 					</UFormField>
 				</template>
@@ -179,7 +199,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.board"
 					:items="boardOptions"
 					class="w-48"
-					@update:model-value="updateConfig({ board: $event as BoardSelection })"
+					@update:model-value="updateConfig({ board: $event as BoardSelection, currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -192,7 +212,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.sortBy"
 					:items="sortByOptions"
 					class="w-48"
-					@update:model-value="updateConfig({ sortBy: $event as MetagameCardSortBy })"
+					@update:model-value="updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -206,7 +226,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.limit.min"
 					:max="fields.limit.max"
 					class="w-32"
-					@update:model-value="updateConfig({ limit: Number($event) })"
+					@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>
@@ -240,7 +260,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:model-value="config.archetypeFilter ?? ''"
 					placeholder="All archetypes"
 					class="w-64"
-					@update:model-value="updateConfig({ archetypeFilter: $event || null })"
+					@update:model-value="updateConfig({ archetypeFilter: $event || null, currentPage: 1 })"
 				/>
 			</UFormField>
 		</ScreenSettingsCard>
@@ -256,7 +276,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:min="fields.columns.min"
 					:max="fields.columns.max"
 					class="w-32"
-					@update:model-value="updateConfig({ columns: Number($event) })"
+					@update:model-value="updateConfig({ columns: Number($event), currentPage: 1 })"
 				/>
 			</UFormField>
 
@@ -294,6 +314,78 @@ function typeLabel(bucket: CardTypeBucket): string {
 					@update:model-value="updateConfig({ cardGap: Number($event) })"
 				/>
 			</UFormField>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard title="Pagination">
+			<UFormField
+				:label="fields.rowsPerPage.label"
+				description="Grid rows shown per page, each holding one card per column."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="config.rowsPerPage"
+					:min="fields.rowsPerPage.min"
+					:max="fields.rowsPerPage.max"
+					class="w-32"
+					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
+				/>
+			</UFormField>
+
+			<USeparator />
+
+			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+				Automatic Paging
+			</p>
+
+			<ScreenSettingsToggle
+				:label="fields.autoPageEnabled.label"
+				description="Automatically cycle through pages of cards."
+				:model-value="config.autoPageEnabled"
+				@update:model-value="setAutoPageEnabled($event === true)"
+			/>
+
+			<UFormField
+				v-if="config.autoPageEnabled"
+				:label="fields.autoPageIntervalMs.label"
+				description="Time between page transitions."
+				class="flex max-sm:flex-col justify-between items-start gap-4"
+			>
+				<UInputNumber
+					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
+					:min="fields.autoPageIntervalMs.min"
+					:max="fields.autoPageIntervalMs.max"
+					class="w-32"
+					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
+				/>
+			</UFormField>
+
+			<USeparator />
+
+			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+				Manual Page Controls
+			</p>
+
+			<div class="flex items-center justify-center gap-2 max-sm:flex-wrap">
+				<UButton
+					icon="i-lucide-chevron-left"
+					variant="outline"
+					size="sm"
+					aria-label="Previous page"
+					:disabled="totalPages <= 1"
+					@click="adminPrevPage"
+				/>
+				<span class="text-sm text-muted px-2">
+					Page {{ currentPage }} of {{ totalPages }}
+				</span>
+				<UButton
+					icon="i-lucide-chevron-right"
+					variant="outline"
+					size="sm"
+					aria-label="Next page"
+					:disabled="totalPages <= 1"
+					@click="adminNextPage"
+				/>
+			</div>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard title="Header">
