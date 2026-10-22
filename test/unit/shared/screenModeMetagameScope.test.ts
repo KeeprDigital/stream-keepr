@@ -10,7 +10,7 @@ import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
  */
 
 const SCOPED_MODES = [
-	// Top Cards never offered Minimum Points, so it carries no minimum to scope by.
+	// Most Played Cards never offered Minimum Points, so it carries no minimum to scope by.
 	{ mode: 'metagame', scopeFields: ['scope', 'topN', 'minPoints', 'playerListId'], archetypeFilter: true },
 	{ mode: 'top-cards', scopeFields: ['scope', 'topN', 'playerListId'], archetypeFilter: true },
 	{ mode: 'archetype-spotlight', scopeFields: ['scope', 'topN', 'minPoints', 'playerListId'], archetypeFilter: false },

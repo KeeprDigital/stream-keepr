@@ -76,9 +76,9 @@ export const DEFAULT_METAGAME_SCOPE = {
 } as const;
 
 /**
- * The Metagame Scope less Minimum Points, for Top Cards, which never offered it.
- * Its `scope` still admits `minPoints`, as it always did, so a Top Cards config
- * scoped that way reads with no minimum.
+ * The Metagame Scope less Minimum Points, for Most Played Cards, which never
+ * offered it. Its `scope` still admits `minPoints`, as it always did, so a Most
+ * Played Cards config scoped that way reads with no minimum.
  */
 const { minPoints: _minPointsField, ...metagameScopeShapeWithoutMinPoints } = metagameScopeShape;
 const { minPoints: _minPointsDefault, ...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS } = DEFAULT_METAGAME_SCOPE;
