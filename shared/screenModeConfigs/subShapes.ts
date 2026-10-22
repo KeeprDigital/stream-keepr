@@ -14,6 +14,23 @@ export function columnConfigSchema<const Keys extends readonly [string, ...strin
 	}).strict();
 }
 
+/**
+ * A stored column list with every column its mode offers: each key it lacks is
+ * appended hidden, in the mode's key order. A column added to a mode after a
+ * Screen stored its list renders as before and can still be shown. A complete
+ * list is returned as it is.
+ */
+export function withEveryColumn<Key extends string, Column extends { key: Key; visible: boolean }>(
+	columns: readonly Column[],
+	keys: readonly Key[],
+): Column[] {
+	const held = new Set(columns.map(column => column.key));
+	const missing = keys.filter(key => !held.has(key));
+	if (missing.length === 0)
+		return columns as Column[];
+	return [...columns, ...missing.map(key => ({ key, visible: false }) as Column)];
+}
+
 /** The optional header above a mode's content. */
 export const headerConfigShape = {
 	showHeader: editorField(z.boolean(), { label: 'Show header' }),

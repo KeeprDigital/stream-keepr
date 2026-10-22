@@ -240,6 +240,84 @@ describe('screenModesPlayerHistoryDisplay', () => {
 		expect(wrapper.find('[data-testid="mana-colors"]').exists()).toBe(false);
 	});
 
+	describe('opponent archetype and game score columns', () => {
+		function showingColumns(...keys: string[]) {
+			config.value = { ...config.value, columns: keys.map(key => ({ key, visible: true })) };
+		}
+
+		it('shows the opponent\'s archetype with its colors in its own column', async () => {
+			showingColumns('opponent', 'opponentArchetype');
+
+			const wrapper = await mountComponent();
+
+			const row = wrapper.get('.history-row');
+			expect(row.get('.opponent-archetype').text()).toContain('Grixis');
+			expect(row.get('.opponent-archetype [data-testid="mana-colors"]').text()).toBe('UBR');
+		});
+
+		it('leaves the archetype column blank when the opponent has none', async () => {
+			showingColumns('opponent', 'opponentArchetype');
+			pageData.value = [historyRow({ opponentDeckName: null, opponentDeckColors: null })];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.opponent-archetype').text()).toBe('');
+			expect(wrapper.find('[data-testid="mana-colors"]').exists()).toBe(false);
+		});
+
+		it('moves the deck line out of the opponent cell while the archetype column shows', async () => {
+			showingColumns('opponent', 'opponentArchetype');
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.opponent').text()).toBe('vs Nadia Rivers');
+			expect(wrapper.find('.opponent-deck').exists()).toBe(false);
+		});
+
+		it.each([
+			['a win', historyRow(), '2-1'],
+			['a loss', historyRow({ outcome: 'loss', playerGameWins: 0, opponentGameWins: 2 }), '0-2'],
+			['a game draw', historyRow({ outcome: 'draw', playerGameWins: 1, opponentGameWins: 1, gameDraws: 1 }), '1-1-1'],
+			['a bye', historyRow({ outcome: 'bye', opponentName: 'BYE', playerGameWins: 2, opponentGameWins: 0 }), ''],
+			['an unreported Match', historyRow({ outcome: 'pending', hasResult: false, playerGameWins: null, opponentGameWins: null }), ''],
+		])('scores %s from the history Player\'s side', async (_name, row, expected) => {
+			showingColumns('opponent', 'gameScore');
+			pageData.value = [row];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.game-score').text()).toBe(expected);
+		});
+
+		it('drops the score from the outcome badge while the game score column shows', async () => {
+			showingColumns('outcome', 'gameScore');
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.get('.outcome-label').text()).toBe('WIN');
+			expect(wrapper.find('.outcome-score').exists()).toBe(false);
+			expect(wrapper.get('.game-score').text()).toBe('2-1');
+		});
+
+		it('keeps both in place while the new columns are hidden', async () => {
+			config.value = {
+				...config.value,
+				columns: [
+					...config.value.columns,
+					{ key: 'opponentArchetype', visible: false },
+					{ key: 'gameScore', visible: false },
+				],
+			};
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('.opponent-archetype').exists()).toBe(false);
+			expect(wrapper.find('.game-score').exists()).toBe(false);
+			expect(wrapper.get('.opponent-deck').text()).toContain('Grixis');
+			expect(wrapper.get('.outcome-score').text()).toBe('2-1');
+		});
+	});
+
 	it('sizes rows from the measured table height and rows per page', async () => {
 		const wrapper = await mountComponent();
 

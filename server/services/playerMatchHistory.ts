@@ -2,7 +2,7 @@ import { and, asc, eq, or } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, matches, phases, players, rounds } from '~~/server/db/schema';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
-import { getMtgGameData } from '~~/shared/utils/gameData';
+import { readMatchFromPlayerSide, resolvePlayerArchetype } from '~~/shared/utils/matchFromPlayerSide';
 
 /**
  * One Player's Matches across the Event, oldest phase first, with each outcome
@@ -47,26 +47,11 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 
 	const history = rows.map((row) => {
 		const match = row.match;
-		const isPlayer1 = match.player1Id === playerId;
-		const playerGameWins = isPlayer1 ? match.player1GameWins : match.player2GameWins;
-		const opponentGameWins = isPlayer1 ? match.player2GameWins : match.player1GameWins;
-		let outcome: 'win' | 'loss' | 'draw' | 'bye' | 'pending' = 'pending';
-
-		if (match.isBye) {
-			outcome = 'bye';
-		}
-		else if (match.hasResult && playerGameWins != null && opponentGameWins != null) {
-			if (playerGameWins > opponentGameWins)
-				outcome = 'win';
-			else if (playerGameWins < opponentGameWins)
-				outcome = 'loss';
-			else
-				outcome = 'draw';
-		}
-
-		const opponentMtgData = getMtgGameData(row.opponentGameData);
-		const opponentDeckName = row.opponentArchetypeName ?? opponentMtgData.deckName ?? null;
-		const opponentDeckColors = row.opponentArchetypeColors ?? opponentMtgData.deckColors ?? null;
+		const side = readMatchFromPlayerSide(match, playerId);
+		const opponentArchetype = resolvePlayerArchetype(
+			row.opponentArchetypeName == null ? null : { name: row.opponentArchetypeName, colors: row.opponentArchetypeColors },
+			row.opponentGameData,
+		);
 
 		return {
 			id: match.id,
@@ -77,13 +62,9 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 			tableNumber: match.tableNumber,
 			opponentId: match.isBye ? null : row.opponentId,
 			opponentName: match.isBye ? 'BYE' : (row.opponentName ?? 'Unknown opponent'),
-			opponentDeckName: match.isBye ? null : opponentDeckName,
-			opponentDeckColors: match.isBye ? null : opponentDeckColors,
-			outcome,
-			playerGameWins,
-			opponentGameWins,
-			gameDraws: match.gameDraws,
-			hasResult: match.hasResult,
+			opponentDeckName: match.isBye ? null : opponentArchetype.name,
+			opponentDeckColors: match.isBye ? null : opponentArchetype.colors,
+			...side,
 			resultString: match.resultString,
 		};
 	});
