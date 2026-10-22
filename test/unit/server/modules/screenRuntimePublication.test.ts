@@ -26,31 +26,35 @@ describe('screen runtime publication module', () => {
 		vi.clearAllMocks();
 	});
 
-	it('publishes card runtime updates', async () => {
+	it('publishes card runtime updates with the revision the save committed', async () => {
 		const card = createCard();
 
 		await screenRuntimePublicationModule().cardUpdated({
 			eventId: 1,
 			screenId: 2,
 			card: card as any,
+			revision: 7,
 			originConnectionId: 'origin-1',
 		});
 
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'card:updated', {
 			card,
 			screenId: 2,
+			revision: 7,
 		}, 'origin-1');
 	});
 
-	it('publishes card runtime clears', async () => {
+	it('publishes card runtime clears with the revision the Clear committed', async () => {
 		await screenRuntimePublicationModule().cardCleared({
 			eventId: 1,
 			screenId: 2,
+			revision: 8,
 			originConnectionId: 'origin-1',
 		});
 
 		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'card:cleared', {
 			screenId: 2,
+			revision: 8,
 		}, 'origin-1');
 	});
 });

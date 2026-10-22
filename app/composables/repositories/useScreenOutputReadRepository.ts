@@ -1,4 +1,5 @@
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type { ScreenCardState } from '~~/shared/types/card/mtg';
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
 	ScreenOutputFeatureMatchResponse,
@@ -9,7 +10,6 @@ import type {
 import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import type { Player } from '~/types';
-import type { MtgCard } from '~/types/card/mtg';
 import { screenOutputCapabilityHeaders } from '~~/shared/utils/screenOutput';
 
 /** The Screen a rendering reads as, and the credential it reads with. */
@@ -39,7 +39,7 @@ export function useScreenOutputReadRepository() {
 
 	return {
 		event: (scope: ScreenOutputReadScope) => read<ScreenOutputEvent>(scope, 'event'),
-		card: (scope: ScreenOutputReadScope) => read<MtgCard | null>(scope, 'card'),
+		card: (scope: ScreenOutputReadScope) => read<ScreenCardState>(scope, 'card'),
 		liveSession: (scope: ScreenOutputReadScope) =>
 			read<BroadcastGraphicsLiveSessionResponse>(scope, 'broadcast-graphics/live-session'),
 		playerHistory: (scope: ScreenOutputReadScope) =>

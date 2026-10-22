@@ -139,16 +139,14 @@ export const useCardStore = defineStore('card', () => {
 			return;
 		}
 
-		// Toggle the display property and save
+		// Toggle the display property and save, putting it back if the save fails (#734).
 		const toggleMap: Record<Exclude<MtgActiveCardAction, 'clear'>, keyof MtgCard['displayData']> = {
 			flip: 'flipped',
 			rotate: 'rotated',
 			turnOver: 'turnedOver',
 			counterRotate: 'counterRotated',
 		};
-		const prop = toggleMap[action];
-		activeCard.value.displayData[prop] = !activeCard.value.displayData[prop];
-		await saveActiveCard(activeCard.value);
+		await activeCardRuntime.controlActiveCardDisplay(toggleMap[action]);
 	}
 
 	const clearSearch = cardSearchRuntime.clearSearch;

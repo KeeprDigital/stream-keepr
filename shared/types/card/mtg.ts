@@ -51,6 +51,22 @@ export interface MtgCard {
 	timeoutData?: MtgCardTimeoutData;
 }
 
+/**
+ * A Screen Card at one Card revision: what every Card read answers (#734).
+ * The revision advances on each save and Clear and never on expiry, so `card`
+ * is `null` both for no Card and for one past its Card Timeout (ADR-0022).
+ */
+export interface ScreenCardState<TCard = MtgCard> {
+	card: TCard | null;
+	revision: number;
+}
+
+/** What a Card save or Clear answers: the Card revision it committed (#734). */
+export interface ScreenCardWriteResult {
+	success: true;
+	revision: number;
+}
+
 /* ACTION TYPES */
 export type MtgPreviewCardAction
 	= | 'show'

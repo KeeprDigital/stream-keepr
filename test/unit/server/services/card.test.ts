@@ -51,8 +51,8 @@ describe('cardService', () => {
 		mockKv.get.mockReset();
 		mockKv.set.mockReset();
 		mockKv.del.mockReset();
-		mockReturning.mockResolvedValue([{ id: 2 }]);
-		mockFindFirst.mockResolvedValue({ activeCard: null });
+		mockReturning.mockResolvedValue([{ revision: 4 }]);
+		mockFindFirst.mockResolvedValue({ activeCard: null, activeCardVersion: 0 });
 	});
 
 	describe('setScreenCard', () => {
@@ -67,7 +67,8 @@ describe('cardService', () => {
 				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
 			};
 
-			await cardService().setScreenCard(1, 2, cardData as any);
+			// The save answers the Card revision it committed (#734).
+			await expect(cardService().setScreenCard(1, 2, cardData as any)).resolves.toBe(4);
 
 			expect(mockKv.set).toHaveBeenCalledWith(
 				'event:1:screen:2:card',
@@ -93,7 +94,7 @@ describe('cardService', () => {
 				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
 			};
 
-			await expect(cardService().setScreenCard(1, 2, cardData as any)).resolves.toBeUndefined();
+			await expect(cardService().setScreenCard(1, 2, cardData as any)).resolves.toBe(4);
 			expect(mockReturning).toHaveBeenCalled();
 			expect(warn).toHaveBeenCalledWith(expect.stringContaining('kv_set'));
 			warn.mockRestore();
@@ -116,13 +117,13 @@ describe('cardService', () => {
 	});
 
 	describe('getScreenCard', () => {
-		it('returns parsed card data from KV', async () => {
+		it('returns the stored Card with the revision it was read at', async () => {
 			const stored = { id: 'card-1', name: 'Bolt', savedAt: 123 };
-			mockFindFirst.mockResolvedValue({ activeCard: stored });
+			mockFindFirst.mockResolvedValue({ activeCard: stored, activeCardVersion: 3 });
 
 			const result = await cardService().getScreenCard(1, 2);
 
-			expect(result).toEqual(stored);
+			expect(result).toEqual({ card: stored, revision: 3 });
 			expect(mockFindFirst).toHaveBeenCalled();
 			expect(mockKv.get).not.toHaveBeenCalled();
 		});
@@ -131,6 +132,7 @@ describe('cardService', () => {
 			vi.useFakeTimers();
 			vi.setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
 			mockFindFirst.mockResolvedValue({
+				activeCardVersion: 3,
 				activeCard: {
 					id: 'card-1',
 					name: 'Bolt',
@@ -143,7 +145,7 @@ describe('cardService', () => {
 			});
 
 			// Expiry is a projection (ADR-0022): the read answers no Card and writes nothing.
-			await expect(cardService().getScreenCard(1, 2)).resolves.toBeNull();
+			await expect(cardService().getScreenCard(1, 2)).resolves.toEqual({ card: null, revision: 3 });
 			expect(mockUpdate).not.toHaveBeenCalled();
 			expect(mockKv.del).not.toHaveBeenCalled();
 			vi.useRealTimers();
@@ -152,7 +154,7 @@ describe('cardService', () => {
 
 	describe('deleteScreenCard', () => {
 		it('deletes card data from KV', async () => {
-			await cardService().deleteScreenCard(1, 2);
+			await expect(cardService().deleteScreenCard(1, 2)).resolves.toBe(4);
 
 			expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ activeCard: null }));
 			expect(mockKv.del).toHaveBeenCalledWith('event:1:screen:2:card');

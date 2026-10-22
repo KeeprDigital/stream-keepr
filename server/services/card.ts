@@ -1,4 +1,5 @@
 import type { CardInput, StoredCardData } from '~~/server/schemas/kv/card';
+import type { ScreenCardState } from '~~/shared/types/card/mtg';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { screens } from '~~/server/db/schema';
@@ -35,7 +36,8 @@ export function cardService() {
 			logArtifactFailure(eventId, screenId, operation);
 		}
 	};
-	const writeAuthoritativeCard = async (eventId: number, screenId: number, card: StoredCardData | null) => {
+	/** Write the Card and advance its revision, answering the revision this write committed. */
+	const writeAuthoritativeCard = async (eventId: number, screenId: number, card: StoredCardData | null): Promise<number> => {
 		const updated = await db
 			.update(screens)
 			.set({
@@ -44,21 +46,25 @@ export function cardService() {
 				updatedAt: new Date(),
 			})
 			.where(and(eq(screens.id, screenId), eq(screens.eventId, eventId)))
-			.returning({ id: screens.id });
+			.returning({ revision: screens.activeCardVersion });
 
-		if (updated.length === 0)
+		const [written] = updated;
+		if (!written)
 			throw new Error('Screen not found');
+		return written.revision;
 	};
 
-	const setScreenCard = async (eventId: number, screenId: number, cardData: CardInput): Promise<void> => {
+	/** Save a Card, answering the Card revision the save committed (#734). */
+	const setScreenCard = async (eventId: number, screenId: number, cardData: CardInput): Promise<number> => {
 		const data: StoredCardData = {
 			...cardData,
 			savedAt: Date.now(),
 		};
 
 		const validated = storedCardSchema.parse(data);
-		await writeAuthoritativeCard(eventId, screenId, validated);
+		const revision = await writeAuthoritativeCard(eventId, screenId, validated);
 		await bestEffort(eventId, screenId, 'kv_set', async () => await kvStorage().set(getScreenCardKey(eventId, screenId), validated));
+		return revision;
 	};
 
 	/**
@@ -66,29 +72,37 @@ export function cardService() {
 	 * state transition (ADR-0022): a timed Card past its Card Timeout answers
 	 * `null`, and the stored Card, its revision and its KV copy stay as they are
 	 * until the next save, Clear, or Screen or Event deletion. A read never writes.
+	 *
+	 * The answer carries the Card revision of the row it loaded, so a holder can
+	 * order it against the writes and announcements it has already seen (#734).
 	 */
-	const getScreenCard = async (eventId: number, screenId: number): Promise<StoredCardData | null> => {
+	const getScreenCard = async (eventId: number, screenId: number): Promise<ScreenCardState<StoredCardData>> => {
 		const screen = await db.query.screens.findFirst({
 			where: and(eq(screens.id, screenId), eq(screens.eventId, eventId)),
-			columns: { activeCard: true },
+			columns: { activeCard: true, activeCardVersion: true },
 		});
+		const revision = screen?.activeCardVersion ?? 0;
 		if (!screen?.activeCard)
-			return null;
+			return { card: null, revision };
 
 		const parsed = storedCardSchema.safeParse(screen.activeCard);
 		if (!parsed.success)
-			return null;
+			return { card: null, revision };
 
 		if (cardTimeoutRemainingMs(parsed.data.timeoutData, Date.now()) <= 0)
-			return null;
+			return { card: null, revision };
 
-		return parsed.data;
+		return { card: parsed.data, revision };
 	};
 
-	/** The operator's explicit Clear. Expiry never calls it (ADR-0022). */
-	const deleteScreenCard = async (eventId: number, screenId: number): Promise<void> => {
-		await writeAuthoritativeCard(eventId, screenId, null);
+	/**
+	 * The operator's explicit Clear, answering the Card revision it committed.
+	 * Expiry never calls it (ADR-0022).
+	 */
+	const deleteScreenCard = async (eventId: number, screenId: number): Promise<number> => {
+		const revision = await writeAuthoritativeCard(eventId, screenId, null);
 		await bestEffort(eventId, screenId, 'kv_delete', async () => await kvStorage().del(getScreenCardKey(eventId, screenId)));
+		return revision;
 	};
 
 	/** Clean derived artifacts after a Screen/Event row has already been deleted. */

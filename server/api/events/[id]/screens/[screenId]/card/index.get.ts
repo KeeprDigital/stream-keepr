@@ -13,7 +13,6 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 
-	const card = await cardService().getScreenCard(id, screenId);
-
-	return card;
+	// The Card with the revision it was read at, so the reader can order it (#734).
+	return await cardService().getScreenCard(id, screenId);
 });

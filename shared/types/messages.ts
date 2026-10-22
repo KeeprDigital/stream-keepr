@@ -343,10 +343,14 @@ export interface MessageDefinitions {
 		staleDeleted: number;
 	};
 
-	// Card management (screen-scoped)
+	// Card management (screen-scoped). `card:updated` and `card:cleared` carry
+	// the Card revision the write committed. A holder applies only a Card state
+	// at least as new as the one it holds, whether it arrives as an announcement,
+	// a write's answer or a read (#734).
 	'card:updated': {
 		card: MtgCard | null;
 		screenId: number;
+		revision: number;
 	};
 
 	'card:preview': {
@@ -358,6 +362,7 @@ export interface MessageDefinitions {
 	// holder hides it from the `timeoutData` that `card:updated` carries (ADR-0022).
 	'card:cleared': {
 		screenId: number;
+		revision: number;
 	};
 
 	/*

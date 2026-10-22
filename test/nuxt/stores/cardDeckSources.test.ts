@@ -320,7 +320,7 @@ describe('useCardStore deck sources and search', () => {
 		it('clears active card on "clear"', async () => {
 			store.activeScreenId = 5;
 			store.activeCard = createMockMtgCard();
-			mockCardRepo.deleteScreenCard.mockResolvedValue(undefined);
+			mockCardRepo.deleteScreenCard.mockResolvedValue({ success: true, revision: 1 });
 
 			await store.controlActiveCard('clear');
 
@@ -330,7 +330,7 @@ describe('useCardStore deck sources and search', () => {
 		it('flips active card and saves', async () => {
 			store.activeScreenId = 5;
 			store.activeCard = createMockMtgCard();
-			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
+			mockCardRepo.saveScreenCard.mockResolvedValue({ success: true, revision: 1 });
 
 			await store.controlActiveCard('flip');
 
@@ -341,7 +341,7 @@ describe('useCardStore deck sources and search', () => {
 		it('rotates active card and saves', async () => {
 			store.activeScreenId = 5;
 			store.activeCard = createMockMtgCard();
-			mockCardRepo.saveScreenCard.mockResolvedValue(undefined);
+			mockCardRepo.saveScreenCard.mockResolvedValue({ success: true, revision: 1 });
 
 			await store.controlActiveCard('rotate');
 
@@ -748,7 +748,7 @@ describe('useCardStore deck sources and search', () => {
 				store.activeScreenId = 5;
 				store.activeCard = createMockMtgCard();
 
-				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: null });
+				ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card: null, revision: 1 });
 
 				expect(store.activeCard).toBeNull();
 			});

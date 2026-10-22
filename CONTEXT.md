@@ -149,7 +149,7 @@ _Avoid_: Auto-paging when naming the projection itself — auto-page is the oper
 The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape (a display reset among them), or when an operator selects a page mid-rotation. A Screen Output never writes it.
 
 **Screen Card**:
-The one Card a Screen in Card mode shows, set and cleared by an operator. Only the Card read carries it; a Screen read never does (ADR-0022).
+The one Card a Screen in Card mode shows, set and cleared by an operator. Only the Card read carries it; a Screen read never does (ADR-0022). Its Card revision advances on each save and Clear; every write answer, announcement and Card read carries it, and a holder applies only a state at least as new as the one it holds (ADR-0042).
 
 **Card Timeout**:
 A Screen Card's optional duration, after which every holder hides it by the shared clock. Expiry is a clock projection, like Page Rotation: no read, client or timer writes it, and nothing announces it (ADR-0022).

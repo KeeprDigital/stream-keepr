@@ -73,3 +73,28 @@ describe('createMessage', () => {
 		vi.useRealTimers();
 	});
 });
+
+/**
+ * A Card announcement carries the Card revision its write committed, which
+ * every holder orders Card states by (#734). Typecheck fails here if
+ * `card:updated` or `card:cleared` stops requiring it.
+ */
+describe('the Card announcements', () => {
+	it('carry the Card revision', () => {
+		const updated = createMessage(1, 'card:updated', { screenId: 2, card: null, revision: 7 });
+		const cleared = createMessage(1, 'card:cleared', { screenId: 2, revision: 8 });
+
+		expect(updated.revision).toBe(7);
+		expect(cleared.revision).toBe(8);
+	});
+
+	it('cannot be built without it', () => {
+		// @ts-expect-error — a Card update with no revision to order it by
+		const updated = { screenId: 2, card: null } satisfies MessagePayload<'card:updated'>;
+		// @ts-expect-error — a Card Clear with no revision to order it by
+		const cleared = { screenId: 2 } satisfies MessagePayload<'card:cleared'>;
+
+		expect(updated).not.toHaveProperty('revision');
+		expect(cleared).not.toHaveProperty('revision');
+	});
+});
