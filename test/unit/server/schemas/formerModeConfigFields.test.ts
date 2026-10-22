@@ -6,7 +6,7 @@ import { getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/ty
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 /**
- * A field a mode's config contract dropped, such as Top Cut's placeholder
+ * A field a mode's config contract dropped, such as Top Cut Bracket's placeholder
  * `bracketSize` (#752), may still be in storage. A Screen storing one still
  * loads and saves: no reader sees the field, a write naming it is accepted
  * without storing it, and the next write of the mode's config removes it.
@@ -14,7 +14,7 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 describe('a Top Cut Bracket Screen storing the dropped bracketSize', () => {
 	const stored = { 'top-cut': { bracketSize: 16, phaseId: 4 } };
 
-	it('declares bracketSize a former field of the Top Cut contract', () => {
+	it('declares bracketSize a former field of the Top Cut Bracket contract', () => {
 		expect(screenModeConfigContract('top-cut').formerFields).toEqual(['bracketSize']);
 		expect(getDisplayDefaultsForMode('top-cut')).not.toHaveProperty('bracketSize');
 	});
@@ -29,7 +29,7 @@ describe('a Top Cut Bracket Screen storing the dropped bracketSize', () => {
 		expect(JSON.parse(JSON.stringify(modeConfigsMapSchema.parse(stored)))).toEqual({ 'top-cut': { phaseId: 4 } });
 	});
 
-	it('loses it on the next PATCH of Top Cut config, whether or not the PATCH names it', () => {
+	it('loses it on the next PATCH of Top Cut Bracket config, whether or not the PATCH names it', () => {
 		const phasePatch = modeConfigPatchSchemaMap['top-cut'].parse({ phaseId: 5 }) as Record<string, unknown>;
 		const resetPatch = modeConfigPatchSchemaMap['top-cut'].parse({ bracketSize: 8 }) as Record<string, unknown>;
 

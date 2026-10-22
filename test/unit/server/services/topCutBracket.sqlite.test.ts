@@ -48,8 +48,18 @@ beforeAll(async () => {
 	semifinalsId = semifinals!.id;
 	quarterfinalsId = quarterfinals!.id;
 
+	const [archetype] = await db.insert(schema.archetypes)
+		.values({ eventId, name: 'Izzet Prowess', colors: 'UR' })
+		.returning({ id: schema.archetypes.id });
+
+	// Seed 1's Archetype is assigned; Seed 2's deck is named only by their Deck List.
 	const players = await db.insert(schema.players).values(
-		Array.from({ length: 8 }, (_, index) => ({ eventId, name: `Seed ${index + 1}` })),
+		Array.from({ length: 8 }, (_, index) => ({
+			eventId,
+			name: `Seed ${index + 1}`,
+			archetypeId: index === 0 ? archetype!.id : null,
+			gameData: index === 1 ? { type: 'mtg' as const, deckName: 'Mono-Green Landfall', deckColors: 'G' } : null,
+		})),
 	).returning({ id: schema.players.id });
 	playerIds.push(...players.map(row => row.id));
 	const seed = (n: number) => playerIds[n - 1]!;
@@ -62,6 +72,14 @@ beforeAll(async () => {
 		{ eventId, roundId: quarterfinalsId, tableNumber: 4, player1Id: seed(3), player2Data: { name: 'Unlinked Sixth' } },
 		{ eventId, roundId: semifinalsId, tableNumber: 1, player1Id: seed(1), player2Id: seed(5) },
 		{ eventId, roundId: swissRound!.id, tableNumber: 1, player1Id: seed(1), player2Id: seed(2) },
+	]);
+
+	// The last Swiss Round's Round Standings seed the Top 8; Seed 8 has no position
+	// there. The Top 8's own Round Standings are not seeds.
+	await db.insert(schema.playerRoundStandings).values([
+		...[1, 2, 3, 4, 5, 6, 7].map(n => ({ eventId, roundId: swissRound!.id, playerId: seed(n), position: n })),
+		{ eventId, roundId: swissRound!.id, playerId: seed(8), position: null },
+		...[1, 2, 3, 4, 5, 6, 7, 8].map(n => ({ eventId, roundId: quarterfinalsId, playerId: seed(n), position: 9 - n })),
 	]);
 });
 
@@ -88,6 +106,40 @@ describe('findPhaseBracket', () => {
 			{ playerId: null, name: 'Unlinked Sixth' },
 		]);
 		expect(result.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 0, gameWins: [2, 1] });
+	});
+
+	it('leaves seeds and Archetypes out unless asked for', async () => {
+		const result = await findPhaseBracket(eventId, topCutId);
+
+		const entrants = result.bracket.columns[0]!.positions.flatMap(position => position.entrants);
+		expect(entrants.every(entrant => entrant != null && !('seed' in entrant) && !('deck' in entrant))).toBe(true);
+	});
+
+	it('seeds each Player by their final position in the last Round Standings before the Phase', async () => {
+		const result = await findPhaseBracket(eventId, topCutId, { showSeeds: true });
+
+		expect(result.bracket.columns.map(column => column.positions.map(position => position.entrants.map(entrant => entrant?.seed ?? null)))).toEqual([
+			[[1, null], [4, 5], [2, 7], [3, null]],
+			[[1, 5], [null, null]],
+			[[null, null]],
+		]);
+	});
+
+	it('names each Player\'s Archetype from their assigned Archetype or their Deck List, blank when they have neither', async () => {
+		const result = await findPhaseBracket(eventId, topCutId, { showArchetypes: true });
+
+		expect(result.bracket.columns[0]!.positions.map(position => position.entrants.map(entrant => entrant?.deck ?? null))).toEqual([
+			[{ name: 'Izzet Prowess', colors: 'UR' }, null],
+			[null, null],
+			[{ name: 'Mono-Green Landfall', colors: 'G' }, null],
+			[null, null],
+		]);
+	});
+
+	it('has no seeds for a Phase no earlier Round Standings precede', async () => {
+		const result = await findPhaseBracket(eventId, swissId, { showSeeds: true });
+
+		expect(result.bracket.columns[0]!.positions[0]!.entrants.map(entrant => entrant?.seed)).toEqual([null, null]);
 	});
 
 	it('answers no Phase and an empty bracket for a Phase outside the Event, or one that is gone', async () => {

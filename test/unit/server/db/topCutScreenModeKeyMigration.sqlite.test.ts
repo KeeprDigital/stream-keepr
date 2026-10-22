@@ -71,7 +71,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		harness = await createSqliteD1Harness({ throughMigration: '0002' });
 		await insertEvent();
 		await insertScreen(1, 'topCut', {
-			topCut: { phaseId: 4, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
+			topCut: { phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
 			standings: { rowsPerPage: 8 },
 		});
 
@@ -80,7 +80,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		expect(await readScreen(1)).toEqual({
 			currentMode: 'top-cut',
 			modeConfigs: {
-				'top-cut': { phaseId: 4, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
+				'top-cut': { phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false, backgroundLayers: [{ id: 'layer-1', type: 'color' }] },
 				'standings': { rowsPerPage: 8 },
 			},
 		});
@@ -88,7 +88,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 		// Read as every Top Cut Bracket rendering and the Screen Output read do.
 		const { currentMode, modeConfigs } = await readScreen(1);
 		expect(SCREEN_MODE_VALUES).toContain(currentMode);
-		expect(resolveScreenModeConfig(modeConfigs, 'top-cut')).toMatchObject({ phaseId: 4, showHeader: false });
+		expect(resolveScreenModeConfig(modeConfigs, 'top-cut')).toMatchObject({ phaseId: 4, showSeeds: true, showArchetypes: true, showHeader: false });
 	});
 
 	it('moves a Top Cut Bracket config held by a Screen in another mode, and leaves Screens without one alone', async () => {

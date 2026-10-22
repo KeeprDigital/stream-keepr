@@ -35,6 +35,7 @@ describe('sCREEN_MODES', () => {
 			'top-cards': 'Most Played Cards',
 			'player-history': 'Player History',
 			'pairings': 'Pairings',
+			'archetype-spotlight': 'Archetype Spotlight',
 			'head-to-head': 'Head-to-Head',
 		});
 	});

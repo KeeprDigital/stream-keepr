@@ -10,7 +10,7 @@ export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
-export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'top-cut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'head-to-head'] as const;
+export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'top-cut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
 /**
  * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).
  * A migration moved stored Screens; a Screen write accepts the former key from a

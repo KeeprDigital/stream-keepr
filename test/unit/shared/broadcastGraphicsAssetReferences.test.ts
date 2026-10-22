@@ -278,6 +278,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'top-cards',
 			'player-history',
 			'pairings',
+			'archetype-spotlight',
 			'head-to-head',
 		]);
 

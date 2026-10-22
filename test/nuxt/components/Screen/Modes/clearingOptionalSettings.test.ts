@@ -37,6 +37,7 @@ const loaded = { isLoaded: true, $reset: vi.fn() };
 mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [{ id: 5, name: 'Ada' }], loadPlayersByEventId: vi.fn() }));
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [{ id: 31, name: 'Round 4' }], loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [{ id: 4, name: 'Mono Red' }], loadByEventId: vi.fn() }));
 mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [{ id: 3, name: 'Top 8', sortOrder: 1 }], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
@@ -142,6 +143,11 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 	['TopCut', 'top-cut', {}, [
 		['Custom header text', 'headerText', 'Championship Bracket'],
 		['Phase', 'phaseId', 3],
+	]],
+	['ArchetypeSpotlight', 'archetype-spotlight', { scope: 'playerList' }, [
+		['Custom header text', 'headerText', 'Deck to Beat'],
+		['Archetype', 'archetypeId', 4],
+		['Select list', 'playerListId', 7],
 	]],
 ])('the %s settings editor', (editor, mode, variant, fields) => {
 	beforeEach(() => {

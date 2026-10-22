@@ -14,9 +14,12 @@ const columns = computed(() => bracket.value.columns.map(column => ({
 })));
 
 // The first column seats the most Matches, so it sets the type size that keeps
-// every position of a Top 16 on screen.
+// every position of a Top 16 on screen. A position's height in ems is its two
+// entrant rows and their spacing; an Archetype line under each name (#759)
+// adds to it, so the type shrinks to keep a Top 16 whole.
 const layoutStyle = computed(() => ({
 	'--bracket-rows': String(Math.max(bracket.value.columns[0]?.positions.length ?? 1, 1)),
+	'--bracket-position-height': config.value.showArchetypes ? '6.4' : '4.6',
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
 }));
@@ -72,7 +75,11 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 									class="bracket-entrant"
 									:class="entrantClass(position, side)"
 								>
-									<span class="bracket-entrant-name">{{ entrantLabel(position, side) }}</span>
+									<span v-if="config.showSeeds" class="bracket-entrant-seed broadcast-table-numeric">{{ position.entrants[side]?.seed ?? '' }}</span>
+									<div class="bracket-entrant-identity">
+										<span class="bracket-entrant-name">{{ entrantLabel(position, side) }}</span>
+										<span v-if="config.showArchetypes" class="bracket-entrant-archetype">{{ position.entrants[side]?.deck?.name ?? '' }}</span>
+									</div>
 									<span v-if="position.gameWins[side] != null" class="bracket-entrant-score broadcast-table-numeric">{{ position.gameWins[side] }}</span>
 								</div>
 							</div>
@@ -102,8 +109,8 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 	gap: var(--bracket-gap);
 	min-height: 0;
 	padding: 0.75rem 1rem;
-	/* Two entrant rows and their spacing per position, so a Top 16's eight first-column positions fit. */
-	font-size: clamp(0.7rem, calc(100cqh / var(--bracket-rows) / 4.6), 2rem);
+	/* Each position's height in ems, so a Top 16's eight first-column positions fit. */
+	font-size: clamp(0.7rem, calc(100cqh / var(--bracket-rows) / var(--bracket-position-height, 4.6)), 2rem);
 }
 
 .bracket-column,
@@ -178,11 +185,36 @@ function entrantClass(position: BracketPosition, side: 0 | 1) {
 	border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.bracket-entrant-name {
+.bracket-entrant-seed {
+	color: var(--broadcast-table-secondary-text, rgba(255, 255, 255, 0.72));
+	flex-shrink: 0;
+	font-size: 0.8em;
+	font-weight: 700;
+	min-width: 1.6em;
+	text-align: right;
+}
+
+.bracket-entrant-identity {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.bracket-entrant-name,
+.bracket-entrant-archetype {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Blank for a Player with no Archetype, holding its line so every entrant stays one height. */
+.bracket-entrant-archetype {
+	color: var(--broadcast-table-secondary-text, rgba(255, 255, 255, 0.72));
+	font-size: 0.75em;
+	font-weight: 600;
+	min-height: 1.15em;
 }
 
 .bracket-entrant-score {

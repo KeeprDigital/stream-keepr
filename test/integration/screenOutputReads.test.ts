@@ -515,6 +515,15 @@ describe('capability-only Screen Output reads', () => {
 			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({ status: 'reported', winner: 1, gameWins: [1, 2] });
 			expect(reported.data.bracket.columns[1]!.positions[0]!.entrants).toEqual([{ playerId: null, name: 'Bob' }, null]);
+
+			// Seeds and Archetypes are read only while the Screen shows them (#759);
+			// a side no Player holds has neither.
+			await topCut.configure({ showSeeds: true, showArchetypes: true });
+			const detailed = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(detailed.data.bracket.columns[0]!.positions[0]!.entrants).toEqual([
+				{ playerId: null, name: 'Alice', seed: null, deck: null },
+				{ playerId: null, name: 'Bob', seed: null, deck: null },
+			]);
 		});
 
 		it('refuses to name another Event\'s Phase', async () => {
