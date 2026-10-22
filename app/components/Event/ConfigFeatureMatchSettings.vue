@@ -22,6 +22,7 @@ const initialData = computed(() => {
 		extraTurnsLabel: defaults.extraTurnsLabel,
 		lgsEnabled: props.event.lgsEnabled,
 		tableNumberEnabled: props.event.tableNumberEnabled,
+		featureMatchNotesEnabled: props.event.featureMatchNotesEnabled,
 	};
 });
 
@@ -33,9 +34,9 @@ useRegisterDirtyState(isDirty);
 
 function submit() {
 	const changes = getChanges();
-	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, ...matchDefaults } = changes;
+	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, featureMatchNotesEnabled, ...matchDefaults } = changes;
 	const eventToggles = Object.fromEntries(
-		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled }).filter(([key]) => key in changes),
+		Object.entries({ pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, featureMatchNotesEnabled }).filter(([key]) => key in changes),
 	);
 	emit('submit', { ...eventToggles, ...fromFeatureMatchDefaults(matchDefaults) } as UpdateEventInput);
 }
@@ -106,6 +107,15 @@ function submit() {
 					class="flex max-sm:flex-col justify-between gap-4 items-center"
 				>
 					<USwitch v-model="formData.tableNumberEnabled" />
+				</UFormField>
+
+				<UFormField
+					name="featureMatchNotesEnabled"
+					label="Feature Match Notes"
+					description="Show a production note on each Feature Match for the crew to share."
+					class="flex max-sm:flex-col justify-between gap-4 items-center"
+				>
+					<USwitch v-model="formData.featureMatchNotesEnabled" />
 				</UFormField>
 
 				<UFormField

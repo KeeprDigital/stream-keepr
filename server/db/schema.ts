@@ -125,6 +125,7 @@ export const events = sqliteTable('events', {
 	lgsEnabled: integer('lgs_enabled', { mode: 'boolean' }).notNull().default(false),
 	pronounsEnabled: integer('pronouns_enabled', { mode: 'boolean' }).notNull().default(true),
 	tableNumberEnabled: integer('table_number_enabled', { mode: 'boolean' }).notNull().default(false),
+	featureMatchNotesEnabled: integer('feature_match_notes_enabled', { mode: 'boolean' }).notNull().default(false),
 
 	...timestamps,
 });

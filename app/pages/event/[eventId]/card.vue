@@ -306,7 +306,7 @@ const timeoutProgress = computed(() => {
 								:match-options="matchOptions"
 								:selected-match="selectedDeckListMatch"
 								:selected-assignment="selectedDeckListAssignment"
-								:save-assignment-note="saveSelectedAssignmentNote"
+								:save-assignment-note="eventStore.event?.featureMatchNotesEnabled ? saveSelectedAssignmentNote : undefined"
 								:assignment-note-remote-changed="selectedDeckListAssignment ? assignmentStore.isRemoteChanged(selectedDeckListAssignment.id) : false"
 							/>
 						</div>

@@ -36,6 +36,7 @@ const featureMatchAssignment = computed(() => assignmentStore.assignments.find(a
 	assignment.slotId === props.match.id && assignment.matchId === props.match.matchId,
 ) ?? null);
 const assignmentNote = computed(() => featureMatchAssignment.value?.note ?? '');
+const featureMatchNotesEnabled = computed(() => eventStore.event?.featureMatchNotesEnabled ?? false);
 const sourceMatch = ref<import('~/types').Match | null>(null);
 const sourceRound = computed(() => sourceMatch.value ? roundStore.getRoundById(sourceMatch.value.roundId) : undefined);
 
@@ -284,7 +285,7 @@ async function save() {
 		</template>
 
 		<FeatureMatchNote
-			v-if="featureMatchAssignment"
+			v-if="featureMatchAssignment && featureMatchNotesEnabled"
 			class="mx-3 mt-3"
 			:note="assignmentNote"
 			:note-key="featureMatchAssignment.id"
