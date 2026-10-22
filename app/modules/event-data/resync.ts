@@ -145,11 +145,12 @@ export function storeReloaders(): EventDataReloaders {
 		playerLists: forLoaded(usePlayerListStore, (store, eventId) => store.loadByEventId(eventId)),
 		playerDecks: forLoaded(usePlayerDeckStore, (store, eventId) => store.loadByEventId(eventId)),
 		screens: forLoaded(useScreenStore, (store, eventId) => store.loadScreensByEventId(eventId)),
-		// The selected Screen's Card, re-read without deselecting the Screen.
-		card: () => {
+		// The selected Screen's Card, re-read without deselecting the Screen. A read
+		// of no Card lands; a failed or superseded one does not (#726).
+		card: async () => {
 			const cardStore = useCardStore();
 			if (cardStore.activeScreenId !== null)
-				return cardStore.loadActiveCard();
+				return await cardStore.loadActiveCard() === 'landed';
 		},
 	};
 }
