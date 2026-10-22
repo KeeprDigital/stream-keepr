@@ -101,13 +101,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 						<div v-else-if="column.key === 'opponent'" class="opponent" :style="primaryTextStyle">
 							<div>vs {{ row.opponentName }}</div>
 							<div v-if="row.opponentDeckName && !showsArchetypeColumn" class="opponent-deck" :style="secondaryTextStyle">
-								{{ row.opponentDeckName }}
-								<MtgManaColorDisplay
-									v-if="row.opponentDeckColors"
-									:colors="row.opponentDeckColors"
-									size="sm"
-									class="inline-flex ml-2 align-middle"
-								/>
+								<ScreenModesPlayerHistoryOpponentDeck :name="row.opponentDeckName" :colors="row.opponentDeckColors" />
 							</div>
 						</div>
 						<div v-else-if="column.key === 'table'" class="table" :style="secondaryTextStyle">
@@ -120,15 +114,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 							</span>
 						</div>
 						<div v-else-if="column.key === 'opponentArchetype'" class="opponent-archetype" :style="secondaryTextStyle">
-							<template v-if="row.opponentDeckName">
-								{{ row.opponentDeckName }}
-								<MtgManaColorDisplay
-									v-if="row.opponentDeckColors"
-									:colors="row.opponentDeckColors"
-									size="sm"
-									class="inline-flex ml-2 align-middle"
-								/>
-							</template>
+							<ScreenModesPlayerHistoryOpponentDeck v-if="row.opponentDeckName" :name="row.opponentDeckName" :colors="row.opponentDeckColors" />
 						</div>
 						<div v-else-if="column.key === 'gameScore'" class="game-score" :style="primaryTextStyle">
 							{{ formatGameScore(row) ?? '' }}

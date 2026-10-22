@@ -19,6 +19,9 @@ A unit of tournament play within a Phase, containing Matches and optional tourna
 A pairing between Players in a Round, including results and records used for standings and broadcast workflows.
 _Avoid_: Feature Match when referring to the pairing.
 
+**Game Score**:
+A Match's game wins and game draws read from one of its Players' side, theirs first: 2-1, or 1-1-1 with a game draw. A bye or an unreported Match has none.
+
 **Round Standings**:
 The standings for Players as of a specific Round.
 

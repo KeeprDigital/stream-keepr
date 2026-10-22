@@ -3,7 +3,6 @@ import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { PLAYER_HISTORY_COLUMN_KEY_VALUES } from '~~/shared/types/enums';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -44,7 +43,7 @@ const columnLabels: Record<PlayerHistoryColumnConfig['key'], string> = {
 };
 
 // A Screen that stored its columns before a column was added still offers it, hidden.
-const columns = computed(() => withEveryColumn(config.value.columns, PLAYER_HISTORY_COLUMN_KEY_VALUES));
+const columns = computed(() => withEveryColumn(config.value.columns, screenModeConfigContract('player-history').defaults.columns));
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the

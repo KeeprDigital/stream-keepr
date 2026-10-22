@@ -3,30 +3,37 @@ import { playerHistoryModeConfigContract } from '../../../shared/screenModeConfi
 import { withEveryColumn } from '../../../shared/screenModeConfigs/subShapes';
 
 describe('withEveryColumn', () => {
-	const keys = ['round', 'opponent', 'table', 'outcome', 'opponentArchetype', 'gameScore'] as const;
+	const defaults = [
+		{ key: 'round', visible: true },
+		{ key: 'opponent', visible: true },
+		{ key: 'table', visible: true },
+		{ key: 'outcome', visible: true },
+		{ key: 'opponentArchetype', visible: false },
+		{ key: 'gameScore', visible: true },
+	];
 
-	it('appends each key a stored column list lacks, hidden, in key order', () => {
+	it('appends each default column a stored list lacks, as the defaults hold it, in their order', () => {
 		const stored = [
 			{ key: 'outcome', visible: true },
 			{ key: 'round', visible: false },
 			{ key: 'opponent', visible: true },
 			{ key: 'table', visible: true },
-		] as const;
+		];
 
-		expect(withEveryColumn(stored, keys)).toEqual([
+		expect(withEveryColumn(stored, defaults)).toEqual([
 			{ key: 'outcome', visible: true },
 			{ key: 'round', visible: false },
 			{ key: 'opponent', visible: true },
 			{ key: 'table', visible: true },
 			{ key: 'opponentArchetype', visible: false },
-			{ key: 'gameScore', visible: false },
+			{ key: 'gameScore', visible: true },
 		]);
 	});
 
 	it('returns a complete list as it is', () => {
-		const complete = keys.map(key => ({ key, visible: true }));
+		const complete = defaults.map(column => ({ ...column, visible: false }));
 
-		expect(withEveryColumn(complete, keys)).toBe(complete);
+		expect(withEveryColumn(complete, defaults)).toBe(complete);
 	});
 });
 

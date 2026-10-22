@@ -2,7 +2,8 @@ import { and, asc, eq, or } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, matches, phases, players, rounds } from '~~/server/db/schema';
 import { mapPlayerToResponse } from '~~/server/mappers/player';
-import { readMatchFromPlayerSide, resolvePlayerArchetype } from '~~/shared/utils/matchFromPlayerSide';
+import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
+import { readMatchFromPlayerSide } from '~~/shared/utils/matchFromPlayerSide';
 
 /**
  * One Player's Matches across the Event, oldest phase first, with each outcome
@@ -48,7 +49,7 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 	const history = rows.map((row) => {
 		const match = row.match;
 		const side = readMatchFromPlayerSide(match, playerId);
-		const opponentArchetype = resolvePlayerArchetype(
+		const opponentDeck = resolvePlayerDeckIdentity(
 			row.opponentArchetypeName == null ? null : { name: row.opponentArchetypeName, colors: row.opponentArchetypeColors },
 			row.opponentGameData,
 		);
@@ -62,8 +63,8 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 			tableNumber: match.tableNumber,
 			opponentId: match.isBye ? null : row.opponentId,
 			opponentName: match.isBye ? 'BYE' : (row.opponentName ?? 'Unknown opponent'),
-			opponentDeckName: match.isBye ? null : opponentArchetype.name,
-			opponentDeckColors: match.isBye ? null : opponentArchetype.colors,
+			opponentDeckName: match.isBye ? null : opponentDeck.name,
+			opponentDeckColors: match.isBye ? null : opponentDeck.colors,
 			...side,
 			resultString: match.resultString,
 		};

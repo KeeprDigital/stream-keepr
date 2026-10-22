@@ -1,6 +1,3 @@
-import type { PlayerGameData } from '../types/game';
-import { getMtgGameData } from './gameData';
-
 /** How a Match ended for one of its Players. */
 export type MatchSideOutcome = 'win' | 'loss' | 'draw' | 'bye' | 'pending';
 
@@ -51,26 +48,4 @@ export function formatGameScore(side: MatchSide): string | null {
 	if (side.outcome === 'bye' || !side.hasResult || side.playerGameWins == null || side.opponentGameWins == null)
 		return null;
 	return `${side.playerGameWins}-${side.opponentGameWins}${side.gameDraws ? `-${side.gameDraws}` : ''}`;
-}
-
-/** A Player's deck identity as a broadcast names it. */
-export interface PlayerArchetype {
-	name: string | null;
-	colors: string | null;
-}
-
-/**
- * The name and colours a broadcast shows for a Player's deck: their assigned
- * Archetype, else the name their primary Deck List projects into game data.
- * Blank when the Player has neither, as when they have no Deck List.
- */
-export function resolvePlayerArchetype(
-	archetype: { name: string; colors: string | null } | null,
-	gameData: PlayerGameData | null | undefined,
-): PlayerArchetype {
-	const mtg = getMtgGameData(gameData);
-	return {
-		name: archetype?.name ?? mtg.deckName ?? null,
-		colors: archetype?.colors ?? mtg.deckColors ?? null,
-	};
 }

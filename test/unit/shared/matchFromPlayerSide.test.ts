@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatGameScore, readMatchFromPlayerSide, resolvePlayerArchetype } from '../../../shared/utils/matchFromPlayerSide';
+import { formatGameScore, readMatchFromPlayerSide } from '../../../shared/utils/matchFromPlayerSide';
 
 function match(overrides: Partial<Parameters<typeof readMatchFromPlayerSide>[0]> = {}) {
 	return {
@@ -73,21 +73,5 @@ describe('formatGameScore', () => {
 
 	it('has no score for a result without game wins', () => {
 		expect(formatGameScore(readMatchFromPlayerSide(match({ player1GameWins: null, player2GameWins: null }), 1))).toBeNull();
-	});
-});
-
-describe('resolvePlayerArchetype', () => {
-	it('names the Player\'s Archetype with its colours', () => {
-		expect(resolvePlayerArchetype({ name: 'Grixis Control', colors: 'UBR' }, { type: 'mtg', deckName: 'Imported', deckColors: 'G' }))
-			.toEqual({ name: 'Grixis Control', colors: 'UBR' });
-	});
-
-	it('falls back to the Player\'s deck name without an Archetype', () => {
-		expect(resolvePlayerArchetype(null, { type: 'mtg', deckName: 'Mono-Red Aggro', deckColors: 'R' }))
-			.toEqual({ name: 'Mono-Red Aggro', colors: 'R' });
-	});
-
-	it('is blank when the Player has neither', () => {
-		expect(resolvePlayerArchetype(null, null)).toEqual({ name: null, colors: null });
 	});
 });
