@@ -15,6 +15,7 @@ const {
 	visibleColumns,
 	pageData,
 	formatCell,
+	positionChangeOf,
 } = useStandingsModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
@@ -33,7 +34,7 @@ const secondaryTextStyle = computed(() => {
 
 const isRevealMode = computed(() => config.value.viewMode === 'reveal');
 
-function getCellStyle(key: StandingsColumnKey) {
+function getCellStyle(key: StandingsColumnKey, player: Player) {
 	switch (key) {
 		case 'name':
 		case 'points':
@@ -42,7 +43,18 @@ function getCellStyle(key: StandingsColumnKey) {
 		case 'record':
 		case 'deck':
 			return secondaryTextStyle.value;
+		case 'positionChange': {
+			// A climb or a drop shows in its own colour; everything else reads
+			// as secondary text.
+			const { kind } = positionChangeOf(player);
+			return kind === 'up' || kind === 'down' ? {} : secondaryTextStyle.value;
+		}
 	}
+}
+
+/** A Position Change cell's direction, which its colour reads from. */
+function positionChangeKind(key: StandingsColumnKey, player: Player) {
+	return key === 'positionChange' ? positionChangeOf(player).kind : undefined;
 }
 
 function getDeckColors(player: Player) {
@@ -123,7 +135,12 @@ const contentStyle = computed(() => ({
 							:style="{ '--row-index': index }"
 						>
 							<template v-for="col in visibleColumns" :key="col.key">
-								<div class="standings-cell" :class="`cell-${col.key}`" :style="getCellStyle(col.key)">
+								<div
+									class="standings-cell"
+									:class="`cell-${col.key}`"
+									:style="getCellStyle(col.key, player)"
+									:data-position-change="positionChangeKind(col.key, player)"
+								>
 									<template v-if="col.key === 'deck'">
 										<span class="deck-cell-content">
 											<span class="deck-cell-text">{{ formatCell(player, col.key) }}</span>
@@ -152,7 +169,12 @@ const contentStyle = computed(() => ({
 							class="standings-row broadcast-table-row"
 						>
 							<template v-for="col in visibleColumns" :key="col.key">
-								<div class="standings-cell" :class="`cell-${col.key}`" :style="getCellStyle(col.key)">
+								<div
+									class="standings-cell"
+									:class="`cell-${col.key}`"
+									:style="getCellStyle(col.key, player)"
+									:data-position-change="positionChangeKind(col.key, player)"
+								>
 									<template v-if="col.key === 'deck'">
 										<span class="deck-cell-content">
 											<span class="deck-cell-text">{{ formatCell(player, col.key) }}</span>
@@ -236,6 +258,29 @@ const contentStyle = computed(() => ({
 	text-align: center;
 	font-family: var(--font-mono);
 	white-space: nowrap;
+}
+
+.cell-positionChange {
+	width: 3.25em;
+	text-align: center;
+	font-family: var(--font-mono);
+	font-size: var(--standings-row-secondary-font-size, 0.875rem);
+	white-space: nowrap;
+}
+
+/* The arrow carries the direction; the colour only reinforces it. */
+.cell-positionChange[data-position-change='up'] {
+	color: #4ade80;
+}
+
+.cell-positionChange[data-position-change='down'] {
+	color: #f87171;
+}
+
+.cell-positionChange[data-position-change='new'] {
+	font-size: calc(var(--standings-row-secondary-font-size, 0.875rem) * 0.8);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
 }
 
 .cell-deck {

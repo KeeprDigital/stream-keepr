@@ -14,6 +14,14 @@ export function columnConfigSchema<const Keys extends readonly [string, ...strin
 	}).strict();
 }
 
+/** Whether a table mode's column list shows the column `key`. */
+export function isColumnVisible<Key extends string>(
+	columns: ReadonlyArray<{ key: Key; visible: boolean }>,
+	key: Key,
+): boolean {
+	return columns.some(column => column.key === key && column.visible);
+}
+
 /**
  * A stored column list as its editor offers it, with every column its mode
  * offers: each of the mode's default columns it lacks is appended hidden, in the

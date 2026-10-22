@@ -2,6 +2,7 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { isColumnVisible, withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -78,11 +79,14 @@ const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
 	record: 'Record (W-L-D)',
 	points: 'Points',
 	deck: 'Deck',
+	positionChange: 'Position Change',
 };
 
-const isDeckColumnVisible = computed(() =>
-	config.value.columns.some(col => col.key === 'deck' && col.visible),
-);
+// A Screen whose columns were saved before a column existed is offered it too,
+// as its defaults hold it (the Position Change column hidden), after its own.
+const editorColumns = computed(() => withEveryColumn(config.value.columns, screenModeConfigContract('standings').defaults.columns));
+
+const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns, 'deck'));
 
 // ── Pagination ──
 // Estimate display row count from player store for page controls
@@ -338,7 +342,7 @@ const modeSettingsLabel = computed(() => {
 
 		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
 			<ScreenColumnVisibilityList
-				:columns="config.columns"
+				:columns="editorColumns"
 				:labels="COLUMN_LABELS"
 				@update="updateConfig({ columns: $event })"
 			/>

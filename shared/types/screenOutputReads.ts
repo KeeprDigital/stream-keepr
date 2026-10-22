@@ -32,6 +32,18 @@ export interface ScreenOutputStandingsResponse {
 	roundStandings: ScreenOutputRoundStanding[] | null;
 	/** The watchlist's name and members; `null` unless the view is a watchlist of a list that exists. */
 	watchlist: { name: string; playerIds: number[] } | null;
+	/**
+	 * The previous Round's Round Standings positions, which the Position Change
+	 * column measures against (#755); `null` unless that column shows, and when
+	 * there is no previous Round.
+	 */
+	previousRoundPositions: ScreenOutputPreviousRoundPositions | null;
+}
+
+/** Each Player's position in the Round Standings of the Round before the one shown. */
+export interface ScreenOutputPreviousRoundPositions {
+	roundId: number;
+	positions: Array<{ playerId: number; position: number | null }>;
 }
 
 /** One side of a Match as Pairings names it: its Player, or the Match's own record of a side no Player holds. */
