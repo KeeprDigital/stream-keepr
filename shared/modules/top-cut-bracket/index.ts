@@ -14,6 +14,18 @@ export interface BracketEntrant {
 	/** The seated Player; `null` when the side names no Player of the Event. */
 	playerId: number | null;
 	name: string;
+	/**
+	 * The Player's seed: their final position in the last Round Standings
+	 * before the Phase (#759). `null` when they have none; absent when the
+	 * Screen does not show seeds.
+	 */
+	seed?: number | null;
+	/**
+	 * The Player's Archetype as a broadcast names it: their assigned Archetype,
+	 * else their Deck List's deck name (#759). `null` when they have neither;
+	 * absent when the Screen does not show Archetypes.
+	 */
+	archetype?: { name: string; colors: string | null } | null;
 }
 
 /** One Match of a Round, as the bracket reads it. */

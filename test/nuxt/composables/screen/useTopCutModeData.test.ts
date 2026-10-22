@@ -11,6 +11,8 @@ const defaultConfig = {
 	phaseId: undefined as number | undefined,
 	showHeader: true,
 	headerText: undefined as string | undefined,
+	showSeeds: false,
+	showArchetypes: false,
 };
 
 const mutableConfig = reactive({ ...defaultConfig });
@@ -129,9 +131,26 @@ describe('useTopCutModeData', () => {
 		expect(headerText.value).toBe('Championship Bracket');
 	});
 
+	it.each([
+		['seeds', 'showSeeds'],
+		['Archetypes', 'showArchetypes'],
+	] as const)('re-reads when %s are turned on, since the read carries them only while shown', async (_, toggle) => {
+		mutableConfig.phaseId = 3;
+		mockFetch.mockResolvedValue(answer());
+		makeTopCutModeData();
+		await flushPromises();
+		mockFetch.mockClear();
+
+		mutableConfig[toggle] = true;
+		await flushPromises();
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+	});
+
 	describe('live-follow', () => {
-		async function following() {
+		async function following(shown: Partial<Pick<typeof defaultConfig, 'showSeeds' | 'showArchetypes'>> = {}) {
 			mutableConfig.phaseId = 3;
+			Object.assign(mutableConfig, shown);
 			mockFetch.mockResolvedValue(answer());
 			makeTopCutModeData();
 			await flushPromises();
@@ -165,6 +184,48 @@ describe('useTopCutModeData', () => {
 			['another Phase renamed', 'phase:updated', { phase: { id: 4 } }],
 			['a Player it does not seat renamed', 'player:updated', { player: { id: 50 } }],
 		])('does not re-read on %s', async (_, type, payload) => {
+			await following();
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
+		});
+
+		// Seeds come from Round Standings before the Phase, which a sync of any
+		// Round may write, and any Round or Phase edit may reorder.
+		const seedChanges = [
+			['an earlier Round re-synced from Melee', 'melee:roundSynced', { roundId: 20 }],
+			['an earlier Round renumbered', 'round:updated', { round: { id: 20, phaseId: 2 } }],
+			['an earlier Round deleted', 'round:deleted', { roundId: 20 }],
+			['another Phase reordered', 'phase:updated', { phase: { id: 2 } }],
+			['another Phase deleted', 'phase:deleted', { phaseId: 2 }],
+		] as const;
+
+		// An Archetype is named by its Archetype or a Deck List, neither of which
+		// is a Player message.
+		const archetypeChanges = [
+			['an Archetype renamed', 'archetype:updated', { archetype: { id: 5 } }],
+			['an Archetype deleted', 'archetype:deleted', { archetypeId: 5 }],
+			['Melee\'s Deck Lists synced', 'melee:decklistsSynced', {}],
+		] as const;
+
+		it.each(seedChanges)('re-reads on %s while seeds show', async (_, type, payload) => {
+			await following({ showSeeds: true });
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it.each(archetypeChanges)('re-reads on %s while Archetypes show', async (_, type, payload) => {
+			await following({ showArchetypes: true });
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([...seedChanges, ...archetypeChanges])('does not re-read on %s while neither shows', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
 			await flushPromises();

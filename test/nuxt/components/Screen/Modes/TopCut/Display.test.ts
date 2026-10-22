@@ -6,7 +6,7 @@ import { computed, ref } from 'vue';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 
 const screen = ref<any>({ id: 1, screenConfig: {} });
-const config = ref({ phaseId: 3, showHeader: true, headerText: undefined as string | undefined });
+const config = ref({ phaseId: 3, showSeeds: false, showArchetypes: false, showHeader: true, headerText: undefined as string | undefined });
 const error = ref<string | null>(null);
 const isEmpty = ref(false);
 const headerText = ref('Top 8');
@@ -70,7 +70,7 @@ function columnTexts(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 
 describe('screenModesTopCutDisplay', () => {
 	beforeEach(() => {
-		config.value = { phaseId: 3, showHeader: true, headerText: undefined };
+		config.value = { phaseId: 3, showSeeds: false, showArchetypes: false, showHeader: true, headerText: undefined };
 		error.value = null;
 		isEmpty.value = false;
 		headerText.value = 'Top 8';
@@ -134,6 +134,79 @@ describe('screenModesTopCutDisplay', () => {
 
 		expect(wrapper.findAll('.bracket-position')).toHaveLength(size - 1);
 		expect(wrapper.find('.topcut-display').attributes('style')).toContain(`--bracket-rows: ${size / 2}`);
+	});
+
+	describe('seeds and Archetypes', () => {
+		/** A Semifinal whose Players carry a seed and an Archetype, or neither. */
+		function detailed(): TopCutBracket {
+			return deriveTopCutBracket([{
+				roundId: 1,
+				name: 'Semifinals',
+				matches: [
+					match(1, 1, { ...player(1), seed: 1, archetype: { name: 'Izzet Prowess', colors: 'UR' } }, { ...player(4), seed: null, archetype: null }),
+					match(2, 2, { ...player(2), seed: 2, archetype: null }, { ...player(3), seed: 3, archetype: { name: 'Mono-Green Landfall', colors: 'G' } }),
+				],
+			}]);
+		}
+
+		function firstColumnEntrants(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
+			return wrapper.findAll('.bracket-column')[0]!.findAll('.bracket-entrant');
+		}
+
+		it('shows each Player\'s seed before their name, blank for one with none', async () => {
+			bracket.value = detailed();
+			config.value = { ...config.value, showSeeds: true };
+			const wrapper = await mountComponent();
+
+			expect(firstColumnEntrants(wrapper).map(entrant => [entrant.find('.bracket-entrant-seed').text(), entrant.find('.bracket-entrant-name').text()])).toEqual([
+				['1', 'Seed 1'],
+				['', 'Seed 4'],
+				['2', 'Seed 2'],
+				['3', 'Seed 3'],
+			]);
+			expect(wrapper.find('.bracket-entrant-archetype').exists()).toBe(false);
+		});
+
+		it('shows each Player\'s Archetype under their name, blank for one with none', async () => {
+			bracket.value = detailed();
+			config.value = { ...config.value, showArchetypes: true };
+			const wrapper = await mountComponent();
+
+			expect(firstColumnEntrants(wrapper).map(entrant => entrant.find('.bracket-entrant-archetype').text())).toEqual([
+				'Izzet Prowess',
+				'',
+				'',
+				'Mono-Green Landfall',
+			]);
+			expect(wrapper.find('.bracket-entrant-seed').exists()).toBe(false);
+		});
+
+		it('shows neither while the Screen turns both off', async () => {
+			bracket.value = detailed();
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('.bracket-entrant-seed').exists()).toBe(false);
+			expect(wrapper.find('.bracket-entrant-archetype').exists()).toBe(false);
+		});
+
+		it('keeps every position of a Top 16 on screen with both on, sizing type for a second line per entrant', async () => {
+			bracket.value = unplayed(16);
+			config.value = { ...config.value, showSeeds: true, showArchetypes: true };
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('.bracket-position')).toHaveLength(15);
+			const style = wrapper.find('.topcut-display').attributes('style');
+			expect(style).toContain('--bracket-rows: 8');
+			expect(style).toContain('--bracket-position-height: 6.4');
+		});
+
+		it('sizes type for one line per entrant while Archetypes are off', async () => {
+			bracket.value = unplayed(16);
+			config.value = { ...config.value, showSeeds: true };
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('.topcut-display').attributes('style')).toContain('--bracket-position-height: 4.6');
+		});
 	});
 
 	it('hides the header when the Screen turns it off', async () => {
