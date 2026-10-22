@@ -76,65 +76,80 @@ function animationEffectLabel(effect: AnimationEffectName) {
 	return ANIMATION_EFFECT_CATALOGUE[effect].label;
 }
 
+const backgroundSummary = computed(() => {
+	const frame = props.config.layout.frame;
+	const parts = [frame.backgroundColor || 'transparent'];
+	if (frame.gradient)
+		parts.push('gradient');
+	if (frame.backgroundImage)
+		parts.push('image');
+	return parts.join(' • ');
+});
+
+const borderSummary = computed(() => {
+	const frame = props.config.layout.frame;
+	return frame.borderVisible ? `${frame.borderWidth ?? 1}px border` : 'No border';
+});
+
 function animationSummary() {
 	return `${animationEffectLabel(animation.value.effect)} • opacity ${animation.value.opacity}`;
 }
 </script>
 
 <template>
-	<div class="space-y-3">
-		<div class="max-h-[58vh] divide-y divide-default/60 overflow-y-auto pr-2">
-			<section class="py-4 first:pt-0 last:pb-0">
-				<div class="space-y-3">
-					<FeatureMatchOverlayBackgroundFields
-						:color="config.layout.frame.backgroundColor"
-						:gradient="config.layout.frame.gradient"
-						:opacity="config.layout.frame.opacity"
-						color-placeholder="#111111"
-						allow-raw-color
-						empty-color-value="transparent"
-						@update="updateFrameBackground"
-					/>
-					<div class="grid gap-3 sm:grid-cols-2 sm:items-end">
-						<div class="space-y-3 sm:col-span-2" data-testid="frame-image-source">
-							<ScreenMediaSourceField
-								:model-value="config.layout.frame.backgroundImage"
-								:event-id="eventId"
-								asset-kind="image"
-								label="Frame image"
-								@update:model-value="updateFrame({ backgroundImage: $event ?? undefined })"
-							/>
-						</div>
-						<UFormField label="Image fit">
-							<USelect
-								:model-value="config.layout.frame.backgroundImageFit"
-								:items="MEDIA_FIT_OPTIONS"
-								value-key="value"
-								size="sm"
-								class="w-full"
-								@update:model-value="updateFrame({ backgroundImageFit: $event as MediaFit })"
-							/>
-						</UFormField>
-					</div>
-				</div>
-			</section>
-
-			<section class="py-4 first:pt-0 last:pb-0">
-				<ScreenMediaBackgroundFields
-					:media="mediaBackground"
-					:event-id="eventId"
-					@update="updateMediaBackground"
+	<div class="min-w-0">
+		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary" default-open>
+			<div class="space-y-3">
+				<FeatureMatchOverlayBackgroundFields
+					:color="config.layout.frame.backgroundColor"
+					:gradient="config.layout.frame.gradient"
+					:opacity="config.layout.frame.opacity"
+					color-placeholder="#111111"
+					allow-raw-color
+					empty-color-value="transparent"
+					@update="updateFrameBackground"
 				/>
-			</section>
+				<div class="grid gap-3 sm:grid-cols-2 sm:items-end">
+					<div class="space-y-3 sm:col-span-2" data-testid="frame-image-source">
+						<ScreenMediaSourceField
+							:model-value="config.layout.frame.backgroundImage"
+							:event-id="eventId"
+							asset-kind="image"
+							label="Frame image"
+							@update:model-value="updateFrame({ backgroundImage: $event ?? undefined })"
+						/>
+					</div>
+					<UFormField label="Image fit">
+						<USelect
+							:model-value="config.layout.frame.backgroundImageFit"
+							:items="MEDIA_FIT_OPTIONS"
+							value-key="value"
+							size="sm"
+							class="w-full"
+							@update:model-value="updateFrame({ backgroundImageFit: $event as MediaFit })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+		</FeatureMatchOverlayControlSection>
 
-			<section class="space-y-4 py-4 first:pt-0 last:pb-0">
+		<FeatureMatchOverlayControlSection title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
+			<ScreenMediaBackgroundFields
+				:media="mediaBackground"
+				:event-id="eventId"
+				@update="updateMediaBackground"
+			/>
+		</FeatureMatchOverlayControlSection>
+
+		<FeatureMatchOverlayControlSection title="Animation" :summary="animation.enabled ? animationSummary() : 'Off'">
+			<div class="space-y-4">
 				<ScreenSettingsToggle
 					label="Animation"
 					:model-value="animation.enabled"
 					@update:model-value="updateAnimation({ enabled: $event })"
 				/>
 
-				<div v-if="animation.enabled" class="grid gap-3 md:grid-cols-2">
+				<template v-if="animation.enabled">
 					<UFormField label="Layer opacity">
 						<UIOpacityInput
 							:model-value="animation.opacity"
@@ -143,30 +158,23 @@ function animationSummary() {
 							@update:model-value="updateAnimation({ opacity: Number($event) })"
 						/>
 					</UFormField>
-				</div>
 
-				<FeatureMatchOverlayControlSection
-					v-if="animation.enabled"
-					title="Effect tuning"
-					:badge="animationEffectLabel(animation.effect)"
-					:summary="animationSummary()"
-				>
 					<ScreenAnimationEffectFields
 						:selection="animationSelection"
 						@update:selection="applyAnimationSelection"
 					/>
-				</FeatureMatchOverlayControlSection>
-			</section>
+				</template>
+			</div>
+		</FeatureMatchOverlayControlSection>
 
-			<section class="py-4 first:pt-0 last:pb-0">
-				<GraphicsBorderGlowFields
-					border-label="Frame border"
-					v-bind="borderGlowFieldsValue(config.layout.frame)"
-					per-side
-					glow-gated-on-border
-					@edit="updateFrame(borderGlowStyleUpdates($event))"
-				/>
-			</section>
-		</div>
+		<FeatureMatchOverlayControlSection title="Border and glow" :summary="borderSummary">
+			<GraphicsBorderGlowFields
+				border-label="Frame border"
+				v-bind="borderGlowFieldsValue(config.layout.frame)"
+				per-side
+				glow-gated-on-border
+				@edit="updateFrame(borderGlowStyleUpdates($event))"
+			/>
+		</FeatureMatchOverlayControlSection>
 	</div>
 </template>

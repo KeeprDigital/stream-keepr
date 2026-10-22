@@ -122,43 +122,6 @@ const inputStep = computed(() => geometryUnitInputStep(unit.value));
 
 <template>
 	<div class="space-y-3">
-		<UFormField label="Units" size="sm">
-			<GraphicsGeometryUnitPicker v-model="unit" />
-		</UFormField>
-
-		<div v-if="!stacked" class="flex flex-wrap gap-4">
-			<UFormField :label="anchorLabel ?? 'Anchor'" size="sm">
-				<UINinePointPicker
-					:model-value="anchor"
-					:aria-label="anchorLabel ?? 'Anchor'"
-					@update:model-value="emit('update:anchor', $event)"
-				/>
-			</UFormField>
-
-			<UFormField label="Align" size="sm">
-				<div class="space-y-1">
-					<div
-						v-for="{ axis, actions } in ALIGN_ACTIONS"
-						:key="axis"
-						class="grid grid-cols-3 gap-1"
-					>
-						<UButton
-							v-for="action in actions"
-							:key="action.edge"
-							:aria-label="action.label"
-							:title="action.label"
-							:icon="action.icon"
-							size="xs"
-							color="neutral"
-							variant="soft"
-							class="size-7 justify-center p-0"
-							@click="align(axis, action.edge)"
-						/>
-					</div>
-				</div>
-			</UFormField>
-		</div>
-
 		<div v-if="!stacked" class="grid grid-cols-2 gap-2">
 			<UFormField
 				v-for="axis in ['x', 'y'] as const"
@@ -208,6 +171,46 @@ const inputStep = computed(() => geometryUnitInputStep(unit.value));
 					/>
 				</UFormField>
 			</template>
+		</div>
+
+		<slot name="after-size" />
+
+		<div class="flex flex-wrap items-start gap-4">
+			<template v-if="!stacked">
+				<UFormField :label="anchorLabel ?? 'Anchor'" size="sm">
+					<UINinePointPicker
+						:model-value="anchor"
+						:aria-label="anchorLabel ?? 'Anchor'"
+						@update:model-value="emit('update:anchor', $event)"
+					/>
+				</UFormField>
+
+				<UFormField label="Align" size="sm">
+					<div class="space-y-1">
+						<div
+							v-for="{ axis, actions } in ALIGN_ACTIONS"
+							:key="axis"
+							class="grid grid-cols-3 gap-1"
+						>
+							<UButton
+								v-for="action in actions"
+								:key="action.edge"
+								:aria-label="action.label"
+								:title="action.label"
+								:icon="action.icon"
+								size="xs"
+								color="neutral"
+								variant="soft"
+								class="size-7 justify-center p-0"
+								@click="align(axis, action.edge)"
+							/>
+						</div>
+					</div>
+				</UFormField>
+			</template>
+			<UFormField label="Units" size="sm">
+				<GraphicsGeometryUnitPicker v-model="unit" />
+			</UFormField>
 		</div>
 	</div>
 </template>

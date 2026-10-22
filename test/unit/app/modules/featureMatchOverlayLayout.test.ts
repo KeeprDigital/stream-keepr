@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	bringSourceToFront,
 	createSourceItem,
+	duplicateSource,
 	moveSourceOrder,
 	patchFrame,
 	patchSource,
@@ -105,5 +106,24 @@ describe('feature match layout writer', () => {
 		const layout = layoutOf([source(), source({ id: 's2' })]);
 
 		expect(removeSource(layout, 's1').sources.map(item => item.id)).toEqual(['s2']);
+	});
+
+	it('duplicates a Source Item in front of itself, offset and uniquely named', () => {
+		const layout = layoutOf([source(), source({ id: 's2', label: 'Other' })]);
+
+		const { layout: next, id } = duplicateSource(layout, 's1');
+
+		expect(next.sources.map(item => item.id)).toEqual(['s1', id, 's2']);
+		expect(next.sources[1]).toMatchObject({ label: 'Source copy', x: 120, y: 70, width: 200, height: 100, sourceRole: 'main' });
+		expect(id).not.toBe('s1');
+
+		const again = duplicateSource(next, 's1');
+		expect(again.layout.sources[1]!.label).toBe('Source copy 2');
+	});
+
+	it('duplicates nothing for an unknown Source Item', () => {
+		const layout = layoutOf([source()]);
+
+		expect(duplicateSource(layout, 'missing')).toEqual({ layout, id: '' });
 	});
 });
