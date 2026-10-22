@@ -4,14 +4,22 @@ import {
 	BOARD_SELECTION_VALUES,
 	DECK_CARD_SIZE_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
-	METAGAME_SCOPE_VALUES,
 	QUANTITY_SIZE_VALUES,
 	TOP_CARDS_STAT_VALUES,
 } from '../types/enums';
 import { CARD_TYPE_BUCKET_ORDER } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
-import { DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import {
+	DEFAULT_HEADER_CONFIG,
+	DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
+	DEFAULT_PAGE_ROTATION,
+	headerConfigShape,
+	metagameArchetypeFilterField,
+	metagameScopeShapeWithoutMinPoints,
+	pageRotationPageSize,
+	pageRotationShape,
+} from './subShapes';
 
 /** A badge colour: any CSS colour, as the server's other colour fields take. */
 const optionalCssColorSchema = z.string().min(1).max(500).optional();
@@ -28,7 +36,8 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
 /**
  * The Top Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
- * renders a deck. Scoping reuses the Metagame vocabulary; `excludedCardTypes` is
+ * renders a deck. It is scoped by the Metagame Scope, less Minimum Points, which
+ * it never offered; `excludedCardTypes` is
  * applied server-side before `limit`, so a filtered top N still fills N slots.
  *
  * Its Page Rotation pages the grid by whole grid rows: `rowsPerPage` rows of
@@ -36,11 +45,9 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  * one column, so a Screen that never set it shows every card on one page.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
-	// Scoping (same vocabulary as the Metagame mode)
-	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), { label: 'Player scope' }),
-	topN: editorField(z.number().int().min(1).max(500), { label: 'Top N' }),
-	playerListId: z.number().int().positive().optional(),
-	archetypeFilter: editorField(z.string().max(200).optional(), { label: 'Archetype filter' }),
+	// Scoping
+	...metagameScopeShapeWithoutMinPoints,
+	archetypeFilter: metagameArchetypeFilterField,
 
 	// Data selection & filtering
 	board: editorField(z.enum(BOARD_SELECTION_VALUES), { label: 'Board' }),
@@ -72,9 +79,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	statBadgeTextColor: editorField(optionalCssColorSchema, { label: 'Stat badge text color', control: 'color' }),
 	statBadgeBgColor: editorField(optionalCssColorSchema, { label: 'Stat badge background color', control: 'color' }),
 }, {
-	scope: 'all',
-	topN: 8,
-	playerListId: undefined,
+	...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS,
 	archetypeFilter: undefined,
 	board: 'mainboard',
 	sortBy: 'inclusionRate',

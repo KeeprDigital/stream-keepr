@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { editorField } from './fields';
 
 /**
@@ -51,6 +52,43 @@ export const DEFAULT_HEADER_CONFIG = {
 	showHeader: true,
 	headerText: undefined,
 } as const;
+
+/**
+ * A Metagame Scope: which Players a mode's metagame read counts. Every Player,
+ * the top N by placement, those with at least a minimum match-point total, or
+ * one Player List's members; each field past `scope` is read only under its own
+ * scope. Every mode reading the metagame carries it, so a scope asks each read
+ * the same question. `playerListId` names a Player List in the Event, an Event
+ * Reference each mode declares on its definition (ADR-0038).
+ */
+export const metagameScopeShape = {
+	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), { label: 'Player scope' }),
+	topN: editorField(z.number().int().min(1).max(500), { label: 'Top N' }),
+	minPoints: editorField(z.number().int().min(0).max(999), { label: 'Minimum points' }),
+	playerListId: z.number().int().positive().optional(),
+};
+
+/** The Metagame Scope fields as a mode's config holds them. */
+export type MetagameScopeConfig = z.input<z.ZodObject<typeof metagameScopeShape>>;
+
+export const DEFAULT_METAGAME_SCOPE = {
+	scope: 'all',
+	topN: 8,
+	minPoints: 9,
+	playerListId: undefined,
+} as const;
+
+/**
+ * The Metagame Scope less Minimum Points, for Top Cards, which never offered it.
+ * Its `scope` still admits `minPoints`, as it always did, so a Top Cards config
+ * scoped that way reads with no minimum.
+ */
+const { minPoints: _minPointsField, ...metagameScopeShapeWithoutMinPoints } = metagameScopeShape;
+const { minPoints: _minPointsDefault, ...DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS } = DEFAULT_METAGAME_SCOPE;
+export { DEFAULT_METAGAME_SCOPE_WITHOUT_MIN_POINTS, metagameScopeShapeWithoutMinPoints };
+
+/** A card read's archetype filter: an Archetype's name, narrowing the cards to its decks. */
+export const metagameArchetypeFilterField = editorField(z.string().max(200).optional(), { label: 'Archetype filter' });
 
 /**
  * A paginated mode's Page Rotation: `currentPage` is the manually selected page

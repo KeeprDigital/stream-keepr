@@ -50,6 +50,9 @@ A Deck List entry imported by **Melee Sync** whose name matched no known card. R
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 
+**Metagame Scope**:
+Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
+
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
 
