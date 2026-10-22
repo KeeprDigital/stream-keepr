@@ -202,8 +202,9 @@ describe('screenService event scoping', () => {
 describe('cardService event scoping', () => {
 	it('never surfaces another Event\'s Screen Card', async () => {
 		const service = cardService();
-		expect(await service.getScreenCard(two.eventId, two.screenId)).toMatchObject({ id: 'card-two' });
-		expect(await service.getScreenCard(one.eventId, two.screenId)).toBeNull();
+		expect(await service.getScreenCard(two.eventId, two.screenId)).toEqual({ card: expect.objectContaining({ id: 'card-two' }), revision: 1 });
+		// Nor its Card revision: the wrong Event reads as a Screen never written.
+		expect(await service.getScreenCard(one.eventId, two.screenId)).toEqual({ card: null, revision: 0 });
 	});
 });
 
