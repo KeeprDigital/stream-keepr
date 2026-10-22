@@ -8,7 +8,6 @@ import type {
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
-import { useElementSize } from '@vueuse/core';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 
 interface TableColumnDefinition<Key extends string> {
@@ -92,29 +91,11 @@ const gridStyle = computed(() => ({
 	gridTemplateColumns: gridTemplateColumns.value,
 }));
 
-const rowsRef = useTemplateRef<HTMLElement>('rowsRef');
-const { height: rowsHeight } = useElementSize(rowsRef);
-
-const rowLayoutStyle = computed(() => {
-	const rowCount = Math.max(config.value.pageSize ?? pageData.value.length ?? 1, 1);
-	const baseRowHeight = 44;
-	const availableHeight = rowsHeight.value > 0
-		? rowsHeight.value
-		: rowCount * baseRowHeight;
-	const usableHeight = Math.max(availableHeight, rowCount * 24);
-	const rowHeight = usableHeight / rowCount;
-	const primaryFontSize = Math.max(14, 14 + ((rowHeight - 36) * 0.16));
-	const secondaryFontSize = Math.max(12, primaryFontSize * 0.84);
-	const paddingY = Math.max(4, rowHeight * 0.12);
-	const paddingX = Math.max(10, primaryFontSize * 0.75);
-
-	return {
-		'--metagame-row-height': `${rowHeight}px`,
-		'--metagame-row-font-size': `${primaryFontSize}px`,
-		'--metagame-row-secondary-font-size': `${secondaryFontSize}px`,
-		'--metagame-row-padding-y': `${paddingY}px`,
-		'--metagame-row-padding-x': `${paddingX}px`,
-	};
+// Measures the rows themselves, below the header row, so no page inset applies.
+const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'), {
+	density: 'compact',
+	prefix: 'metagame',
+	rowCount: () => config.value.pageSize ?? pageData.value.length,
 });
 
 const contentStyle = computed(() => ({

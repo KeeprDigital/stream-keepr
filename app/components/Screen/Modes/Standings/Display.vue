@@ -2,7 +2,6 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { Player } from '~/types';
-import { useElementSize } from '@vueuse/core';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 
 const { screen } = useScreenContext();
@@ -61,9 +60,6 @@ function getDeckColors(player: Player) {
 	return getMtgGameData(player.gameData).deckColors;
 }
 
-const tableRef = useTemplateRef<HTMLElement>('tableRef');
-const { height: tableHeight } = useElementSize(tableRef);
-
 const layoutRowCount = computed(() => {
 	const rowsPerPage = Math.max(config.value.rowsPerPage ?? pageData.value.length ?? 1, 1);
 
@@ -73,27 +69,12 @@ const layoutRowCount = computed(() => {
 
 	return rowsPerPage;
 });
-const pageInsetY = computed(() => screenConfig.value.paddingY ?? 0);
 
-const rowLayoutStyle = computed(() => {
-	const baseRowHeight = 44;
-	const availableHeight = tableHeight.value > 0
-		? tableHeight.value
-		: layoutRowCount.value * baseRowHeight;
-	const usableHeight = Math.max(availableHeight - pageInsetY.value, layoutRowCount.value * 24);
-	const rowHeight = usableHeight / layoutRowCount.value;
-	const primaryFontSize = Math.max(14, 14 + ((rowHeight - 36) * 0.16));
-	const secondaryFontSize = Math.max(12, primaryFontSize * 0.84);
-	const paddingY = Math.max(4, rowHeight * 0.12);
-	const paddingX = Math.max(10, primaryFontSize * 0.75);
-
-	return {
-		'--standings-row-height': `${rowHeight}px`,
-		'--standings-row-font-size': `${primaryFontSize}px`,
-		'--standings-row-secondary-font-size': `${secondaryFontSize}px`,
-		'--standings-row-padding-y': `${paddingY}px`,
-		'--standings-row-padding-x': `${paddingX}px`,
-	};
+const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
+	density: 'compact',
+	prefix: 'standings',
+	rowCount: layoutRowCount,
+	insetY: () => screenConfig.value.paddingY ?? 0,
 });
 
 const contentStyle = computed(() => ({
