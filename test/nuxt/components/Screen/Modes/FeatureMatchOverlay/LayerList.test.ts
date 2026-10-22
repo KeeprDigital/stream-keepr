@@ -140,4 +140,120 @@ describe('featureMatchOverlayLayerList', () => {
 		const cluster = config.value.layout.composition.items.find(item => item.id === 'cluster');
 		expect(cluster?.type === 'group' && cluster.children).toHaveLength(2);
 	});
+
+	describe('renaming a layer inline', () => {
+		function itemLabel(config: Awaited<ReturnType<typeof mountList>>['config'], id: string) {
+			return config.value.layout.composition.items.find(item => item.id === id)?.label;
+		}
+
+		it('renames a Graphic Item on double-click, trimmed, as one undo step', async () => {
+			const { wrapper, config, editor, sync } = await mountList();
+			const before = itemLabel(config, 'back');
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			const input = wrapper.get('[data-layer-key="item:back"] [data-testid="layer-rename"]');
+			expect((input.element as HTMLInputElement).value).toBe(before);
+			await input.setValue('  Lower third  ');
+			await input.trigger('keydown', { key: 'Enter' });
+			await sync();
+
+			expect(itemLabel(config, 'back')).toBe('Lower third');
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			expect(wrapper.get('[data-layer-key="item:back"]').text()).toContain('Lower third');
+
+			editor.undo();
+			expect(itemLabel(config, 'back')).toBe(before);
+			expect(editor.canUndo.value).toBe(false);
+		});
+
+		it('renames a Source Item from F2 on its row, committing on blur, as one undo step', async () => {
+			const { wrapper, config, editor, sync } = await mountList();
+			const source = config.value.layout.sources[0]!;
+			const row = `[data-layer-key="source:${source.id}"]`;
+
+			await wrapper.get(`${row} [data-testid="layer-select"]`).trigger('keydown', { key: 'F2' });
+			const input = wrapper.get(`${row} [data-testid="layer-rename"]`);
+			await input.setValue('Player 1 feed');
+			await input.trigger('blur');
+			await sync();
+
+			expect(config.value.layout.sources[0]!.label).toBe('Player 1 feed');
+			editor.undo();
+			expect(config.value.layout.sources[0]!.label).toBe(source.label);
+			expect(editor.canUndo.value).toBe(false);
+		});
+
+		it('waits out an input method\'s composition before Enter commits', async () => {
+			const { wrapper, config } = await mountList();
+			const before = itemLabel(config, 'back');
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			const input = wrapper.get('[data-testid="layer-rename"]');
+			await input.setValue('ロゴ');
+			await input.trigger('keydown', { key: 'Enter', isComposing: true });
+
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(true);
+			expect(itemLabel(config, 'back')).toBe(before);
+		});
+
+		it('drops a rename whose row leaves the list, so the row comes back as a button', async () => {
+			const { wrapper, editor, sync } = await mountList();
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			editor.remove({ type: 'item', itemId: 'back' });
+			await sync();
+			editor.undo();
+			await sync();
+
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			expect(wrapper.find('[data-layer-key="item:back"] [data-testid="layer-select"]').exists()).toBe(true);
+		});
+
+		it('selects on Enter, and renames on Enter once the row is selected', async () => {
+			const { wrapper, editor } = await mountList();
+			const button = () => wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]');
+
+			await button().trigger('keydown', { key: 'Enter' });
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			editor.select({ type: 'item', itemId: 'back' });
+			await wrapper.vm.$nextTick();
+
+			await button().trigger('keydown', { key: 'Enter' });
+
+			expect(wrapper.find('[data-layer-key="item:back"] [data-testid="layer-rename"]').exists()).toBe(true);
+		});
+
+		it('keeps the old name when the rename is cancelled with Escape or left blank', async () => {
+			const { wrapper, config, editor } = await mountList();
+			const before = itemLabel(config, 'back');
+			const button = '[data-layer-key="item:back"] [data-testid="layer-select"]';
+
+			await wrapper.get(button).trigger('dblclick');
+			await wrapper.get('[data-testid="layer-rename"]').setValue('Discarded');
+			await wrapper.get('[data-testid="layer-rename"]').trigger('keydown', { key: 'Escape' });
+			expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
+			expect(itemLabel(config, 'back')).toBe(before);
+
+			await wrapper.get(button).trigger('dblclick');
+			await wrapper.get('[data-testid="layer-rename"]').setValue('   ');
+			await wrapper.get('[data-testid="layer-rename"]').trigger('keydown', { key: 'Enter' });
+
+			expect(itemLabel(config, 'back')).toBe(before);
+			expect(editor.canUndo.value).toBe(false);
+		});
+
+		it('keeps the keys typed into the name away from the editor\'s shortcuts', async () => {
+			const { wrapper } = await mountList();
+			const reachedEditor: string[] = [];
+			wrapper.element.addEventListener('keydown', (event: KeyboardEvent) => reachedEditor.push(event.key));
+
+			await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('dblclick');
+			const input = wrapper.get('[data-testid="layer-rename"]');
+			await input.trigger('keydown', { key: 'Backspace' });
+			await input.trigger('keydown', { key: 'z', metaKey: true });
+			await input.trigger('keydown', { key: 'Escape' });
+
+			expect(reachedEditor).toEqual([]);
+		});
+	});
 });

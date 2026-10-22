@@ -5,6 +5,7 @@ import {
 	compositorSelectionTarget,
 	editorSelectionExists,
 	editorSelectionFrame,
+	editorSelectionLabel,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
@@ -57,6 +58,20 @@ describe('feature match layout editor selection', () => {
 		expect(editorSelectionExists(layout, { type: 'item', itemId: 'gone' })).toBe(false);
 		expect(editorSelectionExists(layout, { type: 'source', itemId: 'main-source' })).toBe(true);
 		expect(editorSelectionExists(layout, { type: 'source', itemId: 'gone' })).toBe(false);
+	});
+
+	it('names the layer it selects, a group child included, and nothing for the canvas or a layer that has gone', () => {
+		const layout = layoutWith(composition => addGraphicGroupChild(
+			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
+			{ kind: 'shape', groupId: 'cluster', id: 'child' },
+		).graphic);
+		const child = group(layout).children[0]!;
+		const source = layout.sources.find(item => item.id === 'main-source')!;
+
+		expect(editorSelectionLabel(layout, { type: 'item', itemId: 'child' })).toBe(child.label);
+		expect(editorSelectionLabel(layout, { type: 'source', itemId: 'main-source' })).toBe(source.label);
+		expect(editorSelectionLabel(layout, { type: 'item', itemId: 'gone' })).toBeUndefined();
+		expect(editorSelectionLabel(layout, { type: 'canvas' })).toBeUndefined();
 	});
 
 	it('places a Source Item and a top-level Graphic Item on the canvas itself', () => {

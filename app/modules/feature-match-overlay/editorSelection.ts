@@ -57,6 +57,15 @@ export function editorSelectionExists(layout: FeatureMatchLayoutConfig, selectio
 	return findGraphicItem(layout.composition, selection.itemId) !== null;
 }
 
+/** The name of the layer the selection names, or nothing for the canvas or a layer no longer in this layout. */
+export function editorSelectionLabel(layout: FeatureMatchLayoutConfig, selection: FeatureMatchLayoutEditorSelection): string | undefined {
+	if (selection.type === 'source')
+		return layout.sources.find(item => item.id === selection.itemId)?.label;
+	if (selection.type === 'item')
+		return findGraphicItem(layout.composition, selection.itemId)?.item.label;
+	return undefined;
+}
+
 export interface EditorSelectionFrame {
 	/** The stored top-left rectangle, in its container's pixels. */
 	rect: GraphicRect;

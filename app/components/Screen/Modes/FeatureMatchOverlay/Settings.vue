@@ -5,7 +5,6 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { findGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -13,6 +12,7 @@ import {
 	CANVAS_SELECTION,
 	compositorSelectionTarget,
 	editorSelectionFrame,
+	editorSelectionLabel,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
@@ -109,14 +109,7 @@ function selectCompositorTarget(target: GraphicsSelectionTarget) {
 }
 
 const selectionFrame = computed(() => editorSelectionFrame(config.value.layout, selection.value));
-const selectionLabel = computed(() => {
-	const current = selection.value;
-	if (current.type === 'source')
-		return config.value.layout.sources.find(item => item.id === current.itemId)?.label;
-	if (current.type === 'item')
-		return findGraphicItem(config.value.layout.composition, current.itemId)?.item.label;
-	return undefined;
-});
+const selectionLabel = computed(() => editorSelectionLabel(config.value.layout, selection.value));
 
 function manipulate(rect: GraphicRect, gesture: number) {
 	editor.setRect(selection.value, rect, { coalesce: `canvas:${gesture}` });
@@ -203,6 +196,7 @@ const SHORTCUTS = [
 	{ keys: ['⌘', ']'], label: 'Bring forward (⇧ to front)' },
 	{ keys: ['⌘', '['], label: 'Send backward (⇧ to back)' },
 	{ keys: ['⌘', '⇧', 'H'], label: 'Hide or show' },
+	{ keys: ['F2'], label: 'Rename the focused layer (or double-click it)' },
 	{ keys: ['Esc'], label: 'Select canvas' },
 	{ keys: ['⇧ drag'], label: 'Keep aspect ratio' },
 	{ keys: ['⌥ drag'], label: 'Turn off snapping' },
