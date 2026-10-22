@@ -72,10 +72,13 @@ mockNuxtImport('useStandingsModeData', () => () => ({
 				return player.name;
 			case 'deck':
 				return player.gameData?.deckName ?? '-';
+			case 'positionChange':
+				return player.id === 1 ? '▲2' : 'new';
 			default:
 				return '-';
 		}
 	},
+	positionChangeOf: (player: any) => player.id === 1 ? { kind: 'up', by: 2 } : { kind: 'new' },
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -200,5 +203,26 @@ describe('screenStandingsDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('.standings-rows').attributes('style')).toContain('--standings-row-height: 200px;');
+	});
+
+	it.each([false, true])('shows each row\'s position change, marked with its direction (animated: %s)', async (animateEntries) => {
+		config.value = {
+			...config.value,
+			animateEntries,
+			columns: [
+				{ key: 'name', visible: true },
+				{ key: 'positionChange', visible: true },
+			],
+		};
+		pageData.value = [
+			pageData.value[0],
+			{ id: 2, name: 'Newcomer', position: 2, gameData: null },
+		];
+
+		const wrapper = await mountComponent();
+		const cells = wrapper.findAll('.cell-positionChange');
+
+		expect(cells.map(cell => cell.text())).toEqual(['▲2', 'new']);
+		expect(cells.map(cell => cell.attributes('data-position-change'))).toEqual(['up', 'new']);
 	});
 });

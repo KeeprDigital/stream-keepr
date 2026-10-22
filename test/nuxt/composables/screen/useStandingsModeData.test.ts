@@ -116,7 +116,7 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig))
 
 /** The Standings Screen Output read's answer; by default, the roster as it stands. */
 function standingsRead(overrides: Record<string, unknown> = {}) {
-	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, ...overrides };
+	return { players: [...serverPlayers], round: null, roundStandings: null, watchlist: null, previousRoundPositions: null, ...overrides };
 }
 
 const STANDINGS_READ = '/api/screen-output/events/1/screens/1/standings';
@@ -494,6 +494,115 @@ describe('useStandingsModeData', () => {
 			answer(standingsRead({ players: serverPlayers.slice(0, 2) }));
 			await flushPromises();
 			expect(displayRows.value).toHaveLength(2);
+		});
+	});
+	// ── Position change ──
+
+	describe('Position Change', () => {
+		const withPositionChange = [
+			{ key: 'position', visible: true },
+			{ key: 'name', visible: true },
+			{ key: 'positionChange', visible: true },
+		];
+		// Round 7's Round Standings, measured against Round 6's.
+		const roundSeven = {
+			round: createMockRound({ id: 7, name: 'Round 7' }),
+			roundStandings: [
+				{ playerId: 3, wins: 5, losses: 0, draws: 0, position: 1, points: 15 },
+				{ playerId: 1, wins: 4, losses: 1, draws: 0, position: 2, points: 12 },
+				{ playerId: 2, wins: 4, losses: 1, draws: 0, position: 3, points: 12 },
+				{ playerId: 4, wins: 3, losses: 2, draws: 0, position: 4, points: 9 },
+			],
+			previousRoundPositions: {
+				roundId: 6,
+				positions: [
+					{ playerId: 1, position: 1 },
+					{ playerId: 2, position: 3 },
+					{ playerId: 3, position: 4 },
+				],
+			},
+		};
+		const positionChanges = (result: Awaited<ReturnType<typeof mountStandings>>) =>
+			result.pageData.value.map(player => [player.name, result.formatCell(player, 'positionChange')]);
+
+		it('shows each Player\'s Position Change since the previous Round', async () => {
+			mutableConfig.columns = withPositionChange;
+			mutableConfig.roundId = 7;
+			mockFetch.mockImplementation(async () => standingsRead(roundSeven));
+
+			const result = await mountStandings();
+
+			expect(positionChanges(result)).toEqual([
+				['Charlie', '▲3'],
+				['Alice', '▼1'],
+				['Bob', '–'],
+				['Diana', 'new'],
+			]);
+			expect(result.positionChangeOf(result.pageData.value[0]!)).toEqual({ kind: 'up', by: 3 });
+		});
+
+		it('shows a neutral marker for every Player when there is no previous Round', async () => {
+			mutableConfig.columns = withPositionChange;
+			mutableConfig.roundId = 7;
+			mockFetch.mockImplementation(async () => standingsRead({ ...roundSeven, previousRoundPositions: null }));
+
+			const result = await mountStandings();
+
+			expect(positionChanges(result).map(([, change]) => change)).toEqual(['–', '–', '–', '–']);
+		});
+
+		it('keeps each Player\'s Position Change whichever rows the view shows', async () => {
+			mutableConfig.columns = withPositionChange;
+			mutableConfig.roundId = 7;
+			mutableConfig.viewMode = 'watchlist';
+			mutableConfig.playerListId = 42;
+			mockFetch.mockImplementation(async () => standingsRead({ ...roundSeven, watchlist: { name: 'VIPs', playerIds: [1, 4] } }));
+
+			const result = await mountStandings();
+
+			expect(positionChanges(result)).toEqual([['Alice', '▼1'], ['Diana', 'new']]);
+		});
+
+		it('reads again when the column is shown, so the previous Round is read only for a Screen showing it', async () => {
+			mutableConfig.roundId = 7;
+			mockFetch.mockImplementation(async () => standingsRead(roundSeven));
+			await mountStandings();
+			mockFetch.mockClear();
+
+			mutableConfig.columns = withPositionChange;
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it('follows a change to the Event\'s Round order while the column shows', async () => {
+			mutableConfig.columns = withPositionChange;
+			mutableConfig.roundId = 7;
+			mockFetch.mockImplementation(async () => standingsRead(roundSeven));
+			await mountStandings();
+			mockFetch.mockClear();
+
+			deliver('round:updated', { round: createMockRound({ id: 3, name: 'Round 3' }) });
+			await flushPromises();
+			deliver('phase:updated', { phase: { id: 1 } });
+			await flushPromises();
+			deliver('round:deleted', { roundId: 6 });
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+		});
+
+		it('ignores another Round\'s change while the column is hidden', async () => {
+			mutableConfig.roundId = 7;
+			mockFetch.mockImplementation(async () => standingsRead(roundSeven));
+			await mountStandings();
+			mockFetch.mockClear();
+
+			deliver('round:updated', { round: createMockRound({ id: 3, name: 'Round 3' }) });
+			deliver('phase:updated', { phase: { id: 1 } });
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 	});
 });
