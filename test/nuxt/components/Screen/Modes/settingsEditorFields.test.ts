@@ -26,7 +26,6 @@ import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/ty
 
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
-	'topCut': 'its editor configures nothing yet',
 	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
@@ -39,7 +38,7 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
 	'metagame.sortBy': ['conversionRate'],
-	// Shared Metagame vocabulary: Top Cards carries no minimum-points field to scope by.
+	// Shared Metagame vocabulary: Most Played Cards carries no minimum-points field to scope by.
 	'top-cards.scope': ['minPoints'],
 };
 
@@ -65,17 +64,27 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 			{ viewMode: 'reveal', autoPageEnabled: true, columns: [{ key: 'deck', visible: true }] },
 		],
 	},
-	// Each scope's and each view's settings.
+	// Each scope's and each view's settings, and the conversion target a shown Conversion Rate column asks for.
 	'metagame': {
 		editor: 'Metagame',
 		variants: [
 			{ scope: 'topN', autoPageEnabled: true },
 			{ scope: 'minPoints', viewMode: 'cards' },
+			{ archetypeColumns: [{ key: 'archetype', visible: true }, { key: 'conversionRate', visible: true }] },
 		],
 	},
 	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
-	// The Top N scope, and a fixed card size.
-	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false }] },
+	'pairings': { editor: 'Pairings', variants: [{ autoPageEnabled: true }] },
+	// Each scope's own field, and auto-page.
+	'archetype-spotlight': {
+		editor: 'ArchetypeSpotlight',
+		variants: [{ scope: 'topN', autoPageEnabled: true }, { scope: 'minPoints' }],
+	},
+	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
+	'head-to-head': { editor: 'HeadToHead', variants: [{}, { playerSource: 'players' }] },
+	'top-cut': { editor: 'TopCut', variants: [{}] },
+	// The Top N scope, a fixed card size, and auto-page.
+	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true }] },
 };
 
 // ── The editor's environment ──
@@ -111,6 +120,8 @@ mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlay
 // One Player List, so every scope that needs one is offered.
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [], loadByEventId: vi.fn() }));
+mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ ...loaded, loadState: vi.fn() }));
 mockNuxtImport('useBroadcastDeckListStore', () => () => ({ summaries: [], loadCollection: vi.fn() }));

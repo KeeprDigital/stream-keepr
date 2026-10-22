@@ -35,6 +35,11 @@ const entries = ref<any[]>([
 	{ id: 2, name: 'Counterspell', inclusionRate: 60, avgCopies: 3, totalCopies: 12, deckCount: 3, cardType: 'Instant', scryfallId: null },
 ]);
 
+// The page the composable projects: by default every card, ranked from 1.
+const pageEntries = ref<any[] | null>(null);
+const currentPage = ref(1);
+const totalPages = ref(1);
+
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: computed(() => screen.value),
 }));
@@ -47,6 +52,9 @@ mockNuxtImport('useTopCardsModeData', () => () => ({
 	emptyMessage: computed(() => 'No card data available'),
 	headerText: computed(() => config.value.headerText ?? 'Most Played Cards'),
 	entries: computed(() => entries.value),
+	pageEntries: computed(() => pageEntries.value ?? entries.value.map((entry, index) => ({ entry, rank: index + 1 }))),
+	currentPage: computed(() => currentPage.value),
+	totalPages: computed(() => totalPages.value),
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -94,6 +102,27 @@ describe('screenTopCardsDisplay', () => {
 			{ id: 1, name: 'Lightning Bolt', inclusionRate: 80, avgCopies: 3.6, totalCopies: 18, deckCount: 4, cardType: 'Instant', scryfallId: null },
 			{ id: 2, name: 'Counterspell', inclusionRate: 60, avgCopies: 3, totalCopies: 12, deckCount: 3, cardType: 'Instant', scryfallId: null },
 		];
+		pageEntries.value = null;
+		currentPage.value = 1;
+		totalPages.value = 1;
+	});
+
+	it('renders only the current page, ranking each card across the whole ranking', async () => {
+		pageEntries.value = [{ entry: entries.value[1], rank: 7 }];
+		currentPage.value = 2;
+		totalPages.value = 3;
+
+		const wrapper = await mountComponent();
+
+		const items = wrapper.findAll('[data-testid="top-cards-item"]');
+		expect(items.map(item => item.text())).toEqual(['7:Counterspell:60%:true:true']);
+		expect(wrapper.get('[data-testid="top-cards-page-indicator"]').text()).toBe('2 / 3');
+	});
+
+	it('shows no page indicator when every card fits on one page', async () => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-testid="top-cards-page-indicator"]').exists()).toBe(false);
 	});
 
 	it('renders a ranked tile per entry with the selected stat', async () => {

@@ -1,16 +1,19 @@
 import type { FeatureMatchOverlayModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
+	archetypeSpotlightModeConfigSchema,
 	backgroundModeConfigSchema,
 	createScreenSchema,
 	deckModeConfigSchema,
 	featureMatchLayoutConfigSchema,
 	featureMatchModeConfigSchema,
 	featureMatchOverlayModeConfigSchema,
+	headToHeadModeConfigSchema,
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
+	pairingsModeConfigSchema,
 	parseModeConfigPatchResult,
 	playerHistoryModeConfigSchema,
 	screenConfigSchema,
@@ -21,7 +24,7 @@ import {
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
 // ──────────────── createScreenSchema ────────────────
@@ -930,23 +933,34 @@ describe('metagameModeConfigSchema', () => {
 		headerText: 'Full Field Metagame',
 		animateEntries: true,
 	};
+	const conversionTarget = { conversionMetric: 'topN' as const, conversionThreshold: 8 };
 
 	it('accepts valid metagame config with column arrays', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 9 });
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9 });
 		expect(result.success).toBe(true);
 	});
 
-	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
+	it('saves a stored config predating minPoints, archetypeLimit and Conversion Rate as it is, and reads them with their defaults', () => {
 		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
 
 		const resolved = resolveScreenModeConfig({ metagame: validConfig } as ModeConfigsMap, 'metagame');
 
 		expect(resolved.minPoints).toBe(9);
 		expect(resolved.archetypeLimit).toBeNull();
+		expect(resolved).toMatchObject(conversionTarget);
+		expect(resolved.archetypeColumns).toEqual(validConfig.archetypeColumns);
+	});
+
+	it('accepts a Conversion Rate column and refuses a conversion threshold out of bounds', () => {
+		const archetypeColumns = [...validConfig.archetypeColumns, { key: 'conversionRate', visible: true }];
+		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 }))
+			.toEqual({ archetypeColumns, conversionMetric: 'minPoints', conversionThreshold: 12 });
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ conversionThreshold: 1000 }).success).toBe(false);
+		expect(modeConfigPatchSchemaMap.metagame.safeParse({ conversionMetric: 'cashRate' }).success).toBe(false);
 	});
 
 	it('accepts the minPoints scope with explicit minPoints', () => {
-		const result = metagameModeConfigSchema.safeParse({ ...validConfig, scope: 'minPoints', minPoints: 12 });
+		const result = metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, scope: 'minPoints', minPoints: 12 });
 		expect(result.success).toBe(true);
 		if (result.success)
 			expect(result.data.minPoints).toBe(12);
@@ -978,6 +992,9 @@ describe('topCardsModeConfigSchema', () => {
 		cardSize: 'medium' as const,
 		dynamicCardSize: true,
 		cardGap: 12,
+		rowsPerPage: 60,
+		autoPageEnabled: false,
+		autoPageIntervalMs: 10000,
 		showHeader: true,
 		showCardNames: true,
 		showRankBadges: true,
@@ -1005,8 +1022,142 @@ describe('topCardsModeConfigSchema', () => {
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, statBadge: 'winRate' }).success).toBe(false);
 	});
 
+	it('rejects a page of more grid rows than the shared page size bound', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, rowsPerPage: 101 }).success).toBe(false);
+	});
+
 	it('is strict about unknown keys', () => {
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, pageSize: 10 }).success).toBe(false);
+	});
+});
+
+// ──────────────── Pairings ────────────────
+
+describe('pairingsModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('pairings');
+
+	it('defaults to no Round, the generic header, ten rows a page and no auto-page', () => {
+		expect(defaults).toEqual({
+			roundId: undefined,
+			showHeader: true,
+			headerText: undefined,
+			rowsPerPage: 10,
+			autoPageEnabled: false,
+			autoPageIntervalMs: 10000,
+		});
+		expect(pairingsModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('names its Round by a positive id', () => {
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 31 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 0 }).success).toBe(false);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 1.5 }).success).toBe(false);
+	});
+
+	it('holds rows per page between 1 and 100', () => {
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 1 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 100 }).success).toBe(true);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 0 }).success).toBe(false);
+		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 101 }).success).toBe(false);
+	});
+
+	it('takes a cleared Round as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap.pairings.safeParse({ roundId: null }).success).toBe(true);
+	});
+});
+
+// ──────────────── Archetype Spotlight ────────────────
+
+describe('archetypeSpotlightModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('archetype-spotlight');
+
+	it('defaults to no Archetype, the whole field, the Metagame page\'s Top 8 conversion target and its full-deck cards', () => {
+		expect(defaults).toEqual({
+			archetypeId: undefined,
+			scope: 'all',
+			topN: 8,
+			minPoints: 9,
+			playerListId: undefined,
+			conversionMetric: 'topN',
+			conversionThreshold: 8,
+			board: 'full',
+			cardLimit: 8,
+			excludedCardTypes: ['Land'],
+			showHeader: true,
+			headerText: undefined,
+			rowsPerPage: 8,
+			autoPageEnabled: false,
+			autoPageIntervalMs: 10000,
+		});
+		expect(archetypeSpotlightModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('names its Archetype by a positive id', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 7 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 0 }).success).toBe(false);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 1.5 }).success).toBe(false);
+	});
+
+	it('takes the Metagame scope vocabulary', () => {
+		for (const scope of ['all', 'topN', 'minPoints', 'playerList'])
+			expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope: 'everyone' }).success).toBe(false);
+	});
+
+	it('holds between 1 and 20 top cards', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 1 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 20 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 0 }).success).toBe(false);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 21 }).success).toBe(false);
+	});
+
+	it('refuses an unknown excluded card type', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, excludedCardTypes: ['Tribal'] }).success).toBe(false);
+	});
+
+	it('takes a cleared Archetype as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap['archetype-spotlight'].safeParse({ archetypeId: null }).success).toBe(true);
+	});
+});
+
+// ──────────────── Head-to-Head ────────────────
+
+describe('headToHeadModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('head-to-head');
+
+	it('defaults to following a Feature Match Slot, none chosen yet, under the generic header', () => {
+		expect(defaults).toEqual({
+			playerSource: 'featureMatchSlot',
+			featureMatchId: null,
+			player1Id: null,
+			player2Id: null,
+			showHeader: true,
+			headerText: undefined,
+		});
+		expect(headToHeadModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('takes its Players from a Feature Match Slot or from two picked Players, and nothing else', () => {
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'featureMatchSlot', featureMatchId: 4 }).success).toBe(true);
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'players', player1Id: 11, player2Id: 12 }).success).toBe(true);
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'round' }).success).toBe(false);
+	});
+
+	it('names its Slot and Players by positive ids', () => {
+		for (const field of ['featureMatchId', 'player1Id', 'player2Id']) {
+			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 0 }).success).toBe(false);
+			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 2.5 }).success).toBe(false);
+		}
+	});
+
+	it('takes a cleared Slot or Player as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap['head-to-head'].safeParse({ featureMatchId: null, player1Id: null, player2Id: null }).success).toBe(true);
+	});
+
+	it('keeps which Players it shows through a display reset', () => {
+		const reset = getDisplayDefaultsForMode('head-to-head');
+		for (const field of ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'])
+			expect(reset).not.toHaveProperty(field);
 	});
 });
 
@@ -1017,6 +1168,7 @@ describe('page rotation config fields', () => {
 		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 		expect(playerHistoryModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 		expect(metagameModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
+		expect(topCardsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
 	});
 
 	it('rejects a negative or fractional rotationAnchor', () => {

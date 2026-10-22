@@ -4,13 +4,13 @@ import {
 	METAGAME_ARCHETYPE_COLUMN_KEY_VALUES,
 	METAGAME_CARD_COLUMN_KEY_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
-	METAGAME_SCOPE_VALUES,
+	METAGAME_CONVERSION_METRIC_VALUES,
 	METAGAME_SORT_BY_VALUES,
 	METAGAME_VIEW_MODE_VALUES,
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape } from './subShapes';
 
 /** The Metagame Screen Mode's config contract: its shape, type, and defaults. */
 export const metagameModeConfigContract = defineScreenModeConfigContract({
@@ -18,11 +18,13 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	viewMode: editorField(z.enum(METAGAME_VIEW_MODE_VALUES), { label: 'Display' }),
 
 	// Scoping
-	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), { label: 'Player scope' }),
-	topN: editorField(z.number().int().min(1).max(500), { label: 'Top N' }),
-	minPoints: editorField(z.number().int().min(0).max(999), { label: 'Minimum points' }),
-	playerListId: z.number().int().positive().optional(),
-	archetypeFilter: editorField(z.string().max(200).optional(), { label: 'Archetype filter' }),
+	...metagameScopeShape,
+	archetypeFilter: metagameArchetypeFilterField,
+
+	// Conversion Rate target: a numerator condition inside the scope, never narrowing it.
+	// The threshold sits inside the archetype read's bounds, which the Screen Output parses it through.
+	conversionMetric: editorField(z.enum(METAGAME_CONVERSION_METRIC_VALUES), { label: 'Conversion target' }),
+	conversionThreshold: editorField(z.number().int().min(1).max(999), { label: 'Conversion threshold' }),
 
 	// Sorting
 	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), { label: 'Sort archetypes by' }),
@@ -48,11 +50,10 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	animateEntries: editorField(z.boolean(), { label: 'Animate entries' }),
 }, {
 	viewMode: 'archetype',
-	scope: 'all',
-	topN: 8,
-	minPoints: 9,
-	playerListId: undefined,
+	...DEFAULT_METAGAME_SCOPE,
 	archetypeFilter: undefined,
+	conversionMetric: 'topN',
+	conversionThreshold: 8,
 	sortBy: 'metaShare',
 	cardSortBy: 'inclusionRate',
 	archetypeColumns: [
@@ -62,6 +63,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		{ key: 'winRate', visible: true },
 		{ key: 'avgPlace', visible: false },
 		{ key: 'colors', visible: false },
+		{ key: 'conversionRate', visible: false },
 	],
 	cardColumns: [
 		{ key: 'card', visible: true },

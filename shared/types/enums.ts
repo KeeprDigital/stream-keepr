@@ -10,7 +10,15 @@ export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
-export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'topCut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history'] as const;
+export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'top-cut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
+/**
+ * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).
+ * A migration moved stored Screens; a Screen write accepts the former key from a
+ * client built before the rename and stores the current one.
+ */
+export const FORMER_SCREEN_MODE_KEYS: Readonly<Record<string, ScreenMode>> = { topCut: 'top-cut' };
+/** Where a Head-to-Head Screen takes its two Players from (#760). */
+export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players'] as const;
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;
 export const CLOCK_TYPE_VALUES = ['countdown', 'countup'] as const;
 export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
@@ -37,11 +45,11 @@ export const METAGAME_SORT_BY_VALUES = ['count', 'winRate', 'metaShare', 'conver
 export const METAGAME_CONVERSION_METRIC_VALUES = ['topN', 'minPoints'] as const;
 export const METAGAME_CARD_SORT_BY_VALUES = ['inclusionRate', 'avgCopies', 'totalCopies'] as const;
 export const TOP_CARDS_STAT_VALUES = ['none', 'inclusionRate', 'avgCopies', 'totalCopies', 'deckCount'] as const;
-export const METAGAME_ARCHETYPE_COLUMN_KEY_VALUES = ['archetype', 'count', 'metaShare', 'winRate', 'avgPlace', 'colors'] as const;
+export const METAGAME_ARCHETYPE_COLUMN_KEY_VALUES = ['archetype', 'count', 'metaShare', 'winRate', 'avgPlace', 'colors', 'conversionRate'] as const;
 export const METAGAME_CARD_COLUMN_KEY_VALUES = ['card', 'manaCost', 'type', 'inclusionRate', 'avgCopies', 'totalCopies', 'deckCount', 'mainboardCount', 'sideboardCount'] as const;
 export const STANDINGS_VIEW_MODE_VALUES = ['all', 'topN', 'slice', 'watchlist', 'reveal'] as const;
-export const STANDINGS_COLUMN_KEY_VALUES = ['position', 'name', 'record', 'points', 'deck'] as const;
-export const PLAYER_HISTORY_COLUMN_KEY_VALUES = ['round', 'opponent', 'table', 'outcome'] as const;
+export const STANDINGS_COLUMN_KEY_VALUES = ['position', 'name', 'record', 'points', 'deck', 'positionChange'] as const;
+export const PLAYER_HISTORY_COLUMN_KEY_VALUES = ['round', 'opponent', 'table', 'outcome', 'opponentArchetype', 'gameScore'] as const;
 export const REVEAL_ORDER_VALUES = ['bottomUp', 'topDown'] as const;
 export const REVEAL_TRIGGER_VALUES = ['manual', 'auto'] as const;
 export const ROUND_CONTROL_MODE_VALUES = ['default', 'manual_override'] as const;
@@ -56,6 +64,7 @@ export type PlayerDisplayMode = typeof PLAYER_DISPLAY_MODE_VALUES[number];
 export type PositionFormat = typeof POSITION_FORMAT_VALUES[number];
 export type DisplayType = typeof DISPLAY_TYPE_VALUES[number];
 export type ScreenMode = typeof SCREEN_MODE_VALUES[number];
+export type HeadToHeadPlayerSource = typeof HEAD_TO_HEAD_PLAYER_SOURCE_VALUES[number];
 export type ScreenCommand = typeof SCREEN_COMMAND_VALUES[number];
 export type RecordSeparator = typeof RECORD_SEPARATOR_VALUES[number];
 export type DeckBoardView = typeof DECK_BOARD_VIEW_VALUES[number];

@@ -3,13 +3,16 @@ import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeC
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, ScreenMode } from './types/enums';
+import { archetypeSpotlightModeConfigContract } from './screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from './screenModeConfigs/card';
 import { deckModeConfigContract } from './screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from './screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from './screenModeConfigs/featureMatchOverlay';
+import { headToHeadModeConfigContract } from './screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
+import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
@@ -46,14 +49,17 @@ export interface ScreenModeGraphicsHost {
 
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
- * the field names: a Round, a Player, a Player List or a Feature Match Slot by
- * id, or a whole Deck Source, which names a Player or a Broadcast Deck List.
+ * the field names: a Phase, a Round, a Player, a Player List, a Feature Match
+ * Slot or an Archetype by id, or a whole Deck Source, which names a Player or a
+ * Broadcast Deck List.
  */
 interface EventReferenceValues {
+	phase: EntityIdField;
 	round: EntityIdField;
 	player: EntityIdField;
 	playerList: EntityIdField;
 	featureMatchSlot: EntityIdField;
+	archetype: EntityIdField;
 	deckSource: DeckSource | undefined;
 }
 
@@ -145,11 +151,11 @@ export const DEFAULT_OVERLAY_CONTAINER_CONTROLS: Required<ScreenModeContainerCon
  */
 const SCREEN_MODE_DEFINITIONS = {
 	'background': { label: 'Background', icon: 'i-lucide-wallpaper', displayType: 'overlay', description: 'Full-screen layered background', config: backgroundModeConfigContract, eventReferences: {} },
-	'card': { label: 'Card', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
-	'deck': { label: 'Deck', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract, eventReferences: { deckSource: 'deckSource' } },
+	'card': { label: 'Card Spotlight', icon: 'i-lucide-square', displayType: 'overlay', description: 'Single card display', backgroundLayers: true, config: cardModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
+	'deck': { label: 'Deck List', icon: 'i-lucide-layers', displayType: 'overlay', description: 'Deck list view', backgroundLayers: true, config: deckModeConfigContract, eventReferences: { deckSource: 'deckSource' } },
 	'standings': { label: 'Standings', icon: 'i-lucide-trophy', displayType: 'overlay', description: 'Player standings', backgroundLayers: true, config: standingsModeConfigContract, eventReferences: { roundId: 'round', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
-	'topCut': { label: 'Top Cut', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: {} },
-	'feature-match': { label: 'Feature Match', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
+	'top-cut': { label: 'Top Cut Bracket', icon: 'i-lucide-git-branch', displayType: 'overlay', description: 'Top cut bracket', backgroundLayers: true, config: topCutModeConfigContract, eventReferences: { phaseId: 'phase' } },
+	'feature-match': { label: 'Feature Match Controls', icon: 'i-lucide-swords', displayType: 'control', description: 'Live feature match controls', config: featureMatchModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot' } },
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
 		icon: 'i-lucide-panels-top-left',
@@ -178,8 +184,11 @@ const SCREEN_MODE_DEFINITIONS = {
 		eventReferences: {},
 	},
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract, eventReferences: { playerListId: 'playerList' }, pageRotation: { pageSize: 'pageSize' } },
-	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' } },
+	'top-cards': { label: 'Most Played Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'pairings': { label: 'Pairings', icon: 'i-lucide-list-ordered', displayType: 'overlay', description: 'Round pairings and results', backgroundLayers: true, config: pairingsModeConfigContract, eventReferences: { roundId: 'round' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'archetype-spotlight': { label: 'Archetype Spotlight', icon: 'i-lucide-crosshair', displayType: 'overlay', description: 'One archetype\'s pilots, numbers and top cards', backgroundLayers: true, config: archetypeSpotlightModeConfigContract, eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'head-to-head': { label: 'Head-to-Head', icon: 'i-lucide-users', displayType: 'overlay', description: 'Two Players side by side before their Match', backgroundLayers: true, config: headToHeadModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;

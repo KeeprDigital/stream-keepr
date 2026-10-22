@@ -104,7 +104,12 @@ export default defineNuxtConfig({
 			// So the bundle holds every icon the app names. Without it, an unbundled
 			// icon's failure is logged asynchronously, and a log landing as a file
 			// closes fails the run under load (vitest-dev/vitest#11153).
-			scan: process.env.NODE_ENV === 'test',
+			// The default globs skip `.ts`, so the app's and shared modules' icon
+			// names (a Shape Geometry preset's, a Screen Mode Definition's) are
+			// added; replacing the defaults means restating them.
+			scan: process.env.NODE_ENV === 'test' && {
+				globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml}', 'app/**/*.ts', 'shared/**/*.ts'],
+			},
 		},
 	},
 

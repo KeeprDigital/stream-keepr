@@ -7,13 +7,16 @@ import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { archetypeSpotlightModeConfigContract } from '../screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from '../screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from '../screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from '../screenModeConfigs/card';
 import { deckModeConfigContract } from '../screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from '../screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from '../screenModeConfigs/featureMatchOverlay';
+import { headToHeadModeConfigContract } from '../screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
+import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
@@ -275,6 +278,7 @@ export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
  * above stay hand-written: the server's schemas for those fields are typed to
  * produce them.
  */
+export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 export type { BackgroundModeConfig } from '../screenModeConfigs/background';
 export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
 export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
@@ -282,7 +286,9 @@ export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoa
 export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
 export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
+export type { HeadToHeadModeConfig } from '../screenModeConfigs/headToHead';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
+export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
 export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
@@ -376,13 +382,16 @@ const MODE_CONFIG_CONTRACTS = {
 	'card': cardModeConfigContract,
 	'deck': deckModeConfigContract,
 	'standings': standingsModeConfigContract,
-	'topCut': topCutModeConfigContract,
+	'top-cut': topCutModeConfigContract,
 	'feature-match': featureMatchModeConfigContract,
 	'feature-match-overlay': featureMatchOverlayModeConfigContract,
 	'broadcast-graphics': broadcastGraphicsModeConfigContract,
 	'metagame': metagameModeConfigContract,
 	'top-cards': topCardsModeConfigContract,
 	'player-history': playerHistoryModeConfigContract,
+	'pairings': pairingsModeConfigContract,
+	'archetype-spotlight': archetypeSpotlightModeConfigContract,
+	'head-to-head': headToHeadModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -483,7 +492,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'background': [],
 	'card': ['featureMatchId'],
 	'deck': ['deckSource'],
-	'topCut': [],
+	'top-cut': ['phaseId'],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': [],
@@ -491,6 +500,9 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
+	'pairings': ['roundId'],
+	'archetype-spotlight': ['archetypeId', 'scope', 'topN', 'minPoints', 'playerListId'],
+	'head-to-head': ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
@@ -511,18 +523,19 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 	const stored = modeConfigs?.[mode];
 	return {
 		...getDefaultConfigForMode(mode),
-		...(stored && clampStoredModeConfig(mode, stored)),
+		...(stored && readStoredModeConfig(mode, stored)),
 	};
 }
 
-/** One mode's stored fragment read within its contract's bounds (`clampStored`, #498). */
-function clampStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
-	return MODE_CONFIG_CONTRACTS[mode].clampStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
+/** One mode's stored fragment as its contract reads it: without its former fields, and within its bounds (`readStored`, #498, #752). */
+function readStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
+	return MODE_CONFIG_CONTRACTS[mode].readStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
 }
 
 /**
  * Stored mode configurations as every reader reads them: each mode's fragment
- * with every number outside its contract's bounds pulled to the nearest bound.
+ * without its contract's former fields (#752), and with every number outside
+ * its contract's bounds pulled to the nearest bound.
  * A bound tightened after a Screen stored a value outside it reads as that bound,
  * never as the default, and the read is never refused (#498). The server applies
  * it to every Screen it sends a client, so an editor writing a value back sends
@@ -536,7 +549,7 @@ export function clampStoredModeConfigs<T extends ModeConfigsMap | null | undefin
 	for (const [mode, stored] of Object.entries(modeConfigs)) {
 		if (!stored || !Object.hasOwn(MODE_CONFIG_CONTRACTS, mode))
 			continue;
-		const next = clampStoredModeConfig(mode as ScreenMode, stored);
+		const next = readStoredModeConfig(mode as ScreenMode, stored);
 		if (next !== stored) {
 			clamped ??= { ...modeConfigs };
 			clamped[mode] = next;
@@ -585,8 +598,9 @@ export function mergeScreenModeConfig<M extends ScreenMode>(
 	partialConfig: Record<string, unknown>,
 ): ModeConfigsMap {
 	const currentModeConfig = currentConfigs[mode] ?? {};
+	// A write of a mode's config also drops what its contract no longer holds (#752).
 	return {
 		...currentConfigs,
-		[mode]: stripNullConfigKeys({ ...currentModeConfig, ...partialConfig }),
+		[mode]: MODE_CONFIG_CONTRACTS[mode].withoutFormerFields(stripNullConfigKeys({ ...currentModeConfig, ...partialConfig })),
 	};
 }

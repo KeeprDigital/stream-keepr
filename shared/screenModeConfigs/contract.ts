@@ -69,6 +69,10 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  * - `fields` is the editor-facing view of every field marked `editorField`: its
  *   label, control kind, and bounds read back from the schema, so the mode's
  *   editor offers exactly the range the contract accepts (#498).
+ * - `formerFields` names the fields an earlier version of the contract held,
+ *   which storage may still carry, such as Top Cut Bracket's placeholder `bracketSize`
+ *   (#752). No reader sees one, a write naming one is accepted without storing
+ *   it, and the next PATCH of the mode's config removes it from storage.
  *
  * The write forms are derived from `shape` on the server without special cases
  * (`configContractModeForms`): a full write validates a fragment of the complete
@@ -84,12 +88,17 @@ export interface ScreenModeConfigContract<
 	readonly defaults: z.input<z.ZodObject<Shape, z.core.$strict>>;
 	readonly authoredStacks: readonly AuthoredStack[];
 	readonly fields: ScreenModeConfigFields<Shape>;
+	readonly formerFields: readonly string[];
 	/**
-	 * A stored fragment as a reader reads it: every number outside its field's
-	 * bounds pulled to the nearest bound (`clampToShapeBounds`). Reads only, so a
-	 * tightened bound never resets or refuses a stored config; writes are refused.
+	 * A stored fragment as a reader reads it: without its former fields, and
+	 * every number outside its field's bounds pulled to the nearest bound
+	 * (`clampToShapeBounds`). Reads only, so a tightened bound never resets or
+	 * refuses a stored config; writes are refused. A fragment needing neither is
+	 * returned as it is.
 	 */
-	readonly clampStored: <T extends Record<string, unknown>>(fragment: T) => T;
+	readonly readStored: <T extends Record<string, unknown>>(fragment: T) => T;
+	/** A fragment without the contract's former fields; returned as it is when it names none. */
+	readonly withoutFormerFields: <T>(fragment: T) => T;
 }
 
 /** The config type a contract defines: what a rendering of its mode reads. */
@@ -101,14 +110,31 @@ export function defineScreenModeConfigContract<
 >(
 	shape: Shape & FieldsWithoutDefaults<Shape>,
 	defaults: z.input<z.ZodObject<Shape, z.core.$strict>>,
-	options: { authoredStacks?: readonly AuthoredStack[] } = {},
+	options: { authoredStacks?: readonly AuthoredStack[]; formerFields?: readonly string[] } = {},
 ): ScreenModeConfigContract<Shape, AuthoredStack> {
+	const formerFields = options.formerFields ?? [];
+	for (const field of formerFields) {
+		if (Object.hasOwn(shape, field))
+			throw new Error(`Config field "${field}" cannot be both a field and a former field of one contract.`);
+	}
+
+	function withoutFormerFields<T>(fragment: T): T {
+		if (!fragment || typeof fragment !== 'object' || Array.isArray(fragment) || !formerFields.some(field => Object.hasOwn(fragment, field)))
+			return fragment;
+		const kept = { ...fragment } as Record<string, unknown>;
+		for (const field of formerFields)
+			delete kept[field];
+		return kept as T;
+	}
+
 	return {
 		shape,
 		schema: z.object(shape).strict(),
 		defaults,
 		authoredStacks: options.authoredStacks ?? [],
 		fields: screenModeConfigFields(shape),
-		clampStored: fragment => clampToShapeBounds(shape, fragment),
+		formerFields,
+		readStored: fragment => clampToShapeBounds(shape, withoutFormerFields(fragment)),
+		withoutFormerFields,
 	};
 }

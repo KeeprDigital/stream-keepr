@@ -3,7 +3,7 @@ import type {
 	MetagameArchetypeColumnKey,
 	MetagameCardColumnKey,
 	MetagameCardSortBy,
-	MetagameScope,
+	MetagameConversionMetric,
 	MetagameSortBy,
 	MetagameViewMode,
 } from '~~/shared/types/enums';
@@ -12,6 +12,7 @@ import type {
 	MetagameCardColumnConfig,
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -60,27 +61,10 @@ const viewModeOptions = [
 	{ label: 'Chart', value: 'chart' },
 ];
 
-const scopeOptions = computed(() => {
-	const options = [
-		{ label: 'All Players', value: 'all' },
-		{ label: 'Top N', value: 'topN' },
-		{ label: 'Minimum Points', value: 'minPoints' },
-	];
-
-	if (playerListStore.lists.length > 0) {
-		options.push({ label: 'Player List', value: 'playerList' });
-	}
-
-	return options;
-});
-
-const playerListOptions = computed(() => [
-	{ label: 'Select a list...', value: null },
-	...playerListStore.lists.map(list => ({
-		label: `${list.name} (${list.memberCount})`,
-		value: list.id,
-	})),
-]);
+const conversionMetricOptions = [
+	{ label: 'Top N', value: 'topN' },
+	{ label: 'Minimum Points', value: 'minPoints' },
+];
 
 const sortByOptions = [
 	{ label: 'Meta Share', value: 'metaShare' },
@@ -103,6 +87,7 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 	winRate: 'Win Rate',
 	avgPlace: 'Avg Place',
 	colors: 'Colors',
+	conversionRate: 'Conversion Rate',
 	card: 'Card',
 	manaCost: 'Cost',
 	type: 'Type',
@@ -114,10 +99,16 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 	sideboardCount: 'Side',
 };
 
+const { defaults } = screenModeConfigContract('metagame');
+
 const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 	config.value.viewMode === 'cards'
-		? config.value.cardColumns
-		: config.value.archetypeColumns,
+		? withEveryColumn(config.value.cardColumns, defaults.cardColumns)
+		: withEveryColumn(config.value.archetypeColumns, defaults.archetypeColumns),
+);
+
+const showsConversionRate = computed(() =>
+	config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
 );
 
 const estimatedRowCount = computed(() => {
@@ -198,68 +189,13 @@ function updateArchetypeLimit(value: number | null | undefined) {
 				/>
 			</UFormField>
 
-			<UFormField
-				:label="fields.scope.label"
+			<ScreenMetagameScopeFields
+				:config="config"
+				:fields="fields"
 				description="Which players to include in the breakdown."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.scope"
-					:items="scopeOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ scope: $event as MetagameScope, currentPage: 1 })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="config.scope === 'topN'"
-				:label="fields.topN.label"
-				description="Include the top N players by position."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.topN"
-					:min="fields.topN.min"
-					:max="fields.topN.max"
-					class="w-32"
-					@update:model-value="updateConfig({ topN: Number($event), currentPage: 1 })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="config.scope === 'minPoints'"
-				:label="fields.minPoints.label"
-				description="Include players with at least this many match points."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.minPoints"
-					:min="fields.minPoints.min"
-					:max="fields.minPoints.max"
-					class="w-32"
-					@update:model-value="updateConfig({ minPoints: Number($event), currentPage: 1 })"
-				/>
-			</UFormField>
-
-			<template v-if="config.scope === 'playerList'">
-				<template v-if="playerListStore.lists.length > 0">
-					<UFormField
-						label="Select list"
-						description="Include players from this list only."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="config.playerListId ?? null"
-							:items="playerListOptions"
-							class="w-64"
-							@update:model-value="updateConfig({ playerListId: $event ?? null, currentPage: 1 })"
-						/>
-					</UFormField>
-				</template>
-				<div v-else class="text-sm text-muted text-center py-2">
-					No player lists available. Create one on the Players page.
-				</div>
-			</template>
+				:show-archetype-filter="config.viewMode === 'cards'"
+				@update="updateConfig({ ...$event, currentPage: 1 })"
+			/>
 
 			<template v-if="config.viewMode !== 'cards'">
 				<UFormField
@@ -274,6 +210,35 @@ function updateArchetypeLimit(value: number | null | undefined) {
 						@update:model-value="updateConfig({ sortBy: $event as MetagameSortBy, currentPage: 1 })"
 					/>
 				</UFormField>
+
+				<template v-if="showsConversionRate">
+					<UFormField
+						:label="fields.conversionMetric.label"
+						description="What a player in the scope must reach to count as converted. It never narrows the scope."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<USelect
+							:model-value="config.conversionMetric"
+							:items="conversionMetricOptions"
+							class="w-48"
+							@update:model-value="updateConfig({ conversionMetric: $event as MetagameConversionMetric })"
+						/>
+					</UFormField>
+
+					<UFormField
+						:label="fields.conversionThreshold.label"
+						:description="config.conversionMetric === 'topN' ? 'Converted at this placement or better.' : 'Converted at this many match points or more.'"
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<UInputNumber
+							:model-value="config.conversionThreshold"
+							:min="fields.conversionThreshold.min"
+							:max="fields.conversionThreshold.max"
+							class="w-32"
+							@update:model-value="updateConfig({ conversionThreshold: Number($event) })"
+						/>
+					</UFormField>
+				</template>
 
 				<UFormField
 					:label="fields.archetypeLimit.label"
@@ -318,19 +283,6 @@ function updateArchetypeLimit(value: number | null | undefined) {
 						:max="fields.limit.max"
 						class="w-32"
 						@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.archetypeFilter.label"
-					description="Limit cards to a single archetype. Leave empty for all archetypes."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInput
-						:model-value="config.archetypeFilter ?? ''"
-						placeholder="All archetypes"
-						class="w-64"
-						@update:model-value="updateConfig({ archetypeFilter: $event || null, currentPage: 1 })"
 					/>
 				</UFormField>
 			</template>

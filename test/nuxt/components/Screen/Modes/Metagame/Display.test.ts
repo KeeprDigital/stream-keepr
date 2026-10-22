@@ -123,9 +123,40 @@ describe('screenMetagameDisplay', () => {
 			],
 		};
 		pageData.value = [
-			{ id: 1, name: 'Mono Red', count: 12, metaShare: 25, winRate: 61.5, avgPosition: 3.2, colors: 'R' },
+			{ id: 1, name: 'Mono Red', count: 12, metaShare: 25, winRate: 61.5, avgPosition: 3.2, colors: 'R', conversionRate: 37.5 },
 		];
 		chartBars.value = [];
+	});
+
+	it('renders each Archetype\'s Conversion Rate where the operator placed its column', async () => {
+		config.value = {
+			...config.value,
+			archetypeColumns: [
+				{ key: 'archetype', visible: true },
+				{ key: 'conversionRate', visible: true },
+				{ key: 'count', visible: true },
+			],
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual(['Archetype', 'Conversion', 'Count']);
+		expect(wrapper.findAll('.metagame-row .metagame-cell').map(cell => cell.text())).toEqual(['Mono Red', '37.5%', '12']);
+	});
+
+	it('shows an absent Conversion Rate as a dash', async () => {
+		config.value = { ...config.value, archetypeColumns: [{ key: 'archetype', visible: true }, { key: 'conversionRate', visible: true }] };
+		pageData.value = [{ ...pageData.value[0], conversionRate: null }];
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.metagame-row .metagame-cell').map(cell => cell.text())).toEqual(['Mono Red', '-']);
+	});
+
+	it('renders a stored column list saved before Conversion Rate existed unchanged', async () => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual(['Archetype', 'Count', 'Share', 'Win Rate']);
 	});
 
 	it('renders the colors column when it is visible', async () => {

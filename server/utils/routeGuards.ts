@@ -147,10 +147,12 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 
 /** How each kind of Event Reference is proved to belong to the Event. */
 const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: number, value: unknown) => Promise<void> } = {
+	phase: (eventId, value) => requirePhaseInEvent(eventId, referencedId(value)),
 	round: (eventId, value) => requireRoundInEvent(eventId, referencedId(value)),
 	player: (eventId, value) => requirePlayersInEvent(eventId, [referencedId(value)]),
 	playerList: (eventId, value) => requirePlayerListInEvent(eventId, referencedId(value)),
 	featureMatchSlot: (eventId, value) => requireFeatureMatchSlotInEvent(eventId, referencedId(value)),
+	archetype: (eventId, value) => requireArchetypeInEvent(eventId, referencedId(value)),
 	deckSource: requireDeckSourceInEvent,
 };
 

@@ -6,6 +6,7 @@ import type { Event, FeatureMatch, Match, Phase, Round } from '~/types';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { buildFeatureMatchOverlayTemplateMetadataValues } from '~/utils/featureMatchOverlayTemplateValues';
 
 /**
@@ -74,15 +75,7 @@ function record(input: FeatureMatchOverlayHostStateInput, side: PlayerSide): str
 	if (data?.wins == null && data?.losses == null && data?.draws == null)
 		return '';
 
-	const wins = data.wins ?? 0;
-	const losses = data.losses ?? 0;
-	const draws = data.draws ?? 0;
-	const separator = input.event?.displayRecordSeparator ?? '-';
-	const hideZeroDraws = input.event?.displayHideZeroDraws ?? true;
-
-	return hideZeroDraws && draws === 0
-		? `${wins}${separator}${losses}`
-		: `${wins}${separator}${losses}${separator}${draws}`;
+	return formatPlayerRecord(data, input.event);
 }
 
 function playerValues(

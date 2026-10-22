@@ -248,7 +248,7 @@ export function useDeckModeData() {
 
 	/**
 	 * The authoritative read of the selected Deck Source, through the Screen
-	 * (#604): its capability reaches the Player the Deck mode selects, and only
+	 * (#604): its capability reaches the Player the Deck List mode selects, and only
 	 * that Player, or the Broadcast Deck List the Screen selects.
 	 */
 	async function readDeckSource(): Promise<DeckSourceRead | null> {

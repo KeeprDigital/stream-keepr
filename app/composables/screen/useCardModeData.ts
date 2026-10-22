@@ -10,7 +10,7 @@ export function useCardModeData() {
 	onScopeDispose(cardStore.readActiveCardAsScreenOutput(() => outputReads.card()));
 
 	// Card-screen deck-source loads report their Scryfall degradation through
-	// the same seam the Deck mode uses (#465, #471): the host carries the report
+	// the same seam the Deck List mode uses (#465, #471): the host carries the report
 	// to control surfaces via presence instead of showing it on program. The ref
 	// is optional — operator-side consumers of the same store have no
 	// ScreenContext and load with no health reporting.
