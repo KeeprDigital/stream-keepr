@@ -1135,6 +1135,27 @@ describe('useScreenDisplaySession', () => {
 			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Read for the left Screen' });
 		});
 
+		it('drops a loss heard during a load that then failed, and its retry, whose reads follow the loss, re-reads nothing more', async () => {
+			vi.useFakeTimers();
+			const harness = createHarness();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			await vi.advanceTimersByTimeAsync(0);
+
+			harness.reattach('event:42');
+			inFlight.reject(new Error('503 Service Unavailable'));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(harness.session.error.value).toBe('Event details unavailable');
+			harness.order.splice(0);
+
+			await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+
+			expect(harness.session.error.value).toBeNull();
+			// The retry's own Screen re-read, then the load finishing: no recovery after it.
+			expect(harness.order).toEqual(['refresh:7', 'start:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		});
+
 		it('recovers for a Program monitor too, without entering presence', async () => {
 			const harness = createHarness({ query: { embed: 'monitor' } });
 			const inFlight = deferred<any>();

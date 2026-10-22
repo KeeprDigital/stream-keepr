@@ -24,6 +24,13 @@ export type ScreenModeDependencies<T> = {
 	[K in MessageType]?: true | ((message: MessageData<K>, held: T) => boolean);
 };
 
+/**
+ * Why a follow-up read is asked for while a read is in flight: a message, which
+ * may postdate what that read answers, or the Event channel's first attach,
+ * which says only that something may have been published unheard.
+ */
+type FollowUpReason = 'message' | 'first-attach';
+
 export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel' | 'onContinuityLost' | 'onceAttached'>;
 
 export interface ScreenModeFreshnessOptions<T> {
@@ -91,12 +98,8 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 
 	/** The read in flight: when it began, and whether a load asked for it. */
 	let reading: { since: number; load: boolean } | null = null;
-	/**
-	 * What, since the read in flight began, asks for another once it settles: a
-	 * message, which may postdate what that read answers, or the Event channel's
-	 * first attach, which only says something may have been published unheard.
-	 */
-	let followUpAsked: 'message' | 'first-attach' | null = null;
+	/** What, since the read in flight began, asks for another once it settles. */
+	let followUpAsked: FollowUpReason | null = null;
 
 	/** Reads now, superseding any read in flight. */
 	function refresh(load = false) {
@@ -149,10 +152,8 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		});
 	}
 
-	/** One follow-up for however many messages arrive while a read is in flight. */
-	function follow(reason: 'message' | 'first-attach' = 'message') {
-		if (options.source() == null)
-			return;
+	/** One follow-up for however many reasons arrive while a read is in flight. */
+	function follow(reason: FollowUpReason) {
 		if (reading && Date.now() - reading.since < SCREEN_MODE_REREAD_MS) {
 			if (followUpAsked !== 'message')
 				followUpAsked = reason;
@@ -189,7 +190,7 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 		unsubscribers = (Object.keys(options.dependsOn) as MessageType[]).map(type =>
 			realtime.onChannel(channel, type, (message) => {
 				if (touches(type, message))
-					follow();
+					follow('message');
 			}));
 	}, { immediate: true });
 
@@ -198,7 +199,10 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	// Event channel has attached: what was published in between was heard by
 	// nothing, and that first attach reports no continuity loss (#733).
 	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime, {
-		onFirstAttach: () => follow('first-attach'),
+		onFirstAttach: () => {
+			if (options.source() != null)
+				follow('first-attach');
+		},
 	});
 	const waitingOnToken = computed(() => !!realtime?.tokenError);
 	watch(waitingOnToken, (waiting, wasWaiting) => {

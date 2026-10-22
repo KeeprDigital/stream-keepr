@@ -365,7 +365,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * load's first read is sent, and ended by the next attempt, a failure, or
 	 * disposal.
 	 */
-	let stopListeningForLoad: Array<() => void> = [];
+	let loadListeners: Array<() => void> = [];
 	/** The load that heard a reason to re-read while it was still reading, if any. */
 	let loadAskedRecovery: Flight | null = null;
 
@@ -380,14 +380,14 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			else
 				loadAskedRecovery = flight;
 		}
-		stopListeningForLoad = [
+		loadListeners = [
 			realtime.onceAttached(channel, askForRecovery),
 			realtime.onContinuityLost(channel, askForRecovery),
 		];
 	}
 
 	function stopListeningDuringLoad() {
-		for (const stop of stopListeningForLoad.splice(0))
+		for (const stop of loadListeners.splice(0))
 			stop();
 		loadAskedRecovery = null;
 	}
@@ -420,6 +420,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		exportError.value = null;
 
 		if (!evtId) {
+			stopListeningDuringLoad();
 			if (flight.current) {
 				loadFailure.value = 'event-missing';
 				loading.value = false;
