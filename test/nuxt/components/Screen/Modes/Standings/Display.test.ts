@@ -205,7 +205,7 @@ describe('screenStandingsDisplay', () => {
 		expect(wrapper.get('.standings-rows').attributes('style')).toContain('--standings-row-height: 200px;');
 	});
 
-	it.each([false, true])('shows each row\'s position change, marked with its direction (animated: %s)', async (animateEntries) => {
+	it.each([false, true])('shows each row\'s Position Change, marked with its direction (animated: %s)', async (animateEntries) => {
 		config.value = {
 			...config.value,
 			animateEntries,

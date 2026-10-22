@@ -46,13 +46,13 @@ function getCellStyle(key: StandingsColumnKey, player: Player) {
 		case 'positionChange': {
 			// A climb or a drop shows in its own colour; everything else reads
 			// as secondary text.
-			const kind = positionChangeKind(key, player);
+			const { kind } = positionChangeOf(player);
 			return kind === 'up' || kind === 'down' ? {} : secondaryTextStyle.value;
 		}
 	}
 }
 
-/** A position change cell's direction, which its colour reads from. */
+/** A Position Change cell's direction, which its colour reads from. */
 function positionChangeKind(key: StandingsColumnKey, player: Player) {
 	return key === 'positionChange' ? positionChangeOf(player).kind : undefined;
 }

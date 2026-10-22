@@ -267,7 +267,7 @@ describe('capability-only Screen Output reads', () => {
 			expect((await asOutput('standings', null)).status).toBe(404);
 		});
 
-		it('measures a position change column against nothing at the Event\'s first Round', async () => {
+		it('measures a Position Change column against nothing when no earlier Round holds Round Standings', async () => {
 			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Position Change Swiss' } });
 			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
 				method: 'POST',

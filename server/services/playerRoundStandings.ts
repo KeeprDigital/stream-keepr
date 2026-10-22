@@ -1,5 +1,4 @@
 import type { DbPlayerRoundStandings } from '~~/server/db/schema';
-import type { ScreenOutputPreviousRoundPositions } from '~~/shared/types/screenOutputReads';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { phases, playerRoundStandings, rounds } from '~~/server/db/schema';
@@ -11,6 +10,12 @@ export interface RoundStandingInput {
 	draws: number | null;
 	position: number | null;
 	points: number | null;
+}
+
+/** Each Player's position in one Round's Round Standings. */
+export interface RoundStandingPositions {
+	roundId: number;
+	positions: Array<{ playerId: number; position: number | null }>;
 }
 
 export function playerRoundStandingsService() {
@@ -34,7 +39,7 @@ export function playerRoundStandingsService() {
 	};
 
 	/**
-	 * The Round Standings a Standings Screen's position change is measured
+	 * The Round Standings a Standings Screen's Position Change is measured
 	 * against (#755): the nearest Round before `roundId`, in the Event's Round
 	 * order (Phase sort order, then round number), that holds Round Standings.
 	 * A Round without them, such as a manual one, is passed over.
@@ -48,7 +53,7 @@ export function playerRoundStandingsService() {
 	const findPreviousRoundPositions = async (
 		eventId: number,
 		roundId: number | null,
-	): Promise<ScreenOutputPreviousRoundPositions | null> => {
+	): Promise<RoundStandingPositions | null> => {
 		const ordered = await db
 			.select({
 				id: rounds.id,

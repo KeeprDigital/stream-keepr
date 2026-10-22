@@ -2,7 +2,7 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { completeColumns } from '~~/shared/screenModeConfigs/subShapes';
+import { completeColumns, isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { STANDINGS_COLUMN_KEY_VALUES } from '~~/shared/types/enums';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -80,16 +80,14 @@ const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
 	record: 'Record (W-L-D)',
 	points: 'Points',
 	deck: 'Deck',
-	positionChange: 'Position change',
+	positionChange: 'Position Change',
 };
 
 // A Screen whose columns were saved before a column existed is offered it too,
 // hidden, after its own (#755).
 const editorColumns = computed(() => completeColumns(config.value.columns, STANDINGS_COLUMN_KEY_VALUES));
 
-const isDeckColumnVisible = computed(() =>
-	config.value.columns.some(col => col.key === 'deck' && col.visible),
-);
+const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns, 'deck'));
 
 // ── Pagination ──
 // Estimate display row count from player store for page controls

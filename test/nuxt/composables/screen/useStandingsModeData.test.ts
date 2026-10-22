@@ -496,9 +496,10 @@ describe('useStandingsModeData', () => {
 			expect(displayRows.value).toHaveLength(2);
 		});
 	});
-	// ── Position change ──
 
-	describe('Position Change', () => {
+	// ── Position Change ──
+
+	describe('the Position Change column', () => {
 		const withPositionChange = [
 			{ key: 'position', visible: true },
 			{ key: 'name', visible: true },
@@ -561,6 +562,19 @@ describe('useStandingsModeData', () => {
 			const result = await mountStandings();
 
 			expect(positionChanges(result)).toEqual([['Alice', '▼1'], ['Diana', 'new']]);
+		});
+
+		it.each([
+			['topN', { topNCount: 2 }, [['Charlie', '▲3'], ['Alice', '▼1']]],
+			['slice', { sliceStart: 2, sliceEnd: 3 }, [['Alice', '▼1'], ['Bob', '–']]],
+			['reveal', { revealCount: 4, revealedCount: 1, revealOrder: 'bottomUp' }, [['Diana', 'new']]],
+		] as const)('keeps each Player\'s Position Change in the %s view', async (viewMode, view, expected) => {
+			Object.assign(mutableConfig, { columns: withPositionChange, roundId: 7, viewMode, ...view });
+			mockFetch.mockImplementation(async () => standingsRead(roundSeven));
+
+			const result = await mountStandings();
+
+			expect(positionChanges(result)).toEqual(expected);
 		});
 
 		it('reads again when the column is shown, so the previous Round is read only for a Screen showing it', async () => {

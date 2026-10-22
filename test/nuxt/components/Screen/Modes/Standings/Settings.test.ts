@@ -58,13 +58,13 @@ describe('the Standings settings editor\'s columns', () => {
 		config.value = structuredClone(getDefaultConfigForMode('standings'));
 	});
 
-	it('offers the position change column', async () => {
+	it('offers the Position Change column', async () => {
 		const wrapper = await mountSettings();
 
-		expect(columnLabels(wrapper)).toContain('Position change');
+		expect(columnLabels(wrapper)).toContain('Position Change');
 	});
 
-	it('offers the position change column to a Screen whose stored columns predate it, and shows it on request', async () => {
+	it('offers the Position Change column to a Screen whose stored columns predate it, and shows it on request', async () => {
 		config.value.columns = [
 			{ key: 'name', visible: true },
 			{ key: 'position', visible: true },
@@ -76,7 +76,7 @@ describe('the Standings settings editor\'s columns', () => {
 		const wrapper = await mountSettings();
 		const rows = wrapper.findAll('[data-testid="column-row"]');
 
-		expect(columnLabels(wrapper)).toEqual(['Name', '#', 'Record (W-L-D)', 'Points', 'Deck', 'Position change']);
+		expect(columnLabels(wrapper)).toEqual(['Name', '#', 'Record (W-L-D)', 'Points', 'Deck', 'Position Change']);
 
 		await rows[5]!.get('[data-testid="u-switch"]').trigger('click');
 

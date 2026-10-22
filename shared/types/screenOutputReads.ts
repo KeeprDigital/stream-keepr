@@ -33,7 +33,7 @@ export interface ScreenOutputStandingsResponse {
 	/** The watchlist's name and members; `null` unless the view is a watchlist of a list that exists. */
 	watchlist: { name: string; playerIds: number[] } | null;
 	/**
-	 * The previous Round's Round Standings positions, which the position change
+	 * The previous Round's Round Standings positions, which the Position Change
 	 * column measures against (#755); `null` unless that column shows, and when
 	 * there is no previous Round.
 	 */

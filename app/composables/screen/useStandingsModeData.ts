@@ -3,6 +3,7 @@ import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutput
 import type { PositionChange } from '~~/shared/utils/standingsPositionChange';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
+import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { formatPositionChange, positionChange } from '~~/shared/utils/standingsPositionChange';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -10,11 +11,12 @@ import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
  * The Event Data Standings are read from: the roster, the Round they are fixed
- * at and its snapshot, the watchlist they filter to, and, while the position
- * change column shows, the previous Round in the Event's Round order. Every
+ * at and its snapshot, the watchlist they filter to, and, while the Position
+ * Change column shows, the previous Round in the Event's Round order. Every
  * Player is a row, and Melee syncs rewrite records and snapshots wholesale, so
  * any of them re-reads. Any Round or Phase edit may reorder the Event's Rounds,
- * so while that column shows, each one re-reads.
+ * so while that column shows, each one re-reads. A new Round holds no Round
+ * Standings until a Melee sync writes them, which re-reads already.
  */
 function standingsDependencies(
 	watchlistId: () => number | null,
@@ -49,7 +51,7 @@ export function useStandingsModeData() {
 	const eventStore = useEventStore();
 
 	const selectedWatchlistId = () => config.value.viewMode === 'watchlist' ? config.value.playerListId ?? null : null;
-	const showsPositionChange = () => config.value.columns.some(column => column.key === 'positionChange' && column.visible);
+	const showsPositionChange = () => isColumnVisible(config.value.columns, 'positionChange');
 
 	// ── Data Loading ──
 	/**

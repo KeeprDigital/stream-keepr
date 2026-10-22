@@ -4,7 +4,7 @@ import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * The previous Round's Round Standings a Standings Screen's position change is
+ * The previous Round's Round Standings a Standings Screen's Position Change is
  * measured against (#755), read against real SQL so the Event's Round order
  * (Phase sort order, then round number) is what the query really applies.
  */
