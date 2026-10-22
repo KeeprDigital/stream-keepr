@@ -6,7 +6,7 @@ import { requireScreenOutputModeRead, screenOutputReadNotFound } from '~~/server
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 
 /**
- * The Archetype this Screen's Archetype spotlight mode names, within its scope
+ * The Archetype this Screen's Archetype Spotlight mode names, within its scope
  * (#761): the archetype detail the app's archetype page reads for the same
  * scope, board and conversion target, projected to what the Screen shows.
  */

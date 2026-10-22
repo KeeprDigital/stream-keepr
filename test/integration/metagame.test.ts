@@ -382,7 +382,7 @@ describe('metagame API', () => {
 		});
 	});
 
-	// ──────────────── Archetype spotlight Screen Output ────────────────
+	// ──────────────── Archetype Spotlight Screen Output ────────────────
 
 	describe('archetype spotlight Screen Output read', () => {
 		it('answers the archetype page\'s numbers for the Screen\'s Archetype, scope and conversion target', async () => {

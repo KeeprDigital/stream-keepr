@@ -269,7 +269,6 @@ export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as Fe
  */
 export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 
-export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 /**
  * Every Screen Mode's config is inferred from its config contract, which also
  * holds its defaults (ADR-0037). Re-exported here because this is where every
@@ -278,6 +277,7 @@ export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetyp
  * above stay hand-written: the server's schemas for those fields are typed to
  * produce them.
  */
+export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 export type { BackgroundModeConfig } from '../screenModeConfigs/background';
 export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
 export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';

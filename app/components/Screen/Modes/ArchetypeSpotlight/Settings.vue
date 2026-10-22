@@ -224,7 +224,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 
 			<UFormField
 				:label="fields.conversionMetric.label"
-				description="What a player in the scope must reach to count as converted. It never narrows the scope."
+				description="What a player in the scope must reach to count as converted. It never narrows the scope. The Screen keeps its own target: match the Metagame page's to show the same Conversion Rate."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect

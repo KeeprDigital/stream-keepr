@@ -7,7 +7,7 @@ import { editorField } from './fields';
 import { DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
 
 /**
- * The Archetype spotlight Screen Mode's config contract (#761): one Archetype's
+ * The Archetype Spotlight Screen Mode's config contract (#761): one Archetype's
  * pilots, meta share, Conversion Rate and most-included cards within a
  * Metagame scope. Scope and conversion target use the Metagame vocabulary and
  * bounds, so the Screen asks the archetype detail read what the app's

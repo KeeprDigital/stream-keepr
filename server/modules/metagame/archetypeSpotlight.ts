@@ -22,7 +22,7 @@ function byPosition(a: ScreenOutputArchetypePilot, b: ScreenOutputArchetypePilot
 }
 
 /**
- * The Archetype spotlight a Screen shows (#761), projected from the archetype
+ * The Archetype Spotlight a Screen shows (#761), projected from the archetype
  * detail read the app's archetype page makes for the same scope and conversion
  * target, so its meta share, Conversion Rate and inclusion rates are that
  * page's numbers rather than a second computation of them.

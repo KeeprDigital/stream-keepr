@@ -49,6 +49,9 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
 
+**Pilot**:
+A Player of an Archetype within the current Metagame scope; an Archetype's pilots are its Players in that scope.
+
 **Conversion Rate**:
 The percentage of an Archetype's Players in the current Metagame scope that reached a conversion target — a Top N placement or a minimum match-point total. The target is a numerator condition evaluated inside the scope; it never narrows the scope itself.
 _Avoid_: top-cut rate, cash rate, qualification rate

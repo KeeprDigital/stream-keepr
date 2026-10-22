@@ -1059,7 +1059,7 @@ describe('pairingsModeConfigSchema', () => {
 	});
 });
 
-// ──────────────── Archetype spotlight ────────────────
+// ──────────────── Archetype Spotlight ────────────────
 
 describe('archetypeSpotlightModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('archetype-spotlight');

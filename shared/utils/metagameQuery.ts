@@ -139,7 +139,7 @@ export function metagameScreenQuery(config: MetagameModeConfig) {
 }
 
 /**
- * The archetype detail an Archetype spotlight Screen renders (#761), read off
+ * The archetype detail an Archetype Spotlight Screen renders (#761), read off
  * its configuration: the archetype page's own query for the same scope, board
  * and conversion target, so the Screen shows that page's numbers. `null` while
  * no Archetype is picked.

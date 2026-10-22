@@ -41,8 +41,8 @@ const stats = computed(() => {
 	];
 });
 
-// Top Cards' badges, so a card reads the same on both Screens.
-const rankBadgeStyle = { color: '#ffffff', backgroundColor: '#7c3aed' };
+// Top Cards' default stat badge, so a card's inclusion rate reads the same on
+// both Screens. Cards carry no rank badge here: their order is the ranking.
 const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 </script>
 
@@ -112,7 +112,7 @@ const statBadgeStyle = { color: '#111827', backgroundColor: '#ffffff' };
 						:show-name="true"
 						:show-rank="false"
 						rank-badge-class=""
-						:rank-badge-style="rankBadgeStyle"
+						:rank-badge-style="{}"
 						:stat-text="`${entry.inclusionRate}%`"
 						stat-badge-class="bottom-1 right-1 text-sm px-2 py-1"
 						:stat-badge-style="statBadgeStyle"

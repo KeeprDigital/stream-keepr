@@ -25,7 +25,7 @@ export interface ScreenOutputArchetypePilot {
 }
 
 /**
- * What an Archetype spotlight Screen renders from (#761): one Archetype within
+ * What an Archetype Spotlight Screen renders from (#761): one Archetype within
  * a Metagame scope, its numbers as the app's archetype detail page reads them
  * for the same scope and conversion target.
  */

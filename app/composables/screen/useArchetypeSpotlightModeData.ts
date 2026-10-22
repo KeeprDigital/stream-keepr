@@ -4,7 +4,7 @@ import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependen
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
-/** The Archetype spotlight Screen's data (#761): one Archetype's pilots, numbers and top cards in a Metagame scope. */
+/** The Archetype Spotlight Screen's data (#761): one Archetype's pilots, numbers and top cards in a Metagame scope. */
 export function useArchetypeSpotlightModeData() {
 	const { eventId } = useScreenContext();
 	const config = useScreenModeConfig('archetype-spotlight');
