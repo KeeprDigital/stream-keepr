@@ -24,23 +24,35 @@ function holdsPlayer(held: ScreenOutputTopCutResponse, playerId: number): boolea
  * `match:updated`, so it re-reads the bracket (#752). Melee's wholesale syncs
  * of structure and Players re-read; a Round sync re-reads only for a Round
  * the bracket shows.
+ *
+ * While seeds show, so do the Round Standings before the Phase (#759): a sync
+ * of any Round may write them, and any Round or Phase edit may reorder the
+ * Event's Rounds, so each one re-reads. While Archetypes show, so do the
+ * Archetypes and Deck Lists naming them. A Player's assigned Archetype is a
+ * `player:updated`, which already re-reads.
  */
-function topCutDependencies(phaseId: () => number | undefined): ScreenModeDependencies<ScreenOutputTopCutResponse> {
+function topCutDependencies(
+	phaseId: () => number | undefined,
+	shows: { seeds: () => boolean; archetypes: () => boolean },
+): ScreenModeDependencies<ScreenOutputTopCutResponse> {
 	const isPhase = (id: number) => id === phaseId();
 
 	return {
-		'phase:updated': ({ phase }) => isPhase(phase.id),
-		'phase:deleted': ({ phaseId: id }) => isPhase(id),
+		'phase:updated': ({ phase }) => isPhase(phase.id) || shows.seeds(),
+		'phase:deleted': ({ phaseId: id }) => isPhase(id) || shows.seeds(),
 		'round:created': ({ round }) => isPhase(round.phaseId),
-		'round:updated': ({ round }, held) => isPhase(round.phaseId) || holdsRound(held, round.id),
-		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId),
+		'round:updated': ({ round }, held) => isPhase(round.phaseId) || holdsRound(held, round.id) || shows.seeds(),
+		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId) || shows.seeds(),
 		'round:matchesRefreshed': ({ roundId }, held) => holdsRound(held, roundId),
 		'match:created': ({ match }, held) => holdsRound(held, match.roundId),
 		'match:updated': ({ match }, held) => holdsRound(held, match.roundId) || holdsMatch(held, match.id),
 		'match:deleted': ({ matchId }, held) => holdsMatch(held, matchId),
 		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
 		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),
-		'melee:roundSynced': ({ roundId }, held) => holdsRound(held, roundId),
+		'archetype:updated': () => shows.archetypes(),
+		'archetype:deleted': () => shows.archetypes(),
+		'melee:roundSynced': ({ roundId }, held) => holdsRound(held, roundId) || shows.seeds(),
+		'melee:decklistsSynced': () => shows.archetypes(),
 		'melee:dataReset': true,
 		'melee:structureSynced': true,
 		'melee:playersSynced': true,
@@ -60,12 +72,15 @@ export function useTopCutModeData() {
 	const freshness = useScreenModeFreshness<ScreenOutputTopCutResponse>({
 		eventId,
 		source: () => outputReads.scopeKey.value && config.value.phaseId
-			? `${outputReads.scopeKey.value}:${config.value.phaseId}`
+			? `${outputReads.scopeKey.value}:${config.value.phaseId}:${config.value.showSeeds}:${config.value.showArchetypes}`
 			: null,
 		read: () => outputReads.topCut(),
 		initialData: NO_BRACKET,
 		errorMessage: 'Failed to load the bracket',
-		dependsOn: topCutDependencies(() => config.value.phaseId),
+		dependsOn: topCutDependencies(() => config.value.phaseId, {
+			seeds: () => config.value.showSeeds,
+			archetypes: () => config.value.showArchetypes,
+		}),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

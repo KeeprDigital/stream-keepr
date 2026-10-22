@@ -55,6 +55,21 @@ const phaseOptions = computed(() => [
 			</UFormField>
 		</ScreenSettingsCard>
 
+		<ScreenSettingsCard title="Players">
+			<ScreenSettingsToggle
+				:label="fields.showSeeds.label"
+				description="Show each Player's final position in the last Round Standings before this Phase."
+				:model-value="config.showSeeds"
+				@update:model-value="updateConfig({ showSeeds: $event })"
+			/>
+			<ScreenSettingsToggle
+				:label="fields.showArchetypes.label"
+				description="Show each Player's archetype under their name, or their Deck List's deck name; blank when they have neither."
+				:model-value="config.showArchetypes"
+				@update:model-value="updateConfig({ showArchetypes: $event })"
+			/>
+		</ScreenSettingsCard>
+
 		<ScreenSettingsCard title="Header">
 			<ScreenSettingsToggle
 				:label="fields.showHeader.label"
