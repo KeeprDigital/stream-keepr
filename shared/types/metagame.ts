@@ -58,6 +58,9 @@ export type MetagameFact = MetagameSimpleFact | MetagameCardSplitFact;
 
 // ─── Archetype breakdown (list view) ────────────────────────────
 
+/** The id the archetype breakdown reserves for its Other row, grouping the archetypes past its limit. */
+export const OTHER_ARCHETYPE_ID = -1;
+
 /** Single row in the archetype breakdown table */
 export interface ArchetypeBreakdownEntry {
 	/** Archetype DB id, or a reserved negative id for an aggregate row. */
