@@ -39,6 +39,7 @@ export default defineConfig(async (env) => {
 	// Ahead of the test-utils entry, which `defineVitestConfig` puts first and
 	// which mounts the app that prints Vue's Suspense notice; see the file.
 	// The credential guard first of all, before anything can start a child (#619).
-	config.test!.setupFiles = ['./test/helpers/blockCloudflareCredentials.ts', './test/nuxt/quietSuspenseNotice.ts', ...[config.test!.setupFiles ?? []].flat()];
+	// The icon guard also ahead of the entry, so its mock precedes `@nuxt/icon`.
+	config.test!.setupFiles = ['./test/helpers/blockCloudflareCredentials.ts', './test/nuxt/quietSuspenseNotice.ts', './test/nuxt/failOnUnbundledIcon.ts', ...[config.test!.setupFiles ?? []].flat()];
 	return config;
 });
