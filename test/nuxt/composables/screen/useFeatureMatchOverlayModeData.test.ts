@@ -57,6 +57,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 		return () => channelHandlers.get(key)!.delete(handler);
 	},
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: vi.fn(() => () => {}),
 }));
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);

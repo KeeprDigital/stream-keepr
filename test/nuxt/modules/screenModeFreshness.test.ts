@@ -3,7 +3,7 @@ import type { ScreenModeDependencies, ScreenModeFreshnessTransport } from '~/mod
 import type { RealtimeTransport } from '~/types/realtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_REREAD_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 /**
@@ -23,6 +23,7 @@ type Handler = (message: Record<string, unknown>) => void;
 function fakeTransport() {
 	const handlers = new Map<string, Set<Handler>>();
 	const continuity = createContinuitySignal();
+	const attachment = createAttachSignal();
 	const transport = reactive({
 		connectionState: 'connected' as RealtimeTransport['connectionState'],
 		tokenError: null as Error | null,
@@ -34,9 +35,12 @@ function fakeTransport() {
 			return () => handlers.get(key)!.delete(handler);
 		}),
 		onContinuityLost: continuity.onContinuityLost,
+		onceAttached: attachment.onceAttached,
 	});
 	return {
 		transport,
+		/** The Event channel attached: the first time, or again after a detach. */
+		attach: (eventId: number) => attachment.attach(`event:${eventId}`),
 		deliver(eventId: number, type: string, payload: Record<string, unknown>) {
 			for (const handler of handlers.get(`event:${eventId}|${type}`) ?? [])
 				handler({ eventId, ...payload });
@@ -49,8 +53,10 @@ function fakeTransport() {
 
 const scopes: EffectScope[] = [];
 
-function harness(dependsOn: ScreenModeDependencies<Held> = {}) {
+function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [] as number[] } = {}) {
 	const realtime = fakeTransport();
+	for (const eventId of attached)
+		realtime.attach(eventId);
 	const eventId = ref<number | null>(1);
 	const selection = ref<number | null>(7);
 	const read = vi.fn(async (): Promise<Held> => ({ ids: [selection.value!], label: `read ${read.mock.calls.length}` }));
@@ -514,6 +520,109 @@ describe('useScreenModeFreshness', () => {
 			transport.connectionState = 'connecting';
 			await flushPromises();
 			transport.connectionState = 'connected';
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe('first attach', () => {
+		it('shows a change published after its first read but before its Event channel first attached (#733)', async () => {
+			const { read, attach, freshness } = harness();
+			await flushPromises();
+			expect(freshness.data.value.label).toBe('read 1');
+
+			// Published while nothing listens on the channel, so never delivered.
+			read.mockImplementation(async () => ({ ids: [7], label: 'published before the attach' }));
+			attach(1);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(2);
+			expect(freshness.data.value.label).toBe('published before the attach');
+		});
+
+		it('renders the load it lands during, then re-reads, rather than superseding that load', async () => {
+			const { read, attach, selection, freshness } = harness();
+			await flushPromises();
+			const shown: string[] = [];
+			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
+			let answer!: () => void;
+			read.mockImplementationOnce(() => new Promise((resolve) => {
+				answer = () => resolve({ ids: [9], label: 'load' });
+			}));
+			selection.value = 9;
+			await flushPromises();
+
+			attach(1);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(2);
+
+			answer();
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(3);
+			expect(shown).toEqual(['load', 'read 3']);
+		});
+
+		it('re-reads once, however often its channel attaches afterwards', async () => {
+			const { read, attach } = harness();
+			await flushPromises();
+
+			attach(1);
+			await flushPromises();
+			attach(1);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(2);
+		});
+
+		it('does not re-read when its channel was already attached before it read', async () => {
+			const { read, attach } = harness({}, { attached: [1] });
+			await flushPromises();
+
+			attach(1);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(1);
+		});
+
+		it('waits on the first attach of the Event it moves to, and stops waiting when disposed', async () => {
+			const { read, attach, eventId, scope } = harness();
+			await flushPromises();
+
+			eventId.value = 2;
+			await flushPromises();
+			const afterMove = read.mock.calls.length;
+			attach(1);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(afterMove);
+
+			scope.stop();
+			attach(2);
+			await flushPromises();
+			expect(read).toHaveBeenCalledTimes(afterMove);
+		});
+
+		it('re-reads on the first attach of the Event it moves to', async () => {
+			const { read, attach, eventId } = harness();
+			await flushPromises();
+
+			eventId.value = 2;
+			await flushPromises();
+			const afterMove = read.mock.calls.length;
+			attach(2);
+			await flushPromises();
+
+			expect(read).toHaveBeenCalledTimes(afterMove + 1);
+		});
+
+		it('reads nothing on its first attach while the mode selects nothing', async () => {
+			const { read, attach, selection } = harness();
+			await flushPromises();
+			selection.value = null;
+			await flushPromises();
+
+			attach(1);
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(1);

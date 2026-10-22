@@ -345,42 +345,51 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	}
 
 	/**
-	 * The current load's wait for its Event channel's first attach.
+	 * The current load attempt's own listening on its Event channel, for what
+	 * Reconnect Resync cannot hear yet: it follows only a finished load's Event.
 	 *
-	 * A load reads before it listens: the Event channel attaches only once the
-	 * Event context names it, after the reads have answered. Whatever was published
-	 * in between reached neither the reads nor any listener, and a first attach on
-	 * an unbroken connection reports no continuity loss (ADR-0023). So a load
-	 * re-reads once off that attach, rather than attaching before it reads, which
-	 * would hold program blank for as long as a token outage lasts (#727).
+	 * - **The first attach.** A load reads before it listens: the Event channel
+	 *   attaches only once the Event context names it, after the reads have
+	 *   answered. Whatever was published in between reached neither the reads nor
+	 *   any listener, and a first attach on an unbroken connection reports no
+	 *   continuity loss (ADR-0023). So a load re-reads once off that attach, rather
+	 *   than attaching before it reads, which would hold program blank for as long
+	 *   as a token outage lasts (#727). Inert when the channel is attached already
+	 *   — a Screen change within one Event — because then it was listening before
+	 *   the reads went out.
+	 * - **A continuity loss.** On a channel already attached, a loss while the
+	 *   load reads means something published meanwhile went unheard too (#733).
 	 *
-	 * Begun before the load's first read is sent, and inert when the channel is
-	 * attached already — a Screen change within one Event — because then it was
-	 * listening before the reads went out. (A continuity loss on that channel
-	 * mid-load is not covered: Reconnect Resync listens only once loaded.)
+	 * Either one heard mid-load asks for one recovery once the load finishes,
+	 * rather than superseding it; heard once loaded, it recovers. Begun before the
+	 * load's first read is sent, and ended by the next attempt, a failure, or
+	 * disposal.
 	 */
-	let stopFirstAttachWait: (() => void) | null = null;
-	/** The load whose Event channel attached while it was still reading, if any. */
-	let loadAttachedMidRead: Flight | null = null;
+	let loadListeners: Array<() => void> = [];
+	/** The load that heard a reason to re-read while it was still reading, if any. */
+	let loadAskedRecovery: Flight | null = null;
 
-	function listenForFirstAttach(evtId: number, flight: Flight) {
-		stopListeningForFirstAttach();
-		stopFirstAttachWait = realtime.onceAttached(eventRealtimeChannel(evtId), () => {
-			stopFirstAttachWait = null;
+	function listenDuringLoad(evtId: number, flight: Flight) {
+		stopListeningDuringLoad();
+		const channel = eventRealtimeChannel(evtId);
+		function askForRecovery() {
 			if (flight.stale)
 				return;
-			const loaded = loadedOn.value;
-			if (loaded)
-				void recoverLoadedRendering(loaded);
+			if (loadedOn.value)
+				queueRecovery();
 			else
-				loadAttachedMidRead = flight;
-		});
+				loadAskedRecovery = flight;
+		}
+		loadListeners = [
+			realtime.onceAttached(channel, askForRecovery),
+			realtime.onContinuityLost(channel, askForRecovery),
+		];
 	}
 
-	function stopListeningForFirstAttach() {
-		stopFirstAttachWait?.();
-		stopFirstAttachWait = null;
-		loadAttachedMidRead = null;
+	function stopListeningDuringLoad() {
+		for (const stop of loadListeners.splice(0))
+			stop();
+		loadAskedRecovery = null;
 	}
 
 	/** The slow retry of a load whose Event context read failed. */
@@ -392,10 +401,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loadRetry = null;
 	}
 
-	/** Begin one attempt at a load: no retry stands for it, and it listens for its channel's first attach. */
+	/** Begin one attempt at a load: no retry stands for it, and it listens on its Event channel. */
 	function beginLoadAttempt(evtId: number, flight: Flight) {
 		cancelLoadRetry();
-		listenForFirstAttach(evtId, flight);
+		listenDuringLoad(evtId, flight);
 	}
 
 	function readScope(evtId: number, screenId: number): ScreenOutputReadScope {
@@ -411,6 +420,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		exportError.value = null;
 
 		if (!evtId) {
+			stopListeningDuringLoad();
 			if (flight.current) {
 				loadFailure.value = 'event-missing';
 				loading.value = false;
@@ -470,9 +480,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loadedOn.value = scope;
 		loadFailure.value = null;
 		loading.value = false;
-		if (loadAttachedMidRead === flight) {
-			loadAttachedMidRead = null;
-			void recoverLoadedRendering(scope);
+		if (loadAskedRecovery === flight) {
+			loadAskedRecovery = null;
+			queueRecovery();
 		}
 		await captureDownload();
 	}
@@ -486,7 +496,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		if (flight.stale)
 			return;
 		console.error('Failed to load screen:', err);
-		stopListeningForFirstAttach();
+		stopListeningDuringLoad();
 		loading.value = false;
 		loadFailure.value = failure;
 		if (failure === 'event-context-unavailable') {
@@ -566,6 +576,24 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		]);
 	}
 
+	let recoveryQueued = false;
+	/**
+	 * One recovery of the finished load for however many reasons arrive together:
+	 * one attach can report a continuity loss and a first attach at once, and both
+	 * the load's own listening and Reconnect Resync hear a loss once it is loaded.
+	 */
+	function queueRecovery() {
+		if (recoveryQueued)
+			return;
+		recoveryQueued = true;
+		queueMicrotask(() => {
+			recoveryQueued = false;
+			const loaded = loadedOn.value;
+			if (loaded)
+				void recoverLoadedRendering(loaded);
+		});
+	}
+
 	/**
 	 * Re-read authoritative state after this rendering has been out of touch.
 	 *
@@ -601,7 +629,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 
 		const loaded = loadedOn.value;
 		if (loaded?.screenId === held.id)
-			void recoverLoadedRendering(loaded);
+			queueRecovery();
 		else
 			void resumeLoad(readScope(evtId, held.id));
 	}
@@ -638,7 +666,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	onBeforeUnmount(async () => {
 		loads.supersede();
 		forgetLoad();
-		stopListeningForFirstAttach();
+		stopListeningDuringLoad();
 		await screenRealtimeSession.stop();
 	});
 

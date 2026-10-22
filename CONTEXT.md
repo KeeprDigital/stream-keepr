@@ -190,7 +190,7 @@ A consumer's standing request to the realtime transport: a room handler, a chann
 _Avoid_: registration.
 
 **Reconnect Resync**:
-The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the Event channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). A consumer listening on no Event yet re-reads when the connection comes back instead. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
+The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the Event channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). A consumer listening on no Event yet re-reads when the connection comes back instead. A consumer that read before its Event channel first attached also re-reads once off that attach, which reports no continuity loss yet followed a window nothing listened in. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
 _Avoid_: reconnect handler, resubscribe hook.
 
 **Event Data Resync**:
@@ -198,7 +198,7 @@ The client-side module owning which Event Data this client consumes, so **Reconn
 _Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:
-The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, and **Reconnect Resync**. A message heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
+The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, a re-read once its Event channel first attaches, and **Reconnect Resync**. A message or that first attach heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Guarded Sequence**:

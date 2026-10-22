@@ -38,7 +38,10 @@ export function useBroadcastGraphicsLiveSessionSync(
 		{ immediate: true },
 	);
 
-	const { disconnected } = useReconnectResync(reload, eventId);
+	// A rendering's first load is read before its Event channel attaches. A command
+	// applied in between is heard by nothing, and no sequence gap reveals it until
+	// the next command, so the first attach reloads too (#733).
+	const { disconnected } = useReconnectResync(reload, eventId, undefined, { onFirstAttach: reload });
 
 	return { disconnected, reload };
 }
