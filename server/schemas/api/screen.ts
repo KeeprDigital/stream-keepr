@@ -1634,6 +1634,7 @@ const modeConfigForms = {
 	'metagame': configContractModeForms('metagame'),
 	'top-cards': configContractModeForms('top-cards'),
 	'player-history': configContractModeForms('player-history'),
+	'pairings': configContractModeForms('pairings'),
 } satisfies Record<ScreenMode, unknown>;
 
 type ModeConfigForms = typeof modeConfigForms;
@@ -1662,6 +1663,7 @@ export const broadcastGraphicsModeConfigSchema = modeConfigCompleteSchemaMap['br
 export const metagameModeConfigSchema = modeConfigCompleteSchemaMap.metagame;
 export const topCardsModeConfigSchema = modeConfigCompleteSchemaMap['top-cards'];
 export const playerHistoryModeConfigSchema = modeConfigCompleteSchemaMap['player-history'];
+export const pairingsModeConfigSchema = modeConfigCompleteSchemaMap.pairings;
 
 /**
  * The rules that are properties of the whole stored mode configuration rather than

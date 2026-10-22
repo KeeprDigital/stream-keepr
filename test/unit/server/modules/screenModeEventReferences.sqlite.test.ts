@@ -149,6 +149,7 @@ describe('screen Mode Event References', () => {
 			'metagame.playerListId: playerList',
 			'top-cards.playerListId: playerList',
 			'player-history.playerId: player',
+			'pairings.roundId: round',
 		]);
 	});
 

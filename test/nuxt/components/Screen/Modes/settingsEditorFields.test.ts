@@ -74,6 +74,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		],
 	},
 	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
+	'pairings': { editor: 'Pairings', variants: [{ autoPageEnabled: true }] },
 	// The Top N scope, and a fixed card size.
 	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false }] },
 };

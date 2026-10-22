@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { ScreenOutputFeatureMatchResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
 
@@ -375,6 +375,42 @@ describe('capability-only Screen Output reads', () => {
 			await setMode('background');
 			expect((await asOutput('player-history')).status).toBe(404);
 			expect((await asOutput('standings')).status).toBe(404);
+		});
+	});
+
+	describe('pairings', () => {
+		it('reads the Matches of the Round the Screen names, with each result as last reported', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'Pairings Swiss' } });
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Pairings Round', roundNumber: 1 },
+			});
+			const match = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: { roundId: round.id, tableNumber: 7, player1Data: { name: 'Alice' }, player2Data: { name: 'Bob' } },
+			});
+			const pairings = await outputScreen('pairings');
+
+			expect((await pairings.read('pairings')).status).toBe(404);
+
+			await pairings.configure({ roundId: round.id });
+			const pending = await pairings.read<ScreenOutputPairingsResponse>('pairings');
+			expect(pending.status).toBe(200);
+			expect(pending.data.round).toMatchObject({ id: round.id, name: 'Pairings Round' });
+			expect(pending.data.matches).toEqual([expect.objectContaining({
+				matchId: match.id,
+				tableNumber: 7,
+				player1: { id: null, name: 'Alice' },
+				player2: { id: null, name: 'Bob' },
+				hasResult: false,
+			})]);
+
+			await $fetch(`/api/events/${eventId}/matches/${match.id}`, {
+				method: 'PATCH',
+				body: { hasResult: true, player1GameWins: 2, player2GameWins: 1 },
+			});
+			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
+			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
 		});
 	});
 });
