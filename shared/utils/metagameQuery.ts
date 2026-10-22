@@ -155,7 +155,7 @@ export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConf
 	};
 }
 
-/** The card breakdown a Top Cards Screen renders, read off its configuration. */
+/** The card breakdown a Most Played Cards Screen renders, read off its configuration. */
 export function topCardsScreenQuery(config: TopCardsModeConfig) {
 	return buildCardBreakdownQuery(
 		config,

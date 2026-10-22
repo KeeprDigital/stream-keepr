@@ -70,7 +70,7 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   label, control kind, and bounds read back from the schema, so the mode's
  *   editor offers exactly the range the contract accepts (#498).
  * - `formerFields` names the fields an earlier version of the contract held,
- *   which storage may still carry, such as Top Cut's placeholder `bracketSize`
+ *   which storage may still carry, such as Top Cut Bracket's placeholder `bracketSize`
  *   (#752). No reader sees one, a write naming one is accepted without storing
  *   it, and the next PATCH of the mode's config removes it from storage.
  *

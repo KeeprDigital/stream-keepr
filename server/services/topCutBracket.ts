@@ -12,7 +12,7 @@ import { findMatchesByRound } from '~~/server/services/roundMatches';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
 
-/** What a Top Cut Screen shows beside each Player's name (#759). */
+/** What a Top Cut Bracket Screen shows beside each Player's name (#759). */
 export type TopCutEntrantDetails = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes'>>;
 
 /** Each Player's seed: their position in the Round Standings that seed the Phase. */
@@ -62,7 +62,7 @@ function seatedPlayerIds(matchesByRound: ReadonlyMap<number, readonly ScreenOutp
 
 /**
  * A Phase's Top Cut Bracket: its Rounds in order and their Matches, derived
- * into one column per Round (#752). The Top Cut Screen Output's read. Naming
+ * into one column per Round (#752). The Top Cut Bracket Screen Output's read. Naming
  * no Phase, or one the Event does not hold, answers no Phase and an empty
  * bracket. Each side is named as Pairings names it: its Player by their
  * current name, or the Match's own record of a side no Player holds.

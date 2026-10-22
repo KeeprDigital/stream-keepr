@@ -7,7 +7,7 @@ import { archetypes, matches, phases, playerRoundStandings, players, rounds } fr
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { projectHeadToHead } from '~~/shared/utils/headToHead';
 
-/** The two Players a Head-to-head names, and the Match they are about to play if a Slot says so. */
+/** The two Players a Head-to-Head names, and the Match they are about to play if a Slot says so. */
 interface HeadToHeadSides {
 	player1Id: number | null;
 	player2Id: number | null;
@@ -93,7 +93,7 @@ async function readMatchesBetween(eventId: number, player1Id: number, player2Id:
  * deck, and their earlier Matches at the Event. A side no Player of the Event
  * fills is `null`.
  *
- * The Head-to-head Screen Output's read.
+ * The Head-to-Head Screen Output's read.
  */
 export async function findHeadToHead(eventId: number, config: HeadToHeadModeConfig): Promise<ScreenOutputHeadToHeadResponse> {
 	const sides = await resolveSides(eventId, config);

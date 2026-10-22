@@ -7,7 +7,7 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * Two Players as the Head-to-head Screen Mode renders them (#760), read
+ * Two Players as the Head-to-Head Screen Mode renders them (#760), read
  * against real SQLite so the Event scoping, the Slot's current Feature Match
  * Assignment and the latest Round Standings are the queries', not a mock's.
  */

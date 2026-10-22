@@ -5,11 +5,11 @@ import { editorField } from './fields';
 import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
 
 /**
- * The Top Cut Screen Mode's config contract: its shape, type, and defaults.
+ * The Top Cut Bracket Screen Mode's config contract: its shape, type, and defaults.
  *
  * The bracket is derived from the Phase the operator picks (#752); its size
  * comes from that Phase's first Round. The placeholder `bracketSize` it once
- * held is a former field, which a stored Top Cut config may still carry.
+ * held is a former field, which a stored Top Cut Bracket config may still carry.
  *
  * Each Player's seed and Archetype are shown beside their name only when
  * turned on (#759), so a Screen saved before either existed renders as it did.
