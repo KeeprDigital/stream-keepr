@@ -27,6 +27,7 @@ const {
 	isEmpty,
 	headerText,
 	pageData,
+	chartBars,
 	currentPage,
 	totalPages,
 } = useMetagameModeData();
@@ -209,7 +210,13 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 					</h2>
 				</div>
 
-				<div class="metagame-table broadcast-table-surface">
+				<ScreenModesMetagameChart
+					v-if="config.viewMode === 'chart'"
+					:bars="chartBars"
+					:animate="config.animateEntries"
+				/>
+
+				<div v-else class="metagame-table broadcast-table-surface">
 					<div class="metagame-header-row broadcast-table-header-row metagame-grid" :style="gridStyle" data-testid="metagame-header-row">
 						<div
 							v-for="column in activeColumns"

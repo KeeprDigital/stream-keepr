@@ -13,6 +13,7 @@ import type {
 } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -56,6 +57,7 @@ onMounted(async () => {
 const viewModeOptions = [
 	{ label: 'Archetypes', value: 'archetype' },
 	{ label: 'Cards', value: 'cards' },
+	{ label: 'Chart', value: 'chart' },
 ];
 
 const scopeOptions = computed(() => {
@@ -119,6 +121,11 @@ const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 );
 
 const estimatedRowCount = computed(() => {
+	// A chart is one page: it draws every bar at once, Other folding the rest.
+	if (config.value.viewMode === 'chart') {
+		return 0;
+	}
+
 	if (config.value.viewMode === 'cards') {
 		return config.value.limit;
 	}
@@ -180,7 +187,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 		<ScreenSettingsCard title="Data">
 			<UFormField
 				:label="fields.viewMode.label"
-				description="Choose the metagame table to show."
+				description="Choose the metagame table or chart to show."
 				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
@@ -254,7 +261,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 				</div>
 			</template>
 
-			<template v-if="config.viewMode === 'archetype'">
+			<template v-if="config.viewMode !== 'cards'">
 				<UFormField
 					:label="fields.sortBy.label"
 					description="Order archetypes using this metric."
@@ -270,7 +277,9 @@ function updateArchetypeLimit(value: number | null | undefined) {
 
 				<UFormField
 					:label="fields.archetypeLimit.label"
-					description="Show the top archetypes and group the remainder as Other. Leave empty to show all."
+					:description="config.viewMode === 'chart'
+						? `Show the top archetypes and group the remainder as Other. The chart draws at most ${METAGAME_CHART_MAX_ARCHETYPES}.`
+						: 'Show the top archetypes and group the remainder as Other. Leave empty to show all.'"
 					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<UInputNumber
@@ -327,14 +336,19 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			</template>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
-			<ScreenColumnVisibilityList
-				:columns="activeColumns"
-				:labels="columnLabels"
-				@update="persistColumns"
-			/>
+		<ScreenSettingsCard
+			:title="config.viewMode === 'chart' ? 'Layout' : 'Columns'"
+			:subtitle="config.viewMode === 'chart' ? undefined : 'Drag to reorder, toggle to show/hide.'"
+		>
+			<template v-if="config.viewMode !== 'chart'">
+				<ScreenColumnVisibilityList
+					:columns="activeColumns"
+					:labels="columnLabels"
+					@update="persistColumns"
+				/>
 
-			<USeparator />
+				<USeparator />
+			</template>
 
 			<UFormField
 				:label="fields.maxTableWidth.label"
@@ -374,7 +388,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Pagination">
+		<ScreenSettingsCard v-if="config.viewMode !== 'chart'" title="Pagination">
 			<UFormField
 				:label="fields.pageSize.label"
 				description="Number of table rows shown per page."

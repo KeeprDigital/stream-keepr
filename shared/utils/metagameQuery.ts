@@ -108,7 +108,7 @@ export function buildArchetypeDetailQuery(
  *
  * The Screen Output's read derives its query here from the saved
  * configuration (#604), so a capability can only ever ask for the breakdown its
- * Screen publishes.
+ * Screen publishes. The chart display reads the archetype table's breakdown.
  */
 export function metagameScreenQuery(config: MetagameModeConfig) {
 	const scope: MetagameScopeInput = {

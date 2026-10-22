@@ -1,5 +1,5 @@
 import type { EffectScope } from 'vue';
-import type { MetagameScope } from '~~/shared/types/enums';
+import type { MetagameScope, MetagameViewMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +38,7 @@ const mockScreenStore = {
 };
 
 const defaultConfig = {
-	viewMode: 'archetype' as 'archetype' | 'cards',
+	viewMode: 'archetype' as MetagameViewMode,
 	scope: 'all' as MetagameScope,
 	topN: 8,
 	minPoints: 9,
@@ -354,6 +354,86 @@ describe('useMetagameModeData', () => {
 			await flushPromises();
 
 			expect(displayRows.value).toHaveLength(1);
+		});
+	});
+
+	describe('chart display', () => {
+		const chartEntries = [
+			{ id: 3, name: 'Boros Energy', colors: 'RW', count: 6, metaShare: 50 },
+			{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 4, metaShare: 33.33 },
+			{ id: -1, name: 'Other', colors: null, count: 2, metaShare: 16.67 },
+		];
+
+		beforeEach(() => {
+			mutableConfig.viewMode = 'chart';
+			mockFetch.mockResolvedValue(archetypeRead({ entries: chartEntries, totalPlayers: 12, classifiedPlayers: 12, scope: 'all' }));
+		});
+
+		it('draws the archetype breakdown as chart bars under the archetype header', async () => {
+			const { chartBars, headerText, isEmpty } = makeMetagameModeData();
+			await flushPromises();
+
+			expect(headerText.value).toBe('Full Field Metagame');
+			expect(isEmpty.value).toBe(false);
+			expect(chartBars.value.map(bar => [bar.name, bar.metaShare, bar.isOther])).toEqual([
+				['Boros Energy', 50, false],
+				['Eldrazi Ramp', 33.33, false],
+				['Other', 16.67, true],
+			]);
+		});
+
+		it('is one page: a Page Rotation never pages it', async () => {
+			vi.useFakeTimers();
+			try {
+				mockFetch.mockResolvedValue(archetypeRead({
+					entries: Array.from({ length: 12 }, (_, i) => ({ id: i + 1, name: `Arch${i}`, count: 1, metaShare: 8.33 })),
+					totalPlayers: 12,
+					classifiedPlayers: 12,
+					scope: 'all',
+				}));
+				const { chartBars, currentPage, totalPages } = makeMetagameModeData();
+				await flushPromises();
+
+				mutableConfig.autoPageEnabled = true;
+				mutableConfig.autoPageIntervalMs = 5000;
+				mutableConfig.rotationAnchor = mockServerNow;
+				mockServerNow += 5000;
+				vi.advanceTimersByTime(5000);
+				await nextTick();
+
+				expect(totalPages.value).toBe(1);
+				expect(currentPage.value).toBe(1);
+				// Eight archetypes and Other, whatever the page size.
+				expect(chartBars.value).toHaveLength(9);
+			}
+			finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('follows deck data live, as the table does', async () => {
+			const { chartBars } = makeMetagameModeData();
+			await flushPromises();
+			mockFetch.mockResolvedValue(archetypeRead({
+				entries: [{ id: 7, name: 'Eldrazi Ramp', colors: 'C', count: 12, metaShare: 100 }],
+				totalPlayers: 12,
+				classifiedPlayers: 12,
+				scope: 'all',
+			}));
+
+			deliver('playerDeck:reviewed', { deck: { id: 3, playerId: 2 } });
+			await flushPromises();
+
+			expect(chartBars.value.map(bar => bar.name)).toEqual(['Eldrazi Ramp']);
+		});
+
+		it('draws nothing outside the chart display', async () => {
+			mutableConfig.viewMode = 'archetype';
+			const { chartBars, displayRows } = makeMetagameModeData();
+			await flushPromises();
+
+			expect(displayRows.value).toHaveLength(3);
+			expect(chartBars.value).toEqual([]);
 		});
 	});
 
