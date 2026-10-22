@@ -71,6 +71,10 @@ watch(() => config.value.roundId, async (roundId) => {
 			estimatedRowCount.value = matches.length;
 		}
 	}
+	catch (error) {
+		// The count only enables the manual page controls; without it they stay on one page.
+		console.error('Failed to count the Round\'s Matches', error);
+	}
 	finally {
 		if (id === requestId) {
 			loadingMatches.value = false;

@@ -1,5 +1,5 @@
 import type { EffectScope } from 'vue';
-import type { ScreenOutputPairing, ScreenOutputPairingsResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,7 +54,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 }));
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 
-function pairing(overrides: Partial<ScreenOutputPairing> = {}): ScreenOutputPairing {
+function pairing(overrides: Partial<ScreenOutputRoundMatch> = {}): ScreenOutputRoundMatch {
 	return {
 		matchId: 1,
 		tableNumber: 1,
@@ -72,8 +72,8 @@ function pairing(overrides: Partial<ScreenOutputPairing> = {}): ScreenOutputPair
 
 const round = { id: 31, eventId: 1, phaseId: 3, name: 'Round 4', roundNumber: 4 };
 
-function answer(pairings: ScreenOutputPairing[], overrides: Partial<ScreenOutputPairingsResponse['round']> = {}) {
-	return { round: { ...round, ...overrides }, pairings };
+function answer(matches: ScreenOutputRoundMatch[], overrides: Partial<ScreenOutputPairingsResponse['round']> = {}) {
+	return { round: { ...round, ...overrides }, matches };
 }
 
 const scopes: EffectScope[] = [];
@@ -115,24 +115,22 @@ describe('usePairingsModeData', () => {
 		expect(error.value).toBeNull();
 	});
 
-	it('reads nothing and asks for a Round while none is selected', async () => {
-		const { isEmpty, emptyMessage } = makePairingsModeData();
+	it('reads nothing and is empty while no Round is selected', async () => {
+		const { isEmpty } = makePairingsModeData();
 		await flushPromises();
 
 		expect(mockFetch).not.toHaveBeenCalled();
 		expect(isEmpty.value).toBe(true);
-		expect(emptyMessage.value).toBe('Select a round to show pairings.');
 	});
 
-	it('says so when the Round has no Matches yet', async () => {
+	it('is empty while the Round has no Matches yet', async () => {
 		mutableConfig.roundId = 31;
 		mockFetch.mockResolvedValue(answer([]));
 
-		const { isEmpty, emptyMessage } = makePairingsModeData();
+		const { isEmpty } = makePairingsModeData();
 		await flushPromises();
 
 		expect(isEmpty.value).toBe(true);
-		expect(emptyMessage.value).toBe('No pairings yet for this round.');
 	});
 
 	it('re-reads when the selected Round changes', async () => {
@@ -181,7 +179,7 @@ describe('usePairingsModeData', () => {
 			['reported Match', pairing({ hasResult: true, player1GameWins: 2, player2GameWins: 1, gameDraws: 0 }), '2-1'],
 			['reported Match with game draws', pairing({ hasResult: true, player1GameWins: 1, player2GameWins: 1, gameDraws: 1 }), '1-1-1'],
 			['result without game counts', pairing({ hasResult: true, resultString: 'Intentional draw' }), 'Intentional draw'],
-			['result with nothing to show', pairing({ hasResult: true }), 'Reported'],
+			['result with nothing to show', pairing({ hasResult: true }), 'Result'],
 		])('formats a %s', (_name, row, expected) => {
 			expect(makePairingsModeData().formatResult(row)).toBe(expected);
 		});
@@ -194,6 +192,7 @@ describe('usePairingsModeData', () => {
 			['nobody on a draw', pairing({ hasResult: true, player1GameWins: 1, player2GameWins: 1 }), null],
 			['nobody while pending', pairing(), null],
 			['the Player with the bye', pairing({ isBye: true, player2: null }), 1],
+			['the Player with the bye, seated second', pairing({ isBye: true, player1: null }), 2],
 		])('is %s', (_name, row, expected) => {
 			expect(makePairingsModeData().winner(row)).toBe(expected);
 		});

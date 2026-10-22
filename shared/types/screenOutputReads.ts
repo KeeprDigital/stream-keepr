@@ -35,18 +35,19 @@ export interface ScreenOutputStandingsResponse {
 }
 
 /** One side of a Match as Pairings names it: its Player, or the Match's own record of a side no Player holds. */
-export interface ScreenOutputPairingSide {
+export interface ScreenOutputMatchSide {
+	/** The seated Player; `null` when the side names no Player of the Event. */
 	id: number | null;
 	name: string;
 }
 
 /** One Match of a Round, as Pairings lists it. */
-export interface ScreenOutputPairing {
+export interface ScreenOutputRoundMatch {
 	matchId: number;
 	tableNumber: number | null;
 	/** `null` for a side no Player and no name fills, such as a bye's second seat. */
-	player1: ScreenOutputPairingSide | null;
-	player2: ScreenOutputPairingSide | null;
+	player1: ScreenOutputMatchSide | null;
+	player2: ScreenOutputMatchSide | null;
 	isBye: boolean;
 	hasResult: boolean;
 	player1GameWins: number | null;
@@ -58,7 +59,7 @@ export interface ScreenOutputPairing {
 /** What a Pairings Screen renders from: its Round, and that Round's Matches in table order. */
 export interface ScreenOutputPairingsResponse {
 	round: RoundResponse;
-	pairings: ScreenOutputPairing[];
+	matches: ScreenOutputRoundMatch[];
 }
 
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */

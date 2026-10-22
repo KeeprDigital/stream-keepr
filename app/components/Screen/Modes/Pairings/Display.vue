@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
-import type { ScreenOutputPairing, ScreenOutputPairingSide } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import { useElementSize } from '@vueuse/core';
 
 const { screen } = useScreenContext();
@@ -31,7 +31,7 @@ const rowLayoutStyle = computed(() => {
 	};
 });
 
-function sideName(row: ScreenOutputPairing, side: ScreenOutputPairingSide | null) {
+function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | null) {
 	if (side)
 		return side.name;
 	return row.isBye ? 'BYE' : 'TBD';

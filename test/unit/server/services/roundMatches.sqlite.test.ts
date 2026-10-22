@@ -13,7 +13,7 @@ const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 vi.doMock('~~/server/db', () => ({ db }));
 
-const { findRoundPairings } = await import('~~/server/services/roundPairings');
+const { findRoundMatches } = await import('~~/server/services/roundMatches');
 
 let eventId: number;
 let roundId: number;
@@ -61,16 +61,16 @@ beforeAll(async () => {
 
 afterAll(async () => await harness.close());
 
-describe('findRoundPairings', () => {
+describe('findRoundMatches', () => {
 	it('lists the Round\'s Matches in table order, byes after every table', async () => {
-		const result = await findRoundPairings(eventId, roundId);
+		const result = await findRoundMatches(eventId, roundId);
 
 		expect(result?.round).toMatchObject({ id: roundId, name: 'Round 3' });
-		expect(result?.pairings.map(pairing => pairing.tableNumber)).toEqual([2, 12, null]);
+		expect(result?.matches.map(match => match.tableNumber)).toEqual([2, 12, null]);
 	});
 
 	it('names each side by its Player, or by the Match\'s own record of a side no Player holds', async () => {
-		const [table2, table12, bye] = (await findRoundPairings(eventId, roundId))!.pairings;
+		const [table2, table12, bye] = (await findRoundMatches(eventId, roundId))!.matches;
 
 		expect(table2).toMatchObject({ player1: { id: bob, name: 'Bob' }, player2: { id: alice, name: 'Alice' } });
 		expect(table12).toMatchObject({ player1: { id: alice, name: 'Alice' }, player2: { id: null, name: 'Unlinked Dave' } });
@@ -78,18 +78,18 @@ describe('findRoundPairings', () => {
 	});
 
 	it('carries each Match\'s result, or none while it is pending', async () => {
-		const [table2, table12] = (await findRoundPairings(eventId, roundId))!.pairings;
+		const [table2, table12] = (await findRoundMatches(eventId, roundId))!.matches;
 
 		expect(table2).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1, gameDraws: 1, resultString: 'Bob won 2-1-1' });
 		expect(table12).toMatchObject({ hasResult: false, player1GameWins: null, player2GameWins: null });
 	});
 
 	it('answers nothing for a Round of another Event', async () => {
-		expect(await findRoundPairings(eventId, foreignRoundId)).toBeNull();
+		expect(await findRoundMatches(eventId, foreignRoundId)).toBeNull();
 	});
 
-	it('answers a Round without Matches as an empty pairings list', async () => {
+	it('answers a Round without Matches with none', async () => {
 		const [empty] = await db.insert(schema.rounds).values({ eventId, phaseId: (await db.query.rounds.findFirst())!.phaseId, name: 'Round 5', roundNumber: 5 }).returning({ id: schema.rounds.id });
-		expect((await findRoundPairings(eventId, empty!.id))?.pairings).toEqual([]);
+		expect((await findRoundMatches(eventId, empty!.id))?.matches).toEqual([]);
 	});
 });

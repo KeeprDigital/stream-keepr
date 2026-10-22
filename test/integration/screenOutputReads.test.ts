@@ -397,7 +397,7 @@ describe('capability-only Screen Output reads', () => {
 			const pending = await pairings.read<ScreenOutputPairingsResponse>('pairings');
 			expect(pending.status).toBe(200);
 			expect(pending.data.round).toMatchObject({ id: round.id, name: 'Pairings Round' });
-			expect(pending.data.pairings).toEqual([expect.objectContaining({
+			expect(pending.data.matches).toEqual([expect.objectContaining({
 				matchId: match.id,
 				tableNumber: 7,
 				player1: { id: null, name: 'Alice' },
@@ -410,7 +410,7 @@ describe('capability-only Screen Output reads', () => {
 				body: { hasResult: true, player1GameWins: 2, player2GameWins: 1 },
 			});
 			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
-			expect(reported.data.pairings[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
+			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
 		});
 	});
 });

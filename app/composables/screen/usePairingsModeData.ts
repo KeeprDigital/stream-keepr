@@ -1,4 +1,4 @@
-import type { ScreenOutputPairing, ScreenOutputPairingsResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -12,9 +12,9 @@ type HeldPairings = ScreenOutputPairingsResponse | null;
  */
 function pairingsDependencies(roundId: () => number | undefined): ScreenModeDependencies<HeldPairings> {
 	const isRound = (id: number) => id === roundId();
-	const holdsMatch = (held: HeldPairings, matchId: number) => held?.pairings.some(row => row.matchId === matchId) ?? false;
+	const holdsMatch = (held: HeldPairings, matchId: number) => held?.matches.some(row => row.matchId === matchId) ?? false;
 	const holdsPlayer = (held: HeldPairings, playerId: number) =>
-		held?.pairings.some(row => row.player1?.id === playerId || row.player2?.id === playerId) ?? false;
+		held?.matches.some(row => row.player1?.id === playerId || row.player2?.id === playerId) ?? false;
 
 	return {
 		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
@@ -50,32 +50,31 @@ export function usePairingsModeData() {
 	const loading = freshness.loading;
 	const error = freshness.error;
 	const round = computed(() => freshness.data.value?.round ?? null);
-	const rows = computed(() => freshness.data.value?.pairings ?? []);
+	const rows = computed(() => freshness.data.value?.matches ?? []);
 
 	const headerText = computed(() => config.value.headerText || (round.value ? `${round.value.name} Pairings` : 'Pairings'));
 	const isEmpty = computed(() => !loading.value && (!config.value.roundId || rows.value.length === 0));
-	const emptyMessage = computed(() => !config.value.roundId ? 'Select a round to show pairings.' : 'No pairings yet for this round.');
 
 	const { pageData } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
 
-	function formatResult(row: ScreenOutputPairing) {
+	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
 			return 'BYE';
 		if (!row.hasResult)
 			return 'Pending';
 		if (row.player1GameWins != null && row.player2GameWins != null)
 			return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws ? `-${row.gameDraws}` : ''}`;
-		return row.resultString || 'Reported';
+		return row.resultString || 'Result';
 	}
 
-	/** Which side won the Match: the Player with a bye, or the one with more game wins; `null` for a draw or a pending Match. */
-	function winner(row: ScreenOutputPairing): 1 | 2 | null {
+	/** Which side won the Match: the seated Player of a bye, or the one with more game wins; `null` for a draw or a pending Match. */
+	function winner(row: ScreenOutputRoundMatch): 1 | 2 | null {
 		if (row.isBye)
-			return 1;
+			return row.player1 || !row.player2 ? 1 : 2;
 		if (!row.hasResult || row.player1GameWins == null || row.player2GameWins == null || row.player1GameWins === row.player2GameWins)
 			return null;
 		return row.player1GameWins > row.player2GameWins ? 1 : 2;
 	}
 
-	return { config, loading, error, isEmpty, emptyMessage, headerText, round, pageData, formatResult, winner };
+	return { config, loading, error, isEmpty, headerText, round, pageData, formatResult, winner };
 }
