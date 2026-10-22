@@ -200,7 +200,7 @@ describe('saving a timed Card', () => {
 
 		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: 'bolt' });
 		expect(announced()).toEqual(['card:updated']);
-		await expect(getCard(request())).resolves.toBeNull();
+		await expect(getCard(request())).resolves.toMatchObject({ card: null });
 		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: 'bolt' });
 	});
 });
@@ -215,7 +215,7 @@ describe.each([
 		published.length = 0;
 
 		vi.setSystemTime(SAVED_AT + D - 1);
-		await expect(read(request())).resolves.toMatchObject({ id: 'bolt' });
+		await expect(read(request())).resolves.toMatchObject({ card: { id: 'bolt' } });
 
 		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
@@ -227,8 +227,8 @@ describe.each([
 		published.length = 0;
 
 		vi.setSystemTime(SAVED_AT + D);
-		await expect(read(request())).resolves.toBeNull();
-		await expect(read(request())).resolves.toBeNull();
+		await expect(read(request())).resolves.toMatchObject({ card: null });
+		await expect(read(request())).resolves.toMatchObject({ card: null });
 
 		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
@@ -245,7 +245,7 @@ describe.each([
 		await vi.runAllTimersAsync();
 		expect(await stored()).toEqual(before);
 
-		await expect(read(request())).resolves.toBeNull();
+		await expect(read(request())).resolves.toMatchObject({ card: null });
 
 		expect(await stored()).toEqual(before);
 		expect(published).toEqual([]);
@@ -258,7 +258,7 @@ describe.each([
 		published.length = 0;
 
 		// Ordering this answer against the newer card:updated is the Card read's freshness (#704).
-		await expect(read(request())).resolves.toBeNull();
+		await expect(read(request())).resolves.toMatchObject({ card: null });
 
 		expect(await stored()).toMatchObject({ cardId: 'counterspell', version: 2, kv: 'counterspell' });
 		expect(announced()).toEqual(['card:updated']);
@@ -274,8 +274,8 @@ describe('a replacement saved just before the replaced Card expires', () => {
 		const replaced = await stored();
 
 		vi.setSystemTime(SAVED_AT + D);
-		await expect(getCard(request())).resolves.toMatchObject({ id: 'counterspell' });
-		await expect(getOutputCard(request())).resolves.toMatchObject({ id: 'counterspell' });
+		await expect(getCard(request())).resolves.toMatchObject({ card: { id: 'counterspell' } });
+		await expect(getOutputCard(request())).resolves.toMatchObject({ card: { id: 'counterspell' } });
 
 		expect(replaced).toMatchObject({ cardId: 'counterspell', version: 2 });
 		expect(await stored()).toEqual(replaced);
@@ -314,5 +314,48 @@ describe.each([
 			expect(screen).not.toHaveProperty('activeCard');
 			expect(screen).not.toHaveProperty('activeCardVersion');
 		}
+	});
+});
+
+/**
+ * The Card revision orders every Card state a holder is handed (#734): each
+ * write answers the revision it committed, each announcement carries it, and
+ * each read answers the revision of the row it loaded beside the Card.
+ */
+describe('the Card revision', () => {
+	it('is answered by each save and Clear, and carried by its announcement', async () => {
+		await expect(putCard(request(card('bolt')))).resolves.toEqual({ success: true, revision: 1 });
+		await expect(deleteCard(request())).resolves.toEqual({ success: true, revision: 2 });
+		await expect(putCard(request(card('counterspell')))).resolves.toEqual({ success: true, revision: 3 });
+
+		expect(published).toEqual([
+			{ type: 'card:updated', data: expect.objectContaining({ screenId, revision: 1, card: expect.objectContaining({ id: 'bolt' }) }) },
+			{ type: 'card:cleared', data: { screenId, revision: 2 } },
+			{ type: 'card:updated', data: expect.objectContaining({ screenId, revision: 3, card: expect.objectContaining({ id: 'counterspell' }) }) },
+		]);
+	});
+
+	it.each([
+		['an operator read', getCard],
+		['a Screen Output read', getOutputCard],
+	])('is answered by %s beside the Card it loaded, expired or cleared', async (_reader, read) => {
+		await expect(read(request())).resolves.toEqual({ card: null, revision: 0 });
+
+		await putCard(request(card('bolt', D)));
+		await expect(read(request())).resolves.toEqual({ card: expect.objectContaining({ id: 'bolt' }), revision: 1 });
+
+		vi.setSystemTime(SAVED_AT + D);
+		await expect(read(request())).resolves.toEqual({ card: null, revision: 1 });
+
+		await deleteCard(request());
+		await expect(read(request())).resolves.toEqual({ card: null, revision: 2 });
+	});
+
+	it('answered by a read that loaded the row before a replacement is the older one', async () => {
+		await putCard(request(card('bolt')));
+		afterCardRowLoaded = async () => void await putCard(request(card('counterspell')));
+
+		await expect(getCard(request())).resolves.toEqual({ card: expect.objectContaining({ id: 'bolt' }), revision: 1 });
+		expect(published.at(-1)).toMatchObject({ type: 'card:updated', data: { revision: 2 } });
 	});
 });

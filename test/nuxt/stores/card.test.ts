@@ -24,6 +24,22 @@ const mockCardRepo = {
 	deleteScreenCard: vi.fn(),
 };
 
+/**
+ * The stand-in server's Card revision (#734). A test that is about ordering
+ * answers with explicit revisions (`{ card, revision }`, `{ success, revision }`,
+ * a message's `revision`). Every other test answers with a bare Card, or
+ * nothing, and is answered as by a server that is current when it answers:
+ * each write and each announcement advances the revision, and each read
+ * answers the revision the server is at.
+ */
+let serverRevision = 0;
+function hasRevision(answer: unknown): answer is { revision: number } {
+	return typeof answer === 'object' && answer !== null && 'revision' in answer;
+}
+const asWrite = (answer: unknown) => hasRevision(answer) ? answer : { success: true, revision: ++serverRevision };
+const asRead = (answer: unknown) => hasRevision(answer) ? answer : { card: answer, revision: serverRevision };
+const asAnnouncement = (data: any) => hasRevision(data) ? data : { ...data, revision: ++serverRevision };
+
 const mockAbly = createMockRealtime();
 const mockIsSelfOrigin = vi.fn(() => false);
 
@@ -38,7 +54,11 @@ const mockEventStoreState = {
 	event: { id: 1, cardTimeout: 0 } as any,
 };
 
-mockNuxtImport('useCardRepository', () => () => mockCardRepo);
+mockNuxtImport('useCardRepository', () => () => ({
+	saveScreenCard: async (...args: unknown[]) => asWrite(await mockCardRepo.saveScreenCard(...args)),
+	getScreenCard: async (...args: unknown[]) => asRead(await mockCardRepo.getScreenCard(...args)),
+	deleteScreenCard: async (...args: unknown[]) => asWrite(await mockCardRepo.deleteScreenCard(...args)),
+}));
 mockNuxtImport('useRealtime', () => () => mockAbly);
 mockNuxtImport('useEventStore', () => () => mockEventStoreState);
 mockNuxtImport('useScryfallBatch', () => () => ({
@@ -97,10 +117,11 @@ describe('useCardStore', () => {
 		mockAbly.onRoom.mockImplementation((storeName: string, callbacks: Record<string, (...args: unknown[]) => void>) => {
 			ablyCallbacks[storeName] = callbacks;
 		});
+		serverRevision = 0;
 		ablyCallbacks.card = {
-			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(data as any),
+			'card:updated': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteUpdated(asAnnouncement(data)),
 			'card:preview': data => !(mockIsSelfOrigin as any)(data) && store.applyRemotePreview(data as any),
-			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(data as any),
+			'card:cleared': data => !(mockIsSelfOrigin as any)(data) && store.applyRemoteCleared(asAnnouncement(data)),
 		};
 		mockEventStoreState.eventId = 1;
 		mockEventStoreState.event = { id: 1, cardTimeout: 0 };
@@ -204,7 +225,7 @@ describe('useCardStore', () => {
 				},
 			});
 			const outputRead = vi.fn().mockResolvedValue(card);
-			const uninstall = store.readActiveCardAsScreenOutput(outputRead);
+			const uninstall = store.readActiveCardAsScreenOutput(async () => asRead(await outputRead()) as any);
 
 			await store.loadActiveCard();
 			expect(store.activeCard).toEqual(card);
@@ -427,7 +448,7 @@ describe('useCardStore', () => {
 			let uninstall: () => void;
 
 			beforeEach(() => {
-				uninstall = store.readActiveCardAsScreenOutput(() => mockOutputRead());
+				uninstall = store.readActiveCardAsScreenOutput(async () => asRead(await mockOutputRead()) as any);
 			});
 
 			afterEach(() => uninstall());
@@ -710,6 +731,285 @@ describe('useCardStore', () => {
 
 				expect(store.activeCard).toEqual(held);
 			});
+		});
+	});
+
+	/**
+	 * The Card revision orders every Card state the store is handed (#734). Each
+	 * row hands the real store Card states out of order, each carrying the
+	 * revision the server committed it at, and the store must show the newest:
+	 * a save, Clear, read or message older than what it holds lands nothing.
+	 */
+	describe('card revision ordering', () => {
+		function deferred<T>() {
+			let resolve!: (value: T) => void;
+			let reject!: (error: unknown) => void;
+			const promise = new Promise<T>((res, rej) => {
+				resolve = res;
+				reject = rej;
+			});
+			return { promise, resolve, reject };
+		}
+
+		const committed = (revision: number) => ({ success: true, revision });
+		const read = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) => ({ card, revision });
+		const updated = (card: ReturnType<typeof createMockMtgCard> | null, revision: number) =>
+			ablyCallbacks.card!['card:updated']!({ eventId: 1, screenId: 5, card, revision });
+		const cleared = (revision: number) => ablyCallbacks.card!['card:cleared']!({ eventId: 1, screenId: 5, revision });
+		const ours = () => createMockMtgCard({ id: 'ours', name: 'Our Card' });
+		const theirs = () => createMockMtgCard({ id: 'theirs', name: 'Their Card' });
+
+		beforeEach(() => {
+			store.setActiveScreen(5);
+		});
+
+		it('keeps a newer card:updated over a save answered after it', async () => {
+			const save = deferred<ReturnType<typeof committed>>();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(ours());
+
+			updated(theirs(), 3);
+			save.resolve(committed(2));
+
+			// The caller still hears its write landed.
+			await expect(saving).resolves.toEqual(ours());
+			expect(store.activeCard?.id).toBe('theirs');
+		});
+
+		it('keeps a newer card:cleared over a save answered after it', async () => {
+			const save = deferred<ReturnType<typeof committed>>();
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(save.promise);
+			const saving = store.saveActiveCard(ours());
+
+			cleared(3);
+			save.resolve(committed(2));
+			await saving;
+
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('keeps a newer card:updated over a Clear answered after it', async () => {
+			mockCardRepo.saveScreenCard.mockResolvedValueOnce(committed(1));
+			await store.saveActiveCard(ours());
+			const clear = deferred<ReturnType<typeof committed>>();
+			mockCardRepo.deleteScreenCard.mockReturnValueOnce(clear.promise);
+			const clearing = store.clearActiveCard();
+
+			updated(theirs(), 3);
+			clear.resolve(committed(2));
+			await clearing;
+
+			expect(store.activeCard?.id).toBe('theirs');
+		});
+
+		it('keeps a newer save over a card:updated delivered after it', async () => {
+			mockCardRepo.saveScreenCard.mockResolvedValueOnce(committed(5));
+			await store.saveActiveCard(ours());
+
+			updated(theirs(), 4);
+
+			expect(store.activeCard?.id).toBe('ours');
+		});
+
+		it('keeps a newer save over a card:cleared delivered after it', async () => {
+			mockCardRepo.saveScreenCard.mockResolvedValueOnce(committed(5));
+			await store.saveActiveCard(ours());
+
+			cleared(4);
+
+			expect(store.activeCard?.id).toBe('ours');
+		});
+
+		it('keeps a newer Clear over a card:updated delivered after it', async () => {
+			store.activeCard = ours();
+			mockCardRepo.deleteScreenCard.mockResolvedValueOnce(committed(5));
+			await store.clearActiveCard();
+
+			updated(theirs(), 4);
+
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('lands nothing from a read that answers an older revision than the one held', async () => {
+			updated(theirs(), 3);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(read(ours(), 2));
+
+			await expect(store.loadActiveCard()).resolves.toBe('superseded');
+			expect(store.activeCard?.id).toBe('theirs');
+		});
+
+		it('lands a read that answers the revision held', async () => {
+			updated(theirs(), 3);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(read(null, 3));
+
+			// The Card held at 3 has expired by the time the read answers it as none.
+			await expect(store.loadActiveCard()).resolves.toBe('landed');
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('applies a newer message over the revision a read landed', async () => {
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(read(ours(), 2));
+			await store.loadActiveCard();
+
+			updated(theirs(), 3);
+			expect(store.activeCard?.id).toBe('theirs');
+			cleared(4);
+			expect(store.activeCard).toBeNull();
+		});
+
+		it('orders a Screen Output read by its revision too', async () => {
+			const uninstall = store.readActiveCardAsScreenOutput(async () => read(ours(), 2));
+			updated(theirs(), 3);
+
+			await expect(store.loadActiveCard()).resolves.toBe('superseded');
+			expect(store.activeCard?.id).toBe('theirs');
+			uninstall();
+		});
+
+		it('forgets the revision held when another Screen is selected', async () => {
+			updated(theirs(), 9);
+
+			store.setActiveScreen(6);
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce(read(ours(), 1));
+
+			await expect(store.loadActiveCard()).resolves.toBe('landed');
+			expect(store.activeCard?.id).toBe('ours');
+		});
+
+		it('forgets the revision held when its Event Lifetime ends', async () => {
+			updated(theirs(), 9);
+
+			store.$reset();
+			store.setActiveScreen(5);
+			updated(ours(), 1);
+
+			expect(store.activeCard?.id).toBe('ours');
+		});
+	});
+
+	/**
+	 * A display control is a save of the held Card with one display field
+	 * toggled. It shows at once, but never by mutating the held Card in place,
+	 * and a failed save puts back only the field it toggled, and only while
+	 * nothing newer has been accepted since (#734).
+	 */
+	describe('controlActiveCard display controls', () => {
+		function deferredSave() {
+			let resolve!: (value: unknown) => void;
+			let reject!: (error: unknown) => void;
+			mockCardRepo.saveScreenCard.mockReturnValueOnce(new Promise((res, rej) => {
+				resolve = res;
+				reject = rej;
+			}));
+			return { resolve, reject };
+		}
+
+		beforeEach(async () => {
+			store.setActiveScreen(5);
+			mockCardRepo.getScreenCard.mockResolvedValueOnce({ card: createMockMtgCard(), revision: 1 });
+			await store.loadActiveCard();
+		});
+
+		it('shows the toggle at once, without mutating the held Card in place, and saves it', async () => {
+			const held = store.activeCard!;
+			const save = deferredSave();
+
+			const controlling = store.controlActiveCard('flip');
+
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+			expect(held.displayData.flipped).toBe(false);
+			expect(mockCardRepo.saveScreenCard).toHaveBeenCalledWith(1, 5, expect.objectContaining({
+				displayData: expect.objectContaining({ flipped: true }),
+			}));
+			save.resolve({ success: true, revision: 2 });
+			await controlling;
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+		});
+
+		it('puts back the field it toggled when its save fails, and reports the failure', async () => {
+			const save = deferredSave();
+			const controlling = store.controlActiveCard('rotate');
+
+			save.reject(unavailable());
+			await controlling;
+
+			expect(store.activeCard).toEqual(createMockMtgCard());
+			expect(store.error).toBe('Unavailable');
+		});
+
+		it('puts back only its own field, keeping another control still out', async () => {
+			const flip = deferredSave();
+			const flipping = store.controlActiveCard('flip');
+			const rotate = deferredSave();
+			const rotating = store.controlActiveCard('rotate');
+
+			flip.reject(unavailable());
+			await flipping;
+
+			expect(store.activeCard!.displayData).toMatchObject({ flipped: false, rotated: true });
+			rotate.resolve({ success: true, revision: 2 });
+			await rotating;
+		});
+
+		it('puts back the value last accepted when two controls of one field both fail, the first first', async () => {
+			const first = deferredSave();
+			const flipping = store.controlActiveCard('flip');
+			const second = deferredSave();
+			const unflipping = store.controlActiveCard('flip');
+
+			first.reject(unavailable());
+			await flipping;
+			second.reject(unavailable());
+			await unflipping;
+
+			// The server never held the first control's unsaved `true`.
+			expect(store.activeCard!.displayData.flipped).toBe(false);
+		});
+
+		it('leaves a field to the later control of it still out when an earlier one fails', async () => {
+			const first = deferredSave();
+			const flipping = store.controlActiveCard('flip');
+			const second = deferredSave();
+			const unflipping = store.controlActiveCard('flip');
+			const third = deferredSave();
+			const reflipping = store.controlActiveCard('flip');
+
+			first.reject(unavailable());
+			await flipping;
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+
+			second.reject(unavailable());
+			third.resolve({ success: true, revision: 2 });
+			await Promise.all([unflipping, reflipping]);
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+		});
+
+		it('puts nothing back over newer state accepted while its save was out', async () => {
+			const save = deferredSave();
+			const controlling = store.controlActiveCard('flip');
+
+			ablyCallbacks.card!['card:updated']!({
+				eventId: 1,
+				screenId: 5,
+				revision: 2,
+				card: createMockMtgCard({ id: 'theirs', displayData: { flipped: true, rotated: true, turnedOver: false, counterRotated: false } }),
+			});
+			save.reject(unavailable());
+			await controlling;
+
+			expect(store.activeCard).toMatchObject({ id: 'theirs', displayData: { flipped: true, rotated: true } });
+		});
+
+		it('puts nothing back once the operator has moved to another Screen', async () => {
+			const save = deferredSave();
+			const controlling = store.controlActiveCard('flip');
+
+			store.setActiveScreen(6);
+			save.reject(unavailable());
+			await controlling;
+
+			expect(store.activeCard).toBeNull();
 		});
 	});
 

@@ -601,7 +601,7 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 - **No read writes.** The operator and Screen Output Card reads answer the projection and leave the stored Card, its revision and its KV copy as they are.
 - **No client clears on expiry.** The operator Card page hides an expired Card as a rendering does. Its `DELETE` is the operator's explicit Clear only, which still clears, advances the revision and announces `card:cleared`.
 - **No timer exists, and none is needed.** The stored expired Card is inert. It stays until the next save, Clear, or Screen or Event deletion replaces or removes it, so a show whose every client disconnected before expiry needs nothing to run.
-- **Only the Card read carries the Card.** A Screen read (the operator list, the Screen by id and by slug) does not ship `activeCard` or `activeCardVersion`, so no surface shows the stored value past its expiry.
+- **Only the Card read carries the Card.** A Screen read (the operator list, the Screen by id and by slug) does not ship `activeCard` or `activeCardVersion`, so no surface shows the stored value past its expiry. The Card read answers the Card with its Card revision, which orders it against the Card's writes and announcements (ADR-0042).
 - **Nothing announces expiry.** A holder schedules its hiding from the `timeoutData` that `card:updated` and the Card read already carry. `card:timeout` and `card:timeout:cancel` add nothing to those, and are retired.
 
 **Every rendering reads this way, whatever it holds.** A Program monitor or preview with a Session takes the same paths as a capability-only output. No client chooses a path by credential.
@@ -626,7 +626,7 @@ This section first named a server-side timeout as expiry's owner. None exists: `
 - Writes from a rendering are out of scope: a Feature Match control Screen's commands and page persistence still need a Session.
 - The Broadcast Graphics Live Session read still ensures a session server-side, as the private read always has.
 - An expired Card's stored value and its KV copy stay until the next save, Clear, or Screen or Event deletion. That is one bounded Card per Screen. Reclaiming it buys nothing a holder can observe.
-- A Card read that loaded the row before a concurrent replacement answers what it loaded. Ordering that answer against the newer `card:updated` belongs to the Card's own read freshness ([#704](https://github.com/KeeprDigital/stream-keepr/issues/704)), not to expiry. Once no client clears on expiry, a superseded read that arms a timer can only hide a newer Card locally, never clear it in storage. #704's read Flight closes that too: a superseded read lands nothing and arms no timer.
+- A Card read that loaded the row before a concurrent replacement answers what it loaded. Ordering that answer against the newer `card:updated` belongs to the Card's own read freshness ([#704](https://github.com/KeeprDigital/stream-keepr/issues/704)), not to expiry. Once no client clears on expiry, a superseded read that arms a timer can only hide a newer Card locally, never clear it in storage. #704's read Flight closes that too: a superseded read lands nothing and arms no timer. A read answering a revision older than the one held lands nothing either (ADR-0042).
 - `test/unit/server/api/cardExpiry.sqlite.test.ts` pins #707's acceptance scenarios over the real Card and Screen routes ([#725](https://github.com/KeeprDigital/stream-keepr/issues/725)).
 
 ### Rejected alternatives
@@ -696,7 +696,7 @@ An Event id cannot tell two lifetimes of the same Event apart. After A → B →
 - A Melee operation from an earlier lifetime no longer answers one started since. The in-flight coalescing is cleared on reset.
 - The write itself is not a continuation. One still queued, or retrying a lost race, when its lifetime ends is still sent for its own Event and Screen, at the revision that lifetime last knew (ADR-0041); only its effects on the stores are gated.
 - Ordering _within_ one lifetime is unchanged. This decision does not replace live aggregates' sequence and epoch rules (#590, #591). A Slot Promotion result is dropped when its lifetime ended, and otherwise still meets those rules.
-- The Card store holds one Screen's Card, so a Screen selection is a boundary too: selecting a Screen, even the one already selected, begins a new Flight within the lifetime, and a save or Clear answered after it touches nothing. Its Card reads were already Flights that a selection, a reset and anything newer supersede (#704). A Clear changes nothing it holds until its `DELETE` succeeds, so a failed one has nothing to roll back: what the store accepted meanwhile stands (#726).
+- The Card store holds one Screen's Card, so a Screen selection is a boundary too: selecting a Screen, even the one already selected, begins a new Flight within the lifetime, and a save or Clear answered after it touches nothing. Its Card reads were already Flights that a selection, a reset and anything newer supersede (#704). A Clear changes nothing it holds until its `DELETE` succeeds, so a failed one has nothing to roll back: what the store accepted meanwhile stands (#726). Within a selection, the Card's writes, reads and announcements are ordered by its Card revision (ADR-0042).
 
 ### Rejected alternatives
 
@@ -845,7 +845,7 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 - A consumer that also reads what no store holds passes its own re-read, which runs on every resync until the consumer is disposed. The metagame pages pass their summary and section fetch. That re-read is never behind, since it dies with its page. A metagame page can fetch twice on one resync, once for its own re-read and once more when the Player re-read bumps the roster version.
 - A Feature Match Slot re-read offers its Session to the Live State Follower, which holds it when it is newer. So a Session missed in the outage reaches Live Control's bound values through the Slots.
 - The Card mode, through Screen Mode Data Freshness, also re-reads on the degraded cadence while disconnected.
-- A Card read answers whether it landed. A read of no Card has landed. A failed read has not, so the operator's stays behind and a Screen Output's is retried on the slow cadence. A read something newer superseded has not either, as a superseded collection load has not; the newer state is already held (#726).
+- A Card read answers whether it landed. A read of no Card has landed. A failed read has not, so the operator's stays behind and a Screen Output's is retried on the slow cadence. A read something newer superseded has not either, as a superseded collection load has not; the newer state is already held (#726). Nor has a read answering a Card revision older than the one held (ADR-0042).
 - The Feature Match and Feature Match Overlay modes read their Slot through Screen Mode Data Freshness as well (#592). Their Reconnect Resync re-reads the whole Slot through the Screen and offers its Session to the Live State Follower, rather than reloading the Session alone. So a promotion missed in the outage is found as well as a score. A gap in the Session's notifications still reloads through the follower's load, by the same Screen read.
 
 ### Rejected alternatives
@@ -1316,3 +1316,37 @@ A write's v2 answer replaced a v3 the client already held. A failed write restor
 - **Gate write answers on the write's own per-key Flight**, as before. It refused an answer when a newer edit of the same key began, and a newer revision from anywhere else never stopped it.
 - **Drain every write before the reset completes.** Navigation would wait on the network, and a write queued behind another would still need its revision from somewhere.
 - **Treat `undefined` as omission and fix only the editors.** The display reset sends the contract's `undefined` defaults, and any other caller could repeat the mistake; the type system cannot refuse `undefined` without `exactOptionalPropertyTypes`.
+
+## ADR-0042: A Screen Card's states are ordered by its Card revision
+
+Accepted · 2026-10-22 · [#734](https://github.com/KeeprDigital/stream-keepr/issues/734)
+
+### Decision
+
+**Every Card state a holder is handed carries its Card revision, and a holder applies only one at least as new as what it holds.** The server already advanced `activeCardVersion` on each save and Clear. A save and a Clear now answer the revision they committed (`{ success, revision }`), `card:updated` and `card:cleared` carry it, and the operator and Screen Output Card reads answer `{ card, revision }`: the Card, or `null` for none or for one past its Card Timeout, beside the revision of the row they loaded. The Card store (`app/modules/card-screen/activeCard.ts`) holds the selected Screen's revision and refuses a save answer, Clear answer, read or announcement older than it. A refused write still answers its caller. A refused read has not landed (ADR-0028).
+
+**The revision held belongs to the Screen selection.** A selection and the end of the Event Lifetime forget it, as they forget the Card, so the next Screen's first state applies whatever its revision. The Flights stay: #704's read Flight, and the selection and lifetime Flights of #726 (ADR-0024). The revision orders states within a selection. The Flights decide whether a continuation may touch the store at all.
+
+**A display control shows its toggle without mutating the held Card, and a failed save puts back only that field.** `controlActiveCard` replaces the held Card with a copy carrying the toggled field and saves that copy. If the save fails, that field goes back to the Card last accepted, unless newer Card state was accepted since, the Screen selection changed, or a later control of the same field is still out, which owns the field now. Another control's field, still out, is left as it is.
+
+### Why
+
+Card messages and answers carried no revision, so the store applied whatever arrived last. A save or Clear answered after another operator's newer `card:updated` replaced it locally, and so did a late announcement of an older write. The read Flight (#704) ordered reads against everything else, but nothing ordered writes against announcements. `controlActiveCard` flipped `displayData` in place on the held Card and never restored it, so a refused save left the operator page showing a display the server did not hold.
+
+### Consequences
+
+- `card:updated` and `card:cleared` gained `revision` (`shared/types/messages.ts`). A Card read's answer changed shape from the bare Card to `{ card, revision }`.
+- A Screen read still carries no Card and no revision (ADR-0022); only the Card read and the Card's own writes and messages do.
+- The operator who saved hears no echo of their own write (self-origin), so the save's answer is what moves their held revision.
+- A read that answers the revision held lands, so an expired Card read back as `null` at its own revision is accepted, which is what the clock already showed.
+- A field goes back to what was last accepted, not to what its control found. A control can find another control's unsaved toggle, which the server never held.
+- A read landing at the revision held while a control's save is out replaces the toggle until the save answers. That is a brief flicker towards accepted state, never a wrong final state.
+- A control saved while another is still out is built on the first's toggle. If the first fails after the second saved, the second's save has been accepted, so nothing is put back, and the store shows what the server holds.
+- ADR-0022 rejected a revision guard on the operator's expiry `DELETE` partly because no client held a revision. One does now. That rejection still stands: expiry writes nothing, so there is nothing to guard.
+- `test/nuxt/stores/card.test.ts` orders every answer by hand against the real store ("card revision ordering", "controlActiveCard display controls"); `test/unit/server/api/cardExpiry.sqlite.test.ts` pins the revisions the real routes answer and announce over SQLite.
+
+### Rejected alternatives
+
+- **Order Card states by `savedAt`.** It is the writing Worker's clock, a Clear has none, and two saves in one millisecond tie.
+- **Supersede every write on any later message, as reads are.** A save is the operator's and is sent whatever arrives meanwhile (#726). A Flight cannot tell whether the message it lost to was older or newer than the write.
+- **Roll a failed display control back to the whole Card it began with.** That would undo another control still out, and any newer state accepted meanwhile.

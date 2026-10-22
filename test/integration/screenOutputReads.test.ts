@@ -209,10 +209,14 @@ describe('capability-only Screen Output reads', () => {
 
 			expect((await asOutput('card')).status).toBe(404);
 			await setMode('card');
-			const { status, data } = await asOutput<{ name: string }>('card');
+			const { status, data } = await asOutput<{ card: { name: string }; revision: number }>('card');
 
 			expect(status).toBe(200);
-			expect(data).toMatchObject({ id: 'output-card', name: 'Lightning Bolt' });
+			// The Card with the revision it was read at, as the operator's read answers it (#734).
+			expect(data).toEqual({
+				card: expect.objectContaining({ id: 'output-card', name: 'Lightning Bolt' }),
+				revision: expect.any(Number),
+			});
 			expect((await asOutput('card', neighbourCapability)).status).toBe(404);
 		});
 

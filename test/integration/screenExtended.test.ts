@@ -55,23 +55,25 @@ describe('screens extended API', () => {
 		},
 	};
 
-	it('returns null/undefined when no card is set on the screen', async () => {
-		const card = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
+	it('answers no card, at the revision before any write, when none is set on the screen', async () => {
+		const read = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
 
-		expect(card == null).toBe(true);
+		expect(read).toEqual({ card: null, revision: 0 });
 	});
 
-	it('sets a card on the screen', async () => {
+	it('sets a card on the screen, answering the Card revision it committed', async () => {
 		const result = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`, {
 			method: 'PUT',
 			body: sampleCard,
 		});
 
-		expect(result).toEqual({ success: true });
+		expect(result).toEqual({ success: true, revision: 1 });
 	});
 
-	it('gets the card that was set on the screen', async () => {
-		const card = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
+	it('gets the card that was set on the screen, with its revision', async () => {
+		const { card, revision } = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
+
+		expect(revision).toBe(1);
 
 		expect(card).toMatchObject({
 			id: 'test-card-id',
@@ -97,9 +99,10 @@ describe('screens extended API', () => {
 			body: newCard,
 		});
 
-		const card = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
+		const { card, revision } = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
 		expect(card!.name).toBe('Counterspell');
 		expect(card!.id).toBe('new-card-id');
+		expect(revision).toBe(2);
 	});
 
 	it('clears the card from the screen', async () => {
@@ -107,10 +110,10 @@ describe('screens extended API', () => {
 			method: 'DELETE',
 		});
 
-		expect(result).toEqual({ success: true });
+		expect(result).toEqual({ success: true, revision: 3 });
 
-		const card = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
-		expect(card == null).toBe(true);
+		const read = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
+		expect(read).toEqual({ card: null, revision: 3 });
 	});
 
 	// ── Mode config endpoint ──────────────────────────────────────────

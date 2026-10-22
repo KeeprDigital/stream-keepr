@@ -25,13 +25,13 @@ describe('useCardRepository', () => {
 		}));
 	});
 
-	it('gets a screen card', async () => {
-		const card = { id: 'abc', name: 'Bolt' };
-		mockFetch.mockResolvedValue(card);
+	it('gets a screen card with its Card revision', async () => {
+		const answer = { card: { id: 'abc', name: 'Bolt' }, revision: 3 };
+		mockFetch.mockResolvedValue(answer);
 		const repo = useCardRepository();
 
 		const result = await repo.getScreenCard(1, 2);
-		expect(result).toEqual(card);
+		expect(result).toEqual(answer);
 		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/screens/2/card');
 	});
 
