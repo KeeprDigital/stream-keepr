@@ -384,15 +384,19 @@ describe('a capability-only Screen Output', () => {
 
 	it('hides an expired Card itself rather than clearing it on the server', async () => {
 		api.screen = screen({ currentMode: 'card', modeConfigs: {} });
+		// The Card read answers the Card with its Card revision (#734).
 		api.answers.set('/api/screen-output/events/42/screens/7/card', () => ({
-			id: 'expiring-card',
-			name: 'Lightning Bolt',
-			set: 'lea',
-			layout: 'normal',
-			imageData: { front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' }, back: null },
-			orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
-			displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
-			timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 2000 },
+			card: {
+				id: 'expiring-card',
+				name: 'Lightning Bolt',
+				set: 'lea',
+				layout: 'normal',
+				imageData: { front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' }, back: null },
+				orientationData: { flipable: false, turnable: false, rotateable: false, counterRotateable: false },
+				displayData: { flipped: false, rotated: false, counterRotated: false, turnedOver: false },
+				timeoutData: { timeoutStartTimestamp: Date.now(), timeoutDuration: 2000 },
+			},
+			revision: 1,
 		}));
 
 		await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => useCardStore().activeCard !== null);
