@@ -68,9 +68,6 @@ export const metagameScopeShape = {
 	playerListId: z.number().int().positive().optional(),
 };
 
-/** The Metagame Scope fields as a mode's config holds them. */
-export type MetagameScopeConfig = z.input<z.ZodObject<typeof metagameScopeShape>>;
-
 export const DEFAULT_METAGAME_SCOPE = {
 	scope: 'all',
 	topN: 8,

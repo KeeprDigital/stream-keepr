@@ -37,8 +37,8 @@ const TOP_CARDS_MAX_GRID_ROWS = TOP_CARDS_MAX_LIMIT;
  * The Top Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck Screen
  * renders a deck. It is scoped by the Metagame Scope, less Minimum Points, which
- * it never offered; `excludedCardTypes` is
- * applied server-side before `limit`, so a filtered top N still fills N slots.
+ * it never offered; `excludedCardTypes` is applied server-side before `limit`,
+ * so a filtered top N still fills N slots.
  *
  * Its Page Rotation pages the grid by whole grid rows: `rowsPerPage` rows of
  * `columns` cards each. The default holds the most cards a Screen can rank in
