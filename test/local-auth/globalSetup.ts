@@ -1,5 +1,6 @@
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { warmChromium } from '../../scripts/graphics-acceptance/chromium.mjs';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_AUTH_BYPASS_NAME,
@@ -13,6 +14,11 @@ const disableFsWatchImport = fileURLToPath(new URL('../integration/disable-fs-wa
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 
 export async function setup() {
+	// Before the dev server, so the cold launch has the machine to itself (#790).
+	const warmingStarted = Date.now();
+	const warmed = await warmChromium();
+	if (warmed)
+		process.stdout.write(`local-auth: first launch of ${warmed} took ${Date.now() - warmingStarted} ms\n`);
 	await resetIntegrationWranglerState(PERSIST_DIR);
 	await prepareIntegrationD1(PERSIST_DIR);
 

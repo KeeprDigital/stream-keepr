@@ -14,7 +14,7 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -209,13 +209,23 @@ function signal(child, name) {
 	}
 }
 
-/** SIGTERM, then SIGKILL if it is still there after its grace. */
+/**
+ * SIGTERM, then SIGKILL if it is still there after its grace. Resolves to what
+ * stopped it, which a startup failure reports (#790): a browser that needed
+ * SIGKILL was stuck, not merely slow.
+ */
 async function terminate(browser) {
+	if (browser.child.pid === undefined)
+		return 'never started';
+	if (!running(browser.child))
+		return 'already exited';
 	signal(browser.child, 'SIGTERM');
 	if (await exitedWithin(browser.child, browser.terminateGraceMs))
-		return;
+		return 'stopped by SIGTERM';
 	signal(browser.child, 'SIGKILL');
-	await exitedWithin(browser.child, KILL_GRACE_MS);
+	return await exitedWithin(browser.child, KILL_GRACE_MS)
+		? 'stopped by SIGKILL'
+		: 'still running after SIGKILL';
 }
 
 async function removeProfile(profile) {
@@ -303,6 +313,38 @@ function track(browser) {
 	});
 }
 
+/** How much of a browser's stderr a startup failure keeps, from the end. */
+const STDERR_KEPT_CHARS = 4_000;
+/** How long a stopped browser's last stderr is waited for before reporting. */
+const STDERR_DRAIN_MS = 500;
+
+/** A browser that did not start, before the launcher has gathered why. */
+class StartupFailure extends Error {
+	constructor(message, status) {
+		super(message);
+		this.status = status;
+	}
+}
+
+/**
+ * Everything a CI log needs to tell a hung browser from a crashed one, or from
+ * one that listened without saying so (#790): its state when the launcher gave
+ * up, what it took to stop it, whether it had written its DevToolsActivePort
+ * file, and the tail of what it printed. The first line stays the summary.
+ */
+function startupReport(failure, { candidate, pid, stopped, activePort, errorOutput }) {
+	const printed = errorOutput.trim();
+	return [
+		failure.message,
+		`  browser: ${candidate} (pid ${pid ?? 'none'})`,
+		`  status: ${failure.status}; ${stopped}`,
+		`  ${activePort}`,
+		printed
+			? `  stderr (at most the last ${STDERR_KEPT_CHARS} characters):\n${printed.split('\n').map(line => `    ${line}`).join('\n')}`
+			: '  stderr: (nothing)',
+	].join('\n');
+}
+
 /**
  * Start one unattended Chromium and wait for its DevTools endpoint.
  *
@@ -340,14 +382,20 @@ export async function launchChromium(candidate, extraArgs, {
 	if (child.pid !== undefined)
 		track(browser);
 
+	const startedAt = Date.now();
+	const stderrEnded = new Promise(resolve => child.stderr.once('end', resolve));
+	let errorOutput = '';
 	let endpoint;
 	try {
 		endpoint = await new Promise((resolve, reject) => {
-			let errorOutput = '';
-			// Startup only, not an assertion: a cold Chrome on a 2-core CI runner that
-			// is also serving `nuxt dev` has overrun 15s.
+			// Startup only, not an assertion: a cold Chrome on a CI runner that is
+			// also serving `nuxt dev` has overrun 15s, and Chrome 156 30s, which is
+			// why a suite like that warms one first (`warmChromium`, #790).
 			const timeout = setTimeout(
-				() => reject(new Error('Chrome DevTools endpoint timed out.')),
+				() => reject(new StartupFailure(
+					'Chrome DevTools endpoint timed out.',
+					`still running after ${startupTimeoutMs} ms`,
+				)),
 				startupTimeoutMs,
 			);
 			child.stderr.setEncoding('utf8').on('data', (chunk) => {
@@ -357,6 +405,7 @@ export async function launchChromium(candidate, extraArgs, {
 					clearTimeout(timeout);
 					resolve(match[1]);
 				}
+				errorOutput = errorOutput.slice(-STDERR_KEPT_CHARS);
 			});
 			child.once('error', (error) => {
 				clearTimeout(timeout);
@@ -365,20 +414,34 @@ export async function launchChromium(candidate, extraArgs, {
 				else
 					reject(error);
 			});
-			child.once('exit', (code) => {
-				if (code !== 0) {
-					clearTimeout(timeout);
-					reject(new Error(`Chromium exited with ${code}.`));
-				}
+			// Any exit before the endpoint is a failed start, a clean one included:
+			// nothing is left to announce it.
+			child.once('exit', (code, signalName) => {
+				clearTimeout(timeout);
+				const status = signalName ? `killed by ${signalName}` : `exited with code ${code}`;
+				reject(new StartupFailure(
+					`Chromium ${status} before announcing its DevTools endpoint.`,
+					`${status} after ${Date.now() - startedAt} ms`,
+				));
 			});
 		});
 	}
 	catch (error) {
 		// A browser too slow to announce itself is still a browser: left running,
 		// it outlives the run that gave up on it.
-		await terminate(browser);
+		const stopped = await terminate(browser);
+		if (!(error instanceof StartupFailure)) {
+			await removeProfile(profile);
+			throw error;
+		}
+		// `exit` can come before the last of stderr has been read.
+		await Promise.race([stderrEnded, new Promise(resolve => setTimeout(resolve, STDERR_DRAIN_MS))]);
+		const activePort = await readFile(join(profile, 'DevToolsActivePort'), 'utf8').then(
+			text => `DevToolsActivePort: ${text.trim().split('\n').join(' ')}`,
+			() => 'no DevToolsActivePort',
+		);
 		await removeProfile(profile);
-		throw error;
+		throw new Error(startupReport(error, { candidate, pid: child.pid, stopped, activePort, errorOutput }));
 	}
 	if (!endpoint) {
 		await terminate(browser);
@@ -407,6 +470,42 @@ export async function launchChromium(candidate, extraArgs, {
 			await removeProfile(profile);
 		},
 	};
+}
+
+/**
+ * How long a browser's first launch on an idle machine may take. A bound, not
+ * an assertion: Chrome 156 took 8.6 s on an idle fresh CI runner (#790).
+ */
+const WARM_STARTUP_TIMEOUT_MS = 120_000;
+
+/**
+ * Start and stop the first available browser once, so a fresh machine pays
+ * Chrome's first-launch cost before anything competes with it (#790).
+ *
+ * A browser's first launch on a machine is far slower than every later one,
+ * profile or no profile: on a fresh CI runner with Chrome 156 the first took
+ * 8.6 s idle and every later one about 0.1 s. A suite that starts `nuxt dev`
+ * first makes that cold launch compete with the dev server for the CPU and
+ * disk, and it overran the 30 s startup bound on every runner that had 156.
+ * Warming before the server starts moves the one-time cost to a quiet machine.
+ * Resolves to the browser that was warmed, or `undefined` with none installed;
+ * a browser that cannot start even now fails with `launchChromium`'s report.
+ *
+ * @param {{ extraArgs?: readonly string[], startupTimeoutMs?: number, terminateGraceMs?: number }} [options]
+ */
+export async function warmChromium({
+	extraArgs = [],
+	startupTimeoutMs = WARM_STARTUP_TIMEOUT_MS,
+	terminateGraceMs,
+} = {}) {
+	for (const candidate of chromiumCandidates()) {
+		const browser = await launchChromium(candidate, extraArgs, { startupTimeoutMs, terminateGraceMs });
+		if (!browser)
+			continue;
+		await browser.dispose();
+		return candidate;
+	}
+	return undefined;
 }
 
 /**
