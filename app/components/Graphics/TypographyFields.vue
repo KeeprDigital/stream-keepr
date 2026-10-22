@@ -62,12 +62,12 @@ const numberFields = computed(() => props.inheritable
 
 const fontStyleOptions = computed(() => [
 	...(props.inheritable ? [BASE_OPTION] : []),
-	...GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: value, value })),
+	...GRAPHIC_FONT_STYLE_VALUES.map(value => ({ label: optionLabel(value), value })),
 ]);
 
 const caseOptions = computed(() => [
 	...(props.inheritable ? [BASE_OPTION] : []),
-	...GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: value, value })),
+	...GRAPHIC_TEXT_TRANSFORM_VALUES.map(value => ({ label: optionLabel(value), value })),
 ]);
 
 function updateNumber(field: typeof NUMBER_FIELDS[number], value: number | null | undefined) {

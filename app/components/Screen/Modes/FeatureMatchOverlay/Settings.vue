@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
+import type { GraphicRect } from '~~/shared/types/graphics';
+import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
+import { useEventListener } from '@vueuse/core';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { findGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT, DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH } from '~~/shared/types/screenConfig';
+import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import {
+	CANVAS_SELECTION,
+	compositorSelectionTarget,
+	editorSelectionFrame,
+	fromCompositorSelectionTarget,
+	fromHostSelectionTarget,
+	hostSelectionTarget,
+} from '~/modules/feature-match-overlay/editorSelection';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
-import FeatureMatchOverlayCompositorTree from './CompositorTree.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
+import FeatureMatchOverlayLayerList from './LayerList.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
@@ -25,7 +36,7 @@ const {
 	() => props.screen.id,
 );
 
-const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'feature-match-overlay',
@@ -56,8 +67,6 @@ onMounted(async () => {
 
 const matchOptions = useFeatureMatchMenuItems();
 const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
-const confirmPresetId = ref<FeatureMatchOverlayPresetId | null>(null);
-const selectedTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 const screenWidth = computed(() => screenConfig.value.width ?? props.screen.screenConfig?.width ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH);
 const screenHeight = computed(() => screenConfig.value.height ?? props.screen.screenConfig?.height ?? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT);
 const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
@@ -68,27 +77,6 @@ const aspectMismatch = computed(() => {
 	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
 });
 
-const showPresetConfirm = computed({
-	get: () => confirmPresetId.value !== null,
-	set: (value: boolean) => {
-		if (!value)
-			confirmPresetId.value = null;
-	},
-});
-
-function applyPreset() {
-	if (!confirmPresetId.value)
-		return;
-	updateConfig(applyFeatureMatchOverlayPreset(config.value, confirmPresetId.value));
-	clearSelection();
-	confirmPresetId.value = null;
-}
-
-function resetToPreset() {
-	updateConfig(applyFeatureMatchOverlayPreset(config.value, config.value.presetId));
-	clearSelection();
-}
-
 function updateCanvasDimension(field: 'width' | 'height', value: number | null | undefined) {
 	updateScreenConfig({
 		[field]: value ?? (field === 'width' ? DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_WIDTH : DEFAULT_FEATURE_MATCH_OVERLAY_SCREEN_HEIGHT),
@@ -96,61 +84,201 @@ function updateCanvasDimension(field: 'width' | 'height', value: number | null |
 }
 
 /* ────────────────────────────────────────────────
- * Shared compositor
+ * The editor: one selection, one history
  * ──────────────────────────────────────────────── */
 
-/**
- * The shared item tree's own selection, held separately from the host-owned one.
- *
- * Two refs rather than one union, because they address different things: the shared
- * one names a Graphic Item inside the one composition, and the host-owned one names
- * the Frame or a Source Item. Merging them would make every consumer of either
- * handle both, and the two authoring surfaces stay separate because their
- * vocabularies are.
- *
- * They are nonetheless one selection, because there is one property panel. Choosing
- * in either surface clears the other, so exactly one of them is ever non-canvas.
- * Without that, selecting a shared Graphic Item and then a Source Item updates the
- * host-owned ref while the panel keeps showing the compositor's — leaving the
- * host-owned inspector unreachable until the author happens to re-select the canvas.
- */
-const compositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
+const editor = useFeatureMatchLayoutEditor({
+	config,
+	updateConfig,
+	canvasWidth: screenWidth,
+	canvasHeight: screenHeight,
+});
+const { selection } = editor;
 
-function selectCompositorTarget(target: GraphicsSelectionTarget) {
-	compositorTarget.value = target;
-	if (target.type !== 'canvas')
-		selectedTarget.value = { type: 'canvas' };
-}
+/** The selection in the host-owned vocabulary the Frame and Source Item editors speak. */
+const selectedTarget = computed(() => hostSelectionTarget(selection.value));
+/** The selection in the shared compositor's vocabulary its inspector and guides speak. */
+const compositorTarget = computed(() => compositorSelectionTarget(selection.value));
 
 function selectHostTarget(target: FeatureMatchOverlaySelectionTarget) {
-	selectedTarget.value = target;
-	if (target.type !== 'canvas')
-		compositorTarget.value = { type: 'canvas' };
+	editor.select(fromHostSelectionTarget(target));
 }
 
-/** Both surfaces return to the canvas: a preset replaces what either could name. */
-function clearSelection() {
-	selectedTarget.value = { type: 'canvas' };
-	compositorTarget.value = { type: 'canvas' };
+function selectCompositorTarget(target: GraphicsSelectionTarget) {
+	editor.select(fromCompositorSelectionTarget(target));
+}
+
+const selectionFrame = computed(() => editorSelectionFrame(config.value.layout, selection.value));
+const selectionLabel = computed(() => {
+	const current = selection.value;
+	if (current.type === 'source')
+		return config.value.layout.sources.find(item => item.id === current.itemId)?.label;
+	if (current.type === 'item')
+		return findGraphicItem(config.value.layout.composition, current.itemId)?.item.label;
+	return undefined;
+});
+
+function manipulate(rect: GraphicRect, gesture: number) {
+	editor.setRect(selection.value, rect, { coalesce: `canvas:${gesture}` });
 }
 
 /**
- * The single write funnel for the shared item tree.
+ * Someone else's change to this layout ends the undo history.
  *
- * It writes the whole layout rather than the composition alone, because the mode
- * config's merge is a shallow spread: sending `{ layout: { composition } }` would
- * replace the Frame and the legacy items with nothing.
+ * A remote Screen update reaches this client only when another session wrote it
+ * — this one's own echo is suppressed — and every undo step is a whole earlier
+ * layout, so undoing past their change would silently discard it. Only a change
+ * to the layout itself counts; a colleague switching some other setting leaves
+ * the history alone. The editor takes no Graphics Authoring Lease, so this is
+ * the guard against two authors undoing over each other, not against two
+ * authors editing at once.
  */
-function updateComposition(composition: BroadcastGraphicConfig) {
-	updateConfig({ layout: { ...config.value.layout, composition } });
+const toast = useToast();
+const stopWatchingRemoteUpdates = screenStore.$onAction(({ name, args, after }) => {
+	if (name !== 'applyRemoteUpdated' || (args[0] as { screenId?: number } | undefined)?.screenId !== props.screen.id)
+		return;
+	const before = JSON.stringify(config.value.layout);
+	after(() => {
+		if (JSON.stringify(config.value.layout) === before || !editor.discardHistory())
+			return;
+		toast.add({
+			title: 'Layout changed elsewhere',
+			description: 'Another session edited this layout, so undo history was cleared to keep their change.',
+			color: 'info',
+		});
+	});
+});
+onBeforeUnmount(stopWatchingRemoteUpdates);
+
+/** Property panel edits: undoable, one step per burst of typing. */
+function updateFields(partial: Partial<FeatureMatchOverlayModeConfig>) {
+	editor.editFields(partial);
 }
+
+/* ────────────────────────────────────────────────
+ * Whole-layout actions
+ * ──────────────────────────────────────────────── */
+
+/** A whole-layout replacement awaiting confirmation: a different preset, or the current one again. */
+const pendingPreset = ref<{ id: FeatureMatchOverlayPresetId; reset: boolean } | null>(null);
+
+const showPresetConfirm = computed({
+	get: () => pendingPreset.value !== null,
+	set: (value: boolean) => {
+		if (!value)
+			pendingPreset.value = null;
+	},
+});
+
+function askToApplyPreset(id: FeatureMatchOverlayPresetId) {
+	pendingPreset.value = { id, reset: id === config.value.presetId };
+}
+
+function applyPreset() {
+	const pending = pendingPreset.value;
+	if (!pending)
+		return;
+	editor.edit(applyFeatureMatchOverlayPreset(config.value, pending.id));
+	editor.select(CANVAS_SELECTION);
+	pendingPreset.value = null;
+}
+
+const templatesOpen = ref(false);
+
+function templatePlaced() {
+	editor.select(CANVAS_SELECTION);
+	templatesOpen.value = false;
+}
+
+/* ────────────────────────────────────────────────
+ * Keyboard
+ * ──────────────────────────────────────────────── */
+
+const SHORTCUTS = [
+	{ keys: ['⌘', 'Z'], label: 'Undo' },
+	{ keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
+	{ keys: ['⌘', 'D'], label: 'Duplicate' },
+	{ keys: ['⌫'], label: 'Delete' },
+	{ keys: ['←↑↓→'], label: 'Nudge 1px (⇧ 10px)' },
+	{ keys: ['⌘', ']'], label: 'Bring forward (⇧ to front)' },
+	{ keys: ['⌘', '['], label: 'Send backward (⇧ to back)' },
+	{ keys: ['⌘', '⇧', 'H'], label: 'Hide or show' },
+	{ keys: ['Esc'], label: 'Select canvas' },
+	{ keys: ['⇧ drag'], label: 'Keep aspect ratio' },
+	{ keys: ['⌥ drag'], label: 'Turn off snapping' },
+] as const;
+
+/** Whether a key press belongs to something the author is typing into or choosing in. */
+function isTypingTarget(target: EventTarget | null) {
+	if (!(target instanceof HTMLElement))
+		return false;
+	if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+		return true;
+	return target.closest('[role="dialog"], [role="menu"], [role="listbox"]') !== null;
+}
+
+const NUDGE: Record<string, { x: number; y: number }> = {
+	ArrowLeft: { x: -1, y: 0 },
+	ArrowRight: { x: 1, y: 0 },
+	ArrowUp: { x: 0, y: -1 },
+	ArrowDown: { x: 0, y: 1 },
+};
+
+function handleKeydown(event: KeyboardEvent) {
+	if (event.defaultPrevented || isTypingTarget(event.target) || pendingPreset.value || templatesOpen.value)
+		return;
+
+	const mod = event.metaKey || event.ctrlKey;
+	const key = event.key.toLowerCase();
+	const current = selection.value;
+	let handled = true;
+
+	if (mod && key === 'z' && !event.shiftKey) {
+		editor.undo();
+	}
+	else if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) {
+		editor.redo();
+	}
+	else if (mod && key === 'd') {
+		editor.duplicate();
+	}
+	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
+		const forward = event.code === 'BracketRight';
+		if (event.shiftKey)
+			editor.moveToEdge(current, forward ? 'front' : 'back');
+		else
+			editor.move(current, forward ? 1 : -1);
+	}
+	else if (mod && event.shiftKey && key === 'h') {
+		editor.toggleVisible();
+	}
+	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
+		editor.remove();
+	}
+	else if (!mod && event.key in NUDGE && current.type !== 'canvas') {
+		const step = event.shiftKey ? 10 : 1;
+		const direction = NUDGE[event.key]!;
+		editor.nudge({ x: direction.x * step, y: direction.y * step });
+	}
+	else if (event.key === 'Escape' && current.type !== 'canvas') {
+		editor.select(CANVAS_SELECTION);
+	}
+	else {
+		handled = false;
+	}
+
+	if (handled)
+		event.preventDefault();
+}
+
+useEventListener(import.meta.client ? window : undefined, 'keydown', handleKeydown);
 </script>
 
 <template>
-	<div class="space-y-6">
-		<section class="rounded-lg border border-default/70 bg-default p-3">
-			<div class="grid gap-3 xl:grid-cols-[minmax(14rem,1fr)_minmax(18rem,1.2fr)_minmax(16rem,0.85fr)_auto] xl:items-end">
-				<UFormField label="Feature Match Slot" size="sm">
+	<div class="space-y-4">
+		<section class="rounded-lg border border-default/70 bg-default p-3" data-testid="overlay-toolbar">
+			<div class="flex flex-wrap items-end gap-3">
+				<UFormField label="Feature Match Slot" size="sm" class="min-w-56 flex-1">
 					<USelect
 						:model-value="config.featureMatchId ?? undefined"
 						:items="matchOptions"
@@ -160,26 +288,29 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 						@update:model-value="updateConfig({ featureMatchId: $event })"
 					/>
 				</UFormField>
-				<UFormField label="Preset" size="sm">
+				<UFormField label="Preset" size="sm" class="min-w-64 flex-1">
 					<UFieldGroup class="w-full">
 						<USelect
 							:model-value="config.presetId"
 							:items="presetOptions"
 							value-key="value"
 							class="min-w-0 flex-1"
-							@update:model-value="confirmPresetId = $event"
+							@update:model-value="askToApplyPreset($event)"
 						/>
 						<UButton
 							size="sm"
 							variant="soft"
+							color="neutral"
+							icon="i-lucide-rotate-ccw"
 							data-testid="reset-preset"
-							@click="resetToPreset"
+							title="Reset the layout to this preset"
+							@click="askToApplyPreset(config.presetId)"
 						>
 							Reset
 						</UButton>
 					</UFieldGroup>
 				</UFormField>
-				<UFormField label="Canvas Size" size="sm">
+				<UFormField label="Canvas size" size="sm" class="w-64">
 					<UFieldGroup class="w-full">
 						<UInputNumber
 							:model-value="screenWidth"
@@ -201,21 +332,109 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 						/>
 					</UFieldGroup>
 				</UFormField>
-				<UBadge
-					v-if="aspectMismatch"
-					color="warning"
-					variant="soft"
-					icon="i-lucide-triangle-alert"
-					class="justify-center xl:mb-1"
-				>
-					Aspect mismatch
-				</UBadge>
+
+				<div class="ml-auto flex items-center gap-1">
+					<div
+						v-if="saveState !== 'idle'"
+						class="mr-1 flex items-center gap-1.5 text-xs"
+						:class="saveState === 'failed' ? 'text-error' : 'text-muted'"
+						:title="saveState === 'failed' ? (saveError ?? undefined) : undefined"
+						role="status"
+						data-testid="layout-save-state"
+						:data-save-state="saveState"
+					>
+						<template v-if="saveState === 'saving'">
+							<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
+							Saving…
+						</template>
+						<template v-else-if="saveState === 'committed'">
+							<UIcon name="i-lucide-check" class="size-3.5 text-success" />
+							Saved
+						</template>
+						<template v-else>
+							<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
+							Not saved
+							<UButton
+								size="xs"
+								color="error"
+								variant="soft"
+								icon="i-lucide-rotate-cw"
+								data-testid="layout-save-retry"
+								@click="retrySave()"
+							>
+								Retry
+							</UButton>
+						</template>
+					</div>
+					<UFieldGroup size="sm">
+						<UButton
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-undo-2"
+							:disabled="!editor.canUndo.value"
+							aria-label="Undo"
+							title="Undo (⌘Z)"
+							data-testid="layout-undo"
+							@click="editor.undo()"
+						/>
+						<UButton
+							variant="soft"
+							color="neutral"
+							icon="i-lucide-redo-2"
+							:disabled="!editor.canRedo.value"
+							aria-label="Redo"
+							title="Redo (⌘⇧Z)"
+							data-testid="layout-redo"
+							@click="editor.redo()"
+						/>
+					</UFieldGroup>
+					<UButton
+						size="sm"
+						variant="soft"
+						color="neutral"
+						icon="i-lucide-layout-template"
+						data-testid="layout-templates-open"
+						@click="templatesOpen = true"
+					>
+						Templates
+					</UButton>
+					<UPopover>
+						<UButton
+							size="sm"
+							variant="ghost"
+							color="neutral"
+							icon="i-lucide-keyboard"
+							aria-label="Keyboard shortcuts"
+							title="Keyboard shortcuts"
+						/>
+						<template #content>
+							<div class="w-72 space-y-1.5 p-3 text-sm">
+								<p class="mb-2 font-medium">
+									Keyboard shortcuts
+								</p>
+								<div v-for="shortcut in SHORTCUTS" :key="shortcut.label" class="flex items-center justify-between gap-3">
+									<span class="text-muted">{{ shortcut.label }}</span>
+									<span class="flex gap-0.5">
+										<UKbd
+											v-for="key in shortcut.keys"
+											:key="key"
+											:value="key"
+											size="sm"
+										/>
+									</span>
+								</div>
+							</div>
+						</template>
+					</UPopover>
+				</div>
 			</div>
+
 			<UAlert
 				v-if="aspectMismatch"
 				class="mt-3"
 				color="warning"
 				variant="soft"
+				icon="i-lucide-triangle-alert"
 				title="Preset aspect ratio mismatch"
 				description="This preset was designed for 16:9. You can still use it, but geometry may need adjustment."
 			/>
@@ -245,52 +464,13 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 			</UButton>
 		</section>
 
-		<!--
-			The installation's reusable Feature Match Layouts. It sits beside the preset
-			control rather than inside the compositor because it acts on the whole
-			layout: saving copies this Screen's layout out to the library, and placing
-			replaces this Screen's layout with one from it.
-
-			Writable unconditionally, which is the honest state rather than an omission:
-			the Feature Match Overlay editor takes no Graphics Authoring Lease today, so
-			every control on this page is already as writable as this one.
-		-->
-		<GraphicsFeatureMatchLayoutTemplateLibrary
-			:event-id="eventId"
-			:screen-id="screen.id"
-			writable
-			@placed="clearSelection"
-		/>
-
-		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
-			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<!--
-					The Feature Match Layout's shared item tree, authored by the shared
-					compositor behind the Feature Match Overlay Host Contract.
-				-->
-				<FeatureMatchOverlayCompositorTree
-					:selected-target="compositorTarget"
+		<div class="grid items-start gap-4 xl:grid-cols-[15rem_minmax(0,1fr)_18rem] 2xl:grid-cols-[19rem_minmax(0,1fr)_24rem]">
+			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+				<FeatureMatchOverlayLayerList
 					:layout="config.layout"
+					:editor="editor"
 					:canvas-width="screenWidth"
 					:canvas-height="screenHeight"
-					writable
-					@update:selected-target="selectCompositorTarget"
-					@update:composition="updateComposition"
-				/>
-
-				<!--
-					The Frame, the Source Items, and the Frame cutouts stay host-owned, and
-					are reached through the editor that knows their vocabulary.
-				-->
-				<FeatureMatchOverlayLayerInspector
-					:selected-target="selectedTarget"
-					variant="tree"
-					:config="config"
-					:update-config="updateConfig"
-					:screen-width="screenWidth"
-					:screen-height="screenHeight"
-					:event-id="eventId"
-					@update:selected-target="selectHostTarget"
 				/>
 			</section>
 
@@ -305,51 +485,78 @@ function updateComposition(composition: BroadcastGraphicConfig) {
 					:canvas-height="screenHeight"
 					:publication-blocked="assetPublicationBlocked"
 					:publication-block-reason="assetPublicationBlockReason"
+					:selection-frame="selectionFrame"
+					:selection-label="selectionLabel"
+					fit-height="calc(100vh - 14rem)"
 					@select-target="selectHostTarget"
 					@select-compositor-target="selectCompositorTarget"
+					@manipulate="manipulate"
 				/>
 			</section>
 
-			<section class="min-w-0 space-y-4 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
 				<FeatureMatchOverlayCompositorInspector
-					v-if="compositorTarget.type !== 'canvas'"
+					v-if="selection.type === 'item'"
 					:layout="config.layout"
 					:selected-target="compositorTarget"
 					:canvas-width="screenWidth"
 					:canvas-height="screenHeight"
 					:event-id="eventId"
 					writable
-					@update:composition="updateComposition"
+					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
 				/>
 				<FeatureMatchOverlayLayerInspector
 					v-else
 					:selected-target="selectedTarget"
-					variant="inspector"
 					:config="config"
-					:update-config="updateConfig"
+					:update-config="updateFields"
 					:screen-width="screenWidth"
 					:screen-height="screenHeight"
 					:event-id="eventId"
-					@update:selected-target="selectHostTarget"
+					@remove="itemId => editor.remove({ type: 'source', itemId })"
+					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
 				/>
 			</section>
 		</div>
+
+		<!--
+			The installation's reusable Feature Match Layouts. They act on the whole
+			layout — saving copies this Screen's layout out, placing replaces it — so
+			they open from the toolbar beside the preset rather than from the layer list.
+
+			Writable unconditionally, which is the honest state rather than an omission:
+			the Feature Match Overlay editor takes no Graphics Authoring Lease today, so
+			every control on this page is already as writable as this one.
+		-->
+		<USlideover v-model:open="templatesOpen" title="Layout templates">
+			<template #body>
+				<GraphicsFeatureMatchLayoutTemplateLibrary
+					:event-id="eventId"
+					:screen-id="screen.id"
+					writable
+					bare
+					@placing="editor.checkpoint()"
+					@placed="templatePlaced"
+				/>
+			</template>
+		</USlideover>
 
 		<UModal v-model:open="showPresetConfirm">
 			<template #content>
 				<div class="p-6 space-y-4">
 					<h3 class="text-lg font-semibold">
-						Apply preset?
+						{{ pendingPreset?.reset ? 'Reset to preset?' : 'Apply preset?' }}
 					</h3>
 					<p class="text-sm text-muted">
-						This will overwrite Feature Match Overlay geometry and styles, while preserving the selected Feature Match Slot.
+						This replaces the Frame, every Source Item, and every Graphic Item with the preset's,
+						keeping the selected Feature Match Slot. You can undo it.
 					</p>
 					<div class="flex justify-end gap-2">
-						<UButton variant="soft" @click="() => { confirmPresetId = null }">
+						<UButton variant="soft" color="neutral" @click="() => { pendingPreset = null }">
 							Cancel
 						</UButton>
-						<UButton color="primary" @click="applyPreset">
-							Apply
+						<UButton color="primary" data-testid="confirm-preset" @click="applyPreset">
+							{{ pendingPreset?.reset ? 'Reset' : 'Apply' }}
 						</UButton>
 					</div>
 				</div>

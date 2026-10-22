@@ -25,8 +25,9 @@ import { graphicsSelectionKey } from '~/modules/graphics/selection';
 import GraphicsCompositorReorderControls from './ReorderControls.vue';
 
 /**
- * The compositor's authoring tree: the Screen's back-to-front stack of
- * Broadcast Graphics and, within the selected graphic, its Graphic Layer Order.
+ * The compositor's authoring tree: the Screen's stack of Broadcast Graphics and,
+ * within the selected graphic, its Graphic Layer Order — both listed front to
+ * back, the way layer lists read, so moving a row up moves it forward.
  * A Graphic Group appears as one layer among its siblings with its own children
  * nested beneath it, which is exactly how it composites.
  *
@@ -120,22 +121,34 @@ interface TreeRow {
 	siblingCount: number;
 }
 
-/** One flat list of rows, each knowing its own sibling list for reordering. */
-const itemRows = computed<TreeRow[]>(() => (selectedGraphic.value?.items ?? []).flatMap((item, index, items) => {
-	const row: TreeRow = { item, depth: 0, index, siblingCount: items.length };
-	if (item.type !== 'group')
-		return [row];
+/**
+ * One flat list of rows, front to back — the last-composited item first — each
+ * knowing its own sibling list for reordering. A Graphic Group's children sit
+ * beneath it, front to back too, so the arrow pointing up always moves a row
+ * toward the front.
+ */
+const itemRows = computed<TreeRow[]>(() => {
+	const items = selectedGraphic.value?.items ?? [];
+	const rows: TreeRow[] = [];
+	for (let index = items.length - 1; index >= 0; index -= 1) {
+		const item = items[index]!;
+		rows.push({ item, depth: 0, index, siblingCount: items.length });
+		if (item.type !== 'group')
+			continue;
+		for (let childIndex = item.children.length - 1; childIndex >= 0; childIndex -= 1) {
+			rows.push({
+				item: item.children[childIndex] as GraphicItemConfig,
+				depth: 1,
+				index: childIndex,
+				siblingCount: item.children.length,
+			});
+		}
+	}
+	return rows;
+});
 
-	return [
-		row,
-		...item.children.map((child, childIndex) => ({
-			item: child as GraphicItemConfig,
-			depth: 1,
-			index: childIndex,
-			siblingCount: item.children.length,
-		})),
-	];
-}));
+/** The Screen stack front to back, each graphic with its back-to-front index. */
+const stackRows = computed(() => props.graphics.map((graphic, index) => ({ graphic, index })).reverse());
 
 function isSelected(target: GraphicsSelectionTarget) {
 	return graphicsSelectionKey(props.selectedTarget) === graphicsSelectionKey(target);
@@ -225,7 +238,7 @@ function presentationGroupProjection(itemId: string) {
 						Screen stack
 					</p>
 					<p class="text-xs text-muted">
-						Back to front
+						Front at the top
 					</p>
 				</div>
 				<UBadge variant="soft">
@@ -246,7 +259,7 @@ function presentationGroupProjection(itemId: string) {
 		</section>
 
 		<div v-if="showStack" class="space-y-1.5">
-			<div v-for="(graphic, index) in graphics" :key="graphic.id" class="flex gap-1">
+			<div v-for="{ graphic, index } in stackRows" :key="graphic.id" class="flex gap-1">
 				<button
 					type="button"
 					class="flex min-w-0 flex-1 items-start gap-3 rounded-lg border p-3 text-left transition"
