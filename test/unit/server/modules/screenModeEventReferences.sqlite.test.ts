@@ -150,6 +150,9 @@ describe('screen Mode Event References', () => {
 			'top-cards.playerListId: playerList',
 			'player-history.playerId: player',
 			'pairings.roundId: round',
+			'head-to-head.featureMatchId: featureMatchSlot',
+			'head-to-head.player1Id: player',
+			'head-to-head.player2Id: player',
 		]);
 	});
 

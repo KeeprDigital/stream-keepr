@@ -62,6 +62,42 @@ export interface ScreenOutputPairingsResponse {
 	matches: ScreenOutputRoundMatch[];
 }
 
+/** One side of a Head-to-head: the Player, their current record and points, and their deck as a broadcast names it. */
+export interface ScreenOutputHeadToHeadPlayer {
+	id: number;
+	name: string;
+	pronouns: string | null;
+	wins: number | null;
+	losses: number | null;
+	draws: number | null;
+	points: number | null;
+	position: number | null;
+	/** Their Archetype's name, else the deck name their Deck List projects; `null` with neither. */
+	deckName: string | null;
+	deckColors: string | null;
+}
+
+/** An earlier reported Match between a Head-to-head's two Players at this Event. */
+export interface ScreenOutputHeadToHeadMeeting {
+	matchId: number;
+	roundId: number;
+	roundName: string;
+	roundNumber: number;
+	phaseName: string;
+	/** The Player who won it; `null` for a draw. */
+	winnerId: number | null;
+	/** Its Game Score from the first Player's side; `null` when only a result string was reported. */
+	gameScore: string | null;
+}
+
+/** What a Head-to-head Screen renders from: its two Players, and their earlier meetings oldest first. */
+export interface ScreenOutputHeadToHeadResponse {
+	/** `null` for a side no Player fills, such as an empty Slot's. */
+	player1: ScreenOutputHeadToHeadPlayer | null;
+	player2: ScreenOutputHeadToHeadPlayer | null;
+	meetings: ScreenOutputHeadToHeadMeeting[];
+}
+
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */
 export interface ScreenOutputFeatureMatchResponse {
 	slot: FeatureMatchResponse;
