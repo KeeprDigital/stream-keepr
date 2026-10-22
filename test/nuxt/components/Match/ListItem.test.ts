@@ -189,4 +189,24 @@ describe('matchListItem', () => {
 		await wrapper.get('[data-testid="match-note-save"]').trigger('click');
 		expect(save).toHaveBeenCalledWith(9, 'Edited from Matches');
 	});
+
+	// The page passes no save when the Event has Feature Match Notes switched off.
+	it('shows no Note preview or editor when no Note save is offered', async () => {
+		const wrapper = await mountComponent({}, {
+			featureMatchLabel: 'Featured 1',
+			featureMatchAssignment: {
+				id: 9,
+				eventId: 1,
+				roundId: 3,
+				slotId: 2,
+				matchId: 1,
+				note: 'Keep an eye on the sideboard plan',
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		expect(wrapper.find('.match-note-preview').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="match-note-popover"]').exists()).toBe(false);
+	});
 });

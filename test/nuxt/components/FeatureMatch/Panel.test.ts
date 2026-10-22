@@ -18,6 +18,7 @@ const mockEventStore = reactive({
 		id: 1,
 		featureMatchOrientation: 'horizontal',
 		game: 'mtg',
+		featureMatchNotesEnabled: true,
 	},
 });
 
@@ -341,6 +342,31 @@ describe('featureMatchPanel setup save', () => {
 		expect(mockAssignmentStore.consumeRound).toHaveBeenCalledWith(1, 3);
 		wrapper.unmount();
 		expect(releaseRound).toHaveBeenCalledOnce();
+	});
+
+	it('shows no Assignment Note when the Event has Feature Match Notes switched off', async () => {
+		mockAssignmentStore.assignments = [{
+			id: 9,
+			eventId: 1,
+			roundId: 3,
+			slotId: 1,
+			matchId: 7,
+			note: 'Watch the sideboard plan',
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		}];
+		mockMatchRepository.getById.mockResolvedValue({ id: 7, roundId: 3 });
+		mockEventStore.event.featureMatchNotesEnabled = false;
+
+		try {
+			const wrapper = await mountComponent({ matchId: 7 });
+			await flushPromises();
+
+			expect(wrapper.find('.feature-match-note').exists()).toBe(false);
+		}
+		finally {
+			mockEventStore.event.featureMatchNotesEnabled = true;
+		}
 	});
 
 	it('resolves simultaneous Feature Match panels against their own Assignment Rounds', async () => {

@@ -153,6 +153,7 @@ export interface EventListResponse {
 	lgsEnabled: boolean;
 	pronounsEnabled: boolean;
 	tableNumberEnabled: boolean;
+	featureMatchNotesEnabled: boolean;
 	pointsSystem: PointsSystem | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -190,6 +191,7 @@ export interface CreateEventInput {
 	lgsEnabled?: boolean;
 	pronounsEnabled?: boolean;
 	tableNumberEnabled?: boolean;
+	featureMatchNotesEnabled?: boolean;
 	pointsSystem?: PointsSystem | null;
 }
 

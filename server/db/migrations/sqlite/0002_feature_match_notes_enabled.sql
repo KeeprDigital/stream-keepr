@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `feature_match_notes_enabled` integer DEFAULT true NOT NULL;

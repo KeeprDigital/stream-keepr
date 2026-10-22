@@ -183,6 +183,18 @@ describe('event config feature match settings', () => {
 		expect(submitted(wrapper)).toEqual({ featureMatchDefaultTurnTrackingEnabled: true });
 	});
 
+	it('saves switching Feature Match Notes off', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(toggleFor(wrapper, 'featureMatchNotesEnabled').props('modelValue')).toBe(true);
+		await toggleFor(wrapper, 'featureMatchNotesEnabled').setValue(false);
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(submitted(wrapper)).toEqual({ featureMatchNotesEnabled: false });
+	});
+
 	// #612: a whole-form payload would write the stale value back over a
 	// colleague's change to a setting this operator never touched.
 	it('saves only what the operator edited, keeping a colleague\'s concurrent change', async () => {

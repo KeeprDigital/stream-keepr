@@ -27,6 +27,8 @@ const { getActiveDeckForPlayer } = usePlayerDeckCache();
 const assignmentNote = computed(() => props.featureMatchAssignment?.note ?? '');
 const assignmentNotePreview = computed(() => assignmentNote.value.trim());
 const hasAssignmentNote = computed(() => assignmentNotePreview.value.length > 0);
+// The page offers no save when the Event has Feature Match Notes switched off.
+const assignmentNoteEnabled = computed(() => !!props.saveAssignmentNote);
 const matchRowClasses = computed(() => ({
 	'match-row--featured': !!props.featureMatchAssignment,
 }));
@@ -280,7 +282,7 @@ function getScoreColor(side: 'player1' | 'player2') {
 					</div>
 				</div>
 				<div
-					v-if="hasAssignmentNote"
+					v-if="hasAssignmentNote && assignmentNoteEnabled"
 					class="match-note-preview"
 					:class="{ 'match-note-preview--changed': assignmentNoteRemoteChanged }"
 					:title="assignmentNotePreview"
@@ -299,7 +301,7 @@ function getScoreColor(side: 'player1' | 'player2') {
 					{{ match.hasResult ? 'Edit Result' : 'Enter Result' }}
 				</UButton>
 				<MatchNotePopover
-					v-if="featureMatchAssignment"
+					v-if="featureMatchAssignment && assignmentNoteEnabled"
 					:note="assignmentNote"
 					:note-key="featureMatchAssignment.id"
 					:save="saveAssignmentNote"
