@@ -7,6 +7,7 @@ import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { archetypeSpotlightModeConfigContract } from '../screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from '../screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from '../screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from '../screenModeConfigs/card';
@@ -277,6 +278,7 @@ export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
  * above stay hand-written: the server's schemas for those fields are typed to
  * produce them.
  */
+export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 export type { BackgroundModeConfig } from '../screenModeConfigs/background';
 export type { BroadcastGraphicsModeConfig } from '../screenModeConfigs/broadcastGraphics';
 export type { CardDisplayConfig, CardModeConfig } from '../screenModeConfigs/card';
@@ -388,6 +390,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'top-cards': topCardsModeConfigContract,
 	'player-history': playerHistoryModeConfigContract,
 	'pairings': pairingsModeConfigContract,
+	'archetype-spotlight': archetypeSpotlightModeConfigContract,
 	'head-to-head': headToHeadModeConfigContract,
 } as const;
 
@@ -498,6 +501,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
+	'archetype-spotlight': ['archetypeId', 'scope', 'topN', 'minPoints', 'playerListId'],
 	'head-to-head': ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'],
 } as const satisfies ModeResetPreservedKeysMap;
 

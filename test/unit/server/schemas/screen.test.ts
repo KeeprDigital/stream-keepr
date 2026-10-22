@@ -1,6 +1,7 @@
 import type { FeatureMatchOverlayModeConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
+	archetypeSpotlightModeConfigSchema,
 	backgroundModeConfigSchema,
 	createScreenSchema,
 	deckModeConfigSchema,
@@ -1056,6 +1057,60 @@ describe('pairingsModeConfigSchema', () => {
 
 	it('takes a cleared Round as the deletion that reads as none', () => {
 		expect(modeConfigPatchSchemaMap.pairings.safeParse({ roundId: null }).success).toBe(true);
+	});
+});
+
+// ──────────────── Archetype Spotlight ────────────────
+
+describe('archetypeSpotlightModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('archetype-spotlight');
+
+	it('defaults to no Archetype, the whole field, the Metagame page\'s Top 8 conversion target and its full-deck cards', () => {
+		expect(defaults).toEqual({
+			archetypeId: undefined,
+			scope: 'all',
+			topN: 8,
+			minPoints: 9,
+			playerListId: undefined,
+			conversionMetric: 'topN',
+			conversionThreshold: 8,
+			board: 'full',
+			cardLimit: 8,
+			excludedCardTypes: ['Land'],
+			showHeader: true,
+			headerText: undefined,
+			rowsPerPage: 8,
+			autoPageEnabled: false,
+			autoPageIntervalMs: 10000,
+		});
+		expect(archetypeSpotlightModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('names its Archetype by a positive id', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 7 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 0 }).success).toBe(false);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 1.5 }).success).toBe(false);
+	});
+
+	it('takes the Metagame scope vocabulary', () => {
+		for (const scope of ['all', 'topN', 'minPoints', 'playerList'])
+			expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope: 'everyone' }).success).toBe(false);
+	});
+
+	it('holds between 1 and 20 top cards', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 1 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 20 }).success).toBe(true);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 0 }).success).toBe(false);
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 21 }).success).toBe(false);
+	});
+
+	it('refuses an unknown excluded card type', () => {
+		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, excludedCardTypes: ['Tribal'] }).success).toBe(false);
+	});
+
+	it('takes a cleared Archetype as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap['archetype-spotlight'].safeParse({ archetypeId: null }).success).toBe(true);
 	});
 });
 

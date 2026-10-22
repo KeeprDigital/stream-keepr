@@ -50,6 +50,7 @@ interface EventEntities {
 	playerId: number;
 	playerListId: number;
 	featureMatchSlotId: number;
+	archetypeId: number;
 	broadcastDeckListId: number;
 }
 
@@ -59,6 +60,7 @@ async function seedEventEntities(eventId: number, label: string): Promise<EventE
 	const [player] = await db.insert(schema.players).values({ eventId, name: `${label} Player` }).returning({ id: schema.players.id });
 	const [list] = await db.insert(schema.playerLists).values({ eventId, name: `${label} List` }).returning({ id: schema.playerLists.id });
 	const [slot] = await db.insert(schema.featureMatchSlots).values({ eventId }).returning({ id: schema.featureMatchSlots.id });
+	const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: `${label} Archetype` }).returning({ id: schema.archetypes.id });
 	const [deckList] = await db.insert(schema.broadcastDeckLists).values({
 		eventId,
 		name: `${label} Deck List`,
@@ -71,6 +73,7 @@ async function seedEventEntities(eventId: number, label: string): Promise<EventE
 		playerId: player!.id,
 		playerListId: list!.id,
 		featureMatchSlotId: slot!.id,
+		archetypeId: archetype!.id,
 		broadcastDeckListId: deckList!.id,
 	};
 }
@@ -95,6 +98,7 @@ const SAMPLES: Record<EventReferenceKind, Sample[]> = {
 	player: [{ name: 'Player', naming: e => e.playerId, refusal: { statusCode: 404, message: 'Player not found' } }],
 	playerList: [{ name: 'Player List', naming: e => e.playerListId, refusal: { statusCode: 404, message: 'Player list not found' } }],
 	featureMatchSlot: [{ name: 'Feature Match Slot', naming: e => e.featureMatchSlotId, refusal: { statusCode: 404, message: 'Feature match slot not found' } }],
+	archetype: [{ name: 'Archetype', naming: e => e.archetypeId, refusal: { statusCode: 404, message: 'Archetype not found' } }],
 	deckSource: [
 		{ name: 'Player Deck Source', naming: e => ({ type: 'player', playerId: e.playerId }), refusal: { statusCode: 404, message: 'Player not found' } },
 		{ name: 'Broadcast Deck Source', naming: e => ({ type: 'broadcast', broadcastDeckListId: e.broadcastDeckListId }), refusal: { statusCode: 409, code: 'SCREEN_DECK_SOURCE_CONFLICT' } },
@@ -154,6 +158,8 @@ describe('screen Mode Event References', () => {
 			'top-cards.playerListId: playerList',
 			'player-history.playerId: player',
 			'pairings.roundId: round',
+			'archetype-spotlight.archetypeId: archetype',
+			'archetype-spotlight.playerListId: playerList',
 			'head-to-head.featureMatchId: featureMatchSlot',
 			'head-to-head.player1Id: player',
 			'head-to-head.player2Id: player',

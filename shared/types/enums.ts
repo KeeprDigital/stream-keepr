@@ -10,7 +10,7 @@ export const EXTERNAL_SOURCE_VALUES = ['melee', 'manual'] as const;
 export const PLAYER_DISPLAY_MODE_VALUES = ['score', 'position'] as const;
 export const POSITION_FORMAT_VALUES = ['number', 'ordinal'] as const;
 export const DISPLAY_TYPE_VALUES = ['overlay', 'control'] as const;
-export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'topCut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'head-to-head'] as const;
+export const SCREEN_MODE_VALUES = ['background', 'card', 'deck', 'standings', 'topCut', 'feature-match', 'feature-match-overlay', 'broadcast-graphics', 'metagame', 'top-cards', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const;
 /** Where a Head-to-head Screen takes its two Players from (#760). */
 export const HEAD_TO_HEAD_PLAYER_SOURCE_VALUES = ['featureMatchSlot', 'players'] as const;
 export const SCREEN_COMMAND_VALUES = ['refresh', 'identify', 'debug'] as const;

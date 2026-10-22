@@ -53,6 +53,9 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
 
+**Pilot**:
+A Player of an Archetype within the current Metagame scope; an Archetype's pilots are its Players in that scope.
+
 **Conversion Rate**:
 The percentage of an Archetype's Players in the current Metagame scope that reached a conversion target — a Top N placement or a minimum match-point total. The target is a numerator condition evaluated inside the scope; it never narrows the scope itself.
 _Avoid_: top-cut rate, cash rate, qualification rate
@@ -112,13 +115,13 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, Pairings, or Head-to-head.
+A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, Pairings, Archetype Spotlight, or Head-to-head.
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
-A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
+A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Head-to-head**:

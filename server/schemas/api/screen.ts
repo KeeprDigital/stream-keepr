@@ -1640,6 +1640,7 @@ const modeConfigForms = {
 	'top-cards': configContractModeForms('top-cards'),
 	'player-history': configContractModeForms('player-history'),
 	'pairings': configContractModeForms('pairings'),
+	'archetype-spotlight': configContractModeForms('archetype-spotlight'),
 	'head-to-head': configContractModeForms('head-to-head'),
 } satisfies Record<ScreenMode, unknown>;
 
@@ -1670,6 +1671,7 @@ export const metagameModeConfigSchema = modeConfigCompleteSchemaMap.metagame;
 export const topCardsModeConfigSchema = modeConfigCompleteSchemaMap['top-cards'];
 export const playerHistoryModeConfigSchema = modeConfigCompleteSchemaMap['player-history'];
 export const pairingsModeConfigSchema = modeConfigCompleteSchemaMap.pairings;
+export const archetypeSpotlightModeConfigSchema = modeConfigCompleteSchemaMap['archetype-spotlight'];
 export const headToHeadModeConfigSchema = modeConfigCompleteSchemaMap['head-to-head'];
 
 /**

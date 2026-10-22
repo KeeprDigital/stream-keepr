@@ -75,6 +75,11 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 	},
 	'player-history': { editor: 'PlayerHistory', variants: [{ autoPageEnabled: true }] },
 	'pairings': { editor: 'Pairings', variants: [{ autoPageEnabled: true }] },
+	// Each scope's own field, and auto-page.
+	'archetype-spotlight': {
+		editor: 'ArchetypeSpotlight',
+		variants: [{ scope: 'topN', autoPageEnabled: true }, { scope: 'minPoints' }],
+	},
 	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
 	'head-to-head': { editor: 'HeadToHead', variants: [{}, { playerSource: 'players' }] },
 	'topCut': { editor: 'TopCut', variants: [{}] },
@@ -115,6 +120,7 @@ mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlay
 // One Player List, so every scope that needs one is offered.
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
+mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [], loadByEventId: vi.fn() }));
 mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ ...loaded, loadState: vi.fn() }));

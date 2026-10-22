@@ -39,6 +39,8 @@ const ScreenModesPlayerHistoryDisplay = defineAsyncComponent(() => import('~/com
 const ScreenModesPlayerHistorySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Settings.vue'));
 const ScreenModesPairingsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Display.vue'));
 const ScreenModesPairingsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Settings.vue'));
+const ScreenModesArchetypeSpotlightDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Display.vue'));
+const ScreenModesArchetypeSpotlightSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Settings.vue'));
 const ScreenModesHeadToHeadDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Display.vue'));
 const ScreenModesHeadToHeadSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Settings.vue'));
 
@@ -79,6 +81,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'top-cards': { displayComponent: ScreenModesTopCardsDisplay, settingsComponent: ScreenModesTopCardsSettings },
 	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
 	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModesPairingsSettings },
+	'archetype-spotlight': { displayComponent: ScreenModesArchetypeSpotlightDisplay, settingsComponent: ScreenModesArchetypeSpotlightSettings },
 	'head-to-head': { displayComponent: ScreenModesHeadToHeadDisplay, settingsComponent: ScreenModesHeadToHeadSettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 

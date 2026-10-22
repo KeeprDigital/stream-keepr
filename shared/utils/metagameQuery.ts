@@ -6,7 +6,7 @@ import type {
 	MetagameSortBy,
 } from '~~/shared/types/enums';
 import type { MetagameQueryParams } from '~~/shared/types/metagame';
-import type { MetagameModeConfig, TopCardsModeConfig } from '~~/shared/types/screenConfig';
+import type { ArchetypeSpotlightModeConfig, MetagameModeConfig, TopCardsModeConfig } from '~~/shared/types/screenConfig';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 
 export interface MetagameScopeInput {
@@ -136,6 +136,25 @@ export function metagameScreenQuery(config: MetagameModeConfig) {
 					conversionThreshold: config.conversionThreshold,
 				}),
 			};
+}
+
+/**
+ * The archetype detail an Archetype Spotlight Screen renders (#761), read off
+ * its configuration: the archetype page's own query for the same scope, board
+ * and conversion target, so the Screen shows that page's numbers. `null` while
+ * no Archetype is picked.
+ */
+export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConfig) {
+	if (config.archetypeId == null)
+		return null;
+
+	return {
+		archetypeId: config.archetypeId,
+		query: buildArchetypeDetailQuery(
+			{ scope: config.scope, topN: config.topN, minPoints: config.minPoints, playerListId: config.playerListId },
+			{ board: config.board, conversionMetric: config.conversionMetric, conversionThreshold: config.conversionThreshold },
+		),
+	};
 }
 
 /** The card breakdown a Top Cards Screen renders, read off its configuration. */

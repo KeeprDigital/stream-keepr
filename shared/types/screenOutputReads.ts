@@ -1,6 +1,6 @@
 import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
-import type { ArchetypeBreakdownResponse, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
+import type { ArchetypeBreakdownResponse, CardBreakdownEntry, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
 
 /**
  * The answers of the Screen Output read family (#604, ADR-0022): what one
@@ -12,6 +12,39 @@ import type { ArchetypeBreakdownResponse, CardBreakdownResponse, PlayerDeckColle
 export type ScreenOutputMetagameResponse
 	= | { viewMode: 'archetype'; breakdown: ArchetypeBreakdownResponse }
 		| { viewMode: 'cards'; breakdown: CardBreakdownResponse };
+
+/** One pilot of the spotlit Archetype: a Player in the scope, with their standing. */
+export interface ScreenOutputArchetypePilot {
+	id: number;
+	name: string;
+	/** `null` while the Player has no placement. */
+	position: number | null;
+	points: number | null;
+	wins: number | null;
+	losses: number | null;
+	draws: number | null;
+}
+
+/**
+ * What an Archetype Spotlight Screen renders from (#761): one Archetype within
+ * a Metagame scope, its numbers as the app's archetype detail page reads them
+ * for the same scope and conversion target.
+ */
+export interface ScreenOutputArchetypeSpotlightResponse {
+	archetype: { id: number; name: string; colors: string | null };
+	/** The Archetype's Players in the scope. */
+	playerCount: number;
+	/** % of the scope's classified Players on this Archetype. */
+	metaShare: number;
+	/** Pilots that reached the conversion target. */
+	convertedCount: number | null;
+	/** The Archetype's Conversion Rate inside the scope. */
+	conversionRate: number | null;
+	/** The pilots by position, unplaced pilots last. */
+	pilots: ScreenOutputArchetypePilot[];
+	/** The Archetype's most-included cards, most included first. */
+	topCards: CardBreakdownEntry[];
+}
 
 /** One Player's record as it stood at the end of a Round. */
 export interface ScreenOutputRoundStanding {
