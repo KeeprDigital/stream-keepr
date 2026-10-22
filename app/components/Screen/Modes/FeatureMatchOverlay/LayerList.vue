@@ -184,6 +184,63 @@ function revealSelectedRow() {
 watch(selectedKey, () => {
 	void nextTick(revealSelectedRow);
 });
+
+/* ── Renaming in place ─────────────────────────── */
+
+/** The row whose name is an input, and the name typed into it so far. */
+const renaming = shallowRef<LayerRow | null>(null);
+const draft = ref('');
+let renameInput: HTMLInputElement | null = null;
+
+function setRenameInput(element: unknown) {
+	renameInput = element instanceof HTMLInputElement ? element : null;
+}
+
+function startRename(row: LayerRow) {
+	props.editor.select(row.target);
+	renaming.value = row;
+	draft.value = row.label;
+	void nextTick(() => {
+		renameInput?.focus();
+		renameInput?.select();
+	});
+}
+
+/**
+ * End the rename, writing the typed name or not. Either way the row is a button
+ * again; after Enter or Escape focus goes back to it, but not after a blur, which
+ * already put focus wherever the author went.
+ */
+function finishRename(commit: boolean, refocus: boolean) {
+	const row = renaming.value;
+	if (!row)
+		return;
+	renaming.value = null;
+	if (commit)
+		props.editor.rename(row.target, draft.value);
+	if (refocus) {
+		void nextTick(() => {
+			rowElements.get(row.key)?.querySelector<HTMLElement>('[data-testid="layer-select"]')?.focus();
+		});
+	}
+}
+
+/** Rows are buttons, so Enter selects; Enter on the row already selected, or F2, renames it. */
+function rowKeydown(event: KeyboardEvent, row: LayerRow) {
+	if (event.key === 'F2' || (event.key === 'Enter' && row.key === selectedKey.value)) {
+		event.preventDefault();
+		startRename(row);
+	}
+}
+
+/** Every key typed into the name stays there, out of the editor's canvas shortcuts. */
+function renameKeydown(event: KeyboardEvent) {
+	event.stopPropagation();
+	if (event.key === 'Enter' || event.key === 'Escape') {
+		event.preventDefault();
+		finishRename(event.key === 'Enter', true);
+	}
+}
 </script>
 
 <template>
@@ -231,13 +288,32 @@ watch(selectedKey, () => {
 					:data-layer-key="row.key"
 					data-testid="layer-row"
 				>
+					<div
+						v-if="renaming?.key === row.key"
+						class="flex min-w-0 flex-1 items-center gap-2 py-1 pl-2"
+					>
+						<UIcon :name="row.icon" class="size-4 shrink-0 text-muted" />
+						<input
+							:ref="setRenameInput"
+							v-model="draft"
+							type="text"
+							class="min-w-0 flex-1 rounded-sm bg-default px-1 py-0.5 text-sm outline-none ring-1 ring-primary"
+							:aria-label="`Rename ${row.label}`"
+							data-testid="layer-rename"
+							@keydown="renameKeydown"
+							@blur="finishRename(true, false)"
+						>
+					</div>
 					<button
+						v-else
 						type="button"
 						class="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left"
-						:title="`${row.label} · ${row.kind}`"
+						:title="`${row.label} · ${row.kind} — double-click or F2 to rename`"
 						:aria-current="row.key === selectedKey ? 'true' : undefined"
 						data-testid="layer-select"
 						@click="editor.select(row.target)"
+						@dblclick="startRename(row)"
+						@keydown="rowKeydown($event, row)"
 					>
 						<UIcon :name="row.icon" class="size-4 shrink-0 text-muted" />
 						<span class="min-w-0 flex-1 truncate text-sm">{{ row.label }}</span>

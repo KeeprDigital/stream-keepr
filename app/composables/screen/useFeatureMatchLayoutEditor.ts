@@ -256,6 +256,29 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			editComposition(composition => patchGraphicItem(composition, target.itemId, { visible }));
 	}
 
+	function labelOf(target: FeatureMatchLayoutEditorSelection): string | undefined {
+		if (target.type === 'source')
+			return config.value.layout.sources.find(item => item.id === target.itemId)?.label;
+		if (target.type === 'item')
+			return findGraphicItem(config.value.layout.composition, target.itemId)?.item.label;
+		return undefined;
+	}
+
+	/**
+	 * Rename a layer as one undo step, through the same writes as its property
+	 * panel's name field. The name is trimmed; a blank one, or the name it already
+	 * has, writes nothing. Answers whether it renamed.
+	 */
+	function rename(target: FeatureMatchLayoutEditorSelection, name: string): boolean {
+		const label = name.trim();
+		const current = labelOf(target);
+		if (target.type === 'canvas' || label === '' || current === undefined || label === current)
+			return false;
+		if (target.type === 'source')
+			return editLayout(layout => layoutWriter.patchSource(layout, target.itemId, { label }));
+		return editComposition(composition => patchGraphicItem(composition, target.itemId, { label }));
+	}
+
 	/** Set a layer's stored rectangle, as the canvas moves or resizes it. */
 	function setRect(target: FeatureMatchLayoutEditorSelection, rect: GraphicRect, editOptions: FeatureMatchLayoutEditOptions = {}) {
 		if (target.type === 'source')
@@ -292,6 +315,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		moveToEdge,
 		isVisible,
 		toggleVisible,
+		rename,
 		setRect,
 		nudge,
 	};
