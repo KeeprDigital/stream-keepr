@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 
 const LIMIT_MS = 40_000;
+let gapsOf = false;
 const say = line => process.stdout.write(`[DEBUG-790] ${line}\n`);
 
 function run(command, args) {
@@ -105,21 +106,46 @@ async function probe(name, extra = [], env = {}) {
 	say(`  events: ${events.join(' | ')}`);
 	if (snapshot)
 		say(`  ps @10s:\n    ${snapshot}`);
+	if (gapsOf) {
+		const lines = stderr.split('\n');
+		const stamp = (line) => {
+			const match = line.match(/^\[\d+:\d+:\d{4}\/(\d\d)(\d\d)(\d\d)\.(\d{6}):/);
+			return match ? ((Number(match[1]) * 60 + Number(match[2])) * 60 + Number(match[3])) * 1000 + Number(match[4]) / 1000 : undefined;
+		};
+		say(`  ${lines.length} stderr lines; first: ${lines[0]?.slice(0, 200)}`);
+		let previous;
+		let previousLine;
+		for (const line of lines) {
+			const at = stamp(line);
+			if (at === undefined)
+				continue;
+			if (previous !== undefined && at - previous > 250) {
+				say(`  GAP ${Math.round(at - previous)} ms`);
+				say(`    before: ${previousLine.slice(0, 260)}`);
+				say(`    after:  ${line.slice(0, 260)}`);
+			}
+			previous = at;
+			previousLine = line;
+		}
+		const devtools = lines.findIndex(line => line.includes('DevTools listening'));
+		say(`  around DevTools line:\n    ${lines.slice(Math.max(0, devtools - 8), devtools + 2).map(line => line.slice(0, 260)).join('\n    ')}`);
+	}
 	say(`  stdout tail: ${JSON.stringify(stdout.slice(-600))}`);
 	say(`  stderr tail:\n${stderr.slice(-3_000).split('\n').map(line => `    ${line}`).join('\n')}`);
 }
 
-await probe('baseline #1');
-await probe('baseline #2');
-await probe('verbose', ['--enable-logging=stderr', '--v=1']);
-await probe('puppeteer-ish flags', [
-	'--no-first-run',
-	'--no-default-browser-check',
-	'--password-store=basic',
-	'--use-mock-keychain',
-	'--disable-dev-shm-usage',
-	'--disable-background-networking',
-	'--disable-component-update',
-	'--disable-sync',
-]);
-await probe('no dbus', [], { DBUS_SESSION_BUS_ADDRESS: 'disabled:', DBUS_SYSTEM_BUS_ADDRESS: 'disabled:' });
+const home = process.env.HOME;
+const state = () => say(`state: ${run('ls', ['-la', `${home}/.cache/fontconfig`, `${home}/.pki/nssdb`]).replace(/\n/g, ' ;; ').slice(0, 600)}`);
+state();
+say(`meminfo: ${run('grep', ['-E', '^(MemFree|Cached|Buffers):', '/proc/meminfo']).replace(/\n/g, ' ')}`);
+say(`chrome dir size: ${run('du', ['-sh', '/opt/google/chrome'])}`);
+gapsOf = true;
+await probe('cold verbose', ['--enable-logging=stderr', '--v=1']);
+gapsOf = false;
+state();
+{
+	const started = Date.now();
+	const fonts = run('fc-list', []).split('\n').length;
+	say(`fc-list: ${fonts} fonts in ${Date.now() - started} ms`);
+}
+await probe('warm baseline');
