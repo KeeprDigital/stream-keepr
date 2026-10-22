@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
+import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
 
@@ -488,5 +489,61 @@ describe('broadcastGraphicsSettings', () => {
 		// "another session" (#398). The notice itself is the workspace's own, and
 		// is pinned in `EditWorkspace.test.ts`.
 		expect(wrapper.getComponent(EditWorkspaceStub).props('holderName')).toBe('Marcus Angel');
+	});
+});
+
+/**
+ * Editor Focus Mode (#744) applies to the Edit workspace only: its toggle sits
+ * in the workspace toolbar while Edit is open, and the Live workspace neither
+ * offers it nor yields the page to it, whatever this browser chose.
+ */
+describe('broadcastGraphicsSettings — Editor Focus Mode', () => {
+	const focusMode = useEditorFocusMode();
+
+	beforeEach(() => {
+		mockRoute.query = {};
+		mockLeaseWritable.value = true;
+		focusMode.enabled.value = false;
+	});
+
+	afterEach(() => {
+		focusMode.enabled.value = false;
+		localStorage.clear();
+	});
+
+	it('offers the toggle in the Edit workspace and enters Focus Mode from it', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
+
+		expect(focusMode.active.value).toBe(true);
+	});
+
+	it('leaves the Live workspace out of Focus Mode, even when this browser chose it', async () => {
+		focusMode.enabled.value = true;
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="live-workspace"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="editor-focus-mode-toggle"]').exists()).toBe(false);
+		expect(focusMode.active.value).toBe(false);
+	});
+
+	it('follows the workspace switch, keeping the choice for the next Edit', async () => {
+		focusMode.enabled.value = true;
+		mockRoute.query = { workspace: 'edit' };
+		const wrapper = await mountComponent();
+		await flushPromises();
+		expect(focusMode.active.value).toBe(true);
+
+		await wrapper.get('[data-testid="workspace-live"]').trigger('click');
+		await flushPromises();
+		expect(focusMode.active.value).toBe(false);
+
+		await wrapper.get('[data-testid="workspace-edit"]').trigger('click');
+		await flushPromises();
+		expect(focusMode.active.value).toBe(true);
 	});
 });

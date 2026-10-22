@@ -3,7 +3,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive } from 'vue';
-import { getScreenModeConfigurationPolicy } from '~/modules/screen-mode';
+import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
+import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
+import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
 // The mode-settings module pulls in every mode's Display/Settings component
 // (feature-match overlay, metagame, etc.) via defineAsyncComponent. None of
@@ -59,8 +61,16 @@ mockNuxtImport('useToast', () => () => mockToast);
 mockNuxtImport('$fetch', () => mockApiFetch);
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
 
+/** The layout's slots, and whether the page asked it for Editor Focus Mode. */
 const NuxtLayoutStub = defineComponent({
-	template: '<div><slot name="actions" /><slot /></div>',
+	props: { focus: { type: Boolean, default: false } },
+	template: '<div data-testid="layout" :data-focus="String(focus)"><slot name="navbar-center" /><slot name="actions" /><slot /></div>',
+});
+
+/** A Screen-level settings card, named by its title. */
+const ScreenSettingsCardStub = defineComponent({
+	props: { title: { type: String, default: '' } },
+	template: '<section :data-settings-card="title"><slot /></section>',
 });
 
 const UContainerStub = defineComponent({
@@ -169,6 +179,7 @@ async function mountPage() {
 				USeparator: true,
 				UPopover: true,
 				UAlert: true,
+				ScreenSettingsCard: ScreenSettingsCardStub,
 			},
 		},
 	});
@@ -619,5 +630,98 @@ describe('screen config page — handing out this Screen’s output', () => {
 			// Nothing to hand a capability to, so none is minted.
 			expect(capabilityRequests()).toHaveLength(0);
 		});
+	});
+});
+
+/**
+ * Editor Focus Mode (#744). A graphics editor that offers the toggle gets the
+ * page: the app sidebar goes (the layout's job), and so does every Screen-level
+ * card above the editor. What must stay visible — the save failure, the way
+ * back to Screens, and which Screen this is — stays.
+ */
+describe('screen config page — Editor Focus Mode', () => {
+	const focusMode = useEditorFocusMode();
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	/** A mode's editor offering Focus Mode, as the graphics editors do. */
+	const GraphicsEditorStub = defineComponent({
+		components: { EditorFocusModeToggle },
+		template: '<div data-testid="mode-editor"><EditorFocusModeToggle /></div>',
+	});
+
+	/** A mode's settings that offer no Focus Mode. */
+	const PlainSettingsStub = defineComponent({
+		template: '<div data-testid="mode-editor" />',
+	});
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screens = [];
+		mockScreenStore.screenPresence = new Map();
+		focusMode.enabled.value = false;
+		// A control Screen, so the Container card is on the page to be hidden.
+		stubModePolicy({ displayType: 'control', outputOptions: [] });
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+		focusMode.enabled.value = false;
+		localStorage.clear();
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+	});
+
+	async function mountLoadedPage(editor: unknown) {
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => editor as never);
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		return wrapper;
+	}
+
+	it('shows the Screen header and settings until the editor\'s toggle enters Focus Mode', async () => {
+		const page = await mountLoadedPage(GraphicsEditorStub);
+
+		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
+		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-settings-card="Container"]').exists()).toBe(true);
+
+		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
+
+		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
+		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
+		expect(page.find('[data-settings-card="Container"]').exists()).toBe(false);
+		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
+		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
+		expect(page.text()).toContain('Back to Screens');
+	});
+
+	it('opens straight into Focus Mode when this browser left it on', async () => {
+		focusMode.enabled.value = true;
+		const page = await mountLoadedPage(GraphicsEditorStub);
+
+		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
+		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
+	});
+
+	it('exits Focus Mode from the same toggle', async () => {
+		focusMode.enabled.value = true;
+		const page = await mountLoadedPage(GraphicsEditorStub);
+
+		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
+
+		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
+		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+	});
+
+	it('ignores the remembered choice for a mode whose settings offer no Focus Mode', async () => {
+		focusMode.enabled.value = true;
+		const page = await mountLoadedPage(PlainSettingsStub);
+
+		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
+		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="focused-screen-name"]').exists()).toBe(false);
 	});
 });

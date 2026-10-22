@@ -426,6 +426,8 @@ useEventListener(import.meta.client ? window : undefined, 'keydown', handleKeydo
 							</div>
 						</template>
 					</UPopover>
+					<!-- This editor has no Live workspace, so Editor Focus Mode is always on offer (#744). -->
+					<GraphicsEditorFocusModeToggle />
 				</div>
 			</div>
 

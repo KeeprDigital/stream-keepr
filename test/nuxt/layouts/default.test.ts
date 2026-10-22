@@ -121,11 +121,18 @@ const UButtonStub = defineComponent({
 	template: '<button type="button"><slot>{{ label }}</slot></button>',
 });
 
-async function mountLayout() {
+/** The navbar's own slots, and whether it would offer the mobile sidebar toggle. */
+const UDashboardNavbarStub = defineComponent({
+	props: { toggle: { type: Boolean, default: true } },
+	template: '<header data-testid="navbar" :data-toggle="String(toggle)"><slot name="leading" /><slot /><slot name="right" /></header>',
+});
+
+async function mountLayout(props: Record<string, unknown> = {}) {
 	const layoutPath = '../../../../app/layouts/default.vue';
 	const { default: DefaultLayout } = await import(layoutPath);
 
 	return mount(DefaultLayout, {
+		props,
 		slots: {
 			default: '<div>Page Body</div>',
 		},
@@ -134,8 +141,9 @@ async function mountLayout() {
 				UDashboardGroup: UDashboardGroupStub,
 				UDashboardSidebar: UDashboardSidebarStub,
 				UDashboardPanel: UDashboardPanelStub,
-				UDashboardNavbar: true,
+				UDashboardNavbar: UDashboardNavbarStub,
 				UDashboardSidebarCollapse: true,
+				UIRealtimeStatus: true,
 				UNavigationMenu: UNavigationMenuStub,
 				USeparator: true,
 				UIServerTimeStatus: true,
@@ -229,5 +237,30 @@ describe('default layout sign-out', () => {
 		expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
 			description: 'Could not sign out — the session is still open. Try again.',
 		}));
+	});
+});
+
+/**
+ * Editor Focus Mode (#744): a page whose graphics editor wants the width hides
+ * the app sidebar entirely, keeping the connection statuses its footer carried.
+ */
+describe('default layout Editor Focus Mode', () => {
+	it('shows the app sidebar outside Focus Mode', async () => {
+		const wrapper = await mountLayout();
+
+		expect(wrapper.find('aside').exists()).toBe(true);
+		expect(wrapper.get('[data-testid="navbar"]').find('u-i-realtime-status-stub').exists()).toBe(false);
+	});
+
+	it('hides the app sidebar and its toggles in Focus Mode, keeping the connection statuses in the navbar', async () => {
+		const wrapper = await mountLayout({ focus: true });
+
+		expect(wrapper.find('aside').exists()).toBe(false);
+		expect(wrapper.find('u-dashboard-sidebar-collapse-stub').exists()).toBe(false);
+
+		const navbar = wrapper.get('[data-testid="navbar"]');
+		expect(navbar.attributes('data-toggle')).toBe('false');
+		expect(navbar.find('u-i-realtime-status-stub').exists()).toBe(true);
+		expect(navbar.find('u-i-server-time-status-stub').exists()).toBe(true);
 	});
 });
