@@ -1,6 +1,7 @@
 import type { MetagameConversionMetric } from '~~/shared/types/enums';
 import type { ArchetypeBreakdownEntry, CardResponse } from '~~/shared/types/metagame';
 import { computeMetagameWinRate } from '~~/server/services/metagameMetrics';
+import { OTHER_ARCHETYPE_ID } from '~~/shared/types/metagame';
 
 export interface ClassifiedArchetypePlayerRow {
 	archetypeId: number | null;
@@ -52,8 +53,6 @@ export interface ArchetypeAccumulator {
 	convertedCount: number;
 	count: number;
 }
-
-const OTHER_ARCHETYPE_ID = -1;
 
 export function groupClassifiedPlayersByArchetype(
 	rows: ClassifiedArchetypePlayerRow[],

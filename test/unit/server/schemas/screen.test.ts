@@ -970,6 +970,12 @@ describe('metagameModeConfigSchema', () => {
 		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: -1 }).success).toBe(false);
 		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 1.5 }).success).toBe(false);
 	});
+
+	it('offers the chart display alongside the archetype and card tables, and nothing else', () => {
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9, viewMode: 'chart' }).success).toBe(true);
+		expect(modeConfigPatchSchemaMap.metagame.parse({ viewMode: 'chart' })).toEqual({ viewMode: 'chart' });
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, ...conversionTarget, minPoints: 9, viewMode: 'pie' }).success).toBe(false);
+	});
 });
 
 // ──────────────── topCardsModeConfigSchema ────────────────

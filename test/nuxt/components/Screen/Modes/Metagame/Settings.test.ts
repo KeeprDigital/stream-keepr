@@ -316,4 +316,30 @@ describe('screenMetagameSettings', () => {
 			archetypeColumns: reordered,
 		});
 	});
+
+	it('offers the chart display alongside the archetype and card tables', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const displaySelect = wrapper.findAll('[data-testid="u-select"]')
+			.find(select => select.text().includes('Archetypes'));
+
+		expect(displaySelect!.text()).toBe('Archetypes|Cards|Chart');
+	});
+
+	it('scopes, sorts and limits the chart as it does the archetype table, as one page with no columns', async () => {
+		mockConfig.value = { ...structuredClone(defaultConfig), viewMode: 'chart' };
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const fieldLabels = wrapper.findAll('[data-testid="form-field"]').map(field => field.find('span').text());
+		expect(fieldLabels).toEqual(expect.arrayContaining(['Player scope', 'Sort archetypes by', 'Top archetypes']));
+		expect(fieldLabels).not.toContain('Card limit');
+		expect(fieldLabels).not.toContain('Rows per page');
+
+		const cardTitles = wrapper.findAll('[data-testid="settings-card"]').map(card => card.find('h2').text());
+		expect(cardTitles).not.toContain('Pagination');
+		expect(wrapper.findComponent({ name: 'VueDraggable' }).exists()).toBe(false);
+	});
 });
