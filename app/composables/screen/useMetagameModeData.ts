@@ -3,6 +3,8 @@ import type {
 	CardBreakdownResponse,
 } from '~~/shared/types/metagame';
 import type { ScreenOutputMetagameResponse } from '~~/shared/types/screenOutputReads';
+import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
+import { projectMetagameChart } from '~~/shared/utils/metagameChart';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -54,6 +56,7 @@ export function useMetagameModeData() {
 	const activeData = computed(() => {
 		switch (config.value.viewMode) {
 			case 'archetype':
+			case 'chart':
 				return archetypeData.value;
 			case 'cards':
 				return cardData.value;
@@ -82,6 +85,7 @@ export function useMetagameModeData() {
 					? `${prefix} Cards: ${config.value.archetypeFilter}`
 					: `${prefix} Most Played Cards`;
 			case 'archetype':
+			case 'chart':
 			default:
 				return `${prefix} Metagame`;
 		}
@@ -95,7 +99,20 @@ export function useMetagameModeData() {
 		return 'entries' in data ? data.entries : [];
 	});
 
+	// ── Chart ──
+	// The archetype breakdown, drawn as bars; empty outside the chart display.
+	const chartBars = computed<MetagameChartBar[]>(() =>
+		config.value.viewMode === 'chart' && archetypeData.value
+			? projectMetagameChart(archetypeData.value)
+			: [],
+	);
+
 	// ── Pagination ──
+	// A chart is one page: it draws every bar at once (Other folds the rest),
+	// so it gives the Page Rotation nothing to page.
+	const pagedRows = computed<MetagameDisplayRow[]>(() =>
+		config.value.viewMode === 'chart' ? [] : displayRows.value,
+	);
 	const {
 		pageData,
 		totalPages,
@@ -103,7 +120,7 @@ export function useMetagameModeData() {
 		setPage,
 		nextPage,
 		prevPage,
-	} = usePaginatedScreenMode({ mode: 'metagame', config, rows: displayRows });
+	} = usePaginatedScreenMode({ mode: 'metagame', config, rows: pagedRows });
 
 	// ── Empty State ──
 	const isEmpty = computed(() => !loading.value && displayRows.value.length === 0);
@@ -128,6 +145,7 @@ export function useMetagameModeData() {
 		archetypeData,
 		cardData,
 		displayRows,
+		chartBars,
 		pageData,
 		currentPage,
 		totalPages,
