@@ -108,7 +108,7 @@ describe('the shared Pagination settings card', () => {
 		vi.clearAllMocks();
 	});
 
-	it('edits the page size field the mode declares, with its contract label and bounds', async () => {
+	it('edits the page size field the mode declares, with its contract label and bounds', () => {
 		const { wrapper, saveConfig } = mountCard({ mode: 'metagame', config: { pageSize: 6, currentPage: 2 }, rowCount: 20 });
 
 		const pageSize = numberInput(wrapper, 'Rows per page');

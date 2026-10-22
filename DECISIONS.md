@@ -1217,7 +1217,7 @@ The switch had no exhaustiveness check, so a mode it forgot was skipped without 
 
 ## ADR-0039: A paginated Screen Mode Definition declares its Page Rotation, and one rule decides its shape changes
 
-Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/issues/586) · Amended 2026-10-22: Top Cards declares a Page Rotation over its grid rows · [#757](https://github.com/KeeprDigital/stream-keepr/issues/757)
+Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/issues/586) · Amended 2026-10-22: Top Cards declares a Page Rotation over its grid rows · [#757](https://github.com/KeeprDigital/stream-keepr/issues/757) · Amended 2026-10-22: every paginated editor renders one shared Pagination card · [#775](https://github.com/KeeprDigital/stream-keepr/issues/775)
 
 ### Decision
 

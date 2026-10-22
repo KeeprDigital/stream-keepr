@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
 import type { PageRotationControls } from '~/modules/screen-mode/rotationWrites';
-import { screenModeConfigContract, screenModePageRotation } from '~~/shared/screenModes';
 
 /**
  * The Pagination card every paginated Screen Mode's settings render: rows per
@@ -25,19 +23,11 @@ const props = defineProps<{
 }>();
 
 // Each control's label and bounds, read from the mode's config contract (#498).
-const fields = computed(() => {
-	const contractFields = screenModeConfigContract(props.rotation.mode).fields as Record<string, ScreenModeConfigField>;
-	return {
-		pageSize: contractFields[screenModePageRotation(props.rotation.mode).pageSize]!,
-		autoPageEnabled: contractFields.autoPageEnabled!,
-		autoPageIntervalMs: contractFields.autoPageIntervalMs!,
-	};
-});
-
+const fields = computed(() => props.rotation.fields);
 const pageSize = computed(() => props.rotation.pageSize.value);
-const autoPageEnabled = computed(() => props.rotation.rotation.value.autoPageEnabled);
+const autoPageEnabled = computed(() => props.rotation.rotationConfig.value.autoPageEnabled);
 const intervalSeconds = computed(() =>
-	Math.round(props.rotation.rotation.value.autoPageIntervalMs / fields.value.autoPageIntervalMs.displayScale),
+	Math.round(props.rotation.rotationConfig.value.autoPageIntervalMs / fields.value.autoPageIntervalMs.displayScale),
 );
 const currentPage = computed(() => props.rotation.currentPage.value);
 const totalPages = computed(() => props.rotation.totalPages.value);

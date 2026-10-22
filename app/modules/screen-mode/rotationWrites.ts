@@ -1,10 +1,11 @@
 import type { ComputedRef, Ref } from 'vue';
+import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
 import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import { computed } from 'vue';
 import { pageRotationEdit, restartedRotationAnchor, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
-import { screenModePageRotation } from '~~/shared/screenModes';
+import { screenModeConfigContract, screenModePageRotation } from '~~/shared/screenModes';
 import { useProjectedRotationPage } from './pagination';
 
 export interface RotationConfigWritesOptions<M extends PageRotationMode> {
@@ -17,6 +18,13 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
 	saveConfig: (patch: ScreenModeConfigPatch<M>) => void;
 }
 
+/** A paginated mode's contract fields for its rotation: the declared page size field, and the shared ones. */
+export interface PageRotationFields {
+	readonly pageSize: ScreenModeConfigField;
+	readonly autoPageEnabled: ScreenModeConfigField;
+	readonly autoPageIntervalMs: ScreenModeConfigField;
+}
+
 /**
  * What the shared Pagination settings card reads and writes of a paginated
  * mode's Page Rotation: the same for every mode, whatever it names its page
@@ -24,10 +32,10 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
  * `rowCount` its editor passes `useRotationConfigWrites`.
  */
 export interface PageRotationControls {
-	/** The paginated mode, whose config contract labels and bounds the card's fields. */
-	readonly mode: PageRotationMode;
+	/** The contract fields the card edits, labelling and bounding its controls (#498). */
+	readonly fields: PageRotationFields;
 	/** The rotation's own fields, as the mode's config holds them. */
-	readonly rotation: ComputedRef<PageRotationConfig>;
+	readonly rotationConfig: ComputedRef<PageRotationConfig>;
 	/** How many rows a page holds, read from the field the mode declares. */
 	readonly pageSize: ComputedRef<number>;
 	readonly currentPage: ComputedRef<number>;
@@ -39,6 +47,13 @@ export interface PageRotationControls {
 	setAutoPageEnabled: (enabled: boolean) => void;
 	adminNextPage: () => void;
 	adminPrevPage: () => void;
+}
+
+/** A paginated mode's settings editor's Page Rotation: the card's controls, and the editor's own write path. */
+export interface RotationConfigWrites<M extends PageRotationMode> extends PageRotationControls {
+	/** Writes an edit of the mode's config; an edit changing the rotation's shape restarts it from page 1. */
+	updateConfig: (patch: ScreenModeConfigPatch<M>) => void;
+	adminSetPage: (page: number) => void;
 }
 
 /**
@@ -55,9 +70,15 @@ export interface PageRotationControls {
  */
 export function useRotationConfigWrites<M extends PageRotationMode>(
 	options: RotationConfigWritesOptions<M>,
-): PageRotationControls & { updateConfig: (patch: ScreenModeConfigPatch<M>) => void; adminSetPage: (page: number) => void } {
+): RotationConfigWrites<M> {
 	const { getServerTime } = useServerTime();
 	const declaration = screenModePageRotation(options.mode);
+	const contractFields = screenModeConfigContract(options.mode).fields as Record<string, ScreenModeConfigField>;
+	const fields: PageRotationFields = {
+		pageSize: contractFields[declaration.pageSize]!,
+		autoPageEnabled: contractFields.autoPageEnabled!,
+		autoPageIntervalMs: contractFields.autoPageIntervalMs!,
+	};
 	const rotation = computed<PageRotationConfig>(() => options.config.value);
 	// Every paginated mode's config carries the rotation fields (the Screen Mode
 	// Definitions fail to compile otherwise), so a patch of them is a patch of it.
@@ -125,8 +146,8 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	}
 
 	return {
-		mode: options.mode,
-		rotation,
+		fields,
+		rotationConfig: rotation,
 		pageSize,
 		currentPage,
 		totalPages,
