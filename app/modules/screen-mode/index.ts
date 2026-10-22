@@ -41,6 +41,8 @@ const ScreenModesPairingsDisplay = defineAsyncComponent(() => import('~/componen
 const ScreenModesPairingsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Settings.vue'));
 const ScreenModesArchetypeSpotlightDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Display.vue'));
 const ScreenModesArchetypeSpotlightSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Settings.vue'));
+const ScreenModesHeadToHeadDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Display.vue'));
+const ScreenModesHeadToHeadSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Settings.vue'));
 
 interface ScreenModeRuntimeDefinition {
 	displayComponent: Component;
@@ -80,6 +82,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
 	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModesPairingsSettings },
 	'archetype-spotlight': { displayComponent: ScreenModesArchetypeSpotlightDisplay, settingsComponent: ScreenModesArchetypeSpotlightSettings },
+	'head-to-head': { displayComponent: ScreenModesHeadToHeadDisplay, settingsComponent: ScreenModesHeadToHeadSettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 
 const HALIGN_MAP = { left: 'start', center: 'center', right: 'end' } as const;

@@ -8,6 +8,7 @@ import {
 	featureMatchLayoutConfigSchema,
 	featureMatchModeConfigSchema,
 	featureMatchOverlayModeConfigSchema,
+	headToHeadModeConfigSchema,
 	metagameModeConfigSchema,
 	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
@@ -23,7 +24,7 @@ import {
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
 // ──────────────── createScreenSchema ────────────────
@@ -1110,6 +1111,47 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 
 	it('takes a cleared Archetype as the deletion that reads as none', () => {
 		expect(modeConfigPatchSchemaMap['archetype-spotlight'].safeParse({ archetypeId: null }).success).toBe(true);
+	});
+});
+
+// ──────────────── Head-to-head ────────────────
+
+describe('headToHeadModeConfigSchema', () => {
+	const defaults = getDefaultConfigForMode('head-to-head');
+
+	it('defaults to following a Feature Match Slot, none chosen yet, under the generic header', () => {
+		expect(defaults).toEqual({
+			playerSource: 'featureMatchSlot',
+			featureMatchId: null,
+			player1Id: null,
+			player2Id: null,
+			showHeader: true,
+			headerText: undefined,
+		});
+		expect(headToHeadModeConfigSchema.safeParse(defaults).success).toBe(true);
+	});
+
+	it('takes its Players from a Feature Match Slot or from two picked Players, and nothing else', () => {
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'featureMatchSlot', featureMatchId: 4 }).success).toBe(true);
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'players', player1Id: 11, player2Id: 12 }).success).toBe(true);
+		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'round' }).success).toBe(false);
+	});
+
+	it('names its Slot and Players by positive ids', () => {
+		for (const field of ['featureMatchId', 'player1Id', 'player2Id']) {
+			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 0 }).success).toBe(false);
+			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 2.5 }).success).toBe(false);
+		}
+	});
+
+	it('takes a cleared Slot or Player as the deletion that reads as none', () => {
+		expect(modeConfigPatchSchemaMap['head-to-head'].safeParse({ featureMatchId: null, player1Id: null, player2Id: null }).success).toBe(true);
+	});
+
+	it('keeps which Players it shows through a display reset', () => {
+		const reset = getDisplayDefaultsForMode('head-to-head');
+		for (const field of ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'])
+			expect(reset).not.toHaveProperty(field);
 	});
 });
 

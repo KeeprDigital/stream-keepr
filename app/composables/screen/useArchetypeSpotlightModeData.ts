@@ -1,5 +1,6 @@
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
+import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -61,15 +62,7 @@ export function useArchetypeSpotlightModeData() {
 		: `${config.value.conversionThreshold}+ pts`);
 
 	function formatRecord(pilot: ScreenOutputArchetypePilot): string {
-		const event = eventStore.displayEvent;
-		const separator = event?.displayRecordSeparator ?? '-';
-		const hideZeroDraws = event?.displayHideZeroDraws ?? true;
-		const wins = pilot.wins ?? 0;
-		const losses = pilot.losses ?? 0;
-		const draws = pilot.draws ?? 0;
-		return hideZeroDraws && draws === 0
-			? `${wins}${separator}${losses}`
-			: `${wins}${separator}${losses}${separator}${draws}`;
+		return formatPlayerRecord(pilot, eventStore.displayEvent);
 	}
 
 	// Nothing to show until an Archetype is picked and has pilots in the scope.

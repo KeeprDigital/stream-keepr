@@ -44,6 +44,7 @@ export function useScreenOutputReads() {
 		standings: () => repository.standings(requireScope()),
 		pairings: () => repository.pairings(requireScope()),
 		archetypeSpotlight: () => repository.archetypeSpotlight(requireScope()),
+		headToHead: () => repository.headToHead(requireScope()),
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		topCut: () => repository.topCut(requireScope()),

@@ -10,6 +10,7 @@ import { cardModeConfigContract } from './screenModeConfigs/card';
 import { deckModeConfigContract } from './screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from './screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from './screenModeConfigs/featureMatchOverlay';
+import { headToHeadModeConfigContract } from './screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
@@ -187,6 +188,7 @@ const SCREEN_MODE_DEFINITIONS = {
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'pairings': { label: 'Pairings', icon: 'i-lucide-list-ordered', displayType: 'overlay', description: 'Round pairings and results', backgroundLayers: true, config: pairingsModeConfigContract, eventReferences: { roundId: 'round' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'archetype-spotlight': { label: 'Archetype Spotlight', icon: 'i-lucide-crosshair', displayType: 'overlay', description: 'One archetype\'s pilots, numbers and top cards', backgroundLayers: true, config: archetypeSpotlightModeConfigContract, eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'head-to-head': { label: 'Head-to-head', icon: 'i-lucide-users', displayType: 'overlay', description: 'Two Players side by side before their Match', backgroundLayers: true, config: headToHeadModeConfigContract, eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;

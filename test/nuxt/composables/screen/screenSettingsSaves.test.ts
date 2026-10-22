@@ -224,6 +224,8 @@ describe('screen settings saves', () => {
 		['pairings', 'roundId', 31, { rowsPerPage: 6 }],
 		['archetype-spotlight', 'headerText', 'Deck to Beat', { rowsPerPage: 6 }],
 		['archetype-spotlight', 'archetypeId', 4, { rowsPerPage: 6 }],
+		['head-to-head', 'headerText', 'Feature Match Preview', { featureMatchId: 4 }],
+		['head-to-head', 'player1Id', 7, { playerSource: 'players' }],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
 		it.each([
 			['null, the deletion the PATCH contract defines', null],

@@ -279,6 +279,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'player-history',
 			'pairings',
 			'archetype-spotlight',
+			'head-to-head',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

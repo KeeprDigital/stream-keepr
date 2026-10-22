@@ -80,6 +80,8 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		editor: 'ArchetypeSpotlight',
 		variants: [{ scope: 'topN', autoPageEnabled: true }, { scope: 'minPoints' }],
 	},
+	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
+	'head-to-head': { editor: 'HeadToHead', variants: [{}, { playerSource: 'players' }] },
 	'topCut': { editor: 'TopCut', variants: [{}] },
 	// The Top N scope, a fixed card size, and auto-page.
 	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true }] },

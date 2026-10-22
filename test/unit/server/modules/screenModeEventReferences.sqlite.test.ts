@@ -160,6 +160,9 @@ describe('screen Mode Event References', () => {
 			'pairings.roundId: round',
 			'archetype-spotlight.archetypeId: archetype',
 			'archetype-spotlight.playerListId: playerList',
+			'head-to-head.featureMatchId: featureMatchSlot',
+			'head-to-head.player1Id: player',
+			'head-to-head.player2Id: player',
 		]);
 	});
 
