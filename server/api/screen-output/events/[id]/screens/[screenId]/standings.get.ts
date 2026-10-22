@@ -6,22 +6,26 @@ import { playerListService } from '~~/server/services/playerList';
 import { playerRoundStandingsService } from '~~/server/services/playerRoundStandings';
 import { roundService } from '~~/server/services/round';
 import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
+import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 
 /**
  * Everything this Screen's Standings mode renders from, derived from its saved
- * configuration (#604): the roster, the Round it is fixed at, and the
- * watchlist it filters to. One read, so an output never assembles standings
+ * configuration (#604): the roster, the Round it is fixed at, the watchlist it
+ * filters to, and, while its Position Change column shows, the previous
+ * Round's positions (#755). One read, so an output never assembles standings
  * from reads its capability does not reach.
  */
 export default defineEventHandler(async (event): Promise<ScreenOutputStandingsResponse> => {
 	const { eventId, config } = await requireScreenOutputModeRead(event, 'standings');
 
 	const listId = config.viewMode === 'watchlist' ? config.playerListId : null;
-	const [players, round, roundStandings, list] = await Promise.all([
+	const showsPositionChange = isColumnVisible(config.columns, 'positionChange');
+	const [players, round, roundStandings, list, previousRoundPositions] = await Promise.all([
 		playerService().findAll({ eventId }),
 		config.roundId ? roundService().findById(config.roundId, eventId) : null,
 		config.roundId ? playerRoundStandingsService().findByRoundId(eventId, config.roundId) : null,
 		listId ? playerListService().findById(listId, eventId) : null,
+		showsPositionChange ? playerRoundStandingsService().findPreviousRoundPositions(eventId, config.roundId ?? null) : null,
 	]);
 	// A watchlist whose list has since been deleted renders as no watchlist
 	// rather than refusing the whole Standings read.
@@ -39,5 +43,6 @@ export default defineEventHandler(async (event): Promise<ScreenOutputStandingsRe
 			points: standing.points,
 		})) ?? null,
 		watchlist: list ? { name: list.name, playerIds: watchlistPlayerIds } : null,
+		previousRoundPositions,
 	};
 });
