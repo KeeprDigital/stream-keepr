@@ -37,6 +37,7 @@ const mockRealtime = reactive({
 	connectionState: 'connected',
 	onChannel: mockOnChannel,
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: vi.fn(() => () => {}),
 });
 
 mockNuxtImport('useScreenOutputReads', () => () => ({

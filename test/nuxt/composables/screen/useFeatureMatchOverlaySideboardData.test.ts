@@ -34,8 +34,11 @@ mockNuxtImport('useScryfallBatch', () => () => ({
 	buildDeckListArrays: mockBuildDeckListArrays,
 }));
 const reconnectResyncCallbacks: Array<() => void> = [];
-mockNuxtImport('useReconnectResync', () => (resync: () => void) => {
+const firstAttachCallbacks: Array<() => void> = [];
+mockNuxtImport('useReconnectResync', () => (resync: () => void, _eventId: unknown, _realtime: unknown, options: { onFirstAttach?: () => void } = {}) => {
 	reconnectResyncCallbacks.push(resync);
+	if (options.onFirstAttach)
+		firstAttachCallbacks.push(options.onFirstAttach);
 	return { disconnected: ref(false) };
 });
 mockNuxtImport('useScreenContext', () => () => ({
@@ -140,6 +143,7 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		reconnectResyncCallbacks.length = 0;
+		firstAttachCallbacks.length = 0;
 		mockEventId.value = 1;
 		mockCardDataHealth.value = 'complete';
 		serverPlayers.clear();
@@ -480,6 +484,23 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		reconnectResyncCallbacks[0]!();
 		await flushPromises();
 		expect(mockPlayerDecks).not.toHaveBeenCalled();
+	});
+
+	it('shows an edit published between its first read and its Event channel\'s first attach (#733)', async () => {
+		config.value = overlayConfig([deckListItem('player1')]);
+		match.value = slotMatch();
+		const { sideboards } = mountSideboardData();
+		await flushPromises();
+		expect(firstAttachCallbacks).toHaveLength(1);
+
+		// Published while nothing listened on the channel, so never heard.
+		mockReadDeck.mockResolvedValue(deckResponse([sideboardCard('Negate')]));
+		mockBuildDeckListArrays.mockReturnValue({ mainboard: [], sideboard: [enrichedCard('Negate', null)] });
+		firstAttachCallbacks[0]!();
+		await flushPromises();
+
+		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+		expect(sideboards.value.player1?.map(card => card.name)).toEqual(['Negate']);
 	});
 
 	it('clears a standing degraded report on teardown', async () => {

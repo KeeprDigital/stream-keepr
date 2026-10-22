@@ -22,6 +22,7 @@ const mockRealtime = reactive({
 		return () => channelHandlers.get(key)!.delete(handler);
 	},
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: vi.fn(() => () => {}),
 });
 
 /** An Event message, as the Event channel delivers it. */

@@ -1,7 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
 
 const mockCardStore = reactive({
@@ -14,11 +14,13 @@ const mockCardStore = reactive({
 /** The Card the server holds for the Screen; `loadActiveCard` reads it, as the store does. */
 let serverCard: { name: string } | null = null;
 const continuity = createContinuitySignal();
+const attachment = createAttachSignal();
 const mockRealtime = reactive({
 	connectionState: 'connected',
 	tokenError: null as Error | null,
 	onChannel: vi.fn(() => () => {}),
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: attachment.onceAttached,
 });
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 const mockApiFetch = vi.hoisted(() => vi.fn());
@@ -63,6 +65,7 @@ describe('useCardModeData', () => {
 		});
 		mockRealtime.connectionState = 'connected';
 		mockRealtime.tokenError = null;
+		attachment.detach('event:1');
 		mockCardStore.cardDataDegraded = false;
 		mockCardDataHealth = ref('complete');
 		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
@@ -160,6 +163,21 @@ describe('useCardModeData', () => {
 		await flushPromises();
 
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(99);
+	});
+
+	it('shows a Card changed between its first read and its Event channel\'s first attach (#733)', async () => {
+		serverCard = { name: 'Lightning Bolt' };
+		mountCardModeData();
+		await flushPromises();
+		mockCardStore.setActiveScreen.mockClear();
+
+		// Saved while nothing listened on the channel, so `card:updated` was never heard.
+		serverCard = { name: 'Counterspell' };
+		attachment.attach('event:1');
+		await flushPromises();
+
+		expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
+		expect(mockCardStore.setActiveScreen).not.toHaveBeenCalled();
 	});
 
 	// ── Reconnect Resync (#610) ──

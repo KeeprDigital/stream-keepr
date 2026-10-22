@@ -52,6 +52,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 		return mockConnectionState.value === 'connected';
 	},
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: vi.fn(() => () => {}),
 }));
 
 /** Answers the reset confirmation; `null` stands for the operator cancelling. */

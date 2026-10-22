@@ -32,6 +32,18 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
  * all: a Screen Output whose load failed has no Screen to listen for yet. For it,
  * the connection coming back is still the retry.
  *
+ * ## A first attach, for a consumer that read before it listened
+ *
+ * A first attach on an unbroken connection reports no continuity loss, because
+ * the channel had no continuity to lose. A consumer whose read went out before
+ * its channel first attached still missed whatever was published in between:
+ * nothing listened yet. Such a consumer passes `onFirstAttach`, which is told once
+ * when the Event channel it starts listening on first attaches, and never when
+ * that channel was attached already, since then it listened before it read
+ * (ADR-0023, #733). It is a handler of its own rather than `resync`, because a
+ * first attach usually lands while the first read is still in flight and need
+ * not supersede it.
+ *
  * ## What it deliberately does not do on a disconnection
  *
  * It does not clear anything, and it exposes `disconnected` rather than acting on
@@ -50,7 +62,11 @@ export function useReconnectResync(
 	 * Screen Output's display session is handed its transport rather than looking
 	 * one up, and a composable that could only look one up would be unusable there.
 	 */
-	realtime: Pick<RealtimeTransport, 'connectionState' | 'onContinuityLost'> | undefined = tryUseRealtime(),
+	realtime: Pick<RealtimeTransport, 'connectionState' | 'onContinuityLost' | 'onceAttached'> | undefined = tryUseRealtime(),
+	options: {
+		/** Told once when the Event channel this starts listening on first attaches; see above. */
+		onFirstAttach?: () => void;
+	} = {},
 ) {
 	/**
 	 * Whether this client is currently out of touch with the authoritative order.
@@ -69,8 +85,12 @@ export function useReconnectResync(
 	});
 
 	watch(() => toValue(eventId), (listenedOn, _, onCleanup) => {
-		if (realtime && listenedOn)
-			onCleanup(realtime.onContinuityLost(eventRealtimeChannel(listenedOn), resync));
+		if (!realtime || !listenedOn)
+			return;
+		const channel = eventRealtimeChannel(listenedOn);
+		onCleanup(realtime.onContinuityLost(channel, resync));
+		if (options.onFirstAttach)
+			onCleanup(realtime.onceAttached(channel, options.onFirstAttach));
 	}, { immediate: true });
 
 	// Only the transition back to connected, and only while listening on nothing.

@@ -38,7 +38,10 @@ export function useBroadcastGraphicsLiveSessionSync(
 		{ immediate: true },
 	);
 
-	const { disconnected } = useReconnectResync(reload, eventId);
+	// The first load goes out before the Event channel listens on a first load, and
+	// a command applied in between is heard by nothing, so no later gap reveals it
+	// until the next command (#733).
+	const { disconnected } = useReconnectResync(reload, eventId, undefined, { onFirstAttach: reload });
 
 	return { disconnected, reload };
 }

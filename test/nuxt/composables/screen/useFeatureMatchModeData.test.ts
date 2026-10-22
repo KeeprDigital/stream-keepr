@@ -50,6 +50,7 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 	tokenError: null,
 	onChannel: () => () => {},
 	onContinuityLost: continuity.onContinuityLost,
+	onceAttached: vi.fn(() => () => {}),
 }));
 
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);

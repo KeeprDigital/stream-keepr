@@ -1033,4 +1033,122 @@ describe('useScreenDisplaySession', () => {
 			expect(harness.order).toEqual([]);
 		});
 	});
+
+	/**
+	 * A load in flight is not yet listened for by Reconnect Resync, which follows
+	 * only a finished load's Event. A continuity loss on its Event channel while it
+	 * reads still means something published meanwhile went unheard, so the load
+	 * recovers once it finishes, as it does for a first attach (#733).
+	 */
+	describe('a continuity loss during its load', () => {
+		/** A loaded rendering whose Event channel is attached, changing to the second Screen with its Event context read held. */
+		async function screenChangeInFlight() {
+			const harness = createHarness();
+			await flushPromises();
+			harness.attach('event:42');
+			await flushPromises();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+			expect(harness.session.loading.value).toBe(true);
+			harness.order.splice(0);
+			return { harness, inFlight };
+		}
+
+		it('recovers once loaded when its attached Event channel lost continuity mid-load', async () => {
+			const { harness, inFlight } = await screenChangeInFlight();
+			const contextReads = harness.outputReads.event.mock.calls.length;
+
+			harness.reattach('event:42');
+			await flushPromises();
+			// The load is not superseded: its reads stand, and nothing re-reads yet.
+			expect(harness.order).toEqual([]);
+
+			inFlight.resolve({ id: 42, name: 'Read before the loss' });
+			await flushPromises();
+
+			expect(harness.session.loading.value).toBe(false);
+			expect(harness.order).toEqual(['start:8', 'refresh:8']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(contextReads + 1);
+			expect(harness.eventStore.setOutputEvent).toHaveBeenLastCalledWith({ id: 42, name: 'Output Event' });
+		});
+
+		it('recovers once, however many losses and attaches land during one load', async () => {
+			// The transport reports a first attach the connection dropped before as a
+			// loss and an attach at once.
+			const harness = createHarness();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			await flushPromises();
+
+			harness.reattach('event:42');
+			harness.attach('event:42');
+			harness.reattach('event:42');
+			await flushPromises();
+			harness.order.splice(0);
+			inFlight.resolve({ id: 42, name: 'Read before the attach' });
+			await flushPromises();
+
+			expect(harness.order).toEqual(['start:7', 'refresh:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		});
+
+		it('recovers once for a loss on a loaded rendering', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.attach('event:42');
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.reattach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+		});
+
+		it('recovers once when a loaded rendering\'s first attach reports a loss as well', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.order.splice(0);
+
+			harness.reattach('event:42');
+			harness.attach('event:42');
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+		});
+
+		it('leaves a loss heard during a load a Screen change superseded to the load that superseded it', async () => {
+			const { harness, inFlight } = await screenChangeInFlight();
+
+			harness.reattach('event:42');
+			harness.route.params.screenSlug = 'main';
+			await nextTick();
+			await flushPromises();
+			inFlight.resolve({ id: 42, name: 'Read for the left Screen' });
+			await flushPromises();
+
+			expect(harness.order).toEqual(['stop', 'load:main', 'start:7']);
+			expect(harness.eventStore.setOutputEvent).not.toHaveBeenCalledWith({ id: 42, name: 'Read for the left Screen' });
+		});
+
+		it('recovers for a Program monitor too, without entering presence', async () => {
+			const harness = createHarness({ query: { embed: 'monitor' } });
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			await flushPromises();
+
+			harness.reattach('event:42');
+			await flushPromises();
+			harness.order.splice(0);
+			inFlight.resolve({ id: 42, name: 'Read before the loss' });
+			await flushPromises();
+
+			expect(harness.order).toEqual(['refresh:7']);
+			expect(harness.realtimeSession.start).not.toHaveBeenCalled();
+		});
+	});
 });

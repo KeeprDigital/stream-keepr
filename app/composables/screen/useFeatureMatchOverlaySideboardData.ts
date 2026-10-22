@@ -277,15 +277,18 @@ export function useFeatureMatchOverlaySideboardData(
 	/**
 	 * The deck path's half of the Reconnect Resync rule (#307): a `player:updated`
 	 * published while this client was suspended is simply gone, so coming back
-	 * re-reads both sides through the Screen.
+	 * re-reads both sides through the Screen. So does the Event channel's first
+	 * attach: the first read goes out as the rendering mounts, before that channel
+	 * listens, and an edit published in between was heard by nothing (#733).
 	 */
-	useReconnectResync(() => {
+	function reread() {
 		const current = requests.value;
 		if (!eventId.value || (!current.player1 && !current.player2))
 			return;
 
 		void load();
-	}, eventId, realtime);
+	}
+	useReconnectResync(reread, eventId, realtime, { onFirstAttach: reread });
 
 	onScopeDispose(() => {
 		unsubscribeFromDeckChanges.forEach(unsubscribe => unsubscribe());

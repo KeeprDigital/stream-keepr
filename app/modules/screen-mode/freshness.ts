@@ -24,7 +24,7 @@ export type ScreenModeDependencies<T> = {
 	[K in MessageType]?: true | ((message: MessageData<K>, held: T) => boolean);
 };
 
-export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel' | 'onContinuityLost'>;
+export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel' | 'onContinuityLost' | 'onceAttached'>;
 
 export interface ScreenModeFreshnessOptions<T> {
 	eventId: Readonly<Ref<number | null>>;
@@ -58,12 +58,17 @@ export interface ScreenModeFreshnessOptions<T> {
  *   re-registers: holding subscriptions through an outage is the transport's;
  * - **Reconnect Resync** — once on coming back from either, because what was
  *   published meanwhile is gone;
+ * - **first attach** — once when its Event channel first attaches, if it was
+ *   not attached when the mode began listening: the mode's first read went out
+ *   before anything listened, and that attach reports no continuity loss
+ *   (ADR-0023, #733);
  * - **retry** — on the same slow cadence after the latest read failed, because
  *   the change that asked for it will not be announced again.
  *
- * A message heard while a read is in flight asks for one follow-up once that
- * read settles rather than superseding it, so a burst published one message at
- * a time costs one more read per read in flight, not one per message (#650).
+ * A message or the first attach heard while a read is in flight asks for one
+ * follow-up once that read settles rather than superseding it, so a burst
+ * published one message at a time costs one more read per read in flight, not
+ * one per message (#650).
  * Every other reason supersedes, as does a message heard once a read has run
  * for the slow cadence, since a read can hang where a reason must not.
  *
@@ -86,13 +91,17 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 
 	/** The read in flight: when it began, and whether a load asked for it. */
 	let reading: { since: number; load: boolean } | null = null;
-	/** Whether a message heard since the read in flight began asks for another. */
-	let followUpAsked = false;
+	/**
+	 * What, since the read in flight began, asks for another once it settles: a
+	 * message, which may postdate what that read answers, or the Event channel's
+	 * first attach, which only says something may have been published unheard.
+	 */
+	let followUpAsked: 'message' | 'first-attach' | null = null;
 
 	/** Reads now, superseding any read in flight. */
 	function refresh(load = false) {
 		stopRetry();
-		followUpAsked = false;
+		followUpAsked = null;
 		reading = null;
 		const flight = reads.begin();
 		if (options.source() == null) {
@@ -106,8 +115,10 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 				// A load's answer that predates a message would only make the
 				// follow-up a second rendering of the new selection: the follow-up
 				// supersedes it, so its answer is the first shown (#567). Once,
-				// so a steady stream of messages still renders.
-				if (flight.current && followUpAsked && load)
+				// so a steady stream of messages still renders. A first attach
+				// does not: what the load answered is most likely current, so it
+				// renders, and the follow-up only confirms it.
+				if (flight.current && followUpAsked === 'message' && load)
 					refresh();
 				return answer;
 			}
@@ -139,11 +150,16 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	}
 
 	/** One follow-up for however many messages arrive while a read is in flight. */
-	function follow() {
-		if (reading && Date.now() - reading.since < SCREEN_MODE_REREAD_MS)
-			followUpAsked = true;
-		else
+	function follow(reason: 'message' | 'first-attach' = 'message') {
+		if (options.source() == null)
+			return;
+		if (reading && Date.now() - reading.since < SCREEN_MODE_REREAD_MS) {
+			if (followUpAsked !== 'message')
+				followUpAsked = reason;
+		}
+		else {
 			queueRefresh();
+		}
 	}
 
 	watch(options.source, () => refresh(true), { immediate: true });
@@ -177,8 +193,13 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 			}));
 	}, { immediate: true });
 
-	// Reconnect Resync, and its twin for subscriptions that waited on a token.
-	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime);
+	// Reconnect Resync, and its twin for subscriptions that waited on a token. A
+	// mode reads as it mounts, which on a Screen Output's first load is before its
+	// Event channel has attached: what was published in between was heard by
+	// nothing, and that first attach reports no continuity loss (#733).
+	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime, {
+		onFirstAttach: () => follow('first-attach'),
+	});
 	const waitingOnToken = computed(() => !!realtime?.tokenError);
 	watch(waitingOnToken, (waiting, wasWaiting) => {
 		if (wasWaiting && !waiting)
