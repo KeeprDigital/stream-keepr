@@ -59,7 +59,7 @@ describe('capability-only Screen Output reads', () => {
 	async function outputScreen(mode: string) {
 		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: `Output ${mode}`, slug: `output-reads-${mode}-${eventId}`, currentMode: mode },
+			body: { name: `Output ${mode}`, slug: `output-reads-${mode.toLowerCase()}-${eventId}`, currentMode: mode },
 		});
 		const ownCapability = (await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${created.id}/asset-capability`,
