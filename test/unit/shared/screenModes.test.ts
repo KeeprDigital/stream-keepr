@@ -21,6 +21,25 @@ describe('sCREEN_MODES', () => {
 		}
 	});
 
+	it('labels each mode by what it shows or controls (#773)', () => {
+		expect(Object.fromEntries(SCREEN_MODE_VALUES.map(mode => [mode, SCREEN_MODES[mode].label]))).toEqual({
+			'background': 'Background',
+			'card': 'Card Spotlight',
+			'deck': 'Deck List',
+			'standings': 'Standings',
+			'top-cut': 'Top Cut Bracket',
+			'feature-match': 'Feature Match Controls',
+			'feature-match-overlay': 'Feature Match Overlay',
+			'broadcast-graphics': 'Broadcast Graphics',
+			'metagame': 'Metagame',
+			'top-cards': 'Most Played Cards',
+			'player-history': 'Player History',
+			'pairings': 'Pairings',
+			'archetype-spotlight': 'Archetype Spotlight',
+			'head-to-head': 'Head-to-Head',
+		});
+	});
+
 	it('broadcast-graphics mode is an overlay mode with label, icon, and description', () => {
 		expect(SCREEN_MODES['broadcast-graphics']).toMatchObject({
 			label: 'Broadcast Graphics',
@@ -43,12 +62,12 @@ describe('sCREEN_MODES', () => {
 		expect(Object.keys(SCREEN_MODES)).not.toContain('idle');
 	});
 
-	it('overlay modes are background, card, deck, standings, topCut, metagame', () => {
+	it('overlay modes are background, card, deck, standings, top-cut, metagame', () => {
 		expect(SCREEN_MODES.background.displayType).toBe('overlay');
 		expect(SCREEN_MODES.card.displayType).toBe('overlay');
 		expect(SCREEN_MODES.deck.displayType).toBe('overlay');
 		expect(SCREEN_MODES.standings.displayType).toBe('overlay');
-		expect(SCREEN_MODES.topCut.displayType).toBe('overlay');
+		expect(SCREEN_MODES['top-cut'].displayType).toBe('overlay');
 		expect(SCREEN_MODES.metagame.displayType).toBe('overlay');
 	});
 });
@@ -99,8 +118,8 @@ describe('getDisplayType', () => {
 		expect(getDisplayType('standings')).toBe('overlay');
 	});
 
-	it('returns overlay for topCut', () => {
-		expect(getDisplayType('topCut')).toBe('overlay');
+	it('returns overlay for top-cut', () => {
+		expect(getDisplayType('top-cut')).toBe('overlay');
 	});
 
 	it('returns control for feature-match', () => {

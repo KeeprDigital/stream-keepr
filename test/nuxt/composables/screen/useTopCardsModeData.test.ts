@@ -137,7 +137,7 @@ describe('useTopCardsModeData', () => {
 
 		const { headerText } = makeTopCardsModeData();
 
-		expect(headerText.value).toBe('Top Cards: Mono Red');
+		expect(headerText.value).toBe('Most Played Cards: Mono Red');
 	});
 
 	it('prefers custom header text', () => {

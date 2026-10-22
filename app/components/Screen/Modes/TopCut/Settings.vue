@@ -11,13 +11,13 @@ const props = defineProps<{
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
-	'topCut',
+	'top-cut',
 );
 
 defineExpose({ resetConfig, saving });
 
 // Each control's label, read from the mode's config contract (#498).
-const fields = screenModeConfigContract('topCut').fields;
+const fields = screenModeConfigContract('top-cut').fields;
 
 const phaseStore = usePhaseStore();
 

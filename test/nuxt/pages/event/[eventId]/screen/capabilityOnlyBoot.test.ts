@@ -326,7 +326,7 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
-	it('follows a deck review on a Top Cards output, with no roster or settings panel loaded', async () => {
+	it('follows a deck review on a Most Played Cards output, with no roster or settings panel loaded', async () => {
 		api.screen = screen({ currentMode: 'top-cards', modeConfigs: { 'top-cards': { showCardNames: true } } });
 		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Lightning Bolt'));
 		const wrapper = await mountOutput(

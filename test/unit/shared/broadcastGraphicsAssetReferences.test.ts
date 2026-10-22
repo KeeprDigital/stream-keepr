@@ -273,7 +273,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'card',
 			'deck',
 			'standings',
-			'topCut',
+			'top-cut',
 			'metagame',
 			'top-cards',
 			'player-history',
@@ -292,7 +292,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 
 		// The other half of "exactly", derived from every Screen Mode there is rather
 		// than listed by hand. The hand-written list this replaces named five of the
-		// eight non-referencing modes, so standings, topCut, and player-history were
+		// eight non-referencing modes, so standings, top-cut, and player-history were
 		// asserted nowhere — and a mode added to the vocabulary joined neither list.
 		const referencing: readonly string[] = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES;
 		const nonReferencing = SCREEN_MODE_VALUES.filter(mode => !referencing.includes(mode));
