@@ -111,3 +111,34 @@ export function createSourceItem(layout: FeatureMatchLayoutConfig): { layout: Fe
 	const id = nextId('source');
 	return { layout: withSources(layout, [...layout.sources, createFeatureMatchSourceItem(id)]), id };
 }
+
+/** How far a duplicated Source Item is offset from its original. */
+export const SOURCE_ITEM_DUPLICATE_OFFSET = 20;
+
+/**
+ * Duplicate one Source Item directly in front of itself, offset so it does not sit
+ * exactly over its original. Returns the same layout and an empty id when the
+ * Source Item is unknown.
+ */
+export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): { layout: FeatureMatchLayoutConfig; id: string } {
+	const index = layout.sources.findIndex(item => item.id === id);
+	const original = index >= 0 ? layout.sources[index]! : undefined;
+	if (!original)
+		return { layout, id: '' };
+
+	const labels = new Set(layout.sources.map(item => item.label));
+	let label = `${original.label} copy`;
+	for (let suffix = 2; labels.has(label); suffix += 1)
+		label = `${original.label} copy ${suffix}`;
+
+	const copy: FeatureMatchSourceItemConfig = {
+		...(JSON.parse(JSON.stringify(original)) as FeatureMatchSourceItemConfig),
+		id: nextId('source'),
+		label,
+		x: original.x + SOURCE_ITEM_DUPLICATE_OFFSET,
+		y: original.y + SOURCE_ITEM_DUPLICATE_OFFSET,
+	};
+	const sources = [...layout.sources];
+	sources.splice(index + 1, 0, copy);
+	return { layout: withSources(layout, sources), id: copy.id };
+}

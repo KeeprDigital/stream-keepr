@@ -14,11 +14,13 @@ import {
 	deleteGraphicItem,
 	deleteGraphicSourceSelection,
 	deleteSocialProfileProjection,
+	duplicateGraphicItem,
 	findGraphicItem,
 	flattenGraphicItems,
 	GRAPHIC_RULE_PRESET_HEIGHT,
 	moveBroadcastGraphic,
 	moveGraphicItem,
+	moveGraphicItemToEdge,
 	patchDeckListGraphicItem,
 	patchGameWinsGraphicItem,
 	patchGraphicGlow,
@@ -989,5 +991,59 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(patchPlayerLifeGraphicItem(built, 'bar', { lifeAnimation: 'pop' })).toEqual(built);
 			expect(patchGraphicTextOverflow(built, 'bar', { overflowPolicy: 'clip' })).toEqual(built);
 		});
+	});
+});
+
+describe('duplicating and reordering a Graphic Item', () => {
+	function ids() {
+		let next = 0;
+		return () => `copy-${++next}`;
+	}
+
+	it('duplicates a Graphic Item directly in front of itself, offset and uniquely labelled', () => {
+		const built = addGraphicItem(addGraphicItem(graphic('a'), { kind: 'text', id: 't', ...CANVAS }).graphic, { kind: 'shape', id: 's', ...CANVAS }).graphic;
+		const original = built.items[0]!;
+
+		const { graphic: next, itemId } = duplicateGraphicItem(built, 't', { nextId: ids() });
+
+		expect(next.items.map(item => item.id)).toEqual(['t', 'copy-1', 's']);
+		expect(itemId).toBe('copy-1');
+		expect(next.items[1]).toMatchObject({ label: `${original.label} copy`, x: original.x + 20, y: original.y + 20 });
+
+		const again = duplicateGraphicItem(next, 't', { nextId: ids() });
+		expect(again.graphic.items[1]!.label).toBe(`${original.label} copy 2`);
+	});
+
+	it('duplicates a Graphic Group with fresh copies of its children', () => {
+		const built = withGroup();
+
+		const { graphic: next, itemId } = duplicateGraphicItem(built, 'cluster', { nextId: ids() });
+
+		const copy = next.items.find(item => item.id === itemId) as GraphicGroupItemConfig;
+		expect(copy.children.map(child => child.id)).toEqual(['copy-2']);
+		expect(group(next).children.map(child => child.id)).toEqual(['child']);
+		expect(new Set(flattenGraphicItems(next).map(item => item.label)).size).toBe(flattenGraphicItems(next).length);
+	});
+
+	it('duplicates a group child within its group', () => {
+		const { graphic: next, itemId } = duplicateGraphicItem(withGroup(), 'child', { nextId: ids() });
+
+		expect(group(next).children.map(child => child.id)).toEqual(['child', itemId]);
+	});
+
+	it('duplicates nothing for an unknown item', () => {
+		const built = withGroup();
+
+		expect(duplicateGraphicItem(built, 'missing', { nextId: ids() })).toEqual({ graphic: built, itemId: '' });
+	});
+
+	it('moves a Graphic Item to the front or the back of its own sibling list', () => {
+		let built = graphic('a');
+		for (const id of ['one', 'two', 'three'])
+			built = addGraphicItem(built, { kind: 'shape', id, ...CANVAS }).graphic;
+
+		expect(moveGraphicItemToEdge(built, 'one', 'front').items.map(item => item.id)).toEqual(['two', 'three', 'one']);
+		expect(moveGraphicItemToEdge(built, 'three', 'back').items.map(item => item.id)).toEqual(['three', 'one', 'two']);
+		expect(moveGraphicItemToEdge(built, 'three', 'front')).toBe(built);
 	});
 });

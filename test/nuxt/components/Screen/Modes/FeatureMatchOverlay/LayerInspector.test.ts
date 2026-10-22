@@ -5,12 +5,12 @@ import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 /**
- * The host-owned half of the Feature Match Overlay editor: the Frame and the
- * Source Items.
+ * The host-owned half of the Feature Match Overlay property panel: the Frame and
+ * the Source Items.
  *
- * Nothing here authors a Graphic Item. The shared compositor's own tree and
- * inspector do that, and are covered by their own suites — which is the point of
- * the rewrite this ticket completes.
+ * Nothing here authors a Graphic Item, and nothing here chooses what to edit: the
+ * shared compositor's inspector edits Graphic Items, and the editor's one layer
+ * list selects, adds, reorders, and removes — each covered by its own suite.
  */
 
 const ScreenSettingsToggleStub = defineComponent({
@@ -58,21 +58,10 @@ const GeometryFieldsStub = defineComponent({
 	template: '<button type="button" data-testid="geometry-anchor" :data-anchor-value="anchor" @click="$emit(\'update:anchor\', \'bottom-right\')">Anchor</button>',
 });
 
-const OrderSectionStub = defineComponent({
-	emits: ['sendToBack', 'move', 'bringToFront'],
-	template: `
-		<div data-testid="order-section">
-			<button type="button" data-testid="order-send-to-back" @click="$emit('sendToBack')">Back</button>
-			<button type="button" data-testid="order-bring-to-front" @click="$emit('bringToFront')">Front</button>
-		</div>
-	`,
-});
-
 async function mountComponent(overrides: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	selectedTarget: { type: 'canvas' | 'source'; itemId?: string };
 	updateConfig: ReturnType<typeof vi.fn>;
-	variant: 'tree' | 'inspector';
 }> = {}) {
 	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 	const { default: LayerInspector } = await import(componentPath);
@@ -86,7 +75,6 @@ async function mountComponent(overrides: Partial<{
 			screenHeight: 1080,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
-			variant: overrides.variant ?? 'inspector',
 		},
 		global: {
 			stubs: {
@@ -94,7 +82,6 @@ async function mountComponent(overrides: Partial<{
 				FeatureMatchOverlayControlSection: ControlSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				GraphicsGeometryFields: GeometryFieldsStub,
-				FeatureMatchOverlayOrderSection: OrderSectionStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({
 					props: { framingStyle: { type: Object, required: false } },
 					emits: ['update'],
@@ -115,47 +102,11 @@ describe('featureMatchOverlayLayerInspector', () => {
 		vi.clearAllMocks();
 	});
 
-	it('renders a tree of the Canvas and the Source Items, and nothing else', async () => {
-		const wrapper = await mountComponent({ variant: 'tree' });
-
-		expect(wrapper.find('[data-testid="overlay-tree-canvas"]').text()).toContain('Canvas');
-		expect(wrapper.findAll('[data-testid="overlay-tree-source"]')).toHaveLength(
-			DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.sources.length,
-		);
-		expect(wrapper.text()).toContain('Canvas and external video source areas');
-	});
-
-	it('emits a source selection when a Source Item is chosen', async () => {
-		const wrapper = await mountComponent({ variant: 'tree' });
-
-		await wrapper.findAll('[data-testid="overlay-tree-source"]')[0]!.trigger('click');
-
-		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toEqual({
-			type: 'source',
-			itemId: 'main-source',
-		});
-	});
-
-	it('adds a Source Item and selects it', async () => {
-		const updateConfig = vi.fn();
-		const wrapper = await mountComponent({ updateConfig, variant: 'tree' });
-
-		await wrapper.find('[data-testid="overlay-add-source"]').trigger('click');
-
-		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		const added = patch.layout?.sources.at(-1);
-		expect(added).toMatchObject({ frameCutout: true, sourceRole: 'main' });
-		expect(wrapper.emitted('update:selectedTarget')?.at(-1)?.[0]).toEqual({
-			type: 'source',
-			itemId: added?.id,
-		});
-	});
-
 	it('edits the Frame when the Canvas is selected', async () => {
 		const wrapper = await mountComponent({ selectedTarget: { type: 'canvas' } });
 
 		expect(wrapper.find('[data-testid="frame-style-card"]').exists()).toBe(true);
-		expect(wrapper.text()).toContain('1920x1080 frame and background');
+		expect(wrapper.text()).toContain('1920×1080 frame and background');
 	});
 
 	it('edits the selected Source Item and writes the whole layout back', async () => {
@@ -172,18 +123,20 @@ describe('featureMatchOverlayLayerInspector', () => {
 			.toMatchObject({ borderWidth: 6 });
 	});
 
-	it('orders Source Items without exposing a raw z-index', async () => {
+	it('asks the editor to duplicate or remove the selected Source Item', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({
 			updateConfig,
 			selectedTarget: { type: 'source', itemId: 'main-source' },
 		});
 
-		await wrapper.find('[data-testid="order-bring-to-front"]').trigger('click');
+		await wrapper.find('[data-testid="source-duplicate"]').trigger('click');
+		await wrapper.find('[data-testid="source-remove"]').trigger('click');
 
-		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
-		expect(patch.layout?.sources.at(-1)?.id).toBe('main-source');
-		expect(wrapper.html()).not.toContain('z-index');
+		// The editor owns the layer list and the selection, so it does both.
+		expect(wrapper.emitted('duplicate')).toEqual([['main-source']]);
+		expect(wrapper.emitted('remove')).toEqual([['main-source']]);
+		expect(updateConfig).not.toHaveBeenCalled();
 	});
 
 	it('persists a Source Item anchor selection', async () => {

@@ -26,22 +26,10 @@ const UInputNumberStub = defineComponent({
 	template: '<input type="number" :value="modelValue" :disabled="disabled" />',
 });
 
-const USelectStub = defineComponent({
-	name: 'USelect',
-	props: {
-		modelValue: { type: String, required: false },
-		items: { type: Array, default: () => [] },
-		disabled: { type: Boolean, default: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<select :value="modelValue" :disabled="disabled" />',
-});
-
 const global = {
 	stubs: {
 		UFormField: defineComponent({ props: { label: { type: String, default: '' } }, template: '<label><span>{{ label }}</span><slot /></label>' }),
 		UInputNumber: UInputNumberStub,
-		USelect: USelectStub,
 	},
 };
 
@@ -60,10 +48,6 @@ function number(wrapper: Wrapper, ariaLabel: string) {
 	return wrapper.findAllComponents({ name: 'UInputNumber' }).find(input => input.attributes('aria-label') === ariaLabel);
 }
 
-function select(wrapper: Wrapper, testId: string) {
-	return wrapper.findAllComponents({ name: 'USelect' }).find(input => input.attributes('data-testid') === testId);
-}
-
 describe('shape geometry fields', () => {
 	it('asks for a corner size only while the corner is not square', () => {
 		const wrapper = mountFields();
@@ -76,7 +60,7 @@ describe('shape geometry fields', () => {
 		const wrapper = mountFields();
 
 		number(wrapper, 'Top right size')!.vm.$emit('update:modelValue', 40);
-		select(wrapper, 'shape-corner-topLeft')!.vm.$emit('update:modelValue', 'rounded');
+		await wrapper.get('[data-testid="shape-corner-topLeft"] [data-treatment-option="rounded"]').trigger('click');
 		await flushPromises();
 
 		expect(wrapper.emitted('update')).toEqual([
@@ -105,10 +89,27 @@ describe('shape geometry fields', () => {
 		});
 	});
 
+	it('shows each corner\'s treatment where the corner sits', () => {
+		const wrapper = mountFields();
+
+		expect(wrapper.get('[data-testid="shape-corner-topRight"]').attributes('data-treatment')).toBe('cut');
+		expect(wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').attributes('aria-pressed')).toBe('true');
+	});
+
+	it('applies a corner edit to all four while All corners is on', async () => {
+		const wrapper = mountFields();
+
+		await wrapper.get('[data-testid="shape-corners-linked"]').trigger('click');
+		await wrapper.get('[data-testid="shape-corner-bottomLeft"] [data-treatment-option="rounded"]').trigger('click');
+
+		const rounded = { treatment: 'rounded', size: 0 };
+		expect(wrapper.emitted('update')).toEqual([[{ topLeft: rounded, topRight: rounded, bottomLeft: rounded, bottomRight: rounded }]]);
+	});
+
 	it('hands the chosen preset to its host, which knows the bounds it applies to', async () => {
 		const wrapper = mountFields();
 
-		select(wrapper, 'shape-geometry-preset')!.vm.$emit('update:modelValue', 'corner-cut');
+		await wrapper.get('[data-testid="shape-geometry-preset-corner-cut"]').trigger('click');
 		await flushPromises();
 
 		expect(wrapper.emitted('preset')).toEqual([['corner-cut']]);
@@ -118,8 +119,10 @@ describe('shape geometry fields', () => {
 	it('gives an observer every field to read and none to write', () => {
 		const wrapper = mountFields({ disabled: true });
 
-		const controls = wrapper.findAll('input, select');
-		expect(controls.length).toBe(1 + 4 + 1 + 2);
+		// Four presets, the All corners link, three treatments per corner, the one
+		// sized corner, and two slants.
+		const controls = wrapper.findAll('input, button');
+		expect(controls.length).toBe(4 + 1 + 12 + 1 + 2);
 		for (const control of controls)
 			expect((control.element as HTMLInputElement).disabled).toBe(true);
 	});

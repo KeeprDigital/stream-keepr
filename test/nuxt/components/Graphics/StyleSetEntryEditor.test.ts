@@ -358,7 +358,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		const wrapper = await mountEditor(geometry);
 
 		// Only the cut top-right corner has a size; the square ones would ignore it.
-		const sizes = fieldsNamed(wrapper, 'Size').map(field => field.get<HTMLInputElement>('input'));
+		const sizes = wrapper.findAll<HTMLInputElement>('input').filter(input => /^(?:Top|Bottom) (?:left|right) size$/.test(input.attributes('aria-label') ?? ''));
 		expect(sizes.map(size => size.attributes('aria-label'))).toEqual(['Top right size']);
 		expect(sizes[0]!.element.value).toBe('24');
 
@@ -377,7 +377,7 @@ describe('graphicsStyleSetEntryEditor', () => {
 		};
 		const wrapper = await mountEditor(geometry);
 
-		await wrapper.get('[data-testid="shape-geometry-preset"]').setValue('corner-cut');
+		await wrapper.get('[data-testid="shape-geometry-preset-corner-cut"]').trigger('click');
 
 		// A new Shape Graphic Item on a 1080p canvas is 768×108; 30% of the shorter
 		// side, rounded, is 32. The preset replaces the slant too.
