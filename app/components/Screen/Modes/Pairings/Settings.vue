@@ -35,14 +35,8 @@ let requestId = 0;
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const {
-	currentPage,
-	totalPages,
-	updateConfig,
-	setAutoPageEnabled,
-	adminNextPage,
-	adminPrevPage,
-} = useRotationConfigWrites({ mode: 'pairings', config, rowCount: estimatedRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'pairings', config, rowCount: estimatedRowCount, saveConfig });
+const { updateConfig } = rotation;
 
 // What the picker below loads, re-read on Reconnect Resync (#610).
 useConsumedEventData(['rounds']);
@@ -123,76 +117,11 @@ watch(() => config.value.roundId, async (roundId) => {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Pagination">
-			<UFormField
-				:label="fields.rowsPerPage.label"
-				description="Number of pairings shown per page."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.rowsPerPage"
-					:min="fields.rowsPerPage.min"
-					:max="fields.rowsPerPage.max"
-					class="w-32"
-					@update:model-value="updateConfig({ rowsPerPage: Number($event) })"
-				/>
-			</UFormField>
-
-			<USeparator />
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Automatic Paging
-			</p>
-
-			<ScreenSettingsToggle
-				:label="fields.autoPageEnabled.label"
-				description="Automatically cycle through pairings pages."
-				:model-value="config.autoPageEnabled"
-				@update:model-value="setAutoPageEnabled($event === true)"
-			/>
-
-			<UFormField
-				v-if="config.autoPageEnabled"
-				:label="fields.autoPageIntervalMs.label"
-				description="Time between page transitions."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="Math.round(config.autoPageIntervalMs / fields.autoPageIntervalMs.displayScale)"
-					:min="fields.autoPageIntervalMs.min"
-					:max="fields.autoPageIntervalMs.max"
-					class="w-32"
-					@update:model-value="updateConfig({ autoPageIntervalMs: Number($event) * fields.autoPageIntervalMs.displayScale })"
-				/>
-			</UFormField>
-
-			<USeparator />
-
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Manual Page Controls
-			</p>
-
-			<div class="flex items-center justify-center gap-2 max-sm:flex-wrap">
-				<UButton
-					icon="i-lucide-chevron-left"
-					variant="outline"
-					:disabled="totalPages <= 1 || loadingMatches"
-					@click="adminPrevPage"
-				>
-					Previous
-				</UButton>
-				<span class="text-sm text-muted min-w-24 text-center">
-					Page {{ currentPage }} of {{ totalPages }}
-				</span>
-				<UButton
-					trailing-icon="i-lucide-chevron-right"
-					variant="outline"
-					:disabled="totalPages <= 1 || loadingMatches"
-					@click="adminNextPage"
-				>
-					Next
-				</UButton>
-			</div>
-		</ScreenSettingsCard>
+		<ScreenPaginationSettingsCard
+			:rotation="rotation"
+			page-size-description="Number of pairings shown per page."
+			auto-page-description="Automatically cycle through pairings pages."
+			:loading="loadingMatches"
+		/>
 	</div>
 </template>

@@ -18,6 +18,30 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
 }
 
 /**
+ * What the shared Pagination settings card reads and writes of a paginated
+ * mode's Page Rotation: the same for every mode, whatever it names its page
+ * size field. The page count arrives through `totalPages`, counted from the
+ * `rowCount` its editor passes `useRotationConfigWrites`.
+ */
+export interface PageRotationControls {
+	/** The paginated mode, whose config contract labels and bounds the card's fields. */
+	readonly mode: PageRotationMode;
+	/** The rotation's own fields, as the mode's config holds them. */
+	readonly rotation: ComputedRef<PageRotationConfig>;
+	/** How many rows a page holds, read from the field the mode declares. */
+	readonly pageSize: ComputedRef<number>;
+	readonly currentPage: ComputedRef<number>;
+	readonly totalPages: ComputedRef<number>;
+	/** Writes the declared page size field; a shape change, so the rotation restarts from page 1. */
+	setPageSize: (size: number) => void;
+	/** Writes the page duration; a shape change, so a running rotation restarts from page 1. */
+	setPageDurationMs: (ms: number) => void;
+	setAutoPageEnabled: (enabled: boolean) => void;
+	adminNextPage: () => void;
+	adminPrevPage: () => void;
+}
+
+/**
  * The operator-surface half of a Page Rotation: the live page projection for
  * the settings indicator, and the only writes a rotation ever gets — the
  * Rotation Anchor, minted on exactly three occasions (enabling auto-page,
@@ -31,7 +55,7 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
  */
 export function useRotationConfigWrites<M extends PageRotationMode>(
 	options: RotationConfigWritesOptions<M>,
-) {
+): PageRotationControls & { updateConfig: (patch: ScreenModeConfigPatch<M>) => void; adminSetPage: (page: number) => void } {
 	const { getServerTime } = useServerTime();
 	const declaration = screenModePageRotation(options.mode);
 	const rotation = computed<PageRotationConfig>(() => options.config.value);
@@ -40,9 +64,9 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	const saveRotation = (patch: Partial<PageRotationConfig>) =>
 		options.saveConfig(patch as ScreenModeConfigPatch<M>);
 
-	const totalPages = computed(() =>
-		Math.max(1, Math.ceil(options.rowCount.value / rotationPageSize(declaration, options.config.value))),
-	);
+	const pageSize = computed(() => rotationPageSize(declaration, options.config.value));
+
+	const totalPages = computed(() => Math.max(1, Math.ceil(options.rowCount.value / pageSize.value)));
 
 	const rotationPage = useProjectedRotationPage({
 		autoPageEnabled: computed(() => rotation.value.autoPageEnabled),
@@ -58,6 +82,16 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	/** Writes an edit of the mode's config; an edit changing the rotation's shape restarts it from page 1. */
 	function updateConfig(patch: ScreenModeConfigPatch<M>) {
 		options.saveConfig(pageRotationEdit(declaration, rotation.value, patch, getServerTime()));
+	}
+
+	// Each a patch of the mode's config, by the field names its declaration and
+	// the shared rotation fields give it.
+	function setPageSize(size: number) {
+		updateConfig({ [declaration.pageSize]: size } as ScreenModeConfigPatch<M>);
+	}
+
+	function setPageDurationMs(ms: number) {
+		updateConfig({ autoPageIntervalMs: ms } as ScreenModeConfigPatch<M>);
 	}
 
 	function setAutoPageEnabled(enabled: boolean) {
@@ -91,9 +125,14 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 	}
 
 	return {
+		mode: options.mode,
+		rotation,
+		pageSize,
 		currentPage,
 		totalPages,
 		updateConfig,
+		setPageSize,
+		setPageDurationMs,
 		setAutoPageEnabled,
 		adminSetPage,
 		adminNextPage,
