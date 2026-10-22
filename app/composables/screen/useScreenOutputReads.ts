@@ -43,6 +43,7 @@ export function useScreenOutputReads() {
 		playerHistory: () => repository.playerHistory(requireScope()),
 		standings: () => repository.standings(requireScope()),
 		pairings: () => repository.pairings(requireScope()),
+		archetypeSpotlight: () => repository.archetypeSpotlight(requireScope()),
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		featureMatchSlot: (slotId: number) => repository.featureMatchSlot(requireScope(), slotId),

@@ -278,6 +278,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'top-cards',
 			'player-history',
 			'pairings',
+			'archetype-spotlight',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

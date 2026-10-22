@@ -151,6 +151,7 @@ const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: nu
 	player: (eventId, value) => requirePlayersInEvent(eventId, [referencedId(value)]),
 	playerList: (eventId, value) => requirePlayerListInEvent(eventId, referencedId(value)),
 	featureMatchSlot: (eventId, value) => requireFeatureMatchSlotInEvent(eventId, referencedId(value)),
+	archetype: (eventId, value) => requireArchetypeInEvent(eventId, referencedId(value)),
 	deckSource: requireDeckSourceInEvent,
 };
 

@@ -13,4 +13,5 @@ export const MODES_WITH_A_BACKGROUND_LAYER_STACK = [
 	'top-cards',
 	'player-history',
 	'pairings',
+	'archetype-spotlight',
 ] as const;

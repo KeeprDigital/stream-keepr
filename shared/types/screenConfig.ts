@@ -7,6 +7,7 @@ import type { BroadcastGraphicConfig } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
+import { archetypeSpotlightModeConfigContract } from '../screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from '../screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from '../screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from '../screenModeConfigs/card';
@@ -268,6 +269,7 @@ export type { FeatureMatchOverlayFrameAnimationConfig, AnimationEffectName as Fe
  */
 export type { BroadcastGraphicsBackgroundConfig } from '../animationEffects';
 
+export type { ArchetypeSpotlightModeConfig } from '../screenModeConfigs/archetypeSpotlight';
 /**
  * Every Screen Mode's config is inferred from its config contract, which also
  * holds its defaults (ADR-0037). Re-exported here because this is where every
@@ -386,6 +388,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'top-cards': topCardsModeConfigContract,
 	'player-history': playerHistoryModeConfigContract,
 	'pairings': pairingsModeConfigContract,
+	'archetype-spotlight': archetypeSpotlightModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -495,6 +498,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
+	'archetype-spotlight': ['archetypeId', 'scope', 'topN', 'minPoints', 'playerListId'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode

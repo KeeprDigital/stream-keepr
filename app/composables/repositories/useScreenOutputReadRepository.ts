@@ -2,6 +2,7 @@ import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broad
 import type { ScreenCardState } from '~~/shared/types/card/mtg';
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
+	ScreenOutputArchetypeSpotlightResponse,
 	ScreenOutputFeatureMatchResponse,
 	ScreenOutputMetagameResponse,
 	ScreenOutputPairingsResponse,
@@ -47,6 +48,8 @@ export function useScreenOutputReadRepository() {
 			read<{ player: Player; history: PlayerMatchHistoryEntry[] }>(scope, 'player-history'),
 		standings: (scope: ScreenOutputReadScope) => read<ScreenOutputStandingsResponse>(scope, 'standings'),
 		pairings: (scope: ScreenOutputReadScope) => read<ScreenOutputPairingsResponse>(scope, 'pairings'),
+		archetypeSpotlight: (scope: ScreenOutputReadScope) =>
+			read<ScreenOutputArchetypeSpotlightResponse>(scope, 'archetype-spotlight'),
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
 		featureMatchSlot: (scope: ScreenOutputReadScope, slotId: number) =>

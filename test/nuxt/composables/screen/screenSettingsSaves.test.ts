@@ -222,6 +222,8 @@ describe('screen settings saves', () => {
 		['player-history', 'playerId', 5, { rowsPerPage: 6 }],
 		['pairings', 'headerText', 'Top Tables', { rowsPerPage: 6 }],
 		['pairings', 'roundId', 31, { rowsPerPage: 6 }],
+		['archetype-spotlight', 'headerText', 'Deck to Beat', { rowsPerPage: 6 }],
+		['archetype-spotlight', 'archetypeId', 4, { rowsPerPage: 6 }],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
 		it.each([
 			['null, the deletion the PATCH contract defines', null],

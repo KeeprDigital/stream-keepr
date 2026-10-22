@@ -382,6 +382,60 @@ describe('metagame API', () => {
 		});
 	});
 
+	// ──────────────── Archetype spotlight Screen Output ────────────────
+
+	describe('archetype spotlight Screen Output read', () => {
+		it('answers the archetype page\'s numbers for the Screen\'s Archetype, scope and conversion target', async () => {
+			const screen = await $fetch<{ id: number }>(`/api/events/${eventId}/screens`, {
+				method: 'POST',
+				body: { name: 'Spotlight', slug: `spotlight-${eventId}`, currentMode: 'archetype-spotlight' },
+			});
+			const { assetCapability } = await $fetch<{ assetCapability: string }>(
+				`/api/events/${eventId}/screens/${screen.id}/asset-capability`,
+			);
+			async function outputSpotlight() {
+				const response = await anonymousFetch(`/api/screen-output/events/${eventId}/screens/${screen.id}/archetype-spotlight`, {
+					headers: { authorization: `Bearer ${assetCapability}` },
+				});
+				return { status: response.status, data: await response.json() as any };
+			}
+			async function configure(config: Record<string, unknown>) {
+				await $fetch(`/api/events/${eventId}/screens/${screen.id}/config/archetype-spotlight`, { method: 'PATCH', body: config });
+			}
+
+			// No Archetype picked: nothing to publish.
+			expect((await outputSpotlight()).status).toBe(404);
+
+			await configure({ archetypeId: archetypeId1, conversionMetric: 'topN', conversionThreshold: 2 });
+			const whole = await outputSpotlight();
+			const page = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`, {
+				query: { scope: 'all', board: 'full', conversionMetric: 'topN', conversionThreshold: 2 },
+			})) as any;
+			expect(whole.status).toBe(200);
+			expect(whole.data).toMatchObject({
+				archetype: { id: archetypeId1, name: 'Mono Red', colors: 'R' },
+				playerCount: page.playerCount,
+				metaShare: page.metaShare,
+				convertedCount: page.convertedCount,
+				conversionRate: page.conversionRate,
+			});
+			expect(whole.data).toMatchObject({ playerCount: 2, convertedCount: 1, conversionRate: 50 });
+			expect(whole.data.pilots).toEqual([
+				expect.objectContaining({ name: 'Player 1', position: 1, wins: 5, losses: 1 }),
+				expect.objectContaining({ name: 'Player 3', position: 3, wins: 3, losses: 3 }),
+			]);
+
+			// A Player List scope narrows the pilots and the numbers, as on the page.
+			await configure({ scope: 'playerList', playerListId });
+			const listed = await outputSpotlight();
+			const listedPage = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`, {
+				query: { scope: 'playerList', playerListId, board: 'full', conversionMetric: 'topN', conversionThreshold: 2 },
+			})) as any;
+			expect(listed.data).toMatchObject({ playerCount: listedPage.playerCount, metaShare: listedPage.metaShare, conversionRate: listedPage.conversionRate });
+			expect(listed.data.pilots.map((pilot: { name: string }) => pilot.name)).toEqual(['Player 1']);
+		});
+	});
+
 	// ──────────────── Error cases ────────────────
 
 	// ──────────────── Card detail endpoint ────────────────

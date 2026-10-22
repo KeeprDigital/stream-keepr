@@ -3,6 +3,7 @@ import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeC
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, ScreenMode } from './types/enums';
+import { archetypeSpotlightModeConfigContract } from './screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
 import { cardModeConfigContract } from './screenModeConfigs/card';
@@ -47,14 +48,16 @@ export interface ScreenModeGraphicsHost {
 
 /**
  * What a field declared as each kind of Event Reference holds. A kind is what
- * the field names: a Round, a Player, a Player List or a Feature Match Slot by
- * id, or a whole Deck Source, which names a Player or a Broadcast Deck List.
+ * the field names: a Round, a Player, a Player List, a Feature Match Slot or an
+ * Archetype by id, or a whole Deck Source, which names a Player or a Broadcast
+ * Deck List.
  */
 interface EventReferenceValues {
 	round: EntityIdField;
 	player: EntityIdField;
 	playerList: EntityIdField;
 	featureMatchSlot: EntityIdField;
+	archetype: EntityIdField;
 	deckSource: DeckSource | undefined;
 }
 
@@ -182,6 +185,7 @@ const SCREEN_MODE_DEFINITIONS = {
 	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' }, pageRotation: { pageSize: 'rowsPerPage' } },
 	'pairings': { label: 'Pairings', icon: 'i-lucide-list-ordered', displayType: 'overlay', description: 'Round pairings and results', backgroundLayers: true, config: pairingsModeConfigContract, eventReferences: { roundId: 'round' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'archetype-spotlight': { label: 'Archetype Spotlight', icon: 'i-lucide-crosshair', displayType: 'overlay', description: 'One archetype\'s pilots, numbers and top cards', backgroundLayers: true, config: archetypeSpotlightModeConfigContract, eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' }, pageRotation: { pageSize: 'rowsPerPage' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;

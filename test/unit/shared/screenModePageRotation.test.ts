@@ -26,6 +26,7 @@ describe('screen Mode Page Rotation', () => {
 			'top-cards.rowsPerPage',
 			'player-history.rowsPerPage',
 			'pairings.rowsPerPage',
+			'archetype-spotlight.rowsPerPage',
 		]);
 	});
 
