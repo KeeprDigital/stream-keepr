@@ -128,6 +128,14 @@ describe('screenMetagameDisplay', () => {
 		chartBars.value = [];
 	});
 
+	it('sizes rows for the page size before the rows are measured', async () => {
+		config.value = { ...config.value, pageSize: 10 };
+
+		const style = (await mountComponent()).get('.metagame-rows').attributes('style');
+
+		expect(style).toBe('--metagame-row-height: 44px; --metagame-row-font-size: 15.28px; --metagame-row-secondary-font-size: 12.835199999999999px; --metagame-row-padding-y: 5.279999999999999px; --metagame-row-padding-x: 11.459999999999999px;');
+	});
+
 	it('renders each Archetype\'s Conversion Rate where the operator placed its column', async () => {
 		config.value = {
 			...config.value,

@@ -2,7 +2,6 @@
 import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
-import { useElementSize } from '@vueuse/core';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 
 const { screen } = useScreenContext();
@@ -29,27 +28,18 @@ const gridStyle = computed(() => ({
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
 const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
 const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor ? { color: screenConfig.value.secondaryTextColor } : { opacity: '0.75' });
-const tableRef = useTemplateRef<HTMLElement>('tableRef');
-const { height: tableHeight } = useElementSize(tableRef);
-const pageInsetY = computed(() => screenConfig.value.paddingY ?? 0);
-
-const rowLayoutStyle = computed(() => {
-	const rowCount = Math.max(config.value.rowsPerPage ?? pageData.value.length ?? 1, 1);
-	const baseRowHeight = 72;
-	const availableHeight = tableHeight.value > 0 ? tableHeight.value : rowCount * baseRowHeight;
-	const usableHeight = Math.max(availableHeight - pageInsetY.value, rowCount * 44);
-	const rowHeight = usableHeight / rowCount;
-	const primaryFontSize = Math.max(18, 18 + ((rowHeight - 56) * 0.2));
-	const secondaryFontSize = Math.max(13, primaryFontSize * 0.72);
-
-	return {
-		'--history-row-height': `${rowHeight}px`,
-		'--history-row-font-size': `${primaryFontSize}px`,
-		'--history-row-secondary-font-size': `${secondaryFontSize}px`,
-		'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
-		'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
-	};
+const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
+	density: 'roomy',
+	prefix: 'history',
+	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
+	insetY: () => screenConfig.value.paddingY ?? 0,
 });
+
+const displayStyle = computed(() => ({
+	...rowLayoutStyle.value,
+	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
+	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
+}));
 
 function outcomeClass(outcome: string) {
 	return {
@@ -76,7 +66,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="rowLayoutStyle">
+		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
 			<div v-if="config.showHeader" class="history-header broadcast-table-title">
 				<h2 :style="primaryTextStyle">
 					{{ headerText }}

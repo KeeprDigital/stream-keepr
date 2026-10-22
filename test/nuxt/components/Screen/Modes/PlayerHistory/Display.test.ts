@@ -323,6 +323,8 @@ describe('screenModesPlayerHistoryDisplay', () => {
 
 		const style = wrapper.get('.player-history-display').attributes('style');
 		expect(style).toContain('--history-row-height: 100px;');
+		expect(style).toContain('--history-row-font-size: 26.8px;');
+		expect(style).toContain('--history-row-secondary-font-size: 19.296px;');
 		expect(style).toContain('--broadcast-table-primary-text: #123456;');
 		expect(style).toContain('--broadcast-table-secondary-text: #654321;');
 	});

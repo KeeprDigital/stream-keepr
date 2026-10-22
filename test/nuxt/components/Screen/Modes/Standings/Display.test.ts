@@ -205,6 +205,12 @@ describe('screenStandingsDisplay', () => {
 		expect(wrapper.get('.standings-rows').attributes('style')).toContain('--standings-row-height: 200px;');
 	});
 
+	it('sizes row type and padding from the row height', async () => {
+		const style = (await mountComponent()).get('.standings-rows').attributes('style');
+
+		expect(style).toBe('--standings-row-height: 100px; --standings-row-font-size: 24.240000000000002px; --standings-row-secondary-font-size: 20.3616px; --standings-row-padding-y: 12px; --standings-row-padding-x: 18.18px;');
+	});
+
 	it.each([false, true])('shows each row\'s Position Change, marked with its direction (animated: %s)', async (animateEntries) => {
 		config.value = {
 			...config.value,

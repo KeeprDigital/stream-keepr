@@ -138,6 +138,8 @@ describe('screenModesPairingsDisplay', () => {
 		const style = (await mountComponent()).get('.pairings-display').attributes('style');
 
 		expect(style).toContain('--pairings-row-height: 100px;');
+		expect(style).toContain('--pairings-row-font-size: 26.8px;');
+		expect(style).toContain('--pairings-row-secondary-font-size: 19.296px;');
 		expect(style).toContain('--broadcast-table-primary-text: #123456;');
 	});
 
