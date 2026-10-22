@@ -14,7 +14,7 @@ function selection(config: HeadToHeadModeConfig): string | null {
 }
 
 /**
- * The Event Data a Head-to-head is read from: its Feature Match Slot, which
+ * The Event Data a Head-to-Head is read from: its Feature Match Slot, which
  * Players the Slot seats, those Players and their Archetypes, the Matches
  * between them, and the Round Standings their records come from. Melee's
  * wholesale syncs re-read.
@@ -55,7 +55,7 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 }
 
 /**
- * A Head-to-head's two Players and their earlier Matches, kept current on a
+ * A Head-to-Head's two Players and their earlier Matches, kept current on a
  * Screen Output (#760). Bound to a Feature Match Slot, it follows the Slot's
  * current Feature Match Assignment as the Slot is reassigned.
  */

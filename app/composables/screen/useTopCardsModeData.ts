@@ -70,7 +70,7 @@ export function useTopCardsModeData() {
 				: '';
 
 		return config.value.archetypeFilter
-			? `${prefix}Top Cards: ${config.value.archetypeFilter}`
+			? `${prefix}Most Played Cards: ${config.value.archetypeFilter}`
 			: `${prefix}Most Played Cards`;
 	});
 

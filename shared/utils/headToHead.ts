@@ -12,7 +12,7 @@ interface RecordFacts {
 	points: number | null;
 }
 
-/** What a Head-to-head reads of one Player. */
+/** What a Head-to-Head reads of one Player. */
 export interface HeadToHeadPlayerFacts {
 	player: RecordFacts & { id: number; name: string; pronouns: string | null; gameData: PlayerGameData | null };
 	/** Their assigned Archetype, if any. */
@@ -108,7 +108,7 @@ function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player
 }
 
 /**
- * A Head-to-head of two Players at one Event (#760): each Player's current
+ * A Head-to-Head of two Players at one Event (#760): each Player's current
  * record, points and deck, and the earlier Matches between them.
  *
  * A record is the Player's latest Round Standings, as Standings fixed at that
