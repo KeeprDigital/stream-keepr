@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
 
@@ -511,5 +512,58 @@ describe('featureMatchOverlaySettings', () => {
 			await wrapper.get('[data-testid="layout-save-retry"]').trigger('click');
 			expect(mockRetry).toHaveBeenCalledTimes(1);
 		});
+	});
+});
+
+/**
+ * Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit
+ * workspace throughout, so its toolbar always offers the toggle, and only that
+ * toggle exits — Escape stays the editor's own.
+ */
+describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
+	const focusMode = useEditorFocusMode();
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		mockScreenConfig.value = { width: 1920, height: 1080 };
+		mockSaveState.value = 'idle';
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		focusMode.enabled.value = false;
+	});
+
+	afterEach(() => {
+		focusMode.enabled.value = false;
+		localStorage.clear();
+	});
+
+	it('enters Focus Mode from the toolbar toggle, and Escape does not leave it', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		const toggle = wrapper.get('[data-testid="overlay-toolbar"] [data-testid="editor-focus-mode-toggle"]');
+
+		await toggle.trigger('click');
+		expect(focusMode.active.value).toBe(true);
+
+		preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' });
+		await nextTick();
+		await press('Escape');
+
+		expect(focusMode.active.value).toBe(true);
+
+		await toggle.trigger('click');
+		expect(focusMode.active.value).toBe(false);
+	});
+
+	it('gives the page back when the editor closes, keeping the choice', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await wrapper.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
+
+		wrapper.unmount();
+
+		expect(focusMode.active.value).toBe(false);
+		expect(focusMode.enabled.value).toBe(true);
 	});
 });

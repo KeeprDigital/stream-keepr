@@ -6,6 +6,7 @@ import type { Screen, ScreenCommand, ScreenMode } from '~/types';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SCREEN_COLOR_MODE_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useScreenConfigUpdate } from '~/composables/screen/useScreenConfigUpdate';
+import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import { getScreenModeConfigurationPolicy, getScreenModeLabel, getScreenModeSelectOptions, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
 definePageMeta({
@@ -28,6 +29,15 @@ const screenId = computed(() => Number(route.params.screenId));
 const screen = ref<Screen | null>(null);
 const loading = ref(true);
 const isUpdating = ref(false);
+
+/**
+ * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
+ * and it is on, the editor gets the page. The layout drops the app sidebar and
+ * this page drops the Screen-level cards above the editor — the header and the
+ * Container — keeping the save failure, the way back to Screens, and the
+ * Screen's name in the navbar.
+ */
+const { active: editorFocus } = useEditorFocusMode();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -351,7 +361,10 @@ async function sendCommand(command: ScreenCommand) {
 </script>
 
 <template>
-	<NuxtLayout name="default">
+	<NuxtLayout name="default" :editor-focus="editorFocus">
+		<template v-if="editorFocus && screen" #navbar-center>
+			<span class="hidden truncate text-sm text-muted sm:inline" data-testid="focused-screen-name">{{ screen.name }}</span>
+		</template>
 		<template #actions>
 			<UButton
 				variant="outline"
@@ -394,7 +407,7 @@ async function sendCommand(command: ScreenCommand) {
 				</UAlert>
 
 				<!-- Screen Header -->
-				<UCard>
+				<UCard v-if="!editorFocus">
 					<div class="flex flex-col gap-3">
 						<!-- Title Row -->
 						<div class="flex items-center justify-between gap-4">
@@ -588,7 +601,7 @@ async function sendCommand(command: ScreenCommand) {
 				</UCard>
 
 				<!-- Screen-level Container Settings -->
-				<ScreenSettingsCard v-if="hasContainerSettings" title="Container" :default-open="!usesFullWidthConfiguration">
+				<ScreenSettingsCard v-if="hasContainerSettings && !editorFocus" title="Container" :default-open="!usesFullWidthConfiguration">
 					<!-- Color Mode (control screens only) -->
 					<UFormField
 						v-if="isControlScreen"

@@ -613,6 +613,10 @@ One of nine points on a canvas-positioned Graphic Item that fixes its displayed 
 An authoring projection of canonical pixel geometry or motion distance as pixels, a percentage of the containing canvas or Graphic Group, or a centred 32-unit grid. It serves Graphic Items and Source Items alike and changes display and entry only.
 _Avoid_: Graphic Geometry Unit, ±16 unit
 
+**Editor Focus Mode**:
+A per-browser authoring preference that gives a graphics Edit workspace — the Feature Match Overlay editor's or the Broadcast Graphics Screen's — the whole page by hiding the app sidebar and the Screen-level cards around it. One setting serves both editors; it is entered and left only through the editor's own toggle, and never applies to the Broadcast Graphics Live workspace. It changes layout only.
+_Avoid_: Fullscreen (the browser's own mode), zen mode
+
 **Graphic Rotation**:
 The optional static rotation of a canvas-positioned Graphic Item around its Graphic Anchor Point. Row and column items do not rotate; skew, perspective, and raw transforms are not exposed.
 

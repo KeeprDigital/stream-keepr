@@ -183,20 +183,24 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 		<section class="rounded-lg border border-default/70 bg-default p-3">
 			<div class="grid gap-3 xl:grid-cols-[auto_minmax(16rem,0.85fr)] xl:items-end">
 				<UFormField label="Workspace" size="sm">
-					<UFieldGroup size="sm">
-						<UButton
-							v-for="option in WORKSPACE_OPTIONS"
-							:key="option.value"
-							:icon="option.icon"
-							:color="workspace === option.value ? 'primary' : 'neutral'"
-							:variant="workspace === option.value ? 'subtle' : 'outline'"
-							:data-testid="`workspace-${option.value}`"
-							:aria-pressed="workspace === option.value"
-							@click="setWorkspace(option.value)"
-						>
-							{{ option.label }}
-						</UButton>
-					</UFieldGroup>
+					<div class="flex flex-wrap items-center gap-2">
+						<UFieldGroup size="sm">
+							<UButton
+								v-for="option in WORKSPACE_OPTIONS"
+								:key="option.value"
+								:icon="option.icon"
+								:color="workspace === option.value ? 'primary' : 'neutral'"
+								:variant="workspace === option.value ? 'subtle' : 'outline'"
+								:data-testid="`workspace-${option.value}`"
+								:aria-pressed="workspace === option.value"
+								@click="setWorkspace(option.value)"
+							>
+								{{ option.label }}
+							</UButton>
+						</UFieldGroup>
+						<!-- Editor Focus Mode is the Edit workspace's alone (#744): Live keeps the page as it is. -->
+						<GraphicsEditorFocusModeToggle v-if="workspace === 'edit'" />
+					</div>
 				</UFormField>
 
 				<UFormField label="Canvas Size" size="sm" description="Every Broadcast Graphic is authored in this pixel canvas.">
