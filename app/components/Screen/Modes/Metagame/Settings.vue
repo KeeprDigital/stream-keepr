@@ -36,19 +36,14 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('metagame').fields;
 
-const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists']);
+useConsumedEventData(['playerLists']);
 
 onMounted(async () => {
 	if (!props.eventId) {
 		return;
-	}
-
-	if (!playerStore.isLoaded) {
-		await playerStore.loadPlayersByEventId(props.eventId);
 	}
 
 	if (!playerListStore.isLoaded) {
@@ -115,7 +110,7 @@ const showsConversionRate = computed(() =>
 // The table rows the Screen pages (none for a chart, which is one page), read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingRows } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId },
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
 	useMetagameModeData,
 );
 

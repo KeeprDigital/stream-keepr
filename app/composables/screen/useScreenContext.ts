@@ -37,7 +37,7 @@ export interface ScreenContext {
 const SCREEN_CONTEXT_KEY: InjectionKey<ScreenContext> = Symbol('screen-context');
 
 /** The context `runInScreenContext` is setting up under, if any. */
-let settingUpIn: ScreenContext | null = null;
+let contextBeingSetUp: ScreenContext | null = null;
 
 /**
  * Provide screen context to all descendant screen components.
@@ -52,8 +52,8 @@ export function provideScreenContext(context: ScreenContext) {
  * Throws if called outside of a screen context provider.
  */
 export function useScreenContext(): ScreenContext {
-	if (settingUpIn)
-		return settingUpIn;
+	if (contextBeingSetUp)
+		return contextBeingSetUp;
 	const context = inject(SCREEN_CONTEXT_KEY);
 	if (!context) {
 		throw new Error(
@@ -69,16 +69,17 @@ export function useScreenContext(): ScreenContext {
  * than an ancestor's, so a surface that is no rendering of the Screen, such as
  * a mode's settings editor, reads what its renderings read (#780). Every
  * `useScreenContext` call `setup` makes synchronously sees `context`, as a
- * descendant of `provideScreenContext` would.
+ * descendant of `provideScreenContext` would; so a composable `setup` reaches
+ * resolves its context as it is set up, never later in a watcher or callback.
  */
 export function runInScreenContext<T>(context: ScreenContext, setup: () => T): T {
-	const outer = settingUpIn;
-	settingUpIn = context;
+	const outer = contextBeingSetUp;
+	contextBeingSetUp = context;
 	try {
 		return setup();
 	}
 	finally {
-		settingUpIn = outer;
+		contextBeingSetUp = outer;
 	}
 }
 

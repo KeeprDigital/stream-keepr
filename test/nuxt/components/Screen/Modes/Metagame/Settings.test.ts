@@ -4,12 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 
-// The rows the Screen pages, read as its Screen Output reads them, are not
-// under test here (the Pairings and Most Played Cards editors' tests cover them).
-vi.mock('~/modules/screen-mode/editorModeData', async () => {
-	const { ref } = await import('vue');
-	return { useEditedScreenModeData: () => ({ rowCount: ref(0), loading: ref(false) }) };
-});
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
 vi.mock('vue-draggable-plus', () => ({
 	VueDraggable: defineComponent({

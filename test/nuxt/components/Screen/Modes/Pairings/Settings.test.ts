@@ -24,6 +24,7 @@ const savedConfig = {
 
 const mockConfig = ref<Record<string, any>>({ ...savedConfig });
 const mockUpdateConfig = vi.fn();
+const mockSaving = ref(false);
 const { mockFetch } = vi.hoisted(() => ({ mockFetch: vi.fn() }));
 
 type Handler = (message: Record<string, unknown>) => void;
@@ -63,7 +64,7 @@ mockNuxtImport('useRoundStore', () => () => ({
 }));
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
-	saving: ref(false),
+	saving: mockSaving,
 	updateConfig: mockUpdateConfig,
 	resetConfig: vi.fn(),
 }));
@@ -126,6 +127,7 @@ describe('screenModesPairingsSettings', () => {
 		vi.clearAllMocks();
 		mockFetch.mockReset();
 		mockConfig.value = { ...savedConfig };
+		mockSaving.value = false;
 		channelHandlers.clear();
 	});
 
@@ -151,6 +153,26 @@ describe('screenModesPairingsSettings', () => {
 		deliver('match:created', { match: { id: 99, roundId: 31 } });
 		await flushPromises();
 
+		expect(wrapper.text()).toContain('Page 1 of 3');
+	});
+
+	it('reads the newly selected Round once the selection is saved, as the Screen does', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(10));
+		const wrapper = await mountSettings();
+		expect(wrapper.text()).toContain('Page 1 of 2');
+
+		// The store shows the edit at once, but the server reads the Round it holds
+		// until the save lands, so the editor waits for it.
+		mockSaving.value = true;
+		await wrapper.setProps({ screen: { id: 1, modeConfigs: { pairings: { ...savedConfig, roundId: 32 } } } as unknown as Screen });
+		await flushPromises();
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+
+		mockFetch.mockResolvedValue(pairingsOf(20));
+		mockSaving.value = false;
+		await flushPromises();
+
+		expect(mockFetch).toHaveBeenCalledTimes(2);
 		expect(wrapper.text()).toContain('Page 1 of 3');
 	});
 

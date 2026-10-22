@@ -6,12 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, provide, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
-// The rows the Screen pages, read as its Screen Output reads them, are not
-// under test here (the Pairings and Most Played Cards editors' tests cover them).
-vi.mock('~/modules/screen-mode/editorModeData', async () => {
-	const { ref } = await import('vue');
-	return { useEditedScreenModeData: () => ({ rowCount: ref(0), loading: ref(false) }) };
-});
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
 /**
  * Clearing an optional setting in a mode's settings editor writes the `null` that

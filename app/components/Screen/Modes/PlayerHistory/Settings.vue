@@ -33,7 +33,7 @@ const playerOptions = computed(() => [
 // The Player's Matches the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingHistory } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId },
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
 	usePlayerHistoryModeData,
 );
 

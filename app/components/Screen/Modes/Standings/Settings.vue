@@ -26,18 +26,14 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('standings').fields;
 
 // ── Stores ──
-const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 const roundStore = useRoundStore();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists', 'rounds']);
+useConsumedEventData(['playerLists', 'rounds']);
 
 onMounted(async () => {
 	if (props.eventId) {
-		if (!playerStore.isLoaded) {
-			await playerStore.loadPlayersByEventId(props.eventId);
-		}
 		if (!playerListStore.isLoaded) {
 			await playerListStore.loadByEventId(props.eventId);
 		}
@@ -93,7 +89,7 @@ const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns,
 // The rows the Screen pages, its view mode and reveal applied, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
 const { rowCount, loading: loadingRows } = useEditedScreenModeData(
-	{ screen: () => props.screen, eventId: () => props.eventId },
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
 	useStandingsModeData,
 );
 
