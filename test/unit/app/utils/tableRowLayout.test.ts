@@ -37,7 +37,7 @@ describe('tableRowLayout', () => {
 		expect(layout).toEqual({ rowHeight: 24, fontSize: 14, secondaryFontSize: 12, padding: { y: 4, x: 10.5 } });
 	});
 
-	it('grows roomy type with the row height and leaves padding to the Display', () => {
+	it('grows roomy type with the row height and leaves padding to the stylesheet', () => {
 		const layout = tableRowLayout({ density: 'roomy', measuredHeight: 800, rowCount: 8 });
 
 		expect(layout.fontSize).toBeCloseTo(26.8);
@@ -52,7 +52,7 @@ describe('tableRowLayout', () => {
 });
 
 describe('tableRowLayoutStyle', () => {
-	it('names each measure as a custom property under the Display\'s prefix', () => {
+	it('names each measure as a custom property under the given prefix', () => {
 		expect(tableRowLayoutStyle('standings', { rowHeight: 50, fontSize: 16, secondaryFontSize: 13, padding: { y: 6, x: 12 } })).toEqual({
 			'--standings-row-height': '50px',
 			'--standings-row-font-size': '16px',

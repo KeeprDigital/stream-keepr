@@ -16,8 +16,8 @@ interface TableRowLayoutOptions {
 }
 
 /**
- * Sizes a paged table Display's rows to fill the measured `target`, as the
- * row custom properties its stylesheet reads (see `tableRowLayout`).
+ * Sizes a paginated Screen Mode's table rows to fill the measured `target`, as
+ * the row custom properties its stylesheet reads (see `tableRowLayout`).
  */
 export function useTableRowLayout(target: MaybeComputedElementRef, options: TableRowLayoutOptions) {
 	const { height } = useElementSize(target);
@@ -26,6 +26,6 @@ export function useTableRowLayout(target: MaybeComputedElementRef, options: Tabl
 		density: options.density,
 		measuredHeight: height.value,
 		rowCount: toValue(options.rowCount),
-		insetY: toValue(options.insetY) ?? 0,
+		insetY: toValue(options.insetY),
 	})));
 }

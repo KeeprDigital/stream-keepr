@@ -28,15 +28,15 @@ const gridStyle = computed(() => ({
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
 const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
 const secondaryTextStyle = computed(() => screenConfig.value.secondaryTextColor ? { color: screenConfig.value.secondaryTextColor } : { opacity: '0.75' });
-const rowSizeStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
+const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'roomy',
 	prefix: 'history',
 	rowCount: () => config.value.rowsPerPage ?? pageData.value.length,
 	insetY: () => screenConfig.value.paddingY ?? 0,
 });
 
-const rowLayoutStyle = computed(() => ({
-	...rowSizeStyle.value,
+const displayStyle = computed(() => ({
+	...rowLayoutStyle.value,
 	'--broadcast-table-primary-text': screenConfig.value.primaryTextColor ?? '#ffffff',
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
 }));
@@ -66,7 +66,7 @@ function outcomeParts(row: PlayerMatchHistoryEntry) {
 		:error="error"
 		:empty="isEmpty"
 	>
-		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="rowLayoutStyle">
+		<div class="player-history-display broadcast-table-display flex flex-col h-full w-full" :style="displayStyle">
 			<div v-if="config.showHeader" class="history-header broadcast-table-title">
 				<h2 :style="primaryTextStyle">
 					{{ headerText }}

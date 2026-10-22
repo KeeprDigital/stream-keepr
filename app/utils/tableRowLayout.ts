@@ -1,11 +1,11 @@
 /**
- * How a paged table Display sizes its rows to fill the Screen: a page of rows
- * shares the table's measured height, and type (and, for compact rows,
- * padding) grows with the row height.
+ * How a paginated Screen Mode's table sizes its rows to fill the Screen: a
+ * page of rows shares the table's measured height, and type (and, for compact
+ * rows, padding) grows with the row height.
  *
  * - `compact`: dense data tables (Standings, Metagame), padding sized here.
  * - `roomy`: tall rows of one Match each (Player History, Pairings), padding
- *   left to the Display's stylesheet.
+ *   left to the mode's stylesheet.
  */
 export type TableRowDensity = 'compact' | 'roomy';
 
@@ -21,7 +21,8 @@ interface DensityRule {
 	fontGrowth: number;
 	minSecondaryFontSize: number;
 	secondaryFontScale: number;
-	sizesPadding: boolean;
+	/** Row padding floors and growth, or null to leave padding to the stylesheet. */
+	padding: { minY: number; yScale: number; minX: number; xScale: number } | null;
 }
 
 const DENSITY_RULES: Record<TableRowDensity, DensityRule> = {
@@ -33,7 +34,7 @@ const DENSITY_RULES: Record<TableRowDensity, DensityRule> = {
 		fontGrowth: 0.16,
 		minSecondaryFontSize: 12,
 		secondaryFontScale: 0.84,
-		sizesPadding: true,
+		padding: { minY: 4, yScale: 0.12, minX: 10, xScale: 0.75 },
 	},
 	roomy: {
 		naturalRowHeight: 72,
@@ -43,7 +44,7 @@ const DENSITY_RULES: Record<TableRowDensity, DensityRule> = {
 		fontGrowth: 0.2,
 		minSecondaryFontSize: 13,
 		secondaryFontScale: 0.72,
-		sizesPadding: false,
+		padding: null,
 	},
 };
 
@@ -61,7 +62,7 @@ export interface TableRowLayout {
 	rowHeight: number;
 	fontSize: number;
 	secondaryFontSize: number;
-	/** Row padding, or null when the density leaves padding to the Display. */
+	/** Row padding, or null when the density leaves padding to the stylesheet. */
 	padding: { y: number; x: number } | null;
 }
 
@@ -73,15 +74,18 @@ export function tableRowLayout({ density, measuredHeight, rowCount, insetY = 0 }
 	const rowHeight = usableHeight / rows;
 	const fontSize = Math.max(rule.baseFontSize, rule.baseFontSize + ((rowHeight - rule.fontBaseRowHeight) * rule.fontGrowth));
 	const secondaryFontSize = Math.max(rule.minSecondaryFontSize, fontSize * rule.secondaryFontScale);
-	const padding = rule.sizesPadding
-		? { y: Math.max(4, rowHeight * 0.12), x: Math.max(10, fontSize * 0.75) }
+	const padding = rule.padding
+		? {
+				y: Math.max(rule.padding.minY, rowHeight * rule.padding.yScale),
+				x: Math.max(rule.padding.minX, fontSize * rule.padding.xScale),
+			}
 		: null;
 
 	return { rowHeight, fontSize, secondaryFontSize, padding };
 }
 
 /**
- * The layout as the custom properties a Display's stylesheet reads, named
+ * The layout as the custom properties the mode's stylesheet reads, named
  * `--<prefix>-row-*`.
  */
 export function tableRowLayoutStyle(prefix: string, layout: TableRowLayout): Record<string, string> {
