@@ -12,4 +12,5 @@ export const MODES_WITH_A_BACKGROUND_LAYER_STACK = [
 	'metagame',
 	'top-cards',
 	'player-history',
+	'pairings',
 ] as const;

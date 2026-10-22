@@ -24,6 +24,7 @@ describe('screen Mode Page Rotation', () => {
 			'standings.rowsPerPage',
 			'metagame.pageSize',
 			'player-history.rowsPerPage',
+			'pairings.rowsPerPage',
 		]);
 	});
 

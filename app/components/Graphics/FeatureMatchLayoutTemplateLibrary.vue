@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchLayoutTemplateSummary } from '~~/shared/types/featureMatchLayoutTemplate';
+import ScreenSettingsCard from '~/components/Screen/SettingsCard.vue';
 
 /**
  * The Feature Match Layout Template library, as an author browses and manages it.
@@ -33,9 +34,15 @@ const props = defineProps<{
 	 * looking through the available designs corrupts nothing.
 	 */
 	writable?: boolean;
+	/** Render without its own collapsible card, inside a host's panel. */
+	bare?: boolean;
 }>();
 
-const emit = defineEmits<{ placed: [] }>();
+/**
+ * `placing` fires just before a placement writes the Screen, so a host can
+ * remember the layout it is about to lose; `placed` once the placed one is loaded.
+ */
+const emit = defineEmits<{ placing: []; placed: [] }>();
 
 const repository = useFeatureMatchLayoutTemplateRepository();
 const screenStore = useScreenStore();
@@ -105,6 +112,7 @@ function cancelPlace() {
 
 async function place(templateId: string) {
 	await attempt(templateId, async () => {
+		emit('placing');
 		await repository.place({
 			eventId: props.eventId,
 			screenId: props.screenId,
@@ -121,7 +129,11 @@ async function place(templateId: string) {
 </script>
 
 <template>
-	<ScreenSettingsCard title="Layout template library" :default-open="false" data-testid="layout-template-library">
+	<component
+		:is="bare ? 'div' : ScreenSettingsCard"
+		v-bind="bare ? {} : { title: 'Layout template library', defaultOpen: false }"
+		data-testid="layout-template-library"
+	>
 		<div class="space-y-3">
 			<p class="text-xs text-muted">
 				Reusable Feature Match Layout Templates, shared across every Event in this installation.
@@ -263,5 +275,5 @@ async function place(templateId: string) {
 				</GraphicsTemplateLibraryEntry>
 			</div>
 		</div>
-	</ScreenSettingsCard>
+	</component>
 </template>

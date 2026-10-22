@@ -5,7 +5,6 @@ import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
-import FeatureMatchOverlayOrderSection from './OrderSection.vue';
 import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
 const props = defineProps<{
@@ -16,8 +15,13 @@ const props = defineProps<{
 	item: FeatureMatchSourceItemConfig;
 }>();
 
+/**
+ * Removing and duplicating change the layer list and the selection, so they are
+ * the editor's to do; this asks.
+ */
 const emit = defineEmits<{
-	removed: [];
+	remove: [itemId: string];
+	duplicate: [itemId: string];
 }>();
 
 const editor = useFeatureMatchOverlayConfigEditor({
@@ -30,11 +34,6 @@ const SOURCE_ROLE_OPTIONS = [
 	{ label: 'Player 1', value: 'player1' },
 	{ label: 'Player 2', value: 'player2' },
 ] satisfies Array<{ label: string; value: FeatureMatchSourceRole }>;
-
-function removeSelf() {
-	editor.removeSource(props.item.id);
-	emit('removed');
-}
 </script>
 
 <template>
@@ -42,10 +41,8 @@ function removeSelf() {
 		<FeatureMatchOverlayControlSection
 			title="Details"
 			default-open
-			badge="Source"
-			:summary="item.label"
 		>
-			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+			<div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
 				<UFormField label="Name">
 					<UInput
 						:model-value="item.label"
@@ -54,20 +51,33 @@ function removeSelf() {
 						@update:model-value="editor.updateSource(item.id, { label: String($event) })"
 					/>
 				</UFormField>
-				<ScreenSettingsToggle
-					label="Visible"
-					:model-value="item.visible"
-					@update:model-value="editor.updateSource(item.id, { visible: $event })"
-				/>
-				<UButton
-					color="error"
-					variant="soft"
-					icon="i-lucide-trash-2"
-					aria-label="Remove Source Item"
-					title="Remove Source Item"
-					@click="removeSelf"
-				/>
+				<div class="flex items-center gap-1">
+					<UButton
+						color="neutral"
+						variant="soft"
+						icon="i-lucide-copy"
+						aria-label="Duplicate Source Item"
+						title="Duplicate Source Item"
+						data-testid="source-duplicate"
+						@click="emit('duplicate', item.id)"
+					/>
+					<UButton
+						color="error"
+						variant="soft"
+						icon="i-lucide-trash-2"
+						aria-label="Remove Source Item"
+						title="Remove Source Item"
+						data-testid="source-remove"
+						@click="emit('remove', item.id)"
+					/>
+				</div>
 			</div>
+			<ScreenSettingsToggle
+				class="mt-3"
+				label="Visible"
+				:model-value="item.visible"
+				@update:model-value="editor.updateSource(item.id, { visible: $event })"
+			/>
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayControlSection
@@ -124,11 +134,5 @@ function removeSelf() {
 				@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
 			/>
 		</FeatureMatchOverlayControlSection>
-
-		<FeatureMatchOverlayOrderSection
-			@send-to-back="editor.sendSourceToBack(item.id)"
-			@move="delta => editor.moveSourceOrder(item.id, delta)"
-			@bring-to-front="editor.bringSourceToFront(item.id)"
-		/>
 	</div>
 </template>

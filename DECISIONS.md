@@ -209,7 +209,7 @@ Accepted · 2026-08-12 · [#312](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-The current page of a paginated Screen Mode (standings, metagame, player history) is a **pure projection of (Rotation Anchor, page duration, page count, server time)**, computed identically by every rendering — Screen Output, Program monitor, operator settings — from one shared function in `shared/modules/page-rotation/`. Nothing writes as the rotation runs; a rendering re-evaluates exactly at each flip boundary.
+The current page of a paginated Screen Mode (standings, metagame, player history, pairings) is a **pure projection of (Rotation Anchor, page duration, page count, server time)**, computed identically by every rendering — Screen Output, Program monitor, operator settings — from one shared function in `shared/modules/page-rotation/`. Nothing writes as the rotation runs; a rendering re-evaluates exactly at each flip boundary.
 
 - **Only operator surfaces write `rotationAnchor`**, on three occasions: enabling auto-page; an edit that changes the rotation's shape (page duration, page size, a display reset restoring them; decided once by `pageRotationEdit`, ADR-0039); and a manual page selection while rotating, written so the chosen page is current for one full duration. It rides the existing config write and `screen:updated` announcement.
 - **A missing anchor projects from epoch zero**, still deterministic, so older configs rotate without migration.
@@ -583,11 +583,11 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
+**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `pairings` (#751), `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
 
 **A capability reaches a mode's data only while its Screen is in that mode** (`requireScreenOutputModeRead`): a Screen publishes what it is showing, not every mode it holds configuration for.
 
-**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Metagame and Top Cards the breakdown their fields describe (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
+**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Pairings its Round's Matches, Metagame and Top Cards the breakdown their fields describe (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
 
 - `feature-match-slots/:slotId` — a capability reaches only the Slot the current mode shows; a Session reaches any, because the Feature Match Overlay's editor preview renders a Slot not yet saved.
 - `players/:playerId/decks` — a capability reaches only the Deck mode's selected Player or the shown Slot's two Players, so it cannot read the Event's decklists ahead of their broadcast.
@@ -1194,7 +1194,7 @@ Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/is
 
 **The checks are unchanged.** An id outside the Event is refused with 404, as before. A Deck Source naming another Event's Player is refused with 404, and a Broadcast Deck List that is not selectable with 409 `SCREEN_DECK_SOURCE_CONFLICT`. The Deck Source guard triggers (`screens_deck_source_insert_guard` and `screens_deck_source_update_guard`) stay. They prove the Deck Source again inside the Screen write's own statement, so a Player or Broadcast Deck List that goes away between the check and the write still cannot be saved.
 
-The declarations are Card, Feature Match and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck `deckSource`, Standings `roundId` and `playerListId`, Metagame and Top Cards `playerListId`, and Player History `playerId`. Background, Top Cut and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
+The declarations are Card, Feature Match and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck `deckSource`, Standings `roundId` and `playerListId`, Metagame and Top Cards `playerListId`, Player History `playerId`, and Pairings `roundId` (#751). Background, Top Cut and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
 
 ### Why
 
@@ -1218,7 +1218,7 @@ Accepted · 2026-10-21 · [#586](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A paginated Screen Mode Definition declares its Page Rotation** (`pageRotation` in `shared/screenModes.ts`, next to `eventReferences`), naming the config field holding how many rows a page holds: Standings `rowsPerPage`, Metagame `pageSize` and Player History `rowsPerPage`. A mode that is not paginated leaves it out. The declaration is optional, as `backgroundLayers` is, because the compile check runs both ways: a declaring mode whose config lacks the shared Page Rotation fields (`pageRotationShape`) or a numeric page size field fails to compile, and so does a mode whose config carries any rotation field without declaring one (`PAGE_ROTATIONS_FIT_THEIR_CONFIG`). So a mode cannot rotate without declaring it, and the other eight need not write "not paginated".
+**A paginated Screen Mode Definition declares its Page Rotation** (`pageRotation` in `shared/screenModes.ts`, next to `eventReferences`), naming the config field holding how many rows a page holds: Standings `rowsPerPage`, Metagame `pageSize`, Player History `rowsPerPage` and Pairings `rowsPerPage` (#751). A mode that is not paginated leaves it out. The declaration is optional, as `backgroundLayers` is, because the compile check runs both ways: a declaring mode whose config lacks the shared Page Rotation fields (`pageRotationShape`) or a numeric page size field fails to compile, and so does a mode whose config carries any rotation field without declaring one (`PAGE_ROTATIONS_FIT_THEIR_CONFIG`). So a mode cannot rotate without declaring it, and the other eight need not write "not paginated".
 
 **The rotation fields and their validation are written once**, in `shared/screenModeConfigs/subShapes.ts`: `pageRotationShape` with `DEFAULT_PAGE_ROTATION`, and `pageRotationPageSize` for the page size field each mode names itself. Each paginated contract spreads them (ADR-0037), so the server's write forms validate them identically. The type an operator surface reads them through (`PageRotationConfig`) is inferred from that shape, replacing the hand-written copy.
 
@@ -1309,7 +1309,7 @@ A write's v2 answer replaced a v3 the client already held. A failed write restor
 - A loader's revision is laid under unsettled edits too, so a page load cannot take back an edit still out.
 - A display reset now clears a default that is `undefined`, such as a custom header, where it used to leave the stored one.
 - An edit queued behind a save is sent once, by the hand-off, rather than by that save's continuation.
-- `test/nuxt/stores/screenWriteOwnership.test.ts` orders every answer by hand against the store; `test/nuxt/composables/screen/screenSettingsSaves.test.ts` drives the configuration composable through an Event reset and a server that answers through JSON with the real PATCH schema and merge; `test/nuxt/components/Screen/Modes/clearingOptionalSettings.test.ts` clears each optional field in the Metagame, Top Cards, Standings and Player History editors.
+- `test/nuxt/stores/screenWriteOwnership.test.ts` orders every answer by hand against the store; `test/nuxt/composables/screen/screenSettingsSaves.test.ts` drives the configuration composable through an Event reset and a server that answers through JSON with the real PATCH schema and merge; `test/nuxt/components/Screen/Modes/clearingOptionalSettings.test.ts` clears each optional field in the Metagame, Top Cards, Standings, Player History and Pairings editors.
 
 ### Rejected alternatives
 
