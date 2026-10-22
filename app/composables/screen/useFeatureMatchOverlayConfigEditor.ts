@@ -75,7 +75,15 @@ export function useFeatureMatchOverlayConfigEditor(options: FeatureMatchOverlayC
 		return id;
 	}
 
+	/** Duplicate a Source Item. Returns the copy's id, or an empty one when nothing was copied. */
+	function duplicateSource(id: string): string {
+		const { layout: next, id: copyId } = layoutWriter.duplicateSource(layout(), id);
+		submit(next);
+		return copyId;
+	}
+
 	return {
+		duplicateSource,
 		updateLayout,
 		patchFrame,
 		updateSource,

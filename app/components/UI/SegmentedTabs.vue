@@ -3,6 +3,8 @@ interface SegmentedTabItem {
 	label?: string;
 	value?: string | number;
 	icon?: string;
+	/** Names an icon-only item for assistive technology. */
+	ariaLabel?: string;
 }
 
 withDefaults(defineProps<{
@@ -22,6 +24,8 @@ const model = defineModel<string | number | undefined>({ required: true });
 			:key="item.value ?? index"
 			:icon="item.icon"
 			:label="item.label"
+			:aria-label="item.ariaLabel"
+			:title="item.ariaLabel"
 			:color="model === item.value ? 'primary' : 'neutral'"
 			:variant="model === item.value ? 'soft' : 'outline'"
 			:data-testid="item.value ? `tab-${item.value}` : undefined"

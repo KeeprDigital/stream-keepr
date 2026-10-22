@@ -99,10 +99,12 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
+import { useInspectorSections } from '~/composables/ui/useInspectorSections';
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import GraphicsGeometryFields from '../GeometryFields.vue';
+import GraphicsInspectorSection from '../InspectorSection.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
@@ -178,11 +180,11 @@ const OVERFLOW_POLICY_OPTIONS = [
 	{ label: 'Ellipsis', value: 'ellipsis' },
 	{ label: 'Shrink then ellipsis', value: 'shrink' },
 ] satisfies Array<{ label: string; value: typeof TEXT_OVERFLOW_POLICY_VALUES[number] }>;
-const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: value, value }));
-const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: value, value }));
-const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: value, value }));
-const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: value, value }));
-const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({ label: value, value }));
+const TEXT_ALIGN_OPTIONS = GRAPHIC_TEXT_ALIGN_VALUES.map(value => ({ label: optionLabel(value), value, icon: `i-lucide-align-${value}` }));
+const PLAYER_LIFE_ANIMATION_OPTIONS = PLAYER_LIFE_ANIMATION_VALUES.map(value => ({ label: optionLabel(value), value }));
+const GAME_WINS_DISPLAY_MODE_OPTIONS = GAME_WINS_DISPLAY_MODE_VALUES.map(value => ({ label: optionLabel(value), value }));
+const GAME_WINS_BOX_ORIENTATION_OPTIONS = GAME_WINS_BOX_ORIENTATION_VALUES.map(value => ({ label: optionLabel(value), value }));
+const DECK_LIST_VIEW_OPTIONS = DECK_LIST_VIEW_VALUES.map(value => ({ label: optionLabel(value), value }));
 const SOCIAL_NETWORK_OPTIONS = SUPPORTED_SOCIAL_NETWORKS.map(network => ({
 	label: network.label,
 	value: network.key,
@@ -191,9 +193,12 @@ const SOCIAL_NETWORK_ICON_SOURCE_OPTIONS = [
 	{ label: 'Static network', value: 'static' },
 	{ label: 'Social Profile Projection', value: 'projection' },
 ];
-const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({ label: value, value }));
-const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({ label: value, value }));
-const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({ label: value, value }));
+/** Icon-only, named for assistive technology. */
+const TEXT_ALIGN_ITEMS = TEXT_ALIGN_OPTIONS.map(option => ({ value: option.value, icon: option.icon, ariaLabel: `Align ${option.value}` }));
+const ARRANGEMENT_ICONS = { row: 'i-lucide-columns-3', column: 'i-lucide-rows-3', canvas: 'i-lucide-move' } as const;
+const ARRANGEMENT_OPTIONS = GRAPHIC_GROUP_ARRANGEMENT_VALUES.map(value => ({ label: optionLabel(value), value, icon: ARRANGEMENT_ICONS[value] }));
+const ALIGN_OPTIONS = GRAPHIC_GROUP_ALIGN_VALUES.map(value => ({ label: optionLabel(value), value }));
+const JUSTIFY_OPTIONS = GRAPHIC_GROUP_JUSTIFY_VALUES.map(value => ({ label: optionLabel(value), value }));
 const SIZING_MODE_OPTIONS = [
 	{ label: 'Fixed', value: 'fixed' },
 	{ label: 'Weighted fill', value: 'fill' },
@@ -360,6 +365,73 @@ const isStackedChild = computed(() =>
  */
 const selectedSurfaces = computed<Partial<Record<GraphicSurfaceStyleSlot, GraphicSurfaceStyle | null>>>(() =>
 	selectedItem.value ? paintedGraphicSurfaceStyles(selectedItem.value) : {});
+
+/* ── Section titles and the summaries a collapsed section shows ── */
+
+const hasContentSection = computed(() => Boolean(
+	selectedPlayerSideItem.value
+	|| selectedPlayerLife.value
+	|| selectedGameWins.value
+	|| selectedDeckList.value
+	|| selectedTextItem.value
+	|| selectedSocialNetworkIcon.value
+	|| selectedMediaItem.value,
+));
+
+/** The kind-specific section is named for the kind: Text, Media, Game Wins… */
+const contentTitle = computed(() => selectedItem.value ? graphicItemKindLabel(selectedItem.value.type) : 'Content');
+
+const hasSurfaceSection = computed(() =>
+	'surfaceStyle' in selectedSurfaces.value
+	|| 'boxSurfaceStyle' in selectedSurfaces.value
+	|| 'wonBoxSurfaceStyle' in selectedSurfaces.value);
+
+const layoutSummary = computed(() => {
+	const item = selectedItem.value;
+	if (!item)
+		return undefined;
+	const size = `${Math.round(item.width)}×${Math.round(item.height)}`;
+	if (!isCanvasPositioned.value)
+		return size;
+	const rotation = item.rotation ? ` · ${item.rotation}°` : '';
+	return `${Math.round(item.x)}, ${Math.round(item.y)} · ${size}${rotation}`;
+});
+
+const groupSummary = computed(() => {
+	const group = selectedGroup.value;
+	if (!group)
+		return undefined;
+	return group.arrangement === 'canvas'
+		? `canvas · ${group.children.length} items`
+		: `${group.arrangement} · gap ${group.gap} · ${group.children.length} items`;
+});
+
+const typographySummary = computed(() => {
+	const typography = selectedTypography.value;
+	return typography ? `${typography.fontSize}px · ${typography.fontWeight} · ${typography.textAlign}` : undefined;
+});
+
+const shapeSummary = computed(() => {
+	const geometry = selectedShapeGeometry.value?.geometry;
+	if (!geometry)
+		return undefined;
+	const treatments = new Set([geometry.topLeft, geometry.topRight, geometry.bottomRight, geometry.bottomLeft].map(corner => corner.treatment));
+	const corners = treatments.size === 1 ? `${[...treatments][0]} corners` : 'mixed corners';
+	return geometry.leftSlant || geometry.rightSlant ? `${corners} · slanted` : corners;
+});
+
+const surfaceSummary = computed(() => {
+	const surface = selectedSurfaces.value.surfaceStyle;
+	if (surface === undefined)
+		return undefined;
+	if (surface === null)
+		return 'None';
+	const fill = surface.fill.type === 'solid' ? surface.fill.color : `${surface.fill.type} fill`;
+	return surface.outline ? `${fill} · outline` : fill;
+});
+
+const INSPECTOR_SECTION_IDS = ['layout', 'group', 'content', 'typography', 'shape', 'surface', 'animation'] as const;
+const inspectorSections = useInspectorSections();
 
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 const geometryContainer = computed(() => parentGroup.value
@@ -673,6 +745,11 @@ const styleablePlaceholders = computed(() => {
 	].filter(key => available.has(key));
 });
 
+/** Whether this placeholder carries a typography override of its own. */
+function hasPlaceholderStyle(inputKey: string): boolean {
+	return Object.keys(placeholderStyleFor(inputKey)).length > 0;
+}
+
 function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
 	return selectedTextItem.value?.placeholderStyles?.[inputKey] ?? {};
 }
@@ -758,6 +835,28 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<p class="mt-0.5 truncate text-xs text-muted">
 						{{ header.summary }}
 					</p>
+				</div>
+				<div v-if="selectedItem" class="flex shrink-0">
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						icon="i-lucide-chevrons-down-up"
+						aria-label="Collapse all sections"
+						title="Collapse all sections"
+						data-testid="inspector-collapse-all"
+						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, false)"
+					/>
+					<UButton
+						size="xs"
+						variant="ghost"
+						color="neutral"
+						icon="i-lucide-chevrons-up-down"
+						aria-label="Expand all sections"
+						title="Expand all sections"
+						data-testid="inspector-expand-all"
+						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, true)"
+					/>
 				</div>
 			</div>
 		</div>
@@ -994,8 +1093,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			@update:graphics="emit('update:graphics', $event)"
 		/>
 
-		<template v-if="selectedItem">
-			<UFormField label="Label" size="sm">
+		<div v-if="selectedItem" class="flex items-end gap-3">
+			<UFormField label="Label" size="sm" class="min-w-0 flex-1">
 				<UInput
 					:model-value="selectedItem.label"
 					class="w-full"
@@ -1003,7 +1102,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@update:model-value="editItem(patchGraphicItem, { label: String($event) })"
 				/>
 			</UFormField>
-
 			<UFormField label="Visible" size="sm">
 				<USwitch
 					:model-value="selectedItem.visible"
@@ -1011,7 +1109,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@update:model-value="editItem(patchGraphicItem, { visible: $event })"
 				/>
 			</UFormField>
+		</div>
 
+		<GraphicsInspectorSection
+			v-if="selectedItem"
+			id="layout"
+			title="Position and size"
+			icon="i-lucide-move"
+			:summary="layoutSummary"
+		>
 			<GraphicsGeometryFields
 				:key="selectedItem.id"
 				:rect="selectedItem"
@@ -1021,792 +1127,865 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				anchor-label="Graphic Anchor Point"
 				@update:anchor="editItem(patchGraphicItem, { anchor: $event })"
 				@update="editItem(patchGraphicItem, $event)"
-			/>
+			>
+				<template #after-size>
+					<UFormField
+						v-if="isCanvasPositioned"
+						label="Graphic Rotation"
+						size="sm"
+						class="w-1/2 pr-1"
+					>
+						<UInputNumber
+							:model-value="selectedItem.rotation ?? 0"
+							:min="-360"
+							:max="360"
+							size="sm"
+							class="w-full"
+							data-testid="graphic-item-rotation"
+							aria-label="Graphic Rotation"
+							@update:model-value="editItem(patchGraphicItem, { rotation: $event ?? 0 })"
+						/>
+					</UFormField>
+				</template>
+			</GraphicsGeometryFields>
 
-			<UFormField v-if="isCanvasPositioned" label="Graphic Rotation" size="sm">
-				<UInputNumber
-					:model-value="selectedItem.rotation ?? 0"
-					:min="-360"
-					:max="360"
-					size="sm"
+			<template v-if="isStackedChild && selectedItem">
+				<div class="space-y-2">
+					<UFormField label="Main axis" size="sm">
+						<USelect
+							:model-value="selectedItem.sizing?.mode ?? 'fixed'"
+							:items="SIZING_MODE_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="graphic-group-child-sizing-mode"
+							@update:model-value="editItem(patchGraphicGroupChildSizing, { mode: $event as GraphicGroupChildSizing['mode'] })"
+						/>
+					</UFormField>
+					<UFormField
+						v-if="(selectedItem.sizing?.mode ?? 'fixed') === 'fixed'"
+						label="Fixed size"
+						size="sm"
+					>
+						<UInputNumber
+							:model-value="selectedItem.sizing?.size ?? selectedItem.width"
+							:min="0"
+							size="sm"
+							class="w-full"
+							aria-label="Fixed main axis size"
+							@update:model-value="editItem(patchGraphicGroupChildSizing, { size: $event ?? 0 })"
+						/>
+					</UFormField>
+					<UFormField v-else label="Fill weight" size="sm">
+						<UInputNumber
+							:model-value="selectedItem.sizing?.weight ?? 1"
+							:min="0"
+							:step="0.5"
+							size="sm"
+							class="w-full"
+							aria-label="Fill weight"
+							@update:model-value="editItem(patchGraphicGroupChildSizing, { weight: $event ?? 1 })"
+						/>
+					</UFormField>
+				</div>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="selectedGroup"
+			id="group"
+			title="Group layout"
+			icon="i-lucide-group"
+			:summary="groupSummary"
+		>
+			<template v-if="selectedGroup">
+				<div class="space-y-2">
+					<UFormField label="Arrangement" size="sm">
+						<UISegmentedTabs
+							:model-value="selectedGroup.arrangement"
+							:items="ARRANGEMENT_OPTIONS"
+							size="xs"
+							data-testid="graphic-group-arrangement"
+							@update:model-value="editItem(patchGraphicGroup, { arrangement: $event as never })"
+						/>
+					</UFormField>
+					<div class="grid grid-cols-2 gap-2">
+						<UFormField label="Padding" size="sm">
+							<UInputNumber
+								:model-value="selectedGroup.padding"
+								:min="0"
+								size="sm"
+								class="w-full"
+								aria-label="Group padding"
+								@update:model-value="editItem(patchGraphicGroup, { padding: $event ?? 0 })"
+							/>
+						</UFormField>
+						<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Gap" size="sm">
+							<UInputNumber
+								:model-value="selectedGroup.gap"
+								:min="0"
+								size="sm"
+								class="w-full"
+								aria-label="Group gap"
+								@update:model-value="editItem(patchGraphicGroup, { gap: $event ?? 0 })"
+							/>
+						</UFormField>
+						<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Align" size="sm">
+							<USelect
+								:model-value="selectedGroup.align"
+								:items="ALIGN_OPTIONS"
+								value-key="value"
+								class="w-full"
+								@update:model-value="editItem(patchGraphicGroup, { align: $event as never })"
+							/>
+						</UFormField>
+						<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Justify" size="sm">
+							<USelect
+								:model-value="selectedGroup.justify"
+								:items="JUSTIFY_OPTIONS"
+								value-key="value"
+								class="w-full"
+								@update:model-value="editItem(patchGraphicGroup, { justify: $event as never })"
+							/>
+						</UFormField>
+					</div>
+					<UFormField label="Clip children" size="sm">
+						<USwitch
+							:model-value="selectedGroup.clip"
+							data-testid="graphic-group-clip"
+							@update:model-value="editItem(patchGraphicGroup, { clip: $event })"
+						/>
+					</UFormField>
+					<UFormField label="Child style default" size="sm">
+						<USwitch
+							:model-value="selectedGroup.defaultChildSurfaceStyle !== undefined"
+							data-testid="graphic-group-child-style-default"
+							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, $event ? {} : null)"
+						/>
+					</UFormField>
+					<GraphicsCompositorStyleRef
+						v-if="selectedGroup.defaultChildSurfaceStyle"
+						style-slot="defaultChildSurfaceStyle"
+						label="Child style default"
+						:entries="styleSet?.entries"
+						:current="styleRefFor('defaultChildSurfaceStyle')"
+						:writable="canAuthor"
+						@bind="entryId => bindStyleRef('defaultChildSurfaceStyle', entryId)"
+						@unbind="unbindStyleRef('defaultChildSurfaceStyle')"
+					/>
+					<UFormField
+						v-if="selectedGroup.defaultChildSurfaceStyle"
+						label="Child fill opacity"
+						size="sm"
+					>
+						<UIOpacityInput
+							:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
+							size="sm"
+							class="w-full"
+							aria-label="Child fill opacity"
+							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
+						/>
+					</UFormField>
+					<UFormField
+						v-if="selectedGroup.defaultChildSurfaceStyle?.fill.type === 'solid'"
+						label="Child fill"
+						size="sm"
+					>
+						<UIColorPicker
+							:model-value="selectedGroup.defaultChildSurfaceStyle.fill.color"
+							data-testid="graphic-group-child-fill"
+							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
+						/>
+					</UFormField>
+				</div>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="hasContentSection"
+			id="content"
+			:title="contentTitle"
+			icon="i-lucide-file-text"
+		>
+			<!--
+				The Player an item reads, wherever its Definition declares one. Its own
+				control rather than part of the shared geometry block, because it is the
+				only property of these kinds that decides *whose* live state renders.
+			-->
+			<UFormField v-if="selectedPlayerSideItem" label="Player" size="sm">
+				<USelect
+					:model-value="selectedPlayerSideItem.playerSide"
+					:items="PLAYER_SIDE_OPTIONS"
+					value-key="value"
 					class="w-full"
-					data-testid="graphic-item-rotation"
-					aria-label="Graphic Rotation"
-					@update:model-value="editItem(patchGraphicItem, { rotation: $event ?? 0 })"
+					size="sm"
+					data-testid="graphic-item-player-side"
+					@update:model-value="editItem(patchGraphicPlayerSide, $event as PlayerSide)"
 				/>
 			</UFormField>
-		</template>
 
-		<template v-if="isStackedChild && selectedItem">
-			<div class="rounded-lg border border-default/70 p-3">
-				<p class="mb-2 text-xs font-semibold text-muted">
-					Graphic Group sizing
-				</p>
-				<UFormField label="Main axis" size="sm">
-					<USelect
-						:model-value="selectedItem.sizing?.mode ?? 'fixed'"
-						:items="SIZING_MODE_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="graphic-group-child-sizing-mode"
-						@update:model-value="editItem(patchGraphicGroupChildSizing, { mode: $event as GraphicGroupChildSizing['mode'] })"
-					/>
-				</UFormField>
-				<UFormField
-					v-if="(selectedItem.sizing?.mode ?? 'fixed') === 'fixed'"
-					label="Fixed size"
-					size="sm"
-				>
-					<UInputNumber
-						:model-value="selectedItem.sizing?.size ?? selectedItem.width"
-						:min="0"
-						size="sm"
-						class="w-full"
-						aria-label="Fixed main axis size"
-						@update:model-value="editItem(patchGraphicGroupChildSizing, { size: $event ?? 0 })"
-					/>
-				</UFormField>
-				<UFormField v-else label="Fill weight" size="sm">
-					<UInputNumber
-						:model-value="selectedItem.sizing?.weight ?? 1"
-						:min="0"
-						:step="0.5"
-						size="sm"
-						class="w-full"
-						aria-label="Fill weight"
-						@update:model-value="editItem(patchGraphicGroupChildSizing, { weight: $event ?? 1 })"
-					/>
-				</UFormField>
-			</div>
-		</template>
-
-		<template v-if="selectedGroup">
-			<div class="rounded-lg border border-default/70 p-3 space-y-2">
+			<!--
+				How a Player Life Item marks a change to the total it renders. The motion
+				belongs to the Definition rather than to a Graphic Animation Recipe: it fires
+				on a value change from the live session rather than on a lifecycle phase,
+				which is not something the shared animation vocabulary expresses.
+			-->
+			<div v-if="selectedPlayerLife" class="space-y-2">
 				<p class="text-xs font-semibold text-muted">
-					Graphic Group
+					Life change
 				</p>
-				<UFormField label="Arrangement" size="sm">
+				<UFormField label="Animation" size="sm">
 					<USelect
-						:model-value="selectedGroup.arrangement"
-						:items="ARRANGEMENT_OPTIONS"
+						:model-value="selectedPlayerLife.lifeAnimation"
+						:items="PLAYER_LIFE_ANIMATION_OPTIONS"
 						value-key="value"
 						class="w-full"
-						data-testid="graphic-group-arrangement"
-						@update:model-value="editItem(patchGraphicGroup, { arrangement: $event as never })"
+						data-testid="player-life-animation"
+						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimation: $event as PlayerLifeAnimation })"
 					/>
 				</UFormField>
 				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Padding" size="sm">
+					<UFormField label="Duration (ms)" size="sm">
 						<UInputNumber
-							:model-value="selectedGroup.padding"
-							:min="0"
+							:model-value="selectedPlayerLife.lifeAnimationDurationMs"
+							:min="MIN_PLAYER_LIFE_ANIMATION_DURATION_MS"
+							:max="MAX_PLAYER_LIFE_ANIMATION_DURATION_MS"
 							size="sm"
 							class="w-full"
-							aria-label="Group padding"
-							@update:model-value="editItem(patchGraphicGroup, { padding: $event ?? 0 })"
+							data-testid="player-life-animation-duration"
+							aria-label="Life change duration"
+							@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
 						/>
 					</UFormField>
-					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Gap" size="sm">
-						<UInputNumber
-							:model-value="selectedGroup.gap"
-							:min="0"
-							size="sm"
-							class="w-full"
-							aria-label="Group gap"
-							@update:model-value="editItem(patchGraphicGroup, { gap: $event ?? 0 })"
-						/>
-					</UFormField>
-					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Align" size="sm">
-						<USelect
-							:model-value="selectedGroup.align"
-							:items="ALIGN_OPTIONS"
-							value-key="value"
-							class="w-full"
-							@update:model-value="editItem(patchGraphicGroup, { align: $event as never })"
-						/>
-					</UFormField>
-					<UFormField v-if="selectedGroup.arrangement !== 'canvas'" label="Justify" size="sm">
-						<USelect
-							:model-value="selectedGroup.justify"
-							:items="JUSTIFY_OPTIONS"
-							value-key="value"
-							class="w-full"
-							@update:model-value="editItem(patchGraphicGroup, { justify: $event as never })"
-						/>
-					</UFormField>
-				</div>
-				<UFormField label="Clip children" size="sm">
-					<USwitch
-						:model-value="selectedGroup.clip"
-						data-testid="graphic-group-clip"
-						@update:model-value="editItem(patchGraphicGroup, { clip: $event })"
-					/>
-				</UFormField>
-				<UFormField label="Child style default" size="sm">
-					<USwitch
-						:model-value="selectedGroup.defaultChildSurfaceStyle !== undefined"
-						data-testid="graphic-group-child-style-default"
-						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, $event ? {} : null)"
-					/>
-				</UFormField>
-				<GraphicsCompositorStyleRef
-					v-if="selectedGroup.defaultChildSurfaceStyle"
-					style-slot="defaultChildSurfaceStyle"
-					label="Child style default"
-					:entries="styleSet?.entries"
-					:current="styleRefFor('defaultChildSurfaceStyle')"
-					:writable="canAuthor"
-					@bind="entryId => bindStyleRef('defaultChildSurfaceStyle', entryId)"
-					@unbind="unbindStyleRef('defaultChildSurfaceStyle')"
-				/>
-				<UFormField
-					v-if="selectedGroup.defaultChildSurfaceStyle"
-					label="Child fill opacity"
-					size="sm"
-				>
-					<UIOpacityInput
-						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
-						size="sm"
-						class="w-full"
-						aria-label="Child fill opacity"
-						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
-					/>
-				</UFormField>
-				<UFormField
-					v-if="selectedGroup.defaultChildSurfaceStyle?.fill.type === 'solid'"
-					label="Child fill"
-					size="sm"
-				>
-					<UIColorPicker
-						:model-value="selectedGroup.defaultChildSurfaceStyle.fill.color"
-						data-testid="graphic-group-child-fill"
-						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
-					/>
-				</UFormField>
-			</div>
-		</template>
-
-		<!--
-			The Player an item reads, wherever its Definition declares one. Its own
-			control rather than part of the shared geometry block, because it is the
-			only property of these kinds that decides *whose* live state renders.
-		-->
-		<UFormField v-if="selectedPlayerSideItem" label="Player" size="sm">
-			<USelect
-				:model-value="selectedPlayerSideItem.playerSide"
-				:items="PLAYER_SIDE_OPTIONS"
-				value-key="value"
-				class="w-full"
-				size="sm"
-				data-testid="graphic-item-player-side"
-				@update:model-value="editItem(patchGraphicPlayerSide, $event as PlayerSide)"
-			/>
-		</UFormField>
-
-		<!--
-			How a Player Life Item marks a change to the total it renders. The motion
-			belongs to the Definition rather than to a Graphic Animation Recipe: it fires
-			on a value change from the live session rather than on a lifecycle phase,
-			which is not something the shared animation vocabulary expresses.
-		-->
-		<div v-if="selectedPlayerLife" class="rounded-lg border border-default/70 p-3 space-y-2">
-			<p class="text-xs font-semibold text-muted">
-				Life change
-			</p>
-			<UFormField label="Animation" size="sm">
-				<USelect
-					:model-value="selectedPlayerLife.lifeAnimation"
-					:items="PLAYER_LIFE_ANIMATION_OPTIONS"
-					value-key="value"
-					class="w-full"
-					data-testid="player-life-animation"
-					@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimation: $event as PlayerLifeAnimation })"
-				/>
-			</UFormField>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Duration (ms)" size="sm">
-					<UInputNumber
-						:model-value="selectedPlayerLife.lifeAnimationDurationMs"
-						:min="MIN_PLAYER_LIFE_ANIMATION_DURATION_MS"
-						:max="MAX_PLAYER_LIFE_ANIMATION_DURATION_MS"
-						size="sm"
-						class="w-full"
-						data-testid="player-life-animation-duration"
-						aria-label="Life change duration"
-						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationDurationMs: $event ?? MIN_PLAYER_LIFE_ANIMATION_DURATION_MS })"
-					/>
-				</UFormField>
-				<!-- Tinted by a glow or slide change only; the others ignore it. -->
-				<UFormField label="Accent colour" size="sm">
-					<UIColorPicker
-						:model-value="selectedPlayerLife.lifeAnimationAccentColor"
-						data-testid="player-life-animation-accent"
-						@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
-					/>
-				</UFormField>
-			</div>
-		</div>
-
-		<!--
-			A Game Wins Item's own indicator. The box count is deliberately absent: it
-			comes from the Match's best-of rather than from configuration, so a layout
-			never restates what the session already knows.
-		-->
-		<div v-if="selectedGameWins" class="rounded-lg border border-default/70 p-3 space-y-2">
-			<p class="text-xs font-semibold text-muted">
-				Game Wins
-			</p>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Display mode" size="sm">
-					<USelect
-						:model-value="selectedGameWins.displayMode"
-						:items="GAME_WINS_DISPLAY_MODE_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="game-wins-display-mode"
-						@update:model-value="editItem(patchGameWinsGraphicItem, { displayMode: $event as GameWinsDisplayMode })"
-					/>
-				</UFormField>
-				<UFormField v-if="selectedGameWins.displayMode === 'boxes'" label="Box orientation" size="sm">
-					<USelect
-						:model-value="selectedGameWins.boxOrientation"
-						:items="GAME_WINS_BOX_ORIENTATION_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="game-wins-box-orientation"
-						@update:model-value="editItem(patchGameWinsGraphicItem, { boxOrientation: $event as GameWinsBoxOrientation })"
-					/>
-				</UFormField>
-			</div>
-			<div v-if="selectedGameWins.displayMode === 'boxes'" class="grid grid-cols-3 gap-2">
-				<UFormField label="Box width" size="sm">
-					<UInputNumber
-						:model-value="selectedGameWins.boxWidth"
-						:min="1"
-						size="sm"
-						class="w-full"
-						aria-label="Win box width"
-						@update:model-value="editItem(patchGameWinsGraphicItem, { boxWidth: Math.max(1, $event ?? 1) })"
-					/>
-				</UFormField>
-				<UFormField label="Box height" size="sm">
-					<UInputNumber
-						:model-value="selectedGameWins.boxHeight"
-						:min="1"
-						size="sm"
-						class="w-full"
-						aria-label="Win box height"
-						@update:model-value="editItem(patchGameWinsGraphicItem, { boxHeight: Math.max(1, $event ?? 1) })"
-					/>
-				</UFormField>
-				<UFormField label="Box gap" size="sm">
-					<UInputNumber
-						:model-value="selectedGameWins.boxGap"
-						:min="0"
-						size="sm"
-						class="w-full"
-						aria-label="Win box gap"
-						@update:model-value="editItem(patchGameWinsGraphicItem, { boxGap: $event ?? 0 })"
-					/>
-				</UFormField>
-			</div>
-		</div>
-
-		<!--
-			A Deck List Item's own controls. The bounds are the only sizing an author
-			does: the grid view auto-fits rows, columns, and card size from them and
-			the live card count, so there are deliberately no layout knobs here.
-		-->
-		<div v-if="selectedDeckList" class="rounded-lg border border-default/70 p-3 space-y-2">
-			<p class="text-xs font-semibold text-muted">
-				Deck List
-			</p>
-			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="View" size="sm">
-					<USelect
-						:model-value="selectedDeckList.view"
-						:items="DECK_LIST_VIEW_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="deck-list-view"
-						@update:model-value="editItem(patchDeckListGraphicItem, { view: $event as DeckListView })"
-					/>
-				</UFormField>
-				<UFormField label="Show quantities" size="sm">
-					<USwitch
-						:model-value="selectedDeckList.showQuantities"
-						data-testid="deck-list-show-quantities"
-						@update:model-value="editItem(patchDeckListGraphicItem, { showQuantities: $event })"
-					/>
-				</UFormField>
-			</div>
-		</div>
-
-		<template v-if="selectedTextItem">
-			<UFormField label="Text" size="sm">
-				<UTextarea
-					:model-value="selectedTextItem.text"
-					:rows="3"
-					:maxlength="MAX_GRAPHIC_TEXT_LENGTH"
-					class="w-full"
-					data-testid="graphic-item-text"
-					@update:model-value="editItem(patchTextGraphicItem, { text: String($event) })"
-				/>
-			</UFormField>
-
-			<!--
-				Every placeholder this template may name, offered to reference rather
-				than to author. A Feature Match Overlay's vocabulary is its host's fixed
-				catalogue; a Broadcast Graphic's is its own declared Graphic Inputs —
-				and both are keys the author must reproduce exactly, so the useful
-				control is one that appends a valid one. The declared side used to be
-				missing entirely, which left the key visible only in the Graphic Inputs
-				panel of a *different* selection (#234).
-			-->
-			<UFormField v-if="availablePlaceholders.length > 0" label="Placeholders" size="sm">
-				<div class="flex flex-wrap gap-1" data-testid="graphic-host-tokens">
-					<UButton
-						v-for="token in availablePlaceholders"
-						:key="token.key"
-						size="xs"
-						variant="soft"
-						color="neutral"
-						:disabled="!canAuthor"
-						:title="token.label"
-						:data-host-token="token.key"
-						@click="appendHostToken(token.key)"
-					>
-						{{ placeholderToken(token.key) }}
-						<span class="text-muted">{{ token.label }}</span>
-					</UButton>
-				</div>
-			</UFormField>
-
-			<!--
-				A placeholder nothing resolves renders as nothing, which is right for
-				the output and silent for the author. This is where the silence is
-				broken.
-			-->
-			<p
-				v-if="unresolvedPlaceholders.length > 0"
-				class="text-xs text-warning"
-				data-testid="unresolved-placeholders"
-			>
-				Nothing declares
-				{{ unresolvedPlaceholders.map(placeholderToken).join(', ') }}, so
-				{{ unresolvedPlaceholders.length === 1 ? 'it renders' : 'they render' }}
-				nothing.
-				<template v-if="availablePlaceholderKeys.length > 0">
-					This composition offers
-					{{ availablePlaceholderKeys.map(placeholderToken).join(', ') }} — a
-					Graphic Input is named and keyed separately, and a template names the key.
-				</template>
-				<template v-else>
-					This composition declares no Graphic Inputs yet.
-				</template>
-			</p>
-		</template>
-
-		<!--
-			Base typography, offered wherever the selection's Graphic Item Definition
-			says it paints text. A Clock, a Player Life, and a Game Wins Item rendering
-			its win count read their string from the live Feature Match Session rather
-			than from an author — which decides what the item says, and nothing about
-			how it is set.
-		-->
-		<template v-if="selectedTypography">
-			<GraphicsCompositorStyleRef
-				style-slot="typography"
-				label="Typography"
-				:entries="styleSet?.entries"
-				:current="styleRefFor('typography')"
-				:writable="canAuthor"
-				@bind="entryId => bindStyleRef('typography', entryId)"
-				@unbind="unbindStyleRef('typography')"
-			/>
-
-			<GraphicsTypographyFields
-				:typography="selectedTypography"
-				test-id-prefix="typography"
-				@update="editItem(patchGraphicTypography, $event)"
-			>
-				<!--
-					A font is either one that ships with Stream Keepr or one exact font
-					Graphic Asset Revision from the Graphics Asset Library. The same control
-					a Graphic Placeholder Style below offers, less its third answer: a
-					`GraphicTypography` must name a font, so "same as base" is not one here.
-				-->
-				<template #font>
-					<GraphicsCompositorFontSelectionField
-						:source="fontSource"
-						:font="selectedFont"
-						:event-id="eventId"
-						field-label="Typography"
-						size="sm"
-						test-id-prefix="typography"
-						@update:source="updateFontSource"
-						@application="editItem(patchGraphicTypography, { font: applicationGraphicFont($event) })"
-						@select="selectFontAsset"
-						@clear="clearFontAsset"
-					/>
-				</template>
-				<template #color>
-					<UFormField label="Align" size="sm">
-						<USelect
-							:model-value="selectedTypography.textAlign"
-							:items="TEXT_ALIGN_OPTIONS"
-							value-key="value"
-							class="w-full"
-							@update:model-value="editItem(patchGraphicTypography, { textAlign: $event as never })"
-						/>
-					</UFormField>
-					<UFormField label="Colour" size="sm">
+					<!-- Tinted by a glow or slide change only; the others ignore it. -->
+					<UFormField label="Accent colour" size="sm">
 						<UIColorPicker
-							:model-value="selectedTypography.color"
-							@update:model-value="editItem(patchGraphicTypography, { color: $event?.toString() || '#ffffff' })"
+							:model-value="selectedPlayerLife.lifeAnimationAccentColor"
+							data-testid="player-life-animation-accent"
+							@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
 						/>
 					</UFormField>
-				</template>
-			</GraphicsTypographyFields>
-		</template>
-
-		<!--
-			Text does not render with visible overflow beyond its authored bounds, and a
-			string from a live Feature Match Session can be longer than the author ever
-			saw — so a Clock and a Player Life are bounded by the same policy a Text
-			Graphic Item is. Which kinds are bounded is their Definition's to say.
-		-->
-		<template v-if="selectedTextOverflow">
-			<UFormField label="Text Overflow Policy" size="sm">
-				<USelect
-					:model-value="selectedTextOverflow.overflowPolicy"
-					:items="OVERFLOW_POLICY_OPTIONS"
-					value-key="value"
-					class="w-full"
-					data-testid="text-overflow-policy"
-					@update:model-value="editItem(patchGraphicTextOverflow, { overflowPolicy: $event })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="selectedTextOverflow.overflowPolicy === 'shrink'"
-				label="Minimum font size"
-				size="sm"
-			>
-				<UInputNumber
-					:model-value="selectedTextOverflow.minFontSize"
-					:min="MIN_GRAPHIC_FONT_SIZE"
-					:max="MAX_GRAPHIC_FONT_SIZE"
-					size="sm"
-					class="w-full"
-					data-testid="text-min-font-size"
-					aria-label="Minimum font size"
-					@update:model-value="editItem(patchGraphicTextOverflow, { minFontSize: $event ?? 1 })"
-				/>
-			</UFormField>
-		</template>
-
-		<template v-if="selectedTextItem">
-			<!--
-				One optional typography override per `{inputKey}` this Graphic Text Template
-				names. Literal text always uses the base typography above, and only
-				placeholders naming a declared Graphic Input can be styled — styling one
-				that nothing declares would style something that renders nothing.
-			-->
-			<div
-				v-for="inputKey in styleablePlaceholders"
-				:key="inputKey"
-				class="space-y-2 rounded-lg border border-default/70 p-2"
-				:data-graphic-placeholder-style="inputKey"
-			>
-				<div class="flex items-center gap-2">
-					<span class="min-w-0 flex-1 truncate font-mono text-xs">{{ placeholderToken(inputKey) }}</span>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						data-testid="graphic-placeholder-style-clear"
-						@click="editItem(patchGraphicPlaceholderStyle, inputKey, null)"
-					>
-						Use base
-					</UButton>
 				</div>
+			</div>
+
+			<!--
+				A Game Wins Item's own indicator. The box count is deliberately absent: it
+				comes from the Match's best-of rather than from configuration, so a layout
+				never restates what the session already knows.
+			-->
+			<div v-if="selectedGameWins" class="space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Game Wins
+				</p>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="Display mode" size="sm">
+						<USelect
+							:model-value="selectedGameWins.displayMode"
+							:items="GAME_WINS_DISPLAY_MODE_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="game-wins-display-mode"
+							@update:model-value="editItem(patchGameWinsGraphicItem, { displayMode: $event as GameWinsDisplayMode })"
+						/>
+					</UFormField>
+					<UFormField v-if="selectedGameWins.displayMode === 'boxes'" label="Box orientation" size="sm">
+						<USelect
+							:model-value="selectedGameWins.boxOrientation"
+							:items="GAME_WINS_BOX_ORIENTATION_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="game-wins-box-orientation"
+							@update:model-value="editItem(patchGameWinsGraphicItem, { boxOrientation: $event as GameWinsBoxOrientation })"
+						/>
+					</UFormField>
+				</div>
+				<div v-if="selectedGameWins.displayMode === 'boxes'" class="grid grid-cols-3 gap-2">
+					<UFormField label="Box width" size="sm">
+						<UInputNumber
+							:model-value="selectedGameWins.boxWidth"
+							:min="1"
+							size="sm"
+							class="w-full"
+							aria-label="Win box width"
+							@update:model-value="editItem(patchGameWinsGraphicItem, { boxWidth: Math.max(1, $event ?? 1) })"
+						/>
+					</UFormField>
+					<UFormField label="Box height" size="sm">
+						<UInputNumber
+							:model-value="selectedGameWins.boxHeight"
+							:min="1"
+							size="sm"
+							class="w-full"
+							aria-label="Win box height"
+							@update:model-value="editItem(patchGameWinsGraphicItem, { boxHeight: Math.max(1, $event ?? 1) })"
+						/>
+					</UFormField>
+					<UFormField label="Box gap" size="sm">
+						<UInputNumber
+							:model-value="selectedGameWins.boxGap"
+							:min="0"
+							size="sm"
+							class="w-full"
+							aria-label="Win box gap"
+							@update:model-value="editItem(patchGameWinsGraphicItem, { boxGap: $event ?? 0 })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+
+			<!--
+				A Deck List Item's own controls. The bounds are the only sizing an author
+				does: the grid view auto-fits rows, columns, and card size from them and
+				the live card count, so there are deliberately no layout knobs here.
+			-->
+			<div v-if="selectedDeckList" class="space-y-2">
+				<p class="text-xs font-semibold text-muted">
+					Deck List
+				</p>
+				<div class="grid grid-cols-2 gap-2">
+					<UFormField label="View" size="sm">
+						<USelect
+							:model-value="selectedDeckList.view"
+							:items="DECK_LIST_VIEW_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="deck-list-view"
+							@update:model-value="editItem(patchDeckListGraphicItem, { view: $event as DeckListView })"
+						/>
+					</UFormField>
+					<UFormField label="Show quantities" size="sm">
+						<USwitch
+							:model-value="selectedDeckList.showQuantities"
+							data-testid="deck-list-show-quantities"
+							@update:model-value="editItem(patchDeckListGraphicItem, { showQuantities: $event })"
+						/>
+					</UFormField>
+				</div>
+			</div>
+
+			<template v-if="selectedTextItem">
+				<UFormField label="Text" size="sm">
+					<UTextarea
+						:model-value="selectedTextItem.text"
+						:rows="3"
+						:maxlength="MAX_GRAPHIC_TEXT_LENGTH"
+						class="w-full"
+						data-testid="graphic-item-text"
+						@update:model-value="editItem(patchTextGraphicItem, { text: String($event) })"
+					/>
+				</UFormField>
+
+				<!--
+					Every placeholder this template may name, offered to reference rather
+					than to author. A Feature Match Overlay's vocabulary is its host's fixed
+					catalogue; a Broadcast Graphic's is its own declared Graphic Inputs —
+					and both are keys the author must reproduce exactly, so the useful
+					control is one that appends a valid one. The declared side used to be
+					missing entirely, which left the key visible only in the Graphic Inputs
+					panel of a *different* selection (#234).
+				-->
+				<UCollapsible v-if="availablePlaceholders.length > 0" class="rounded-lg border border-default/70">
+					<template #default="{ open }">
+						<button type="button" class="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm" data-testid="graphic-host-tokens-toggle">
+							<span class="font-medium">Insert placeholder</span>
+							<span class="flex items-center gap-1 text-xs text-muted">
+								{{ availablePlaceholders.length }}
+								<UIcon name="i-lucide-chevron-down" class="size-4 transition-transform" :class="{ 'rotate-180': open }" />
+							</span>
+						</button>
+					</template>
+					<template #content>
+						<div class="flex flex-wrap gap-1 px-2 pb-2" data-testid="graphic-host-tokens">
+							<UButton
+								v-for="token in availablePlaceholders"
+								:key="token.key"
+								size="xs"
+								variant="soft"
+								color="neutral"
+								:disabled="!canAuthor"
+								:title="token.label"
+								:data-host-token="token.key"
+								@click="appendHostToken(token.key)"
+							>
+								{{ placeholderToken(token.key) }}
+								<span class="text-muted">{{ token.label }}</span>
+							</UButton>
+						</div>
+					</template>
+				</UCollapsible>
+
+				<!--
+					A placeholder nothing resolves renders as nothing, which is right for
+					the output and silent for the author. This is where the silence is
+					broken.
+				-->
+				<p
+					v-if="unresolvedPlaceholders.length > 0"
+					class="text-xs text-warning"
+					data-testid="unresolved-placeholders"
+				>
+					Nothing declares
+					{{ unresolvedPlaceholders.map(placeholderToken).join(', ') }}, so
+					{{ unresolvedPlaceholders.length === 1 ? 'it renders' : 'they render' }}
+					nothing.
+					<template v-if="availablePlaceholderKeys.length > 0">
+						This composition offers
+						{{ availablePlaceholderKeys.map(placeholderToken).join(', ') }} — a
+						Graphic Input is named and keyed separately, and a template names the key.
+					</template>
+					<template v-else>
+						This composition declares no Graphic Inputs yet.
+					</template>
+				</p>
+			</template>
+
+			<template v-if="selectedSocialNetworkIcon">
+				<div class="space-y-2">
+					<p class="text-xs font-semibold text-muted">
+						Social Network Icon
+					</p>
+					<UFormField label="Network source" size="sm">
+						<USelect
+							:model-value="typeof selectedSocialNetworkIcon.network === 'string' ? 'static' : 'projection'"
+							:items="SOCIAL_NETWORK_ICON_SOURCE_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="social-network-icon-source"
+							@update:model-value="updateSocialNetworkIconSource($event as 'static' | 'projection')"
+						/>
+					</UFormField>
+					<UFormField v-if="typeof selectedSocialNetworkIcon.network === 'string'" label="Social network" size="sm">
+						<USelect
+							:model-value="selectedSocialNetworkIcon.network"
+							:items="SOCIAL_NETWORK_OPTIONS"
+							value-key="value"
+							class="w-full"
+							data-testid="social-network-icon-network"
+							@update:model-value="editItem(patchGraphicItem, { network: $event as SupportedSocialNetwork })"
+						/>
+					</UFormField>
+					<UFormField v-else label="Social Profile Projection" size="sm">
+						<USelect
+							:model-value="selectedSocialNetworkIcon.network.projectionKey"
+							:items="socialProfileProjectionOptions"
+							value-key="value"
+							class="w-full"
+							data-testid="social-network-icon-projection"
+							@update:model-value="editItem(patchGraphicItem, { network: { projectionKey: String($event) } })"
+						/>
+					</UFormField>
+					<p
+						v-if="invalidSocialNetworkIconProjection"
+						class="text-xs text-warning"
+						data-testid="social-network-icon-projection-invalid"
+					>
+						This icon is outside that projection's Presentation Group. Move or replace it before saving.
+					</p>
+					<div class="grid grid-cols-2 gap-2">
+						<UFormField label="Colour" size="sm">
+							<UIColorPicker
+								:model-value="selectedSocialNetworkIcon.color"
+								data-testid="social-network-icon-color"
+								@update:model-value="editItem(patchGraphicItem, { color: $event?.toString() || '#ffffff' })"
+							/>
+						</UFormField>
+						<UFormField label="Opacity" size="sm">
+							<UIOpacityInput
+								:model-value="selectedSocialNetworkIcon.opacity"
+								size="sm"
+								class="w-full"
+								data-testid="social-network-icon-opacity"
+								aria-label="Social network icon opacity"
+								@update:model-value="editItem(patchGraphicItem, { opacity: $event ?? 1 })"
+							/>
+						</UFormField>
+					</div>
+				</div>
+			</template>
+
+			<template v-if="selectedMediaItem">
+				<div class="space-y-2">
+					<p class="text-xs font-semibold text-muted">
+						Media
+					</p>
+
+					<GraphicsCompositorStyleRef
+						style-slot="media"
+						label="Media treatment"
+						:entries="styleSet?.entries"
+						:current="styleRefFor('media')"
+						:writable="canAuthor"
+						@bind="entryId => bindStyleRef('media', entryId)"
+						@unbind="unbindStyleRef('media')"
+					/>
+
+					<!--
+						The picker pins one exact Graphic Asset identity and revision, and
+						reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
+						Content against this exact item so an author repairs the item that
+						pinned it.
+					-->
+					<UFormField label="Graphic Asset" size="sm">
+						<GraphicsAssetFocusPicker
+							:model-value="selectedMediaItem.asset"
+							:event-id="eventId"
+							field-label="Media Graphic Item"
+							:asset-kind="['image', 'silent-video']"
+							@update:model-value="$event ? undefined : editItem(clearMediaGraphicItemAsset)"
+							@select="selectMediaAsset"
+						/>
+					</UFormField>
+
+					<!--
+						Playback belongs to a silent video, so an image item is offered
+						neither control even though it stores both — switching an item back to
+						a video restores the playback its author already set up.
+					-->
+					<GraphicsMediaFields
+						:media="selectedMediaItem"
+						opacity
+						focal
+						:playback="selectedMediaItem.mediaKind === 'silent-video'"
+						@update="updateMediaFields"
+					/>
+					<p v-if="selectedMediaItem.mediaKind === 'silent-video'" class="text-xs text-muted">
+						Video is silent, and starts from its beginning when its Broadcast Graphic enters.
+					</p>
+
+					<UFormField label="Clip to Shape Geometry" size="sm">
+						<USwitch
+							:model-value="selectedMediaItem.clipGeometry !== undefined"
+							data-testid="media-clip-enabled"
+							@update:model-value="editItem(setMediaClipGeometry, $event)"
+						/>
+					</UFormField>
+				</div>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="selectedTypography || selectedTextOverflow"
+			id="typography"
+			title="Text style"
+			icon="i-lucide-type"
+			:summary="typographySummary"
+		>
+			<!--
+				Base typography, offered wherever the selection's Graphic Item Definition
+				says it paints text. A Clock, a Player Life, and a Game Wins Item rendering
+				its win count read their string from the live Feature Match Session rather
+				than from an author — which decides what the item says, and nothing about
+				how it is set.
+			-->
+			<template v-if="selectedTypography">
+				<GraphicsCompositorStyleRef
+					style-slot="typography"
+					label="Typography"
+					:entries="styleSet?.entries"
+					:current="styleRefFor('typography')"
+					:writable="canAuthor"
+					@bind="entryId => bindStyleRef('typography', entryId)"
+					@unbind="unbindStyleRef('typography')"
+				/>
+
 				<GraphicsTypographyFields
-					:typography="placeholderStyleFor(inputKey)"
-					inheritable
-					size="xs"
-					test-id-prefix="graphic-placeholder-style"
-					@update="editItem(patchGraphicPlaceholderStyle, inputKey, $event)"
+					:typography="selectedTypography"
+					test-id-prefix="typography"
+					@update="editItem(patchGraphicTypography, $event)"
 				>
 					<!--
-						A placeholder's own Graphic Font Selection. The same control as the base
-						typography above, with the one answer a placeholder has and it does not:
-						a font is optional here, so "same as base" is a real answer. What the two
-						do with an unpinned library arm differs, which is why the answer arrives
-						here rather than being settled inside the control.
+						A font is either one that ships with Stream Keepr or one exact font
+						Graphic Asset Revision from the Graphics Asset Library. The same control
+						a Graphic Placeholder Style below offers, less its third answer: a
+						`GraphicTypography` must name a font, so "same as base" is not one here.
 					-->
 					<template #font>
 						<GraphicsCompositorFontSelectionField
-							:source="placeholderFontSource(inputKey)"
-							:font="placeholderStyleFor(inputKey).font"
-							optional
+							:source="fontSource"
+							:font="selectedFont"
 							:event-id="eventId"
-							:field-label="`Placeholder ${placeholderToken(inputKey)}`"
-							size="xs"
-							test-id-prefix="graphic-placeholder-style"
-							@update:source="source => updatePlaceholderFontSource(inputKey, source)"
-							@application="editItem(patchGraphicPlaceholderStyle, inputKey, { font: applicationGraphicFont($event) })"
-							@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
-							@clear="clearPlaceholderFontAsset(inputKey)"
+							field-label="Typography"
+							size="sm"
+							test-id-prefix="typography"
+							@update:source="updateFontSource"
+							@application="editItem(patchGraphicTypography, { font: applicationGraphicFont($event) })"
+							@select="selectFontAsset"
+							@clear="clearFontAsset"
 						/>
 					</template>
 					<template #color>
-						<UFormField label="Colour" size="xs" class="col-span-2">
+						<UFormField label="Align" size="sm">
+							<UISegmentedTabs
+								:model-value="selectedTypography.textAlign"
+								:items="TEXT_ALIGN_ITEMS"
+								size="xs"
+								data-testid="typography-text-align"
+								@update:model-value="editItem(patchGraphicTypography, { textAlign: $event as never })"
+							/>
+						</UFormField>
+						<UFormField label="Colour" size="sm">
 							<UIColorPicker
-								:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
-								data-testid="graphic-placeholder-style-color"
-								@update:model-value="editItem(patchGraphicPlaceholderStyle, inputKey, { color: $event?.toString() || undefined })"
+								:model-value="selectedTypography.color"
+								@update:model-value="editItem(patchGraphicTypography, { color: $event?.toString() || '#ffffff' })"
 							/>
 						</UFormField>
 					</template>
 				</GraphicsTypographyFields>
-			</div>
-		</template>
-
-		<template v-if="selectedSocialNetworkIcon">
-			<div class="rounded-lg border border-default/70 p-3 space-y-2">
-				<p class="text-xs font-semibold text-muted">
-					Social Network Icon
-				</p>
-				<UFormField label="Network source" size="sm">
-					<USelect
-						:model-value="typeof selectedSocialNetworkIcon.network === 'string' ? 'static' : 'projection'"
-						:items="SOCIAL_NETWORK_ICON_SOURCE_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="social-network-icon-source"
-						@update:model-value="updateSocialNetworkIconSource($event as 'static' | 'projection')"
-					/>
-				</UFormField>
-				<UFormField v-if="typeof selectedSocialNetworkIcon.network === 'string'" label="Social network" size="sm">
-					<USelect
-						:model-value="selectedSocialNetworkIcon.network"
-						:items="SOCIAL_NETWORK_OPTIONS"
-						value-key="value"
-						class="w-full"
-						data-testid="social-network-icon-network"
-						@update:model-value="editItem(patchGraphicItem, { network: $event as SupportedSocialNetwork })"
-					/>
-				</UFormField>
-				<UFormField v-else label="Social Profile Projection" size="sm">
-					<USelect
-						:model-value="selectedSocialNetworkIcon.network.projectionKey"
-						:items="socialProfileProjectionOptions"
-						value-key="value"
-						class="w-full"
-						data-testid="social-network-icon-projection"
-						@update:model-value="editItem(patchGraphicItem, { network: { projectionKey: String($event) } })"
-					/>
-				</UFormField>
-				<p
-					v-if="invalidSocialNetworkIconProjection"
-					class="text-xs text-warning"
-					data-testid="social-network-icon-projection-invalid"
-				>
-					This icon is outside that projection's Presentation Group. Move or replace it before saving.
-				</p>
-				<div class="grid grid-cols-2 gap-2">
-					<UFormField label="Colour" size="sm">
-						<UIColorPicker
-							:model-value="selectedSocialNetworkIcon.color"
-							data-testid="social-network-icon-color"
-							@update:model-value="editItem(patchGraphicItem, { color: $event?.toString() || '#ffffff' })"
-						/>
-					</UFormField>
-					<UFormField label="Opacity" size="sm">
-						<UIOpacityInput
-							:model-value="selectedSocialNetworkIcon.opacity"
-							size="sm"
-							class="w-full"
-							data-testid="social-network-icon-opacity"
-							aria-label="Social network icon opacity"
-							@update:model-value="editItem(patchGraphicItem, { opacity: $event ?? 1 })"
-						/>
-					</UFormField>
-				</div>
-			</div>
-		</template>
-
-		<template v-if="selectedMediaItem">
-			<div class="rounded-lg border border-default/70 p-3 space-y-2">
-				<p class="text-xs font-semibold text-muted">
-					Media
-				</p>
-
-				<GraphicsCompositorStyleRef
-					style-slot="media"
-					label="Media treatment"
-					:entries="styleSet?.entries"
-					:current="styleRefFor('media')"
-					:writable="canAuthor"
-					@bind="entryId => bindStyleRef('media', entryId)"
-					@unbind="unbindStyleRef('media')"
-				/>
-
-				<!--
-					The picker pins one exact Graphic Asset identity and revision, and
-					reports a Missing Graphic Asset Reference or Unavailable Graphic Asset
-					Content against this exact item so an author repairs the item that
-					pinned it.
-				-->
-				<UFormField label="Graphic Asset" size="sm">
-					<GraphicsAssetFocusPicker
-						:model-value="selectedMediaItem.asset"
-						:event-id="eventId"
-						field-label="Media Graphic Item"
-						:asset-kind="['image', 'silent-video']"
-						@update:model-value="$event ? undefined : editItem(clearMediaGraphicItemAsset)"
-						@select="selectMediaAsset"
-					/>
-				</UFormField>
-
-				<!--
-					Playback belongs to a silent video, so an image item is offered
-					neither control even though it stores both — switching an item back to
-					a video restores the playback its author already set up.
-				-->
-				<GraphicsMediaFields
-					:media="selectedMediaItem"
-					opacity
-					focal
-					:playback="selectedMediaItem.mediaKind === 'silent-video'"
-					@update="updateMediaFields"
-				/>
-				<p v-if="selectedMediaItem.mediaKind === 'silent-video'" class="text-xs text-muted">
-					Video is silent, and starts from its beginning when its Broadcast Graphic enters.
-				</p>
-
-				<UFormField label="Clip to Shape Geometry" size="sm">
-					<USwitch
-						:model-value="selectedMediaItem.clipGeometry !== undefined"
-						data-testid="media-clip-enabled"
-						@update:model-value="editItem(setMediaClipGeometry, $event)"
-					/>
-				</UFormField>
-			</div>
-		</template>
-
-		<template v-if="selectedShapeGeometry">
-			<div class="rounded-lg border border-default/70 p-3 space-y-2">
-				<p class="text-xs font-semibold text-muted">
-					{{ geometryTitle }}
-				</p>
-
-				<GraphicsCompositorStyleRef
-					:style-slot="selectedShapeGeometry.slot"
-					label="Shape Geometry"
-					:entries="styleSet?.entries"
-					:current="styleRefFor(selectedShapeGeometry.slot)"
-					:writable="canAuthor"
-					@bind="entryId => bindStyleRef(selectedShapeGeometry!.slot, entryId)"
-					@unbind="unbindStyleRef(selectedShapeGeometry!.slot)"
-				/>
-				<GraphicsShapeGeometryFields
-					:geometry="selectedShapeGeometry.geometry"
-					@update="editItem(patchShapeGeometry, $event)"
-					@preset="editItem(applyShapeGeometryPreset, $event)"
-				/>
-			</div>
-		</template>
-
-		<!--
-			Each surface the selection's Definition declares and has on screen: its own,
-			and for a Game Wins Item the two that paint a win box before and after the
-			Player wins it.
-		-->
-		<GraphicsCompositorSurfaceStyleFields
-			v-if="'surfaceStyle' in selectedSurfaces"
-			:surface-style="selectedSurfaces.surfaceStyle ?? null"
-			title="Graphic Surface Style"
-			:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
-			@edit="editItem(applyGraphicSurfaceStyleEdit, 'surfaceStyle', $event)"
-		>
-			<template #style-ref>
-				<!--
-					Two references, because a surface entry may itself carry a Graphic Fill
-					entry and an author may want the brand surface with this one gradient.
-					The finer of the two is applied last and wins.
-				-->
-				<GraphicsCompositorStyleRef
-					style-slot="surfaceStyle"
-					label="Surface style"
-					:entries="styleSet?.entries"
-					:current="styleRefFor('surfaceStyle')"
-					:writable="canAuthor"
-					@bind="entryId => bindStyleRef('surfaceStyle', entryId)"
-					@unbind="unbindStyleRef('surfaceStyle')"
-				/>
-				<GraphicsCompositorStyleRef
-					style-slot="surfaceStyle.fill"
-					label="Graphic Fill"
-					:entries="styleSet?.entries"
-					:current="styleRefFor('surfaceStyle.fill')"
-					:writable="canAuthor"
-					@bind="entryId => bindStyleRef('surfaceStyle.fill', entryId)"
-					@unbind="unbindStyleRef('surfaceStyle.fill')"
-				/>
 			</template>
-		</GraphicsCompositorSurfaceStyleFields>
 
-		<template v-if="'boxSurfaceStyle' in selectedSurfaces">
+			<!--
+				Text does not render with visible overflow beyond its authored bounds, and a
+				string from a live Feature Match Session can be longer than the author ever
+				saw — so a Clock and a Player Life are bounded by the same policy a Text
+				Graphic Item is. Which kinds are bounded is their Definition's to say.
+			-->
+			<template v-if="selectedTextOverflow">
+				<UFormField label="Text Overflow Policy" size="sm">
+					<USelect
+						:model-value="selectedTextOverflow.overflowPolicy"
+						:items="OVERFLOW_POLICY_OPTIONS"
+						value-key="value"
+						class="w-full"
+						data-testid="text-overflow-policy"
+						@update:model-value="editItem(patchGraphicTextOverflow, { overflowPolicy: $event })"
+					/>
+				</UFormField>
+
+				<UFormField
+					v-if="selectedTextOverflow.overflowPolicy === 'shrink'"
+					label="Minimum font size"
+					size="sm"
+				>
+					<UInputNumber
+						:model-value="selectedTextOverflow.minFontSize"
+						:min="MIN_GRAPHIC_FONT_SIZE"
+						:max="MAX_GRAPHIC_FONT_SIZE"
+						size="sm"
+						class="w-full"
+						data-testid="text-min-font-size"
+						aria-label="Minimum font size"
+						@update:model-value="editItem(patchGraphicTextOverflow, { minFontSize: $event ?? 1 })"
+					/>
+				</UFormField>
+			</template>
+
+			<template v-if="selectedTextItem">
+				<!--
+					One optional typography override per `{inputKey}` this Graphic Text Template
+					names. Literal text always uses the base typography above, and only
+					placeholders naming a declared Graphic Input can be styled — styling one
+					that nothing declares would style something that renders nothing.
+				-->
+				<UCollapsible
+					v-for="inputKey in styleablePlaceholders"
+					:key="inputKey"
+					:default-open="hasPlaceholderStyle(inputKey)"
+					class="rounded-lg border border-default/70"
+					:data-graphic-placeholder-style="inputKey"
+				>
+					<template #default="{ open }">
+						<button type="button" class="flex w-full items-center gap-2 px-2 py-1.5 text-left" data-testid="graphic-placeholder-style-toggle">
+							<span class="min-w-0 flex-1 truncate text-xs">
+								<span class="font-mono">{{ placeholderToken(inputKey) }}</span>
+								<span class="text-muted"> style · {{ hasPlaceholderStyle(inputKey) ? 'custom' : 'same as base' }}</span>
+							</span>
+							<UIcon name="i-lucide-chevron-down" class="size-4 shrink-0 text-muted transition-transform" :class="{ 'rotate-180': open }" />
+						</button>
+					</template>
+					<template #content>
+						<div class="space-y-2 px-2 pb-2">
+							<div class="flex items-center justify-end gap-2">
+								<UButton
+									size="xs"
+									variant="ghost"
+									color="neutral"
+									data-testid="graphic-placeholder-style-clear"
+									@click="editItem(patchGraphicPlaceholderStyle, inputKey, null)"
+								>
+									Use base
+								</UButton>
+							</div>
+							<GraphicsTypographyFields
+								:typography="placeholderStyleFor(inputKey)"
+								inheritable
+								size="xs"
+								test-id-prefix="graphic-placeholder-style"
+								@update="editItem(patchGraphicPlaceholderStyle, inputKey, $event)"
+							>
+								<!--
+							A placeholder's own Graphic Font Selection. The same control as the base
+							typography above, with the one answer a placeholder has and it does not:
+							a font is optional here, so "same as base" is a real answer. What the two
+							do with an unpinned library arm differs, which is why the answer arrives
+							here rather than being settled inside the control.
+						-->
+								<template #font>
+									<GraphicsCompositorFontSelectionField
+										:source="placeholderFontSource(inputKey)"
+										:font="placeholderStyleFor(inputKey).font"
+										optional
+										:event-id="eventId"
+										:field-label="`Placeholder ${placeholderToken(inputKey)}`"
+										size="xs"
+										test-id-prefix="graphic-placeholder-style"
+										@update:source="source => updatePlaceholderFontSource(inputKey, source)"
+										@application="editItem(patchGraphicPlaceholderStyle, inputKey, { font: applicationGraphicFont($event) })"
+										@select="(asset, reference) => selectPlaceholderFontAsset(inputKey, asset, reference)"
+										@clear="clearPlaceholderFontAsset(inputKey)"
+									/>
+								</template>
+								<template #color>
+									<UFormField label="Colour" size="xs" class="col-span-2">
+										<UIColorPicker
+											:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
+											data-testid="graphic-placeholder-style-color"
+											@update:model-value="editItem(patchGraphicPlaceholderStyle, inputKey, { color: $event?.toString() || undefined })"
+										/>
+									</UFormField>
+								</template>
+							</GraphicsTypographyFields>
+						</div>
+					</template>
+				</UCollapsible>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="selectedShapeGeometry"
+			id="shape"
+			:title="geometryTitle"
+			icon="i-lucide-shapes"
+			:summary="shapeSummary"
+		>
+			<template v-if="selectedShapeGeometry">
+				<div class="space-y-2">
+					<GraphicsCompositorStyleRef
+						:style-slot="selectedShapeGeometry.slot"
+						label="Shape Geometry"
+						:entries="styleSet?.entries"
+						:current="styleRefFor(selectedShapeGeometry.slot)"
+						:writable="canAuthor"
+						@bind="entryId => bindStyleRef(selectedShapeGeometry!.slot, entryId)"
+						@unbind="unbindStyleRef(selectedShapeGeometry!.slot)"
+					/>
+					<GraphicsShapeGeometryFields
+						:geometry="selectedShapeGeometry.geometry"
+						@update="editItem(patchShapeGeometry, $event)"
+						@preset="editItem(applyShapeGeometryPreset, $event)"
+					/>
+				</div>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="hasSurfaceSection"
+			id="surface"
+			title="Fill and outline"
+			icon="i-lucide-paint-bucket"
+			:summary="surfaceSummary"
+		>
+			<!--
+				Each surface the selection's Definition declares and has on screen: its own,
+				and for a Game Wins Item the two that paint a win box before and after the
+				Player wins it.
+			-->
 			<GraphicsCompositorSurfaceStyleFields
-				:surface-style="selectedSurfaces.boxSurfaceStyle ?? null"
-				title="Win box"
-				test-id-prefix="game-wins-box"
-				@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
+				v-if="'surfaceStyle' in selectedSurfaces"
+				flat
+				:surface-style="selectedSurfaces.surfaceStyle ?? null"
+				title="Graphic Surface Style"
+				:presence-label="parentGroup ? 'Override group style default' : 'Paint a surface'"
+				@edit="editItem(applyGraphicSurfaceStyleEdit, 'surfaceStyle', $event)"
 			>
 				<template #style-ref>
+					<!--
+						Two references, because a surface entry may itself carry a Graphic Fill
+						entry and an author may want the brand surface with this one gradient.
+						The finer of the two is applied last and wins.
+					-->
 					<GraphicsCompositorStyleRef
-						style-slot="boxSurfaceStyle"
-						label="Win box style"
+						style-slot="surfaceStyle"
+						label="Surface style"
 						:entries="styleSet?.entries"
-						:current="styleRefFor('boxSurfaceStyle')"
+						:current="styleRefFor('surfaceStyle')"
 						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('boxSurfaceStyle', entryId)"
-						@unbind="unbindStyleRef('boxSurfaceStyle')"
+						@bind="entryId => bindStyleRef('surfaceStyle', entryId)"
+						@unbind="unbindStyleRef('surfaceStyle')"
+					/>
+					<GraphicsCompositorStyleRef
+						style-slot="surfaceStyle.fill"
+						label="Graphic Fill"
+						:entries="styleSet?.entries"
+						:current="styleRefFor('surfaceStyle.fill')"
+						:writable="canAuthor"
+						@bind="entryId => bindStyleRef('surfaceStyle.fill', entryId)"
+						@unbind="unbindStyleRef('surfaceStyle.fill')"
 					/>
 				</template>
 			</GraphicsCompositorSurfaceStyleFields>
-		</template>
-		<template v-if="'wonBoxSurfaceStyle' in selectedSurfaces">
-			<GraphicsCompositorSurfaceStyleFields
-				:surface-style="selectedSurfaces.wonBoxSurfaceStyle ?? null"
-				title="Won win box"
-				test-id-prefix="game-wins-won-box"
-				@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"
-			>
-				<template #style-ref>
-					<GraphicsCompositorStyleRef
-						style-slot="wonBoxSurfaceStyle"
-						label="Won win box style"
-						:entries="styleSet?.entries"
-						:current="styleRefFor('wonBoxSurfaceStyle')"
-						:writable="canAuthor"
-						@bind="entryId => bindStyleRef('wonBoxSurfaceStyle', entryId)"
-						@unbind="unbindStyleRef('wonBoxSurfaceStyle')"
-					/>
-				</template>
-			</GraphicsCompositorSurfaceStyleFields>
-		</template>
 
-		<GraphicsCompositorAnimation
-			:graphics="graphics"
-			:selected-target="selectedTarget"
-			:writable="writable"
-			:style-set="styleSet"
-			:canvas-width="canvasWidth"
-			:canvas-height="canvasHeight"
-			@update:graphics="emit('update:graphics', $event)"
-		/>
+			<template v-if="'boxSurfaceStyle' in selectedSurfaces">
+				<GraphicsCompositorSurfaceStyleFields
+					:surface-style="selectedSurfaces.boxSurfaceStyle ?? null"
+					flat
+					show-title
+					title="Win box"
+					test-id-prefix="game-wins-box"
+					@edit="editItem(applyGraphicSurfaceStyleEdit, 'boxSurfaceStyle', $event)"
+				>
+					<template #style-ref>
+						<GraphicsCompositorStyleRef
+							style-slot="boxSurfaceStyle"
+							label="Win box style"
+							:entries="styleSet?.entries"
+							:current="styleRefFor('boxSurfaceStyle')"
+							:writable="canAuthor"
+							@bind="entryId => bindStyleRef('boxSurfaceStyle', entryId)"
+							@unbind="unbindStyleRef('boxSurfaceStyle')"
+						/>
+					</template>
+				</GraphicsCompositorSurfaceStyleFields>
+			</template>
+			<template v-if="'wonBoxSurfaceStyle' in selectedSurfaces">
+				<GraphicsCompositorSurfaceStyleFields
+					:surface-style="selectedSurfaces.wonBoxSurfaceStyle ?? null"
+					flat
+					show-title
+					title="Won win box"
+					test-id-prefix="game-wins-won-box"
+					@edit="editItem(applyGraphicSurfaceStyleEdit, 'wonBoxSurfaceStyle', $event)"
+				>
+					<template #style-ref>
+						<GraphicsCompositorStyleRef
+							style-slot="wonBoxSurfaceStyle"
+							label="Won win box style"
+							:entries="styleSet?.entries"
+							:current="styleRefFor('wonBoxSurfaceStyle')"
+							:writable="canAuthor"
+							@bind="entryId => bindStyleRef('wonBoxSurfaceStyle', entryId)"
+							@unbind="unbindStyleRef('wonBoxSurfaceStyle')"
+						/>
+					</template>
+				</GraphicsCompositorSurfaceStyleFields>
+			</template>
+		</GraphicsInspectorSection>
+
+		<GraphicsInspectorSection
+			v-if="selection.kind === 'graphic' || selection.kind === 'item'"
+			id="animation"
+			title="Animation"
+			icon="i-lucide-wand-sparkles"
+			:default-open="false"
+		>
+			<GraphicsCompositorAnimation
+				headless
+				:graphics="graphics"
+				:selected-target="selectedTarget"
+				:writable="writable"
+				:style-set="styleSet"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				@update:graphics="emit('update:graphics', $event)"
+			/>
+		</GraphicsInspectorSection>
 	</fieldset>
 </template>

@@ -138,6 +138,11 @@ const SlotOnlyStub = defineComponent({
 	template: '<div :data-label="label"><span>{{ label }}</span><slot /></div>',
 });
 
+/** Always open, so collapsed sections' controls are reachable. */
+const UCollapsibleStub = defineComponent({
+	template: '<div><slot :open="true" /><slot name="content" /></div>',
+});
+
 const USelectStub = defineComponent({
 	name: 'USelect',
 	props: { modelValue: { type: [String, Number], required: false }, items: { type: Array, required: false } },
@@ -233,6 +238,7 @@ async function mountComponent(options: {
 		global: {
 			stubs: {
 				UFormField: SlotOnlyStub,
+				UCollapsible: UCollapsibleStub,
 				USelect: USelectStub,
 				UInput: UInputStub,
 				UInputNumber: UInputNumberStub,
@@ -522,7 +528,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		selectField(wrapper, 'shape-corner-topRight')?.vm.$emit('update:modelValue', 'cut');
+		await wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').trigger('click');
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
@@ -551,7 +557,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		selectField(wrapper, 'shape-geometry-preset')?.vm.$emit('update:modelValue', 'corner-cut');
+		await wrapper.get('[data-testid="shape-geometry-preset-corner-cut"]').trigger('click');
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
@@ -665,7 +671,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'cluster' },
 		});
 
-		selectField(wrapper, 'graphic-group-arrangement')?.vm.$emit('update:modelValue', 'canvas');
+		await wrapper.get('[data-testid="graphic-group-arrangement"] [data-testid="tab-canvas"]').trigger('click');
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ arrangement: 'canvas' });
@@ -2201,7 +2207,7 @@ describe('graphicsCompositorInspector', () => {
 		it('shapes a Game Wins Item’s win box rather than its own bounds', async () => {
 			const wrapper = await mountKind('game-wins');
 
-			selectField(wrapper, 'shape-corner-topRight')?.vm.$emit('update:modelValue', 'cut');
+			await wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').trigger('click');
 			await nextTick();
 
 			const item = itemOf(emittedGraphics(wrapper));
@@ -2448,7 +2454,7 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 		if (!row.geometry)
 			return;
 
-		selectField(wrapper, 'shape-corner-topRight')?.vm.$emit('update:modelValue', 'cut');
+		await wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').trigger('click');
 		await nextTick();
 		const patched = itemOf(emittedGraphics(wrapper)) as unknown as Record<string, ShapeGeometry | undefined>;
 		expect(patched[row.geometry.slot]?.topRight.treatment).toBe('cut');
