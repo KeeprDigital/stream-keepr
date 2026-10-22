@@ -63,8 +63,8 @@ mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToC
 
 /** The layout's slots, and whether the page asked it for Editor Focus Mode. */
 const NuxtLayoutStub = defineComponent({
-	props: { focus: { type: Boolean, default: false } },
-	template: '<div data-testid="layout" :data-focus="String(focus)"><slot name="navbar-center" /><slot name="actions" /><slot /></div>',
+	props: { editorFocus: { type: Boolean, default: false } },
+	template: '<div data-testid="layout" :data-focus="String(editorFocus)"><slot name="navbar-center" /><slot name="actions" /><slot /></div>',
 });
 
 /** A Screen-level settings card, named by its title. */

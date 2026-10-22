@@ -13,12 +13,12 @@ interface Props {
 	 * operator's remembered choice, and Focus Mode must not overwrite it. The
 	 * connection statuses its footer carried move into the navbar.
 	 */
-	focus?: boolean;
+	editorFocus?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
 	flush: false,
-	focus: false,
+	editorFocus: false,
 });
 
 const colorMode = useColorMode();
@@ -215,8 +215,14 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 
 <template>
 	<UDashboardGroup>
+		<!--
+			A fixed id, so the sidebar's remembered collapse survives Editor Focus
+			Mode unmounting it: Nuxt UI otherwise keys that memory by a generated id
+			that changes on every remount.
+		-->
 		<UDashboardSidebar
-			v-if="!props.focus"
+			v-if="!props.editorFocus"
+			id="app"
 			v-model:open="open"
 			collapsible
 			resizable
@@ -286,8 +292,8 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 		</UDashboardSidebar>
 		<UDashboardPanel :ui="{ body: 'p-0 sm:p-0' }">
 			<template #header>
-				<UDashboardNavbar :title="title" :toggle="!props.focus">
-					<template v-if="!props.focus" #leading>
+				<UDashboardNavbar :title="title" :toggle="!props.editorFocus">
+					<template v-if="!props.editorFocus" #leading>
 						<UDashboardSidebarCollapse />
 					</template>
 					<template #default>
@@ -296,7 +302,7 @@ const homeLinks = computed<NavigationMenuItem[]>(() => [{
 						</div>
 					</template>
 					<template #right>
-						<template v-if="props.focus">
+						<template v-if="props.editorFocus">
 							<UIRealtimeStatus />
 							<UIServerTimeStatus />
 						</template>

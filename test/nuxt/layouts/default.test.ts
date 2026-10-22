@@ -253,7 +253,7 @@ describe('default layout Editor Focus Mode', () => {
 	});
 
 	it('hides the app sidebar and its toggles in Focus Mode, keeping the connection statuses in the navbar', async () => {
-		const wrapper = await mountLayout({ focus: true });
+		const wrapper = await mountLayout({ editorFocus: true });
 
 		expect(wrapper.find('aside').exists()).toBe(false);
 		expect(wrapper.find('u-dashboard-sidebar-collapse-stub').exists()).toBe(false);

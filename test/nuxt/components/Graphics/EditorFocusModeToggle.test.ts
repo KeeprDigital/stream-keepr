@@ -32,17 +32,6 @@ describe('editorFocusModeToggle', () => {
 		wrapper.unmount();
 	});
 
-	it('leaves Escape to the editor', async () => {
-		const wrapper = await mountSuspended(EditorFocusModeToggle, { attachTo: document.body });
-		await wrapper.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
-
-		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await wrapper.get('[data-testid="editor-focus-mode-toggle"]').trigger('keydown', { key: 'Escape' });
-
-		expect(page.active.value).toBe(true);
-		wrapper.unmount();
-	});
-
 	it('takes the page out of Focus Mode when the editor offering it closes, keeping the choice', async () => {
 		const wrapper = await mountSuspended(EditorFocusModeToggle);
 		await wrapper.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');

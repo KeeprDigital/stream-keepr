@@ -1,7 +1,7 @@
 import type { ComputedRef, WritableComputedRef } from 'vue';
 import { computed, onScopeDispose, shallowRef } from 'vue';
 
-const STORAGE_KEY = 'graphics-editor-focus-mode';
+const STORAGE_KEY = 'editor-focusMode';
 
 /**
  * Editor Focus Mode: the graphics editors' Edit workspaces given the page's
@@ -10,7 +10,9 @@ const STORAGE_KEY = 'graphics-editor-focus-mode';
  * One setting per browser, shared by the Feature Match Overlay editor and the
  * Broadcast Graphics Edit workspace. It is held here for the document and
  * written through to storage, so a browser that refuses storage still toggles
- * it for this visit and only forgets it on reload.
+ * it for this visit and only forgets it on reload. Not `useLocalStorage`, as
+ * `useGeometryUnit` is: its refused-storage fallback is a ref per caller, and
+ * the page and the editor reading two refs would disagree about the chrome.
  */
 const enabledSetting = shallowRef<boolean | null>(null);
 

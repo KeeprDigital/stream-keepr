@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 
-const STORAGE_KEY = 'graphics-editor-focus-mode';
+const STORAGE_KEY = 'editor-focusMode';
 
 /**
  * The module holds one setting per document, so each test imports it fresh

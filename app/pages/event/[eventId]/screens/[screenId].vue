@@ -33,9 +33,9 @@ const isUpdating = ref(false);
 /**
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and
- * this page drops every Screen-level card above the editor — the header, the
- * Container and the Background Layers — keeping the save failure, the way back
- * to Screens, and the Screen's name in the navbar.
+ * this page drops the Screen-level cards above the editor — the header and the
+ * Container — keeping the save failure, the way back to Screens, and the
+ * Screen's name in the navbar.
  */
 const { active: editorFocus } = useEditorFocusMode();
 
@@ -361,9 +361,9 @@ async function sendCommand(command: ScreenCommand) {
 </script>
 
 <template>
-	<NuxtLayout name="default" :focus="editorFocus">
+	<NuxtLayout name="default" :editor-focus="editorFocus">
 		<template v-if="editorFocus && screen" #navbar-center>
-			<span class="truncate text-sm text-muted" data-testid="focused-screen-name">{{ screen.name }}</span>
+			<span class="hidden truncate text-sm text-muted sm:inline" data-testid="focused-screen-name">{{ screen.name }}</span>
 		</template>
 		<template #actions>
 			<UButton
@@ -719,7 +719,7 @@ async function sendCommand(command: ScreenCommand) {
 
 				<!-- Background Layers (modes that carry their own stack) -->
 				<ScreenModeBackgroundLayersSettings
-					v-if="backgroundLayersMode && !editorFocus"
+					v-if="backgroundLayersMode"
 					:key="backgroundLayersMode"
 					ref="backgroundLayersControlsRef"
 					:screen="screen"
