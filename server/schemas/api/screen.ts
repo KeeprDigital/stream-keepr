@@ -361,6 +361,9 @@ type ModeConfigPatchShape<Shape, AuthoredStack extends PropertyKey> = Extract<{
  *   this key" sentinel, and each authored stack only `.optional()`, so `null`
  *   cannot empty it. No wrapper is peeled and no default stripped, because a
  *   contract's fields carry none.
+ * - `stored` and `patch` both accept and drop the contract's former fields,
+ *   which a client may still hold from a Screen it read before they were
+ *   dropped (#752).
  *
  * `patch` deliberately carries no object-level check: a patch is a fragment, and
  * a whole-object rule cannot be evaluated against one. That once left
@@ -393,10 +396,12 @@ function configContractModeForms<M extends ScreenMode>(
 		authoredStacks.includes(key) ? field.optional() : field.nullable().optional(),
 	])) as ModeConfigPatchShape<ModeConfigShape<M>, ContractOf<M>['authoredStacks'][number]>;
 
+	// A former field may still be in what a client read, so a write naming one
+	// is accepted without storing it (#752); every other unknown key is refused.
 	return {
 		schema,
-		stored: schema.partial(),
-		patch: z.object(patchShape).strict(),
+		stored: z.preprocess(contract.withoutFormerFields, schema.partial()),
+		patch: z.preprocess(contract.withoutFormerFields, z.object(patchShape).strict()),
 	};
 }
 

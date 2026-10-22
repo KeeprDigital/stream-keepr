@@ -45,6 +45,7 @@ function provideNoCapability(): never {
 }
 
 interface EventEntities {
+	phaseId: number;
 	roundId: number;
 	playerId: number;
 	playerListId: number;
@@ -67,6 +68,7 @@ async function seedEventEntities(eventId: number, label: string): Promise<EventE
 		sourceText: '1 Island',
 	}).returning({ id: schema.broadcastDeckLists.id });
 	return {
+		phaseId: phase!.id,
 		roundId: round!.id,
 		playerId: player!.id,
 		playerListId: list!.id,
@@ -91,6 +93,7 @@ interface Sample {
 
 /** For each kind of Event Reference, the values a declared field may hold. A new kind fails to compile here until it has some. */
 const SAMPLES: Record<EventReferenceKind, Sample[]> = {
+	phase: [{ name: 'Phase', naming: e => e.phaseId, refusal: { statusCode: 404, message: 'Phase not found' } }],
 	round: [{ name: 'Round', naming: e => e.roundId, refusal: { statusCode: 404, message: 'Round not found' } }],
 	player: [{ name: 'Player', naming: e => e.playerId, refusal: { statusCode: 404, message: 'Player not found' } }],
 	playerList: [{ name: 'Player List', naming: e => e.playerListId, refusal: { statusCode: 404, message: 'Player list not found' } }],
@@ -148,6 +151,7 @@ describe('screen Mode Event References', () => {
 			'deck.deckSource: deckSource',
 			'standings.roundId: round',
 			'standings.playerListId: playerList',
+			'topCut.phaseId: phase',
 			'feature-match.featureMatchId: featureMatchSlot',
 			'feature-match-overlay.featureMatchId: featureMatchSlot',
 			'metagame.playerListId: playerList',

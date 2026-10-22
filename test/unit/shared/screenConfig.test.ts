@@ -36,8 +36,8 @@ describe('getDefaultConfigForMode', () => {
 });
 
 describe('getDisplayDefaultsForMode', () => {
-	it('returns full config for modes without data bindings', () => {
-		expect(getDisplayDefaultsForMode('topCut')).toEqual({ bracketSize: 8 });
+	it('returns every display default and leaves the Event Reference the Screen points at', () => {
+		expect(getDisplayDefaultsForMode('topCut')).toEqual({ showHeader: true, headerText: undefined });
 	});
 
 	it('preserves the authored Background Layer stack on a display reset', () => {

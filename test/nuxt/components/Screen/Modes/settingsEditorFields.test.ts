@@ -26,7 +26,6 @@ import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/ty
 
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
-	'topCut': 'its editor configures nothing yet',
 	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
@@ -81,6 +80,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 		editor: 'ArchetypeSpotlight',
 		variants: [{ scope: 'topN', autoPageEnabled: true }, { scope: 'minPoints' }],
 	},
+	'topCut': { editor: 'TopCut', variants: [{}] },
 	// The Top N scope, a fixed card size, and auto-page.
 	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true }] },
 };
@@ -119,6 +119,7 @@ mockNuxtImport('usePlayerStore', () => () => ({ ...loaded, players: [], loadPlay
 mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, name: 'Feature Table', memberCount: 4 }], loadByEventId: vi.fn() }));
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [], loadRoundsByEventId: vi.fn() }));
 mockNuxtImport('useArchetypeStore', () => () => ({ ...loaded, archetypes: [], loadByEventId: vi.fn() }));
+mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({ ...loaded, loadState: vi.fn() }));
 mockNuxtImport('useBroadcastDeckListStore', () => () => ({ summaries: [], loadCollection: vi.fn() }));
