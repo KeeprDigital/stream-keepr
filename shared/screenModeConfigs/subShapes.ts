@@ -15,10 +15,12 @@ export function columnConfigSchema<const Keys extends readonly [string, ...strin
 }
 
 /**
- * A stored column list with every column its mode offers: each of the mode's
- * default columns it lacks is appended as the defaults hold it, in their order.
- * A column added to a mode after a Screen stored its list renders as before and
- * can still be shown. A complete list is returned as it is.
+ * A stored column list as its editor offers it, with every column its mode
+ * offers: each of the mode's default columns it lacks is appended hidden, in the
+ * defaults' order. A column added to a mode after a Screen stored its list is not
+ * stored, so it renders as before, hidden; its editor offers it hidden too, and
+ * the operator's first show, hide or reorder stores it. A complete list is
+ * returned as it is.
  */
 export function withEveryColumn<Column extends { key: string; visible: boolean }>(
 	columns: readonly Column[],
@@ -28,7 +30,7 @@ export function withEveryColumn<Column extends { key: string; visible: boolean }
 	const missing = defaultColumns.filter(column => !held.has(column.key));
 	if (missing.length === 0)
 		return columns as Column[];
-	return [...columns, ...missing.map(column => ({ ...column }))];
+	return [...columns, ...missing.map(column => ({ ...column, visible: false }))];
 }
 
 /** The optional header above a mode's content. */

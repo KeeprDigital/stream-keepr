@@ -12,7 +12,7 @@ describe('withEveryColumn', () => {
 		{ key: 'gameScore', visible: true },
 	];
 
-	it('appends each default column a stored list lacks, as the defaults hold it, in their order', () => {
+	it('appends each default column a stored list lacks, hidden as the stored list renders it, in their order', () => {
 		const stored = [
 			{ key: 'outcome', visible: true },
 			{ key: 'round', visible: false },
@@ -26,7 +26,7 @@ describe('withEveryColumn', () => {
 			{ key: 'opponent', visible: true },
 			{ key: 'table', visible: true },
 			{ key: 'opponentArchetype', visible: false },
-			{ key: 'gameScore', visible: true },
+			{ key: 'gameScore', visible: false },
 		]);
 	});
 
