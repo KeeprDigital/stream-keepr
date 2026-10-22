@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.6.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.5.0...v1.6.0) (2026-10-22)
+
+
+### Features
+
+* **feature-match-overlay:** rename a layer inline in the layer list ([#788](https://github.com/KeeprDigital/stream-keepr/issues/788)) ([52284c1](https://github.com/KeeprDigital/stream-keepr/commit/52284c138d25b7e4e3954e82f6044703e09bb093))
+* **feature-match-overlay:** rework the layout editor ([#758](https://github.com/KeeprDigital/stream-keepr/issues/758)) ([f92d9e5](https://github.com/KeeprDigital/stream-keepr/commit/f92d9e51f2492cabc3039cf86d2424c7949b8a2c))
+* **feature-match:** Feature Match Notes can be switched off per Event ([#737](https://github.com/KeeprDigital/stream-keepr/issues/737)) ([3980d6a](https://github.com/KeeprDigital/stream-keepr/commit/3980d6a544d4d5249cedee176e20610933adf8a4))
+* **screens:** Archetype Spotlight Screen Mode ([#771](https://github.com/KeeprDigital/stream-keepr/issues/771)) ([b0ceaae](https://github.com/KeeprDigital/stream-keepr/commit/b0ceaae6f593fdedb35129d0b44e2a7053af53ae))
+* **screens:** chart display for the Metagame Screen ([#768](https://github.com/KeeprDigital/stream-keepr/issues/768)) ([ddfecac](https://github.com/KeeprDigital/stream-keepr/commit/ddfecaca410d47c578789251341ede8be10ba764))
+* **screens:** Conversion Rate column on the Metagame Screen ([#762](https://github.com/KeeprDigital/stream-keepr/issues/762)) ([f4685fb](https://github.com/KeeprDigital/stream-keepr/commit/f4685fb64ba3587405810ea45258dcfbb4b74205))
+* **screens:** Editor Focus Mode for the graphics editors ([#789](https://github.com/KeeprDigital/stream-keepr/issues/789)) ([d8e9648](https://github.com/KeeprDigital/stream-keepr/commit/d8e964868ab457e44ef7434d3e318839a148606e))
+* **screens:** Head-to-head Screen Mode ([#770](https://github.com/KeeprDigital/stream-keepr/issues/770)) ([af7b4fe](https://github.com/KeeprDigital/stream-keepr/commit/af7b4fecc888c6214cd25bdc236cbddb159dd06a))
+* **screens:** opponent archetype and game score on the Player History Screen ([#763](https://github.com/KeeprDigital/stream-keepr/issues/763)) ([b018a9c](https://github.com/KeeprDigital/stream-keepr/commit/b018a9ca4a56c38f032e9e21018584aa8e44847c))
+* **screens:** Page Rotation for the Top Cards Screen ([#767](https://github.com/KeeprDigital/stream-keepr/issues/767)) ([f25dca7](https://github.com/KeeprDigital/stream-keepr/commit/f25dca73f1e0212e3e587d6907fa973f65f72c0b))
+* **screens:** Pairings Screen Mode ([#765](https://github.com/KeeprDigital/stream-keepr/issues/765)) ([81a723e](https://github.com/KeeprDigital/stream-keepr/commit/81a723e7851870c7e79b2f30705dc8fe9a8f07e9))
+* **screens:** position change column on the Standings Screen ([#764](https://github.com/KeeprDigital/stream-keepr/issues/764)) ([9c3a38e](https://github.com/KeeprDigital/stream-keepr/commit/9c3a38ede6648a2cbfb407b041636111f596fca0))
+* **screens:** seeds and archetypes in the Top Cut bracket ([#772](https://github.com/KeeprDigital/stream-keepr/issues/772)) ([ee5b8d3](https://github.com/KeeprDigital/stream-keepr/commit/ee5b8d308b250ae2adb29c938cac6c6cde7b3dd0))
+* **screens:** Top Cut bracket from a chosen Phase ([#769](https://github.com/KeeprDigital/stream-keepr/issues/769)) ([7154053](https://github.com/KeeprDigital/stream-keepr/commit/71540532f9e9fd97147bb62b991ccf516a092c71))
+
+
+### Bug Fixes
+
+* **auth:** enable authentication rate limiting in built Workers ([#715](https://github.com/KeeprDigital/stream-keepr/issues/715)) ([8cd2195](https://github.com/KeeprDigital/stream-keepr/commit/8cd219545a56dc023abd2780c9c2c65320adcfa9))
+* **card:** a Card's expiry is a clock projection nothing writes (ADR-0022) ([#730](https://github.com/KeeprDigital/stream-keepr/issues/730)) ([6859dfe](https://github.com/KeeprDigital/stream-keepr/commit/6859dfe2ebf473855afbdf511518905d2b04c0bd))
+* **card:** a late Card read cannot replace newer Card state ([#720](https://github.com/KeeprDigital/stream-keepr/issues/720)) ([ea76e31](https://github.com/KeeprDigital/stream-keepr/commit/ea76e31ee9a1f3dfd6fe2515ef425be380097ac7))
+* **card:** gate Card writes and recovery by Event Lifetime and newer state ([#732](https://github.com/KeeprDigital/stream-keepr/issues/732)) ([cfdabe7](https://github.com/KeeprDigital/stream-keepr/commit/cfdabe7da55e3157874c34c7eea714fafbd5f557))
+* **card:** order Card writes by revision and roll back failed display controls ([#736](https://github.com/KeeprDigital/stream-keepr/issues/736)) ([b29af4b](https://github.com/KeeprDigital/stream-keepr/commit/b29af4b58d6d7c4c91aa64ab34ce74c6d10e29af))
+* **ci:** warm Chrome before the local-auth dev server and report why a launch fails ([#791](https://github.com/KeeprDigital/stream-keepr/issues/791)) ([f7f21f9](https://github.com/KeeprDigital/stream-keepr/commit/f7f21f97f3f8f2ab78444f484db7cd8b13324d93))
+* **deps:** refresh Nuxt devtools and build tooling past their advisories ([#718](https://github.com/KeeprDigital/stream-keepr/issues/718)) ([6ada706](https://github.com/KeeprDigital/stream-keepr/commit/6ada7060c84443c5c69c7f6cc37a968b92acc39c))
+* **deps:** refresh the Nuxt UI rich-text editor packages past their advisories ([#717](https://github.com/KeeprDigital/stream-keepr/issues/717)) ([64aec44](https://github.com/KeeprDigital/stream-keepr/commit/64aec446ac81abd82c30de605c3f259cae49cf76))
+* **feature-match:** bound Session lookups independently of the Slot cap ([#729](https://github.com/KeeprDigital/stream-keepr/issues/729)) ([2bda3e3](https://github.com/KeeprDigital/stream-keepr/commit/2bda3e3dfc3f957ab95448abd85af0f38254113a))
+* **graphics-assets:** retain terminal staging cleanup obligations until deletion succeeds ([#714](https://github.com/KeeprDigital/stream-keepr/issues/714)) ([90809e8](https://github.com/KeeprDigital/stream-keepr/commit/90809e8b1c2015fac8b6a37aa502f06d0d5a4cb1))
+* **melee-sync:** keep imported structure holding manual Rounds or Matches ([#716](https://github.com/KeeprDigital/stream-keepr/issues/716)) ([7df4318](https://github.com/KeeprDigital/stream-keepr/commit/7df431849eeacd1fae763b430306677610f3496a))
+* **screen:** close the Screen Mode data first-load window and continuity loss during load ([#735](https://github.com/KeeprDigital/stream-keepr/issues/735)) ([d0cec4b](https://github.com/KeeprDigital/stream-keepr/commit/d0cec4bb8486a94a18cc1677d43d4042445ead25))
+* **screen:** close the Screen Output first-load realtime window ([#731](https://github.com/KeeprDigital/stream-keepr/issues/731)) ([5fb037e](https://github.com/KeeprDigital/stream-keepr/commit/5fb037e366328fa863570ff969149325168b3d38))
+* **screen:** make Screen settings saves reliable ([#723](https://github.com/KeeprDigital/stream-keepr/issues/723)) ([3352c97](https://github.com/KeeprDigital/stream-keepr/commit/3352c97d0b452af8fa810965524b70755b29d144))
+* **screen:** Reconnect Resync recovers complete Screen Output state ([#721](https://github.com/KeeprDigital/stream-keepr/issues/721)) ([4c0ba2b](https://github.com/KeeprDigital/stream-keepr/commit/4c0ba2be9ac5b16144b653faf42d2ae0430253e6))
+* **screens:** Pagination settings show the page count the Screen actually renders ([#792](https://github.com/KeeprDigital/stream-keepr/issues/792)) ([038d9bc](https://github.com/KeeprDigital/stream-keepr/commit/038d9bca7c0a432a68fdaad2f218364c4e4be4f2))
+* support the permitted Event sizes on D1 ([#719](https://github.com/KeeprDigital/stream-keepr/issues/719)) ([8ef8a07](https://github.com/KeeprDigital/stream-keepr/commit/8ef8a0778d4bf58edd5b75d7fdf04c703e719f5a))
+* **test:** bundle icons named in app and shared modules for component tests ([#766](https://github.com/KeeprDigital/stream-keepr/issues/766)) ([0d811b2](https://github.com/KeeprDigital/stream-keepr/commit/0d811b250d97572297589aa1de967490775dfcc8))
+* **validator:** reserve silent-video validation sessions before asynchronous work ([#713](https://github.com/KeeprDigital/stream-keepr/issues/713)) ([5668f2e](https://github.com/KeeprDigital/stream-keepr/commit/5668f2e325dd413fd4b578ebc1edb1210322b7fd))
+
+
+### Refactoring
+
+* **screen:** editors read field labels and bounds from the config contract ([#498](https://github.com/KeeprDigital/stream-keepr/issues/498)) ([#709](https://github.com/KeeprDigital/stream-keepr/issues/709)) ([feb8407](https://github.com/KeeprDigital/stream-keepr/commit/feb8407a615b4446c8d914e0c1e8e7d3dd5714ab))
+* **screens:** one shared Metagame Scope for Metagame, Most Played Cards and Archetype Spotlight ([#784](https://github.com/KeeprDigital/stream-keepr/issues/784)) ([a4af65f](https://github.com/KeeprDigital/stream-keepr/commit/a4af65f172b965ad65bc8cbf49bf383f9f6cd535))
+* **screens:** one shared Pagination settings card for paginated Screen Modes ([#785](https://github.com/KeeprDigital/stream-keepr/issues/785)) ([5e92509](https://github.com/KeeprDigital/stream-keepr/commit/5e92509158b74a7cfad76f19477b754e26a49a80))
+* **screens:** one shared row-sizing rule for paged table Displays ([#787](https://github.com/KeeprDigital/stream-keepr/issues/787)) ([46321b3](https://github.com/KeeprDigital/stream-keepr/commit/46321b359b459ee3050bf1939c583f152b7709ee))
+* **screens:** rename misleading Screen Mode labels and the topCut key ([#774](https://github.com/KeeprDigital/stream-keepr/issues/774)) ([e3be682](https://github.com/KeeprDigital/stream-keepr/commit/e3be68208742f1efb2bc5756964d48752eafdf09))
+
+
+### Documentation
+
+* **decisions:** Card expiry is a clock projection nothing writes (ADR-0022) ([#712](https://github.com/KeeprDigital/stream-keepr/issues/712)) ([b4d7277](https://github.com/KeeprDigital/stream-keepr/commit/b4d7277b9f44f5b8fa12929eecc825fe7d1cac93))
+* make operational and domain documentation accurate and navigable ([#722](https://github.com/KeeprDigital/stream-keepr/issues/722)) ([bd166c7](https://github.com/KeeprDigital/stream-keepr/commit/bd166c72b953ba91644d8907bea368f1d03faa0f))
+
 ## [1.5.0](https://github.com/KeeprDigital/stream-keepr/compare/v1.4.0...v1.5.0) (2026-10-21)
 
 
