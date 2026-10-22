@@ -3,6 +3,7 @@ import type { ScreenCardState } from '~~/shared/types/card/mtg';
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
 	ScreenOutputFeatureMatchResponse,
+	ScreenOutputHeadToHeadResponse,
 	ScreenOutputMetagameResponse,
 	ScreenOutputPairingsResponse,
 	ScreenOutputPlayerDecksResponse,
@@ -48,6 +49,7 @@ export function useScreenOutputReadRepository() {
 			read<{ player: Player; history: PlayerMatchHistoryEntry[] }>(scope, 'player-history'),
 		standings: (scope: ScreenOutputReadScope) => read<ScreenOutputStandingsResponse>(scope, 'standings'),
 		pairings: (scope: ScreenOutputReadScope) => read<ScreenOutputPairingsResponse>(scope, 'pairings'),
+		headToHead: (scope: ScreenOutputReadScope) => read<ScreenOutputHeadToHeadResponse>(scope, 'head-to-head'),
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
 		topCut: (scope: ScreenOutputReadScope) => read<ScreenOutputTopCutResponse>(scope, 'top-cut'),

@@ -39,6 +39,8 @@ mockNuxtImport('usePlayerListStore', () => () => ({ ...loaded, lists: [{ id: 7, 
 mockNuxtImport('useRoundStore', () => () => ({ ...loaded, rounds: [{ id: 31, name: 'Round 4' }], loadRoundsByEventId: vi.fn() }));
 mockNuxtImport('usePhaseStore', () => () => ({ ...loaded, phases: [{ id: 3, name: 'Top 8', sortOrder: 1 }], loadPhasesByEventId: vi.fn() }));
 mockNuxtImport('useEventStore', () => () => ({ event: { id: 1, game: 'mtg' }, $reset: vi.fn() }));
+mockNuxtImport('useFeatureMatchStore', () => () => ({ ...loaded, loadFeatureMatchesByEventId: vi.fn() }));
+mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([{ label: 'Table 1', value: 4 }]));
 
 // ── Controls, each found by the label of the form field around it ──
 
@@ -128,6 +130,14 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 	['Pairings', 'pairings', {}, [
 		['Custom header text', 'headerText', 'Top Tables'],
 		['Round', 'roundId', 31],
+	]],
+	['HeadToHead', 'head-to-head', {}, [
+		['Custom header text', 'headerText', 'Feature Match Preview'],
+		['Feature Match Slot', 'featureMatchId', 4],
+	]],
+	['HeadToHead', 'head-to-head', { playerSource: 'players' }, [
+		['First Player', 'player1Id', 7],
+		['Second Player', 'player2Id', 8],
 	]],
 	['TopCut', 'topCut', {}, [
 		['Custom header text', 'headerText', 'Championship Bracket'],

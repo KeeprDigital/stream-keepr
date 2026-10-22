@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { ScreenOutputFeatureMatchResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
@@ -431,6 +431,45 @@ describe('capability-only Screen Output reads', () => {
 			});
 			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
 			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
+		});
+	});
+
+	describe('head-to-head', () => {
+		it('reads the two Players its Feature Match Slot seats, and follows the Slot to its next Match', async () => {
+			const player = async (name: string) => await $fetch<{ id: number }>(`/api/events/${eventId}/players`, { method: 'POST', body: { name } });
+			const alice = await player('H2H Alice');
+			const bob = await player('H2H Bob');
+			const carol = await player('H2H Carol');
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, { method: 'POST', body: { name: 'H2H Swiss' } });
+			const round = async (roundNumber: number) => await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: `H2H Round ${roundNumber}`, roundNumber },
+			});
+			const roundOne = await round(1);
+			const roundTwo = await round(2);
+			const match = async (body: Record<string, unknown>) => await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, { method: 'POST', body });
+			const earlier = await match({ roundId: roundOne.id, player1Id: bob.id, player2Id: alice.id, hasResult: true, player1GameWins: 2, player2GameWins: 1 });
+			const upcoming = await match({ roundId: roundTwo.id, tableNumber: 1, player1Id: alice.id, player2Id: bob.id });
+			const next = await match({ roundId: roundTwo.id, tableNumber: 2, player1Id: carol.id, player2Id: alice.id });
+			const slot = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: { bestOf: 3 } });
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, { method: 'POST', body: { matchId: upcoming.id } });
+
+			const headToHead = await outputScreen('head-to-head');
+			await headToHead.configure({ playerSource: 'featureMatchSlot', featureMatchId: slot.id });
+
+			const before = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
+			expect(before.status).toBe(200);
+			expect(before.data.player1).toMatchObject({ id: alice.id, name: 'H2H Alice' });
+			expect(before.data.player2).toMatchObject({ id: bob.id, name: 'H2H Bob' });
+			expect(before.data.earlierMatches).toEqual([expect.objectContaining({ matchId: earlier.id, roundName: 'H2H Round 1', outcome: 'player2', gameScore: '1-2' })]);
+
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, { method: 'POST', body: { matchId: next.id } });
+			const after = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
+			expect(after.data.player1).toMatchObject({ id: carol.id });
+			expect(after.data.player2).toMatchObject({ id: alice.id });
+			expect(after.data.earlierMatches).toEqual([]);
+
+			expect((await headToHead.read('head-to-head', capability)).status).toBe(404);
 		});
 	});
 

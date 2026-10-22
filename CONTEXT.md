@@ -112,7 +112,7 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, or Pairings.
+A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, Pairings, or Head-to-head.
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
@@ -120,6 +120,10 @@ The definition of a Screen Mode: its defaults and configuration shape (held as o
 **Event Reference**:
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
+
+**Head-to-head**:
+A Screen Mode showing two Players of an Event side by side before their Match: each one's record, points and Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
+_Avoid_: meeting, when naming an earlier Match.
 
 **Authored Stack**:
 An ordered list in a Screen Mode's configuration holding authored content with no recovery path: the Background Screen's Background Layers and a Broadcast Graphics Screen's stack of Broadcast Graphics. A display reset leaves one untouched, and an edit may replace one but never delete it (ADR-0037).

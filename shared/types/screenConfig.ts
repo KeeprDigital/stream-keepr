@@ -13,6 +13,7 @@ import { cardModeConfigContract } from '../screenModeConfigs/card';
 import { deckModeConfigContract } from '../screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from '../screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from '../screenModeConfigs/featureMatchOverlay';
+import { headToHeadModeConfigContract } from '../screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
@@ -283,6 +284,7 @@ export type { DeckBoardLayoutConfig, DeckModeConfig, DeckSource, ResolvedDeckBoa
 export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '../screenModeConfigs/deck';
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
 export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
+export type { HeadToHeadModeConfig } from '../screenModeConfigs/headToHead';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
 export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
@@ -386,6 +388,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'top-cards': topCardsModeConfigContract,
 	'player-history': playerHistoryModeConfigContract,
 	'pairings': pairingsModeConfigContract,
+	'head-to-head': headToHeadModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -495,6 +498,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
+	'head-to-head': ['playerSource', 'featureMatchId', 'player1Id', 'player2Id'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode
