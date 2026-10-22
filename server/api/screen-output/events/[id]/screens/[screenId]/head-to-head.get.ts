@@ -3,7 +3,7 @@ import { findHeadToHead } from '~~/server/services/headToHead';
 import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
 
 /**
- * The two Players this Screen's Head-to-head mode shows, from its Feature Match
+ * The two Players this Screen's Head-to-Head mode shows, from its Feature Match
  * Slot or as picked, with their earlier Matches (#760). A side no Player fills
  * answers `null`, so an unbound or emptied Slot renders empty rather than failing.
  */

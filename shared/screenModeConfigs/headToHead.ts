@@ -8,7 +8,7 @@ import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
 const entityId = z.number().int().positive().nullable();
 
 /**
- * The Head-to-head Screen Mode's config contract: its shape, type, and defaults
+ * The Head-to-Head Screen Mode's config contract: its shape, type, and defaults
  * (#760).
  *
  * `playerSource` chooses where its two Players come from: the Feature Match

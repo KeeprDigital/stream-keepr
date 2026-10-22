@@ -151,7 +151,7 @@ describe('screen Mode Event References', () => {
 			'deck.deckSource: deckSource',
 			'standings.roundId: round',
 			'standings.playerListId: playerList',
-			'topCut.phaseId: phase',
+			'top-cut.phaseId: phase',
 			'feature-match.featureMatchId: featureMatchSlot',
 			'feature-match-overlay.featureMatchId: featureMatchSlot',
 			'metagame.playerListId: playerList',
@@ -171,7 +171,7 @@ describe('screen Mode Event References', () => {
 		expect(reset.map(({ declared }) => declared)).toEqual([]);
 	});
 
-	it('refuses saving a Top Cards Screen whose Player List belongs to another Event, as for Metagame', async () => {
+	it('refuses saving a Most Played Cards Screen whose Player List belongs to another Event, as for Metagame', async () => {
 		for (const mode of ['top-cards', 'metagame'] as const) {
 			const before = await current();
 			await expect(saveModeConfig(mode, { playerListId: foreign.playerListId }, before.stateVersion))

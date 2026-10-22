@@ -18,7 +18,7 @@ function broadcastDeckListNotFound(): never {
 }
 
 /**
- * The complete Broadcast Deck List one Screen has selected for Deck mode.
+ * The complete Broadcast Deck List one Screen has selected for Deck List mode.
  *
  * There is deliberately no list id in this route. A Screen Output can read only
  * the resource its authoritative Screen configuration names, so its capability

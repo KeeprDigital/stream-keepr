@@ -319,7 +319,7 @@ describe('per-mode background layers', () => {
 	const animationLayer = (id: string) => ({ id, type: 'animation' as const, animation: { effect: 'fog' as const }, enabled: true, opacity: 1 });
 
 	it('accepts a background layer stack on every capable mode\'s patch path', () => {
-		for (const mode of ['card', 'deck', 'standings', 'topCut', 'metagame', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const) {
+		for (const mode of ['card', 'deck', 'standings', 'top-cut', 'metagame', 'player-history', 'pairings', 'archetype-spotlight', 'head-to-head'] as const) {
 			expect(modeConfigPatchSchemaMap[mode].safeParse({
 				backgroundLayers: [colorLayer('base'), animationLayer('fx')],
 			}).success).toBe(true);

@@ -27,7 +27,7 @@ function matchSide(joinedName: string | null, playerId: number | null, slot: Pla
 /**
  * The Matches of each of these Rounds of the Event, each Round's in table
  * order, its byes and other untabled Matches last. A Round holding none is
- * absent. Shared by the Pairings (#751) and Top Cut (#752) Screen Output reads,
+ * absent. Shared by the Pairings (#751) and Top Cut Bracket (#752) Screen Output reads,
  * so both name a Match's sides alike.
  */
 export async function findMatchesByRound(eventId: number, roundIds: readonly number[]): Promise<Map<number, ScreenOutputRoundMatch[]>> {

@@ -6,7 +6,7 @@ import { computed, defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 /**
- * The Top Cut settings editor picks the Phase of the Screen's Event its bracket
+ * The Top Cut Bracket settings editor picks the Phase of the Screen's Event its bracket
  * is derived from (#752), and whether each Player's seed and Archetype show (#759).
  */
 
@@ -78,7 +78,7 @@ async function mountEditor() {
 
 describe('screenModesTopCutSettings', () => {
 	beforeEach(() => {
-		config.value = { ...getDefaultConfigForMode('topCut') };
+		config.value = { ...getDefaultConfigForMode('top-cut') };
 		writes.length = 0;
 		phaseStore.loadPhasesByEventId.mockClear();
 	});

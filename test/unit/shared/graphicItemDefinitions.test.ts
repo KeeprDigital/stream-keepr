@@ -142,7 +142,7 @@ describe('graphicItemDefinitions', () => {
 	it('creates a sideboard-only Deck List Item for the first player, as a list with quantities', () => {
 		// Sideboard-only at v1, so the config surface is deliberately lean: the side,
 		// the view, the quantity gate, and the typography the list view renders with.
-		// No board field, and none of the Deck mode's styling carries over.
+		// No board field, and none of the Deck List mode's styling carries over.
 		const item = getGraphicItemDefinition('deck-list').createDefault({
 			id: 'item-10',
 			label: 'Sideboard',
