@@ -9,6 +9,10 @@ import type { MetagameQueryParams } from '~~/shared/types/metagame';
 import type { ArchetypeSpotlightModeConfig, MetagameModeConfig, TopCardsModeConfig } from '~~/shared/types/screenConfig';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 
+/**
+ * A Metagame Scope as a read takes it. A Screen's config is one as it stands,
+ * since every metagame mode carries the shared scope fields (#777).
+ */
 export interface MetagameScopeInput {
 	scope: MetagameScope;
 	topN?: number;
@@ -42,6 +46,7 @@ export interface MetagameArchetypeDetailOptions extends MetagameConversionInput 
 	board?: BoardSelection;
 }
 
+/** The query naming a Metagame Scope: only the field its scope reads, so a Screen's other fields never reach it. */
 export function buildMetagameScopeQuery(input: MetagameScopeInput): MetagameQueryParams {
 	const query: MetagameQueryParams = { scope: input.scope };
 	if (input.scope === 'topN')
@@ -111,17 +116,10 @@ export function buildArchetypeDetailQuery(
  * Screen publishes.
  */
 export function metagameScreenQuery(config: MetagameModeConfig) {
-	const scope: MetagameScopeInput = {
-		scope: config.scope,
-		topN: config.topN,
-		minPoints: config.minPoints,
-		playerListId: config.playerListId,
-	};
-
 	return config.viewMode === 'cards'
 		? {
 				viewMode: 'cards' as const,
-				query: buildCardBreakdownQuery(scope, {
+				query: buildCardBreakdownQuery(config, {
 					sortBy: config.cardSortBy,
 					limit: config.limit,
 					archetype: config.archetypeFilter,
@@ -129,7 +127,7 @@ export function metagameScreenQuery(config: MetagameModeConfig) {
 			}
 		: {
 				viewMode: 'archetype' as const,
-				query: buildArchetypeBreakdownQuery(scope, {
+				query: buildArchetypeBreakdownQuery(config, {
 					sortBy: config.sortBy,
 					limit: config.archetypeLimit ?? undefined,
 					conversionMetric: config.conversionMetric,
@@ -151,7 +149,7 @@ export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConf
 	return {
 		archetypeId: config.archetypeId,
 		query: buildArchetypeDetailQuery(
-			{ scope: config.scope, topN: config.topN, minPoints: config.minPoints, playerListId: config.playerListId },
+			config,
 			{ board: config.board, conversionMetric: config.conversionMetric, conversionThreshold: config.conversionThreshold },
 		),
 	};
@@ -160,7 +158,7 @@ export function archetypeSpotlightScreenQuery(config: ArchetypeSpotlightModeConf
 /** The card breakdown a Most Played Cards Screen renders, read off its configuration. */
 export function topCardsScreenQuery(config: TopCardsModeConfig) {
 	return buildCardBreakdownQuery(
-		{ scope: config.scope, topN: config.topN, playerListId: config.playerListId },
+		config,
 		{
 			sortBy: config.sortBy,
 			limit: config.limit,
