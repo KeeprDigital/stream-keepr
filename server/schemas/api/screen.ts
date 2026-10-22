@@ -25,6 +25,7 @@ import { isServerValidatedField } from '~~/shared/screenModeConfigs/contract';
 import { screenModeConfigContract, screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
+	FORMER_SCREEN_MODE_KEYS,
 	HORIZONTAL_ALIGN_VALUES,
 	PLAYER_SIDE_VALUES,
 	SCREEN_COLOR_MODE_VALUES,
@@ -1632,7 +1633,7 @@ const modeConfigForms = {
 	'card': configContractModeForms('card'),
 	'deck': configContractModeForms('deck'),
 	'standings': configContractModeForms('standings'),
-	'topCut': configContractModeForms('topCut'),
+	'top-cut': configContractModeForms('top-cut'),
 	'feature-match': configContractModeForms('feature-match'),
 	'feature-match-overlay': configContractModeForms('feature-match-overlay', { layout: featureMatchLayoutConfigSchema }),
 	'broadcast-graphics': configContractModeForms('broadcast-graphics', { graphics: broadcastGraphicsStackSchema }),
@@ -1687,9 +1688,41 @@ function withModeConfigsMapRules<T extends z.ZodTypeAny>(schema: T) {
 	);
 }
 
+/**
+ * A Screen Mode key as written, read as the key it is now: a client built before a
+ * key was renamed still sends the former one (ADR-0043). Anything else is left for
+ * the schema to accept or refuse.
+ */
+function currentScreenModeKey(value: unknown): unknown {
+	return typeof value === 'string' && Object.hasOwn(FORMER_SCREEN_MODE_KEYS, value)
+		? FORMER_SCREEN_MODE_KEYS[value]
+		: value;
+}
+
+/** A Screen Mode, accepting a former key as the mode it names now. */
+export const screenModeSchema = z.preprocess(currentScreenModeKey, z.enum(SCREEN_MODE_VALUES));
+
+/**
+ * A mode configurations map with each former key moved to its current one. A map
+ * carrying both keeps the current key's config, the newer of the two.
+ */
+function withCurrentScreenModeKeys(value: unknown): unknown {
+	if (typeof value !== 'object' || value === null || Array.isArray(value))
+		return value;
+	const configs: Record<string, unknown> = { ...value };
+	for (const [former, current] of Object.entries(FORMER_SCREEN_MODE_KEYS)) {
+		if (!Object.hasOwn(configs, former))
+			continue;
+		if (!Object.hasOwn(configs, current))
+			configs[current] = configs[former];
+		delete configs[former];
+	}
+	return configs;
+}
+
 // Full modeConfigs map schema (all keys optional)
 export const modeConfigsMapSchema = withModeConfigsMapRules(
-	z.object(modeConfigSchemaMap).strict().partial(),
+	z.preprocess(withCurrentScreenModeKeys, z.object(modeConfigSchemaMap).strict().partial()),
 );
 
 /**
@@ -1802,6 +1835,7 @@ export const createScreenSchema = createInsertSchema(screens)
 	})
 	.extend({
 		slug: screenSlugSchema,
+		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
 		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 	})
@@ -1823,6 +1857,7 @@ export const updateScreenSchema = createUpdateSchema(screens)
 	})
 	.extend({
 		slug: screenSlugSchema.optional(),
+		currentMode: screenModeSchema.optional(),
 		modeConfigs: modeConfigsMapSchema.nullable().optional(),
 		screenConfig: boundedScreenConfigSchema.nullable().optional(),
 		stateVersion: z.number().int().nonnegative(),
@@ -1843,7 +1878,7 @@ export const screenParamsSchema = z.object({
 export const modeConfigParamsSchema = z.object({
 	id: z.coerce.number().int().positive(),
 	screenId: z.coerce.number().int().positive(),
-	mode: z.enum(SCREEN_MODE_VALUES),
+	mode: screenModeSchema,
 });
 
 /* TYPES */

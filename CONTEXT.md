@@ -112,7 +112,8 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card, Deck, Standings, Top Cut, Feature Match, Feature Match Overlay, Broadcast Graphics, Metagame, Top Cards, Player History, Pairings, or Head-to-head.
+A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, or Head-to-Head. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
+_Avoid_: Top Cards, Card, Deck or Head-to-head as a mode name; Feature Match for the control mode (the on-air one is the Feature Match Overlay).
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface; how width, height, padding, background, alignment, viewport-fit scaling, and theme apply), and what it declares it carries, such as its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
@@ -121,7 +122,7 @@ The definition of a Screen Mode: its defaults and configuration shape (held as o
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
-**Head-to-head**:
+**Head-to-Head**:
 A Screen Mode showing two Players of an Event side by side before their Match: each one's record, points and Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
 _Avoid_: meeting, when naming an earlier Match.
 
@@ -157,14 +158,14 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
-The single-elimination bracket a Top Cut Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size; a Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size; a Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
 **Rotation Anchor**:
 The server timestamp a Page Rotation counts from, written only by an operator surface — when auto-page is enabled, when an edit changes the rotation's shape (a display reset among them), or when an operator selects a page mid-rotation. A Screen Output never writes it.
 
 **Screen Card**:
-The one Card a Screen in Card mode shows, set and cleared by an operator. Only the Card read carries it; a Screen read never does (ADR-0022). Its Card revision advances on each save and Clear; every write answer, announcement and Card read carries it, and a holder applies only a state at least as new as the one it holds (ADR-0042).
+The one Card a Screen in Card Spotlight mode shows, set and cleared by an operator. Only the Card read carries it; a Screen read never does (ADR-0022). Its Card revision advances on each save and Clear; every write answer, announcement and Card read carries it, and a holder applies only a state at least as new as the one it holds (ADR-0042).
 
 **Card revision**:
 The count a Screen Card's saves and Clears advance, never its expiry. A save's and a Clear's answer, `card:updated`, `card:cleared` and the Card read all carry it, so every holder orders the Card states it is handed and applies only one at least as new as the one it holds (ADR-0042).

@@ -4,7 +4,7 @@ import { defineScreenModeConfigContract } from './contract';
 import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
 
 /**
- * The Top Cut Screen Mode's config contract: its shape, type, and defaults.
+ * The Top Cut Bracket Screen Mode's config contract: its shape, type, and defaults.
  *
  * The bracket is derived from the Phase the operator picks (#752); its size
  * comes from that Phase's first Round. The placeholder `bracketSize` it once

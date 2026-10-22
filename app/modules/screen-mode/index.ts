@@ -71,7 +71,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'card': { displayComponent: ScreenModesCardDisplay, settingsComponent: ScreenModesCardSettings },
 	'deck': { displayComponent: ScreenModesDeckDisplay, settingsComponent: ScreenModesDeckSettings },
 	'standings': { displayComponent: ScreenModesStandingsDisplay, settingsComponent: ScreenModesStandingsSettings },
-	'topCut': { displayComponent: ScreenModesTopCutDisplay, settingsComponent: ScreenModesTopCutSettings },
+	'top-cut': { displayComponent: ScreenModesTopCutDisplay, settingsComponent: ScreenModesTopCutSettings },
 	'feature-match': { displayComponent: ScreenModesFeatureMatchDisplay, settingsComponent: ScreenModesFeatureMatchSettings },
 	'feature-match-overlay': { displayComponent: ScreenModesFeatureMatchOverlayDisplay, settingsComponent: ScreenModesFeatureMatchOverlaySettings },
 	'broadcast-graphics': { displayComponent: ScreenModesBroadcastGraphicsDisplay, settingsComponent: ScreenModesBroadcastGraphicsSettings },

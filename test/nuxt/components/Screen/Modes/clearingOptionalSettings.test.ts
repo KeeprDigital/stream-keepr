@@ -139,7 +139,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		['First Player', 'player1Id', 7],
 		['Second Player', 'player2Id', 8],
 	]],
-	['TopCut', 'topCut', {}, [
+	['TopCut', 'top-cut', {}, [
 		['Custom header text', 'headerText', 'Championship Bracket'],
 		['Phase', 'phaseId', 3],
 	]],

@@ -59,7 +59,7 @@ async function mountEditor() {
 
 describe('screenModesTopCutSettings', () => {
 	beforeEach(() => {
-		config.value = { ...getDefaultConfigForMode('topCut') };
+		config.value = { ...getDefaultConfigForMode('top-cut') };
 		writes.length = 0;
 		phaseStore.loadPhasesByEventId.mockClear();
 	});

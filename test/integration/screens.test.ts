@@ -95,7 +95,7 @@ describe('screens API', () => {
 			'card': { scale: 1.5 },
 			'deck': { showDeckName: false },
 			'standings': { viewMode: 'all' },
-			'topCut': { showHeader: false },
+			'top-cut': { showHeader: false },
 			'feature-match': { showClock: false },
 			'feature-match-overlay': { presetId: 'full-table' },
 			'broadcast-graphics': { channels: [{ id: 'lower-thirds', name: 'Lower Thirds' }] },

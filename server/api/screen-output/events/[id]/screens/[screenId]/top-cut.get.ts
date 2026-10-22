@@ -8,6 +8,6 @@ import { requireScreenOutputModeRead } from '~~/server/utils/screenOutputRead';
  * Phase answers an empty bracket.
  */
 export default defineEventHandler(async (event): Promise<ScreenOutputTopCutResponse> => {
-	const { eventId, config: { phaseId } } = await requireScreenOutputModeRead(event, 'topCut');
+	const { eventId, config: { phaseId } } = await requireScreenOutputModeRead(event, 'top-cut');
 	return await findPhaseBracket(eventId, phaseId);
 });

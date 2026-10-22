@@ -75,7 +75,7 @@ export interface ScreenOutputPairingsResponse {
 	matches: ScreenOutputRoundMatch[];
 }
 
-/** One side of a Head-to-head: the Player, their current record and points, and their deck as a broadcast names it. */
+/** One side of a Head-to-Head: the Player, their current record and points, and their deck as a broadcast names it. */
 export interface ScreenOutputHeadToHeadPlayer {
 	id: number;
 	name: string;
@@ -89,7 +89,7 @@ export interface ScreenOutputHeadToHeadPlayer {
 	deckColors: string | null;
 }
 
-/** An earlier reported Match between a Head-to-head's two Players at this Event. */
+/** An earlier reported Match between a Head-to-Head's two Players at this Event. */
 export interface ScreenOutputHeadToHeadEarlierMatch {
 	matchId: number;
 	roundId: number;
@@ -106,10 +106,10 @@ export interface ScreenOutputHeadToHeadEarlierMatch {
 	resultString: string | null;
 }
 
-/** How an earlier Match between a Head-to-head's two Players ended, from the first Player's side. */
+/** How an earlier Match between a Head-to-Head's two Players ended, from the first Player's side. */
 export type HeadToHeadOutcome = 'player1' | 'player2' | 'draw' | 'reported';
 
-/** What a Head-to-head Screen renders from: its two Players, and their earlier Matches oldest first. */
+/** What a Head-to-Head Screen renders from: its two Players, and their earlier Matches oldest first. */
 export interface ScreenOutputHeadToHeadResponse {
 	/** `null` for a side no Player fills, such as an empty Slot's. */
 	player1: ScreenOutputHeadToHeadPlayer | null;
@@ -118,7 +118,7 @@ export interface ScreenOutputHeadToHeadResponse {
 }
 
 /**
- * What a Top Cut Screen renders from: the Phase its configuration names, and
+ * What a Top Cut Bracket Screen renders from: the Phase its configuration names, and
  * the bracket derived from that Phase's Rounds and their Matches (#752). A
  * Phase outside the Event, or one since deleted, answers `null` and an empty
  * bracket.

@@ -4,7 +4,7 @@ import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * A Phase's Top Cut bracket as the Top Cut Screen Mode renders it (#752), read
+ * A Phase's Top Cut bracket as the Top Cut Bracket Screen Mode renders it (#752), read
  * against real SQLite so the Event scoping, the Round order and each side's
  * current Player name are the query's, not a mock's.
  */

@@ -1059,7 +1059,7 @@ describe('pairingsModeConfigSchema', () => {
 	});
 });
 
-// ──────────────── Head-to-head ────────────────
+// ──────────────── Head-to-Head ────────────────
 
 describe('headToHeadModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('head-to-head');

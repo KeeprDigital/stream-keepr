@@ -12,7 +12,7 @@ function entrant(side: ScreenOutputMatchSide | null): BracketEntrant | null {
 
 /**
  * A Phase's Top Cut Bracket: its Rounds in order and their Matches, derived
- * into one column per Round (#752). The Top Cut Screen Output's read. Naming
+ * into one column per Round (#752). The Top Cut Bracket Screen Output's read. Naming
  * no Phase, or one the Event does not hold, answers no Phase and an empty
  * bracket. Each side is named as Pairings names it: its Player by their
  * current name, or the Match's own record of a side no Player holds.

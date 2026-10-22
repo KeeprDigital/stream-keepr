@@ -38,7 +38,7 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 	// Shared Metagame vocabulary: the Metagame page sorts by it; this editor never offered it.
 	'metagame.sortBy': ['conversionRate'],
-	// Shared Metagame vocabulary: Top Cards carries no minimum-points field to scope by.
+	// Shared Metagame vocabulary: Most Played Cards carries no minimum-points field to scope by.
 	'top-cards.scope': ['minPoints'],
 };
 
@@ -77,7 +77,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, { editor: string; variants: Re
 	'pairings': { editor: 'Pairings', variants: [{ autoPageEnabled: true }] },
 	// The Slot binding and the two Player pickers: both are Event References, so only the source and header are scalar.
 	'head-to-head': { editor: 'HeadToHead', variants: [{}, { playerSource: 'players' }] },
-	'topCut': { editor: 'TopCut', variants: [{}] },
+	'top-cut': { editor: 'TopCut', variants: [{}] },
 	// The Top N scope, a fixed card size, and auto-page.
 	'top-cards': { editor: 'TopCards', variants: [{ scope: 'topN', dynamicCardSize: false, autoPageEnabled: true }] },
 };

@@ -48,13 +48,13 @@ function topCutDependencies(phaseId: () => number | undefined): ScreenModeDepend
 }
 
 /**
- * What a Top Cut Screen renders: the bracket of the Phase its configuration
+ * What a Top Cut Bracket Screen renders: the bracket of the Phase its configuration
  * names, read through the Screen and kept current by Screen Mode Data
  * Freshness.
  */
 export function useTopCutModeData() {
 	const { eventId } = useScreenContext();
-	const config = useScreenModeConfig('topCut');
+	const config = useScreenModeConfig('top-cut');
 	const outputReads = useScreenOutputReads();
 
 	const freshness = useScreenModeFreshness<ScreenOutputTopCutResponse>({
