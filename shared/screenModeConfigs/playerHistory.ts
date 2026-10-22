@@ -7,7 +7,7 @@ import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, heade
 /** The Player History Screen Mode's config contract: its shape, type, and defaults. */
 export const playerHistoryModeConfigContract = defineScreenModeConfigContract({
 	playerId: z.number().int().positive().nullable(),
-	columns: z.array(columnConfigSchema(PLAYER_HISTORY_COLUMN_KEY_VALUES)).min(1).max(6),
+	columns: z.array(columnConfigSchema(PLAYER_HISTORY_COLUMN_KEY_VALUES)).min(1).max(PLAYER_HISTORY_COLUMN_KEY_VALUES.length),
 	...headerConfigShape,
 	rowsPerPage: pageRotationPageSize,
 	...pageRotationShape,
@@ -18,6 +18,8 @@ export const playerHistoryModeConfigContract = defineScreenModeConfigContract({
 		{ key: 'opponent', visible: true },
 		{ key: 'table', visible: true },
 		{ key: 'outcome', visible: true },
+		{ key: 'opponentArchetype', visible: false },
+		{ key: 'gameScore', visible: false },
 	],
 	...DEFAULT_HEADER_CONFIG,
 	rowsPerPage: 8,

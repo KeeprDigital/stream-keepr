@@ -58,3 +58,25 @@ export function getPlayerIdentityValue(
 			return null;
 	}
 }
+
+/** A Player's deck as a broadcast names it. */
+export interface PlayerDeckIdentity {
+	name: string | null;
+	colors: string | null;
+}
+
+/**
+ * The name and colours a broadcast shows for a Player's deck: their assigned
+ * Archetype, else the name their primary Deck List projects into game data.
+ * Blank when the Player has neither, as when they have no Deck List.
+ */
+export function resolvePlayerDeckIdentity(
+	archetype: { name: string; colors: string | null } | null,
+	gameData: PlayerGameData | null | undefined,
+): PlayerDeckIdentity {
+	const mtg = getMtgGameData(gameData);
+	return {
+		name: archetype?.name ?? mtg.deckName ?? null,
+		colors: archetype?.colors ?? mtg.deckColors ?? null,
+	};
+}
