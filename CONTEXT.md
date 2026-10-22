@@ -151,6 +151,9 @@ The server timestamp a Page Rotation counts from, written only by an operator su
 **Screen Card**:
 The one Card a Screen in Card mode shows, set and cleared by an operator. Only the Card read carries it; a Screen read never does (ADR-0022). Its Card revision advances on each save and Clear; every write answer, announcement and Card read carries it, and a holder applies only a state at least as new as the one it holds (ADR-0042).
 
+**Card revision**:
+The count a Screen Card's saves and Clears advance, never its expiry. A save's and a Clear's answer, `card:updated`, `card:cleared` and the Card read all carry it, so every holder orders the Card states it is handed and applies only one at least as new as the one it holds (ADR-0042).
+
 **Card Timeout**:
 A Screen Card's optional duration, after which every holder hides it by the shared clock. Expiry is a clock projection, like Page Rotation: no read, client or timer writes it, and nothing announces it (ADR-0022).
 _Avoid_: auto-clear (nothing clears the Card when it runs out)

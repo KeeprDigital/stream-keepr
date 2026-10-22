@@ -952,6 +952,39 @@ describe('useCardStore', () => {
 			await rotating;
 		});
 
+		it('puts back the value last accepted when two controls of one field both fail, the first first', async () => {
+			const first = deferredSave();
+			const flipping = store.controlActiveCard('flip');
+			const second = deferredSave();
+			const unflipping = store.controlActiveCard('flip');
+
+			first.reject(unavailable());
+			await flipping;
+			second.reject(unavailable());
+			await unflipping;
+
+			// The server never held the first control's unsaved `true`.
+			expect(store.activeCard!.displayData.flipped).toBe(false);
+		});
+
+		it('leaves a field to the later control of it still out when an earlier one fails', async () => {
+			const first = deferredSave();
+			const flipping = store.controlActiveCard('flip');
+			const second = deferredSave();
+			const unflipping = store.controlActiveCard('flip');
+			const third = deferredSave();
+			const reflipping = store.controlActiveCard('flip');
+
+			first.reject(unavailable());
+			await flipping;
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+
+			second.reject(unavailable());
+			third.resolve({ success: true, revision: 2 });
+			await Promise.all([unflipping, reflipping]);
+			expect(store.activeCard!.displayData.flipped).toBe(true);
+		});
+
 		it('puts nothing back over newer state accepted while its save was out', async () => {
 			const save = deferredSave();
 			const controlling = store.controlActiveCard('flip');

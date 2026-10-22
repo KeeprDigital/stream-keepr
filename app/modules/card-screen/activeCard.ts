@@ -6,7 +6,7 @@ import type { MessageData } from '~/types/realtime';
 import type { Flight } from '~/utils/guardedSequence';
 import { onScopeDispose, toValue } from 'vue';
 import { cardTimeoutRemainingMs } from '~~/shared/utils/card/timeout';
-import { createGuardedSequence } from '~/utils/guardedSequence';
+import { createGuardedSequence, createKeyedGuardedSequence } from '~/utils/guardedSequence';
 
 /**
  * How a Card read ended. Only `'landed'` holds what it read; Event Data Resync
@@ -71,8 +71,9 @@ interface ActiveCardRuntimeState {
  *
  * A display control (`controlActiveCardDisplay`) shows its toggle at once by
  * replacing the held Card, never by mutating it in place, and saves that Card.
- * A failed save puts back only the field it toggled, and only while nothing
- * newer has been accepted since and the field still shows its toggle.
+ * A failed save puts back only the field it toggled, to the Card last
+ * accepted, and only while nothing newer has been accepted since and no later
+ * control of that field is still out.
  */
 export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	const { saveScreenCard, getScreenCard, deleteScreenCard } = useCardRepository();
@@ -89,9 +90,17 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	 * one is accepted, when anything is at least as new (#734).
 	 */
 	let heldRevision: number | null = null;
-	/** Each accepted Card state begins a Flight, so a display control can tell whether anything landed since it began. */
-	const accepts = createGuardedSequence();
-	let accepted = accepts.begin();
+	/**
+	 * Each accepted Card state begins a Flight here, so a display control can
+	 * tell whether anything was accepted while its save was out: its Flight is
+	 * still current only if nothing was.
+	 */
+	const acceptances = createGuardedSequence();
+	let lastAcceptance = acceptances.begin();
+	/** The Card last accepted, whose display a failed display control puts back. */
+	let acceptedCard: MtgCard | null = null;
+	/** The latest display control of each field: only it may put that field back. */
+	const displayControls = createKeyedGuardedSequence<keyof MtgCardDisplayData>();
 	/** The Screen selection, within the Event Lifetime, a write's continuation belongs to. */
 	const selections = createGuardedSequence();
 	let selection = selections.begin();
@@ -133,13 +142,18 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	}
 
 	/**
-	 * Accept the selected Screen's Card at `revision`. The caller has checked it
-	 * is at least as new as the one held; anything else supersedes reads first.
+	 * Hold the selected Screen's Card state if it is at least as new as the one
+	 * held, superseding any read still out; answers whether it was held (#734).
 	 */
-	function accept(card: MtgCard | null, revision: number) {
-		heldRevision = revision;
-		accepted = accepts.begin();
-		holdCard(card);
+	function acceptIfNewer(next: ScreenCardState) {
+		if (!isAtLeastAsNew(next.revision))
+			return false;
+		reads.supersede();
+		heldRevision = next.revision;
+		lastAcceptance = acceptances.begin();
+		acceptedCard = next.card;
+		holdCard(next.card);
+		return true;
 	}
 
 	/** Hold a Card, arming its hiding from its own timeout data; an expired Card is held as none. */
@@ -194,7 +208,8 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	function resetActiveCardState() {
 		reads.supersede();
 		heldRevision = null;
-		accepted = accepts.begin();
+		lastAcceptance = acceptances.begin();
+		acceptedCard = null;
 		state.activeCard.value = null;
 		state.timeout.reset();
 		clearCardTimeout();
@@ -264,10 +279,9 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 				const answer = await whileLoading(async () => screenOutputRead ? await screenOutputRead() : await getScreenCard(eventId, screenId));
 				// Something newer reached the Card while this read was out, or is held
 				// already: it lands nothing.
-				if (!stillSelected(flight, eventId, screenId) || !isAtLeastAsNew(answer.revision))
+				if (!stillSelected(flight, eventId, screenId))
 					return 'superseded';
-				accept(answer.card, answer.revision);
-				return 'landed';
+				return acceptIfNewer(answer) ? 'landed' : 'superseded';
 			},
 			// A superseded read's failure describes nothing still held.
 			{ errorRef: state.error, flight },
@@ -290,11 +304,9 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.executeAction(
 			async () => {
 				const { revision } = await whileLoading(async () => saveScreenCard(eventId, screenId, cardData));
-				// A newer Card state reached the store first: it stays shown (#734).
-				if (!stillSelected(flight, eventId, screenId) || !isAtLeastAsNew(revision))
-					return cardData;
-				reads.supersede();
-				accept(cardData, revision);
+				// A newer Card state that reached the store first stays shown (#734).
+				if (stillSelected(flight, eventId, screenId))
+					acceptIfNewer({ card: cardData, revision });
 				return cardData;
 			},
 			// A failure from an ended selection describes nothing still held.
@@ -320,10 +332,8 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 		return state.executeAction(
 			async () => {
 				const { revision } = await deleteScreenCard(eventId, screenId);
-				if (!stillSelected(flight, eventId, screenId) || !isAtLeastAsNew(revision))
-					return;
-				reads.supersede();
-				accept(null, revision);
+				if (stillSelected(flight, eventId, screenId))
+					acceptIfNewer({ card: null, revision });
 			},
 			{ errorRef: state.error, flight },
 		);
@@ -332,40 +342,39 @@ export function useActiveCardScreenRuntime(state: ActiveCardRuntimeState) {
 	/**
 	 * Toggle one display field of the held Card and save it. The toggle shows at
 	 * once on a copy of the held Card; the held one is never mutated. A failed
-	 * save puts back that field alone, unless newer Card state was accepted
-	 * since, the Screen selection changed, or the field no longer shows the
-	 * toggle (#734).
+	 * save puts that field alone back to the Card last accepted, unless newer
+	 * Card state was accepted since, the Screen selection changed, or a later
+	 * control of the same field is still out, which owns it now (#734).
 	 */
 	async function controlActiveCardDisplay(field: keyof MtgCardDisplayData) {
 		const held = state.activeCard.value;
 		if (!held)
 			return null;
 		const before = held.displayData[field];
-		const since = accepted;
+		const acceptedBefore = lastAcceptance;
 		const flight = selection;
+		const control = displayControls.begin(field);
 		const toggled = withDisplayField(held, field, !before);
 		state.activeCard.value = toggled;
+		// `saveActiveCard` answers `null` exactly when the save did not happen.
 		const saved = await saveActiveCard(toggled);
 		const shown = state.activeCard.value;
-		if (saved === null && since.current && flight.current && shown && shown.displayData[field] === !before)
-			state.activeCard.value = withDisplayField(shown, field, before);
+		const ownsField = acceptedBefore.current && flight.current && control.current;
+		if (saved === null && shown && ownsField)
+			state.activeCard.value = withDisplayField(shown, field, acceptedCard?.displayData[field] ?? before);
 		return saved;
 	}
 
 	function applyRemoteUpdated(data: MessageData<'card:updated'>) {
 		const eventId = currentEventId();
-		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data) && isAtLeastAsNew(data.revision)) {
-			reads.supersede();
-			accept(data.card, data.revision);
-		}
+		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data))
+			acceptIfNewer({ card: data.card, revision: data.revision });
 	}
 
 	function applyRemoteCleared(data: MessageData<'card:cleared'>) {
 		const eventId = currentEventId();
-		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data) && isAtLeastAsNew(data.revision)) {
-			reads.supersede();
-			accept(null, data.revision);
-		}
+		if (eventId && data.eventId === eventId && isMessageForActiveScreen(data))
+			acceptIfNewer({ card: null, revision: data.revision });
 	}
 
 	onScopeDispose(() => clearCardTimeout());
