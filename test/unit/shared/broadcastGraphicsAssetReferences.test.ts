@@ -277,6 +277,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'metagame',
 			'top-cards',
 			'player-history',
+			'pairings',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

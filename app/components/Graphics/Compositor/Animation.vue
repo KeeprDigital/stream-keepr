@@ -69,6 +69,8 @@ const props = defineProps<{
 	/** The Broadcast Graphics canvas, which a top-level owner's slide is measured against. */
 	canvasWidth: number;
 	canvasHeight: number;
+	/** Leave out the heading and divider, for a host that titles the editor itself. */
+	headless?: boolean;
 }>();
 
 const emit = defineEmits<{ 'update:graphics': [graphics: BroadcastGraphicConfig[]] }>();
@@ -242,11 +244,12 @@ function staggerOf(phase: GraphicAnimationPhase) {
 <template>
 	<fieldset
 		v-if="selection.kind === 'graphic' || selection.kind === 'item'"
-		class="min-w-0 space-y-3 border-t border-default/70 pt-3"
+		class="min-w-0 space-y-3"
+		:class="headless ? '' : 'border-t border-default/70 pt-3'"
 		:disabled="!canAuthor"
 		data-testid="graphic-animation-editor"
 	>
-		<div class="flex items-center gap-2">
+		<div v-if="!headless" class="flex items-center gap-2">
 			<UIcon name="i-lucide-wand-sparkles" class="size-4 shrink-0 text-muted" />
 			<p class="text-sm font-semibold">
 				Animation

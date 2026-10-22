@@ -37,6 +37,8 @@ const ScreenModesTopCardsDisplay = defineAsyncComponent(() => import('~/componen
 const ScreenModesTopCardsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCards/Settings.vue'));
 const ScreenModesPlayerHistoryDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Display.vue'));
 const ScreenModesPlayerHistorySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Settings.vue'));
+const ScreenModesPairingsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Display.vue'));
+const ScreenModesPairingsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Settings.vue'));
 
 interface ScreenModeRuntimeDefinition {
 	displayComponent: Component;
@@ -74,6 +76,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'metagame': { displayComponent: ScreenModesMetagameDisplay, settingsComponent: ScreenModesMetagameSettings },
 	'top-cards': { displayComponent: ScreenModesTopCardsDisplay, settingsComponent: ScreenModesTopCardsSettings },
 	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
+	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModesPairingsSettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 
 const HALIGN_MAP = { left: 'start', center: 'center', right: 'end' } as const;

@@ -2,9 +2,8 @@
 import type { RevealOrder, StandingsViewMode } from '~~/shared/types/enums';
 import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { completeColumns, isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
+import { isColumnVisible, withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { STANDINGS_COLUMN_KEY_VALUES } from '~~/shared/types/enums';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -84,8 +83,8 @@ const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
 };
 
 // A Screen whose columns were saved before a column existed is offered it too,
-// hidden, after its own (#755).
-const editorColumns = computed(() => completeColumns(config.value.columns, STANDINGS_COLUMN_KEY_VALUES));
+// as its defaults hold it (the Position Change column hidden), after its own.
+const editorColumns = computed(() => withEveryColumn(config.value.columns, screenModeConfigContract('standings').defaults.columns));
 
 const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns, 'deck'));
 

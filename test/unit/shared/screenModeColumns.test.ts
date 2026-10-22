@@ -1,32 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { completeColumns } from '~~/shared/screenModeConfigs/subShapes';
+import { playerHistoryModeConfigContract } from '../../../shared/screenModeConfigs/playerHistory';
+import { withEveryColumn } from '../../../shared/screenModeConfigs/subShapes';
 
-const KEYS = ['position', 'name', 'points', 'positionChange'] as const;
+describe('withEveryColumn', () => {
+	const defaults = [
+		{ key: 'round', visible: true },
+		{ key: 'opponent', visible: true },
+		{ key: 'table', visible: true },
+		{ key: 'outcome', visible: true },
+		{ key: 'opponentArchetype', visible: false },
+		{ key: 'gameScore', visible: true },
+	];
 
-describe('completeColumns', () => {
-	it('keeps a stored list that names every column as stored', () => {
+	it('appends each default column a stored list lacks, as the defaults hold it, in their order', () => {
 		const stored = [
-			{ key: 'name' as const, visible: true },
-			{ key: 'positionChange' as const, visible: true },
-			{ key: 'position' as const, visible: false },
-			{ key: 'points' as const, visible: true },
+			{ key: 'outcome', visible: true },
+			{ key: 'round', visible: false },
+			{ key: 'opponent', visible: true },
+			{ key: 'table', visible: true },
 		];
 
-		expect(completeColumns(stored, KEYS)).toEqual(stored);
+		expect(withEveryColumn(stored, defaults)).toEqual([
+			{ key: 'outcome', visible: true },
+			{ key: 'round', visible: false },
+			{ key: 'opponent', visible: true },
+			{ key: 'table', visible: true },
+			{ key: 'opponentArchetype', visible: false },
+			{ key: 'gameScore', visible: true },
+		]);
 	});
 
-	it('appends a column a stored list predates, hidden, after the stored order', () => {
-		const stored = [
-			{ key: 'points' as const, visible: true },
-			{ key: 'name' as const, visible: true },
-			{ key: 'position' as const, visible: false },
-		];
+	it('returns a complete list as it is', () => {
+		const complete = defaults.map(column => ({ ...column, visible: false }));
 
-		expect(completeColumns(stored, KEYS)).toEqual([
-			{ key: 'points', visible: true },
-			{ key: 'name', visible: true },
-			{ key: 'position', visible: false },
-			{ key: 'positionChange', visible: false },
+		expect(withEveryColumn(complete, defaults)).toBe(complete);
+	});
+});
+
+describe('player History columns', () => {
+	it('offer opponent archetype and game score, hidden by default after the original four', () => {
+		expect(playerHistoryModeConfigContract.defaults.columns).toEqual([
+			{ key: 'round', visible: true },
+			{ key: 'opponent', visible: true },
+			{ key: 'table', visible: true },
+			{ key: 'outcome', visible: true },
+			{ key: 'opponentArchetype', visible: false },
+			{ key: 'gameScore', visible: false },
 		]);
+	});
+
+	it('accept a stored list of the original four, and one holding every column', () => {
+		const schema = playerHistoryModeConfigContract.schema.shape.columns;
+
+		expect(schema.safeParse(playerHistoryModeConfigContract.defaults.columns.slice(0, 4)).success).toBe(true);
+		expect(schema.safeParse(playerHistoryModeConfigContract.defaults.columns).success).toBe(true);
 	});
 });

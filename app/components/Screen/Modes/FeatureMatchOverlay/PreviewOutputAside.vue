@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
+import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
@@ -41,11 +43,18 @@ const props = defineProps<{
 	canvasHeight: number;
 	publicationBlocked?: boolean;
 	publicationBlockReason?: string;
+	/** Where the selected layer sits on the canvas, when the canvas can move it. */
+	selectionFrame?: EditorSelectionFrame | null;
+	selectionLabel?: string;
+	/** The tallest the fitted preview is drawn, as a CSS length. */
+	fitHeight?: string;
 }>();
 
 const emit = defineEmits<{
 	selectTarget: [target: FeatureMatchOverlaySelectionTarget];
 	selectCompositorTarget: [target: GraphicsSelectionTarget];
+	/** The selected layer moved or resized on the canvas; one `gesture` per drag. */
+	manipulate: [rect: GraphicRect, gesture: number];
 }>();
 
 const toast = useToast();
@@ -150,7 +159,20 @@ function handlePreviewSelection(message: MessageEvent) {
 		return;
 	}
 
+	releaseFrameFocus();
 	emit('selectTarget', message.data.target);
+}
+
+/**
+ * Hand keyboard focus back to the editor after a click in the preview.
+ *
+ * A click inside the frame focuses the frame's own document, whose key presses
+ * never reach this one, so the editor's shortcuts would stop working the moment
+ * an author picked something on the canvas.
+ */
+function releaseFrameFocus() {
+	if (import.meta.client && previewFrame.value && document.activeElement === previewFrame.value)
+		previewFrame.value.blur();
 }
 
 /**
@@ -182,6 +204,7 @@ function handleCompositorPreviewSelection(message: MessageEvent) {
 		return;
 	}
 
+	releaseFrameFocus();
 	emit('selectCompositorTarget', message.data.target);
 }
 
@@ -264,6 +287,8 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 			v-model:output="previewOutput"
 			v-model:item-guides="itemGuides"
 			v-model:safe-area-guides="safeAreaGuides"
+			:collapsible="false"
+			:fit-height="fitHeight"
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
 		>
@@ -343,6 +368,14 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 					class="absolute inset-0 size-full border-0"
 					title="Feature Match Overlay preview"
 					@load="syncPreviewState"
+				/>
+				<GraphicsCanvasManipulationOverlay
+					:rect="selectionFrame?.rect ?? null"
+					:origin="selectionFrame?.origin"
+					:canvas-width="canvasWidth"
+					:canvas-height="canvasHeight"
+					:label="selectionLabel"
+					@change="(rect, gesture) => emit('manipulate', rect, gesture)"
 				/>
 			</template>
 		</GraphicsPreviewPanel>
