@@ -23,6 +23,7 @@ describe('screen Mode Page Rotation', () => {
 		expect(paginated.map(({ declared }) => declared)).toEqual([
 			'standings.rowsPerPage',
 			'metagame.pageSize',
+			'top-cards.rowsPerPage',
 			'player-history.rowsPerPage',
 		]);
 	});
