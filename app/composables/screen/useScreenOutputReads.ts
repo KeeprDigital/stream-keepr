@@ -42,6 +42,7 @@ export function useScreenOutputReads() {
 		liveSession: () => repository.liveSession(requireScope()),
 		playerHistory: () => repository.playerHistory(requireScope()),
 		standings: () => repository.standings(requireScope()),
+		pairings: () => repository.pairings(requireScope()),
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		topCut: () => repository.topCut(requireScope()),

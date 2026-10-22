@@ -14,6 +14,7 @@ import { deckModeConfigContract } from '../screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from '../screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from '../screenModeConfigs/featureMatchOverlay';
 import { metagameModeConfigContract } from '../screenModeConfigs/metagame';
+import { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
@@ -283,6 +284,7 @@ export { DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
 export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
+export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
 export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
@@ -383,6 +385,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'metagame': metagameModeConfigContract,
 	'top-cards': topCardsModeConfigContract,
 	'player-history': playerHistoryModeConfigContract,
+	'pairings': pairingsModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -491,6 +494,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'metagame': ['viewMode', 'scope', 'topN', 'minPoints', 'playerListId', 'archetypeFilter'],
 	'top-cards': ['scope', 'topN', 'playerListId', 'archetypeFilter'],
 	'player-history': ['playerId'],
+	'pairings': ['roundId'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode

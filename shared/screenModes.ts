@@ -10,6 +10,7 @@ import { deckModeConfigContract } from './screenModeConfigs/deck';
 import { featureMatchModeConfigContract } from './screenModeConfigs/featureMatch';
 import { featureMatchOverlayModeConfigContract } from './screenModeConfigs/featureMatchOverlay';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
+import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
@@ -182,6 +183,7 @@ const SCREEN_MODE_DEFINITIONS = {
 	'metagame': { label: 'Metagame', icon: 'i-lucide-pie-chart', displayType: 'overlay', description: 'Metagame breakdown', backgroundLayers: true, config: metagameModeConfigContract, eventReferences: { playerListId: 'playerList' }, pageRotation: { pageSize: 'pageSize' } },
 	'top-cards': { label: 'Top Cards', icon: 'i-lucide-trending-up', displayType: 'overlay', description: 'Most played cards grid', backgroundLayers: true, config: topCardsModeConfigContract, eventReferences: { playerListId: 'playerList' } },
 	'player-history': { label: 'Player History', icon: 'i-lucide-history', displayType: 'overlay', description: 'Player match history', backgroundLayers: true, config: playerHistoryModeConfigContract, eventReferences: { playerId: 'player' }, pageRotation: { pageSize: 'rowsPerPage' } },
+	'pairings': { label: 'Pairings', icon: 'i-lucide-list-ordered', displayType: 'overlay', description: 'Round pairings and results', backgroundLayers: true, config: pairingsModeConfigContract, eventReferences: { roundId: 'round' }, pageRotation: { pageSize: 'rowsPerPage' } },
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;

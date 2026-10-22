@@ -4,6 +4,7 @@ import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
 	ScreenOutputFeatureMatchResponse,
 	ScreenOutputMetagameResponse,
+	ScreenOutputPairingsResponse,
 	ScreenOutputPlayerDecksResponse,
 	ScreenOutputStandingsResponse,
 	ScreenOutputTopCutResponse,
@@ -46,6 +47,7 @@ export function useScreenOutputReadRepository() {
 		playerHistory: (scope: ScreenOutputReadScope) =>
 			read<{ player: Player; history: PlayerMatchHistoryEntry[] }>(scope, 'player-history'),
 		standings: (scope: ScreenOutputReadScope) => read<ScreenOutputStandingsResponse>(scope, 'standings'),
+		pairings: (scope: ScreenOutputReadScope) => read<ScreenOutputPairingsResponse>(scope, 'pairings'),
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
 		topCut: (scope: ScreenOutputReadScope) => read<ScreenOutputTopCutResponse>(scope, 'top-cut'),
