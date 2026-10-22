@@ -306,7 +306,7 @@ const noMatchesAvailableDescription = computed(() => hasRounds.value
 				:players="playerStore.players"
 				:feature-matches="featureMatchesForList"
 				:feature-match-assignments="viewedRoundId ? assignmentStore.assignmentsForRound(viewedRoundId) : []"
-				:save-assignment-note="eventStore.event?.featureMatchNotesEnabled === false ? undefined : handleAssignmentNoteBlur"
+				:save-assignment-note="eventStore.event?.featureMatchNotesEnabled ? handleAssignmentNoteBlur : undefined"
 				:is-assignment-remote-changed="assignmentStore.isRemoteChanged"
 				:loading="initialLoading"
 				:global-filter="globalFilter"

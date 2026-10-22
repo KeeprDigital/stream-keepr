@@ -86,7 +86,7 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		lgsEnabled: false,
 		pronounsEnabled: true,
 		tableNumberEnabled: false,
-		featureMatchNotesEnabled: true,
+		featureMatchNotesEnabled: false,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3b51c3a3-ee0f-4dfd-9eac-98a0185c72d7",
+  "id": "1a0a3fde-89d0-4168-a050-ba7f123f4bfa",
   "prevId": "cd888622-7837-4a16-8afe-e0581d57a013",
   "tables": {
     "animation_effect_presets": {
@@ -1433,7 +1433,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": true
+          "default": false
         },
         "created_at": {
           "name": "created_at",

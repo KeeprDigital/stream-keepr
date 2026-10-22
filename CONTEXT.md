@@ -87,7 +87,7 @@ A Round-scoped selection of a Match for a Feature Match Slot. Moving the same Ma
 _Avoid_: Feature Match when referring to the saved Round selection.
 
 **Feature Match Note**:
-A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends. An Event can switch Feature Match Notes off, which hides them from production surfaces without deleting any.
+A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends. Feature Match Notes are off for a new Event; switching them off hides them from production surfaces without deleting any.
 
 **Feature Match Session**:
 The live state timeline for a Feature Match Slot.
