@@ -14,8 +14,7 @@ const disableFsWatchImport = fileURLToPath(new URL('../integration/disable-fs-wa
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 
 export async function setup() {
-	// The browser gate's Chrome is the first on a fresh CI runner; launched beside
-	// `nuxt dev` it overran its startup bound (#790), so it starts once here first.
+	// Before the dev server, so the cold launch has the machine to itself (#790).
 	const warmingStarted = Date.now();
 	const warmed = await warmChromium();
 	if (warmed)

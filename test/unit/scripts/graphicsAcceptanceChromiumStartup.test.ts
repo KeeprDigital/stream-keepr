@@ -13,14 +13,14 @@ import { launchChromium, warmChromium } from '../../../scripts/graphics-acceptan
  * that listened without saying so. These drive the real launcher against the
  * stand-in, which writes to stderr what a real Chrome would log.
  */
-const STAND_IN = fileURLToPath(new URL('./fixtures/stubborn-chrome.mjs', import.meta.url));
+const STUBBORN_CHROME = fileURLToPath(new URL('./fixtures/stubborn-chrome.mjs', import.meta.url));
 
-chmodSync(STAND_IN, 0o755);
+chmodSync(STUBBORN_CHROME, 0o755);
 
 const quick = { startupTimeoutMs: 300, terminateGraceMs: 200 };
 
 async function startupFailure(args: string[]): Promise<string> {
-	const error = await launchChromium(STAND_IN, args, quick).then(
+	const error = await launchChromium(STUBBORN_CHROME, args, quick).then(
 		() => { throw new Error('the stand-in launched'); },
 		(failure: Error) => failure,
 	);
@@ -58,16 +58,16 @@ describe('warming the acceptance browser', () => {
 
 	it('starts the first available browser once and leaves nothing running', async () => {
 		const tag = `--stand-in=${process.pid}-${Date.now()}`;
-		process.env.CHROME_BIN = STAND_IN;
+		process.env.CHROME_BIN = STUBBORN_CHROME;
 
-		await expect(warmChromium({ extraArgs: [tag], terminateGraceMs: 200 })).resolves.toBe(STAND_IN);
+		await expect(warmChromium({ extraArgs: [tag], terminateGraceMs: 200 })).resolves.toBe(STUBBORN_CHROME);
 
 		const ps = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
 		expect(ps.split('\n').filter(line => line.includes(tag))).toEqual([]);
 	});
 
 	it('says why a browser could not start even on an idle machine', async () => {
-		process.env.CHROME_BIN = STAND_IN;
+		process.env.CHROME_BIN = STUBBORN_CHROME;
 
 		await expect(warmChromium({ extraArgs: ['--silent', '--say=still loading fonts'], ...quick }))
 			.rejects

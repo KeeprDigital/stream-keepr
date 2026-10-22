@@ -215,6 +215,8 @@ function signal(child, name) {
  * SIGKILL was stuck, not merely slow.
  */
 async function terminate(browser) {
+	if (browser.child.pid === undefined)
+		return 'never started';
 	if (!running(browser.child))
 		return 'already exited';
 	signal(browser.child, 'SIGTERM');
@@ -338,7 +340,7 @@ function startupReport(failure, { candidate, pid, stopped, activePort, errorOutp
 		`  status: ${failure.status}; ${stopped}`,
 		`  ${activePort}`,
 		printed
-			? `  stderr (last ${STDERR_KEPT_CHARS} characters):\n${printed.split('\n').map(line => `    ${line}`).join('\n')}`
+			? `  stderr (at most the last ${STDERR_KEPT_CHARS} characters):\n${printed.split('\n').map(line => `    ${line}`).join('\n')}`
 			: '  stderr: (nothing)',
 	].join('\n');
 }
@@ -386,8 +388,9 @@ export async function launchChromium(candidate, extraArgs, {
 	let endpoint;
 	try {
 		endpoint = await new Promise((resolve, reject) => {
-			// Startup only, not an assertion: a cold Chrome on a 2-core CI runner that
-			// is also serving `nuxt dev` has overrun 15s.
+			// Startup only, not an assertion: a cold Chrome on a CI runner that is
+			// also serving `nuxt dev` has overrun 15s, and Chrome 156 30s, which is
+			// why a suite like that warms one first (`warmChromium`, #790).
 			const timeout = setTimeout(
 				() => reject(new StartupFailure(
 					'Chrome DevTools endpoint timed out.',
