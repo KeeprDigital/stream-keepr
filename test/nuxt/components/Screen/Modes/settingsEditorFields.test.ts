@@ -11,6 +11,8 @@ import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
+
 /**
  * The guard against an editor drifting from its config contract (ADR-0037, #498).
  *

@@ -35,7 +35,7 @@ export function useArchetypeSpotlightModeData() {
 	const pilots = computed(() => spotlight.value?.pilots ?? []);
 	const topCards = computed(() => spotlight.value?.topCards ?? []);
 
-	const { pageData, totalPages, currentPage } = usePaginatedScreenMode({ mode: 'archetype-spotlight', config, rows: pilots });
+	const { pageData, rowCount, totalPages, currentPage } = usePaginatedScreenMode({ mode: 'archetype-spotlight', config, rows: pilots });
 
 	// ── Header ──
 	const scopeLabel = computed(() => {
@@ -78,6 +78,7 @@ export function useArchetypeSpotlightModeData() {
 		spotlight,
 		topCards,
 		pageData,
+		rowCount,
 		currentPage,
 		totalPages,
 		formatRecord,

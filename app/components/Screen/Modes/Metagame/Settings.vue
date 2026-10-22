@@ -16,6 +16,7 @@ import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -35,19 +36,14 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('metagame').fields;
 
-const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists']);
+useConsumedEventData(['playerLists']);
 
 onMounted(async () => {
 	if (!props.eventId) {
 		return;
-	}
-
-	if (!playerStore.isLoaded) {
-		await playerStore.loadPlayersByEventId(props.eventId);
 	}
 
 	if (!playerListStore.isLoaded) {
@@ -111,42 +107,17 @@ const showsConversionRate = computed(() =>
 	config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
 );
 
-const estimatedRowCount = computed(() => {
-	// A chart is one page: it draws every bar at once, Other folding the rest.
-	if (config.value.viewMode === 'chart') {
-		return 0;
-	}
-
-	if (config.value.viewMode === 'cards') {
-		return config.value.limit;
-	}
-
-	let scopedPlayerCount: number;
-	if (config.value.scope === 'topN') {
-		scopedPlayerCount = config.value.topN;
-	}
-	else if (config.value.scope === 'minPoints') {
-		scopedPlayerCount = playerStore.players
-			.filter(player => player.points != null && player.points >= config.value.minPoints)
-			.length;
-	}
-	else if (config.value.scope === 'playerList') {
-		const list = playerListStore.lists.find(item => item.id === config.value.playerListId);
-		scopedPlayerCount = list?.memberCount ?? 0;
-	}
-	else {
-		scopedPlayerCount = playerStore.players.length;
-	}
-
-	return config.value.archetypeLimit == null
-		? scopedPlayerCount
-		: Math.min(scopedPlayerCount, config.value.archetypeLimit + 1);
-});
+// The table rows the Screen pages (none for a chart, which is one page), read and followed as its Screen Output reads and follows them, so
+// the page count is the one it renders (#780).
+const { rowCount, loading: loadingRows } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	useMetagameModeData,
+);
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'metagame', config, rowCount: estimatedRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'metagame', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 function persistColumns(columns: ActiveMetagameColumnConfig[]) {
@@ -339,6 +310,7 @@ function updateArchetypeLimit(value: number | null | undefined) {
 			:rotation="rotation"
 			page-size-description="Number of table rows shown per page."
 			auto-page-description="Automatically cycle through table pages."
+			:loading="loadingRows"
 		/>
 
 		<ScreenSettingsCard title="Animation">

@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
+
 vi.mock('vue-draggable-plus', () => ({
 	VueDraggable: defineComponent({
 		name: 'VueDraggable',

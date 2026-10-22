@@ -22,6 +22,7 @@ mockNuxtImport('useServerTime', () => () => ({
 
 function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number; currentPage?: number } = {}) {
 	const saveConfig = vi.fn();
+	const rowCount = ref(20); // 4 pages of 5
 	const state = reactive({
 		...getDefaultConfigForMode('standings'),
 		autoPageEnabled: overrides.autoPageEnabled ?? true,
@@ -33,10 +34,10 @@ function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number
 	const writes = useRotationConfigWrites({
 		mode: 'standings',
 		config: computed(() => state),
-		rowCount: computed(() => 20), // 4 pages of 5
+		rowCount,
 		saveConfig,
 	});
-	return { writes, saveConfig, state };
+	return { writes, saveConfig, state, rowCount };
 }
 
 describe('useRotationConfigWrites', () => {
@@ -115,5 +116,34 @@ describe('useRotationConfigWrites', () => {
 
 		state.rowsPerPage = 8;
 		expect(writes.totalPages.value).toBe(3);
+	});
+
+	it('a manual selection never picks a page beyond the real last page', () => {
+		const { writes, saveConfig } = harness({ autoPageEnabled: false });
+
+		writes.adminSetPage(9);
+		writes.adminSetPage(0);
+
+		expect(saveConfig.mock.calls).toEqual([[{ currentPage: 4 }], [{ currentPage: 1 }]]);
+	});
+
+	it('a manual selection while rotating anchors at most the real last page', () => {
+		const { writes, saveConfig } = harness({ rotationAnchor: 1_000_000 });
+
+		writes.adminSetPage(9);
+
+		// Page 4 of 10 s pages: current from 30 s after the anchor.
+		expect(saveConfig).toHaveBeenCalledWith({ rotationAnchor: 1_000_000 - 30_000 });
+	});
+
+	it('pages from the rows it is given, following them as they change', () => {
+		const { writes, saveConfig, rowCount } = harness({ autoPageEnabled: false, currentPage: 4 });
+
+		rowCount.value = 7;
+		expect(writes.totalPages.value).toBe(2);
+		expect(writes.currentPage.value).toBe(2);
+
+		writes.adminNextPage();
+		expect(saveConfig).toHaveBeenCalledWith({ currentPage: 1 });
 	});
 });

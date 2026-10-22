@@ -114,6 +114,7 @@ export function useMetagameModeData() {
 		config.value.viewMode === 'chart' ? [] : displayRows.value,
 	);
 	const {
+		rowCount,
 		pageData,
 		totalPages,
 		currentPage,
@@ -147,6 +148,7 @@ export function useMetagameModeData() {
 		displayRows,
 		chartBars,
 		pageData,
+		rowCount,
 		currentPage,
 		totalPages,
 		nextPage,

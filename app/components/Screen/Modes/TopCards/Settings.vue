@@ -8,10 +8,10 @@ import type {
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
-import { topCardsGridRowCount } from '~~/shared/screenModeConfigs/topCards';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -51,15 +51,19 @@ onMounted(async () => {
 	}
 });
 
-// The grid rows the Screen would show at its full card count: a page holds
-// `rowsPerPage` of them.
-const estimatedGridRowCount = computed(() => topCardsGridRowCount(config.value.limit, config.value.columns));
+// The grid rows the Screen pages — the cards it reads, once the filters have
+// applied, in rows of `columns` — read and followed as its Screen Output reads
+// and follows them, so the page count is the one it renders (#780).
+const { rowCount, loading: loadingCards } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	useTopCardsModeData,
+);
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape. An edit
 // changing which cards each page holds returns to page 1 as well.
-const rotation = useRotationConfigWrites({ mode: 'top-cards', config, rowCount: estimatedGridRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'top-cards', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 const boardOptions = [
@@ -238,6 +242,7 @@ function typeLabel(bucket: CardTypeBucket): string {
 			:rotation="rotation"
 			page-size-description="Grid rows shown per page, each holding one card per column."
 			auto-page-description="Automatically cycle through pages of cards."
+			:loading="loadingCards"
 		/>
 
 		<ScreenSettingsCard title="Header">

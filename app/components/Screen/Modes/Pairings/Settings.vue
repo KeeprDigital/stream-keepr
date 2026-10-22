@@ -2,6 +2,7 @@
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -10,7 +11,6 @@ const props = defineProps<{
 }>();
 
 const roundStore = useRoundStore();
-const matchRepository = useMatchRepository();
 const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
@@ -28,14 +28,17 @@ const roundOptions = computed(() => [
 	...roundStore.rounds.map(round => ({ label: round.name, value: round.id })),
 ]);
 
-const estimatedRowCount = ref(0);
-const loadingMatches = ref(false);
-let requestId = 0;
+// The Matches the Screen pages, read and followed as its Screen Output reads
+// and follows them, so the page count is the one it renders (#780).
+const { rowCount, loading: loadingMatches } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	usePairingsModeData,
+);
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'pairings', config, rowCount: estimatedRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'pairings', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 // What the picker below loads, re-read on Reconnect Resync (#610).
@@ -46,35 +49,6 @@ onMounted(async () => {
 		await roundStore.loadRoundsByEventId(props.eventId);
 	}
 });
-
-// How many Matches the Round holds, for the manual page controls. Read through
-// the repository rather than the Match store, whose loaded Round belongs to the
-// operator's Matches page.
-watch(() => config.value.roundId, async (roundId) => {
-	const id = ++requestId;
-	estimatedRowCount.value = 0;
-
-	if (!roundId) {
-		return;
-	}
-
-	loadingMatches.value = true;
-	try {
-		const matches = await matchRepository.list(props.eventId, roundId);
-		if (id === requestId) {
-			estimatedRowCount.value = matches.length;
-		}
-	}
-	catch (error) {
-		// The count only enables the manual page controls; without it they stay on one page.
-		console.error('Failed to count the Round\'s Matches', error);
-	}
-	finally {
-		if (id === requestId) {
-			loadingMatches.value = false;
-		}
-	}
-}, { immediate: true });
 </script>
 
 <template>

@@ -158,6 +158,7 @@ export function useStandingsModeData() {
 
 	// ── Pagination ──
 	const {
+		rowCount,
 		pageData,
 		totalPages,
 		currentPage,
@@ -245,6 +246,7 @@ export function useStandingsModeData() {
 		visibleColumns,
 		displayRows,
 		pageData,
+		rowCount,
 		currentPage,
 		totalPages,
 		nextPage,

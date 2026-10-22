@@ -5,6 +5,7 @@ import type { Screen } from '~/types';
 import { isColumnVisible, withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -25,18 +26,14 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('standings').fields;
 
 // ── Stores ──
-const playerStore = usePlayerStore();
 const playerListStore = usePlayerListStore();
 const roundStore = useRoundStore();
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists', 'rounds']);
+useConsumedEventData(['playerLists', 'rounds']);
 
 onMounted(async () => {
 	if (props.eventId) {
-		if (!playerStore.isLoaded) {
-			await playerStore.loadPlayersByEventId(props.eventId);
-		}
 		if (!playerListStore.isLoaded) {
 			await playerListStore.loadByEventId(props.eventId);
 		}
@@ -89,33 +86,17 @@ const editorColumns = computed(() => withEveryColumn(config.value.columns, scree
 const isDeckColumnVisible = computed(() => isColumnVisible(config.value.columns, 'deck'));
 
 // ── Pagination ──
-// Estimate display row count from player store for page controls
-const estimatedRowCount = computed(() => {
-	const mode = config.value.viewMode;
-	const total = playerStore.players.length;
-
-	if (mode === 'topN')
-		return Math.min(config.value.topNCount, total);
-	if (mode === 'slice') {
-		return playerStore.players.filter(p =>
-			p.position != null
-			&& p.position >= config.value.sliceStart
-			&& p.position <= config.value.sliceEnd,
-		).length;
-	}
-	if (mode === 'watchlist') {
-		const list = playerListStore.lists.find(l => l.id === config.value.playerListId);
-		return list?.memberCount ?? 0;
-	}
-	if (mode === 'reveal')
-		return config.value.revealCount;
-	return total;
-});
+// The rows the Screen pages, its view mode and reveal applied, read and followed as its Screen Output reads and follows them, so
+// the page count is the one it renders (#780).
+const { rowCount, loading: loadingRows } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	useStandingsModeData,
+);
 
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'standings', config, rowCount: estimatedRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'standings', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 function updateMaxTableWidth(value: number | null | undefined) {
@@ -396,6 +377,7 @@ const modeSettingsLabel = computed(() => {
 			:rotation="rotation"
 			page-size-description="Number of players shown per page."
 			auto-page-description="Automatically cycle through pages on the display."
+			:loading="loadingRows"
 		/>
 
 		<ScreenSettingsCard title="Animation">

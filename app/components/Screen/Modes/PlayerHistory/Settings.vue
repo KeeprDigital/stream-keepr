@@ -4,6 +4,7 @@ import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 const props = defineProps<{
@@ -29,9 +30,12 @@ const playerOptions = computed(() => [
 	...playerStore.players.map(player => ({ label: player.name, value: player.id })),
 ]);
 
-const estimatedRowCount = ref(0);
-const loadingHistory = ref(false);
-let requestId = 0;
+// The Player's Matches the Screen pages, read and followed as its Screen Output reads and follows them, so
+// the page count is the one it renders (#780).
+const { rowCount, loading: loadingHistory } = useEditedScreenModeData(
+	{ screen: () => props.screen, eventId: () => props.eventId, saving: () => saving.value },
+	usePlayerHistoryModeData,
+);
 
 const columnLabels: Record<PlayerHistoryColumnConfig['key'], string> = {
 	round: 'Round',
@@ -48,7 +52,7 @@ const columns = computed(() => withEveryColumn(config.value.columns, screenModeC
 // The live Page Rotation projection and the anchor writes an operator makes.
 // Every edit below goes through its `updateConfig`, which restarts the
 // rotation from page 1 when the edit changes the rotation's shape.
-const rotation = useRotationConfigWrites({ mode: 'player-history', config, rowCount: estimatedRowCount, saveConfig });
+const rotation = useRotationConfigWrites({ mode: 'player-history', config, rowCount, saveConfig });
 const { updateConfig } = rotation;
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
@@ -59,28 +63,6 @@ onMounted(async () => {
 		await playerStore.loadPlayersByEventId(props.eventId);
 	}
 });
-
-watch(() => config.value.playerId, async (playerId) => {
-	const id = ++requestId;
-	estimatedRowCount.value = 0;
-
-	if (!playerId) {
-		return;
-	}
-
-	loadingHistory.value = true;
-	try {
-		const data = await $fetch<{ history: unknown[] }>(`/api/events/${props.eventId}/players/${playerId}/match-history`);
-		if (id === requestId) {
-			estimatedRowCount.value = data.history.length;
-		}
-	}
-	finally {
-		if (id === requestId) {
-			loadingHistory.value = false;
-		}
-	}
-}, { immediate: true });
 </script>
 
 <template>

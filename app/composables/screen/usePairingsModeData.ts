@@ -55,7 +55,7 @@ export function usePairingsModeData() {
 	const headerText = computed(() => config.value.headerText || (round.value ? `${round.value.name} Pairings` : 'Pairings'));
 	const isEmpty = computed(() => !loading.value && (!config.value.roundId || rows.value.length === 0));
 
-	const { pageData } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
+	const { pageData, rowCount } = usePaginatedScreenMode({ mode: 'pairings', config, rows });
 
 	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
@@ -76,5 +76,5 @@ export function usePairingsModeData() {
 		return row.player1GameWins > row.player2GameWins ? 1 : 2;
 	}
 
-	return { config, loading, error, isEmpty, headerText, round, pageData, formatResult, winner };
+	return { config, loading, error, isEmpty, headerText, round, pageData, rowCount, formatResult, winner };
 }

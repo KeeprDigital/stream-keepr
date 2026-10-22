@@ -49,6 +49,7 @@ export function useTopCardsModeData() {
 		config.value.columns,
 	));
 	const {
+		rowCount,
 		pageData,
 		totalPages,
 		currentPage,
@@ -94,6 +95,7 @@ export function useTopCardsModeData() {
 		cardData,
 		entries,
 		pageEntries,
+		rowCount,
 		currentPage,
 		totalPages,
 		setPage,

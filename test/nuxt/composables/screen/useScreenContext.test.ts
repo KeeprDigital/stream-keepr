@@ -59,6 +59,20 @@ describe('useScreenContext', () => {
 		expect(eventId.value).toBe(7);
 		expect(interactive.value).toBe(true);
 	});
+
+	it('sets a composable up against a given context outside any provider, and only it (#780)', () => {
+		const ctx = {
+			screen: ref(createMockScreen({ id: 42 }) as any),
+			eventId: computed(() => 7),
+			interactive: ref(false),
+			overlayContainer: ref<HTMLElement | null>(null),
+		};
+
+		const { eventId } = runInScreenContext(ctx, () => useScreenContext());
+
+		expect(eventId.value).toBe(7);
+		expect(() => useScreenContext()).toThrow('outside of a screen context');
+	});
 });
 
 describe('useScreenModeConfig', () => {

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, provide, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
+
 /**
  * Clearing an optional setting in a mode's settings editor writes the `null` that
  * deletes it (#703). An editor used to write `undefined`, which JSON omits, so the

@@ -12,7 +12,10 @@ export interface RotationConfigWritesOptions<M extends PageRotationMode> {
 	/** The paginated mode, whose Screen Mode Definition declares its Page Rotation. */
 	mode: M;
 	config: ComputedRef<ModeConfigTypeMap[M]>;
-	/** How many rows the mode would show, from which its page count follows. */
+	/**
+	 * How many rows the Screen pages, from which its page count follows: the
+	 * mode data's `rowCount`, read as the Screen Output reads it (#780).
+	 */
 	rowCount: Readonly<Ref<number>>;
 	/** Saves a patch of the mode's config, as `useModeConfigUpdate` does. */
 	saveConfig: (patch: ScreenModeConfigPatch<M>) => void;
@@ -123,8 +126,10 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 
 	// A manual selection while the rotation runs re-anchors it — the chosen
 	// page becomes current everywhere and holds a full duration. With
-	// auto-page off it persists the page exactly as before.
-	function adminSetPage(page: number) {
+	// auto-page off it persists the page exactly as before. Either way the
+	// page is one the Screen has: the rows it renders bound it (#780).
+	function adminSetPage(requested: number) {
+		const page = Math.max(1, Math.min(requested, totalPages.value));
 		if (rotation.value.autoPageEnabled) {
 			saveRotation({ rotationAnchor: rotationAnchorForPage({
 				page,

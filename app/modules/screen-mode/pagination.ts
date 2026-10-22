@@ -135,6 +135,8 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 	}
 
 	return {
+		/** How many rows the rotation pages over, which its page count follows. */
+		rowCount: computed(() => options.rows.value.length),
 		pageData,
 		totalPages,
 		currentPage,
