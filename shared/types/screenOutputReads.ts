@@ -71,31 +71,37 @@ export interface ScreenOutputHeadToHeadPlayer {
 	losses: number | null;
 	draws: number | null;
 	points: number | null;
-	position: number | null;
 	/** Their Archetype's name, else the deck name their Deck List projects; `null` with neither. */
 	deckName: string | null;
 	deckColors: string | null;
 }
 
 /** An earlier reported Match between a Head-to-head's two Players at this Event. */
-export interface ScreenOutputHeadToHeadMeeting {
+export interface ScreenOutputHeadToHeadEarlierMatch {
 	matchId: number;
 	roundId: number;
 	roundName: string;
 	roundNumber: number;
 	phaseName: string;
-	/** The Player who won it; `null` for a draw. */
-	winnerId: number | null;
+	/**
+	 * How it ended: won by the first or second Player, drawn, or reported with
+	 * only a result string, which names no winner a broadcast can show.
+	 */
+	outcome: HeadToHeadOutcome;
 	/** Its Game Score from the first Player's side; `null` when only a result string was reported. */
 	gameScore: string | null;
+	resultString: string | null;
 }
 
-/** What a Head-to-head Screen renders from: its two Players, and their earlier meetings oldest first. */
+/** How an earlier Match between a Head-to-head's two Players ended, from the first Player's side. */
+export type HeadToHeadOutcome = 'player1' | 'player2' | 'draw' | 'reported';
+
+/** What a Head-to-head Screen renders from: its two Players, and their earlier Matches oldest first. */
 export interface ScreenOutputHeadToHeadResponse {
 	/** `null` for a side no Player fills, such as an empty Slot's. */
 	player1: ScreenOutputHeadToHeadPlayer | null;
 	player2: ScreenOutputHeadToHeadPlayer | null;
-	meetings: ScreenOutputHeadToHeadMeeting[];
+	earlierMatches: ScreenOutputHeadToHeadEarlierMatch[];
 }
 
 /** A Feature Match Slot the Screen's mode shows, with the Match it is following. */

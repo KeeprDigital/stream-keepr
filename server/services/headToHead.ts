@@ -17,9 +17,9 @@ interface HeadToHeadSides {
 /**
  * Which Players the configuration shows: those its Feature Match Slot seats
  * now, following the Slot's current Feature Match Assignment, or those picked
- * directly. `null` when the Slot is not the Event's.
+ * directly. A Slot the Event no longer has seats no one.
  */
-async function resolveSides(eventId: number, config: HeadToHeadModeConfig): Promise<HeadToHeadSides | null> {
+async function resolveSides(eventId: number, config: HeadToHeadModeConfig): Promise<HeadToHeadSides> {
 	if (config.playerSource === 'players')
 		return { player1Id: config.player1Id ?? null, player2Id: config.player2Id ?? null, currentMatchId: null };
 
@@ -27,9 +27,7 @@ async function resolveSides(eventId: number, config: HeadToHeadModeConfig): Prom
 		return { player1Id: null, player2Id: null, currentMatchId: null };
 
 	const slot = await featureMatchService().findById(config.featureMatchId, eventId);
-	if (!slot)
-		return null;
-	return { player1Id: slot.player1Id, player2Id: slot.player2Id, currentMatchId: slot.matchId };
+	return { player1Id: slot?.player1Id ?? null, player2Id: slot?.player2Id ?? null, currentMatchId: slot?.matchId ?? null };
 }
 
 /** One Player of the Event with their Archetype and latest Round Standings; `null` when the Event has no such Player. */
@@ -51,7 +49,6 @@ async function readPlayerFacts(eventId: number, playerId: number | null): Promis
 			losses: playerRoundStandings.losses,
 			draws: playerRoundStandings.draws,
 			points: playerRoundStandings.points,
-			position: playerRoundStandings.position,
 		})
 		.from(playerRoundStandings)
 		.innerJoin(rounds, eq(rounds.id, playerRoundStandings.roundId))
@@ -88,26 +85,23 @@ async function readMatchesBetween(eventId: number, player1Id: number, player2Id:
 			),
 		));
 
-	return rows.map(({ match, ...where }) => ({ ...match, ...where }));
+	return rows.map(({ match, ...playedIn }) => ({ ...match, ...playedIn }));
 }
 
 /**
  * Two Players of an Event side by side (#760): each one's record, points and
- * deck, and their earlier meetings at the Event. `null` when the configuration
- * names a Feature Match Slot the Event does not have.
+ * deck, and their earlier Matches at the Event. A side no Player of the Event
+ * fills is `null`.
  *
  * The Head-to-head Screen Output's read.
  */
-export async function findHeadToHead(eventId: number, config: HeadToHeadModeConfig): Promise<ScreenOutputHeadToHeadResponse | null> {
+export async function findHeadToHead(eventId: number, config: HeadToHeadModeConfig): Promise<ScreenOutputHeadToHeadResponse> {
 	const sides = await resolveSides(eventId, config);
-	if (!sides)
-		return null;
-
 	const [player1, player2] = await Promise.all([
 		readPlayerFacts(eventId, sides.player1Id),
 		readPlayerFacts(eventId, sides.player2Id),
 	]);
-	const between = player1 && player2 ? await readMatchesBetween(eventId, player1.player.id, player2.player.id) : [];
+	const matchesBetween = player1 && player2 ? await readMatchesBetween(eventId, player1.player.id, player2.player.id) : [];
 
-	return projectHeadToHead({ player1, player2, matches: between, currentMatchId: sides.currentMatchId });
+	return projectHeadToHead({ player1, player2, matches: matchesBetween, currentMatchId: sides.currentMatchId });
 }

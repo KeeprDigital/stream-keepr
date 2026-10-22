@@ -1,5 +1,5 @@
 import type { EffectScope } from 'vue';
-import type { ScreenOutputHeadToHeadMeeting, ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputHeadToHeadEarlierMatch, ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,15 +55,15 @@ const ALICE = 7;
 const BOB = 8;
 
 function side(id: number, name: string): ScreenOutputHeadToHeadPlayer {
-	return { id, name, pronouns: null, wins: 3, losses: 1, draws: 0, points: 9, position: 4, deckName: null, deckColors: null };
+	return { id, name, pronouns: null, wins: 3, losses: 1, draws: 0, points: 9, deckName: null, deckColors: null };
 }
 
-function meeting(overrides: Partial<ScreenOutputHeadToHeadMeeting> = {}): ScreenOutputHeadToHeadMeeting {
-	return { matchId: 20, roundId: 31, roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', winnerId: ALICE, gameScore: '2-1', ...overrides };
+function earlierMatch(overrides: Partial<ScreenOutputHeadToHeadEarlierMatch> = {}): ScreenOutputHeadToHeadEarlierMatch {
+	return { matchId: 20, roundId: 31, roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', outcome: 'player1', gameScore: '2-1', resultString: null, ...overrides };
 }
 
 function answer(overrides: Partial<ScreenOutputHeadToHeadResponse> = {}): ScreenOutputHeadToHeadResponse {
-	return { player1: side(ALICE, 'Alice'), player2: side(BOB, 'Bob'), meetings: [meeting()], ...overrides };
+	return { player1: side(ALICE, 'Alice'), player2: side(BOB, 'Bob'), earlierMatches: [earlierMatch()], ...overrides };
 }
 
 const scopes: EffectScope[] = [];
@@ -90,24 +90,24 @@ describe('useHeadToHeadModeData', () => {
 		scopes.splice(0).forEach(scope => scope.stop());
 	});
 
-	it('reads the two Players and their meetings through the Screen', async () => {
+	it('reads the two Players and their earlierMatches through the Screen', async () => {
 		mutableConfig.featureMatchId = 4;
 		mockFetch.mockResolvedValue(answer());
 
-		const { player1, player2, meetings, firstMeeting, error } = makeHeadToHeadModeData();
+		const { player1, player2, earlierMatches, firstMeeting, error } = makeHeadToHeadModeData();
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/head-to-head', expect.anything());
 		expect(player1.value?.name).toBe('Alice');
 		expect(player2.value?.name).toBe('Bob');
-		expect(meetings.value).toHaveLength(1);
+		expect(earlierMatches.value).toHaveLength(1);
 		expect(firstMeeting.value).toBe(false);
 		expect(error.value).toBeNull();
 	});
 
-	it('calls two Players with no earlier meeting a first meeting', async () => {
+	it('calls two Players with no earlier Match a first meeting', async () => {
 		mutableConfig.featureMatchId = 4;
-		mockFetch.mockResolvedValue(answer({ meetings: [] }));
+		mockFetch.mockResolvedValue(answer({ earlierMatches: [] }));
 
 		const { firstMeeting } = makeHeadToHeadModeData();
 		await flushPromises();
@@ -115,9 +115,9 @@ describe('useHeadToHeadModeData', () => {
 		expect(firstMeeting.value).toBe(true);
 	});
 
-	it('is no first meeting while a side is empty', async () => {
+	it('is no first earlierMatch while a side is empty', async () => {
 		mutableConfig.featureMatchId = 4;
-		mockFetch.mockResolvedValue(answer({ player2: null, meetings: [] }));
+		mockFetch.mockResolvedValue(answer({ player2: null, earlierMatches: [] }));
 
 		const { firstMeeting, isEmpty } = makeHeadToHeadModeData();
 		await flushPromises();
@@ -143,7 +143,7 @@ describe('useHeadToHeadModeData', () => {
 
 	it('is empty when the Slot seats no Players', async () => {
 		mutableConfig.featureMatchId = 4;
-		mockFetch.mockResolvedValue(answer({ player1: null, player2: null, meetings: [] }));
+		mockFetch.mockResolvedValue(answer({ player1: null, player2: null, earlierMatches: [] }));
 
 		const { isEmpty } = makeHeadToHeadModeData();
 		await flushPromises();
@@ -210,7 +210,7 @@ describe('useHeadToHeadModeData', () => {
 
 		it('follows its Slot to the Players of its next Feature Match Assignment', async () => {
 			const { player1 } = await showingSlot();
-			mockFetch.mockResolvedValue(answer({ player1: side(9, 'Carol'), meetings: [] }));
+			mockFetch.mockResolvedValue(answer({ player1: side(9, 'Carol'), earlierMatches: [] }));
 
 			deliver('featureMatch:updated', { featureMatch: { id: 4, matchId: 99, player1Id: 9, player2Id: BOB } });
 			await flushPromises();
@@ -293,17 +293,17 @@ describe('useHeadToHeadModeData', () => {
 		});
 
 		it('shows a result missed while disconnected once its channel is attached again', async () => {
-			const { meetings } = await showingSlot();
+			const { earlierMatches } = await showingSlot();
 
 			mockRealtime.connectionState = 'disconnected';
 			await nextTick();
-			mockFetch.mockResolvedValue(answer({ meetings: [meeting(), meeting({ matchId: 21, roundName: 'Round 5' })] }));
+			mockFetch.mockResolvedValue(answer({ earlierMatches: [earlierMatch(), earlierMatch({ matchId: 21, roundName: 'Round 5' })] }));
 			mockRealtime.connectionState = 'connected';
 			continuity.reattach('event:1');
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(meetings.value).toHaveLength(2);
+			expect(earlierMatches.value).toHaveLength(2);
 		});
 	});
 });

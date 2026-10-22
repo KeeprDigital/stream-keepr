@@ -28,7 +28,7 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 		return ids.length === 2 && match.player1Id != null && match.player2Id != null
 			&& ids.includes(match.player1Id) && ids.includes(match.player2Id);
 	};
-	const holdsMeeting = (held: HeldHeadToHead, matchId: number) => held?.meetings.some(meeting => meeting.matchId === matchId) ?? false;
+	const holdsEarlierMatch = (held: HeldHeadToHead, matchId: number) => held?.earlierMatches.some(earlierMatch => earlierMatch.matchId === matchId) ?? false;
 
 	return {
 		'featureMatch:updated': ({ featureMatch }) => isBoundSlot(featureMatch.id),
@@ -37,9 +37,9 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
 		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),
 		'match:created': ({ match }, held) => seatsBoth(held, match),
-		'match:updated': ({ match }, held) => seatsBoth(held, match) || holdsMeeting(held, match.id),
-		'match:deleted': ({ matchId }, held) => holdsMeeting(held, matchId),
-		'round:updated': ({ round }, held) => held?.meetings.some(meeting => meeting.roundId === round.id) ?? false,
+		'match:updated': ({ match }, held) => seatsBoth(held, match) || holdsEarlierMatch(held, match.id),
+		'match:deleted': ({ matchId }, held) => holdsEarlierMatch(held, matchId),
+		'round:updated': ({ round }, held) => held?.earlierMatches.some(earlierMatch => earlierMatch.roundId === round.id) ?? false,
 		'round:deleted': true,
 		'round:matchesRefreshed': true,
 		'phase:updated': true,
@@ -55,7 +55,7 @@ function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDep
 }
 
 /**
- * A Head-to-head's two Players and their earlier meetings, kept current on a
+ * A Head-to-head's two Players and their earlier Matches, kept current on a
  * Screen Output (#760). Bound to a Feature Match Slot, it follows the Slot's
  * current Feature Match Assignment as the Slot is reassigned.
  */
@@ -80,13 +80,13 @@ export function useHeadToHeadModeData() {
 	const error = freshness.error;
 	const player1 = computed(() => freshness.data.value?.player1 ?? null);
 	const player2 = computed(() => freshness.data.value?.player2 ?? null);
-	const meetings = computed(() => freshness.data.value?.meetings ?? []);
+	const earlierMatches = computed(() => freshness.data.value?.earlierMatches ?? []);
 
 	const headerText = computed(() => config.value.headerText || 'Head to Head');
 	/** Neither side holds a Player: nothing is selected, or the Slot seats no one. */
 	const isEmpty = computed(() => !loading.value && !player1.value && !player2.value);
 	/** Both Players are known and have not met at this Event before. */
-	const firstMeeting = computed(() => !!player1.value && !!player2.value && meetings.value.length === 0);
+	const firstMeeting = computed(() => !!player1.value && !!player2.value && earlierMatches.value.length === 0);
 
 	/**
 	 * A record as the Event displays records, as Standings writes them; `null`
@@ -95,14 +95,8 @@ export function useHeadToHeadModeData() {
 	function formatRecord(record: Pick<ScreenOutputHeadToHeadPlayer, 'wins' | 'losses' | 'draws'>): string | null {
 		if (record.wins == null && record.losses == null && record.draws == null)
 			return null;
-		const event = eventStore.displayEvent;
-		const separator = event?.displayRecordSeparator ?? '-';
-		const draws = record.draws ?? 0;
-		const parts = [record.wins ?? 0, record.losses ?? 0];
-		if (draws !== 0 || !(event?.displayHideZeroDraws ?? true))
-			parts.push(draws);
-		return parts.join(separator);
+		return formatPlayerRecord(record, eventStore.displayEvent);
 	}
 
-	return { config, loading, error, isEmpty, firstMeeting, headerText, player1, player2, meetings, formatRecord };
+	return { config, loading, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord };
 }

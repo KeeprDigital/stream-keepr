@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getPlayerIdentityValue } from '~~/shared/utils/gameData';
+import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 /**
  * Resolves player-specific match data from stores.
@@ -116,15 +117,7 @@ export function usePlayerFeatureMatchData(
 		}
 
 		// Score mode: format as W-L-D
-		const wins = data.wins ?? 0;
-		const losses = data.losses ?? 0;
-		const draws = data.draws ?? 0;
-		const sep = event?.displayRecordSeparator ?? '-';
-		const hideZeroDraws = event?.displayHideZeroDraws ?? true;
-		if (hideZeroDraws && draws === 0) {
-			return `${wins}${sep}${losses}`;
-		}
-		return `${wins}${sep}${losses}${sep}${draws}`;
+		return formatPlayerRecord(data, event);
 	});
 
 	return {

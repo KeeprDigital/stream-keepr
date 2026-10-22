@@ -1,6 +1,6 @@
 import type { PlayerGameData } from '../types/game';
-import type { ScreenOutputHeadToHeadMeeting, ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '../types/screenOutputReads';
-import type { MatchResultFacts } from './matchFromPlayerSide';
+import type { HeadToHeadOutcome, ScreenOutputHeadToHeadEarlierMatch, ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '../types/screenOutputReads';
+import type { MatchResultFacts, MatchSideOutcome } from './matchFromPlayerSide';
 import { resolvePlayerDeckIdentity } from './gameData';
 import { formatGameScore, readMatchFromPlayerSide } from './matchFromPlayerSide';
 
@@ -10,7 +10,6 @@ interface RecordFacts {
 	losses: number | null;
 	draws: number | null;
 	points: number | null;
-	position: number | null;
 }
 
 /** What a Head-to-head reads of one Player. */
@@ -32,14 +31,15 @@ export interface HeadToHeadMatchFacts extends MatchResultFacts {
 	phaseName: string;
 	phaseSortOrder: number;
 	sortOrder: number;
+	resultString: string | null;
 }
 
 export interface HeadToHeadFacts {
 	player1: HeadToHeadPlayerFacts | null;
 	player2: HeadToHeadPlayerFacts | null;
-	/** Matches of the Event, at least every one seating either Player. */
+	/** Matches of the Event; those not seating both Players are not earlier Matches between them. */
 	matches: readonly HeadToHeadMatchFacts[];
-	/** The Match the two are about to play, which is not an earlier meeting; `null` when none is known. */
+	/** The Match the two are about to play, which is not an earlier Match between them; `null` when none is known. */
 	currentMatchId: number | null;
 }
 
@@ -54,7 +54,6 @@ function projectPlayer({ player, archetype, latestStanding }: HeadToHeadPlayerFa
 		losses: record.losses,
 		draws: record.draws,
 		points: record.points,
-		position: record.position,
 		deckName: deck.name,
 		deckColors: deck.colors,
 	};
@@ -63,6 +62,19 @@ function projectPlayer({ player, archetype, latestStanding }: HeadToHeadPlayerFa
 function seatsBoth(match: HeadToHeadMatchFacts, a: number, b: number): boolean {
 	return (match.player1Id === a && match.player2Id === b) || (match.player1Id === b && match.player2Id === a);
 }
+
+/**
+ * A reported Match read from the first Player's side. One reported without game
+ * wins reads as pending there; it is a result all the same, just one naming no
+ * winner. A bye never seats both Players.
+ */
+const OUTCOME_FROM_FIRST_SIDE: Record<MatchSideOutcome, HeadToHeadOutcome> = {
+	win: 'player1',
+	loss: 'player2',
+	draw: 'draw',
+	pending: 'reported',
+	bye: 'reported',
+};
 
 function byPlayOrder(a: HeadToHeadMatchFacts, b: HeadToHeadMatchFacts): number {
 	return a.phaseSortOrder - b.phaseSortOrder
@@ -74,9 +86,9 @@ function byPlayOrder(a: HeadToHeadMatchFacts, b: HeadToHeadMatchFacts): number {
 /**
  * The earlier reported Matches between two Players, oldest first, each read
  * from the first Player's side. A Match not yet reported, and the one the two
- * are about to play, are not earlier meetings.
+ * are about to play, are not earlier Matches.
  */
-function projectMeetings(facts: HeadToHeadFacts, player1Id: number, player2Id: number): ScreenOutputHeadToHeadMeeting[] {
+function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player2Id: number): ScreenOutputHeadToHeadEarlierMatch[] {
 	return facts.matches
 		.filter(match => match.id !== facts.currentMatchId && match.hasResult && !match.isBye && seatsBoth(match, player1Id, player2Id))
 		.sort(byPlayOrder)
@@ -88,8 +100,9 @@ function projectMeetings(facts: HeadToHeadFacts, player1Id: number, player2Id: n
 				roundName: match.roundName,
 				roundNumber: match.roundNumber,
 				phaseName: match.phaseName,
-				winnerId: side.outcome === 'win' ? player1Id : side.outcome === 'loss' ? player2Id : null,
+				outcome: OUTCOME_FROM_FIRST_SIDE[side.outcome],
 				gameScore: formatGameScore(side),
+				resultString: match.resultString,
 			};
 		});
 }
@@ -108,6 +121,6 @@ export function projectHeadToHead(facts: HeadToHeadFacts): ScreenOutputHeadToHea
 	return {
 		player1,
 		player2,
-		meetings: player1 && player2 ? projectMeetings(facts, player1.id, player2.id) : [],
+		earlierMatches: player1 && player2 ? projectEarlierMatches(facts, player1.id, player2.id) : [],
 	};
 }

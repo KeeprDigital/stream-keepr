@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { ScreenConfig } from '~~/shared/types/screenConfig';
-import type { ScreenOutputHeadToHeadMeeting } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputHeadToHeadEarlierMatch } from '~~/shared/types/screenOutputReads';
 
 const { screen } = useScreenContext();
-const { config, error, isEmpty, firstMeeting, headerText, player1, player2, meetings, formatRecord } = useHeadToHeadModeData();
+const { config, error, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData();
 
 const screenConfig = computed<Partial<ScreenConfig>>(() => (screen.value?.screenConfig ?? {}) as Partial<ScreenConfig>);
 const primaryTextStyle = computed(() => screenConfig.value.primaryTextColor ? { color: screenConfig.value.primaryTextColor } : {});
@@ -13,11 +13,20 @@ const displayStyle = computed(() => ({
 	'--broadcast-table-secondary-text': screenConfig.value.secondaryTextColor ?? 'rgba(255, 255, 255, 0.72)',
 }));
 
-const sides = computed(() => [player1.value, player2.value]);
+const players = computed(() => [player1.value, player2.value]);
 
-/** Who won an earlier meeting, by name; a draw names no one. */
-function winnerName(meeting: ScreenOutputHeadToHeadMeeting): string {
-	return sides.value.find(side => side && side.id === meeting.winnerId)?.name ?? 'Draw';
+/** How an earlier Match ended: its winner by name, a draw, or the result as reported when it names no winner. */
+function outcomeLabel({ outcome, resultString }: ScreenOutputHeadToHeadEarlierMatch): string {
+	switch (outcome) {
+		case 'player1':
+			return player1.value?.name ?? '';
+		case 'player2':
+			return player2.value?.name ?? '';
+		case 'draw':
+			return 'Draw';
+		case 'reported':
+			return resultString ?? '';
+	}
 }
 </script>
 
@@ -34,7 +43,7 @@ function winnerName(meeting: ScreenOutputHeadToHeadMeeting): string {
 			</div>
 
 			<div class="head-to-head-players">
-				<template v-for="(side, index) in sides" :key="index">
+				<template v-for="(side, index) in players" :key="index">
 					<div v-if="index === 1" class="versus" :style="secondaryTextStyle">
 						vs
 					</div>
@@ -62,22 +71,22 @@ function winnerName(meeting: ScreenOutputHeadToHeadMeeting): string {
 				</template>
 			</div>
 
-			<div class="head-to-head-meetings broadcast-table-surface">
+			<div class="head-to-head-earlier-matches broadcast-table-surface">
 				<p v-if="firstMeeting" class="first-meeting" :style="secondaryTextStyle">
 					First meeting
 				</p>
-				<template v-else-if="meetings.length > 0">
-					<p class="meetings-title broadcast-table-header-row">
-						Earlier meetings
+				<template v-else-if="earlierMatches.length > 0">
+					<p class="earlier-matches-title broadcast-table-header-row">
+						Earlier Matches
 					</p>
 					<div
-						v-for="meeting in meetings"
-						:key="meeting.matchId"
-						class="meeting broadcast-table-row"
+						v-for="earlierMatch in earlierMatches"
+						:key="earlierMatch.matchId"
+						class="earlier-match broadcast-table-row"
 					>
-						<span class="round" :style="secondaryTextStyle">{{ meeting.roundName }}</span>
-						<span class="winner" :style="primaryTextStyle">{{ winnerName(meeting) }}</span>
-						<span class="score broadcast-table-numeric">{{ meeting.gameScore ?? '' }}</span>
+						<span class="round" :style="secondaryTextStyle">{{ earlierMatch.roundName }}</span>
+						<span class="winner" :style="primaryTextStyle">{{ outcomeLabel(earlierMatch) }}</span>
+						<span class="score broadcast-table-numeric">{{ earlierMatch.gameScore ?? '' }}</span>
 					</div>
 				</template>
 			</div>
@@ -132,13 +141,13 @@ function winnerName(meeting: ScreenOutputHeadToHeadMeeting): string {
 	font-weight: 900;
 	text-transform: uppercase;
 }
-.head-to-head-meetings {
+.head-to-head-earlier-matches {
 	padding: 0 1.5rem 1rem;
 }
-.meetings-title {
+.earlier-matches-title {
 	padding: 0.5rem 0;
 }
-.meeting {
+.earlier-match {
 	display: grid;
 	grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr) auto;
 	gap: 1rem;

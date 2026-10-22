@@ -3,6 +3,7 @@ import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutput
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
+import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
@@ -182,16 +183,8 @@ export function useStandingsModeData() {
 				return player.position != null ? String(player.position) : '-';
 			case 'name':
 				return player.name;
-			case 'record': {
-				const wins = player.wins ?? 0;
-				const losses = player.losses ?? 0;
-				const draws = player.draws ?? 0;
-				const sep = event?.displayRecordSeparator ?? '-';
-				const hideZeroDraws = event?.displayHideZeroDraws ?? true;
-				if (hideZeroDraws && draws === 0)
-					return `${wins}${sep}${losses}`;
-				return `${wins}${sep}${losses}${sep}${draws}`;
-			}
+			case 'record':
+				return formatPlayerRecord(player, event);
 			case 'points':
 				return player.points != null ? String(player.points) : '-';
 			case 'deck': {

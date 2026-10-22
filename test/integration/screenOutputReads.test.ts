@@ -441,13 +441,13 @@ describe('capability-only Screen Output reads', () => {
 			expect(before.status).toBe(200);
 			expect(before.data.player1).toMatchObject({ id: alice.id, name: 'H2H Alice' });
 			expect(before.data.player2).toMatchObject({ id: bob.id, name: 'H2H Bob' });
-			expect(before.data.meetings).toEqual([expect.objectContaining({ matchId: earlier.id, roundName: 'H2H Round 1', winnerId: bob.id, gameScore: '1-2' })]);
+			expect(before.data.earlierMatches).toEqual([expect.objectContaining({ matchId: earlier.id, roundName: 'H2H Round 1', outcome: 'player2', gameScore: '1-2' })]);
 
 			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, { method: 'POST', body: { matchId: next.id } });
 			const after = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
 			expect(after.data.player1).toMatchObject({ id: carol.id });
 			expect(after.data.player2).toMatchObject({ id: alice.id });
-			expect(after.data.meetings).toEqual([]);
+			expect(after.data.earlierMatches).toEqual([]);
 
 			expect((await headToHead.read('head-to-head', capability)).status).toBe(404);
 		});

@@ -89,15 +89,15 @@ beforeAll(async () => {
 afterAll(async () => await harness.close());
 
 describe('findHeadToHead', () => {
-	it('shows the two Players a Feature Match Slot seats, and their earlier meetings but not the Match they are about to play', async () => {
+	it('shows the two Players a Feature Match Slot seats, and their earlier Matches but not the Match they are about to play', async () => {
 		const answer = await findHeadToHead(eventId, config({ playerSource: 'featureMatchSlot', featureMatchId: slotId }));
 
 		expect(answer).toEqual({
-			player1: { id: alice, name: 'Alice', pronouns: 'she/her', wins: 4, losses: 1, draws: 0, points: 12, position: 5, deckName: 'Boros Energy', deckColors: 'RW' },
-			player2: { id: bob, name: 'Bob', pronouns: null, wins: 5, losses: 1, draws: 1, points: 16, position: 3, deckName: 'Dimir Murktide', deckColors: 'UB' },
-			meetings: [
-				{ matchId: roundTwoMatch, roundId: expect.any(Number), roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', winnerId: alice, gameScore: '2-1' },
-				{ matchId: roundFiveMatch, roundId: expect.any(Number), roundName: 'Round 5', roundNumber: 5, phaseName: 'Swiss', winnerId: bob, gameScore: '0-2' },
+			player1: { id: alice, name: 'Alice', pronouns: 'she/her', wins: 4, losses: 1, draws: 0, points: 12, deckName: 'Boros Energy', deckColors: 'RW' },
+			player2: { id: bob, name: 'Bob', pronouns: null, wins: 5, losses: 1, draws: 1, points: 16, deckName: 'Dimir Murktide', deckColors: 'UB' },
+			earlierMatches: [
+				{ matchId: roundTwoMatch, roundId: expect.any(Number), roundName: 'Round 2', roundNumber: 2, phaseName: 'Swiss', outcome: 'player1', gameScore: '2-1', resultString: null },
+				{ matchId: roundFiveMatch, roundId: expect.any(Number), roundName: 'Round 5', roundNumber: 5, phaseName: 'Swiss', outcome: 'player2', gameScore: '0-2', resultString: null },
 			],
 		});
 	});
@@ -109,31 +109,32 @@ describe('findHeadToHead', () => {
 
 			expect(answer?.player1?.name).toBe('Carol');
 			expect(answer?.player2?.name).toBe('Alice');
-			expect(answer?.meetings).toEqual([expect.objectContaining({ roundName: 'Round 2', winnerId: alice, gameScore: '0-2' })]);
+			expect(answer?.earlierMatches).toEqual([expect.objectContaining({ roundName: 'Round 2', outcome: 'player2', gameScore: '0-2' })]);
 		}
 		finally {
 			await db.update(schema.featureMatchSlots).set({ player1Id: alice, player2Id: bob }).where(eq(schema.featureMatchSlots.id, slotId));
 		}
 	});
 
-	it('shows two Players picked directly, with every reported meeting', async () => {
+	it('shows two Players picked directly, with every reported Match between them', async () => {
 		const answer = await findHeadToHead(eventId, config({ playerSource: 'players', featureMatchId: slotId, player1Id: bob, player2Id: alice }));
 
 		expect(answer?.player1?.name).toBe('Bob');
 		expect(answer?.player2?.name).toBe('Alice');
-		expect(answer?.meetings.map(meeting => [meeting.roundName, meeting.gameScore])).toEqual([['Round 2', '1-2'], ['Round 5', '2-0']]);
+		expect(answer?.earlierMatches.map(earlierMatch => [earlierMatch.roundName, earlierMatch.gameScore])).toEqual([['Round 2', '1-2'], ['Round 5', '2-0']]);
 	});
 
 	it('leaves a side empty when no Player is picked for it, or the Slot seats none', async () => {
 		expect(await findHeadToHead(eventId, config({ playerSource: 'players', player1Id: alice })))
-			.toEqual({ player1: expect.objectContaining({ name: 'Alice' }), player2: null, meetings: [] });
+			.toEqual({ player1: expect.objectContaining({ name: 'Alice' }), player2: null, earlierMatches: [] });
 		expect(await findHeadToHead(eventId, config({ playerSource: 'featureMatchSlot', featureMatchId: null })))
-			.toEqual({ player1: null, player2: null, meetings: [] });
+			.toEqual({ player1: null, player2: null, earlierMatches: [] });
 	});
 
 	it('reads nothing of another Event', async () => {
-		expect(await findHeadToHead(eventId, config({ playerSource: 'featureMatchSlot', featureMatchId: foreignSlotId }))).toBeNull();
+		expect(await findHeadToHead(eventId, config({ playerSource: 'featureMatchSlot', featureMatchId: foreignSlotId })))
+			.toEqual({ player1: null, player2: null, earlierMatches: [] });
 		expect(await findHeadToHead(eventId, config({ playerSource: 'players', player1Id: foreignPlayer, player2Id: alice })))
-			.toEqual({ player1: null, player2: expect.objectContaining({ name: 'Alice' }), meetings: [] });
+			.toEqual({ player1: null, player2: expect.objectContaining({ name: 'Alice' }), earlierMatches: [] });
 	});
 });
