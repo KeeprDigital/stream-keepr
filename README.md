@@ -254,6 +254,13 @@ profile, so they are never touched. The browser gates also stop their own
 Chrome however they end, including a timeout and SIGINT/SIGTERM of the runner,
 escalating to SIGKILL; the reap is for a runner that was itself SIGKILLed.
 
+A Chrome that fails to start names why (#790): the error carries its stderr
+tail, its state when the launcher gave up, what it took to stop it, and whether
+it had written `DevToolsActivePort`. Chrome's first launch on a fresh machine is
+far slower than later ones, so the local-auth suite starts and stops one
+before its dev server, rather than leaving the cold launch to compete with
+`nuxt dev`.
+
 ### Local auth bypass
 
 The `:bypass` launchers set `STREAM_KEEPR_LOCAL_AUTH_BYPASS=true` on their own

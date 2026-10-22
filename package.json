@@ -43,7 +43,7 @@
 		"test:unit:coverage": "vitest run --coverage",
 		"test:nuxt": "vitest --config vitest.nuxt.config.ts",
 		"test:nuxt:coverage": "vitest run --config vitest.nuxt.config.ts --coverage",
-		"test:local-auth": "node scripts/debug-790.mjs; vitest run --config vitest.local-auth.config.ts",
+		"test:local-auth": "vitest run --config vitest.local-auth.config.ts",
 		"test:integration": "vitest --config vitest.integration.config.ts",
 		"accept": "node scripts/accept.mjs"
 	},

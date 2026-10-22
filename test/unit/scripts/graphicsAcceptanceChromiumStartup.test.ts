@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { chmodSync } from 'node:fs';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { launchChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { launchChromium, warmChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
 
 /**
  * A browser that fails to start says why (#790).
@@ -42,5 +44,33 @@ describe('the acceptance browser\'s startup', () => {
 		expect(message).toMatch(/^Chromium exited with code 0 before announcing its DevTools endpoint\./);
 		expect(message).toContain('FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!');
 		expect(message).toContain('already exited');
+	});
+});
+
+describe('warming the acceptance browser', () => {
+	const chromeBin = process.env.CHROME_BIN;
+	afterEach(() => {
+		if (chromeBin === undefined)
+			delete process.env.CHROME_BIN;
+		else
+			process.env.CHROME_BIN = chromeBin;
+	});
+
+	it('starts the first available browser once and leaves nothing running', async () => {
+		const tag = `--stand-in=${process.pid}-${Date.now()}`;
+		process.env.CHROME_BIN = STAND_IN;
+
+		await expect(warmChromium({ extraArgs: [tag], terminateGraceMs: 200 })).resolves.toBe(STAND_IN);
+
+		const ps = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
+		expect(ps.split('\n').filter(line => line.includes(tag))).toEqual([]);
+	});
+
+	it('says why a browser could not start even on an idle machine', async () => {
+		process.env.CHROME_BIN = STAND_IN;
+
+		await expect(warmChromium({ extraArgs: ['--silent', '--say=still loading fonts'], ...quick }))
+			.rejects
+			.toThrow(/Chrome DevTools endpoint timed out\.[\s\S]*still loading fonts/);
 	});
 });

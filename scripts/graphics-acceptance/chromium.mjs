@@ -470,6 +470,42 @@ export async function launchChromium(candidate, extraArgs, {
 }
 
 /**
+ * How long a browser's first launch on an idle machine may take. A bound, not
+ * an assertion: Chrome 156 took 8.6 s on an idle fresh CI runner (#790).
+ */
+const WARM_STARTUP_TIMEOUT_MS = 120_000;
+
+/**
+ * Start and stop the first available browser once, so a fresh machine pays
+ * Chrome's first-launch cost before anything competes with it (#790).
+ *
+ * A browser's first launch on a machine is far slower than every later one,
+ * profile or no profile: on a fresh CI runner with Chrome 156 the first took
+ * 8.6 s idle and every later one about 0.1 s. A suite that starts `nuxt dev`
+ * first makes that cold launch compete with the dev server for the CPU and
+ * disk, and it overran the 30 s startup bound on every runner that had 156.
+ * Warming before the server starts moves the one-time cost to a quiet machine.
+ * Resolves to the browser that was warmed, or `undefined` with none installed;
+ * a browser that cannot start even now fails with `launchChromium`'s report.
+ *
+ * @param {{ extraArgs?: readonly string[], startupTimeoutMs?: number, terminateGraceMs?: number }} [options]
+ */
+export async function warmChromium({
+	extraArgs = [],
+	startupTimeoutMs = WARM_STARTUP_TIMEOUT_MS,
+	terminateGraceMs,
+} = {}) {
+	for (const candidate of chromiumCandidates()) {
+		const browser = await launchChromium(candidate, extraArgs, { startupTimeoutMs, terminateGraceMs });
+		if (!browser)
+			continue;
+		await browser.dispose();
+		return candidate;
+	}
+	return undefined;
+}
+
+/**
  * Give the page the harness's own identities instead of ones of its own.
  *
  * Two cookies travel, and they answer different questions. The **operator
