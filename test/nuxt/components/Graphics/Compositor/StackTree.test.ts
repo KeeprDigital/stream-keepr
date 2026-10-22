@@ -136,8 +136,9 @@ describe('graphicsCompositorStackTree', () => {
 			},
 		});
 
+		// Front to back: the last graphic in the stack composites in front, so it is listed first.
 		const badges = wrapper.findAll('[data-testid="host-badge"]');
-		expect(badges.map(badge => badge.text())).toEqual(['lower-third', 'slate']);
+		expect(badges.map(badge => badge.text())).toEqual(['slate', 'lower-third']);
 		// Inside the graphic's own node, so the badge reads as a fact about that
 		// graphic rather than tree furniture.
 		expect(wrapper.findAll('[data-testid="broadcast-graphic-node"] [data-testid="host-badge"]')).toHaveLength(2);
@@ -376,6 +377,34 @@ describe('graphicsCompositorStackTree', () => {
 		const rows = wrapper.findAll('[data-graphic-item-depth]');
 		expect(rows.map(row => row.attributes('data-graphic-item-depth'))).toEqual(['0', '1']);
 		expect(rows[1]!.text()).toContain('Shape 1');
+	});
+
+	it('lists the Graphic Layer Order front to back, so the row moved up moves forward', async () => {
+		const shape = (id: string, label: string) => ({
+			type: 'shape' as const,
+			id,
+			label,
+			visible: true,
+			anchor: 'top-left' as const,
+			x: 0,
+			y: 0,
+			width: 10,
+			height: 10,
+			geometry: squareShapeGeometry(),
+			surfaceStyle: { fill: { type: 'solid' as const, color: '#ffffff' }, fillOpacity: 1 },
+		});
+		const wrapper = await mountComponent({
+			graphics: [{ id: 'a', name: 'A', items: [shape('back', 'Back'), shape('front', 'Front')] }],
+			selectedGraphicId: 'a',
+			selectedTarget: { type: 'graphic', graphicId: 'a' },
+		});
+
+		const rows = wrapper.findAll('[data-testid="graphic-item-node"]');
+		expect(rows.map(row => row.text())).toEqual([expect.stringContaining('Front'), expect.stringContaining('Back')]);
+
+		// The lower row moves up the list, which is toward the front.
+		await wrapper.get('[aria-label="Move Back forward"]').trigger('click');
+		expect(emittedGraphics(wrapper)[0]!.items.map(item => item.id)).toEqual(['front', 'back']);
 	});
 
 	it('offers a Graphic Group child palette that never offers another Graphic Group', async () => {

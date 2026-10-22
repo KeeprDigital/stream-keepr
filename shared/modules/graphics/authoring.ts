@@ -993,6 +993,90 @@ export function moveGraphicItem(
 	};
 }
 
+/** Move one Graphic Item to the front or the back of its own sibling list. */
+export function moveGraphicItemToEdge(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	edge: 'front' | 'back',
+): BroadcastGraphicConfig {
+	const location = findGraphicItem(graphic, itemId);
+	const siblings: readonly { id: string }[] = location?.group ? location.group.children : graphic.items;
+	const index = siblings.findIndex(sibling => sibling.id === itemId);
+	if (index < 0)
+		return graphic;
+	const delta = edge === 'front' ? siblings.length - 1 - index : -index;
+	return delta === 0 ? graphic : moveGraphicItem(graphic, itemId, delta);
+}
+
+/** How far a duplicate is offset from its original, so it reads as a second item. */
+export const GRAPHIC_ITEM_DUPLICATE_OFFSET = 20;
+
+export interface DuplicateGraphicItemOptions {
+	/** Mints the id of the duplicate and of each of a Graphic Group's children. */
+	nextId: () => string;
+}
+
+/**
+ * Duplicate one Graphic Item directly in front of itself, in its own sibling list.
+ *
+ * A Graphic Group arrives with copies of its children. Every copy gets a fresh id
+ * and a label no other item carries, and the duplicate is offset so it does not
+ * sit exactly over its original. Nothing referencing the original — a stagger, a
+ * Social Profile Projection — is extended to the copy.
+ */
+export function duplicateGraphicItem(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	options: DuplicateGraphicItemOptions,
+): AddGraphicItemResult {
+	const location = findGraphicItem(graphic, itemId);
+	if (!location)
+		return { graphic, itemId: '' };
+
+	const taken = usedLabels(graphic);
+	function copyLabel(label: string) {
+		const base = `${label} copy`;
+		let candidate = base;
+		let index = 2;
+		while (taken.includes(candidate)) {
+			candidate = `${base} ${index}`;
+			index += 1;
+		}
+		taken.push(candidate);
+		return candidate;
+	}
+
+	// A JSON copy: the item is stored configuration, and may arrive as a reactive proxy.
+	const source = JSON.parse(JSON.stringify(location.item)) as GraphicItemConfig;
+	const copy = {
+		...source,
+		id: options.nextId(),
+		label: copyLabel(source.label),
+		x: source.x + GRAPHIC_ITEM_DUPLICATE_OFFSET,
+		y: source.y + GRAPHIC_ITEM_DUPLICATE_OFFSET,
+	} as GraphicItemConfig;
+	if (copy.type === 'group') {
+		copy.children = copy.children.map(child => ({
+			...child,
+			id: options.nextId(),
+			label: copyLabel(child.label),
+		}));
+	}
+
+	if (location.group) {
+		const group = location.group;
+		const index = group.children.findIndex(child => child.id === itemId);
+		const children = [...group.children];
+		children.splice(index + 1, 0, copy as GraphicGroupChildConfig);
+		return { graphic: replaceGraphicItem(graphic, { ...group, children }), itemId: copy.id };
+	}
+
+	const index = graphic.items.findIndex(item => item.id === itemId);
+	const items = [...graphic.items];
+	items.splice(index + 1, 0, copy);
+	return { graphic: { ...graphic, items }, itemId: copy.id };
+}
+
 /**
  * Delete one Graphic Item, and with a Graphic Group its children.
  *
