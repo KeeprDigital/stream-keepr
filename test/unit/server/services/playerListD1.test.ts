@@ -18,8 +18,6 @@ vi.doMock('~~/server/db', () => ({ db }));
 
 const { playerListService } = await import('~~/server/services/playerList');
 
-afterAll(async () => await harness.dispose());
-
 let eventId: number;
 let playerIds: number[];
 
@@ -36,6 +34,8 @@ beforeAll(async () => {
 		playerIds.push(...rows.map(row => row.id));
 	}
 });
+
+afterAll(async () => await harness.dispose());
 
 async function stageList() {
 	return await playerListService().create(eventId, { name: 'List' });
@@ -75,13 +75,41 @@ describe('playerListService membership', () => {
 	});
 
 	it.each([
-		['a subset', (ids: number[]) => [ids[1]!, ids[0]!]],
-		['a duplicated member', (ids: number[]) => [ids[1]!, ids[1]!, ids[2]!]],
+		[
+			'a subset',
+			(ids: number[]) => [ids[1]!, ids[0]!],
+		],
+		[
+			'a duplicated member',
+			(ids: number[]) => [ids[1]!, ids[1]!, ids[2]!],
+		],
 	])('refuses to reorder by %s, keeping the order', async (_case, order) => {
 		const list = await stageList();
 		await playerListService().addMembers(list.id, eventId, playerIds.slice(0, 3));
 
 		await expect(playerListService().reorderMembers(list.id, eventId, order(playerIds))).rejects.toMatchObject({ statusCode: 400 });
 		expect(await members(list.id)).toEqual(playerIds.slice(0, 3));
+	});
+
+	it('removes one member, answering whether it was there', async () => {
+		const list = await stageList();
+		await playerListService().addMembers(list.id, eventId, playerIds.slice(0, 2));
+
+		expect(await playerListService().removeMember(list.id, eventId, playerIds[0]!)).toBe(true);
+		expect(await playerListService().removeMember(list.id, eventId, playerIds[0]!)).toBe(false);
+		expect(await members(list.id)).toEqual([playerIds[1]]);
+	});
+
+	it('answers 404 for every member write to another Event\'s list', async () => {
+		const list = await stageList();
+		const [other] = await db.insert(schema.events).values({ name: 'Other', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning();
+
+		for (const write of [
+			() => playerListService().addMembers(list.id, other!.id, [playerIds[0]!]),
+			() => playerListService().removeMember(list.id, other!.id, playerIds[0]!),
+			() => playerListService().batchRemoveMembers(list.id, other!.id, [playerIds[0]!]),
+			() => playerListService().reorderMembers(list.id, other!.id, []),
+		])
+			await expect(write()).rejects.toMatchObject({ statusCode: 404 });
 	});
 });

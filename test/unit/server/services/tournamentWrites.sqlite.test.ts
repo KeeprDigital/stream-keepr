@@ -31,7 +31,12 @@ beforeAll(async () => {
 		.returning({ id: schema.phases.id });
 	phaseId = phase!.id;
 	const [round] = await db.insert(schema.rounds)
-		.values({ eventId, phaseId, name: 'Round 1', roundNumber: 1 })
+		.values({
+			eventId,
+			phaseId,
+			name: 'Round 1',
+			roundNumber: 1,
+		})
 		.returning({ id: schema.rounds.id });
 	roundId = round!.id;
 });
@@ -48,36 +53,83 @@ const forged = {
 
 describe('manual writes keep Melee provenance out', () => {
 	it('a created Phase is manual, whatever the payload claims', async () => {
-		const phase = await phaseService().create(eventId, { name: 'Top 8', formatExternalId: 'forged' , ...forged } as never);
+		const phase = await phaseService().create(eventId, { name: 'Top 8', formatExternalId: 'forged', ...forged } as never);
 
-		expect(phase).toMatchObject({ eventId, name: 'Top 8', externalId: null, externalSource: 'manual', formatExternalId: null });
+		expect(phase).toMatchObject({
+			eventId,
+			name: 'Top 8',
+			externalId: null,
+			externalSource: 'manual',
+			formatExternalId: null,
+		});
 		expect(phase.id).not.toBe(forged.id);
 		expect(phase.createdAt.getTime()).toBeGreaterThan(0);
 	});
 
 	it('a created Round is manual, whatever the payload claims', async () => {
-		const round = await roundService().create(eventId, { phaseId, name: 'Round 2', roundNumber: 2, lastSyncedAt: new Date(), ...forged } as never);
+		const round = await roundService().create(eventId, {
+			phaseId,
+			name: 'Round 2',
+			roundNumber: 2,
+			lastSyncedAt: new Date(),
+			...forged,
+		} as never);
 
-		expect(round).toMatchObject({ eventId, name: 'Round 2', externalId: null, externalSource: 'manual', lastSyncedAt: null });
+		expect(round).toMatchObject({
+			eventId,
+			name: 'Round 2',
+			externalId: null,
+			externalSource: 'manual',
+			lastSyncedAt: null,
+		});
 		expect(round.id).not.toBe(forged.id);
 	});
 
 	it('a created Match is manual, whatever the payload claims', async () => {
 		const match = await matchService().create(eventId, { roundId, ...forged } as never);
 
-		expect(match).toMatchObject({ eventId, roundId, externalId: null, externalSource: 'manual' });
+		expect(match).toMatchObject({
+			eventId,
+			roundId,
+			externalId: null,
+			externalSource: 'manual',
+		});
 		expect(match.id).not.toBe(forged.id);
 	});
 
 	it.each([
-		['Phase', () => phaseService(), { name: 'Renamed' }, 'name'],
-		['Round', () => roundService(), { name: 'Renamed' }, 'name'],
-		['Match', () => matchService(), { tableNumber: 9 }, 'tableNumber'],
+		[
+			'Phase',
+			() => phaseService(),
+			{ name: 'Renamed' },
+			'name',
+		],
+		[
+			'Round',
+			() => roundService(),
+			{ name: 'Renamed' },
+			'name',
+		],
+		[
+			'Match',
+			() => matchService(),
+			{ tableNumber: 9 },
+			'tableNumber',
+		],
 	] as const)('an update to a synced %s writes the manual fields and leaves its Melee identity', async (_kind, service, change, field) => {
 		const table = { Phase: schema.phases, Round: schema.rounds, Match: schema.matches }[_kind];
-		const base = { Phase: { name: 'Synced', sortOrder: 5 }, Round: { phaseId, name: 'Synced', roundNumber: 9 }, Match: { roundId } }[_kind];
+		const base = {
+			Phase: { name: 'Synced', sortOrder: 5 },
+			Round: { phaseId, name: 'Synced', roundNumber: 9 },
+			Match: { roundId },
+		}[_kind];
 		const [row] = await db.insert(table)
-			.values({ eventId, ...base, externalId: `melee-${_kind}`, externalSource: 'melee' } as never)
+			.values({
+				eventId,
+				...base,
+				externalId: `melee-${_kind}`,
+				externalSource: 'melee',
+			} as never)
 			.returning() as { id: number }[];
 
 		const updated = await service().update(row!.id, eventId, { ...change, externalId: 'forged-id', externalSource: 'manual' } as never) as Record<string, unknown>;
@@ -90,7 +142,12 @@ describe('manual writes keep Melee provenance out', () => {
 describe('matchService.create sort order', () => {
 	it('appends after the Round\'s last Match, starting from zero', async () => {
 		const [round] = await db.insert(schema.rounds)
-			.values({ eventId, phaseId, name: 'Sorting', roundNumber: 20 })
+			.values({
+				eventId,
+				phaseId,
+				name: 'Sorting',
+				roundNumber: 20,
+			})
 			.returning({ id: schema.rounds.id });
 
 		const first = await matchService().create(eventId, { roundId: round!.id } as never);
@@ -98,7 +155,12 @@ describe('matchService.create sort order', () => {
 		const pinned = await matchService().create(eventId, { roundId: round!.id, sortOrder: 40 } as never);
 		const after = await matchService().create(eventId, { roundId: round!.id } as never);
 
-		expect([first.sortOrder, second.sortOrder, pinned.sortOrder, after.sortOrder]).toEqual([0, 1, 40, 41]);
+		expect([
+			first.sortOrder,
+			second.sortOrder,
+			pinned.sortOrder,
+			after.sortOrder,
+		]).toEqual([0, 1, 40, 41]);
 	});
 });
 
@@ -114,8 +176,27 @@ describe('phaseService.getMaxSortOrder', () => {
 
 describe('upsertByExternalId', () => {
 	it.each([
-		['Phase', () => phaseService().upsertByExternalId({ eventId, name: 'Melee Phase', sortOrder: 3, externalId: 'melee-phase', externalSource: 'melee' })],
-		['Round', () => roundService().upsertByExternalId({ eventId, phaseId, name: 'Melee Round', roundNumber: 4, externalId: 'melee-round', externalSource: 'melee' } as never)],
+		[
+			'Phase',
+			() => phaseService().upsertByExternalId({
+				eventId,
+				name: 'Melee Phase',
+				sortOrder: 3,
+				externalId: 'melee-phase',
+				externalSource: 'melee',
+			}),
+		],
+		[
+			'Round',
+			() => roundService().upsertByExternalId({
+				eventId,
+				phaseId,
+				name: 'Melee Round',
+				roundNumber: 4,
+				externalId: 'melee-round',
+				externalSource: 'melee',
+			} as never),
+		],
 	] as const)('reports a %s as created on first sight and as updated after', async (_kind, upsert) => {
 		const first = await upsert() as { created: boolean; [key: string]: unknown };
 		const second = await upsert() as { created: boolean; [key: string]: unknown };
@@ -138,7 +219,14 @@ describe('archetypeCardService key cards', () => {
 			.returning({ id: schema.archetypes.id });
 		archetypeId = archetype!.id;
 		const inserted = await db.insert(schema.cards)
-			.values(['Lightning Bolt', 'Lava Spike', 'Rift Bolt', 'Goblin Guide', 'Monastery Swiftspear', 'Eidolon of the Great Revel'].map(name => ({ name, game: 'mtg' as const })))
+			.values([
+				'Lightning Bolt',
+				'Lava Spike',
+				'Rift Bolt',
+				'Goblin Guide',
+				'Monastery Swiftspear',
+				'Eidolon of the Great Revel',
+			].map(name => ({ name, game: 'mtg' as const })))
 			.returning({ id: schema.cards.id });
 		cardIds = inserted.map(card => card.id);
 	});
@@ -147,7 +235,10 @@ describe('archetypeCardService key cards', () => {
 		await archetypeCardService().setKeyCards(archetypeId, [cardIds[0]!, cardIds[1]!]);
 		const replaced = await archetypeCardService().setKeyCards(archetypeId, [cardIds[3]!, cardIds[2]!]);
 
-		expect(replaced.map(card => [card.id, card.sortOrder])).toEqual([[cardIds[3], 0], [cardIds[2], 1]]);
+		expect(replaced.map(card => [card.id, card.sortOrder])).toEqual([
+			[cardIds[3], 0],
+			[cardIds[2], 1],
+		]);
 		expect(await db.select().from(schema.archetypeCards).where(eq(schema.archetypeCards.archetypeId, archetypeId))).toHaveLength(2);
 	});
 

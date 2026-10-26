@@ -31,12 +31,25 @@ async function roster(eventId: number) {
 describe('manual writes', () => {
 	it('keep Melee provenance out of a created and an updated Player', async () => {
 		const eventId = await stageEvent();
-		const forged = { externalId: 'forged-id', externalSource: 'melee', externalStatus: 2, isActive: false, lastSeenAt: new Date(0) };
+		const forged = {
+			externalId: 'forged-id',
+			externalSource: 'melee',
+			externalStatus: 2,
+			isActive: false,
+			lastSeenAt: new Date(0),
+		};
 
 		const created = await playerService().create(eventId, { name: 'Forger', ...forged } as never);
 		await playerService().update(created.id, eventId, { name: 'Renamed', ...forged } as never);
 
-		expect((await roster(eventId))[0]).toMatchObject({ name: 'Renamed', externalId: null, externalSource: null, externalStatus: null, isActive: true, lastSeenAt: null });
+		expect((await roster(eventId))[0]).toMatchObject({
+			name: 'Renamed',
+			externalId: null,
+			externalSource: null,
+			externalStatus: null,
+			isActive: true,
+			lastSeenAt: null,
+		});
 	});
 });
 
@@ -48,36 +61,78 @@ describe('reconcileMeleeSnapshot', () => {
 		const eventId = await stageEvent();
 
 		expect(await playerService().reconcileMeleeSnapshot(eventId, [
-			{ externalId: 'player-1', externalStatus: 1, name: 'One', pronouns: 'they/them' },
+			{
+				externalId: 'player-1',
+				externalStatus: 1,
+				name: 'One',
+				pronouns: 'they/them',
+			},
 			{ externalId: 'player-2', externalStatus: 1, name: 'Two' },
 		], seenAt)).toMatchObject({ created: 2, updated: 0, deactivated: 0 });
 		expect(await playerService().reconcileMeleeSnapshot(eventId, [
 			{ externalId: 'player-1', externalStatus: 2, name: 'One Updated' },
 		], later)).toMatchObject({ created: 0, updated: 1, deactivated: 1 });
 
-		expect((await roster(eventId)).map(player => [player.externalId, player.name, player.pronouns, player.externalStatus, player.isActive, player.lastSeenAt])).toEqual([
-			['player-1', 'One Updated', 'they/them', 2, true, later],
-			['player-2', 'Two', null, 1, false, seenAt],
+		expect((await roster(eventId)).map(player => [
+			player.externalId,
+			player.name,
+			player.pronouns,
+			player.externalStatus,
+			player.isActive,
+			player.lastSeenAt,
+		])).toEqual([
+			[
+				'player-1',
+				'One Updated',
+				'they/them',
+				2,
+				true,
+				later,
+			],
+			[
+				'player-2',
+				'Two',
+				null,
+				1,
+				false,
+				seenAt,
+			],
 		]);
 	});
 
 	it('reactivates a returning Player', async () => {
 		const eventId = await stageEvent();
-		await playerService().reconcileMeleeSnapshot(eventId, [{ externalId: 'returning', externalStatus: 1, name: 'Back' }], seenAt);
+		await playerService().reconcileMeleeSnapshot(eventId, [
+			{ externalId: 'returning', externalStatus: 1, name: 'Back' },
+		], seenAt);
 		await playerService().reconcileMeleeSnapshot(eventId, [], seenAt);
 
-		expect(await playerService().reconcileMeleeSnapshot(eventId, [{ externalId: 'returning', externalStatus: 9, name: 'Back' }], later))
+		expect(await playerService().reconcileMeleeSnapshot(eventId, [
+			{ externalId: 'returning', externalStatus: 9, name: 'Back' },
+		], later))
 			.toMatchObject({ created: 0, updated: 1, deactivated: 0 });
 		expect((await roster(eventId))[0]).toMatchObject({ isActive: true, externalStatus: 9, lastSeenAt: later });
 	});
 
 	it('deactivates every Melee Player for an empty snapshot and leaves manual Players alone', async () => {
 		const eventId = await stageEvent();
-		await playerService().reconcileMeleeSnapshot(eventId, [{ externalId: 'a', externalStatus: 1, name: 'A' }, { externalId: 'b', externalStatus: 1, name: 'B' }], seenAt);
+		await playerService().reconcileMeleeSnapshot(eventId, [
+			{ externalId: 'a', externalStatus: 1, name: 'A' },
+			{ externalId: 'b', externalStatus: 1, name: 'B' },
+		], seenAt);
 		await playerService().create(eventId, { name: 'Manual' } as never);
 
-		expect(await playerService().reconcileMeleeSnapshot(eventId, [], later)).toMatchObject({ players: [], created: 0, updated: 0, deactivated: 2 });
-		expect((await roster(eventId)).map(player => [player.name, player.isActive])).toEqual([['Manual', true], ['A', false], ['B', false]]);
+		expect(await playerService().reconcileMeleeSnapshot(eventId, [], later)).toMatchObject({
+			players: [],
+			created: 0,
+			updated: 0,
+			deactivated: 2,
+		});
+		expect((await roster(eventId)).map(player => [player.name, player.isActive])).toEqual([
+			['Manual', true],
+			['A', false],
+			['B', false],
+		]);
 	});
 
 	it('refuses a snapshot naming one identity twice, before writing anything', async () => {
@@ -104,11 +159,28 @@ describe('reconcileMeleeSnapshot', () => {
 describe('batchUpsertByExternalId', () => {
 	it('counts first sightings as created and the rest as updated', async () => {
 		const eventId = await stageEvent();
-		await playerService().batchUpsertByExternalId([{ eventId, name: 'Seen', externalId: 'e1', externalSource: 'melee' } as never]);
+		await playerService().batchUpsertByExternalId([
+			{
+				eventId,
+				name: 'Seen',
+				externalId: 'e1',
+				externalSource: 'melee',
+			} as never,
+		]);
 
 		const result = await playerService().batchUpsertByExternalId([
-			{ eventId, name: 'Seen Again', externalId: 'e1', externalSource: 'melee' } as never,
-			{ eventId, name: 'New', externalId: 'e2', externalSource: 'melee' } as never,
+			{
+				eventId,
+				name: 'Seen Again',
+				externalId: 'e1',
+				externalSource: 'melee',
+			} as never,
+			{
+				eventId,
+				name: 'New',
+				externalId: 'e2',
+				externalSource: 'melee',
+			} as never,
 		]);
 
 		expect(result).toMatchObject({ created: 1, updated: 1 });

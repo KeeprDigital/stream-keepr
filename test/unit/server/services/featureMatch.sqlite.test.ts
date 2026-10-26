@@ -18,7 +18,10 @@ const db = drizzle(harness.database, { schema });
 let failNextOpen: Error | undefined;
 
 vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({ publishMessage: async () => {}, publishMessageStrict: async () => {} }));
+vi.doMock('~~/server/utils/ably', () => ({
+	publishMessage: async () => {},
+	publishMessageStrict: async () => {},
+}));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
 	...await importOriginal<object>(),
 	refreshBroadcastGraphicsBindings: async () => {},
@@ -47,14 +50,20 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 
 const { featureMatchService } = await import('~~/server/services/featureMatch');
 
-afterAll(async () => await harness.close());
 beforeEach(() => {
 	failNextOpen = undefined;
 });
 
+afterAll(async () => await harness.close());
+
 async function stageEvent(featureMatchDefaultBestOf = 3) {
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal', featureMatchDefaultBestOf })
+		.values({
+			name: 'Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			featureMatchDefaultBestOf,
+		})
 		.returning({ id: schema.events.id });
 	return event!.id;
 }
@@ -89,15 +98,27 @@ describe('create', () => {
 		const slot = await featureMatchService().create(eventId, { externalId: 'forged-id', externalSource: 'melee', activeSessionId: 42 } as never);
 
 		expect(slot).toMatchObject({ externalId: null, externalSource: 'manual' });
-		const session = await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.slotId, slot.id) });
+		const session = await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.slotId, slot.id),
+		});
 		expect(slot.activeSessionId).toBe(session!.id);
 	});
 
 	it('takes its provenance from the Match it shows', async () => {
 		const eventId = await stageEvent();
 		const [phase] = await db.insert(schema.phases).values({ eventId, name: 'Swiss' }).returning();
-		const [round] = await db.insert(schema.rounds).values({ eventId, phaseId: phase!.id, name: 'R1', roundNumber: 1 }).returning();
-		const [match] = await db.insert(schema.matches).values({ eventId, roundId: round!.id, externalId: 'match-22', externalSource: 'melee' }).returning();
+		const [round] = await db.insert(schema.rounds).values({
+			eventId,
+			phaseId: phase!.id,
+			name: 'R1',
+			roundNumber: 1,
+		}).returning();
+		const [match] = await db.insert(schema.matches).values({
+			eventId,
+			roundId: round!.id,
+			externalId: 'match-22',
+			externalSource: 'melee',
+		}).returning();
 
 		const slot = await featureMatchService().create(eventId, { matchId: match!.id, externalId: 'forged', externalSource: 'manual' } as never);
 
@@ -131,7 +152,12 @@ describe('update', () => {
 		const eventId = await stageEvent();
 		const [slot] = await db.insert(schema.featureMatches).values({ eventId, externalId: 'melee-slot', externalSource: 'melee' }).returning();
 
-		await featureMatchService().update(slot!.id, eventId, { tableNumber: 9, externalId: 'forged-id', externalSource: 'manual', activeSessionId: 42 } as never);
+		await featureMatchService().update(slot!.id, eventId, {
+			tableNumber: 9,
+			externalId: 'forged-id',
+			externalSource: 'manual',
+			activeSessionId: 42,
+		} as never);
 
 		expect((await slotsOf(eventId))[0]).toMatchObject({ tableNumber: 9, externalId: 'melee-slot', externalSource: 'melee' });
 		expect((await slotsOf(eventId))[0]!.activeSessionId).not.toBe(42);
@@ -148,7 +174,10 @@ describe('syncFeatureMatches', () => {
 
 		const [, second, third] = grown.created;
 		const shrunk = await featureMatchService().syncFeatureMatches(eventId, 1);
-		expect(shrunk).toEqual({ created: [], deleted: [third!.id, second!.id] });
+		expect(shrunk).toEqual({
+			created: [],
+			deleted: [third!.id, second!.id],
+		});
 
 		expect(await featureMatchService().syncFeatureMatches(eventId, 1)).toEqual({ created: [], deleted: [] });
 	});
@@ -170,12 +199,23 @@ describe('swapMatchOrder', () => {
 	it('swaps a Slot with its neighbour, first giving duplicate orders distinct places', async () => {
 		const eventId = await stageEvent();
 		const [one, two, three] = await db.insert(schema.featureMatches)
-			.values([{ eventId, sortOrder: 0 }, { eventId, sortOrder: 0 }, { eventId, sortOrder: 1 }])
+			.values([
+				{ eventId, sortOrder: 0 },
+				{ eventId, sortOrder: 0 },
+				{ eventId, sortOrder: 1 },
+			])
 			.returning();
 
 		const result = await featureMatchService().swapMatchOrder(eventId, two!.id, 'down');
 
-		expect(result).toEqual([{ matchId: two!.id, sortOrder: 2 }, { matchId: three!.id, sortOrder: 1 }]);
-		expect((await slotsOf(eventId)).map(slot => [slot.id, slot.sortOrder])).toEqual([[one!.id, 0], [two!.id, 2], [three!.id, 1]]);
+		expect(result).toEqual([
+			{ matchId: two!.id, sortOrder: 2 },
+			{ matchId: three!.id, sortOrder: 1 },
+		]);
+		expect((await slotsOf(eventId)).map(slot => [slot.id, slot.sortOrder])).toEqual([
+			[one!.id, 0],
+			[two!.id, 2],
+			[three!.id, 1],
+		]);
 	});
 });

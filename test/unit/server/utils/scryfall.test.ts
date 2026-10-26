@@ -182,45 +182,40 @@ describe('batchLookupScryfallIds', () => {
 		expect(secondBatch.identifiers).toHaveLength(5);
 	});
 
-	it('stores results with both name+set and name-only keys', async () => {
+	it('maps each card under both its name+set and name-only keys', async () => {
 		vi.mocked(fetch).mockResolvedValue(
 			createScryfallResponse([
 				{
 					id: 'abc',
-					name: 'Lightning Bolt',
-					set: 'm21',
+					name: 'Detention Sphere',
+					set: 'rtr',
 					oracle_id: 'oracle-1',
-					mana_cost: '{R}',
+					mana_cost: '{1}{W}{U}',
+					cmc: 3,
+					color_identity: ['W', 'U'],
+					type_line: 'Enchantment',
 				},
+				{ id: 'def', name: 'Plains', set: 'm21' },
 			]) as any,
 		);
 
 		const result = await batchLookupScryfallIds([
-			{ name: 'Lightning Bolt', setCode: 'm21' },
+			{ name: 'Detention Sphere', setCode: 'rtr' },
+			{ name: 'Plains', setCode: 'm21' },
 		]);
 
-		expect(result.results.get('lightning bolt|m21')).toMatchObject({ id: 'abc', oracleId: 'oracle-1', manaCost: '{R}' });
-		expect(result.results.get('lightning bolt')).toMatchObject({ id: 'abc', oracleId: 'oracle-1', manaCost: '{R}' });
+		const sphere = {
+			id: 'abc',
+			oracleId: 'oracle-1',
+			manaCost: '{1}{W}{U}',
+			cmc: 3,
+			colors: 'WU',
+			typeLine: 'Enchantment',
+		};
+		expect(result.results.get('detention sphere|rtr')).toMatchObject(sphere);
+		expect(result.results.get('detention sphere')).toMatchObject(sphere);
+		expect(result.results.get('plains|m21')?.cmc).toBeNull();
 		expect(result.errors).toHaveLength(0);
-	});
-
-	it('extracts oracle_id fields', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{
-					id: 'abc',
-					name: 'Time Vault',
-					set: 'lea',
-					oracle_id: 'oracle-time-vault',
-				},
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Time Vault', setCode: 'lea' },
-		]);
-
-		expect(result.results.get('time vault|lea')?.oracleId).toBe('oracle-time-vault');
 	});
 
 	it('handles double-faced card names by splitting on " // "', async () => {
@@ -271,77 +266,6 @@ describe('batchLookupScryfallIds', () => {
 				}),
 			}),
 		);
-	});
-
-	it('cmc is extracted from response', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{
-					id: 'abc',
-					name: 'Lightning Bolt',
-					set: 'm21',
-					cmc: 1,
-				},
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Lightning Bolt', setCode: 'm21' },
-		]);
-
-		expect(result.results.get('lightning bolt|m21')?.cmc).toBe(1);
-	});
-
-	it('color_identity joined to colors string', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{
-					id: 'abc',
-					name: 'Detention Sphere',
-					set: 'rtr',
-					color_identity: ['W', 'U'],
-				},
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Detention Sphere', setCode: 'rtr' },
-		]);
-
-		expect(result.results.get('detention sphere|rtr')?.colors).toBe('WU');
-	});
-
-	it('type_line extracted to typeLine', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{
-					id: 'abc',
-					name: 'Serra Angel',
-					set: 'm21',
-					type_line: 'Creature — Angel',
-				},
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Serra Angel', setCode: 'm21' },
-		]);
-
-		expect(result.results.get('serra angel|m21')?.typeLine).toBe('Creature — Angel');
-	});
-
-	it('card with no cmc in response has cmc=null', async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			createScryfallResponse([
-				{ id: 'abc', name: 'Plains', set: 'm21' },
-			]) as any,
-		);
-
-		const result = await batchLookupScryfallIds([
-			{ name: 'Plains', setCode: 'm21' },
-		]);
-
-		expect(result.results.get('plains|m21')?.cmc).toBeNull();
 	});
 
 	it('strips " // back" from DFC/split names sent to Scryfall collection endpoint', async () => {

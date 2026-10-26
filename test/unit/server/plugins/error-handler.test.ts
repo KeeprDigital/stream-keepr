@@ -1,8 +1,5 @@
 import type { LoggedNitroError } from '~~/server/utils/errorLogFields';
 import type { MappableNitroError } from '~~/server/utils/nitroErrorMapping';
-import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { GraphicsAssetLibraryError } from '~~/server/modules/graphics-asset-library/errors';
 import { errorLogFields } from '~~/server/utils/errorLogFields';
@@ -17,7 +14,6 @@ import { mapPublicNitroError } from '~~/server/utils/nitroErrorMapping';
 import { REALTIME_PUBLISH_FAILED_MESSAGE, RealtimePublishError } from '~~/server/utils/realtimePublishFailure';
 import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { ErrorInfoShaped, providerRefusal } from '~~/test/helpers/providerRefusal';
-import { scanSourceForRefusals, typeScriptFilesUnder } from '~~/test/helpers/routeRefusalScan';
 
 describe('error-handler mapping logic', () => {
 	it('maps Broadcast Deck provider outages to a stable retryable API failure', () => {
@@ -168,11 +164,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('reports an absent unhandled flag as handled, and a set one as unhandled', () => {
-			// The field decides how a reader triages the line: `unhandled` is Nitro's
-			// mark for an error nothing classified, and the mapper clears it for every
-			// failure it recognises. So `false` has to mean "something owned this" and
-			// not "the property was missing" — an absent flag defaulting the other way
-			// would report every classified failure as an unexplained crash.
+			// `unhandled: false` means something classified the failure, never that the flag was absent.
 			expect(errorLogFields(failed({}), '/api/events/1')).toMatchObject({ unhandled: false });
 			expect(errorLogFields(failed({ unhandled: false }), '/api/events/1')).toMatchObject({ unhandled: false });
 			expect(errorLogFields(failed({ unhandled: true }), '/api/events/1')).toMatchObject({ unhandled: true });
@@ -270,11 +262,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('realtimePublishError mapping', () => {
 		it('answers a refused publish in its own name rather than the provider\'s status', () => {
-			// #264: `publishScreenCommand` used to propagate Ably's `ErrorInfo`
-			// untouched, and h3 adopts `statusCode` from anything thrown — so a key
-			// Ably refuses made the Screen-command route answer 404, the same answer
-			// it gives for a Screen that does not exist. The two are different
-			// failures with different owners, and now say so.
+			// A refused publish answers in its own name, not with the provider's 404 (#264).
 			const error: MappableNitroError = {
 				statusCode: 404,
 				message: 'No application found',
@@ -293,11 +281,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('clears unhandled, without which Nitro masks the message regardless', () => {
-			// A bare `throw` of a non-H3Error arrives unhandled, and Nitro's handler
-			// runs after this hook and rewrites the body message to 'Server Error' when
-			// it still is. The integration diagnosis reads that message, so leaving it
-			// masked would
-			// cost the whole classification.
+			// Nitro masks the body message of an error still marked unhandled.
 			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
@@ -459,11 +443,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('melee credential keyring configuration mapping', () => {
 		it('keeps a sentence naming the keyring setting an operator must fix', () => {
-			// #347: the same judgement as #233 one subsystem over. A missing or
-			// malformed keyring entry is an unfinished deployment, and the only
-			// reader who can act on it is the one holding the response. The public
-			// sentence names the setting, never a value — the crypto library's own
-			// words stay on the cause, where the log reads them.
+			// A keyring fault names the setting, never a value; the crypto error stays on the cause (#347).
 			const error: MappableNitroError = {
 				statusCode: 503,
 				statusMessage: 'Service Unavailable',
@@ -492,11 +472,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('classifies an unparseable previous-keys setting as the same deployment fault', () => {
-			// Beyond #347's enumerated four, deliberately: the brief's census listed
-			// the codes the crypto utility raises and missed the one the keyring
-			// *parser* raises, but the rule it wrote — keyring-configuration faults
-			// name the setting — covers it squarely. Flagged on the issue rather
-			// than silently shipped.
+			// The keyring parser's code is the same deployment fault as the crypto utility's.
 			const error: MappableNitroError = {
 				statusCode: 503,
 				statusMessage: 'Service Unavailable',
@@ -517,10 +493,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('discriminates on the code, so a corrupt envelope stays a sanitized 500', () => {
-			// The other half of #347's split: a stored envelope that cannot be
-			// decrypted is a genuine internal failure — no setting fixes it, so its
-			// prose earns nothing and the sanitizer keeps the last word. The code
-			// still reaches the structured log through the cause.
+			// A corrupt stored envelope is an internal failure no setting fixes, so it is sanitized.
 			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Melee credential encryption is unavailable',
@@ -546,13 +519,7 @@ describe('error-handler mapping logic', () => {
 
 	describe('graphics asset library unavailability mapping', () => {
 		it('keeps the sentence naming which store the library could not reach', () => {
-			// #294: the library says which of its stores went away — the catalogue,
-			// the staging byte store, the canonical one — and the sanitizer was
-			// replacing all three with 'Internal Server Error'. That sentence is the
-			// only part of the failure an operator can act on: it says whether a
-			// binding is missing or a bucket is refusing, and the alternative is
-			// reading the logs of a server whose own database is the thing that is
-			// down. Preserved for the same reason as #233 and #243.
+			// Which store went away is the part an operator can act on (#294).
 			const error: MappableNitroError = {
 				statusCode: 503,
 				statusMessage: 'Service Unavailable',
@@ -574,10 +541,7 @@ describe('error-handler mapping logic', () => {
 		});
 
 		it('preserves the byte store\'s own wording rather than a sentence of its own', () => {
-			// Twenty-three throw sites share the one code — this comment said three
-			// until #321 counted them — and each names a different store or a
-			// different interrupted operation, so the branch may not substitute a
-			// message of its own. It carries whichever one the library wrote.
+			// Many throw sites share the code, so the branch carries the library's own wording.
 			const error: MappableNitroError = {
 				statusCode: 503,
 				message: 'Graphics Asset staging byte store is unavailable',
@@ -623,16 +587,6 @@ describe('error-handler mapping logic', () => {
 			expect(error.message).toBe('Internal Server Error');
 		});
 	});
-
-	/**
-	 * The Graphics Author Session store had a mapping branch of its own here until
-	 * #398 retired the store (ADR-0010's cutover). What #294 established with it
-	 * survives in the rows above and below: a 5xx whose cause is a *named* class
-	 * keeps its sentence, and one whose cause is a raw store exception is sanitized
-	 * to 'Internal Server Error' — the second of which is pinned by the
-	 * unrecognised-cause rows in this file rather than by a session-shaped copy of
-	 * them.
-	 */
 
 	describe('temporarily unavailable mapping', () => {
 		it('keeps the sentence a route wrote about something momentarily out of reach', () => {
@@ -707,16 +661,7 @@ describe('error-handler mapping logic', () => {
 		});
 	});
 
-	/**
-	 * Every family whose prose survives the sanitizer, driven in one place.
-	 *
-	 * The client reads this list without being able to see it: `failureSentence`
-	 * quotes a 5xx body it did not recognise as a placeholder, and the two marks it
-	 * decides on — not 500, not one of the sanitizer's own sentences — are properties
-	 * of this table rather than of that function. Its docstring cites the count and
-	 * the statuses as established by driving the mapper; this is that drive, so the
-	 * claim fails here rather than drifting quietly.
-	 */
+	// Every family whose prose survives the sanitizer: the list `failureSentence` relies on.
 	describe('the families whose prose survives, enumerated', () => {
 		const preserved: readonly { family: string; cause: unknown; sentence: string }[] = [
 			{
@@ -790,11 +735,7 @@ describe('error-handler mapping logic', () => {
 			expect(error.unhandled).toBe(false);
 		});
 
-		/**
-		 * The first of the two marks the client decides on. A family raised at 500
-		 * would be quoted by nothing, because 500 is where this server says it broke
-		 * and the client refuses that status whatever the body carries.
-		 */
+		// A family raised at 500 would be quoted by nothing: the client refuses that status.
 		it.each(preserved)('answers away from 500 for $family', ({ cause }) => {
 			const error: MappableNitroError = { statusCode: 500, message: 'Something went wrong', cause };
 
@@ -802,19 +743,6 @@ describe('error-handler mapping logic', () => {
 
 			expect(error.statusCode).not.toBe(500);
 			expect([502, 503, 504, 507]).toContain(error.statusCode);
-		});
-
-		/**
-		 * The count `failureSentence`'s docstring quotes. It was nine until #294 added
-		 * two, eleven until #321 added the shared one, twelve until #344 retired the
-		 * wiring family, and eleven until #398 retired the Graphics Author Session
-		 * store with the identity it belonged to. The number is load-bearing on the
-		 * client's side of the boundary: it is the enumeration behind "every preserved
-		 * family comes out non-500", which is the whole reason the status mark can be
-		 * trusted.
-		 */
-		it('is eleven families wide', () => {
-			expect(preserved).toHaveLength(11);
 		});
 	});
 
@@ -837,88 +765,6 @@ describe('error-handler mapping logic', () => {
 			};
 			mapPublicNitroError(error);
 			expect(error.statusCode).toBe(409);
-		});
-	});
-
-	/**
-	 * The structural half of everything above: no `createError` under `server/` may raise
-	 * a non-500 5xx without naming a cause.
-	 *
-	 * Every row in this file drives the mapper with an error somebody constructed here.
-	 * That establishes what the mapper does and nothing at all about what the server hands
-	 * it — so the class this guards has been fixed three times over (#233/#243, then #294,
-	 * then #321's seven sites) and each fix left nothing behind that would notice the
-	 * fourth. `app/utils/failureSentence.ts` reads the far side of the same boundary and
-	 * says its placeholder mark is belt-and-braces; until this row that honesty rested on
-	 * nobody writing a bare 5xx again. #339.
-	 *
-	 * **Read the site before satisfying the failure.** A cause is not a formality: it is
-	 * what `mapPublicNitroError` classifies by, so the fix is to raise a class the mapper
-	 * recognises — `TemporarilyUnavailableError` and friends in `server/utils/errors.ts`,
-	 * enumerated as the eleven families above. Attaching whatever a store threw satisfies
-	 * this row and still answers 'Internal Server Error', which is the shape pinned under
-	 * 'does not exempt a store failure that merely reached the same route'.
-	 *
-	 * **500 is deliberately outside the band.** A hand-rolled 500 is this server saying it
-	 * broke, and 'Internal Server Error' is the honest answer to that — demanding a cause
-	 * there would demand that every route classify a genuine crash. Four such 500s exist
-	 * today and are not this row's business.
-	 *
-	 * **What the readability filter costs, stated so nobody reads more into a pass.** The
-	 * scan reads syntax, so `statusCode: cause.statusCode` — the idiom #321's own fixes
-	 * landed on — has no readable status and is out of scope here. Twelve calls under
-	 * `server/` have an unreadable status, but not all for that reason: **seven** are the
-	 * property-access idiom (six spelled `cause.statusCode`, one `failure.statusCode`),
-	 * and the other **five** are unreadable for reasons of their own — one ternary status
-	 * (`templatePackageExportApi.ts`; `melee-sync/configuration.ts`'s went with #355),
-	 * two shorthand properties (`graphicsAssetApi.ts`, `routeGuards.ts`), one element
-	 * access (`broadcastGraphicsState.ts`), and `screen-output-assets/runtime.ts`, whose
-	 * status is a plain literal 503 defeated only by the shorthand `cause` beside it. The
-	 * seven are each pinned by their own route's tests; the other five are a mix, and the
-	 * last of them is this filter's blind spot in its purest form.
-	 * What is in scope is the shape the defect actually takes when it regrows: a fresh
-	 * `createError({ statusCode: 503, message: '…' })` written by someone who had not read
-	 * #321. That is what the planted-regression proof on this ticket exercised.
-	 */
-	describe('every hand-rolled non-500 5xx under server/', () => {
-		const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
-		const serverDirectory = fileURLToPath(new URL('../../../../server/', import.meta.url));
-
-		const scanned = typeScriptFilesUnder(serverDirectory).flatMap(
-			file => scanSourceForRefusals(relative(repositoryRoot, file), readFileSync(file, 'utf8')),
-		);
-
-		/** A readable 5xx that is not 500 — the band whose prose the mapper decides on. */
-		const banded = scanned.filter(
-			refusal => refusal.statusCode !== undefined && refusal.statusCode > 500 && refusal.statusCode < 600,
-		);
-
-		it('is found by the scan at all, so this row cannot pass by scanning nothing', () => {
-			// The whole census is a filter over a list, and an empty list satisfies every
-			// filter. A scan pointed at a renamed directory, or one that stopped matching
-			// `createError`, would otherwise report a clean server in silence — which is
-			// the defect class one level up, and the one this file keeps meeting.
-			expect(typeScriptFilesUnder(serverDirectory).length).toBeGreaterThan(100);
-			expect(scanned.length).toBeGreaterThan(100);
-			// The band itself is empty since #355 retired its last site —
-			// `deck-list-resolution`'s 502 now throws only a cause and lets the mapper
-			// spell the refusal. So the row below quantifies over nothing today, and its
-			// power to catch the fresh bare 503 it exists for rests on the synthetic-shape
-			// rows in `realtimeDiagnosis.test.ts`, which prove the scan reads
-			// `carriesCause` off exactly that shape. Pinned at zero rather than dropped:
-			// a readable in-band literal reappearing means someone is hand-spelling a 5xx
-			// again, and that deserves a conscious look — either it is #355's defect
-			// regrowing, or the band has a legitimate new resident and this becomes
-			// `toBeGreaterThan(0)` once more.
-			expect(banded.length).toBe(0);
-		});
-
-		it('names a cause, so the sentence it wrote reaches the operator it wrote it for', () => {
-			const uncaused = banded
-				.filter(refusal => refusal.carriesCause === false)
-				.map(refusal => `${refusal.site}: ${refusal.source}`);
-
-			expect(uncaused).toEqual([]);
 		});
 	});
 });

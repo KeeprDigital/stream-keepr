@@ -19,7 +19,10 @@ const db = drizzle(harness.database, { schema });
 let failNextCorrection: unknown;
 
 vi.doMock('~~/server/db', () => ({ db }));
-vi.doMock('~~/server/utils/ably', () => ({ publishMessage: async () => {}, publishMessageStrict: async () => {} }));
+vi.doMock('~~/server/utils/ably', () => ({
+	publishMessage: async () => {},
+	publishMessageStrict: async () => {},
+}));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
 	...await importOriginal<object>(),
 	refreshBroadcastGraphicsBindings: async () => {},
@@ -47,10 +50,11 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 const { playerFeatureMatchSyncService } = await import('~~/server/services/playerFeatureMatchSync');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
-afterAll(async () => await harness.close());
 beforeEach(() => {
 	failNextCorrection = undefined;
 });
+
+afterAll(async () => await harness.close());
 
 interface StagedDeck {
 	id?: number;
@@ -69,14 +73,23 @@ async function stage(playersDecks: StagedDeck[][]) {
 		.returning({ id: schema.events.id });
 	const eventId = event!.id;
 	const [phase] = await db.insert(schema.phases).values({ eventId, name: 'Swiss', formatExternalId: 'standard' }).returning();
-	const [round] = await db.insert(schema.rounds).values({ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 }).returning();
+	const [round] = await db.insert(schema.rounds).values({
+		eventId,
+		phaseId: phase!.id,
+		name: 'Round 1',
+		roundNumber: 1,
+	}).returning();
 	const [match] = await db.insert(schema.matches).values({ eventId, roundId: round!.id }).returning();
 
 	const playerIds: number[] = [];
 	const deckIds: number[][] = [];
 	for (const [index, decks] of playersDecks.entries()) {
 		const [player] = await db.insert(schema.players)
-			.values({ eventId, name: `Player ${index + 1}`, gameData: { type: 'mtg', deckName: 'Primary Import', deckColors: 'R' } })
+			.values({
+				eventId,
+				name: `Player ${index + 1}`,
+				gameData: { type: 'mtg', deckName: 'Primary Import', deckColors: 'R' },
+			})
 			.returning();
 		playerIds.push(player!.id);
 		const ids: number[] = [];
@@ -85,7 +98,9 @@ async function stage(playersDecks: StagedDeck[][]) {
 				? await db.insert(schema.archetypes).values({ eventId, ...deck.archetype }).returning()
 				: [];
 			const [row] = await db.insert(schema.playerDecks).values({
-				...(deck.id === undefined ? {} : { id: deck.id }),
+				...(deck.id === undefined
+					? {}
+					: { id: deck.id }),
 				eventId,
 				playerId: player!.id,
 				externalId: `${eventId}-${index}-${sortOrder}`,
@@ -96,13 +111,20 @@ async function stage(playersDecks: StagedDeck[][]) {
 				isPrimary: deck.isPrimary ?? false,
 				sortOrder: deck.sortOrder ?? sortOrder,
 				archetypeId: archetype?.id ?? null,
-				reviewedAt: archetype ? new Date('2026-07-15T00:00:00Z') : null,
+				reviewedAt: archetype
+					? new Date('2026-07-15T00:00:00Z')
+					: null,
 			}).returning();
 			ids.push(row!.id);
 		}
 		deckIds.push(ids);
 	}
-	return { eventId, matchId: match!.id, playerIds, deckIds };
+	return {
+		eventId,
+		matchId: match!.id,
+		playerIds,
+		deckIds,
+	};
 }
 
 async function stageSlot(eventId: number, values: Partial<typeof schema.featureMatches.$inferInsert>) {
@@ -111,15 +133,29 @@ async function stageSlot(eventId: number, values: Partial<typeof schema.featureM
 }
 
 async function storedSlot(id: number) {
-	return (await db.query.featureMatches.findFirst({ where: eq(schema.featureMatches.id, id) }))!;
+	return (await db.query.featureMatches.findFirst({
+		where: eq(schema.featureMatches.id, id),
+	}))!;
 }
 
 describe('which deck a Slot side shows after its Player changes', () => {
 	it('takes the reviewed deck in the Match\'s format over the primary import', async () => {
-		const { eventId, matchId, playerIds } = await stage([[
-			{ formatExternalId: 'modern', name: 'Primary Import', colors: 'R', isPrimary: true },
-			{ formatExternalId: 'standard', name: 'Secondary Import', colors: 'U', archetype: { name: 'Reviewed Control', colors: 'WU' } },
-		]]);
+		const { eventId, matchId, playerIds } = await stage([
+			[
+				{
+					formatExternalId: 'modern',
+					name: 'Primary Import',
+					colors: 'R',
+					isPrimary: true,
+				},
+				{
+					formatExternalId: 'standard',
+					name: 'Secondary Import',
+					colors: 'U',
+					archetype: { name: 'Reviewed Control', colors: 'WU' },
+				},
+			],
+		]);
 		const slot = await stageSlot(eventId, { matchId, player1Id: playerIds[0] });
 
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!]);
@@ -131,13 +167,24 @@ describe('which deck a Slot side shows after its Player changes', () => {
 	});
 
 	it('keeps the exact deck the Slot already names', async () => {
-		const { eventId, matchId, playerIds, deckIds } = await stage([[
-			{ formatExternalId: 'standard', name: 'First Standard', colors: 'U' },
-			{ formatExternalId: 'standard', name: 'Exact Standard', colors: 'G' },
-			{ formatExternalId: 'modern', name: 'Primary Import', colors: 'R', isPrimary: true },
-		]]);
+		const { eventId, matchId, playerIds, deckIds } = await stage([
+			[
+				{ formatExternalId: 'standard', name: 'First Standard', colors: 'U' },
+				{ formatExternalId: 'standard', name: 'Exact Standard', colors: 'G' },
+				{
+					formatExternalId: 'modern',
+					name: 'Primary Import',
+					colors: 'R',
+					isPrimary: true,
+				},
+			],
+		]);
 		const exact = deckIds[0]![1]!;
-		const slot = await stageSlot(eventId, { matchId, player1Id: playerIds[0], player1Data: { name: 'Alice', deckId: exact } });
+		const slot = await stageSlot(eventId, {
+			matchId,
+			player1Id: playerIds[0],
+			player1Data: { name: 'Alice', deckId: exact },
+		});
 
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!]);
 
@@ -148,8 +195,17 @@ describe('which deck a Slot side shows after its Player changes', () => {
 	});
 
 	it('keeps an explicit no-deck side without a deck', async () => {
-		const { eventId, matchId, playerIds } = await stage([[{ formatExternalId: 'standard', name: 'Standard Deck' }]]);
-		const noDeck: PlayerSlotData = { name: 'Alice', deckId: null, archetypeId: null, gameData: { type: 'mtg', deckName: null, deckColors: null } };
+		const { eventId, matchId, playerIds } = await stage([
+			[
+				{ formatExternalId: 'standard', name: 'Standard Deck' },
+			],
+		]);
+		const noDeck: PlayerSlotData = {
+			name: 'Alice',
+			deckId: null,
+			archetypeId: null,
+			gameData: { type: 'mtg', deckName: null, deckColors: null },
+		};
 		const slot = await stageSlot(eventId, { matchId, player1Id: playerIds[0], player1Data: noDeck });
 
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!]);
@@ -159,24 +215,48 @@ describe('which deck a Slot side shows after its Player changes', () => {
 
 	it('keeps each side\'s historical deck after it leaves the import, side by side', async () => {
 		const { eventId, matchId, playerIds } = await stage([
-			[{ formatExternalId: 'standard', name: 'New Standard' }],
-			[{ formatExternalId: 'standard', name: 'Other Standard' }],
+			[
+				{ formatExternalId: 'standard', name: 'New Standard' },
+			],
+			[
+				{ formatExternalId: 'standard', name: 'Other Standard' },
+			],
 		]);
 		const alice = { type: 'mtg' as const, deckName: 'Alice Historical', deckColors: 'G' };
 		const bob = { type: 'mtg' as const, deckName: 'Bob Historical', deckColors: 'W' };
 		const slot = await stageSlot(eventId, {
 			matchId,
 			player1Id: playerIds[0],
-			player1Data: { name: 'Alice', deckId: 99_001, archetypeId: 8, gameData: alice },
+			player1Data: {
+				name: 'Alice',
+				deckId: 99_001,
+				archetypeId: 8,
+				gameData: alice,
+			},
 			player2Id: playerIds[1],
-			player2Data: { name: 'Bob', deckId: 99_002, archetypeId: 3, gameData: bob },
+			player2Data: {
+				name: 'Bob',
+				deckId: 99_002,
+				archetypeId: 3,
+				gameData: bob,
+			},
 		});
 
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, playerIds);
 
 		const stored = await storedSlot(slot.id);
-		expect(stored.player1Data).toMatchObject({ name: 'Player 1', deckId: 99_001, archetypeId: 8, gameData: alice });
-		expect(stored.player2Data).toMatchObject({ name: 'Player 2', deckId: 99_002, archetypeId: 3, gameData: bob });
+		expect(stored.player1Data).toMatchObject({
+			name: 'Player 1',
+			deckId: 99_001,
+			archetypeId: 8,
+			gameData: alice,
+		});
+		expect(stored.player2Data).toMatchObject({
+			name: 'Player 2',
+			deckId: 99_002,
+			archetypeId: 3,
+			gameData: bob,
+		});
 	});
 });
 
@@ -201,7 +281,9 @@ describe('syncMatchesFromPlayers', () => {
 
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!]);
 
-		const session = await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.slotId, slot.id) });
+		const session = await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.slotId, slot.id),
+		});
 		expect(session?.sourceSnapshot.player1.data?.name).toBe('Renamed');
 	});
 
@@ -210,15 +292,22 @@ describe('syncMatchesFromPlayers', () => {
 		const slot = await stageSlot(eventId, { player1Id: playerIds[0] });
 		const session = (await featureMatchStateService().createSessionForSlot(slot.id, eventId))!;
 		await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!]);
-		const settled = await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.id, session.id) });
+		const settled = await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.id, session.id),
+		});
 
 		expect(await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!])).toEqual([]);
-		expect((await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.id, session.id) }))?.sequence).toBe(settled?.sequence);
+		expect((await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.id, session.id),
+		}))?.sequence).toBe(settled?.sequence);
 	});
 
 	it('leaves the Slot rows at their previous snapshot when the Session correction fails, so a retry finds the delta', async () => {
 		const { eventId, playerIds } = await stage([[]]);
-		const slot = await stageSlot(eventId, { player1Id: playerIds[0], player1Data: { name: 'Old Name' } });
+		const slot = await stageSlot(eventId, {
+			player1Id: playerIds[0],
+			player1Data: { name: 'Old Name' },
+		});
 		failNextCorrection = new Error('session CAS failed');
 
 		await expect(playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!])).rejects.toThrow('session CAS failed');
@@ -231,7 +320,10 @@ describe('syncMatchesFromPlayers', () => {
 	describe('as a post-commit follow-on', () => {
 		it('absorbs a lost Session race and logs it, leaving the delta for the next pass', async () => {
 			const { eventId, playerIds } = await stage([[]]);
-			const slot = await stageSlot(eventId, { player1Id: playerIds[0], player1Data: { name: 'Old Name' } });
+			const slot = await stageSlot(eventId, {
+				player1Id: playerIds[0],
+				player1Data: { name: 'Old Name' },
+			});
 			failNextCorrection = Object.assign(new Error('Feature match session has advanced'), { statusCode: 409 });
 			const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -243,7 +335,10 @@ describe('syncMatchesFromPlayers', () => {
 
 		it('still fails on a fault, which is not a race the caller may absorb', async () => {
 			const { eventId, playerIds } = await stage([[]]);
-			await stageSlot(eventId, { player1Id: playerIds[0], player1Data: { name: 'Old Name' } });
+			await stageSlot(eventId, {
+				player1Id: playerIds[0],
+				player1Data: { name: 'Old Name' },
+			});
 			failNextCorrection = new Error('D1_ERROR: no such table: feature_match_sessions');
 
 			await expect(playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(eventId, [playerIds[0]!])).rejects.toThrow('no such table');

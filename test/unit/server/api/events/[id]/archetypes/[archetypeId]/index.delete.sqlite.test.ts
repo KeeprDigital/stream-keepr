@@ -30,7 +30,9 @@ vi.doMock('~~/server/modules/player-update', () => ({
 vi.doMock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => ({ archetypeDeleted: mockArchetypeDeleted }),
 }));
-vi.doMock('~~/server/utils/ably', () => ({ getOriginConnectionId: () => 'origin-1' }));
+vi.doMock('~~/server/utils/ably', () => ({
+	getOriginConnectionId: () => 'origin-1',
+}));
 
 const { default: handler } = await import('~~/server/api/events/[id]/archetypes/[archetypeId]/index.delete');
 
@@ -45,14 +47,40 @@ async function stage() {
 		.values({ eventId, name: 'Burn' })
 		.returning({ id: schema.archetypes.id });
 	const [primary, secondary] = await db.insert(schema.players)
-		.values([{ eventId, name: 'Primary' }, { eventId, name: 'Secondary' }])
+		.values([
+			{ eventId, name: 'Primary' },
+			{ eventId, name: 'Secondary' },
+		])
 		.returning({ id: schema.players.id });
-	const reviewed = { archetypeId: archetype!.id, reviewedAt: new Date('2026-09-01T00:00:00Z'), externalSource: 'melee' as const, formatExternalId: 'format', eventId };
+	const reviewed = {
+		archetypeId: archetype!.id,
+		reviewedAt: new Date('2026-09-01T00:00:00Z'),
+		externalSource: 'melee' as const,
+		formatExternalId: 'format',
+		eventId,
+	};
 	await db.insert(schema.playerDecks).values([
-		{ ...reviewed, playerId: primary!.id, externalId: `${eventId}-a`, name: 'A', isPrimary: true },
-		{ ...reviewed, playerId: secondary!.id, externalId: `${eventId}-b`, name: 'B', isPrimary: false },
+		{
+			...reviewed,
+			playerId: primary!.id,
+			externalId: `${eventId}-a`,
+			name: 'A',
+			isPrimary: true,
+		},
+		{
+			...reviewed,
+			playerId: secondary!.id,
+			externalId: `${eventId}-b`,
+			name: 'B',
+			isPrimary: false,
+		},
 	]);
-	return { eventId, archetypeId: archetype!.id, primaryId: primary!.id, secondaryId: secondary!.id };
+	return {
+		eventId,
+		archetypeId: archetype!.id,
+		primaryId: primary!.id,
+		secondaryId: secondary!.id,
+	};
 }
 
 describe('delete /api/events/[id]/archetypes/[archetypeId]', () => {
@@ -70,9 +98,20 @@ describe('delete /api/events/[id]/archetypes/[archetypeId]', () => {
 
 		expect(await db.select().from(schema.archetypes).where(eq(schema.archetypes.id, archetypeId))).toEqual([]);
 		const decks = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.eventId, eventId));
-		expect(decks.map(deck => [deck.archetypeId, deck.reviewedAt])).toEqual([[null, null], [null, null]]);
-		expect(mockReconcileDeckProjections).toHaveBeenCalledWith({ eventId, playerIds: [primaryId], originConnectionId: 'origin-1' });
-		expect(mockPublishPlayerSnapshotUpdates).toHaveBeenCalledWith({ eventId, playerIds: [secondaryId], originConnectionId: 'origin-1' });
+		expect(decks.map(deck => [deck.archetypeId, deck.reviewedAt])).toEqual([
+			[null, null],
+			[null, null],
+		]);
+		expect(mockReconcileDeckProjections).toHaveBeenCalledWith({
+			eventId,
+			playerIds: [primaryId],
+			originConnectionId: 'origin-1',
+		});
+		expect(mockPublishPlayerSnapshotUpdates).toHaveBeenCalledWith({
+			eventId,
+			playerIds: [secondaryId],
+			originConnectionId: 'origin-1',
+		});
 		expect(mockArchetypeDeleted).toHaveBeenCalledWith({ eventId, id: archetypeId, originConnectionId: 'origin-1' });
 	});
 

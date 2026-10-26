@@ -21,13 +21,20 @@ afterAll(async () => await harness.close());
 
 async function stageEvent(meleeClientSecret: string) {
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal', meleeClientSecret })
+		.values({
+			name: 'Event',
+			game: 'mtg',
+			featureMatchOrientation: 'horizontal',
+			meleeClientSecret,
+		})
 		.returning({ id: schema.events.id });
 	return event!.id;
 }
 
 async function storedSecret(eventId: number) {
-	return (await db.query.events.findFirst({ where: eq(schema.events.id, eventId) }))?.meleeClientSecret;
+	return (await db.query.events.findFirst({
+		where: eq(schema.events.id, eventId),
+	}))?.meleeClientSecret;
 }
 
 describe('rewrapMeleeClientSecret', () => {

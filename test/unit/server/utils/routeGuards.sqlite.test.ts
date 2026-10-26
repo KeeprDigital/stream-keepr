@@ -34,7 +34,20 @@ async function seed(name: string): Promise<Seeded> {
 	const eventId = event!.id;
 	const [phase] = await db.insert(schema.phases).values({ eventId, name: 'Swiss' }).returning();
 	const [round, otherRound] = await db.insert(schema.rounds)
-		.values([{ eventId, phaseId: phase!.id, name: 'Round 1', roundNumber: 1 }, { eventId, phaseId: phase!.id, name: 'Round 2', roundNumber: 2 }])
+		.values([
+			{
+				eventId,
+				phaseId: phase!.id,
+				name: 'Round 1',
+				roundNumber: 1,
+			},
+			{
+				eventId,
+				phaseId: phase!.id,
+				name: 'Round 2',
+				roundNumber: 2,
+			},
+		])
 		.returning();
 	const [match] = await db.insert(schema.matches).values({ eventId, roundId: round!.id }).returning();
 	const [slot] = await db.insert(schema.featureMatches).values({ eventId }).returning();
@@ -103,10 +116,26 @@ describe('validateFeatureMatchAssignmentCreateReferences', () => {
 	});
 
 	it.each([
-		['another Event\'s Round', () => ({ roundId: foreign.roundId, slotId: own.slotId, matchId: own.matchId }), { statusCode: 404, message: 'Round not found' }],
-		['another Event\'s Slot', () => ({ roundId: own.roundId, slotId: foreign.slotId, matchId: own.matchId }), { statusCode: 404, message: 'Feature match slot not found' }],
-		['another Event\'s Match', () => ({ roundId: own.roundId, slotId: own.slotId, matchId: foreign.matchId }), { statusCode: 404, message: 'Match not found' }],
-		['a Match of another Round', () => ({ roundId: own.otherRoundId, slotId: own.slotId, matchId: own.matchId }), { statusCode: 400, message: 'Match does not belong to round' }],
+		[
+			'another Event\'s Round',
+			() => ({ roundId: foreign.roundId, slotId: own.slotId, matchId: own.matchId }),
+			{ statusCode: 404, message: 'Round not found' },
+		],
+		[
+			'another Event\'s Slot',
+			() => ({ roundId: own.roundId, slotId: foreign.slotId, matchId: own.matchId }),
+			{ statusCode: 404, message: 'Feature match slot not found' },
+		],
+		[
+			'another Event\'s Match',
+			() => ({ roundId: own.roundId, slotId: own.slotId, matchId: foreign.matchId }),
+			{ statusCode: 404, message: 'Match not found' },
+		],
+		[
+			'a Match of another Round',
+			() => ({ roundId: own.otherRoundId, slotId: own.slotId, matchId: own.matchId }),
+			{ statusCode: 400, message: 'Match does not belong to round' },
+		],
 	])('refuses %s', async (_case, input, refusal) => {
 		await expect(guards.validateFeatureMatchAssignmentCreateReferences(own.eventId, input())).rejects.toMatchObject(refusal);
 	});

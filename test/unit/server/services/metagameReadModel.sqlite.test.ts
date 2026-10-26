@@ -22,7 +22,13 @@ vi.doMock('~~/server/db', () => ({ db }));
 const { metagameReadModel } = await import('~~/server/modules/metagame/readModel');
 
 function token(id: string, name: string): DeckTokenRequirement {
-	return { id, scryfallId: id, name, typeLine: `Token - ${name}`, uri: null };
+	return {
+		id,
+		scryfallId: id,
+		name,
+		typeLine: `Token - ${name}`,
+		uri: null,
+	};
 }
 
 let eventId: number;
@@ -41,7 +47,10 @@ beforeAll(async () => {
 	emptyEventId = empty!.id;
 
 	const [monoRed] = await db.insert(schema.archetypes)
-		.values([{ eventId, name: 'Mono Red', colors: 'R' }, { eventId, name: 'Unplayed' }])
+		.values([
+			{ eventId, name: 'Mono Red', colors: 'R' },
+			{ eventId, name: 'Unplayed' },
+		])
 		.returning({ id: schema.archetypes.id });
 	monoRedId = monoRed!.id;
 
@@ -53,9 +62,28 @@ beforeAll(async () => {
 			{ name: 'Treasure Vault', cardType: 'Artifact Land' },
 			{ name: 'Disdainful Stroke', cardType: 'Instant' },
 			{ name: 'Negate', cardType: 'Instant' },
-			{ name: 'Fable of the Mirror-Breaker', cardType: 'Enchantment', deckTokens: [token('token-a', 'Map')] },
-			{ name: 'Reflection Spell', cardType: 'Sorcery', deckTokens: [token('token-b', 'Reflection'), token('token-a', 'Map')] },
-			{ name: 'Surveyor Saga', cardType: 'Enchantment', deckTokens: [token('token-a-copy', ' map ')] },
+			{
+				name: 'Fable of the Mirror-Breaker',
+				cardType: 'Enchantment',
+				deckTokens: [
+					token('token-a', 'Map'),
+				],
+			},
+			{
+				name: 'Reflection Spell',
+				cardType: 'Sorcery',
+				deckTokens: [
+					token('token-b', 'Reflection'),
+					token('token-a', 'Map'),
+				],
+			},
+			{
+				name: 'Surveyor Saga',
+				cardType: 'Enchantment',
+				deckTokens: [
+					token('token-a-copy', ' map '),
+				],
+			},
 			{ name: 'Wrath of God', cardType: 'Sorcery' },
 		].map(card => ({ game: 'mtg' as const, ...card })))
 		.returning({ id: schema.cards.id, name: schema.cards.name });
@@ -63,21 +91,97 @@ beforeAll(async () => {
 
 	const playerRows = await db.insert(schema.players)
 		.values([
-			{ eventId, name: 'p1', archetypeId: monoRedId, position: 1, wins: 4, losses: 2, points: 12 },
-			{ eventId, name: 'p2', archetypeId: monoRedId, position: 2, wins: 3, losses: 3, points: 9 },
-			{ eventId, name: 'p3', position: 3, wins: 2, losses: 4, points: 6 },
-			{ eventId, name: 'p4', position: 4, wins: 1, losses: 5, points: 3 },
+			{
+				eventId,
+				name: 'p1',
+				archetypeId: monoRedId,
+				position: 1,
+				wins: 4,
+				losses: 2,
+				points: 12,
+			},
+			{
+				eventId,
+				name: 'p2',
+				archetypeId: monoRedId,
+				position: 2,
+				wins: 3,
+				losses: 3,
+				points: 9,
+			},
+			{
+				eventId,
+				name: 'p3',
+				position: 3,
+				wins: 2,
+				losses: 4,
+				points: 6,
+			},
+			{
+				eventId,
+				name: 'p4',
+				position: 4,
+				wins: 1,
+				losses: 5,
+				points: 3,
+			},
 			{ eventId, name: 'p5', archetypeId: monoRedId },
 		])
 		.returning({ id: schema.players.id });
 	playerIds.push(...playerRows.map(row => row.id));
 
 	const decks: { player: number; name: string; primary: boolean; reviewed?: boolean; cards: [string, number, 'mainboard' | 'sideboard'][] }[] = [
-		{ player: 0, name: 'Red Deck Wins', primary: true, reviewed: true, cards: [['Mountain', 20, 'mainboard'], ['Lightning Bolt', 4, 'mainboard'], ['Shatterskull Smashing', 2, 'mainboard'], ['Disdainful Stroke', 2, 'sideboard']] },
-		{ player: 1, name: 'Boros Burn', primary: true, cards: [['Mountain', 20, 'mainboard'], ['Lightning Bolt', 2, 'mainboard'], ['Treasure Vault', 2, 'mainboard'], ['Lightning Bolt', 2, 'sideboard'], ['Disdainful Stroke', 2, 'sideboard']] },
-		{ player: 2, name: 'Izzet', primary: true, cards: [['Negate', 3, 'mainboard'], ['Fable of the Mirror-Breaker', 1, 'mainboard']] },
-		{ player: 3, name: 'Tokens', primary: true, cards: [['Negate', 3, 'mainboard'], ['Reflection Spell', 1, 'mainboard'], ['Surveyor Saga', 1, 'mainboard']] },
-		{ player: 0, name: 'Old List', primary: false, cards: [['Wrath of God', 4, 'mainboard']] },
+		{
+			player: 0,
+			name: 'Red Deck Wins',
+			primary: true,
+			reviewed: true,
+			cards: [
+				['Mountain', 20, 'mainboard'],
+				['Lightning Bolt', 4, 'mainboard'],
+				['Shatterskull Smashing', 2, 'mainboard'],
+				['Disdainful Stroke', 2, 'sideboard'],
+			],
+		},
+		{
+			player: 1,
+			name: 'Boros Burn',
+			primary: true,
+			cards: [
+				['Mountain', 20, 'mainboard'],
+				['Lightning Bolt', 2, 'mainboard'],
+				['Treasure Vault', 2, 'mainboard'],
+				['Lightning Bolt', 2, 'sideboard'],
+				['Disdainful Stroke', 2, 'sideboard'],
+			],
+		},
+		{
+			player: 2,
+			name: 'Izzet',
+			primary: true,
+			cards: [
+				['Negate', 3, 'mainboard'],
+				['Fable of the Mirror-Breaker', 1, 'mainboard'],
+			],
+		},
+		{
+			player: 3,
+			name: 'Tokens',
+			primary: true,
+			cards: [
+				['Negate', 3, 'mainboard'],
+				['Reflection Spell', 1, 'mainboard'],
+				['Surveyor Saga', 1, 'mainboard'],
+			],
+		},
+		{
+			player: 0,
+			name: 'Old List',
+			primary: false,
+			cards: [
+				['Wrath of God', 4, 'mainboard'],
+			],
+		},
 	];
 	for (const [index, deck] of decks.entries()) {
 		const [row] = await db.insert(schema.playerDecks)
@@ -90,7 +194,9 @@ beforeAll(async () => {
 				name: deck.name,
 				isPrimary: deck.primary,
 				archetypeId: deck.reviewed ? monoRedId : null,
-				reviewedAt: deck.reviewed ? new Date('2026-09-01T00:00:00Z') : null,
+				reviewedAt: deck.reviewed
+					? new Date('2026-09-01T00:00:00Z')
+					: null,
 			})
 			.returning({ id: schema.playerDecks.id });
 		await db.insert(schema.playerDeckCards).values(deck.cards.map(([name, quantity, compartment], sortOrder) => ({
@@ -137,7 +243,12 @@ describe('card breakdown', () => {
 		const sideboard = await metagameReadModel().getCardBreakdown(eventId, { scope: 'all', board: 'sideboard', sortBy: 'totalCopies' });
 
 		expect(mainboard.entries.map(entry => entry.name).slice(0, 2)).toEqual(['Lightning Bolt', 'Negate']);
-		expect(mainboard.entries[0]).toMatchObject({ totalCopies: 6, deckCount: 2, avgCopies: 3, inclusionRate: 50 });
+		expect(mainboard.entries[0]).toMatchObject({
+			totalCopies: 6,
+			deckCount: 2,
+			avgCopies: 3,
+			inclusionRate: 50,
+		});
 		expect(names(mainboard.entries)).not.toContain('Disdainful Stroke');
 		expect(sideboard.entries.map(entry => [entry.name, entry.totalCopies, entry.deckCount])).toEqual([
 			['Disdainful Stroke', 4, 2],
@@ -201,7 +312,9 @@ describe('summary', () => {
 			scope: 'all',
 		});
 		expect(result.topCards.map(entry => entry.name)).not.toContain('Mountain');
-		expect(result.facts).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'mostPlayedCards' })]));
+		expect(result.facts).toEqual(expect.arrayContaining([
+			expect.objectContaining({ key: 'mostPlayedCards' }),
+		]));
 	});
 });
 

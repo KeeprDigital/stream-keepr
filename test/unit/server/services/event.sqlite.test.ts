@@ -18,7 +18,10 @@ const protectMeleeClientSecret = vi.fn(async (secret: string) => `encrypted:${se
 
 vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/services/meleeCredentials', () => ({ protectMeleeClientSecret }));
-vi.doMock('~~/server/utils/ably', () => ({ publishMessage: async () => {}, publishMessageStrict: async () => {} }));
+vi.doMock('~~/server/utils/ably', () => ({
+	publishMessage: async () => {},
+	publishMessageStrict: async () => {},
+}));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
 	...await importOriginal<object>(),
 	refreshBroadcastGraphicsBindings: async () => {},
@@ -26,11 +29,14 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOrigi
 
 const { eventService } = await import('~~/server/services/event');
 
-afterAll(async () => await harness.close());
 beforeEach(() => protectMeleeClientSecret.mockClear());
 
+afterAll(async () => await harness.close());
+
 async function storedEvent(id: number) {
-	return (await db.query.events.findFirst({ where: eq(schema.events.id, id) }))!;
+	return (await db.query.events.findFirst({
+		where: eq(schema.events.id, id),
+	}))!;
 }
 
 const syncedAt = new Date('2026-01-01T00:00:00Z');
@@ -57,18 +63,73 @@ async function stageMeleeEvent() {
 	}).returning();
 	const eventId = event!.id;
 	const [card] = await db.insert(schema.cards).values({ name: `Card ${eventId}`, game: 'mtg' }).returning();
-	await db.insert(schema.eventCardNameOverrides).values({ eventId, inputName: 'x', normalizedInputName: 'x', resolvedCardId: card!.id });
+	await db.insert(schema.eventCardNameOverrides).values({
+		eventId,
+		inputName: 'x',
+		normalizedInputName: 'x',
+		resolvedCardId: card!.id,
+	});
 	const [imported, manual] = await db.insert(schema.players)
-		.values([{ eventId, name: 'Imported', externalSource: 'melee', externalId: 'p-1' }, { eventId, name: 'Manual', externalSource: 'manual' }])
+		.values([
+			{
+				eventId,
+				name: 'Imported',
+				externalSource: 'melee',
+				externalId: 'p-1',
+			},
+			{ eventId, name: 'Manual', externalSource: 'manual' },
+		])
 		.returning();
 	const [importedPhase] = await db.insert(schema.phases)
-		.values([{ eventId, name: 'Imported', externalSource: 'melee', externalId: 'ph-1' }, { eventId, name: 'Manual', externalSource: 'manual' }])
+		.values([
+			{
+				eventId,
+				name: 'Imported',
+				externalSource: 'melee',
+				externalId: 'ph-1',
+			},
+			{ eventId, name: 'Manual', externalSource: 'manual' },
+		])
 		.returning();
-	const [round] = await db.insert(schema.rounds).values({ eventId, phaseId: importedPhase!.id, name: 'R1', roundNumber: 1, externalSource: 'melee', externalId: 'r-1' }).returning();
-	const [match] = await db.insert(schema.matches).values({ eventId, roundId: round!.id, externalSource: 'melee', externalId: 'm-1' }).returning();
+	const [round] = await db.insert(schema.rounds).values({
+		eventId,
+		phaseId: importedPhase!.id,
+		name: 'R1',
+		roundNumber: 1,
+		externalSource: 'melee',
+		externalId: 'r-1',
+	}).returning();
+	const [match] = await db.insert(schema.matches).values({
+		eventId,
+		roundId: round!.id,
+		externalSource: 'melee',
+		externalId: 'm-1',
+	}).returning();
 	const [importedScreen, manualScreen] = await db.insert(schema.screens).values([
-		{ eventId, name: 'Imported Deck', slug: `imported-${eventId}`, modeConfigs: { deck: { deckSource: { type: 'player', playerId: imported!.id } } } as never, assetCapabilitySeed: 's', assetCapabilityDigest: `d-${eventId}-a` },
-		{ eventId, name: 'Manual Deck', slug: `manual-${eventId}`, modeConfigs: { deck: { deckSource: { type: 'player', playerId: manual!.id } } } as never, assetCapabilitySeed: 's', assetCapabilityDigest: `d-${eventId}-b` },
+		{
+			eventId,
+			name: 'Imported Deck',
+			slug: `imported-${eventId}`,
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: imported!.id },
+				},
+			} as never,
+			assetCapabilitySeed: 's',
+			assetCapabilityDigest: `d-${eventId}-a`,
+		},
+		{
+			eventId,
+			name: 'Manual Deck',
+			slug: `manual-${eventId}`,
+			modeConfigs: {
+				deck: {
+					deckSource: { type: 'player', playerId: manual!.id },
+				},
+			} as never,
+			assetCapabilitySeed: 's',
+			assetCapabilityDigest: `d-${eventId}-b`,
+		},
 	]).returning();
 	const [slot] = await db.insert(schema.featureMatches).values({
 		eventId,
@@ -97,7 +158,13 @@ async function stageMeleeEvent() {
 		contentKey: 'old-content-key',
 		sequence: 7,
 	});
-	return { eventId, importedScreenId: importedScreen!.id, manualScreenId: manualScreen!.id, slotId: slot!.id, sessionId: session!.id };
+	return {
+		eventId,
+		importedScreenId: importedScreen!.id,
+		manualScreenId: manualScreen!.id,
+		slotId: slot!.id,
+		sessionId: session!.id,
+	};
 }
 
 async function countBySource(table: typeof schema.players | typeof schema.phases | typeof schema.matches, eventId: number, source: 'melee' | 'manual') {
@@ -138,7 +205,12 @@ describe('updateMeleeConfig', () => {
 	it('stores only the encrypted form of a new secret, and keeps the stored one when none is sent', async () => {
 		const { eventId } = await stageMeleeEvent();
 
-		await eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'old-event', meleeClientId: 'client', meleeClientSecret: 'plaintext' } as never);
+		await eventService().updateMeleeConfig(eventId, {
+			meleeEnabled: true,
+			meleeEventId: 'old-event',
+			meleeClientId: 'client',
+			meleeClientSecret: 'plaintext',
+		} as never);
 		expect((await storedEvent(eventId)).meleeClientSecret).toBe('encrypted:plaintext');
 
 		await eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'old-event', meleeClientId: 'client' } as never);
@@ -149,8 +221,14 @@ describe('updateMeleeConfig', () => {
 		const { eventId } = await stageMeleeEvent();
 		protectMeleeClientSecret.mockRejectedValueOnce(new Error('encryption unavailable'));
 
-		await expect(eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'new-event', meleeClientId: 'client', meleeClientSecret: 'plaintext' } as never))
-			.rejects.toThrow('encryption unavailable');
+		await expect(eventService().updateMeleeConfig(eventId, {
+			meleeEnabled: true,
+			meleeEventId: 'new-event',
+			meleeClientId: 'client',
+			meleeClientSecret: 'plaintext',
+		} as never))
+			.rejects
+			.toThrow('encryption unavailable');
 
 		expect(await storedEvent(eventId)).toMatchObject({ meleeEventId: 'old-event', meleeClientSecret: 'encrypted:old-secret' });
 		expect(await countBySource(schema.players, eventId, 'melee')).toBe(1);
@@ -159,7 +237,12 @@ describe('updateMeleeConfig', () => {
 	it('clears sync progress when Melee is switched off, leaving the running lease alone', async () => {
 		const { eventId } = await stageMeleeEvent();
 
-		await eventService().updateMeleeConfig(eventId, { meleeEnabled: false, meleeEventId: 'old-event', meleeClientId: null, meleeClientSecret: null } as never);
+		await eventService().updateMeleeConfig(eventId, {
+			meleeEnabled: false,
+			meleeEventId: 'old-event',
+			meleeClientId: null,
+			meleeClientSecret: null,
+		} as never);
 
 		expect(await storedEvent(eventId)).toMatchObject({
 			initialSetupCompletedAt: null,
@@ -174,23 +257,47 @@ describe('updateMeleeConfig', () => {
 	it('resets imported data, keeping manual data, when the Melee event changes', async () => {
 		const { eventId, importedScreenId, manualScreenId, slotId, sessionId } = await stageMeleeEvent();
 
-		const result = await eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'new-event', meleeClientId: 'new-client', meleeClientSecret: 'new-secret' } as never);
+		const result = await eventService().updateMeleeConfig(eventId, {
+			meleeEnabled: true,
+			meleeEventId: 'new-event',
+			meleeClientId: 'new-client',
+			meleeClientSecret: 'new-secret',
+		} as never);
 
 		expect(result?.clearedScreens.map(screen => screen.id)).toEqual([importedScreenId]);
-		expect(await storedEvent(eventId)).toMatchObject({ meleeEventId: 'new-event', lastEventSyncedAt: null, lastSyncError: null, meleeSyncLeaseToken: 'lease-token' });
+		expect(await storedEvent(eventId)).toMatchObject({
+			meleeEventId: 'new-event',
+			lastEventSyncedAt: null,
+			lastSyncError: null,
+			meleeSyncLeaseToken: 'lease-token',
+		});
 		for (const table of [schema.players, schema.phases, schema.matches])
 			expect(await countBySource(table, eventId, 'melee')).toBe(0);
 		expect(await countBySource(schema.players, eventId, 'manual')).toBe(1);
 		expect(await countBySource(schema.phases, eventId, 'manual')).toBe(1);
 		expect(await db.select().from(schema.eventCardNameOverrides).where(eq(schema.eventCardNameOverrides.eventId, eventId))).toEqual([]);
 		const screens = await db.select().from(schema.screens).where(eq(schema.screens.eventId, eventId));
-		expect(screens.find(screen => screen.id === importedScreenId)?.modeConfigs).toEqual({ deck: { deckSource: { type: 'player', playerId: null } } });
+		expect(screens.find(screen => screen.id === importedScreenId)?.modeConfigs).toEqual({
+			deck: {
+				deckSource: { type: 'player', playerId: null },
+			},
+		});
 		expect(screens.find(screen => screen.id === manualScreenId)?.stateVersion).toBe(0);
 
-		const slot = (await db.query.featureMatches.findFirst({ where: eq(schema.featureMatches.id, slotId) }))!;
-		expect(slot).toMatchObject({ matchId: null, externalId: null, player1Id: null, player1Data: null, bestOf: 5 });
+		const slot = (await db.query.featureMatches.findFirst({
+			where: eq(schema.featureMatches.id, slotId),
+		}))!;
+		expect(slot).toMatchObject({
+			matchId: null,
+			externalId: null,
+			player1Id: null,
+			player1Data: null,
+			bestOf: 5,
+		});
 		expect(slot.activeSessionId).not.toBe(sessionId);
-		expect((await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.id, sessionId) }))?.status).toBe('closed');
+		expect((await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.id, sessionId),
+		}))?.status).toBe('closed');
 		expect(await db.select().from(schema.liveStateCommandReceipts).where(eq(schema.liveStateCommandReceipts.eventId, eventId))).toEqual([]);
 	});
 
@@ -199,8 +306,14 @@ describe('updateMeleeConfig', () => {
 		await harness.client.execute(`create trigger reject_receipt_delete before delete on live_state_command_receipts
 			begin select raise(abort, 'forced reset failure'); end`);
 		try {
-			await expect(eventService().updateMeleeConfig(eventId, { meleeEnabled: true, meleeEventId: 'new-event', meleeClientId: 'new-client', meleeClientSecret: 'new-secret' } as never))
-				.rejects.toThrow(/forced reset failure/);
+			await expect(eventService().updateMeleeConfig(eventId, {
+				meleeEnabled: true,
+				meleeEventId: 'new-event',
+				meleeClientId: 'new-client',
+				meleeClientSecret: 'new-secret',
+			} as never))
+				.rejects
+				.toThrow(/forced reset failure/);
 		}
 		finally {
 			await harness.client.execute('drop trigger reject_receipt_delete');
@@ -209,8 +322,12 @@ describe('updateMeleeConfig', () => {
 		expect(await storedEvent(eventId)).toMatchObject({ meleeEventId: 'old-event', meleeClientSecret: 'encrypted:old-secret', lastSyncError: 'old-error' });
 		expect(await countBySource(schema.players, eventId, 'melee')).toBe(1);
 		expect(await countBySource(schema.matches, eventId, 'melee')).toBe(1);
-		expect((await db.query.screens.findFirst({ where: eq(schema.screens.id, importedScreenId) }))?.stateVersion).toBe(0);
-		expect((await db.query.featureMatchSessions.findFirst({ where: eq(schema.featureMatchSessions.id, sessionId) }))).toMatchObject({ status: 'active', sequence: 7 });
+		expect((await db.query.screens.findFirst({
+			where: eq(schema.screens.id, importedScreenId),
+		}))?.stateVersion).toBe(0);
+		expect((await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.id, sessionId),
+		}))).toMatchObject({ status: 'active', sequence: 7 });
 	});
 
 	it('answers nothing for an unknown Event', async () => {
@@ -221,7 +338,13 @@ describe('updateMeleeConfig', () => {
 describe('the Melee Sync lease', () => {
 	const now = new Date('2026-01-01T00:00:00Z');
 	const expiresAt = new Date('2026-01-01T00:15:00Z');
-	const acquire = (eventId: number, token: string) => eventService().tryAcquireMeleeSyncLease({ eventId, token, command: 'update', now, expiresAt });
+	const acquire = (eventId: number, token: string) => eventService().tryAcquireMeleeSyncLease({
+		eventId,
+		token,
+		command: 'update',
+		now,
+		expiresAt,
+	});
 
 	async function stageLease(lease: { token: string | null; expiresAt: Date | null }) {
 		const [event] = await db.insert(schema.events).values({
@@ -236,19 +359,34 @@ describe('the Melee Sync lease', () => {
 	}
 
 	it.each([
-		['free', { token: null, expiresAt: null }],
-		['expired', { token: 'expired-token', expiresAt: new Date('2025-12-31T23:59:59Z') }],
+		[
+			'free',
+			{ token: null, expiresAt: null },
+		],
+		[
+			'expired',
+			{
+				token: 'expired-token',
+				expiresAt: new Date('2025-12-31T23:59:59Z'),
+			},
+		],
 	])('takes a %s lease', async (_state, lease) => {
 		const eventId = await stageLease(lease);
 
-		expect(await acquire(eventId, 'new-token')).toEqual({ acquired: true, lease: { token: 'new-token', command: 'update', expiresAt } });
+		expect(await acquire(eventId, 'new-token')).toEqual({
+			acquired: true,
+			lease: { token: 'new-token', command: 'update', expiresAt },
+		});
 		expect((await storedEvent(eventId)).meleeSyncLeaseToken).toBe('new-token');
 	});
 
 	it('reports a held lease by command and expiry, never by token', async () => {
 		const eventId = await stageLease({ token: 'active-token', expiresAt });
 
-		expect(await acquire(eventId, 'new-token')).toEqual({ acquired: false, activeLease: { command: 'decklists', expiresAt } });
+		expect(await acquire(eventId, 'new-token')).toEqual({
+			acquired: false,
+			activeLease: { command: 'decklists', expiresAt },
+		});
 	});
 
 	it('renews and releases only for the token that holds it', async () => {
@@ -261,5 +399,28 @@ describe('the Melee Sync lease', () => {
 		expect((await storedEvent(eventId)).meleeSyncLeaseExpiresAt).toEqual(later);
 		expect(await eventService().releaseMeleeSyncLease(eventId, 'owning-token')).toBe(true);
 		expect(await storedEvent(eventId)).toMatchObject({ meleeSyncLeaseToken: null, meleeSyncLeaseCommand: null, meleeSyncLeaseExpiresAt: null });
+	});
+});
+
+describe('reads and sync metadata', () => {
+	it('records sync metadata only for the lease token that owns the Event', async () => {
+		const { eventId } = await stageMeleeEvent();
+
+		expect(await eventService().updateSyncMetadata(eventId, { lastSyncError: 'stale' }, 'other-token')).toBe(false);
+		expect(await eventService().updateSyncMetadata(eventId, { lastSyncError: 'owned' }, 'lease-token')).toBe(true);
+		expect((await storedEvent(eventId)).lastSyncError).toBe('owned');
+		expect(await eventService().updateSyncMetadata(999_999, { lastSyncError: 'missing' })).toBe(false);
+	});
+
+	it('lists Events by game, and answers existence and removal', async () => {
+		const op = await eventService().create({ name: 'Listed', game: 'op' } as never);
+
+		const listed = await eventService().findAll({ game: 'op' });
+		expect(listed.map(event => event.id)).toContain(op.id);
+		expect(listed.every(event => event.game === 'op')).toBe(true);
+		expect(await eventService().exists(op.id)).toBe(true);
+		expect(await eventService().remove(op.id)).toBe(true);
+		expect(await eventService().remove(op.id)).toBe(false);
+		expect(await eventService().exists(op.id)).toBe(false);
 	});
 });

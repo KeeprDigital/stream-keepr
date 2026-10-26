@@ -17,16 +17,45 @@ afterAll(async () => await harness.close());
 
 describe('mtgCardService.batchUpsert', () => {
 	it('keeps fields a refresh leaves out and replaces the arrays it supplies', async () => {
-		const token = (id: string) => ({ id, scryfallId: null, name: id, typeLine: null, uri: null });
-		await mtgCardService().batchUpsert([{ name: 'Integration Bolt', game: 'mtg', scryfallId: 'keep-me', colors: 'R', deckCounterTypes: ['charge'], deckTokens: [token('old-token')] }]);
+		const token = (id: string) => ({
+			id,
+			scryfallId: null,
+			name: id,
+			typeLine: null,
+			uri: null,
+		});
+		await mtgCardService().batchUpsert([
+			{
+				name: 'Integration Bolt',
+				game: 'mtg',
+				scryfallId: 'keep-me',
+				colors: 'R',
+				deckCounterTypes: ['charge'],
+				deckTokens: [
+					token('old-token'),
+				],
+			},
+		]);
 
-		const result = await mtgCardService().batchUpsert([{ name: 'Integration Bolt', game: 'mtg', colors: 'U', deckCounterTypes: ['energy'], deckTokens: [token('new-token')] }]);
+		const result = await mtgCardService().batchUpsert([
+			{
+				name: 'Integration Bolt',
+				game: 'mtg',
+				colors: 'U',
+				deckCounterTypes: ['energy'],
+				deckTokens: [
+					token('new-token'),
+				],
+			},
+		]);
 
 		expect(result.get('integration bolt')).toMatchObject({
 			scryfallId: 'keep-me',
 			colors: 'U',
 			deckCounterTypes: ['energy'],
-			deckTokens: [expect.objectContaining({ id: 'new-token' })],
+			deckTokens: [
+				expect.objectContaining({ id: 'new-token' }),
+			],
 		});
 	});
 
@@ -36,12 +65,19 @@ describe('mtgCardService.batchUpsert', () => {
 			{ name: 'LIGHTNING BOLT', game: 'mtg' },
 		]);
 
-		expect([...result.keys()]).toEqual(['lightning bolt']);
+		expect([
+			...result.keys(),
+		]).toEqual(['lightning bolt']);
 		expect((await db.select().from(schema.cards)).filter(card => card.name.toLowerCase() === 'lightning bolt')).toHaveLength(1);
 	});
 
 	it('upserts a thousand cards', async () => {
-		const result = await mtgCardService().batchUpsert(Array.from({ length: 1000 }, (_, index) => ({ name: `Card ${index}`, game: 'mtg' as const, deckCounterTypes: [], deckTokens: [] })));
+		const result = await mtgCardService().batchUpsert(Array.from({ length: 1000 }, (_, index) => ({
+			name: `Card ${index}`,
+			game: 'mtg' as const,
+			deckCounterTypes: [],
+			deckTokens: [],
+		})));
 
 		expect(result.size).toBe(1000);
 	});

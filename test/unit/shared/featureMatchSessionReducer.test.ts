@@ -5,7 +5,6 @@ import { applyFeatureMatchSessionEvent, normalizeFeatureMatchSessionCommandPaylo
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefaults';
 import { createInitialFeatureMatchState } from '~~/shared/types/featureMatchState';
 
-
 function createSnapshot(overrides: Partial<FeatureMatchSourceSnapshot> = {}): FeatureMatchSourceSnapshot {
 	return {
 		eventId: 1,

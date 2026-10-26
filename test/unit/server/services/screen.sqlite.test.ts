@@ -41,14 +41,21 @@ async function createScreen(values: Record<string, unknown> = {}) {
 }
 
 async function stored(id: number) {
-	return (await db.query.screens.findFirst({ where: eq(schema.screens.id, id) }))!;
+	return (await db.query.screens.findFirst({
+		where: eq(schema.screens.id, id),
+	}))!;
 }
 
 describe('screenService', () => {
 	it('stores the Screen Output Asset Capability with the created Screen', async () => {
 		const screen = await createScreen();
 
-		expect(await stored(screen.id)).toMatchObject({ eventId, ...capability, assetCapabilityDigest: `digest-${screenCount}`, stateVersion: 0 });
+		expect(await stored(screen.id)).toMatchObject({
+			eventId,
+			...capability,
+			assetCapabilityDigest: `digest-${screenCount}`,
+			stateVersion: 0,
+		});
 	});
 
 	it('rotates the capability only from the version the caller read', async () => {
@@ -57,7 +64,8 @@ describe('screenService', () => {
 
 		expect(await screenService().replaceAssetCapability(screen.id, eventId, next, 1)).toMatchObject(next);
 		await expect(screenService().replaceAssetCapability(screen.id, eventId, { ...next, assetCapabilityVersion: 3 }, 1))
-			.rejects.toMatchObject({ statusCode: 409 });
+			.rejects
+			.toMatchObject({ statusCode: 409 });
 		expect(await screenService().replaceAssetCapability(999_999, eventId, next, 2)).toBeUndefined();
 	});
 
@@ -77,11 +85,18 @@ describe('screenService', () => {
 			db.update(schema.events).set({ name: 'Touched By Companion' }).where(eq(schema.events.id, eventId)),
 		]);
 
-		expect((await db.query.events.findFirst({ where: eq(schema.events.id, eventId) }))?.name).toBe('Touched By Companion');
+		expect((await db.query.events.findFirst({
+			where: eq(schema.events.id, eventId),
+		}))?.name).toBe('Touched By Companion');
 	});
 
 	it('merges a mode\'s configuration and the Screen configuration into what is stored', async () => {
-		const screen = await createScreen({ modeConfigs: { standings: { pageSize: 8, showRecord: true } }, screenConfig: { padding: 10 } });
+		const screen = await createScreen({
+			modeConfigs: {
+				standings: { pageSize: 8, showRecord: true },
+			},
+			screenConfig: { padding: 10 },
+		});
 
 		await screenService().updateModeConfig(screen.id, eventId, 'standings', { pageSize: 12 });
 		await screenService().updateScreenConfig(screen.id, eventId, { background: '#000000' });

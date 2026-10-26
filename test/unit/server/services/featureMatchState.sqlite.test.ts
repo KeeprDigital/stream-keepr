@@ -16,12 +16,16 @@ vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-/** Runs once, straight after the next batch commits: the other side of a race. */
+/** Run once, just before or straight after the next batch commits: the other side of a race. */
+let beforeNextBatch: (() => Promise<void>) | undefined;
 let afterNextBatch: (() => Promise<void>) | undefined;
 const racingDb = new Proxy(db, {
 	get(target, property, receiver) {
 		if (property === 'batch') {
 			return async (queries: Parameters<typeof db.batch>[0]) => {
+				const first = beforeNextBatch;
+				beforeNextBatch = undefined;
+				await first?.();
 				const result = await target.batch(queries);
 				const race = afterNextBatch;
 				afterNextBatch = undefined;
@@ -30,7 +34,9 @@ const racingDb = new Proxy(db, {
 			};
 		}
 		const value = Reflect.get(target, property, receiver);
-		return typeof value === 'function' ? value.bind(target) : value;
+		return typeof value === 'function'
+			? value.bind(target)
+			: value;
 	},
 });
 
@@ -49,11 +55,13 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOrigi
 
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
-afterAll(async () => await harness.close());
 beforeEach(() => {
 	publishMessage.mockClear();
+	beforeNextBatch = undefined;
 	afterNextBatch = undefined;
 });
+
+afterAll(async () => await harness.close());
 
 const defaults = { ...DEFAULT_FEATURE_MATCH_DEFAULTS, game: 'mtg' as const };
 
@@ -84,14 +92,24 @@ describe('buildSourceSnapshot', () => {
 		const slot = await stageSlot();
 		const [alice, bob] = await db.insert(schema.players)
 			.values([
-				{ eventId: slot.eventId, name: 'Alice', wins: 3, losses: 1, gameData: { type: 'mtg', deckName: 'Control' } },
+				{
+					eventId: slot.eventId,
+					name: 'Alice',
+					wins: 3,
+					losses: 1,
+					gameData: { type: 'mtg', deckName: 'Control' },
+				},
 				{ eventId: slot.eventId, name: 'Bob', points: 6 },
 			])
 			.returning();
 		const withPlayers: DbFeatureMatch = {
 			...slot,
 			player1Id: alice!.id,
-			player1Data: { name: 'Display Alice', deckId: 77, gameData: { type: 'mtg', deckName: 'Aggro' } },
+			player1Data: {
+				name: 'Display Alice',
+				deckId: 77,
+				gameData: { type: 'mtg', deckName: 'Aggro' },
+			},
 			player2Id: bob!.id,
 		};
 
@@ -104,15 +122,25 @@ describe('buildSourceSnapshot', () => {
 			defaults: expect.objectContaining({ startingLife: 25 }),
 			player1: {
 				playerId: alice!.id,
-				data: expect.objectContaining({ name: 'Display Alice', deckId: 77, wins: 3, gameData: { type: 'mtg', deckName: 'Aggro' } }),
+				data: expect.objectContaining({
+					name: 'Display Alice',
+					deckId: 77,
+					wins: 3,
+					gameData: { type: 'mtg', deckName: 'Aggro' },
+				}),
 			},
-			player2: { playerId: bob!.id, data: expect.objectContaining({ name: 'Bob', points: 6 }) },
+			player2: {
+				playerId: bob!.id,
+				data: expect.objectContaining({ name: 'Bob', points: 6 }),
+			},
 		});
 	});
 
 	it('stamps a snapshot with the moment it was built', async () => {
 		const slot = await stageSlot();
-		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.useFakeTimers({
+			toFake: ['Date'],
+		});
 		vi.setSystemTime(Date.parse('2026-03-04T05:06:07.000Z'));
 		try {
 			expect((await featureMatchStateService().buildSourceSnapshot(slot, defaults)).createdAt)
@@ -124,29 +152,82 @@ describe('buildSourceSnapshot', () => {
 	});
 
 	it.each([
-		['with display fields', { name: 'Alice' }],
+		[
+			'with display fields',
+			{ name: 'Alice' },
+		],
 		['without display fields', {}],
 	])('keeps a Slot\'s explicit no-deck identity %s rather than the Player\'s primary deck', async (_case, display) => {
 		const slot = await stageSlot();
-		const player = { id: 101, eventId: slot.eventId, name: 'Alice', archetypeId: 9, gameData: { type: 'mtg', deckName: 'Primary Deck', deckColors: 'R' } } as DbPlayer;
-		const noDeck = { ...display, deckId: null, archetypeId: null, gameData: { type: 'mtg' as const, deckName: null, deckColors: null } };
+		const player = {
+			id: 101,
+			eventId: slot.eventId,
+			name: 'Alice',
+			archetypeId: 9,
+			gameData: { type: 'mtg', deckName: 'Primary Deck', deckColors: 'R' },
+		} as DbPlayer;
+		const noDeck = {
+			...display,
+			deckId: null,
+			archetypeId: null,
+			gameData: { type: 'mtg' as const, deckName: null, deckColors: null },
+		};
 
 		const snapshot = await featureMatchStateService().buildSourceSnapshot(
 			{ ...slot, player1Id: 101, player1Data: noDeck },
 			defaults,
-			new Map([[101, player]]),
+			new Map([
+				[101, player],
+			]),
 		);
 
-		expect(snapshot.player1.data).toEqual(expect.objectContaining({ name: 'Alice', deckId: null, archetypeId: null, gameData: noDeck.gameData }));
+		expect(snapshot.player1.data).toEqual(expect.objectContaining({
+			name: 'Alice',
+			deckId: null,
+			archetypeId: null,
+			gameData: noDeck.gameData,
+		}));
 	});
 });
 
 describe('applyCommand', () => {
 	it('merges a relative command onto a Session that advanced past its base', async () => {
 		const { slot, session } = await openSession();
-		await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'a', type: 'AdjustLife', payload: { player: 'player1', delta: -5 }, baseSequence: session.sequence });
+		await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'a',
+			type: 'AdjustLife',
+			payload: { player: 'player1', delta: -5 },
+			baseSequence: session.sequence,
+		});
 
-		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'b', type: 'AdjustLife', payload: { player: 'player1', delta: -1 }, baseSequence: session.sequence });
+		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'b',
+			type: 'AdjustLife',
+			payload: { player: 'player1', delta: -1 },
+			baseSequence: session.sequence,
+		});
+
+		expect(result.sequence).toBe(session.sequence + 2);
+		expect(result.currentState.player1.lifeTotal).toBe(session.currentState.player1.lifeTotal - 6);
+	});
+
+	it('retries a relative command whose commit lost a race, merging onto the Session as it then stands', async () => {
+		const { slot, session } = await openSession();
+		beforeNextBatch = async () => {
+			await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+				commandId: 'other',
+				type: 'AdjustLife',
+				payload: { player: 'player1', delta: -5 },
+				baseSequence: session.sequence,
+			});
+		};
+
+		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'mine',
+			type: 'AdjustLife',
+			payload: { player: 'player1', delta: -1 },
+			baseSequence: session.sequence,
+		});
 
 		expect(result.sequence).toBe(session.sequence + 2);
 		expect(result.currentState.player1.lifeTotal).toBe(session.currentState.player1.lifeTotal - 6);
@@ -154,18 +235,45 @@ describe('applyCommand', () => {
 
 	it('refuses an absolute command whose base the Session has moved past', async () => {
 		const { slot, session } = await openSession();
-		await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'a', type: 'AdjustLife', payload: { player: 'player1', delta: -5 }, baseSequence: session.sequence });
+		await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'a',
+			type: 'AdjustLife',
+			payload: { player: 'player1', delta: -5 },
+			baseSequence: session.sequence,
+		});
 
-		await expect(featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'b', type: 'SetLife', payload: { player: 'player1', lifeTotal: 30 }, baseSequence: session.sequence }))
-			.rejects.toMatchObject({ statusCode: 409, message: 'Feature match session has advanced' });
+		await expect(featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'b',
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 30 },
+			baseSequence: session.sequence,
+		}))
+			.rejects
+			.toMatchObject({ statusCode: 409, message: 'Feature match session has advanced' });
 	});
 
 	it('re-reduces a snapshot correction onto a Session an operator advanced under it', async () => {
 		const { slot, session } = await openSession();
-		await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'a', type: 'AdjustLife', payload: { player: 'player1', delta: -5 }, baseSequence: session.sequence });
-		const corrected = { ...session.sourceSnapshot, player1: { playerId: null, data: { name: 'Renamed Alice' } } };
+		await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'a',
+			type: 'AdjustLife',
+			payload: { player: 'player1', delta: -5 },
+			baseSequence: session.sequence,
+		});
+		const corrected = {
+			...session.sourceSnapshot,
+			player1: {
+				playerId: null,
+				data: { name: 'Renamed Alice' },
+			},
+		};
 
-		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'b', type: 'SnapshotCorrected', payload: { sourceSnapshot: corrected }, baseSequence: session.sequence });
+		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'b',
+			type: 'SnapshotCorrected',
+			payload: { sourceSnapshot: corrected },
+			baseSequence: session.sequence,
+		});
 
 		expect(result.sourceSnapshot.player1.data?.name).toBe('Renamed Alice');
 		expect(result.currentState.player1.lifeTotal).toBe(session.currentState.player1.lifeTotal - 5);
@@ -177,28 +285,45 @@ describe('applyCommand', () => {
 		await expect(featureMatchStateService().applyCommand(session.id, slot.eventId, {
 			commandId: 'wrong-snapshot',
 			type: 'SnapshotCorrected',
-			payload: { sourceSnapshot: { ...session.sourceSnapshot, slotId: slot.id + 1_000 } },
+			payload: {
+				sourceSnapshot: { ...session.sourceSnapshot, slotId: slot.id + 1_000 },
+			},
 			baseSequence: session.sequence,
 		})).rejects.toMatchObject({ statusCode: 400, message: 'Snapshot correction does not belong to this session' });
 	});
 
 	it('answers a retried command with the Session as it stands, and refuses its id for a different command', async () => {
 		const { slot, session } = await openSession();
-		const start = { commandId: 'clock', type: 'StartClock' as const, payload: {}, baseSequence: session.sequence };
+		const start = {
+			commandId: 'clock',
+			type: 'StartClock' as const,
+			payload: {},
+			baseSequence: session.sequence,
+		};
 		const first = await featureMatchStateService().applyCommand(session.id, slot.eventId, start);
 
 		const retried = await featureMatchStateService().applyCommand(session.id, slot.eventId, start);
 
 		expect(retried.sequence).toBe(first.sequence);
-		await expect(featureMatchStateService().applyCommand(session.id, slot.eventId, { ...start, type: 'SetLife', payload: { player: 'player1', lifeTotal: 11 } }))
-			.rejects.toMatchObject({ statusCode: 409, message: 'commandId has already been used for a different command' });
+		await expect(featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			...start,
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 11 },
+		}))
+			.rejects
+			.toMatchObject({ statusCode: 409, message: 'commandId has already been used for a different command' });
 	});
 
 	it('announces an applied command when asked, without the Session response', async () => {
 		const { slot, session } = await openSession();
 		publishMessage.mockClear();
 
-		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'a', type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 }, baseSequence: session.sequence }, 'origin-1', { publish: true });
+		const result = await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'a',
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 12 },
+			baseSequence: session.sequence,
+		}, 'origin-1', { publish: true });
 
 		expect(publishMessage).toHaveBeenCalledWith(slot.eventId, 'featureMatchSession:eventApplied', {
 			slotId: slot.id,
@@ -214,7 +339,12 @@ describe('applyCommand', () => {
 		const { slot, session } = await openSession();
 		publishMessage.mockClear();
 
-		await featureMatchStateService().applyCommand(session.id, slot.eventId, { commandId: 'a', type: 'SetLife', payload: { player: 'player1', lifeTotal: 12 }, baseSequence: session.sequence });
+		await featureMatchStateService().applyCommand(session.id, slot.eventId, {
+			commandId: 'a',
+			type: 'SetLife',
+			payload: { player: 'player1', lifeTotal: 12 },
+			baseSequence: session.sequence,
+		});
 
 		expect(publishMessage).not.toHaveBeenCalled();
 	});

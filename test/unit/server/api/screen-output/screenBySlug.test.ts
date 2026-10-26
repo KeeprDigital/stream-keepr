@@ -1,23 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 
-/**
- * The Screen lookup by slug, on the capability surface (#397, ADR-0010).
- *
- * This route was fully public until #396 made it private and #397 moved it here, and
- * what it answers is the bootstrap a Screen Output cannot start without: the Screen
- * its slug names. Three things are pinned, because each would be invisible from a
- * response that looked fine:
- *
- * - **one refusal for every way of not being allowed to ask.** A missing Screen, a
- *   capability for a different Screen, and no credential at all are the same 404, so
- *   nothing here can be used to find out which Screens exist.
- * - **the capability arm needs no session.** An output has none; a route that
- *   consulted one anyway would go dark exactly when the boundary started working.
- * - **the session arm exists at all.** The editor's `embed=preview` surfaces hold no
- *   capability by design, so a capability-only gate — which is what the ticket asks
- *   for literally — would leave them rendering nothing.
- */
+// The Screen lookup by slug (ADR-0010): every way of not being allowed to ask is the same 404,
+// a capability needs no session, and the editor's session-only preview still resolves.
 
 const mockFindBySlug = vi.fn();
 const mockOptionalUserSession = vi.fn();
@@ -48,13 +33,7 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 
 const CAPABILITY = 'a-screen-output-capability-token';
 
-/**
- * The digest of `CAPABILITY`, computed the way the server does.
- *
- * Through the real `screenOutputAssetCapabilityDigest` rather than a stub, because
- * what the route compares is a digest against the one stored on the row — and a
- * stubbed hash would let a comparison bug pass by agreeing with itself.
- */
+/** The digest of `CAPABILITY`, through the real digest so a comparison bug cannot agree with itself. */
 async function capabilityDigest(capability: string): Promise<string> {
 	const { screenOutputAssetCapabilityDigest } = await import(
 		'~~/server/modules/screen-output-assets/capability',

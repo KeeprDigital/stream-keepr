@@ -12,22 +12,9 @@ import {
 } from '~~/server/db/schema/graphicsAsset';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * The two library-wide Graphic Style Set operations, against real SQL.
- *
- * The rule under test is the one the glossary states and no route can force: deleting
- * an entry or a whole Style Set "occurs only if every affected template update
- * succeeds". Both routes read the templates themselves immediately before writing, so
- * the failing half of that rule — one template revised by another session in between —
- * is only reachable here, by handing the service a rewrite at a revision the template
- * is no longer at.
- *
- * It has to be real SQL rather than an asserted statement list, because what is being
- * proved is a property of the database's behaviour: a conditional `UPDATE` that
- * matches no row is not an error and does not roll a batch back, so an operation whose
- * statements each carried their own precondition would commit the ones that matched.
- * The assertions are therefore all "this row is exactly as it was".
- */
+// A Style Set deletion commits only if every affected template update does: a template
+// revised in between leaves every row exactly as it was. Real SQL, because a conditional
+// UPDATE matching no row is not an error and would not roll a batch back.
 
 /**
  * The real migrations, because the operations hold every rewritten template to the

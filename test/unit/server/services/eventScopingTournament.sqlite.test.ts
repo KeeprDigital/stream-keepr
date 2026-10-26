@@ -3,19 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * Cross-Event scoping proofs for the tournament-structure CRUD services (#468).
- *
- * The chainable db mock these services' unit tests run on verifies that a query
- * ran, not what its predicate was — a missing `eq(<table>.eventId, …)` still
- * passes there. These suites run the same reads against real SQL holding two
- * Events' data arranged to collide on every non-Event predicate (same external
- * ids, same round numbers, same foreign keys), so a read that loses its Event
- * scope returns the other Event's row and fails the assertion.
- *
- * Every "wrong Event" probe passes Event 1's id against Event 2's row on
- * purpose: scoped, that read finds nothing; unscoped, it finds the foreign row.
- */
+// Two Events collide on every non-Event predicate, and each wrong-Event probe passes Event 1's
+// id against Event 2's row: scoped it finds nothing, unscoped the foreign row (#468).
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });

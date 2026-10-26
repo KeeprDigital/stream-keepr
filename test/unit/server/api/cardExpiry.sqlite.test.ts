@@ -6,23 +6,8 @@ import * as schema from '~~/server/db/schema';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * A Card's expiry is a clock projection that no read, client or timer writes
- * (ADR-0022, #707, #725). Each row is one of #707's acceptance scenarios for a
- * Card saved at T₀ with timeout D, and says which.
- *
- * The Card and Screen routes run as written over real SQLite (the Card's
- * revision is SQL). Only admission and transport are stood in for: every
- * announcement is recorded instead of sent, and the Screen Output reads are
- * admitted without a capability.
- *
- * What a row here observes, and why each is observed where it is:
- * - **durable state** is the Screen row's `activeCard`, `activeCardVersion`
- *   (its revision) and `updatedAt`. No route answers them, so they are read from
- *   the row: "a read writes nothing" means these do not move.
- * - **announcements** are the realtime messages the server published.
- * - **the derived copy** is the KV key the service mirrors the Card into.
- */
+// A Card's expiry is a projection no read, client or timer writes (ADR-0022). Each row is one
+// of #707's scenarios, observed in the Screen row, the announcements, and the KV copy.
 
 const harness = await createSqliteD1Harness();
 const realDb = drizzle(harness.database, { schema });

@@ -7,7 +7,9 @@ import { stubH3Event } from '~~/test/helpers/h3Event';
 // Every graphics route answers library failures through this one mapping, so
 // the per-route tests no longer repeat it.
 
-vi.mock('~~/server/utils/auth', () => ({ optionalUserId: vi.fn() }));
+vi.mock('~~/server/utils/auth', () => ({
+	optionalUserId: vi.fn(),
+}));
 
 const setResponseHeader = vi.fn();
 vi.stubGlobal('setResponseHeader', setResponseHeader);
@@ -43,7 +45,12 @@ describe('rethrowGraphicsAssetApiError', () => {
 
 		const { thrown } = rethrown(error);
 
-		expect(thrown).toMatchObject({ statusCode, statusMessage, message: `library says ${code}`, cause: error });
+		expect(thrown).toMatchObject({
+			statusCode,
+			statusMessage,
+			message: `library says ${code}`,
+			cause: error,
+		});
 	});
 
 	it('asks a client to retry an unavailable library, and only then', () => {
