@@ -666,6 +666,30 @@ describe('event controls', () => {
 		expect(pageIsDirty()).toBe(false);
 	});
 
+	// The save trims the holding text and the event comes back holding the trimmed
+	// text; the form kept the operator's untrimmed text as a local edit against it,
+	// so the toast said saved while Save stayed enabled and leaving warned.
+	it('reads clean once a holding text the save trimmed lands', async () => {
+		mockEventStore.updateEvent.mockImplementation(async (updates: object) => {
+			mockEventStore.event = {
+				...mockEventStore.event!,
+				...updates,
+			};
+			return mockEventStore.event;
+		});
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.  ');
+		await saveButton(wrapper, 'holdingText').trigger('click');
+		await flushPromises();
+
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('Back after this break.');
+		expect(saveButton(wrapper, 'holdingText').attributes('disabled')).toBeDefined();
+		expect(pageIsDirty()).toBe(false);
+	});
+
 	it('offers a commentator save only once that form has changed, and takes it back on reset', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();

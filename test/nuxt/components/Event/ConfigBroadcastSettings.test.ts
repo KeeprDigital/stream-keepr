@@ -1,7 +1,7 @@
 import type { Event } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
@@ -17,6 +17,11 @@ mockNuxtImport('useOverlay', () => () => ({
 	}),
 }));
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
+
+// The card saves through the Event config submit; what that does with the update
+// is its own composable's test.
+const handleSubmit = vi.fn(async (_update: object): Promise<unknown> => true);
+mockNuxtImport('useEventConfigSubmit', () => () => ({ handleSubmit }));
 
 /**
  * The factory returns a database row, which carries the Melee credential columns
@@ -159,14 +164,18 @@ function resetButton(wrapper: Wrapper) {
 	return wrapper.get('[data-label="Reset"]');
 }
 
-function submitted(wrapper: Wrapper) {
-	const events = wrapper.emitted('submit');
-	if (!events?.length)
-		throw new Error('The card emitted no submit');
-	return events.at(-1)![0];
+function submitted() {
+	const call = handleSubmit.mock.calls.at(-1);
+	if (!call)
+		throw new Error('The card saved nothing');
+	return call[0];
 }
 
 describe('event config broadcast settings', () => {
+	beforeEach(() => {
+		handleSubmit.mockClear();
+	});
+
 	it('shows the broadcast settings the event already carries', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -200,7 +209,7 @@ describe('event config broadcast settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(submitted(wrapper)).toEqual({ cardTimeout: 30 });
+		expect(submitted()).toEqual({ cardTimeout: 30 });
 	});
 
 	// #612: a whole-form payload would write the stale value back over a
@@ -217,7 +226,7 @@ describe('event config broadcast settings', () => {
 		await flushPromises();
 
 		expect(numberFor(wrapper, 'numFeatureMatches').props('modelValue')).toBe(4);
-		expect(submitted(wrapper)).toEqual({ cardTimeout: 30 });
+		expect(submitted()).toEqual({ cardTimeout: 30 });
 	});
 
 	it('refuses to save a negative card timeout, and says so at the field', async () => {
@@ -228,7 +237,7 @@ describe('event config broadcast settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(wrapper.emitted('submit')).toBeUndefined();
+		expect(handleSubmit).not.toHaveBeenCalled();
 		expect(errorFor(wrapper, 'cardTimeout')).toBe('Card timeout must be 0 or greater');
 	});
 
@@ -240,7 +249,7 @@ describe('event config broadcast settings', () => {
 		await saveButton(wrapper).trigger('click');
 		await flushPromises();
 
-		expect(wrapper.emitted('submit')).toBeUndefined();
+		expect(handleSubmit).not.toHaveBeenCalled();
 		expect(errorFor(wrapper, 'numFeatureMatches')).toBe('Cannot exceed 10 feature matches');
 	});
 

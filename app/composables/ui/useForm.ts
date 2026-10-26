@@ -35,14 +35,20 @@ export interface UseFormReturn<T> {
 	 */
 	reset: () => void;
 	/**
-	 * Update the original data (useful when external data changes)
-	 */
-	updateOriginal: (data: T) => void;
-	/**
 	 * Get only the fields that have changed (for PATCH requests)
 	 * Returns DeepPartial<T> with only modified fields
 	 */
 	getChanges: () => DeepPartial<T>;
+	/**
+	 * Run a save and settle the form on what it stored. Once the save resolves
+	 * truthy, every value still as it was submitted takes the baseline's, so a
+	 * value the save normalized (trimmed, blank read as null) stops counting as
+	 * a change, while one edited since the submit stays. The save must have
+	 * moved the `initialData` ref to its answer by the time it resolves; a
+	 * failed save (falsy), or one that never reached the baseline, leaves the
+	 * form as it is.
+	 */
+	runSave: <R>(save: () => Promise<R>) => Promise<R>;
 }
 
 /**
@@ -53,7 +59,8 @@ export interface UseFormReturn<T> {
  * Automatically watches for changes to initial data if provided as a ref, and
  * merges each new baseline into the form: fields the operator has not edited
  * follow it, edited ones keep the local value (#612). Submit `getChanges()`,
- * not the whole form, so untouched fields are never written back.
+ * not the whole form, so untouched fields are never written back, and wrap
+ * the save in `runSave` so a value the save normalized reads clean after it.
  *
  * @example
  * // Basic usage
@@ -118,8 +125,22 @@ export function useForm<T extends Record<string, any>>(
 	const formData = ref<T>(getInitialValue()) as Ref<T>;
 	const originalFormData = ref<T>(getInitialValue()) as Ref<T>;
 
+	const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+		return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
+	};
+
+	/**
+	 * Serializes with object keys sorted: a merge appends keys the new baseline
+	 * added, so the same values can arrive in another key order and must still
+	 * compare equal.
+	 */
+	const serialize = (value: unknown): string => JSON.stringify(value, (_key, entry: unknown) =>
+		isPlainObject(entry)
+			? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]]))
+			: entry);
+
 	const isDirty = computed(() => {
-		return JSON.stringify(formData.value) !== JSON.stringify(originalFormData.value);
+		return serialize(formData.value) !== serialize(originalFormData.value);
 	});
 
 	const areValuesEqual = (val1: unknown, val2: unknown): boolean => {
@@ -131,18 +152,14 @@ export function useForm<T extends Record<string, any>>(
 		}
 
 		if (Array.isArray(val1) && Array.isArray(val2)) {
-			return JSON.stringify(val1) === JSON.stringify(val2);
+			return serialize(val1) === serialize(val2);
 		}
 
 		if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null) {
-			return JSON.stringify(val1) === JSON.stringify(val2);
+			return serialize(val1) === serialize(val2);
 		}
 
 		return false;
-	};
-
-	const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-		return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
 	};
 
 	const hasRowId = (value: unknown): value is Record<string, unknown> => {
@@ -224,8 +241,12 @@ export function useForm<T extends Record<string, any>>(
 		return merged;
 	}
 
+	/** Counts baselines merged in, so a save can tell whether its answer arrived. */
+	let baselineVersion = 0;
+
 	if (isRef(initialData)) {
 		watch(initialData, (newData) => {
+			baselineVersion++;
 			const next = cloneData(newData);
 			formData.value = mergeValue(formData.value, originalFormData.value, next) as T;
 			originalFormData.value = cloneData(next);
@@ -267,10 +288,17 @@ export function useForm<T extends Record<string, any>>(
 		onReset?.();
 	};
 
-	const updateOriginal = (data: T) => {
-		const cloned = cloneData(data);
-		formData.value = cloned;
-		originalFormData.value = cloneData(cloned);
+	const runSave = async <R>(save: () => Promise<R>): Promise<R> => {
+		const submitted = cloneData(formData.value);
+		const submittedVersion = baselineVersion;
+		const result = await save();
+		if (!result || !isRef(initialData))
+			return result;
+		// The watcher merges the answer into the baseline on the next flush.
+		await nextTick();
+		if (baselineVersion !== submittedVersion)
+			formData.value = mergeValue(formData.value, submitted, cloneData(originalFormData.value)) as T;
+		return result;
 	};
 
 	return {
@@ -278,7 +306,7 @@ export function useForm<T extends Record<string, any>>(
 		originalFormData,
 		isDirty,
 		reset,
-		updateOriginal,
 		getChanges,
+		runSave,
 	};
 }

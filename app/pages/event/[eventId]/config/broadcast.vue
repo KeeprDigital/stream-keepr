@@ -4,7 +4,6 @@ import { applyTalentUpdates } from '~/modules/event-data/talentUpdates';
 
 const eventStore = useEventStore();
 const { runRequest } = useRequestFeedback();
-const { handleSubmit } = useEventConfigSubmit();
 
 const event = computed(() => eventStore.event!);
 const loading = computed(() => eventStore.loading);
@@ -56,7 +55,7 @@ async function handleSaveTalents(newTalents: { id?: number; name: string; social
 
 <template>
 	<div class="flex flex-col gap-6">
-		<EventConfigBroadcastSettings :event="event" :loading="loading" @submit="handleSubmit" />
+		<EventConfigBroadcastSettings :event="event" :loading="loading" />
 		<EventBroadcastDeckListLibrary :event="event" />
 
 		<h2 class="text-xl font-semibold">

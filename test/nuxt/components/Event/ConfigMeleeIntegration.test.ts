@@ -377,4 +377,37 @@ describe('configMeleeIntegration', () => {
 		expect(mockOverlay.create).not.toHaveBeenCalled();
 		expect(mockRefreshAfterMeleeReset).not.toHaveBeenCalled();
 	});
+	it('reads clean once a save lands, emptying the secret the server keeps', async () => {
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		await flushPromises();
+
+		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
+		await fieldInput(wrapper, 'meleeClientSecret').setValue('rotated-secret');
+		await wrapper.get('[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(fieldInput(wrapper, 'meleeClientSecret').props('modelValue')).toBe('');
+		expect(pageIsDirty()).toBe(false);
+	});
+
+	// The save used to take the whole form as saved once it landed, so a field
+	// edited while the request was in flight read clean and leaving lost it.
+	it('keeps an edit typed while the save is in flight unsaved', async () => {
+		let land = () => {};
+		mockEventRepo.updateMeleeConfig.mockImplementation(() => new Promise((resolve) => {
+			land = () => resolve({ meleeConfigured: true });
+		}));
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		await flushPromises();
+
+		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
+		await wrapper.get('[data-label="Save"]').trigger('click');
+		await flushPromises();
+		await fieldInput(wrapper, 'meleeClientId').setValue('typed-while-saving');
+		land();
+		await flushPromises();
+
+		expect(fieldInput(wrapper, 'meleeClientId').props('modelValue')).toBe('typed-while-saving');
+		expect(pageIsDirty()).toBe(true);
+	});
 });
