@@ -10,14 +10,9 @@ import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 /**
- * A Screen settings edit from the operator's control to what a reload shows (#703).
- *
- * Real: the configuration composable (`useModeConfigUpdate`, over `useConfigUpdate`),
- * the Screen store that owns the Screen, and the Event reset navigation runs. Faked:
- * only the repository, by a server that takes each request the way the wire does —
- * through JSON — and answers it with the real mode-configuration PATCH schema and
- * the real merge, holding one revision and refusing a write made against an older one.
- * Every answer can be held back, so the order under test is the test's.
+ * A Screen settings edit from the operator's control to what a reload shows (#703). Only
+ * the repository is faked: a server that round-trips JSON through the real PATCH schema and
+ * merge, refuses stale revisions, and holds each answer until the test releases it.
  */
 
 const mockToast = {

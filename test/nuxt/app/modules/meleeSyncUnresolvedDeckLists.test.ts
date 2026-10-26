@@ -207,15 +207,7 @@ describe('melee Sync unresolved Deck List module', () => {
 		const olderRequest = workflow.searchResolveCandidates();
 		workflow.resolveSearchTerm.value = 'second';
 		const newerRequest = workflow.searchResolveCandidates();
-		// Two searches, counted rather than assumed, and named rather than taken from
-		// position 0: this `$fetch` mock stands in for the module's, which `useServerTime`
-		// also samples the clock through (#123), and a stray at position 0 hands back
-		// options with no `signal` on them.
-		// Both signals, asserted as a list rather than read by position: the older search
-		// is abandoned and the newer one is still live, which is the whole of what
-		// "keeps the newest" means here. Nothing indexes the call list at all — the count
-		// `callsTo` enforces at run time is invisible to the compiler, so a positional read
-		// of its result would want a bang under `noUncheckedIndexedAccess` (#342).
+		// The older search is abandoned and the newer one is still live.
 		expect(callsTo(mockFetch, 2, SCRYFALL_SEARCH_ENDPOINT)
 			.map(([, options]) => options.signal.aborted)).toEqual([true, false]);
 

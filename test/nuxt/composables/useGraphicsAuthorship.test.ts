@@ -83,16 +83,8 @@ describe('useGraphicsAuthorship', () => {
 		expect(describeFailure('not an error', 'Cancellation failed.')).toBe('Cancellation failed.');
 	});
 
-	/**
-	 * The trip to the login page, and the read that has to happen before it.
-	 *
-	 * `ensure()` treats `signed-in` as settled and never re-asks, so at the moment a
-	 * 401 arrives the browser still believes in the session the server has just
-	 * refused. Navigating with that belief intact puts the operator in front of the
-	 * page gate's "already signed in" arm, which sends them straight back to the page
-	 * that refused them — a loop, not a sign-in. The unconditional read is what
-	 * replaces the stale answer, so it is pinned as an order rather than as two calls.
-	 */
+	// The browser still believes in the refused session; without a fresh read first,
+	// the page gate's "already signed in" arm sends the operator straight back.
 	it('asks the server who this browser is before sending it to sign in', async () => {
 		const order: string[] = [];
 		mockLoad.mockImplementation(async () => {

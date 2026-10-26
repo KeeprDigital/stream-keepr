@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { reactive } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 
 const modal = {
 	open: vi.fn(),
@@ -15,76 +16,55 @@ const deckCache = {
 	fetchDecks: vi.fn(),
 };
 
-function deckList(overrides = {}) {
-	return {
-		deckId: 1,
-		externalId: 'deck-1',
-		formatExternalId: 'modern',
-		phaseIds: [1],
-		phaseName: null,
-		name: 'Main',
-		colors: 'R',
-		isPrimary: true,
-		cards: [],
-		...overrides,
-	};
+function deckList(name: string) {
+	return { deckId: 1, externalId: `deck-${name}`, formatExternalId: 'modern', phaseIds: [1], phaseName: null, name, colors: 'R', isPrimary: true, cards: [] };
 }
 
 mockNuxtImport('useOverlay', () => () => overlay);
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('usePlayerDeckCache', () => () => deckCache);
 
+const player = (id: number, name: string) => ({ id, name, updatedAt: new Date('2026-02-01') }) as never;
+
 describe('usePlayerDeckListModal', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		eventStore.eventId = 1;
 		deckCache.getDeckLists.mockReturnValue([]);
 		deckCache.fetchDecks.mockResolvedValue(undefined);
 	});
 
-	it('opens explicit deck lists without forcing loading', () => {
-		const deckLists = [
-			deckList(),
-		];
-		const { openDeckLists } = usePlayerDeckListModal();
+	it('shows a Player\'s cached deck lists at once, fetching nothing', async () => {
+		const cached = [deckList('Main')];
+		deckCache.getDeckLists.mockReturnValue(cached);
 
-		openDeckLists({ playerName: 'Alice', playerId: 7, deckLists });
+		await usePlayerDeckListModal().openPlayerDeckList(player(7, 'Alice'));
 
-		expect(overlay.create).toHaveBeenCalledOnce();
-		expect(modal.open).toHaveBeenCalledWith({
-			playerName: 'Alice',
-			playerId: 7,
-			deckLists,
-			loading: false,
-		});
+		expect(modal.open).toHaveBeenCalledWith({ playerName: 'Alice', playerId: 7, deckLists: cached, loading: false });
+		expect(deckCache.fetchDecks).not.toHaveBeenCalled();
 	});
 
-	it('patches the modal after fetching a missing player deck', async () => {
-		const fetchedDeckLists = [
-			deckList({
-				deckId: 2,
-				externalId: 'deck-2',
-				phaseIds: [2],
-				phaseName: 'Finals',
-				name: 'Fetched',
-				colors: 'G',
-			}),
-		];
-		deckCache.getDeckLists
-			.mockReturnValueOnce([])
-			.mockReturnValueOnce(fetchedDeckLists);
-		const updatedAt = new Date('2026-02-01');
+	it('opens loading for an uncached Player, then fills in what the fetch brought', async () => {
+		const fetched = [deckList('Fetched')];
+		deckCache.getDeckLists.mockReturnValueOnce([]).mockReturnValueOnce(fetched);
+
+		await usePlayerDeckListModal().openPlayerDeckList(player(8, 'Bob'));
+
+		expect(modal.open).toHaveBeenCalledWith(expect.objectContaining({ playerId: 8, deckLists: [], loading: true }));
+		expect(deckCache.fetchDecks).toHaveBeenCalledWith(8, 1, new Date('2026-02-01'));
+		expect(modal.patch).toHaveBeenCalledWith({ deckLists: fetched, loading: false });
+	});
+
+	it('drops a fetch that a later Player\'s opening overtook', async () => {
+		const bobFetch = deferred();
+		deckCache.fetchDecks.mockReturnValueOnce(bobFetch.promise);
 		const { openPlayerDeckList } = usePlayerDeckListModal();
 
-		await openPlayerDeckList({ id: 8, name: 'Bob', updatedAt } as never);
+		const bob = openPlayerDeckList(player(8, 'Bob'));
+		await openPlayerDeckList(player(9, 'Cara'));
+		modal.patch.mockClear();
+		bobFetch.resolve();
+		await bob;
 
-		expect(modal.open).toHaveBeenCalledWith(expect.objectContaining({
-			playerName: 'Bob',
-			playerId: 8,
-			deckLists: [],
-			loading: true,
-		}));
-		expect(deckCache.fetchDecks).toHaveBeenCalledWith(8, 1, updatedAt);
-		expect(modal.patch).toHaveBeenCalledWith({ deckLists: fetchedDeckLists, loading: false });
+		expect(modal.patch).not.toHaveBeenCalled();
 	});
 });

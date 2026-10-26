@@ -419,16 +419,7 @@ describe('useConfigUpdate', () => {
 		});
 	});
 
-	/*
-	 * Disposal used to cancel the pending write, and this suite pinned that (#308).
-	 *
-	 * Local-first is what made it silent: the edit is applied to `localOverrides` the
-	 * moment it is made, so the operator has already been shown it as saved. Navigate
-	 * away inside the three hundred milliseconds and the write that would have made
-	 * that true never happened — the setting reverts, and nothing anywhere says so.
-	 * A disposal is the last moment the intent exists, so it is the moment to spend
-	 * it, not the moment to discard it.
-	 */
+	// The operator was already shown the edit as saved, so leaving must send it, not drop it (#308).
 	it('flushes a pending debounced save when its component scope is disposed', async () => {
 		const scope = effectScope();
 		const saveToStore = vi.fn().mockResolvedValue({ ok: true });
