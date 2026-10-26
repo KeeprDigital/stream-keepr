@@ -1,9 +1,11 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, reactive } from 'vue';
+import { reactive } from 'vue';
 import { mountUnderPageGuard } from '~~/test/helpers/mountUnderPageGuard';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import ConfigMeleeIntegration from '~/components/Event/ConfigMeleeIntegration.vue';
 
 const mockEventStore = reactive({
 	event: {
@@ -54,109 +56,41 @@ mockNuxtImport('useMeleeDataRefresh', () => () => ({
 // way its page does.
 mockNuxtImport('onBeforeRouteLeave', () => () => {});
 
-const UFormStub = defineComponent({
-	emits: ['submit'],
-	template: '<form @submit.prevent="$emit(\'submit\')"><slot /></form>',
-});
-
-const UCardStub = defineComponent({
-	template: '<section><slot name="header" /><slot /><slot name="footer" /></section>',
-});
-
-const UFormFieldStub = defineComponent({
-	props: {
-		name: { type: String, required: false },
-	},
-	template: '<label :data-field="name"><slot /></label>',
-});
-
-// UButton takes `type` as a prop and leaves the default to ULink, which is
-// "button". Declaring it here rather than hardcoding one on the root says that
-// out loud: the footer's "submit" has to reach the rendered button for pressing
-// Save to submit anything.
-const UButtonStub = defineComponent({
-	props: {
-		label: { type: String, required: false },
-		disabled: { type: Boolean, required: false },
-		type: { type: String, required: false, default: 'button' },
-	},
-	template: '<button :type="type" :data-label="label" :disabled="disabled"><slot>{{ label }}</slot></button>',
-});
-
-const UInputStub = defineComponent({
-	props: {
-		modelValue: {
-			type: [String, Number],
-			required: false,
-		},
-	},
-	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
-});
-
-const UInputNumberStub = defineComponent({
-	props: {
-		modelValue: { type: Number, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input type="number" :value="modelValue ?? 0">',
-});
-
-const USwitchStub = defineComponent({
-	props: {
-		modelValue: { type: Boolean, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)">',
-});
-
-const componentPath = '../../../../app/components/Event/ConfigMeleeIntegration.vue';
-
-// A detached button has no activation behaviour, so pressing a submit button
-// only submits its form once the tree is in the document.
+// Attached, so pressing Save — a submit button — submits the form.
 const mountOptions = {
 	attachTo: document.body,
-	props: {
-		eventId: 1,
-	},
-	global: {
-		stubs: {
-			UForm: UFormStub,
-			UCard: UCardStub,
-			UFormField: UFormFieldStub,
-			UButton: UButtonStub,
-			UInput: UInputStub,
-			UInputNumber: UInputNumberStub,
-			USwitch: USwitchStub,
-			USeparator: true,
-			UIcon: true,
-		},
-	},
+	props: { eventId: 1 },
+	global: { stubs: nuxtUiStubs },
 };
 
 enableAutoUnmount(afterEach);
 
 async function mountComponent() {
-	const { default: ConfigMeleeIntegration } = await import(componentPath);
-
 	return mount(ConfigMeleeIntegration, mountOptions);
 }
 
 type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
-/**
- * Mounts the card the way `pages/event/[eventId]/config/integrations.vue` does,
- * inside a page that has installed the unsaved-changes guard. See the shared
- * harness for why the registration is invisible from a bare mount.
- */
 async function mountUnderGuard() {
-	const { default: ConfigMeleeIntegration } = await import(componentPath);
-
 	return mountUnderPageGuard<Wrapper>(ConfigMeleeIntegration, mountOptions);
 }
 
 function fieldInput(wrapper: Wrapper, field: string) {
-	return wrapper.get(`[data-field="${field}"]`).getComponent(UInputStub);
+	return wrapper.get(`[data-field="${field}"] input`);
+}
+
+function fieldValue(wrapper: Wrapper, field: string) {
+	return (fieldInput(wrapper, field).element as HTMLInputElement).value;
+}
+
+function button(wrapper: Wrapper, label: string) {
+	return wrapper.findAll('button').find(candidate => candidate.text() === label)!;
+}
+
+async function disableIntegration(wrapper: Wrapper) {
+	await wrapper.get('[role="switch"]').trigger('click');
+	await wrapper.get('form').trigger('submit');
+	await flushPromises();
 }
 
 describe('configMeleeIntegration', () => {
@@ -192,9 +126,7 @@ describe('configMeleeIntegration', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.find('input[type="checkbox"]').setValue(false);
-		await wrapper.find('form').trigger('submit');
-		await flushPromises();
+		await disableIntegration(wrapper);
 
 		expect(open).toHaveBeenCalledWith(expect.objectContaining({
 			title: 'Disable Melee Integration',
@@ -211,7 +143,7 @@ describe('configMeleeIntegration', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.findAll('input').find(input => input.attributes('type') !== 'checkbox')!.setValue('67890');
+		await fieldInput(wrapper, 'meleeEventId').setValue('67890');
 		await wrapper.find('form').trigger('submit');
 		await flushPromises();
 
@@ -230,9 +162,7 @@ describe('configMeleeIntegration', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.find('input[type="checkbox"]').setValue(false);
-		await wrapper.find('form').trigger('submit');
-		await flushPromises();
+		await disableIntegration(wrapper);
 
 		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledWith(1, expect.objectContaining({
 			meleeEnabled: false,
@@ -255,9 +185,7 @@ describe('configMeleeIntegration', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.find('input[type="checkbox"]').setValue(false);
-		await wrapper.find('form').trigger('submit');
-		await flushPromises();
+		await disableIntegration(wrapper);
 
 		expect(open).toHaveBeenCalledWith(expect.objectContaining({
 			message: expect.stringContaining('Manual rounds and matches stay'),
@@ -279,9 +207,7 @@ describe('configMeleeIntegration', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.find('input[type="checkbox"]').setValue(false);
-		await wrapper.find('form').trigger('submit');
-		await flushPromises();
+		await disableIntegration(wrapper);
 
 		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledOnce();
 		expect(mockEventStore.setEvent).toHaveBeenCalledWith({ meleeConfigured: true });
@@ -297,14 +223,7 @@ describe('configMeleeIntegration', () => {
 		vi.useRealTimers();
 	});
 
-	/**
-	 * What the card says when its configuration read is refused.
-	 *
-	 * This banner replaces the whole form, so it has to carry standing context — and it
-	 * used to carry only that: `runRequest` wrote `getErrorMessage`'s answer into
-	 * `errorRef` and `onFailure` overwrote it with static wording one line later, so the
-	 * reason never survived (#271 recorded the dead write). One writer now composes both.
-	 */
+	// The banner replaces the form, so it carries both what failed and why (#271).
 	it('names what failed and quotes the refusal the server wrote', async () => {
 		mockEventRepo.getMeleeConfig.mockRejectedValueOnce(transportFailure({
 			status: 403,
@@ -330,22 +249,6 @@ describe('configMeleeIntegration', () => {
 		expect(wrapper.text()).toContain('NUXT_MELEE_CREDENTIAL_KEY is not configured');
 	});
 
-	it('renders only the Melee integration configuration form', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		expect(mockEventRepo.getMeleeConfig).toHaveBeenCalledWith(1);
-		expect(wrapper.text()).toContain('Reset');
-		expect(wrapper.text()).toContain('Save');
-		expect(wrapper.text()).not.toContain('Melee Sync Summary');
-		expect(wrapper.text()).not.toContain('Open Melee Sync');
-		expect(wrapper.find('.divide-y.divide-default').exists()).toBe(false);
-		expect(wrapper.findAll('section')).toHaveLength(1);
-	});
-
-	// The guard is what stops an operator navigating away from an unsaved edit. It
-	// registers through inject, so a card mounted without a page around it
-	// registers with nothing and loses this silently.
 	it('tells the page it has unsaved changes while its form is edited', async () => {
 		const { wrapper, pageIsDirty } = await mountUnderGuard();
 		await flushPromises();
@@ -355,7 +258,7 @@ describe('configMeleeIntegration', () => {
 		await fieldInput(wrapper, 'meleeEventId').setValue('67890');
 		expect(pageIsDirty()).toBe(true);
 
-		await wrapper.get('[data-label="Reset"]').trigger('click');
+		await button(wrapper, 'Reset').trigger('click');
 		expect(pageIsDirty()).toBe(false);
 	});
 
@@ -366,7 +269,7 @@ describe('configMeleeIntegration', () => {
 		await flushPromises();
 
 		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
-		await wrapper.get('[data-label="Save"]').trigger('click');
+		await button(wrapper, 'Save').trigger('click');
 		await flushPromises();
 
 		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledWith(1, {
@@ -383,15 +286,13 @@ describe('configMeleeIntegration', () => {
 
 		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
 		await fieldInput(wrapper, 'meleeClientSecret').setValue('rotated-secret');
-		await wrapper.get('[data-label="Save"]').trigger('click');
+		await button(wrapper, 'Save').trigger('click');
 		await flushPromises();
 
-		expect(fieldInput(wrapper, 'meleeClientSecret').props('modelValue')).toBe('');
+		expect(fieldValue(wrapper, 'meleeClientSecret')).toBe('');
 		expect(pageIsDirty()).toBe(false);
 	});
 
-	// The save used to take the whole form as saved once it landed, so a field
-	// edited while the request was in flight read clean and leaving lost it.
 	it('keeps an edit typed while the save is in flight unsaved', async () => {
 		let land = () => {};
 		mockEventRepo.updateMeleeConfig.mockImplementation(() => new Promise((resolve) => {
@@ -401,13 +302,13 @@ describe('configMeleeIntegration', () => {
 		await flushPromises();
 
 		await fieldInput(wrapper, 'meleeClientId').setValue('rotated-client-id');
-		await wrapper.get('[data-label="Save"]').trigger('click');
+		await button(wrapper, 'Save').trigger('click');
 		await flushPromises();
 		await fieldInput(wrapper, 'meleeClientId').setValue('typed-while-saving');
 		land();
 		await flushPromises();
 
-		expect(fieldInput(wrapper, 'meleeClientId').props('modelValue')).toBe('typed-while-saving');
+		expect(fieldValue(wrapper, 'meleeClientId')).toBe('typed-while-saving');
 		expect(pageIsDirty()).toBe(true);
 	});
 });

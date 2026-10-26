@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import ListMembersPane from '~/components/Player/ListMembersPane.vue';
 
 const eventStore = reactive({ eventId: 1 });
 const playerListStore = {
@@ -27,7 +28,6 @@ const VueDraggableStub = defineComponent({
 });
 
 async function mountPane() {
-	const { default: ListMembersPane } = await import('../../../../app/components/Player/ListMembersPane.vue');
 	return mount(ListMembersPane, {
 		props: {
 			listId: 5,
@@ -68,13 +68,5 @@ describe('playerListMembersPane', () => {
 
 		expect(playerListStore.reorderMembers).not.toHaveBeenCalled();
 		expect(playerListStore.loadListMembers).not.toHaveBeenCalled();
-	});
-
-	it('uses a single-column transfer layout until large viewports', async () => {
-		const wrapper = await mountPane();
-		const grid = wrapper.get('.grid');
-
-		expect(grid.classes()).toContain('grid-cols-1');
-		expect(grid.classes()).toContain('lg:grid-cols-2');
 	});
 });

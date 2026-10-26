@@ -10,6 +10,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import ReorderControls from '~/components/Graphics/Compositor/ReorderControls.vue';
+import StackTree from '~/components/Graphics/Compositor/StackTree.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -50,9 +51,6 @@ async function mountComponent(options: {
 	contract?: GraphicsHostContract;
 	slots?: Record<string, unknown>;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/StackTree.vue';
-	const { default: StackTree } = await import(componentPath);
-
 	return mount(StackTree, {
 		props: {
 			graphics: options.graphics,
@@ -135,12 +133,8 @@ function groupStack(): BroadcastGraphicConfig {
 }
 
 describe('graphicsCompositorStackTree', () => {
-	/**
-	 * The graphic-badge slot is host capability, not compositor vocabulary: only a
-	 * Broadcast Graphics host has playout state to mark (#373), so the tree offers
-	 * the seam per graphic and carries no opinion about what a badge says. A host
-	 * that supplies nothing gets exactly the tree it had.
-	 */
+	// The graphic-badge slot is host capability, not compositor vocabulary: only a Broadcast
+	// Graphics host has playout state to mark (#373), so the tree offers the seam per graphic and…
 	it('renders a host-supplied badge beside each Broadcast Graphic in the stack', async () => {
 		const wrapper = await mountComponent({
 			graphics: [
@@ -274,12 +268,7 @@ describe('graphicsCompositorStackTree', () => {
 		});
 	});
 
-	/**
-	 * The split lower-third the #179 fidelity run was building needs four Shapes
-	 * in a row. Under a select, the second consecutive Shape was not a change of
-	 * value and added nothing at all — silently, with the author left alternating
-	 * kinds to work around it (#234).
-	 */
+	// The split lower-third the #179 fidelity run was building needs four Shapes in a row.
 	it('adds a second Graphic Item of the kind it just added', async () => {
 		const wrapper = await mountComponent({
 			graphics: [

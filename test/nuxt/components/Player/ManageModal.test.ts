@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
+import ManageModal from '~/components/Player/ManageModal.vue';
 
 const mockPlayerStore = {
 	updatePlayer: vi.fn(),
@@ -73,12 +74,9 @@ const FormFieldsStub = defineComponent({
 	template: '<div />',
 });
 
-const componentPath = '../../../../app/components/Player/ManageModal.vue';
-
 enableAutoUnmount(afterEach);
 
 async function mountModal() {
-	const { default: ManageModal } = await import(componentPath);
 	return mount(ManageModal, {
 		attrs: { 'onUpdate:open': overlayClose },
 		props: {

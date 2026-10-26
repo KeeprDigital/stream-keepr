@@ -1,10 +1,9 @@
 import type {
-	BroadcastGraphicChannelContext,
 	BroadcastGraphicsLiveState,
 	BroadcastGraphicsRecoveryFault,
 	BroadcastGraphicsRejectionCode,
 } from '~~/shared/modules/broadcast-graphics-live-session';
-import type { BroadcastGraphicConfig, GraphicChannelConfig, GraphicInputValue } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReferenceStatus } from '~~/shared/types/graphicsAsset';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
@@ -12,17 +11,12 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import {
-	broadcastGraphicChannelContexts,
-	broadcastGraphicPhaseProjections,
-	broadcastGraphicPhaseTiming,
-	broadcastGraphicPlayoutState,
-	broadcastGraphicRenderedInputs,
 	createInitialBroadcastGraphicsLiveState,
-	graphicInputTraces,
-	onAirBroadcastGraphicIds,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import LiveWorkspace from '~/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -83,94 +77,8 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	get sessions() {
 		return mockSessions.value;
 	},
-	serverNow: () => mockServerNow.value,
-	channelContexts: (
-		graphics: readonly BroadcastGraphicConfig[],
-		channels: readonly GraphicChannelConfig[] | undefined,
-	) => (channels?.length
-		? broadcastGraphicChannelContexts({ graphics, channels })
-		: {}),
+	...liveSessionSelectors(() => mockLiveState.value, () => mockServerNow.value),
 	isPending: (_screenId: number, graphicId: string) => mockPendingGraphicIds.value.includes(graphicId),
-	playoutState: (
-		_screenId: number,
-		graphicId: string,
-		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
-		now?: number,
-		channel?: BroadcastGraphicChannelContext,
-	) => broadcastGraphicPlayoutState(
-		mockLiveState.value,
-		graphicId,
-		graphic
-			? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, channel)
-			: undefined,
-	),
-	onAirGraphicIds: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-		channels?: readonly GraphicChannelConfig[],
-	) => {
-		const contexts = channels?.length
-			? broadcastGraphicChannelContexts({ graphics, channels })
-			: {};
-		return onAirBroadcastGraphicIds(
-			mockLiveState.value,
-			graphics,
-			graphic => broadcastGraphicPhaseTiming(
-				graphic as BroadcastGraphicConfig,
-				now ?? mockServerNow.value,
-				contexts[graphic.id],
-			),
-		);
-	},
-	animationProjection: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-		channels?: readonly GraphicChannelConfig[],
-	) => {
-		const contexts = channels?.length
-			? broadcastGraphicChannelContexts({ graphics, channels })
-			: {};
-		return Object.fromEntries(graphics.flatMap((graphic) => {
-			const projection = broadcastGraphicPhaseProjections(
-				mockLiveState.value,
-				graphic.id,
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, contexts[graphic.id]),
-			);
-			// Empty means settled, and the real store leaves a settled graphic out of the
-			// map entirely so "is anything moving?" stays one question about the map's size.
-			return projection.length > 0
-				? [
-						[graphic.id, projection],
-					]
-				: [];
-		}));
-	},
-	inputTraces: (_screenId: number, graphic: BroadcastGraphicConfig) =>
-		graphicInputTraces(mockLiveState.value, graphic.id, graphic),
-	renderedInputValues: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-	) => {
-		const current: Record<string, Record<string, GraphicInputValue>> = {};
-		const outgoing: Record<string, Record<string, GraphicInputValue>> = {};
-		for (const graphic of graphics) {
-			const rendered = broadcastGraphicRenderedInputs(
-				mockLiveState.value,
-				graphic.id,
-				graphic.inputs ?? [],
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
-			);
-			current[graphic.id] = rendered.current;
-			if (rendered.outgoing)
-				outgoing[graphic.id] = rendered.outgoing;
-		}
-		return { current, outgoing };
-	},
-	sourceSelections: (_screenId: number, graphicId: string) =>
-		mockLiveState.value.sources?.[graphicId] ?? {},
 	setInput: vi.fn(),
 	setOverride: vi.fn(),
 	selectSource: vi.fn(),
@@ -186,13 +94,7 @@ mockNuxtImport('useGraphicBindingData', () => () => ({
 	selectionOptions: () => [],
 }));
 
-/**
- * What the Screen Outputs watching this Screen report about themselves.
- *
- * Only Screen Outputs join a Screen's presence, so every member here is one — and
- * `assetAccess` is each one's own answer to whether it can resolve this Screen's
- * media at all.
- */
+// What the Screen Outputs watching this Screen report about themselves.
 const mockPresence = ref<Array<{ data?: { assetAccess?: 'granted' | 'absent' } }>>([]);
 
 mockNuxtImport('useScreenStore', () => () => ({
@@ -260,9 +162,6 @@ async function mountComponent(
 	selectedGraphicId: string | null = null,
 	channels: GraphicChannelConfig[] = [],
 ) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
-	const { default: LiveWorkspace } = await import(componentPath);
-
 	const wrapper = mount(LiveWorkspace, {
 		props: {
 			eventId: 7,
@@ -308,11 +207,8 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		mockApiFetch.mockImplementation(async () => mockReferenceStatus.value);
 	});
 
-	/**
-	 * Broadcast Graphic Template actions are authoring, and the Live workspace is not
-	 * an authoring surface. Nothing here may save, place, rename, or delete a design:
-	 * a live operator's Screen must not change shape under them.
-	 */
+	// Broadcast Graphic Template actions are authoring, and the Live workspace is not an authoring
+	// surface.
 	it('offers no Broadcast Graphic Template action anywhere in the Live workspace', async () => {
 		const wrapper = await mountComponent();
 
@@ -322,12 +218,8 @@ describe('broadcastGraphicsLiveWorkspace', () => {
 		expect(wrapper.text()).not.toContain('Template');
 	});
 
-	/**
-	 * Authoring a Graphic Source Selection or a Graphic Input Binding is the same kind
-	 * of structural change as a template action, and belongs to the same side of the
-	 * split: Live Control selects declared sources and edits values, and can never
-	 * author a binding, a query, or an expression.
-	 */
+	// Authoring a Graphic Source Selection or a Graphic Input Binding is the same kind of
+	// structural change as a template action, and belongs to the same side of the split: Live…
 	it('offers no Graphic Source Selection or Graphic Input Binding authoring', async () => {
 		const wrapper = await mountComponent([
 			{

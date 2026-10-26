@@ -3,11 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import ColumnVisibilityList from '~/components/Screen/ColumnVisibilityList.vue';
 
-/**
- * The one draggable column visibility list, shared by the Standings, Player
- * History and Metagame settings: what it shows, and the whole column list it
- * hands back on every reorder or visibility toggle. Persisting it is the host's.
- */
+// The one draggable column visibility list, shared by the Standings, Player History and Metagame
+// settings: what it shows, and the whole column list it hands back on every reorder or visibility…
 
 vi.mock('vue-draggable-plus', () => ({
 	VueDraggable: defineComponent({

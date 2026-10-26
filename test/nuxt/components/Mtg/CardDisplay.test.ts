@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { mtgCardSizeFromHeight } from '~~/shared/utils/card/size';
+import CardDisplay from '~/components/Mtg/CardDisplay.vue';
 
 const mockCardStore = {
 	setActiveScreen: vi.fn(),
@@ -42,9 +43,6 @@ const CardImageStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Mtg/CardDisplay.vue';
-	const { default: CardDisplay } = await import(componentPath);
-
 	return mount(CardDisplay, {
 		props: {
 			screenId: 1,

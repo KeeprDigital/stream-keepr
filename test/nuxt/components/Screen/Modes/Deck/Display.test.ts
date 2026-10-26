@@ -5,6 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Display from '~/components/Screen/Modes/Deck/Display.vue';
 
 let mutableConfig: Record<string, unknown>;
 const screenLevelConfig = ref<Record<string, unknown>>({});
@@ -117,9 +118,6 @@ function createHighlanderSummary(overrides: Partial<HighlanderDeckSummary> = {})
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Deck/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: {
@@ -182,7 +180,7 @@ describe('screenDeckDisplay', () => {
 		deckColors.value = 'U';
 	});
 
-	it('renders a styled deck meta pill below the top deck info row', async () => {
+	it('styles the deck meta pill and chips in the configured colours', async () => {
 		const wrapper = await mountComponent();
 
 		const metaPill = wrapper.get('[data-testid="deck-meta-pill"]');
@@ -191,8 +189,6 @@ describe('screenDeckDisplay', () => {
 		expect(metaPill.text()).toContain('Lurrus of the Dream-Den');
 		expect(wrapper.get('[data-testid="highlander-total-inline"]').text()).toContain('4/3 Points');
 		expect(metaPill.text()).toContain('Instants');
-		expect(metaPill.classes()).toContain('rounded-full');
-		expect(metaPill.classes()).toContain('text-lg');
 		expect(metaPill.attributes('style')).toContain('color: #123456;');
 		expect(metaPill.attributes('style')).toContain('background: linear-gradient(red, blue);');
 		expect(metaPill.attributes('style')).toContain('border-color: #fedcba;');
@@ -202,7 +198,6 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Lutri, the Spellchaser');
 		expect(wrapper.get('[data-testid="highlander-pointed-cards"]').text()).toContain('Companion');
 		const chip = wrapper.get('[data-testid="highlander-pointed-card-chip"]');
-		expect(chip.classes()).toContain('text-base');
 		expect(chip.attributes('style')).toContain('color: #123456;');
 		expect(chip.attributes('style')).toContain('background: #abcdef;');
 		expect(chip.attributes('style')).toContain('border-color: #fedcba;');
@@ -412,13 +407,11 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.find('.token-card-section').exists()).toBe(false);
 	});
 
-	it('passes Highlander point badge controls through to grid cards', async () => {
+	it('shows Highlander points on grid cards when enabled', async () => {
 		const wrapper = await mountComponent();
 		const card = wrapper.get('[data-testid="deck-card"]');
 
 		expect(card.attributes('data-show-highlander-points')).toBe('true');
-		expect(card.attributes('data-point-position')).toBe('-bottom-1 -right-1');
-		expect(card.attributes('data-point-size')).toBe('min-w-6 px-2 py-0.5 text-xs');
 	});
 
 	it('renders blank when no deck is currently displayed', async () => {

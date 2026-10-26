@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, reactive } from 'vue';
+import PanelMeleeModal from '~/components/FeatureMatch/PanelMeleeModal.vue';
 
 const mockMatchStore = reactive({
 	matches: [
@@ -54,7 +55,6 @@ function fireEnter() {
 }
 
 async function mountComponent() {
-	const { default: PanelMeleeModal } = await import('~/components/FeatureMatch/PanelMeleeModal.vue');
 	return mount(PanelMeleeModal, {
 		props: { open: true },
 		global: {

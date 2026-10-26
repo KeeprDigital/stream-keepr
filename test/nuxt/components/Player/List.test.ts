@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import PlayerList from '~/components/Player/List.vue';
 
 mockNuxtImport('usePlayerDeckCache', () => () => ({
 	getDeckLists: vi.fn(() => []),
@@ -28,9 +29,6 @@ const UIEmptyStateStub = defineComponent({
 });
 
 async function mountComponent(activeListId: number | null) {
-	const componentPath = '../../../../app/components/Player/List.vue';
-	const { default: PlayerList } = await import(componentPath);
-
 	return mount(PlayerList, {
 		props: {
 			players: [],

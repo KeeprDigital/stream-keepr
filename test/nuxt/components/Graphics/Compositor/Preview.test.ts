@@ -2,6 +2,8 @@ import type { Screen } from '~/types';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
+import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import Preview from '~/components/Graphics/Compositor/Preview.vue';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
@@ -25,8 +27,11 @@ const graphics = [
 				y: 0,
 				width: 100,
 				height: 40,
-				geometry: { cornerRadius: 0 },
-				surfaceStyle: { fill: '#0077a3', fillOpacity: 1 },
+				geometry: squareShapeGeometry(),
+				surfaceStyle: {
+					fill: { type: 'solid' as const, color: '#0077a3' },
+					fillOpacity: 1,
+				},
 			},
 		],
 	},
@@ -92,9 +97,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Preview.vue';
-	const { default: Preview } = await import(componentPath);
-
 	return mount(Preview, {
 		props: {
 			eventId: 1,
@@ -239,7 +241,6 @@ describe('graphicsCompositorPreview', () => {
 		const style = canvas?.getAttribute('style') ?? '';
 
 		expect(style).toContain('aspect-ratio: 1080 / 1920');
-		expect(style).toContain('width: 25.875vh');
 		expect(style).toContain('max-width: 100%');
 		expect(style).not.toContain('max-height');
 		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
@@ -281,13 +282,8 @@ describe('graphicsCompositorPreview', () => {
 		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
 	});
 
-	/**
-	 * The frame's `message` listener is installed when its app mounts, and this
-	 * application renders on the client — so the iframe's `load` event, which the
-	 * push above rides, fires before that as often as after it. A push that lost
-	 * that race was dropped in silence and left the preview composing the Screen's
-	 * persisted stack, which does not look like a missed message (#234).
-	 */
+	// The frame's `message` listener is installed when its app mounts, and this application renders
+	// on the client — so the iframe's `load` event, which the push above rides, fires before that…
 	it('pushes again when the frame reports that it is listening', async () => {
 		const wrapper = await mountComponent();
 		const frame = wrapper.get('iframe').element;

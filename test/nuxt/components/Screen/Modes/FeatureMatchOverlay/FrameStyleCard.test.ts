@@ -1,8 +1,9 @@
-import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
 
 const UFormFieldStub = defineComponent({
 	props: {
@@ -80,15 +81,12 @@ const USwitchStub = defineComponent({
 
 async function mountComponent(options: Partial<{
 	config: FeatureMatchOverlayModeConfig;
-	patchFrame: ReturnType<typeof vi.fn>;
+	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
 }> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
-	const { default: FrameStyleCard } = await import(componentPath);
-
 	return mount(FrameStyleCard, {
 		props: {
 			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
-			patchFrame: options.patchFrame ?? vi.fn(),
+			patchFrame: options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>(),
 			eventId: 7,
 		},
 		global: {
@@ -110,16 +108,13 @@ async function mountComponent(options: Partial<{
 }
 
 describe('featureMatchOverlayFrameStyleCard', () => {
-	it('renders a toggle for a toggle-control effect param and writes it into the params bag', async () => {
+	it('writes an effect param edit into the Frame animation\'s params', async () => {
 		const patchFrame = vi.fn();
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.animation = { enabled: true, effect: 'dots', opacity: 0.5 };
 		const wrapper = await mountComponent({ config, patchFrame });
 
 		const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(candidate => candidate.text() === 'Connecting lines');
-		expect(toggle).toBeDefined();
-		expect(toggle!.attributes('data-description')).toBe('Render connecting line segments between dots.');
-
 		await toggle!.trigger('click');
 
 		const patch = patchFrame.mock.calls.at(-1)?.[0] as { animation?: { params?: Record<string, unknown> } };

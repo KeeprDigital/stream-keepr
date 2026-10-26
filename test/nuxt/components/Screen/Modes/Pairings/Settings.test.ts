@@ -5,12 +5,10 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
-/**
- * The Pagination card's page count is the one the Screen Output renders: the
- * Round's Matches as the Screen reads them, followed as the Screen follows
- * them (Screen Mode Data Freshness), not a count read once on selection (#780).
- */
+// The Pagination card's page count is the one the Screen Output renders: the Round's Matches as the
+// Screen reads them, followed as the Screen follows them (Screen Mode Data Freshness), not a count…
 
 const savedConfig = {
 	roundId: 31,
@@ -111,8 +109,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountSettings() {
-	const { default: Settings } = await import('../../../../../../app/components/Screen/Modes/Pairings/Settings.vue');
-
 	const wrapper = mount(Settings, {
 		props: {
 			screen: {

@@ -4,12 +4,8 @@ import { defineComponent } from 'vue';
 import MediaFields from '~/components/Graphics/MediaFields.vue';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
-/**
- * The one media fields control, shared by Media Graphic Items, media treatment
- * presets, image and video Background Layers, and the Feature Match Overlay
- * Frame's video: which fields each host is offered, the one Media Fit list, the
- * playback-rate bounds, and what a cleared field emits.
- */
+// The one media fields control, shared by Media Graphic Items, media treatment presets, image and
+// video Background Layers, and the Feature Match Overlay Frame's video: which fields each host is…
 
 enableAutoUnmount(afterEach);
 

@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockMatch } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import ResultModal from '~/components/Match/ResultModal.vue';
 
 const mockEventStore = {
 	eventId: 1,
@@ -21,8 +22,6 @@ mockNuxtImport('useMatchStore', () => () => mockMatchStore);
 mockNuxtImport('useToast', () => () => mockToast);
 
 async function mountComponent() {
-	const { default: ResultModal } = await import('~/components/Match/ResultModal.vue');
-
 	return mount(ResultModal, {
 		props: {
 			match: createMockMatch({

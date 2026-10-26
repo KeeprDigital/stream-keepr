@@ -3,28 +3,14 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockMatch, createMockPlayer } from '~~/test/helpers/fixtures';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import MatchListItem from '~/components/Match/ListItem.vue';
 
 const mockDeckCache = {
 	getActiveDeckForPlayer: vi.fn(() => null),
 };
 
 mockNuxtImport('usePlayerDeckCache', () => () => mockDeckCache);
-
-const UBadgeStub = defineComponent({
-	props: {
-		color: { type: String, required: false },
-	},
-	template: '<span data-testid="badge" :data-color="color"><slot /></span>',
-});
-
-const UButtonStub = defineComponent({
-	emits: ['click'],
-	template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
-});
-
-const UDropdownMenuStub = defineComponent({
-	template: '<div><slot /><slot name="item-label" :item="{}" /></div>',
-});
 
 const MatchNotePopoverStub = defineComponent({
 	props: [
@@ -40,8 +26,6 @@ async function mountComponent(
 	matchOverrides?: Parameters<typeof createMockMatch>[0],
 	itemOverrides: Record<string, unknown> = {},
 ) {
-	const { default: MatchListItem } = await import('~/components/Match/ListItem.vue');
-
 	return mount(MatchListItem, {
 		props: {
 			match: createMockMatch({
@@ -63,9 +47,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				UBadge: UBadgeStub,
-				UButton: UButtonStub,
-				UDropdownMenu: UDropdownMenuStub,
+				...nuxtUiStubs,
 				MatchNotePopover: MatchNotePopoverStub,
 				MtgManaColorDisplay: true,
 				UIcon: true,
@@ -80,51 +62,45 @@ describe('matchListItem', () => {
 		mockDeckCache.getActiveDeckForPlayer.mockReturnValue(null);
 	});
 
-	it('emphasizes player 1 and mutes player 2 when player 1 wins', async () => {
+	it.each([
+		[
+			'player 1 wins',
+			2,
+			1,
+			0,
+			['win', 'loss'],
+		],
+		[
+			'player 2 wins',
+			0,
+			2,
+			0,
+			['loss', 'win'],
+		],
+		[
+			'the games are tied',
+			1,
+			1,
+			1,
+			['draw', 'draw'],
+		],
+	])('marks each side\'s outcome when %s', async (_, player1GameWins, player2GameWins, gameDraws, outcomes) => {
 		const wrapper = await mountComponent({
 			hasResult: true,
-			player1GameWins: 2,
-			player2GameWins: 1,
-			resultString: '2-1',
+			player1GameWins,
+			player2GameWins,
+			gameDraws,
 		});
 
-		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-primary');
-		expect(wrapper.get('[data-testid="player2-name"]').classes()).toContain('text-muted');
-		expect(wrapper.text()).toContain('2');
-		expect(wrapper.text()).toContain('1');
-		expect(wrapper.find('[data-testid="match-state"]').exists()).toBe(false);
+		expect([
+			wrapper.get('[data-testid="player1-name"]').attributes('data-outcome'),
+			wrapper.get('[data-testid="player2-name"]').attributes('data-outcome'),
+		]).toEqual(outcomes);
+		expect(wrapper.get('[data-testid="player1-score"]').text()).toBe(String(player1GameWins));
+		expect(wrapper.get('[data-testid="player2-score"]').text()).toBe(String(player2GameWins));
 	});
 
-	it('emphasizes player 2 and mutes player 1 when player 2 wins', async () => {
-		const wrapper = await mountComponent({
-			hasResult: true,
-			player1GameWins: 0,
-			player2GameWins: 2,
-			resultString: '0-2',
-		});
-
-		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-muted');
-		expect(wrapper.get('[data-testid="player2-name"]').classes()).toContain('text-primary');
-		expect(wrapper.find('[data-testid="match-state"]').exists()).toBe(false);
-	});
-
-	it('dims both names and uses draw-colored scores when the result is tied', async () => {
-		const wrapper = await mountComponent({
-			hasResult: true,
-			player1GameWins: 1,
-			player2GameWins: 1,
-			gameDraws: 1,
-			resultString: '1-1-1',
-		});
-
-		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('text-muted');
-		expect(wrapper.get('[data-testid="player2-name"]').classes()).toContain('text-muted');
-		expect(wrapper.get('[data-testid="player1-score"]').attributes('data-color')).toBe('info');
-		expect(wrapper.get('[data-testid="player2-score"]').attributes('data-color')).toBe('info');
-		expect(wrapper.find('[data-testid="match-state"]').exists()).toBe(false);
-	});
-
-	it('does not show a result-state badge when no result has been entered', async () => {
+	it('marks no outcome or score before a result is entered', async () => {
 		const wrapper = await mountComponent({
 			hasResult: false,
 			player1GameWins: null,
@@ -132,9 +108,9 @@ describe('matchListItem', () => {
 			resultString: null,
 		});
 
-		expect(wrapper.find('[data-testid="match-state"]').exists()).toBe(false);
-		expect(wrapper.get('[data-testid="player1-name"]').classes()).toContain('font-medium');
-		expect(wrapper.get('[data-testid="player2-name"]').classes()).toContain('font-medium');
+		expect(wrapper.get('[data-testid="player1-name"]').attributes('data-outcome')).toBeUndefined();
+		expect(wrapper.find('[data-testid="player1-score"]').exists()).toBe(false);
+		expect(wrapper.text()).toContain('Enter Result');
 	});
 
 	it('keeps the bye layout and copy', async () => {
@@ -148,7 +124,7 @@ describe('matchListItem', () => {
 		expect(wrapper.text()).toContain('Alice');
 	});
 
-	it('shows one subdued Note preview without a warning row or redundant Note badge', async () => {
+	it('previews the Assignment Note once, flagging a colleague\'s change', async () => {
 		const wrapper = await mountComponent({}, {
 			featureMatchLabel: 'Featured 1',
 			featureMatchAssignment: {
@@ -165,14 +141,12 @@ describe('matchListItem', () => {
 			saveAssignmentNote: vi.fn().mockResolvedValue(undefined),
 		});
 
-		expect(wrapper.get('.match-row').classes()).not.toContain('match-row--has-note');
 		expect(wrapper.get('.match-note-preview').text()).toContain('Keep an eye on the sideboard plan');
-		expect(wrapper.get('.match-note-preview').classes()).toContain('match-note-preview--changed');
-		expect(wrapper.findAll('[data-testid="badge"]').map(badge => badge.text())).not.toContain('Note');
+		expect(wrapper.text().match(/Keep an eye on the sideboard plan/g)).toHaveLength(1);
 		expect(wrapper.get('[data-testid="match-note-popover"]').attributes('data-remote-changed')).toBe('true');
 	});
 
-	it('keeps a subtle add affordance and shared editor integration when the Assignment has no Note', async () => {
+	it('offers to add a Note when the Assignment has none, saving through the page', async () => {
 		const save = vi.fn().mockResolvedValue(undefined);
 		const wrapper = await mountComponent({}, {
 			featureMatchLabel: 'Featured 1',
@@ -190,7 +164,7 @@ describe('matchListItem', () => {
 		});
 
 		expect(wrapper.find('.match-note-preview').exists()).toBe(false);
-		expect(wrapper.get('[aria-label="Add feature match note"]').attributes('data-color')).not.toBe('warning');
+		expect(wrapper.find('[aria-label="Add feature match note"]').exists()).toBe(true);
 		await wrapper.get('[data-testid="match-note-save"]').trigger('click');
 		expect(save).toHaveBeenCalledWith(9, 'Edited from Matches');
 	});

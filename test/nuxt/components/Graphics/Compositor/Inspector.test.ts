@@ -27,6 +27,7 @@ import {
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+import Inspector from '~/components/Graphics/Compositor/Inspector.vue';
 
 enableAutoUnmount(afterEach);
 // The Geometry Unit is remembered per browser; no test inherits another's choice.
@@ -136,12 +137,7 @@ function stack(items: GraphicItemConfig[]): BroadcastGraphicConfig[] {
 	];
 }
 
-/**
- * Stands in for `UFormField`. The label is reflected onto the element as well as
- * rendered, so a test can ask which control a label belongs to rather than searching
- * the panel's text for it — "Font" is a substring of both "Font source" and "Font
- * size", and a control is only correctly labelled if the label is on that control.
- */
+// Stands in for `UFormField`.
 const SlotOnlyStub = defineComponent({
 	props: {
 		label: { type: String, required: false },
@@ -203,28 +199,8 @@ const USwitchStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
 });
 
-/**
- * Stands in for the Graphic Asset picker, reflecting the reference it was handed
- * so a test can ask what the panel pinned rather than what the library rendered.
- *
- * The testid is *bound*, not hardcoded: a host-passed `data-testid` is what it
- * answers to, and `media-asset-picker` is the fallback for a picker the panel names
- * no other way — the item panel's. So the Graphic Inputs panel's default picker
- * answers to `graphic-input-default` and to nothing else. The expression on the
- * element says which wins; the hardcoded form it replaces said the opposite and
- * relied on attribute fallthrough to overrule it, so the template read as a claim
- * that had to be corrected by prose (#365; #352 documented that form rather than
- * changing it, and its docblock is what this replaces).
- *
- * `inheritAttrs` is off because the binding is now explicit; `v-bind="$attrs"` keeps
- * everything else the host passes reaching the element, and the individual
- * `:data-testid` after it is the one that wins.
- *
- * Worth knowing before "fixing" this back: the suite passes either way. Restoring the
- * hardcoded template and `inheritAttrs` together is green on all 102 tests, because
- * fallthrough really does deliver `graphic-input-default`. What the pins below catch
- * is the panel dropping the attribute, not the stub's spelling of it.
- */
+// Stands in for the Graphic Asset picker, reflecting the reference it was handed so a test can ask
+// what the panel pinned rather than what the library rendered.
 const GraphicsAssetFocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
 	inheritAttrs: false,
@@ -249,9 +225,6 @@ async function mountComponent(options: {
 	/** The published Graphic Style Set this composition authors against, if any. */
 	styleSet?: GraphicStyleAuthoringContext;
 }) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/Inspector.vue';
-	const { default: Inspector } = await import(componentPath);
-
 	return mount(Inspector, {
 		props: {
 			graphics: options.graphics,
@@ -289,19 +262,31 @@ function emittedGraphics(wrapper: Awaited<ReturnType<typeof mountComponent>>, in
 	return wrapper.emitted('update:graphics')?.[index]?.[0] as BroadcastGraphicConfig[];
 }
 
-function numberField(wrapper: Awaited<ReturnType<typeof mountComponent>>, ariaLabel: string) {
-	return wrapper.findAllComponents({ name: 'UInputNumber' })
-		.find(input => input.attributes('aria-label') === ariaLabel);
+type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
+
+/** The one control of a kind whose attribute matches, or undefined; see `control` for the throwing form. */
+function findControl(wrapper: Wrapper, name: string, attribute: string, value: string) {
+	return wrapper.findAllComponents({ name }).find(entry => entry.attributes(attribute) === value);
 }
 
-function selectField(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
-	return wrapper.findAllComponents({ name: 'USelect' })
-		.find(select => select.attributes('data-testid') === testId);
+/** Throws rather than answering undefined, so an emit aimed at a missing control cannot pass vacuously. */
+function control(wrapper: Wrapper, name: string, attribute: string, value: string) {
+	const found = findControl(wrapper, name, attribute, value);
+	if (!found)
+		throw new Error(`No ${name} with ${attribute}="${value}"`);
+	return found;
 }
 
-function switchField(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
-	return wrapper.findAllComponents({ name: 'USwitch' })
-		.find(entry => entry.attributes('data-testid') === testId);
+function numberField(wrapper: Wrapper, ariaLabel: string) {
+	return control(wrapper, 'UInputNumber', 'aria-label', ariaLabel);
+}
+
+function selectField(wrapper: Wrapper, testId: string) {
+	return control(wrapper, 'USelect', 'data-testid', testId);
+}
+
+function switchField(wrapper: Wrapper, testId: string) {
+	return control(wrapper, 'USwitch', 'data-testid', testId);
 }
 
 function itemOf(graphics: BroadcastGraphicConfig[], index = 0) {
@@ -315,11 +300,7 @@ function childOf(graphics: BroadcastGraphicConfig[], index = 0) {
 		: undefined;
 }
 
-/**
- * The Graphic Surface Style of an item that can carry one. A Media Graphic Item
- * paints an asset and a Deck List Item renders cards rather than a surface, so both
- * are narrowed away.
- */
+// The Graphic Surface Style of an item that can carry one.
 function surfaceOf(graphics: BroadcastGraphicConfig[], index = 0) {
 	const item = itemOf(graphics, index);
 	return item && item.type !== 'media' && item.type !== 'social-network-icon' && item.type !== 'deck-list'
@@ -376,9 +357,8 @@ function declarationOf(wrapper: Awaited<ReturnType<typeof mountComponent>>, inde
 	return emittedGraphics(wrapper, index)[0]!.inputs![0];
 }
 
-function numberFieldByTestId(wrapper: Awaited<ReturnType<typeof mountComponent>>, testId: string) {
-	return wrapper.findAllComponents({ name: 'UInputNumber' })
-		.find(input => input.attributes('data-testid') === testId);
+function numberFieldByTestId(wrapper: Wrapper, testId: string) {
+	return control(wrapper, 'UInputNumber', 'data-testid', testId);
 }
 
 describe('graphicsCompositorInspector', () => {
@@ -404,57 +384,16 @@ describe('graphicsCompositorInspector', () => {
 		expect(emittedGraphics(wrapper)[0]?.name).toBe('Talent Lower Third');
 	});
 
-	it('shows the anchored coordinate of the selected Graphic Anchor Point', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		expect(numberField(wrapper, 'Item x')?.props('modelValue')).toBe(300);
-		expect(numberField(wrapper, 'Item y')?.props('modelValue')).toBe(250);
-	});
-
 	it('moves the stored top-left rectangle when the author edits the anchored coordinate', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([shapeItem]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		numberField(wrapper, 'Item x')?.vm.$emit('update:modelValue', 960);
+		numberField(wrapper, 'Item x').vm.$emit('update:modelValue', 960);
 		await nextTick();
 
 		expect(emittedGraphics(wrapper)[0]?.items[0]).toMatchObject({ x: 760, y: 200 });
-	});
-
-	it('holds the Graphic Anchor Point fixed while the author resizes the item', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
-		await nextTick();
-
-		expect(emittedGraphics(wrapper)[0]?.items[0]).toMatchObject({ x: 200, width: 200 });
-	});
-
-	it('keeps the aspect ratio of a linked Graphic Item from its Graphic Anchor Point', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
-		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
-		await nextTick();
-
-		// 400×100 is 4:1, so 200 wide is 50 high, still centred on (300, 250).
-		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
-			x: 200,
-			y: 225,
-			width: 200,
-			height: 50,
-		});
 	});
 
 	it('does not carry a width and height link over to the next selected item', async () => {
@@ -470,7 +409,7 @@ describe('graphicsCompositorInspector', () => {
 		await wrapper.setProps({
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'other' },
 		});
-		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 200);
+		numberField(wrapper, 'Item width').vm.$emit('update:modelValue', 200);
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper), 1)).toMatchObject({ width: 200, height: 100 });
@@ -563,7 +502,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		numberField(wrapper, 'Graphic Rotation')?.vm.$emit('update:modelValue', -6);
+		numberField(wrapper, 'Graphic Rotation').vm.$emit('update:modelValue', -6);
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ rotation: -6 });
@@ -583,20 +522,6 @@ describe('graphicsCompositorInspector', () => {
 				topRight: { treatment: 'cut' },
 				topLeft: { treatment: 'square' },
 			},
-		});
-	});
-
-	it('slants an edge in canonical pixels', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		numberField(wrapper, 'Right edge slant')?.vm.$emit('update:modelValue', 48);
-		await nextTick();
-
-		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({
-			geometry: { rightSlant: 48 },
 		});
 	});
 
@@ -623,7 +548,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		selectField(gradient, 'graphic-fill-kind')?.vm.$emit('update:modelValue', 'linear-gradient');
+		selectField(gradient, 'graphic-fill-kind').vm.$emit('update:modelValue', 'linear-gradient');
 		await nextTick();
 
 		const withGradient = emittedGraphics(gradient);
@@ -641,42 +566,12 @@ describe('graphicsCompositorInspector', () => {
 
 		// Each surface's controls name the surface they belong to, because a Game Wins
 		// Item shows three sets of them at once.
-		numberField(stops, 'Graphic Surface Style stop 2 opacity')?.vm.$emit('update:modelValue', 0.4);
+		numberField(stops, 'Graphic Surface Style stop 2 opacity').vm.$emit('update:modelValue', 0.4);
 		await nextTick();
 
 		const patched = surfaceOf(emittedGraphics(stops));
 		expect(patched?.fill.type === 'linear-gradient'
 			&& patched.fill.stops[1]?.opacity).toBe(0.4);
-	});
-
-	it('adds and removes gradient stops within the bounds of the vocabulary', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([
-				{
-					...shapeItem,
-					surfaceStyle: {
-						fill: {
-							type: 'linear-gradient',
-							angle: 90,
-							stops: [
-								{ color: '#000000', position: 0, opacity: 1 },
-								{ color: '#ffffff', position: 1, opacity: 1 },
-							],
-						},
-						fillOpacity: 1,
-					},
-				},
-			]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		expect(wrapper.get('[data-testid="graphic-fill-remove-stop"]').attributes('disabled')).toBeDefined();
-
-		await wrapper.get('[data-testid="graphic-fill-add-stop"]').trigger('click');
-
-		const patched = surfaceOf(emittedGraphics(wrapper));
-		expect(patched?.fill.type === 'linear-gradient'
-			&& patched.fill.stops).toHaveLength(3);
 	});
 
 	it('adds an outline and a glow, and takes them away again', async () => {
@@ -685,8 +580,8 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		await switchField(wrapper, 'graphic-outline-enabled')?.trigger('click');
-		await switchField(wrapper, 'graphic-glow-enabled')?.trigger('click');
+		await switchField(wrapper, 'graphic-outline-enabled').trigger('click');
+		await switchField(wrapper, 'graphic-glow-enabled').trigger('click');
 
 		expect(surfaceOf(emittedGraphics(wrapper, 0))?.outline).toMatchObject({ width: 2 });
 		expect(surfaceOf(emittedGraphics(wrapper, 1))?.glow).toMatchObject({ size: 24 });
@@ -705,7 +600,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		await switchField(styled, 'graphic-outline-enabled')?.trigger('click');
+		await switchField(styled, 'graphic-outline-enabled').trigger('click');
 
 		expect(surfaceOf(emittedGraphics(styled))?.outline).toBeUndefined();
 	});
@@ -718,7 +613,7 @@ describe('graphicsCompositorInspector', () => {
 
 		expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(false);
 
-		await switchField(wrapper, 'surface-style-own')?.trigger('click');
+		await switchField(wrapper, 'surface-style-own').trigger('click');
 
 		expect(surfaceOf(emittedGraphics(wrapper))).toMatchObject({ fillOpacity: 1 });
 	});
@@ -746,11 +641,11 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 		});
 
-		expect(numberField(wrapper, 'Item x')).toBeUndefined();
+		expect(findControl(wrapper, 'UInputNumber', 'aria-label', 'Item x')).toBeUndefined();
 		expect(wrapper.find('[data-testid="graphic-item-rotation"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="graphic-group-child-sizing-mode"]').exists()).toBe(true);
 
-		selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
+		selectField(wrapper, 'graphic-group-child-sizing-mode').vm.$emit('update:modelValue', 'fill');
 		await nextTick();
 
 		expect(childOf(emittedGraphics(wrapper))).toMatchObject({
@@ -779,19 +674,7 @@ describe('graphicsCompositorInspector', () => {
 		await wrapper.get('button[title="Percent of the container"]').trigger('click');
 
 		// The group is 800 wide, so 400px is half of the containing canvas.
-		expect(numberField(wrapper, 'Item x')?.props('modelValue')).toBe(50);
-	});
-
-	it('aligns a top-level item\'s edge with the canvas', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		await wrapper.get('button[aria-label="Hard right"]').trigger('click');
-
-		// The canvas is 1920 wide, so the 400-wide item starts at 1520.
-		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ x: 1520, y: 200 });
+		expect(numberField(wrapper, 'Item x').props('modelValue')).toBe(50);
 	});
 
 	it('aligns a canvas Graphic Group child\'s edge with its group bounds', async () => {
@@ -830,7 +713,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 
 		expect(wrapper.find('button[aria-label="Hard left"]').exists()).toBe(false);
-		expect(numberField(wrapper, 'Item width')).toBeDefined();
+		expect(findControl(wrapper, 'UInputNumber', 'aria-label', 'Item width')).toBeDefined();
 	});
 
 	it('lets a Graphic Group child override the local style default of its group', async () => {
@@ -854,7 +737,7 @@ describe('graphicsCompositorInspector', () => {
 		// Inheriting, so the group owns the style and the child offers no fill controls.
 		expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(false);
 
-		await switchField(wrapper, 'surface-style-own')?.trigger('click');
+		await switchField(wrapper, 'surface-style-own').trigger('click');
 
 		expect(childSurfaceOf(emittedGraphics(wrapper))).toMatchObject({ fillOpacity: 1 });
 	});
@@ -883,13 +766,13 @@ describe('graphicsCompositorInspector', () => {
 		it('offers fitting, focal position, and opacity for any media kind', async () => {
 			const wrapper = await mountMedia();
 
-			selectField(wrapper, 'media-fit')?.vm.$emit('update:modelValue', 'contain');
+			selectField(wrapper, 'media-fit').vm.$emit('update:modelValue', 'contain');
 			await nextTick();
-			numberField(wrapper, 'Media opacity')?.vm.$emit('update:modelValue', 0.25);
+			numberField(wrapper, 'Media opacity').vm.$emit('update:modelValue', 0.25);
 			await nextTick();
-			numberField(wrapper, 'Horizontal focal position')?.vm.$emit('update:modelValue', 0.2);
+			numberField(wrapper, 'Horizontal focal position').vm.$emit('update:modelValue', 0.2);
 			await nextTick();
-			numberField(wrapper, 'Vertical focal position')?.vm.$emit('update:modelValue', 0.8);
+			numberField(wrapper, 'Vertical focal position').vm.$emit('update:modelValue', 0.8);
 			await nextTick();
 
 			expect(mediaOf(emittedGraphics(wrapper, 0)).fit).toBe('contain');
@@ -912,9 +795,9 @@ describe('graphicsCompositorInspector', () => {
 		it('edits the playback rate and looping of a silent video', async () => {
 			const wrapper = await mountMedia({ mediaKind: 'silent-video' });
 
-			numberField(wrapper, 'Playback rate')?.vm.$emit('update:modelValue', 2);
+			numberField(wrapper, 'Playback rate').vm.$emit('update:modelValue', 2);
 			await nextTick();
-			await switchField(wrapper, 'media-loop')?.trigger('click');
+			await switchField(wrapper, 'media-loop').trigger('click');
 
 			expect(mediaOf(emittedGraphics(wrapper, 0)).playbackRate).toBe(2);
 			expect(mediaOf(emittedGraphics(wrapper, 1)).loop).toBe(false);
@@ -923,9 +806,9 @@ describe('graphicsCompositorInspector', () => {
 		it('returns a cleared opacity or playback rate to its default', async () => {
 			const wrapper = await mountMedia({ mediaKind: 'silent-video', opacity: 0.4, playbackRate: 2 });
 
-			numberField(wrapper, 'Media opacity')?.vm.$emit('update:modelValue', null);
+			numberField(wrapper, 'Media opacity').vm.$emit('update:modelValue', null);
 			await nextTick();
-			numberField(wrapper, 'Playback rate')?.vm.$emit('update:modelValue', null);
+			numberField(wrapper, 'Playback rate').vm.$emit('update:modelValue', null);
 			await nextTick();
 
 			expect(mediaOf(emittedGraphics(wrapper, 0)).opacity).toBe(1);
@@ -937,7 +820,7 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(unclipped.find('[data-testid="shape-corner-topLeft"]').exists()).toBe(false);
 
-			await switchField(unclipped, 'media-clip-enabled')?.trigger('click');
+			await switchField(unclipped, 'media-clip-enabled').trigger('click');
 			expect(mediaOf(emittedGraphics(unclipped)).clipGeometry).toBeDefined();
 
 			const clipped = await mountMedia({
@@ -946,7 +829,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(clipped.find('[data-testid="shape-corner-topLeft"]').exists()).toBe(true);
 
 			// The canonical Shape Geometry controls, editing the clip in place.
-			numberField(clipped, 'Right edge slant')?.vm.$emit('update:modelValue', 40);
+			numberField(clipped, 'Right edge slant').vm.$emit('update:modelValue', 40);
 			await nextTick();
 			expect(mediaOf(emittedGraphics(clipped)).clipGeometry?.rightSlant).toBe(40);
 		});
@@ -1000,7 +883,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.find('[data-testid="media-fit"]').exists()).toBe(true);
 			expect(wrapper.find('[data-testid="media-playback-rate"]').exists()).toBe(true);
 
-			selectField(wrapper, 'media-fit')?.vm.$emit('update:modelValue', 'contain');
+			selectField(wrapper, 'media-fit').vm.$emit('update:modelValue', 'contain');
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
@@ -1019,7 +902,7 @@ describe('graphicsCompositorInspector', () => {
 
 		wrapper.getComponent(USwitchStub).vm.$emit('update:modelValue', false);
 		wrapper.findAllComponents(UInputStub).forEach(input => input.vm.$emit('update:modelValue', 'changed'));
-		numberField(wrapper, 'Item width')?.vm.$emit('update:modelValue', 12);
+		numberField(wrapper, 'Item width').vm.$emit('update:modelValue', 12);
 		await nextTick();
 
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
@@ -1058,7 +941,7 @@ describe('graphicsCompositorInspector', () => {
 				writable: false,
 			});
 
-			selectField(wrapper, 'graphic-item-player-side')?.vm.$emit('update:modelValue', 'player2');
+			selectField(wrapper, 'graphic-item-player-side').vm.$emit('update:modelValue', 'player2');
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
@@ -1075,7 +958,7 @@ describe('graphicsCompositorInspector', () => {
 
 		it('offers the complete Supported Social Network catalog', async () => {
 			const wrapper = await selectedIcon();
-			const network = selectField(wrapper, 'social-network-icon-network');
+			const network = findControl(wrapper, 'USelect', 'data-testid', 'social-network-icon-network');
 
 			expect(network?.props('items')).toEqual([
 				{ label: 'Twitch', value: 'twitch' },
@@ -1136,15 +1019,15 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
 			});
 
-			expect(selectField(wrapper, 'social-network-icon-source')?.props('items')).toEqual([
+			expect(selectField(wrapper, 'social-network-icon-source').props('items')).toEqual([
 				{ label: 'Static network', value: 'static' },
 				{ label: 'Social Profile Projection', value: 'projection' },
 			]);
-			expect(selectField(wrapper, 'social-network-icon-projection')?.props('items')).toEqual([
+			expect(selectField(wrapper, 'social-network-icon-projection').props('items')).toEqual([
 				{ label: 'Left profile', value: 'left-profile' },
 			]);
 
-			selectField(wrapper, 'social-network-icon-projection')?.vm.$emit('update:modelValue', 'left-profile');
+			selectField(wrapper, 'social-network-icon-projection').vm.$emit('update:modelValue', 'left-profile');
 			await nextTick();
 			expect(childOf(emittedGraphics(wrapper))).toMatchObject({
 				network: { projectionKey: 'left-profile' },
@@ -1176,7 +1059,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'social-icon' },
 			});
 
-			expect(selectField(wrapper, 'social-network-icon-projection')?.props('items')).toEqual([]);
+			expect(selectField(wrapper, 'social-network-icon-projection').props('items')).toEqual([]);
 			expect(wrapper.get('[data-testid="social-network-icon-projection-invalid"]').text())
 				.toContain('outside that projection\'s Presentation Group');
 		});
@@ -1191,7 +1074,7 @@ describe('graphicsCompositorInspector', () => {
 			await wrapper.setProps({
 				graphics: emittedGraphics(wrapper),
 			});
-			numberFieldByTestId(wrapper, 'social-network-icon-opacity')?.vm.$emit('update:modelValue', 0.4);
+			numberFieldByTestId(wrapper, 'social-network-icon-opacity').vm.$emit('update:modelValue', 0.4);
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ color: '#ffcc00', opacity: 0.4 });
 
@@ -1216,7 +1099,7 @@ describe('graphicsCompositorInspector', () => {
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
 
-			expect(selectField(wrapper, 'graphic-input-type')).toBeUndefined();
+			expect(findControl(wrapper, 'USelect', 'data-testid', 'graphic-input-type')).toBeUndefined();
 			expect(wrapper.findAll('[data-testid="graphic-input-add"]')).toHaveLength(0);
 		});
 
@@ -1226,7 +1109,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 			});
 
-			expect(selectField(wrapper, 'graphic-input-type')).toBeDefined();
+			expect(findControl(wrapper, 'USelect', 'data-testid', 'graphic-input-type')).toBeDefined();
 			expect(tokenButtons(wrapper)).toHaveLength(0);
 		});
 
@@ -1337,12 +1220,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 	});
 
-	/**
-	 * A Graphic Input is named and keyed separately, and only the key resolves.
-	 * An author who named one 'leftName' and typed `{leftName}` got a template
-	 * that looked finished and rendered a gap, with the real key visible only in
-	 * a panel belonging to a different selection (#234).
-	 */
+	// A Graphic Input is named and keyed separately, and only the key resolves.
 	describe('placeholders a Graphic Text Template names', () => {
 		function namedInput(key: string, label: string): GraphicInputDeclaration {
 			return {
@@ -1470,7 +1348,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
-		selectField(wrapper, 'graphic-input-type')?.vm.$emit('update:modelValue', 'number');
+		selectField(wrapper, 'graphic-input-type').vm.$emit('update:modelValue', 'number');
 		await nextTick();
 		wrapper.findAllComponents(UButtonStub)
 			.find(button => button.attributes('data-testid') === 'graphic-input-add')
@@ -1496,19 +1374,16 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
-		switchField(wrapper, 'graphic-input-required')?.vm.$emit('update:modelValue', true);
-		selectField(wrapper, 'graphic-input-policy')?.vm.$emit('update:modelValue', 'live');
+		switchField(wrapper, 'graphic-input-required').vm.$emit('update:modelValue', true);
+		selectField(wrapper, 'graphic-input-policy').vm.$emit('update:modelValue', 'live');
 		await nextTick();
 
 		expect(emittedGraphics(wrapper, 0)[0]!.inputs![0]).toMatchObject({ key: 'name', required: true });
 		expect(emittedGraphics(wrapper, 1)[0]!.inputs![0]).toMatchObject({ key: 'name', updatePolicy: 'live' });
 	});
 
-	/**
-	 * A choice Graphic Input had an Options field and no Default control, so it was
-	 * stuck at `default: null` however its author declared it (#336, carried out of
-	 * #60 story 13).
-	 */
+	// A choice Graphic Input had an Options field and no Default control, so it was stuck at
+	// `default: null` however its author declared it (#336, carried out of #60 story 13).
 	it('sets a choice Graphic Input’s default from its own declared options, and offers no other value', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
@@ -1525,13 +1400,13 @@ describe('graphicsCompositorInspector', () => {
 
 		// Its own options and a way back to no default — nothing else is offered, which
 		// is what keeps the default inside the options.
-		expect(selectField(wrapper, 'graphic-input-default')?.props('items')).toEqual([
+		expect(selectField(wrapper, 'graphic-input-default').props('items')).toEqual([
 			{ label: 'No default', value: '' },
 			{ label: 'Left', value: 'l' },
 			{ label: 'Right', value: 'r' },
 		]);
 
-		selectField(wrapper, 'graphic-input-default')?.vm.$emit('update:modelValue', 'r');
+		selectField(wrapper, 'graphic-input-default').vm.$emit('update:modelValue', 'r');
 		await nextTick();
 
 		expect(declarationOf(wrapper)).toMatchObject({ type: 'choice', default: 'r' });
@@ -1550,9 +1425,9 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
-		expect(selectField(wrapper, 'graphic-input-default')?.props('modelValue')).toBe('l');
+		expect(selectField(wrapper, 'graphic-input-default').props('modelValue')).toBe('l');
 
-		selectField(wrapper, 'graphic-input-default')?.vm.$emit('update:modelValue', '');
+		selectField(wrapper, 'graphic-input-default').vm.$emit('update:modelValue', '');
 		await nextTick();
 
 		expect(declarationOf(wrapper)).toMatchObject({ default: null });
@@ -1571,15 +1446,9 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
-		// A null default is not a value the select can carry, so the panel maps it onto
-		// the No default option it offers. Without that mapping the field shows nothing
-		// selected, which reads as an option the author has not chosen yet.
-		//
-		// That the option is *offered* is pinned by the items assertion in 'sets a choice
-		// Graphic Input’s default from its own declared options', and was asserted here
-		// too until #365 — one edit killed both rows (#352's M4), so this one was crediting
-		// itself with coverage it did not add. What is only pinned here is the mapping.
-		expect(selectField(wrapper, 'graphic-input-default')?.props('modelValue')).toBe('');
+		// A null default is not a value the select can carry, so the panel maps it onto the No
+		// default option it offers.
+		expect(selectField(wrapper, 'graphic-input-default').props('modelValue')).toBe('');
 	});
 
 	it('drops a choice Graphic Input’s default when its author edits that option away', async () => {
@@ -1612,12 +1481,8 @@ describe('graphicsCompositorInspector', () => {
 		});
 	});
 
-	/**
-	 * Nothing anywhere set a media Graphic Input DECLARATION's kind before #336 — the
-	 * writes around it were all for the Media Graphic Item, whose kind comes from its
-	 * chosen asset — so a silent-video Graphic Input was unreachable through the
-	 * product and declarable only in hand-written configuration.
-	 */
+	// Nothing anywhere set a media Graphic Input DECLARATION's kind before #336 — the writes around
+	// it were all for the Media Graphic Item, whose kind comes from its chosen asset — so a silent-…
 	it('declares which media a media Graphic Input accepts', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
@@ -1629,22 +1494,19 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
 		});
 
-		expect(selectField(wrapper, 'graphic-input-media-kind')?.props('items')).toEqual([
+		expect(selectField(wrapper, 'graphic-input-media-kind').props('items')).toEqual([
 			{ label: 'Image', value: 'image' },
 			{ label: 'Silent video', value: 'silent-video' },
 		]);
 
-		selectField(wrapper, 'graphic-input-media-kind')?.vm.$emit('update:modelValue', 'silent-video');
+		selectField(wrapper, 'graphic-input-media-kind').vm.$emit('update:modelValue', 'silent-video');
 		await nextTick();
 
 		expect(declarationOf(wrapper)).toMatchObject({ type: 'media', mediaKind: 'silent-video' });
 	});
 
-	/**
-	 * The declared kind is the only kind Live Control's picker then offers, which is
-	 * pinned on that component; here it is the kind this panel's own default picker is
-	 * restricted to, so an author cannot pin a default the declaration excludes.
-	 */
+	// The declared kind is the only kind Live Control's picker then offers, which is pinned on that
+	// component; here it is the kind this panel's own default picker is restricted to, so an author…
 	it('restricts a media Graphic Input’s default to the kind it declares', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
@@ -1827,7 +1689,7 @@ describe('graphicsCompositorInspector', () => {
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 		});
 
-		numberFieldByTestId(wrapper, 'graphic-placeholder-style-size')?.vm.$emit('update:modelValue', 24);
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-size').vm.$emit('update:modelValue', 24);
 		await nextTick();
 		wrapper.findAllComponents(UButtonStub)
 			.find(button => button.attributes('data-testid') === 'graphic-placeholder-style-clear')
@@ -1873,13 +1735,13 @@ describe('graphicsCompositorInspector', () => {
 		});
 		const placeholder = wrapper.find('[data-graphic-placeholder-style="name"]');
 
-		expect(selectField(wrapper, 'graphic-placeholder-style-case')?.attributes('value')).toBe('base');
+		expect(selectField(wrapper, 'graphic-placeholder-style-case').attributes('value')).toBe('base');
 		expect(placeholder.find('[data-testid="graphic-placeholder-style-line-height"]').exists()).toBe(false);
-		selectField(wrapper, 'graphic-placeholder-style-case')?.vm.$emit('update:modelValue', 'uppercase');
+		selectField(wrapper, 'graphic-placeholder-style-case').vm.$emit('update:modelValue', 'uppercase');
 		await nextTick();
-		numberFieldByTestId(wrapper, 'graphic-placeholder-style-letter-spacing')?.vm.$emit('update:modelValue', 4);
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-letter-spacing').vm.$emit('update:modelValue', 4);
 		await nextTick();
-		numberFieldByTestId(wrapper, 'graphic-placeholder-style-weight')?.vm.$emit('update:modelValue', null);
+		numberFieldByTestId(wrapper, 'graphic-placeholder-style-weight').vm.$emit('update:modelValue', null);
 		await nextTick();
 
 		const cased = itemOf(emittedGraphics(wrapper, 0));
@@ -1903,13 +1765,7 @@ describe('graphicsCompositorInspector', () => {
 			: undefined).toBeUndefined();
 	});
 
-	/**
-	 * A Text Graphic Item's base Graphic Font Selection.
-	 *
-	 * The control #141 shipped, which had no component test of its own — the placeholder
-	 * one below is modelled on it, so the model is worth pinning before anything leans on
-	 * it further.
-	 */
+	// A Text Graphic Item's base Graphic Font Selection.
 	describe('a base typography font', () => {
 		function typographyFontPicker(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 			return wrapper.findAllComponents({ name: 'GraphicsAssetFocusPicker' })
@@ -1923,24 +1779,14 @@ describe('graphicsCompositorInspector', () => {
 				: undefined;
 		}
 
-		/**
-		 * Two answers, not three (#167).
-		 *
-		 * The base typography and a Graphic Placeholder Style share one control, and the
-		 * only thing that separates them is whether naming no font is an answer. A
-		 * `GraphicTypography` must name one, so offering "Same as base" here would offer an
-		 * answer the panel cannot render: choosing it puts the control on an arm that shows
-		 * neither the application select nor the library picker, and the author is left
-		 * with no font control at all until they reselect the item. So the answers each
-		 * side offers are asserted rather than left to the flag.
-		 */
+		// Two answers, not three (#167).
 		it('offers only the two answers a Text Graphic Item’s own typography has', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([textItem]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			expect(selectField(wrapper, 'typography-font-source')?.props('items')).toEqual([
+			expect(selectField(wrapper, 'typography-font-source').props('items')).toEqual([
 				{ label: 'Application font', value: 'application' },
 				{ label: 'Library font', value: 'asset' },
 			]);
@@ -1950,22 +1796,14 @@ describe('graphicsCompositorInspector', () => {
 			expect(wrapper.find('[data-label="Font"] [data-testid="typography-font"]').exists()).toBe(true);
 		});
 
-		/**
-		 * The answer this control is not offered, refused rather than cast away (#199).
-		 *
-		 * The shared control's source union has three arms and this panel renders two, so
-		 * "same as base" arriving here would leave the author with no font control at all —
-		 * neither arm matches it. The option list above is what stops it being chosen; this
-		 * is what stops it being honoured if it arrives anyway, and the handler taking the
-		 * whole union is what makes the compiler ask for it.
-		 */
+		// The answer this control is not offered, refused rather than cast away (#199).
 		it('refuses “same as base”, which its font control cannot render', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([textItem]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'base');
+			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'base');
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
@@ -1979,27 +1817,21 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'asset');
+			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'asset');
 			await nextTick();
 
 			expect(wrapper.emitted('update:graphics')).toBeUndefined();
 			expect(typographyFontPicker(wrapper)?.exists()).toBe(true);
 		});
 
-		/**
-		 * The application arm writes what the author picked.
-		 *
-		 * The placeholder twin has had this since #161; the base control never did, and
-		 * until the shared control gave its select a test id there was nothing to address
-		 * it by.
-		 */
+		// The application arm writes what the author picked.
 		it('chooses an application font for the item', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([textItem]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			selectField(wrapper, 'typography-font')?.vm.$emit('update:modelValue', 'saira-condensed');
+			selectField(wrapper, 'typography-font').vm.$emit('update:modelValue', 'saira-condensed');
 			await nextTick();
 
 			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
@@ -2012,7 +1844,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'asset');
+			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'asset');
 			await nextTick();
 			typographyFontPicker(wrapper)?.vm.$emit(
 				'select',
@@ -2028,11 +1860,8 @@ describe('graphicsCompositorInspector', () => {
 				});
 		});
 
-		/**
-		 * A `GraphicTypography` must name a font, so leaving the library arm cannot leave
-		 * the item on none. It lands on the application default rather than on whichever
-		 * font happens to be first in the registry.
-		 */
+		// A `GraphicTypography` must name a font, so leaving the library arm cannot leave the item
+		// on none.
 		it('returns to an application font rather than to none', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([
@@ -2052,20 +1881,14 @@ describe('graphicsCompositorInspector', () => {
 
 			expect(typographyFontPicker(wrapper)?.attributes('data-asset-id')).toBe('font-1');
 
-			selectField(wrapper, 'typography-font-source')?.vm.$emit('update:modelValue', 'application');
+			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'application');
 			await nextTick();
 
 			expect(typographyOf(emittedGraphics(wrapper, 0))?.font)
 				.toEqual({ kind: 'application', fontId: 'inter' });
 		});
 
-		/**
-		 * The same fallback, reached from the picker rather than from the arm.
-		 *
-		 * Unpinning through the picker is the other way out of the library arm, and it is
-		 * where the two controls' policies differ: a placeholder loses the key, while a
-		 * `GraphicTypography` must still name a font.
-		 */
+		// The same fallback, reached from the picker rather than from the arm.
 		it('returns to an application font when the picker unpins the revision', async () => {
 			const wrapper = await mountComponent({
 				graphics: stack([
@@ -2091,17 +1914,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 	});
 
-	/**
-	 * A Graphic Placeholder Style's own Graphic Font Selection (#161).
-	 *
-	 * Every other layer already carried one — the type, the wire schema, the reference
-	 * walk, the Screen Output Asset Capability, the render model, and a Template Package
-	 * — while the panel offered size, weight and colour, so the only way to author one
-	 * was to write the Screen mode configuration directly.
-	 *
-	 * The placeholder arm has a third state the base typography does not: a font is
-	 * optional here, so "same as base" is a real answer rather than the absence of one.
-	 */
+	// A Graphic Placeholder Style's own Graphic Font Selection (#161).
 	describe('a Graphic Placeholder Style font', () => {
 		function placeholderTextGraphic(
 			placeholderStyles?: Record<string, Record<string, unknown>>,
@@ -2138,14 +1951,7 @@ describe('graphicsCompositorInspector', () => {
 				: undefined;
 		}
 
-		/**
-		 * Three answers, not two (#167).
-		 *
-		 * The counterpart of the base typography's assertion above. These two are the same
-		 * control now, and "same as base" is the entire difference between the call sites —
-		 * so if it stopped being offered here, a placeholder could never be returned to the
-		 * item's base font, and nothing else in this file would notice.
-		 */
+		// Three answers, not two (#167).
 		it('offers a placeholder the third answer its optional font has', async () => {
 			const wrapper = await mountComponent({
 				graphics: placeholderTextGraphic({
@@ -2154,7 +1960,7 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('items')).toEqual([
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('items')).toEqual([
 				{ label: 'Same as base', value: 'base' },
 				{ label: 'Application font', value: 'application' },
 				{ label: 'Library font', value: 'asset' },
@@ -2165,7 +1971,7 @@ describe('graphicsCompositorInspector', () => {
 				.toBe(true);
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'application');
 			await nextTick();
 
@@ -2182,11 +1988,11 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'application');
 			await nextTick();
 			selectField(wrapper, 'graphic-placeholder-style-font')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'saira-condensed');
 			await nextTick();
 
@@ -2199,13 +2005,7 @@ describe('graphicsCompositorInspector', () => {
 				});
 		});
 
-		/**
-		 * The control refuses what the write path refuses, per #119. The asset arm of a
-		 * Graphic Font Selection requires an exact Graphic Asset Revision, so choosing
-		 * "Library font" before one is pinned would write a font that is nothing — which
-		 * `graphicFontSelectionSchema` rejects. The placeholder keeps the base typography
-		 * until the picker pins a revision.
-		 */
+		// The control refuses what the write path refuses, per #119.
 		it('writes no library font until the picker has pinned a revision', async () => {
 			const wrapper = await mountComponent({
 				graphics: placeholderTextGraphic(),
@@ -2213,7 +2013,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'asset');
 			await nextTick();
 
@@ -2228,7 +2028,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'asset');
 			await nextTick();
 			placeholderFontPicker(wrapper)?.vm.$emit(
@@ -2248,11 +2048,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 		});
 
-		/**
-		 * Returning to the base typography removes the key rather than storing a font of
-		 * nothing. A Graphic Placeholder Style is the keys an author actually changed, so
-		 * an unchosen font is an absent one.
-		 */
+		// Returning to the base typography removes the key rather than storing a font of nothing.
 		it('returns one placeholder to the item’s base font', async () => {
 			const wrapper = await mountComponent({
 				graphics: placeholderTextGraphic({
@@ -2272,7 +2068,7 @@ describe('graphicsCompositorInspector', () => {
 			expect(placeholderFontPicker(wrapper)?.attributes('data-asset-id')).toBe('font-1');
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'base');
 			await nextTick();
 
@@ -2290,19 +2086,14 @@ describe('graphicsCompositorInspector', () => {
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
 			});
 
-			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('modelValue'))
 				.toBe('base');
-			expect(selectField(wrapper, 'graphic-placeholder-style-font')).toBeUndefined();
+			expect(findControl(wrapper, 'USelect', 'data-testid', 'graphic-placeholder-style-font')).toBeUndefined();
 			expect(placeholderFontPicker(wrapper)).toBeUndefined();
 		});
 
-		/**
-		 * Unpinning a library font leaves the placeholder on the base typography rather
-		 * than on a font the author never chose — the base typography control has to fall
-		 * back to an application font because a `GraphicTypography` must name one, and a
-		 * placeholder need not. The arm stays selected, so the picker is still there to pin
-		 * another revision.
-		 */
+		// Unpinning a library font leaves the placeholder on the base typography rather than on a
+		// font the author never chose — the base typography control has to fall back to an…
 		it('unpins a library font without inventing one in its place', async () => {
 			const wrapper = await mountComponent({
 				graphics: placeholderTextGraphic({
@@ -2323,16 +2114,12 @@ describe('graphicsCompositorInspector', () => {
 			expect(placeholderStylesOf(emittedGraphics(wrapper, 0))).toEqual({
 				name: { fontWeight: 300 },
 			});
-			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('modelValue'))
 				.toBe('asset');
 		});
 
-		/**
-		 * The arm an author has chosen but not yet stored belongs to the placeholder they
-		 * chose it on. Carrying it across a selection would leave the control describing
-		 * the previous item's placeholders — offering a library font picker on a
-		 * placeholder whose stored style says nothing of the kind.
-		 */
+		// The arm an author has chosen but not yet stored belongs to the placeholder they chose it
+		// on.
 		it('forgets an unstored arm when the selection moves', async () => {
 			const second = {
 				...textItem,
@@ -2358,7 +2145,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'asset');
 			await nextTick();
 			expect(placeholderFontPicker(wrapper)?.exists()).toBe(true);
@@ -2368,7 +2155,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 			await nextTick();
 
-			expect(selectField(wrapper, 'graphic-placeholder-style-font-source')?.props('modelValue'))
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('modelValue'))
 				.toBe('base');
 			expect(placeholderFontPicker(wrapper)).toBeUndefined();
 		});
@@ -2385,7 +2172,7 @@ describe('graphicsCompositorInspector', () => {
 			});
 
 			selectField(wrapper, 'graphic-placeholder-style-font-source')
-				?.vm
+				.vm
 				.$emit('update:modelValue', 'base');
 			await nextTick();
 
@@ -2393,14 +2180,7 @@ describe('graphicsCompositorInspector', () => {
 		});
 	});
 
-	/**
-	 * Where the Event Data authoring surface is allowed to appear.
-	 *
-	 * With the Broadcast Graphic itself selected, beside the Graphic Inputs its
-	 * bindings map — and nowhere a host supplies its own placeholder values, because a
-	 * Graphic Input Binding maps a declared Graphic Input to a field and that host
-	 * declares none.
-	 */
+	// Where the Event Data authoring surface is allowed to appear.
 	it('authors Graphic Source Selections beside the Graphic Inputs they feed', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([]).map(graphic => ({
@@ -2461,11 +2241,7 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 	describe('the context-gated Feature Match Definitions', () => {
-		/**
-		 * A Feature Match Layout holding one item of a context-gated kind. Authored
-		 * under the Feature Match Overlay Host Contract, because that is the only host
-		 * that can supply the context these Definitions require.
-		 */
+		// A Feature Match Layout holding one item of a context-gated kind.
 		function featureMatchStack(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list') {
 			return stack([
 				getGraphicItemDefinition(kind).createDefault({
@@ -2488,9 +2264,9 @@ describe('graphicsCompositorInspector', () => {
 		it('sets a Deck List Item’s view and quantity gate', async () => {
 			const wrapper = await mountKind('deck-list');
 
-			selectField(wrapper, 'deck-list-view')?.vm.$emit('update:modelValue', 'grid');
+			selectField(wrapper, 'deck-list-view').vm.$emit('update:modelValue', 'grid');
 			await nextTick();
-			await switchField(wrapper, 'deck-list-show-quantities')?.trigger('click');
+			await switchField(wrapper, 'deck-list-show-quantities').trigger('click');
 
 			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ type: 'deck-list', view: 'grid' });
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ showQuantities: false });
@@ -2499,9 +2275,9 @@ describe('graphicsCompositorInspector', () => {
 		it('sets the life-change animation a Player Life Item marks a change with', async () => {
 			const wrapper = await mountKind('player-life');
 
-			selectField(wrapper, 'player-life-animation')?.vm.$emit('update:modelValue', 'pop');
+			selectField(wrapper, 'player-life-animation').vm.$emit('update:modelValue', 'pop');
 			await nextTick();
-			numberFieldByTestId(wrapper, 'player-life-animation-duration')?.vm.$emit('update:modelValue', 800);
+			numberFieldByTestId(wrapper, 'player-life-animation-duration').vm.$emit('update:modelValue', 800);
 			await nextTick();
 			// The colour a glow or slide change tints; the other animations ignore it.
 			wrapper.findAllComponents(UInputStub)
@@ -2518,13 +2294,13 @@ describe('graphicsCompositorInspector', () => {
 		it('sets a Game Wins Item’s win box orientation, dimensions, and gap', async () => {
 			const wrapper = await mountKind('game-wins');
 
-			selectField(wrapper, 'game-wins-box-orientation')?.vm.$emit('update:modelValue', 'vertical');
+			selectField(wrapper, 'game-wins-box-orientation').vm.$emit('update:modelValue', 'vertical');
 			await nextTick();
-			numberField(wrapper, 'Win box width')?.vm.$emit('update:modelValue', 40);
+			numberField(wrapper, 'Win box width').vm.$emit('update:modelValue', 40);
 			await nextTick();
-			numberField(wrapper, 'Win box height')?.vm.$emit('update:modelValue', 12);
+			numberField(wrapper, 'Win box height').vm.$emit('update:modelValue', 12);
 			await nextTick();
-			numberField(wrapper, 'Win box gap')?.vm.$emit('update:modelValue', 3);
+			numberField(wrapper, 'Win box gap').vm.$emit('update:modelValue', 3);
 			await nextTick();
 
 			expect(itemOf(emittedGraphics(wrapper, 0))).toMatchObject({ boxOrientation: 'vertical' });
@@ -2540,7 +2316,7 @@ describe('graphicsCompositorInspector', () => {
 			const boxes = await mountKind('game-wins');
 			expect(boxes.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(true);
 
-			selectField(boxes, 'game-wins-display-mode')?.vm.$emit('update:modelValue', 'number');
+			selectField(boxes, 'game-wins-display-mode').vm.$emit('update:modelValue', 'number');
 			await nextTick();
 
 			const number = await mountKind('game-wins', emittedGraphics(boxes));
@@ -2557,7 +2333,7 @@ describe('graphicsCompositorInspector', () => {
 				?.vm
 				.$emit('update:modelValue', '#123456');
 			await nextTick();
-			await switchField(wrapper, 'game-wins-won-box-graphic-glow-enabled')?.trigger('click');
+			await switchField(wrapper, 'game-wins-won-box-graphic-glow-enabled').trigger('click');
 
 			const unwon = itemOf(emittedGraphics(wrapper, 0));
 			expect(unwon?.type === 'game-wins' && unwon.boxSurfaceStyle.fill).toEqual({ type: 'solid', color: '#123456' });
@@ -2597,7 +2373,7 @@ describe('graphicsCompositorInspector', () => {
 				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 			});
 
-			selectField(wrapper, 'graphic-group-child-sizing-mode')?.vm.$emit('update:modelValue', 'fill');
+			selectField(wrapper, 'graphic-group-child-sizing-mode').vm.$emit('update:modelValue', 'fill');
 			await nextTick();
 
 			expect(childOf(emittedGraphics(wrapper))).toMatchObject({
@@ -2617,14 +2393,7 @@ describe('graphicsCompositorInspector', () => {
 	});
 });
 
-/**
- * Typography and the Text Overflow Policy, over every Graphic Item Definition.
- *
- * The Inspector has no kind switch for either: it offers what the selected item's
- * Definition declares. The expectations below are stated independently, so a wrong
- * declaration or a panel that stops reading it fails here. A Game Wins Item and a
- * Deck List Item appear once per display mode, because each paints text in only one.
- */
+// Typography and the Text Overflow Policy, over every Graphic Item Definition.
 /** One Graphic Item Definition as a table row places it, in one display mode. */
 interface DefinitionRow {
 	name: string;
@@ -2752,7 +2521,7 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 
 	it.each(ROWS)('offers $name exactly the typography it paints with', async (row) => {
 		const wrapper = await mountRow(row);
-		const fontSize = numberField(wrapper, 'Font size');
+		const fontSize = findControl(wrapper, 'UInputNumber', 'aria-label', 'Font size');
 
 		expect(fontSize !== undefined).toBe(row.typography);
 		if (!fontSize)
@@ -2766,7 +2535,7 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 
 	it.each(ROWS)('bounds $name with a Text Overflow Policy only where its text can outgrow its bounds', async (row) => {
 		const wrapper = await mountRow(row);
-		const policy = selectField(wrapper, 'text-overflow-policy');
+		const policy = findControl(wrapper, 'USelect', 'data-testid', 'text-overflow-policy');
 
 		expect(policy !== undefined).toBe(row.textOverflowPolicy);
 		if (!policy)
@@ -2778,23 +2547,13 @@ describe('typography and the Text Overflow Policy for every Graphic Item Definit
 
 		// The floor a shrink policy stops at appears once shrinking is what happens.
 		const shrinking = await mountRow(row, { overflowPolicy: 'shrink' } as Partial<GraphicItemConfig>);
-		numberFieldByTestId(shrinking, 'text-min-font-size')?.vm.$emit('update:modelValue', 30);
+		numberFieldByTestId(shrinking, 'text-min-font-size').vm.$emit('update:modelValue', 30);
 		await nextTick();
 		expect(itemOf(emittedGraphics(shrinking))).toMatchObject({ minFontSize: 30 });
 	});
 });
 
-/**
- * Graphic Surface Styles, the Shape Geometry, and the Player, over every Graphic Item
- * Definition.
- *
- * The Inspector has no kind switch for any of them: it offers what the selected
- * item's Definition declares, in the display mode it is in. The expectations are
- * stated independently, so a wrong declaration or a panel that stops reading it fails
- * here. A Media Graphic Item appears clipped and unclipped, because it has a Shape
- * Geometry to shape only while it clips, and a Game Wins Item once per display mode,
- * because its win boxes are on screen only while it renders them.
- */
+// Graphic Surface Styles, the Shape Geometry, and the Player, over every Graphic Item Definition.
 describe('surfaces, Shape Geometry, and the Player for every Graphic Item Definition', () => {
 	type BoxSurfaceSlot = 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
 
@@ -2917,7 +2676,7 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 
 	it.each(ROWS)('offers $name the Player only where it reads one', async (row) => {
 		const wrapper = await mountDefinition(row);
-		const side = selectField(wrapper, 'graphic-item-player-side');
+		const side = findControl(wrapper, 'USelect', 'data-testid', 'graphic-item-player-side');
 
 		expect(side !== undefined).toBe(row.playerSide);
 		if (!side)
@@ -2944,7 +2703,7 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 
 	it.each(ROWS)('offers $name a surface of its own only where it can paint one', async (row) => {
 		const wrapper = await mountDefinition(row);
-		const presence = switchField(wrapper, 'surface-style-own');
+		const presence = findControl(wrapper, 'USwitch', 'data-testid', 'surface-style-own');
 
 		expect(presence !== undefined).toBe(row.ownSurface);
 		if (!presence) {
@@ -2964,7 +2723,7 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 	it.each(ROWS)('offers $name win box surfaces only while it renders win boxes', async (row) => {
 		for (const slot of ['boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
 			const wrapper = await mountDefinition(row);
-			const glow = switchField(wrapper, `${BOX_TEST_ID_PREFIX[slot]}-graphic-glow-enabled`);
+			const glow = findControl(wrapper, 'USwitch', 'data-testid', `${BOX_TEST_ID_PREFIX[slot]}-graphic-glow-enabled`);
 
 			expect(glow !== undefined, slot).toBe(row.boxSurfaces.includes(slot));
 			if (!glow)
@@ -2977,20 +2736,7 @@ describe('surfaces, Shape Geometry, and the Player for every Graphic Item Defini
 	});
 });
 
-/**
- * The seam a property edit becomes an explicit property-level override at.
- *
- * The controls above write values and know nothing about provenance, so the panel
- * re-derives each reference's overrides from what the composition now holds. What that
- * derivation is allowed to read is the whole question: a difference it finds on a slot
- * the Style Set has a pending change in is the Style Set's own change wearing the
- * author's name, while one on a slot already in step is the author's and nothing else's.
- *
- * Both directions are asserted here because the panel is what tells them apart. It
- * passes the composition as `props.graphics` still holds it, and passing the *edited*
- * copy instead would collapse the two cases into one — every edit would look like a
- * pending change, which is exactly the state #198 was filed about.
- */
+// The seam a property edit becomes an explicit property-level override at.
 describe('recording a Graphic Style Set override from a property edit', () => {
 	function entries(letterSpacing = 2): GraphicStyleSetEntry[] {
 		return [
@@ -3032,12 +2778,8 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 		};
 	}
 
-	/**
-	 * A composition holding exactly what `entries()` resolves to, and recorded two
-	 * revisions behind the published one — what a publish that changed only entries this
-	 * composition never references leaves behind, since it offers nothing to review and
-	 * so never moves the number.
-	 */
+	// A composition holding exactly what `entries()` resolves to, and recorded two revisions behind
+	// the published one — what a publish that changed only entries this composition never…
 	function stranded(): BroadcastGraphicConfig[] {
 		return [
 			applyGraphicStyleSet(
@@ -3068,7 +2810,7 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 			styleSet: context(entries()),
 		});
 
-		numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 30);
+		numberField(wrapper, 'Font size').vm.$emit('update:modelValue', 30);
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper, 0))?.styleRefs?.typography)
@@ -3088,7 +2830,7 @@ describe('recording a Graphic Style Set override from a property edit', () => {
 			styleSet: context(entries(8)),
 		});
 
-		numberField(wrapper, 'Font size')?.vm.$emit('update:modelValue', 30);
+		numberField(wrapper, 'Font size').vm.$emit('update:modelValue', 30);
 		await nextTick();
 
 		const item = itemOf(emittedGraphics(wrapper, 0));

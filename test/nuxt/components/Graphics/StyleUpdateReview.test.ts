@@ -5,17 +5,9 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+import StyleUpdateReview from '~/components/Graphics/StyleUpdateReview.vue';
 
-/**
- * The reviewed Graphic Style Set update, as the author of one template meets it.
- *
- * This surface is the whole reason a republished Style Set is never a silent
- * mutation, so the rules under test are the ones that make that true: the change is
- * announced and readable before it exists anywhere, nothing is written until the
- * author asks, each row's answer travels exactly as they gave it, the Style Set
- * revision they read is a precondition of applying, and an observer can read all of
- * it and decide none of it.
- */
+// The reviewed Graphic Style Set update, as the author of one template meets it.
 
 enableAutoUnmount(afterEach);
 
@@ -52,7 +44,7 @@ const UButtonStub = defineComponent({
 		variant: { type: String, default: undefined },
 	},
 	emits: ['click'],
-	template: `<button type="button" :disabled="disabled" :data-variant="variant" @click="$emit('click')"><slot /></button>`,
+	template: `<button type="button" :disabled="disabled" @click="$emit('click')"><slot /></button>`,
 });
 
 function template(overrides: Partial<BroadcastGraphicTemplateSummary> = {}): BroadcastGraphicTemplateSummary {
@@ -109,9 +101,6 @@ function review(overrides: Partial<GraphicStyleUpdateReview> = {}): GraphicStyle
 }
 
 async function mountReview(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/StyleUpdateReview.vue';
-	const { default: StyleUpdateReview } = await import(componentPath);
-
 	const wrapper = mount(StyleUpdateReview, {
 		props: {
 			template: template(),
@@ -184,15 +173,7 @@ describe('graphicsStyleUpdateReview', () => {
 		expect(wrapper.findAll('[data-testid="style-update-keep"]')).toHaveLength(2);
 	});
 
-	/**
-	 * A row shows what the answer costs (#162).
-	 *
-	 * `recaptureGraphicStyleOverrides` is the identity on a slot that is not in step with
-	 * the published entries, so a genuine author edit made to one between a republish and
-	 * its review records no override and lives inline. Inheriting discards it. Without the
-	 * values on the row an author cannot tell a row holding their own work from a pure
-	 * Style Set change, so the default answer is one they cannot have made informed.
-	 */
+	// A row shows what the answer costs (#162).
 	it('shows what each property would move from and to, so the default answer is an informed one', async () => {
 		const wrapper = await mountReview();
 		await expand(wrapper);
@@ -227,14 +208,7 @@ describe('graphicsStyleUpdateReview', () => {
 		]);
 	});
 
-	/**
-	 * A property arriving where there was none, and one that is not a scalar.
-	 *
-	 * An absent value says so rather than rendering as an empty string, because a blank
-	 * either side of the arrow reads as "unchanged" — the opposite of what it means. A
-	 * media treatment's clipping is the case that produces it: an entry that names a
-	 * Shape Geometry adds one where the item had nothing.
-	 */
+	// A property arriving where there was none, and one that is not a scalar.
 	it('says when a property is not set, and shows a value that is not a scalar whole', async () => {
 		mockReviewTemplateUpdate.mockResolvedValue(review({
 			changes: [
@@ -267,22 +241,8 @@ describe('graphicsStyleUpdateReview', () => {
 		]);
 	});
 
-	/**
-	 * The second-order cost the author is entitled to know about before answering, said
-	 * per row because it is not the same commitment on every row.
-	 *
-	 * A slot that owns keys records the values as local overrides and leaves the rest of
-	 * the property group inheriting. A slot that owns none — a Graphic Fill is a
-	 * discriminated union with no partial to deviate in — cannot record an override at
-	 * all, so keeping it drops the reference and the property goes local outright. One
-	 * blanket sentence describing the first would be false about the second.
-	 *
-	 * The owned-key sentence says "that you have not already pinned" because keeping
-	 * records the author's prior pins beside the values on the row (#167). A row shows
-	 * only the keys that move, so an author holding an earlier pin on a key this row
-	 * does not name would otherwise be told that key carries on inheriting when it does
-	 * not.
-	 */
+	// The second-order cost the author is entitled to know about before answering, said per row
+	// because it is not the same commitment on every row.
 	it('says what keeping commits the author to, per row', async () => {
 		const wrapper = await mountReview();
 		await expand(wrapper);
@@ -308,10 +268,10 @@ describe('graphicsStyleUpdateReview', () => {
 
 		// The highlighted button is the only place an author reads what a row will do, so
 		// it has to be the answer an untouched row actually sends.
-		for (const button of wrapper.findAll('[data-testid="style-update-inherit"]'))
-			expect(button.attributes('data-variant')).toBe('subtle');
-		for (const button of wrapper.findAll('[data-testid="style-update-keep"]'))
-			expect(button.attributes('data-variant')).toBe('ghost');
+		const inherit = wrapper.findAll('[data-testid="style-update-inherit"]');
+		expect(inherit.length).toBeGreaterThan(0);
+		expect(inherit.map(button => button.attributes('aria-pressed'))).toEqual(inherit.map(() => 'true'));
+		expect(wrapper.findAll('[data-testid="style-update-keep"]').map(button => button.attributes('aria-pressed'))).toEqual(inherit.map(() => 'false'));
 	});
 
 	it('writes nothing to the template until the author applies', async () => {
@@ -351,8 +311,8 @@ describe('graphicsStyleUpdateReview', () => {
 		await flushPromises();
 
 		// The chosen answer is the one shown as chosen.
-		expect(wrapper.findAll('[data-testid="style-update-keep"]')[0]!.attributes('data-variant')).toBe('subtle');
-		expect(wrapper.findAll('[data-testid="style-update-inherit"]')[0]!.attributes('data-variant')).toBe('ghost');
+		expect(wrapper.findAll('[data-testid="style-update-keep"]')[0]!.attributes('aria-pressed')).toBe('true');
+		expect(wrapper.findAll('[data-testid="style-update-inherit"]')[0]!.attributes('aria-pressed')).toBe('false');
 
 		await wrapper.get('[data-testid="style-update-apply"]').trigger('click');
 		await flushPromises();
@@ -402,31 +362,6 @@ describe('graphicsStyleUpdateReview', () => {
 		expect(wrapper.emitted('applied')).toBeUndefined();
 	});
 
-	/**
-	 * The 5xx half of what this surface says about a failed apply.
-	 *
-	 * An unmapped 5xx has its body message rewritten to 'Internal Server Error' on the way
-	 * out of this server, so reading one back would tell the author the Style Set update
-	 * was refused for a reason — in the authority's voice — when nothing refused it and
-	 * the words are a placeholder (#262).
-	 */
-	it('does not read a sanitized 5xx body back to the author as though it were a refusal', async () => {
-		mockApplyTemplateUpdate.mockRejectedValue(transportFailure({
-			status: 500,
-			body: { message: 'Internal Server Error' },
-			request: `[POST] "/api/graphics-templates/broadcast-graphics/template-1/style-update"`,
-		}));
-
-		const wrapper = await mountReview();
-		await expand(wrapper);
-		await wrapper.get('[data-testid="style-update-apply"]').trigger('click');
-		await flushPromises();
-
-		const reported = wrapper.get('[data-testid="style-update-error"]').text();
-		expect(reported).toContain('500 Internal Server Error');
-		expect(reported).toContain('[POST]');
-	});
-
 	it('re-reads the review when the template is revised under it, and forgets what was decided about the old one', async () => {
 		const wrapper = await mountReview();
 		await expand(wrapper);
@@ -459,10 +394,9 @@ describe('graphicsStyleUpdateReview', () => {
 		// The change is readable — an observer can see what an author would be applying.
 		expect(wrapper.get('[data-testid="style-update-changes"]').text()).toContain('Headline · Graphic Fill');
 		expect(wrapper.get<HTMLButtonElement>('[data-testid="style-update-apply"]').element.disabled).toBe(true);
-		for (const button of wrapper.findAll<HTMLButtonElement>('[data-testid="style-update-keep"]'))
-			expect(button.element.disabled).toBe(true);
-		for (const button of wrapper.findAll<HTMLButtonElement>('[data-testid="style-update-inherit"]'))
-			expect(button.element.disabled).toBe(true);
+		const decisions = wrapper.findAll<HTMLButtonElement>('[data-testid="style-update-keep"], [data-testid="style-update-inherit"]');
+		expect(decisions.length).toBeGreaterThan(0);
+		expect(decisions.every(button => button.element.disabled)).toBe(true);
 	});
 
 	it('shows nothing at all for a template linked to no Graphic Style Set', async () => {

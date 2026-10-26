@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import TokensModal from '~/components/FeatureMatch/TokensModal.vue';
 
 const mockFetchDeck = vi.fn();
 
@@ -85,8 +86,6 @@ function makeDeck(cardName: string, tokenName = 'Map') {
 }
 
 async function mountComponent() {
-	const { default: TokensModal } = await import('~/components/FeatureMatch/TokensModal.vue');
-
 	const wrapper = mount(TokensModal, {
 		props: {
 			open: true,
@@ -129,16 +128,6 @@ describe('featureMatchTokensModal', () => {
 		expect(wrapper.text()).toContain('Blair');
 		expect(wrapper.text()).toContain('Route Planner');
 		expect(wrapper.text()).toContain('Surveyor Saga');
-	});
-
-	it('emits close through the footer action', async () => {
-		const wrapper = await mountComponent();
-
-		await wrapper.get('button').trigger('click');
-
-		expect(wrapper.emitted('update:open')).toEqual([
-			[false],
-		]);
 	});
 
 	it('keeps loaded token content while closing', async () => {

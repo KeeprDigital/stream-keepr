@@ -3,7 +3,9 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { createPinia, defineStore, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { ref } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import CardControlsButtons from '~/components/Mtg/CardControlsButtons.vue';
 
 function createMockMtgCard(overrides: Partial<MtgCard> = {}): MtgCard {
 	return {
@@ -52,12 +54,6 @@ const useMockCardStore = defineStore('mock-card-controls', () => {
 	};
 });
 
-function noopResetStore() {
-	return {
-		$reset: vi.fn(),
-	};
-}
-
 const mockOverlay = {
 	create: vi.fn(() => ({
 		open: vi.fn(),
@@ -65,23 +61,9 @@ const mockOverlay = {
 };
 
 mockNuxtImport('useEventStore', () => () => ({
-	loadEvent: vi.fn(),
 	event: null,
-	$reset: vi.fn(),
+	updateEvent: vi.fn(),
 }));
-mockNuxtImport('usePlayerStore', () => () => noopResetStore());
-mockNuxtImport('useArchetypeStore', () => () => noopResetStore());
-mockNuxtImport('useMetagameStore', () => () => noopResetStore());
-mockNuxtImport('usePlayerListStore', () => () => noopResetStore());
-mockNuxtImport('usePhaseStore', () => () => noopResetStore());
-mockNuxtImport('useRoundStore', () => () => noopResetStore());
-mockNuxtImport('useMatchStore', () => () => noopResetStore());
-mockNuxtImport('useFeatureMatchStore', () => () => noopResetStore());
-mockNuxtImport('useFeatureMatchStateStore', () => () => noopResetStore());
-mockNuxtImport('useScreenStore', () => () => noopResetStore());
-mockNuxtImport('useMeleeStore', () => () => noopResetStore());
-mockNuxtImport('clearPlayerDeckCache', () => vi.fn());
-mockNuxtImport('navigateTo', () => vi.fn());
 mockNuxtImport('useCardStore', () => () => {
 	const store = useMockCardStore();
 	return Object.assign(store, {
@@ -90,38 +72,10 @@ mockNuxtImport('useCardStore', () => () => {
 });
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 
-const UButtonStub = defineComponent({
-	props: {
-		disabled: { type: Boolean, required: false },
-	},
-	emits: ['click'],
-	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-});
-
-const UAlertStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-		description: { type: String, required: false },
-	},
-	template: '<div data-testid="alert"><div>{{ title }}</div><div>{{ description }}</div></div>',
-});
-
-const UFieldGroupStub = defineComponent({
-	template: '<div><slot /></div>',
-});
-
 async function mountComponent() {
-	const componentPath = '../../../../app/components/Mtg/CardControlsButtons.vue';
-	const { default: CardControlsButtons } = await import(componentPath);
-
 	return mount(CardControlsButtons, {
 		global: {
-			stubs: {
-				UButton: UButtonStub,
-				UAlert: UAlertStub,
-				USeparator: true,
-				UFieldGroup: UFieldGroupStub,
-			},
+			stubs: nuxtUiStubs,
 		},
 	});
 }
@@ -151,7 +105,7 @@ describe('mtgCardControlsButtons', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('button').attributes('disabled')).toBeUndefined();
-		expect(wrapper.find('[data-testid="alert"]').exists()).toBe(false);
+		expect(wrapper.find('[data-alert]').exists()).toBe(false);
 
 		await wrapper.get('button').trigger('click');
 		expect(mockControlPreviewCard).toHaveBeenCalledWith('show');

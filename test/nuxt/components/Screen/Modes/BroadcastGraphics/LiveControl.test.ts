@@ -16,6 +16,7 @@ import {
 	graphicInputTraces,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
+import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -156,11 +157,8 @@ const CHOSEN = {
 	revisionId: 'revision-badge-2',
 } as unknown as MediaGraphicInputValue;
 
-/**
- * The Graphics Asset Library picker, stubbed at the seam Live Control uses it
- * through: it is handed the kinds it may offer and the engines open now, and it
- * hands back one exact Graphic Asset Revision.
- */
+// The Graphics Asset Library picker, stubbed at the seam Live Control uses it through: it is handed
+// the kinds it may offer and the engines open now, and it hands back one exact Graphic Asset…
 const GraphicsAssetFocusPickerStub = defineComponent({
 	name: 'GraphicsAssetFocusPicker',
 	props: {
@@ -234,9 +232,6 @@ async function mountComponent(
 	disconnected = false,
 	pending = false,
 ) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
-	const { default: LiveControl } = await import(componentPath);
-
 	const wrapper = mount(LiveControl, {
 		props: {
 			eventId: 7,
@@ -277,11 +272,8 @@ describe('broadcastGraphicsLiveControl', () => {
 		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
 	});
 
-	/**
-	 * Generated Live Control is exactly the controls a template author declared —
-	 * source pickers and typed Graphic Inputs. A template action would be an
-	 * authoring control appearing in the one surface that never authors.
-	 */
+	// Generated Live Control is exactly the controls a template author declared — source pickers
+	// and typed Graphic Inputs.
 	it('generates no Broadcast Graphic Template action for a live operator', async () => {
 		const wrapper = await mountComponent(graphic([]));
 
@@ -1072,12 +1064,8 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(wrapper.get('[data-testid="live-control-update"]').attributes('disabled')).toBeUndefined();
 		});
 
-		/**
-		 * `admitMediaSelection` rebuilds the value from the library and refuses a
-		 * revision that does not resolve with a 409. An operator must not be able to
-		 * reach that refusal by choosing from the picker, so the surface asks the same
-		 * question of the same library before it writes anything.
-		 */
+		// `admitMediaSelection` rebuilds the value from the library and refuses a revision that
+		// does not resolve with a 409.
 		it('writes nothing and names the reason when the chosen revision no longer resolves', async () => {
 			mockApiFetch.mockResolvedValue({ outcome: 'missing' });
 			const wrapper = await mountComponent(graphic([BADGE]));
@@ -1090,13 +1078,8 @@ describe('broadcastGraphicsLiveControl', () => {
 				.toContain('Missing Graphic Asset Reference');
 		});
 
-		/**
-		 * An ended session is not the library saying anything about the revision, and
-		 * it is the one failure retrying cannot fix. Calling it temporarily unavailable
-		 * content would state the wrong fact and prescribe the one action that provably
-		 * cannot work — where signing in again does fix it, which is what the sentence
-		 * says since #398.
-		 */
+		// An ended session is not the library saying anything about the revision, and it is the one
+		// failure retrying cannot fix.
 		it('names an ended session rather than blaming the revision’s bytes', async () => {
 			mockApiFetch.mockRejectedValue(Object.assign(new Error('Unauthorized'), { statusCode: 401 }));
 			const wrapper = await mountComponent(graphic([BADGE]));
@@ -1123,12 +1106,8 @@ describe('broadcastGraphicsLiveControl', () => {
 				.toContain('Unavailable Graphic Asset Content');
 		});
 
-		/**
-		 * The residual race: the picker asked the library, was told the revision was
-		 * there, and it had gone by the time the command landed. The operator gets the
-		 * same words at the same field as when the picker catches it — rather than a
-		 * banner saying only that a playout action failed (#203).
-		 */
+		// The residual race: the picker asked the library, was told the revision was there, and it
+		// had gone by the time the command landed.
 		it('names the authority’s refusal at the field when the revision goes between the check and the write', async () => {
 			// Once, so the refusal this test installs cannot outlive it: `clearAllMocks`
 			// clears calls but leaves an implementation standing.
@@ -1155,12 +1134,8 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(refusal).toContain('Try again');
 		});
 
-		/**
-		 * The rest of the rejection vocabulary is about the show rather than about the
-		 * revision, and each code is already reported where it belongs — a superseded
-		 * field refreshes itself, a Take that cannot proceed says which input is
-		 * missing. Repeating one beside the picker would name the wrong thing.
-		 */
+		// The rest of the rejection vocabulary is about the show rather than about the revision,
+		// and each code is already reported where it belongs — a superseded field refreshes itself,…
 		it('says nothing beside the picker about a refusal that is not about the revision', async () => {
 			mockInputRefusals.value = { badge: 'stale-input-edit' };
 
@@ -1184,12 +1159,8 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(mockSetInput).toHaveBeenCalledTimes(1);
 		});
 
-		/**
-		 * The picker reports on the revision it is given — Missing Graphic Asset
-		 * Reference, Unavailable Graphic Asset Content, and the retry for it. Told
-		 * nothing, it reports nothing, and a staged revision that has since gone would
-		 * sit there reading as a healthy value until the operator took it on air.
-		 */
+		// The picker reports on the revision it is given — Missing Graphic Asset Reference,
+		// Unavailable Graphic Asset Content, and the retry for it.
 		it('tells the picker which revision is staged, so its status is reported', async () => {
 			mockLiveState.value = {
 				playout: {},
@@ -1243,14 +1214,7 @@ describe('broadcastGraphicsLiveControl', () => {
 			expect(mockApiFetch).not.toHaveBeenCalled();
 		});
 
-		/**
-		 * The window the library's answer arrives in is the window an operator moves
-		 * on in. Every write here names a graphic, so an answer that outlives the
-		 * graphic it was asked for would stage a revision nobody chose for the graphic
-		 * it lands on — and its Field Ownership claim would describe that other
-		 * graphic's value, which is the unconditional overwrite the claim exists to
-		 * prevent.
-		 */
+		// The window the library's answer arrives in is the window an operator moves on in.
 		it('writes nothing when the operator moves to another Broadcast Graphic while the library is still answering', async () => {
 			let answer!: (status: unknown) => void;
 			mockApiFetch.mockReturnValueOnce(new Promise((resolve) => {

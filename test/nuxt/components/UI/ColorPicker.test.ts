@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import ColorPicker from '~/components/UI/ColorPicker.vue';
 
 const UPopoverStub = defineComponent({
 	props: {
@@ -42,9 +43,6 @@ const UInputStub = defineComponent({
 });
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/UI/ColorPicker.vue';
-	const { default: ColorPicker } = await import(componentPath);
-
 	return mount(ColorPicker, {
 		props,
 		global: {

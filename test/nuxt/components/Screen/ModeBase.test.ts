@@ -1,10 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import ModeBase from '~/components/Screen/ModeBase.vue';
 
-async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../app/components/Screen/ModeBase.vue';
-	const { default: ModeBase } = await import(componentPath);
-
+async function mountComponent(props: { error: string | null; empty: boolean }) {
 	return mount(ModeBase, {
 		props,
 		slots: {

@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
+import EditStateModal from '~/components/FeatureMatch/State/EditStateModal.vue';
 
 const UModalStub = defineComponent({
 	props: {
@@ -49,7 +50,6 @@ const UFormFieldStub = defineComponent({
 });
 
 async function mountModal(props: Record<string, unknown> = {}, state?: Partial<FeatureMatchState>) {
-	const { default: EditStateModal } = await import('~/components/FeatureMatch/State/EditStateModal.vue');
 	return mount(EditStateModal, {
 		props: {
 			open: true,

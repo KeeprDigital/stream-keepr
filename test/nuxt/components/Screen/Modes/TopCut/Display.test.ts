@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
 import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
+import Display from '~/components/Screen/Modes/TopCut/Display.vue';
 
 const screen = ref<any>({ id: 1, screenConfig: {} });
 const config = ref({
@@ -60,9 +61,6 @@ function unplayed(size: number): TopCutBracket {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/TopCut/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is left real so the empty case asserts the broadcast
 	// contract itself: that state renders nothing at all.
 	return mount(Display);
