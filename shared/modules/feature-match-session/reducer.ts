@@ -467,6 +467,9 @@ function reduceFeatureMatchSessionEvent(
 		const startingLife = finiteNumber(payload.startingLife ?? sourceSnapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE);
 		if (!player || startingLife === null)
 			return null;
+		// A decided match takes no further wins; undoing the deciding one reopens it.
+		if (currentState.isComplete)
+			return { currentState, sourceSnapshot };
 		const opponent = otherFeatureMatchPlayer(player);
 		const resetLife = payload.resetLife !== false;
 		const resetCounters = payload.resetCounters !== false;
@@ -514,6 +517,8 @@ function reduceFeatureMatchSessionEvent(
 		const opponent = otherFeatureMatchPlayer(player);
 		const resetLife = payload.resetLife === true;
 		const resetCounters = payload.resetCounters === true;
+		const winsNeeded = Math.ceil(sourceSnapshot.bestOf / 2);
+		const stillDecided = Math.max(currentState[player].gameWins - 1, currentState[opponent].gameWins) >= winsNeeded;
 
 		return {
 			sourceSnapshot,
@@ -535,7 +540,7 @@ function reduceFeatureMatchSessionEvent(
 						: currentState[opponent].counters,
 				},
 				currentGame: Math.max(1, currentState.currentGame - 1),
-				isComplete: false,
+				isComplete: stillDecided,
 			},
 		};
 	}

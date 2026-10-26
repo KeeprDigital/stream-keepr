@@ -83,6 +83,34 @@ describe('featureMatchGameWins', () => {
 		expect(buttons[1]!.classes()).toContain('game-wins-slot--empty');
 	});
 
+	it.each([
+		[
+			'the winner',
+			2,
+			['Undo win', 'Undo win'],
+			[],
+		],
+		[
+			'the loser',
+			1,
+			['Undo win', 'Record win'],
+			['Record win'],
+		],
+	])('offers %s no new win once the match is decided, but keeps undo', async (_, gameWins, labels, disabled) => {
+		mockFeatureMatchStateStore.featureMatchStates.set(1, { currentGame: 4, isComplete: true });
+		const wrapper = await mountComponent({ gameWins });
+		const buttons = wrapper.findAll('button');
+
+		expect(buttons.map(button => button.attributes('aria-label'))).toEqual(labels);
+		expect(buttons.filter(button => button.attributes('disabled') !== undefined).map(button => button.attributes('aria-label'))).toEqual(disabled);
+	});
+
+	it('offers a new win while the match is undecided', async () => {
+		const wrapper = await mountComponent({ gameWins: 1 });
+
+		expect(wrapper.findAll('button').every(button => button.attributes('disabled') === undefined)).toBe(true);
+	});
+
 	it('keeps win markers visible without rendering interactive buttons in readonly mode', async () => {
 		const wrapper = await mountComponent({ readonly: true });
 
