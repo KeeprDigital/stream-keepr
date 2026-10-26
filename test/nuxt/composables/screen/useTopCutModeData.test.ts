@@ -5,7 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 
 const defaultConfig = {
 	phaseId: undefined as number | undefined,
@@ -20,31 +20,11 @@ const mockEventId = ref<number | null>(1);
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-const continuity = createContinuitySignal();
-const mockRealtime = reactive({
-	connectionState: 'connected',
-	tokenError: null as Error | null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-});
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:1|${type}`) ?? [])
-		handler({ eventId: 1, ...payload });
-}
+const realtime = createFakeEventChannel();
+const { deliver } = realtime;
 
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: ref({ id: 1, name: 'Test' }),
 	eventId: mockEventId,
@@ -108,8 +88,7 @@ describe('useTopCutModeData', () => {
 	beforeEach(() => {
 		Object.assign(mutableConfig, defaultConfig);
 		mockEventId.value = 1;
-		mockRealtime.connectionState = 'connected';
-		mockRealtime.tokenError = null;
+		realtime.reset();
 		mockFetch.mockReset();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 	});

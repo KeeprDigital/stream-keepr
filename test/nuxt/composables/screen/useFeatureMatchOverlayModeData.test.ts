@@ -5,7 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 
 const mockEventStore = { event: null, displayEvent: null };
@@ -22,7 +22,6 @@ const mockFeatureMatchStateStore = {
 	loadState: vi.fn(),
 	readSessionsAsScreenOutput: vi.fn((_read: (slotId: number) => Promise<unknown>) => vi.fn()),
 };
-const mockConnectionState = ref('connected');
 const mockApiFetch = vi.hoisted(() => vi.fn());
 
 /** What the Screen Output read answers for a Slot following Match 300. */
@@ -39,30 +38,9 @@ function slotRead(slotId: number) {
 	};
 }
 
-const continuity = createContinuitySignal();
-
-type Handler = (message: Record<string, unknown>) => void;
-const channelHandlers = new Map<string, Set<Handler>>();
-
-/** An Event message, as the Event channel delivers it. */
-function deliver(type: string, payload: Record<string, unknown>) {
-	for (const handler of channelHandlers.get(`event:7|${type}`) ?? [])
-		handler({ eventId: 7, ...payload });
-}
-
-mockNuxtImport('tryUseRealtime', () => () => ({
-	get connectionState() { return mockConnectionState.value; },
-	tokenError: null,
-	onChannel: (channel: string, type: string, handler: Handler) => {
-		const key = `${channel}|${type}`;
-		if (!channelHandlers.has(key))
-			channelHandlers.set(key, new Set());
-		channelHandlers.get(key)!.add(handler);
-		return () => channelHandlers.get(key)!.delete(handler);
-	},
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: vi.fn(() => () => {}),
-}));
+const realtime = createFakeEventChannel();
+const deliver = (type: string, payload: Record<string, unknown>) => realtime.deliver(type, payload, 7);
+mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
@@ -115,13 +93,8 @@ function mountOverlay(context: Partial<ScreenContext>) {
 }
 
 /**
- * The editor pushes its working Feature Match Layout into the embedded preview.
- *
- * Spelled as the literal it goes on the wire as, not as
- * `FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE`. Both ends now read that
- * constant (#260), so a test written in it would move with a rename and could
- * not tell one from a no-op — while on the wire a rename is a break, silently
- * ending the exchange between an editor and a frame served different versions.
+ * The editor pushes its working Feature Match Layout into the embedded preview,
+ * spelled as the literal that goes on the wire: a rename there is a break (#260).
  */
 function pushPreviewConfig(config: FeatureMatchOverlayModeConfig) {
 	window.dispatchEvent(new MessageEvent('message', {
@@ -149,7 +122,6 @@ function mountBoundOutput() {
 
 describe('useFeatureMatchOverlayModeData', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
 		mockFeatureMatchStore.featureMatches = [];
 		mockFeatureMatchStore.currentEventId = 7;
 		mockFeatureMatchStore.isLoaded = true;
@@ -165,7 +137,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 				throw new Error(`unexpected request ${path}`);
 			return slotRead(slotId);
 		});
-		mockConnectionState.value = 'connected';
+		realtime.transport.connectionState = 'connected';
 	});
 
 	it('renders the pushed working configuration while item guides are switched off', async () => {
@@ -427,10 +399,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 */
 	describe('a connection that was suspended and came back', () => {
 		async function suspendAndResume() {
-			mockConnectionState.value = 'suspended';
+			realtime.transport.connectionState = 'suspended';
 			await nextTick();
-			mockConnectionState.value = 'connected';
-			continuity.reattach('event:7');
+			realtime.transport.connectionState = 'connected';
+			realtime.reattach(7);
 			await nextTick();
 			await flushPromises();
 		}
@@ -466,7 +438,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await flushPromises();
 			mockApiFetch.mockClear();
 
-			mockConnectionState.value = 'suspended';
+			realtime.transport.connectionState = 'suspended';
 			await nextTick();
 			await flushPromises();
 
