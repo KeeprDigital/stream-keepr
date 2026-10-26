@@ -3,7 +3,6 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 
 /**
@@ -123,7 +122,9 @@ describe('feature Match Overlay Source Item bounds: align actions', () => {
 			{ x: 100, y: 879 },
 		],
 	] as const;
-	const cases = NINE_POINT_VALUES.flatMap(anchor => actions.map(([label, position]) => [anchor, label, position] as const));
+	// A corner, the centre and the opposite corner: every anchor's offset is one of these three per axis.
+	const anchors = ['top-left', 'center', 'bottom-right'] as const;
+	const cases = anchors.flatMap(anchor => actions.map(([label, position]) => [anchor, label, position] as const));
 
 	it.each(cases)('%s anchor: %s moves the item\'s edge, not its anchor', async (anchor, label, position) => {
 		const { align } = await mountBounds(anchor);

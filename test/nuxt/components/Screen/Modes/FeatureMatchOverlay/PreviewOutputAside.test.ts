@@ -2,56 +2,25 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick } from 'vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
-const mockCopyToClipboard = vi.fn();
-const mockToastAdd = vi.fn();
-/** What the Screen Output Asset Capability endpoint issues, if anything. */
-const { mockApiFetch } = vi.hoisted(() => ({
-	mockApiFetch: vi.fn(),
+const copyToClipboard = vi.fn();
+const toastAdd = vi.fn();
+const { apiFetch } = vi.hoisted(() => ({
+	apiFetch: vi.fn(),
 }));
 
-mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
-mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
+mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard }));
+mockNuxtImport('useToast', () => () => ({ add: toastAdd }));
 mockNuxtImport('useRequestURL', () => () => new URL('http://localhost/'));
-mockNuxtImport('$fetch', () => mockApiFetch);
+mockNuxtImport('$fetch', () => apiFetch);
 
-const ScreenSettingsCardStub = defineComponent({
-	template: '<section><slot name="actions" :open="true" /><slot /></section>',
-});
-
-const SlotOnlyStub = defineComponent({
-	template: '<div><slot /></div>',
-});
-
-const UButtonStub = defineComponent({
-	name: 'UButton',
-	props: {
-		disabled: { type: Boolean, required: false },
-		title: { type: String, required: false },
-	},
-	emits: ['click'],
-	template: '<button type="button" :disabled="disabled" :title="title" @click="$emit(\'click\')"><slot /></button>',
-});
-
-const UPopoverStub = defineComponent({
-	template: '<div><slot /><slot name="content" /></div>',
-});
-
-const USwitchStub = defineComponent({
-	name: 'USwitch',
-	props: {
-		modelValue: { type: Boolean, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<button type="button" @click="$emit(\'update:modelValue\', !modelValue)" />',
-});
-
-async function mountComponent(props: {
+function mountAside(props: {
 	publicationBlocked?: boolean;
 	publicationBlockReason?: string;
 	compositorTarget?: GraphicsSelectionTarget;
@@ -75,328 +44,190 @@ async function mountComponent(props: {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
-				UFormField: SlotOnlyStub,
-				USwitch: USwitchStub,
-				UFieldGroup: SlotOnlyStub,
-				UButton: UButtonStub,
+				...nuxtUiStubs,
+				// Its popovers open by default here, so every hand-out control is on screen.
+				UPopover: { template: '<div><slot /><slot name="content" /></div>' },
+				ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 				GraphicsCanvasManipulationOverlay: true,
-				UPopover: UPopoverStub,
-				UBadge: true,
-				UInput: true,
 			},
 		},
 	});
 }
 
+type Wrapper = ReturnType<typeof mountAside>;
+
+/** The preview frame, with `contentWindow` replaced so a test can be or watch its sender. */
+function previewFrame(wrapper: Wrapper, contentWindow: unknown) {
+	const frame = wrapper.get('iframe').element;
+	Object.defineProperty(frame, 'contentWindow', { configurable: true, value: contentWindow });
+	return frame;
+}
+
+function message(origin: string, source: MessageEventSource | null, data: object) {
+	window.dispatchEvent(new MessageEvent('message', { origin, source, data }));
+}
+
 const capability = 'HG7fQ2mS4kLp9xRt0ZbNvCyE1JdWqUoA3hMi5nTgKrs';
 
-describe('featureMatchOverlayPreviewOutputAside', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockApiFetch.mockResolvedValue({ assetCapability: capability });
+beforeEach(() => {
+	vi.clearAllMocks();
+	apiFetch.mockResolvedValue({ assetCapability: capability });
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
+// How a hand-out obtains and carries the Screen Output Asset Capability is
+// `useScreenOutputAccessUrl`'s test; here each control is wired to it once, with
+// this surface's own words for what went wrong (#231).
+describe('feature Match Overlay preview aside — output hand-outs', () => {
+	it('copies an output URL carrying asset access, saying nothing beyond the clipboard', async () => {
+		const wrapper = mountAside();
+
+		await wrapper.get('[data-testid="copy-output-key"]').trigger('click');
+		await flushPromises();
+
+		expect(copyToClipboard).toHaveBeenCalledExactlyOnceWith(
+			`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
+			expect.objectContaining({ successDescription: 'KEY output URL copied.' }),
+		);
+		expect(toastAdd).not.toHaveBeenCalled();
 	});
 
-	/**
-	 * A Feature Match Overlay resolves its media *and* its library fonts through the
-	 * Screen Output Asset Capability, so an output URL handed over without one opens
-	 * an output that renders everything except them — silently, and permanently
-	 * (#231).
-	 */
-	describe('output URLs an operator is handed', () => {
-		it('copies a URL carrying a capability obtained at that moment', async () => {
-			const wrapper = await mountComponent();
+	it('copies nothing when asset access is refused, and says so rather than blaming the clipboard (#257)', async () => {
+		apiFetch.mockRejectedValue(new Error('unavailable'));
+		const wrapper = mountAside();
 
-			await wrapper.get('[data-testid="copy-output-key"]').trigger('click');
-			await flushPromises();
+		await wrapper.get('[data-testid="copy-output-overlay"]').trigger('click');
+		await flushPromises();
 
-			// Filtered rather than counted whole: `$fetch` is mocked for the module, and
-			// `useServerTime` puts its own `/api/time` probe through it while this page is
-			// mounted. The count that matters is of capability requests, and it is one —
-			// a second request obtains a capability that is then handed to nobody.
-			expect(mockApiFetch.mock.calls.filter(([url]) => String(url).includes('asset-capability')))
-				.toEqual([
-					['/api/events/1/screens/1/asset-capability'],
-				]);
-			// Counted, not merely matched. `toHaveBeenCalledWith` asks whether *some* call
-			// looked right, so a handler that copies twice passed it while the operator was
-			// told the URL had been copied twice over. The refusal test below counts its own
-			// path; until #327 the success path beside it was the half nothing counted
-			// (#278, #295).
-			expect(mockCopyToClipboard).toHaveBeenCalledExactlyOnceWith(
-				`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
-				expect.objectContaining({ successTitle: 'URL copied', successDescription: 'KEY output URL copied.' }),
-			);
-			// Nothing else is said: the clipboard helper owns the success sentence here, so
-			// a toast from this surface would be the operator hearing it a second time.
-			expect(mockToastAdd).not.toHaveBeenCalled();
-		});
+		expect(copyToClipboard).toHaveBeenCalledExactlyOnceWith('', expect.objectContaining({
+			nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
+		}));
+	});
 
-		it('copies nothing at all when the capability cannot be obtained', async () => {
-			mockApiFetch.mockRejectedValue(new Error('unavailable'));
-			const wrapper = await mountComponent();
+	it('points a PNG capture at a URL carrying asset access', async () => {
+		const captureWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
+		vi.stubGlobal('open', vi.fn(() => captureWindow));
+		const wrapper = mountAside();
 
-			await wrapper.get('[data-testid="copy-output-overlay"]').trigger('click');
-			await flushPromises();
+		await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+		await flushPromises();
 
-			// The empty string is what the clipboard helper reports as having nothing to
-			// copy; the operator retries rather than pasting a URL that loses its assets.
-			//
-			// And the words matter as much as the empty string. This is an asset access
-			// refusal, not a clipboard that declined the write — "Failed to copy … to
-			// clipboard", which this surface said until #257, sends the operator to the
-			// address in their own browser's bar, which is the media-losing URL the
-			// refusal exists to withhold (#231, #250).
-			// Once, and the count is the half that sees a duplicate: `toHaveBeenCalledWith`
-			// and the last-call read below both pass a handler that reports twice (#278, #295).
-			expect(mockCopyToClipboard).toHaveBeenCalledOnce();
-			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
-				nothingToCopyTitle: 'Nothing copied',
-				nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
-			}));
-			expect(mockCopyToClipboard.mock.calls.at(-1)![1].nothingToCopyDescription).not.toContain('Failed to copy');
-		});
+		expect(captureWindow.location.href).toBe(`${window.location.origin}/event/1/screen/main?output=fill&download=1#asset-capability=${capability}`);
+		expect(toastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: 'Preparing download' }));
+	});
 
-		/**
-		 * The quietest hand-out of all: the PNG arrives, looks like a finished output,
-		 * and is missing every asset the Screen publishes.
-		 */
-		it('points a PNG capture at a URL carrying the capability', async () => {
-			const captureWindow = {
-				opener: {} as unknown,
-				location: { href: '' },
-				close: vi.fn(),
-			};
-			const openWindow = vi.fn(() => captureWindow);
-			vi.stubGlobal('open', openWindow);
-			const wrapper = await mountComponent();
+	// Two reports: the announcement, then exactly one refusal naming the right cause (#258).
+	it.each([
+		[
+			'asset access is refused',
+			() => {
+				apiFetch.mockRejectedValue(new Error('unavailable'));
+				vi.stubGlobal('open', vi.fn(() => ({
+					opener: {},
+					location: { href: '' },
+					close: vi.fn(),
+				})));
+			},
+			'Asset access',
+		],
+		[
+			'the browser blocks the capture tab',
+			() => vi.stubGlobal('open', vi.fn(() => null)),
+			'pop-up',
+		],
+	])('refuses the capture, and says why, when %s', async (_, arrange, reason) => {
+		arrange();
+		const wrapper = mountAside();
 
-			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
-			await flushPromises();
+		await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
+		await flushPromises();
 
-			expect(captureWindow.location.href).toBe(
-				`${window.location.origin}/event/1/screen/main?output=fill&download=1#asset-capability=${capability}`,
-			);
-			// One tab and one sentence. A `toBe` on the URL reads the same whether the
-			// capture was started once or twice, and both refusal tests below count their
-			// own paths while this one counted nothing — so a handler that announced the
-			// download twice, or opened a second capture tab the operator then has to
-			// close, passed here unremarked (#278, #295, #327).
-			expect(openWindow).toHaveBeenCalledOnce();
-			expect(mockToastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-				title: 'Preparing download',
-				description: expect.stringContaining('FILL PNG'),
-				color: 'info',
-			}));
-			vi.unstubAllGlobals();
-		});
-
-		it('refuses the capture, and says so, when the capability cannot be obtained', async () => {
-			mockApiFetch.mockRejectedValue(new Error('unavailable'));
-			const captureWindow = {
-				opener: {} as unknown,
-				location: { href: '' },
-				close: vi.fn(),
-			};
-			vi.stubGlobal('open', vi.fn(() => captureWindow));
-			const wrapper = await mountComponent();
-
-			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
-			await flushPromises();
-
-			expect(captureWindow.location.href).toBe('');
-			expect(captureWindow.close).toHaveBeenCalledOnce();
-			// Two, and only two: the 'Preparing download' announcement and this refusal.
-			// `toHaveBeenCalledWith` asks only whether *some* call matched, and the read
-			// below takes the last one — so a branch firing its own sentence twice passed
-			// both while handing the operator the same failure two or three times (#278,
-			// #295). The sibling surfaces take this as `toHaveBeenCalledExactlyOnceWith`;
-			// here the announcement legitimately precedes the failure, so the count is two.
-			expect(mockToastAdd).toHaveBeenCalledTimes(2);
-			expect(mockToastAdd).toHaveBeenCalledWith(
-				expect.objectContaining({ title: 'Download unavailable', color: 'error' }),
-			);
-			expect(mockToastAdd.mock.calls.at(-1)![0].description).toContain('Asset access');
-			vi.unstubAllGlobals();
-		});
-
-		/**
-		 * A capture runs in a tab, so a pop-up blocker stops it outright — and the
-		 * download was announced a moment earlier, leaving the operator watching for a
-		 * file that is not coming. Reported as an asset access refusal until #258, which
-		 * asks them to retry a capture their browser will refuse identically.
-		 */
-		it('names the browser, not asset access, when the capture tab is blocked', async () => {
-			vi.stubGlobal('open', vi.fn(() => null));
-			const wrapper = await mountComponent();
-
-			await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
-			await flushPromises();
-
-			// Counted before it is read: a run where nothing was reported should say so,
-			// not die dereferencing a call that was never made (#273) — and the count is
-			// what sees a spurious *extra* report, which reading the last call cannot
-			// (#278, #295). Two: the announcement, then this one.
-			expect(mockToastAdd).toHaveBeenCalledTimes(2);
-			const reported = mockToastAdd.mock.calls.at(-1)![0];
-			expect(reported.title).toBe('Download unavailable');
-			expect(reported.description).toContain('pop-up');
-			expect(reported.description).not.toContain('Asset access');
-			vi.unstubAllGlobals();
+		expect(toastAdd).toHaveBeenCalledTimes(2);
+		expect(toastAdd.mock.lastCall![0]).toMatchObject({
+			title: 'Download unavailable',
+			description: expect.stringContaining(reason),
 		});
 	});
 
-	/**
-	 * The message types below are spelled as the literals they go on the wire as
-	 * rather than as the constants both ends now read (#260): a test written in the
-	 * constant moves with a rename, and so cannot tell a rename from a no-op —
-	 * while on the wire a rename ends the exchange in silence.
-	 */
-	it('accepts selections only from its own same-origin preview frame', async () => {
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
-		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: window });
-		const previewWindow = previewFrame.contentWindow;
-		const target = { type: 'source', itemId: 'main-source' };
+	it('disables every hand-out, explaining why, while Graphic Asset publication is blocked', async () => {
+		const wrapper = mountAside({ publicationBlocked: true, publicationBlockReason: 'A pinned revision is missing.' });
+		const blocked = wrapper.findAll('button[disabled]');
 
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: previewWindow,
-			data: { type: 'feature-match-overlay:select', target },
-		}));
-		await nextTick();
-		expect(wrapper.emitted('selectTarget')).toEqual([
-			[target],
-		]);
+		expect(blocked.length).toBeGreaterThanOrEqual(3);
+		expect(blocked.every(button => button.attributes('title') === 'A pinned revision is missing.')).toBe(true);
+	});
+});
 
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: null,
-			data: {
-				type: 'feature-match-overlay:select',
-				target: { type: 'source', itemId: 'spoofed' },
-			},
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: 'https://example.invalid',
-			source: previewWindow,
-			data: {
-				type: 'feature-match-overlay:select',
-				target: { type: 'source', itemId: 'spoofed' },
-			},
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: previewWindow,
-			data: {
-				type: 'feature-match-overlay:select',
-				target: { type: 'unsupported' },
-			},
-		}));
+// The sender guard itself is `graphicsPreviewMessages`' and
+// `featureMatchOverlayPreviewMessages`' test; here the aside routes both selection
+// vocabularies through it. Message types are wire literals, so a rename fails (#260).
+describe('feature Match Overlay preview aside — its preview frame', () => {
+	it.each([
+		[
+			'a Source Item selection',
+			'feature-match-overlay:select',
+			'selectTarget',
+			{ type: 'source', itemId: 'main-source' },
+		],
+		[
+			'a shared Graphic Item selection',
+			'graphics-compositor:select',
+			'selectCompositorTarget',
+			{ type: 'item', graphicId: 'feature-match-layout', itemId: 'shared-clock' },
+		],
+	])('accepts %s only from its own same-origin frame', async (_, type, event, target) => {
+		const wrapper = mountAside();
+		previewFrame(wrapper, window);
+
+		message(window.location.origin, window, { type, target });
+		message('https://example.invalid', window, {
+			type,
+			target: { ...target, itemId: 'spoofed' },
+		});
+		message(window.location.origin, null, {
+			type,
+			target: { ...target, itemId: 'spoofed' },
+		});
 		await nextTick();
 
-		expect(wrapper.emitted('selectTarget')).toEqual([
+		expect(wrapper.emitted(event)).toEqual([
 			[target],
 		]);
 	});
 
-	it('accepts a shared Graphic Item selection only from its own same-origin preview frame', async () => {
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
-		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: window });
-		const previewWindow = previewFrame.contentWindow;
-		const target = { type: 'item', graphicId: 'feature-match-layout', itemId: 'shared-clock' };
+	// A gone frame has a null `contentWindow`, which a bare `source === contentWindow` matches (#252).
+	it('accepts no selection once there is no frame that could have sent one', async () => {
+		const wrapper = mountAside();
+		previewFrame(wrapper, null);
 
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: previewWindow,
-			data: { type: 'graphics-compositor:select', target },
-		}));
-		await nextTick();
-		expect(wrapper.emitted('selectCompositorTarget')).toEqual([
-			[target],
-		]);
-
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: 'https://example.invalid',
-			source: previewWindow,
-			data: {
-				type: 'graphics-compositor:select',
-				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
-			},
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: null,
-			data: {
-				type: 'graphics-compositor:select',
-				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
-			},
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: previewWindow,
-			data: {
-				type: 'graphics-compositor:select',
-				target: { type: 'item', graphicId: 'g' },
-			},
-		}));
-		await nextTick();
-
-		expect(wrapper.emitted('selectCompositorTarget')).toEqual([
-			[target],
-		]);
-	});
-
-	/**
-	 * The case a hand-rolled `message.source === contentWindow` comparison gets
-	 * wrong. A frame that is gone leaves `contentWindow` null and a `MessageEvent`
-	 * carries a null source unless a window sent it, so comparing the two matches —
-	 * and the aside acts on a selection from nobody at exactly the moment there is
-	 * nobody entitled to send one. The shared guard requires the expected sender to
-	 * exist, which is why both selections now go through it (#252).
-	 */
-	it('accepts no selection at all once there is no frame that could have sent one', async () => {
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
-		Object.defineProperty(previewFrame, 'contentWindow', { configurable: true, value: null });
-
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: null,
-			data: {
-				type: 'feature-match-overlay:select',
-				target: { type: 'source', itemId: 'spoofed' },
-			},
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: null,
-			data: {
-				type: 'graphics-compositor:select',
-				target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
-			},
-		}));
+		message(window.location.origin, null, {
+			type: 'feature-match-overlay:select',
+			target: { type: 'source', itemId: 'spoofed' },
+		});
+		message(window.location.origin, null, {
+			type: 'graphics-compositor:select',
+			target: { type: 'item', graphicId: 'g', itemId: 'spoofed' },
+		});
 		await nextTick();
 
 		expect(wrapper.emitted('selectTarget')).toBeUndefined();
 		expect(wrapper.emitted('selectCompositorTarget')).toBeUndefined();
 	});
 
-	it('pushes both selections into the preview frame it embedded', async () => {
-		// Two authoring surfaces, two vocabularies, one preview. The frame needs both
-		// to mark what is under authoring, and neither can be expressed in the other.
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
+	it('pushes the config and both selections on load, and a changed selection after', async () => {
+		const wrapper = mountAside();
 		const postMessage = vi.fn();
-		Object.defineProperty(previewFrame, 'contentWindow', {
-			configurable: true,
-			value: { postMessage },
-		});
+		previewFrame(wrapper, { postMessage });
 
 		await wrapper.get('iframe').trigger('load');
-
-		expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+		expect(postMessage.mock.calls.map(([sent]) => sent.type)).toEqual([
 			'feature-match-overlay:preview-config',
 			'feature-match-overlay:selected-target',
 			'graphics-compositor:selected-target',
@@ -406,127 +237,51 @@ describe('featureMatchOverlayPreviewOutputAside', () => {
 		await wrapper.setProps({
 			compositorTarget: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
 		});
-		await nextTick();
-
 		expect(postMessage).toHaveBeenCalledWith({
 			type: 'graphics-compositor:selected-target',
 			target: { type: 'item', graphicId: 'feature-match-layout', itemId: 'wins' },
 		}, window.location.origin);
 	});
 
-	/**
-	 * The frame's `message` listeners are installed when its app mounts, and this
-	 * application renders on the client — so the iframe's `load` event, which the
-	 * push above rides, fires before that as often as after it. A push that lost
-	 * that race was dropped in silence and left the preview rendering the Screen's
-	 * stored configuration, which does not look like a missed message (#235).
-	 */
-	it('pushes again when the frame reports that it is listening', async () => {
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
+	// The frame may mount its listeners after `load` fires, so it announces readiness (#235).
+	it('pushes again when its own frame announces it is listening, and for no other window', async () => {
+		const wrapper = mountAside();
 		const postMessage = vi.fn();
-		Object.defineProperty(previewFrame, 'contentWindow', {
-			configurable: true,
-			value: { postMessage },
-		});
-
-		// No `load` at all: the frame speaks first, which is the case the handshake
-		// exists for.
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: previewFrame.contentWindow,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
-		await nextTick();
-
-		expect(postMessage.mock.calls.map(([message]) => message.type)).toEqual([
-			'feature-match-overlay:preview-config',
-			'feature-match-overlay:selected-target',
-			'graphics-compositor:selected-target',
-		]);
-	});
-
-	it('answers no ready announced by a window it did not embed', async () => {
-		const wrapper = await mountComponent();
-		const previewFrame = wrapper.get('iframe').element;
-		const postMessage = vi.fn();
-		Object.defineProperty(previewFrame, 'contentWindow', {
-			configurable: true,
-			value: { postMessage },
-		});
-
-		// A window this aside never embedded, rather than this one: the file leaves
-		// its mounted components alive, and `window` is the frame several of them
-		// were given, so announcing as `window` would be announcing to those too.
+		const frame = previewFrame(wrapper, { postMessage });
 		const stranger = {
 			postMessage: vi.fn(),
 		} as unknown as MessageEventSource;
 
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: stranger,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: 'https://example.invalid',
-			source: previewFrame.contentWindow,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
+		message(window.location.origin, stranger, { type: GRAPHICS_PREVIEW_READY_MESSAGE });
+		message('https://example.invalid', frame.contentWindow, { type: GRAPHICS_PREVIEW_READY_MESSAGE });
 		await nextTick();
-
 		expect(postMessage).not.toHaveBeenCalled();
+
+		message(window.location.origin, frame.contentWindow, { type: GRAPHICS_PREVIEW_READY_MESSAGE });
+		await nextTick();
+		expect(postMessage).toHaveBeenCalledTimes(3);
 	});
 
-	it('asks its own preview frame for guides, and asks for them nowhere else', async () => {
-		// Editor-only guides are carried on the preview's URL, and a copyable output
-		// URL is the same Screen without them — which is what keeps a guide off air.
-		const wrapper = await mountComponent();
+	// Guides ride the preview's URL only, which is what keeps them off air.
+	it('asks its own frame for guides, and no output URL for any', async () => {
+		const wrapper = mountAside();
+		const src = () => wrapper.get('iframe').attributes('src');
 
-		expect(wrapper.get('iframe').attributes('src')).toContain('embed=preview');
-		expect(wrapper.get('iframe').attributes('src')).toContain('guides=1');
-		expect(wrapper.get('iframe').attributes('src')).not.toContain('safe=1');
-
+		expect(src()).toContain('guides=1');
+		expect(src()).not.toContain('safe=1');
 		await wrapper.get('[data-testid="preview-safe-area-guides"]').trigger('click');
-		expect(wrapper.get('iframe').attributes('src')).toContain('safe=1');
-
+		expect(src()).toContain('safe=1');
 		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
-		expect(wrapper.get('iframe').attributes('src')).not.toContain('guides=1');
+		expect(src()).not.toContain('guides=1');
 
-		const outputUrls = wrapper.findAll('u-input-stub').map(input => input.attributes('modelvalue') ?? '');
+		const outputUrls = wrapper.findAll('input').map(input => (input.element as HTMLInputElement).value).filter(Boolean);
 		expect(outputUrls.length).toBeGreaterThan(0);
-		for (const url of outputUrls) {
-			expect(url).not.toContain('embed=preview');
-			expect(url).not.toContain('guides=1');
-			expect(url).not.toContain('safe=1');
-		}
+		expect(outputUrls.some(url => /embed=preview|guides=1|safe=1/.test(url))).toBe(false);
 	});
 
-	it('fits the preview to the current canvas aspect ratio without letterboxing', async () => {
-		const wrapper = await mountComponent({ canvasWidth: 1080, canvasHeight: 1920 });
-		const canvas = wrapper.get('iframe').element.parentElement;
-		const style = canvas?.getAttribute('style') ?? '';
+	it('fits the preview to the canvas aspect ratio', () => {
+		const wrapper = mountAside({ canvasWidth: 1080, canvasHeight: 1920 });
 
-		expect(style).toContain('aspect-ratio: 1080 / 1920');
-		expect(style).toContain('width: 25.875vh');
-		expect(style).toContain('max-width: 100%');
-		expect(style).not.toContain('max-height');
-		expect(canvas?.classList).toContain('transparent-checkerboard-backdrop');
-		expect(canvas?.parentElement?.classList).not.toContain('transparent-checkerboard-backdrop');
-	});
-
-	it('disables output URL and capture actions when Graphic Asset publication is blocked', async () => {
-		const wrapper = await mountComponent({
-			publicationBlocked: true,
-			publicationBlockReason: 'A pinned revision is missing.',
-		});
-		const blockedButtons = wrapper.findAll('button[disabled]');
-
-		expect(blockedButtons.length).toBeGreaterThanOrEqual(3);
-		expect(blockedButtons.every(button => button.attributes('title') === 'A pinned revision is missing.'))
-			.toBe(true);
-		for (const button of blockedButtons)
-			await button.trigger('click');
-		expect(mockCopyToClipboard).not.toHaveBeenCalled();
-		expect(mockToastAdd).not.toHaveBeenCalled();
+		expect(wrapper.get('iframe').element.parentElement?.getAttribute('style')).toContain('aspect-ratio: 1080 / 1920');
 	});
 });

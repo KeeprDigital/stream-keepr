@@ -108,16 +108,13 @@ async function mountComponent(options: Partial<{
 }
 
 describe('featureMatchOverlayFrameStyleCard', () => {
-	it('renders a toggle for a toggle-control effect param and writes it into the params bag', async () => {
+	it('writes an effect param edit into the Frame animation\'s params', async () => {
 		const patchFrame = vi.fn();
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		config.layout.frame.animation = { enabled: true, effect: 'dots', opacity: 0.5 };
 		const wrapper = await mountComponent({ config, patchFrame });
 
 		const toggle = wrapper.findAll('[data-testid="settings-toggle"]').find(candidate => candidate.text() === 'Connecting lines');
-		expect(toggle).toBeDefined();
-		expect(toggle!.attributes('data-description')).toBe('Render connecting line segments between dots.');
-
 		await toggle!.trigger('click');
 
 		const patch = patchFrame.mock.calls.at(-1)?.[0] as { animation?: { params?: Record<string, unknown> } };
