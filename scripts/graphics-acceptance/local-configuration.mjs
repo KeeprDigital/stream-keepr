@@ -14,7 +14,7 @@
  * `build/localConfiguration.ts` rather than restated. That file is a build module
  * and these are `.mjs` scripts, which is a real seam and not a stylistic one; it is
  * crossed by importing the `.ts` directly, which Node does natively — type
- * stripping has been on by default since 22.18, and `.node-version` pins 24.
+ * stripping has been on by default since 22.18, and `package.json` pins 26.
  * `localConfiguration.ts` is erasable-syntax-only (`as const satisfies`,
  * `export type`), so nothing there needs a transform. A third copy of the
  * list is what the ticket asked us not to write, and the drift pin in

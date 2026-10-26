@@ -78,7 +78,7 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 	it('the scope decision is the tested script, not an inline diff of HEAD^1', () => {
 		expect(scope).toMatch(/^ {8}run: node scripts\/ci-scope\.mjs$/m);
 		expect(scope).not.toContain('HEAD^1');
-		expect(scope).toMatch(/node-version-file: \.node-version/);
+		expect(scope).toMatch(/node-version-file: package\.json/);
 	});
 
 	it('no gate reads PR-only state, so none is skipped in the queue for want of a PR', () => {
