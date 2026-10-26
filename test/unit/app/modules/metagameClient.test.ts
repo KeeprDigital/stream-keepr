@@ -14,12 +14,11 @@ describe('metagame client module', () => {
 
 	it.each([
 		[
-			{
-				scope: 'all',
-				topN: 16,
-				playerListId: 5,
-				minPoints: 9,
-			},
+			{ scope: 'all', topN: 16, playerListId: 5 },
+			{ scope: 'all' },
+		],
+		[
+			{ scope: 'all', minPoints: 9 },
 			{ scope: 'all' },
 		],
 		[
@@ -37,6 +36,10 @@ describe('metagame client module', () => {
 		[
 			{ scope: 'playerList', playerListId: 5 },
 			{ scope: 'playerList', playerListId: 5 },
+		],
+		[
+			{ scope: 'playerList' },
+			{ scope: 'playerList' },
 		],
 	] as const)('sends only the parameters scope %j uses', (options, query) => {
 		expect(buildMetagameScopeQuery(options)).toEqual(query);
@@ -111,6 +114,27 @@ describe('metagame client module', () => {
 				'/api/events/1/metagame/cards',
 				{
 					query: { scope: 'all', sortBy: 'inclusionRate', limit: 50 },
+				},
+			],
+		]);
+	});
+
+	it('sends the summary and card detail through the same scope query', async () => {
+		const client = useMetagameClient();
+		await client.loadSummary(1, { scope: 'topN', topN: 8 });
+		await client.loadCardDetail(1, 3, { scope: 'minPoints', minPoints: 9 });
+
+		expect(mockFetch.mock.calls).toEqual([
+			[
+				'/api/events/1/metagame',
+				{
+					query: { scope: 'topN', topN: 8 },
+				},
+			],
+			[
+				'/api/events/1/metagame/cards/3',
+				{
+					query: { scope: 'minPoints', minPoints: 9 },
 				},
 			],
 		]);
