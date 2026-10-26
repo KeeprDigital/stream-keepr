@@ -244,10 +244,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 	});
 
 	it('roots every discovered owner slot in its own mode’s namespace', () => {
-		// The reference index has no mode column: the owner-slot prefix is what tells
-		// one mode's rows from another's, so a write can scope its delete to its own
-		// rows and an output can resolve only its own mode's references. A slot that
-		// escaped its prefix would break both silently, which is what this pins.
+		// The prefix is the only thing scoping a write's delete and an output's reads.
 		const references = broadcastGraphicsGraphicAssetReferences(config([
 			{
 				id: 'lower-third',
@@ -287,9 +284,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 	});
 
 	it('gives each referencing Screen Mode a distinct, non-overlapping slot namespace', () => {
-		// Two modes sharing a prefix — or one being a prefix of the other — would make
-		// the delete scope and the output scope ambiguous. Compared without case,
-		// because that is how SQLite's `LIKE` compares them.
+		// Compared without case, as SQLite's `LIKE` compares them.
 		const prefixes = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES
 			.map(mode => graphicAssetReferenceSlotPrefix(mode).toLowerCase());
 
@@ -303,14 +298,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 	});
 
 	it('recognises exactly the modes that publish references, and equips each one', () => {
-		// A mode missing from the list writes its configuration without indexing it,
-		// and its Screen Outputs would then be asked for revisions no capability
-		// covers. A mode on the list that is missing a slot prefix is worse: its
-		// writes would be scoped by an undefined prefix. So every listed mode has to
-		// be recognised and equipped, and an unlisted one recognised as neither.
-		// Named as well as iterated. Iterating proves each listed mode is equipped, but
-		// only naming the list makes dropping or renaming a member fail here rather than
-		// pass quietly with one mode fewer.
+		// Named by hand, so dropping a member fails here rather than passing with one mode fewer.
 		expect([...GRAPHIC_ASSET_REFERENCING_SCREEN_MODES]).toEqual([
 			'feature-match-overlay',
 			'broadcast-graphics',
@@ -330,21 +318,14 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {
 			expect(isGraphicAssetReferencingScreenMode(mode)).toBe(true);
-			// Dotted path segments of letters and hyphens only: `%` and `_` are `LIKE`
-			// wildcards, so a prefix carrying one would scope its delete and its output
-			// to other modes' rows too.
+			// No `%` or `_`: they are `LIKE` wildcards.
 			expect(graphicAssetReferenceSlotPrefix(mode)).toMatch(/^(?:[a-z-]+\.)+$/i);
 		}
 
-		// The other half of "exactly", derived from every Screen Mode there is rather
-		// than listed by hand. The hand-written list this replaces named five of the
-		// eight non-referencing modes, so standings, top-cut, and player-history were
-		// asserted nowhere — and a mode added to the vocabulary joined neither list.
 		const referencing: readonly string[] = GRAPHIC_ASSET_REFERENCING_SCREEN_MODES;
 		const nonReferencing = SCREEN_MODE_VALUES.filter(mode => !referencing.includes(mode));
 
-		// Every referencing mode is a real Screen Mode: a typo in the list above removes
-		// nothing here, and the two counts stop agreeing.
+		// Every referencing mode is a real Screen Mode.
 		expect(nonReferencing).toHaveLength(SCREEN_MODE_VALUES.length - GRAPHIC_ASSET_REFERENCING_SCREEN_MODES.length);
 
 		for (const mode of nonReferencing)

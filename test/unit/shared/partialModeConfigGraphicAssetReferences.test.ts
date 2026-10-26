@@ -2,31 +2,13 @@ import type { GraphicAssetReferencingScreenMode, GraphicAssetReferencingScreenMo
 import { describe, expect, it } from 'vitest';
 import { screenModeGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
-/*
- * A stored mode configuration is legitimately partial: a mode-configuration
- * PATCH writes a fragment, and readers complete it from the mode's defaults.
- * Discovery runs against exactly those stored fragments on the write path, so a
- * fragment missing the key that pins assets has to publish what its rendering
- * would — nothing — rather than throwing a 500 out of the save (#625).
- */
+// A stored mode configuration is a PATCH fragment, so discovery on the write path
+// must publish nothing for a fragment missing its asset keys rather than throw (#625).
+// Background and Background Layer modes cover their own fragments.
 describe('screenModeGraphicAssetReferences on a partial stored configuration', () => {
 	it.each<[GraphicAssetReferencingScreenMode, GraphicAssetReferencingScreenModeConfigs]>([
-		[
-			'feature-match-overlay',
-			{
-				'feature-match-overlay': { featureMatchId: 7 },
-			},
-		],
-		[
-			'broadcast-graphics',
-			{
-				'broadcast-graphics': { channels: [] },
-			},
-		],
-		[
-			'background',
-			{ background: {} },
-		],
+		['feature-match-overlay', { 'feature-match-overlay': { featureMatchId: 7 } }],
+		['broadcast-graphics', { 'broadcast-graphics': { channels: [] } }],
 	])('publishes nothing for a %s fragment with no assets in it', (mode, modeConfigs) => {
 		expect(screenModeGraphicAssetReferences(mode, modeConfigs)).toEqual([]);
 	});
