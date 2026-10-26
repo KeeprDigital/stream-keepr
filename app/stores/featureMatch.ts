@@ -57,19 +57,6 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		return true;
 	}
 
-	async function getFeatureMatchById(eventId: number, matchId: number) {
-		return executeReporting(
-			async () => {
-				const matchData = await matchRepo.getById(eventId, matchId);
-				if (!matchData) {
-					throw new Error('Feature match not found');
-				}
-				return matchData;
-			},
-			{ loadingRef: itemLoading, errorRef: error },
-		);
-	}
-
 	async function createFeatureMatch(eventId: number, input: CreateFeatureMatchInput) {
 		const flight = lifecycle.currentLifetime();
 		const createdMatch = await lifecycle.create(eventId, input);
@@ -182,7 +169,6 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		// Actions
 		loadFeatureMatchesByEventId,
 		holdFeatureMatch,
-		getFeatureMatchById,
 		createFeatureMatch,
 		updateFeatureMatch,
 		removeFeatureMatch,
