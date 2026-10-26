@@ -26,6 +26,12 @@ export const createMatchSchema = createInsertSchema(matches)
 		eventId: true,
 		externalId: true,
 		externalSource: true,
+		// A Match's result is Melee's alone (ADR-0047).
+		hasResult: true,
+		player1GameWins: true,
+		player2GameWins: true,
+		gameDraws: true,
+		isBye: true,
 		createdAt: true,
 		updatedAt: true,
 	})
@@ -36,12 +42,6 @@ export const createMatchSchema = createInsertSchema(matches)
 		player2Id: z.number().int().positive().nullable().optional(),
 		player1Data: matchPlayerDataSchema.nullable().optional(),
 		player2Data: matchPlayerDataSchema.nullable().optional(),
-		hasResult: z.boolean().optional(),
-		player1GameWins: z.number().int().nonnegative().nullable().optional(),
-		player2GameWins: z.number().int().nonnegative().nullable().optional(),
-		gameDraws: z.number().int().nonnegative().nullable().optional(),
-		isBye: z.boolean().optional(),
-		resultString: z.string().max(500).nullable().optional(),
 	})
 	.strict();
 
@@ -52,6 +52,12 @@ export const updateMatchSchema = createUpdateSchema(matches)
 		eventId: true,
 		externalId: true,
 		externalSource: true,
+		// A Match's result is Melee's alone (ADR-0047).
+		hasResult: true,
+		player1GameWins: true,
+		player2GameWins: true,
+		gameDraws: true,
+		isBye: true,
 		createdAt: true,
 		updatedAt: true,
 	})
@@ -62,12 +68,6 @@ export const updateMatchSchema = createUpdateSchema(matches)
 		player2Id: z.number().int().positive().nullable().optional(),
 		player1Data: matchPlayerDataSchema.nullable().optional(),
 		player2Data: matchPlayerDataSchema.nullable().optional(),
-		hasResult: z.boolean().optional(),
-		player1GameWins: z.number().int().nonnegative().nullable().optional(),
-		player2GameWins: z.number().int().nonnegative().nullable().optional(),
-		gameDraws: z.number().int().nonnegative().nullable().optional(),
-		isBye: z.boolean().optional(),
-		resultString: z.string().max(500).nullable().optional(),
 	})
 	.strict();
 

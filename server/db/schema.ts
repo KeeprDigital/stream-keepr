@@ -245,13 +245,14 @@ export const matches = sqliteTable('matches', {
 	player1Data: text('player1_data', { mode: 'json' }).$type<PlayerSlotData>(),
 	player2Data: text('player2_data', { mode: 'json' }).$type<PlayerSlotData>(),
 
-	// Match result data
+	// Match result data, written only by Melee Sync (ADR-0047). A reported
+	// Match that is not a bye holds both game wins and game draws; an
+	// unreported Match or a bye holds none.
 	hasResult: integer('has_result', { mode: 'boolean' }).notNull().default(false),
 	player1GameWins: integer('player1_game_wins'),
 	player2GameWins: integer('player2_game_wins'),
 	gameDraws: integer('game_draws'),
 	isBye: integer('is_bye', { mode: 'boolean' }).notNull().default(false),
-	resultString: text('result_string'),
 
 	sortOrder: integer('sort_order').notNull().default(0),
 

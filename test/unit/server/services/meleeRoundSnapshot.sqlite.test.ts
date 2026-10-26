@@ -24,7 +24,7 @@ describe('meleeRoundSnapshotService JSON bulk SQLite integration', () => {
 				external_id text, external_source text, table_number integer, player1_id integer,
 				player2_id integer, player1_data text, player2_data text, has_result integer not null default 0,
 				player1_game_wins integer, player2_game_wins integer, game_draws integer,
-				is_bye integer not null default 0, result_string text, sort_order integer not null default 0,
+				is_bye integer not null default 0, sort_order integer not null default 0,
 				created_at integer not null default (unixepoch() * 1000),
 				updated_at integer not null default (unixepoch() * 1000),
 				unique (event_id, external_id, external_source)

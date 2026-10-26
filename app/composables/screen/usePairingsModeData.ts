@@ -62,14 +62,11 @@ export function usePairingsModeData() {
 	function formatResult(row: ScreenOutputRoundMatch) {
 		if (row.isBye)
 			return 'BYE';
-		if (!row.hasResult)
+		if (!row.hasResult || row.player1GameWins == null || row.player2GameWins == null)
 			return 'Pending';
-		if (row.player1GameWins != null && row.player2GameWins != null) {
-			return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws
-				? `-${row.gameDraws}`
-				: ''}`;
-		}
-		return row.resultString || 'Result';
+		return `${row.player1GameWins}-${row.player2GameWins}${row.gameDraws
+			? `-${row.gameDraws}`
+			: ''}`;
 	}
 
 	/** Which side won the Match: the seated Player of a bye, or the one with more game wins; `null` for a draw or a pending Match. */

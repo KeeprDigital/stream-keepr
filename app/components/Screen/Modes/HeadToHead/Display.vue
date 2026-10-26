@@ -19,8 +19,8 @@ const displayStyle = computed(() => ({
 
 const players = computed(() => [player1.value, player2.value]);
 
-/** How an earlier Match ended: its winner by name, a draw, or the result as reported when it names no winner. */
-function outcomeLabel({ outcome, resultString }: ScreenOutputHeadToHeadEarlierMatch): string {
+/** How an earlier Match ended: its winner by name, or a draw. */
+function outcomeLabel({ outcome }: ScreenOutputHeadToHeadEarlierMatch): string {
 	switch (outcome) {
 		case 'player1':
 			return player1.value?.name ?? '';
@@ -28,8 +28,6 @@ function outcomeLabel({ outcome, resultString }: ScreenOutputHeadToHeadEarlierMa
 			return player2.value?.name ?? '';
 		case 'draw':
 			return 'Draw';
-		case 'reported':
-			return resultString ?? '';
 	}
 }
 </script>
@@ -90,7 +88,7 @@ function outcomeLabel({ outcome, resultString }: ScreenOutputHeadToHeadEarlierMa
 					>
 						<span class="round" :style="secondaryTextStyle">{{ earlierMatch.roundName }}</span>
 						<span class="winner" :style="primaryTextStyle">{{ outcomeLabel(earlierMatch) }}</span>
-						<span class="score broadcast-table-numeric">{{ earlierMatch.gameScore ?? '' }}</span>
+						<span class="score broadcast-table-numeric">{{ earlierMatch.gameScore }}</span>
 					</div>
 				</template>
 			</div>

@@ -57,7 +57,6 @@ function earlierMatch(overrides: Record<string, unknown> = {}) {
 		phaseName: 'Swiss',
 		outcome: 'player1',
 		gameScore: '2-1',
-		resultString: null,
 		...overrides,
 	};
 }
@@ -167,17 +166,6 @@ describe('screenModesHeadToHeadDisplay', () => {
 		expect(rows.map(row => row.get('.round').text())).toEqual(['Round 2', 'Round 5', 'Quarterfinal']);
 		expect(rows.map(row => row.get('.winner').text())).toEqual(['Nadia Rivers', 'Oskar Lind', 'Draw']);
 		expect(rows.map(row => row.get('.score').text())).toEqual(['2-1', '0-2', '1-1-1']);
-	});
-
-	it('shows the result as reported for a Match reported without game wins, naming no winner', async () => {
-		earlierMatches.value = [
-			earlierMatch({ outcome: 'reported', gameScore: null, resultString: 'Oskar Lind won' }),
-		];
-
-		const row = (await mountComponent()).get('.earlier-match');
-
-		expect(row.get('.winner').text()).toBe('Oskar Lind won');
-		expect(row.get('.score').text()).toBe('');
 	});
 
 	it('says it is the two Players\' first earlierMatch when they have not met', async () => {

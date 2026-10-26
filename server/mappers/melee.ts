@@ -528,6 +528,11 @@ function mapMeleeMatchToDbRow(
 	const p2 = mapCompetitorToPlayerData(competitors[1], context, meleeMatch.Guid, matchFormatExternalId);
 
 	const isBye = competitors.length < 2 || meleeMatch.ByeReason != null;
+	const hasResult = meleeMatch.HasResult ?? false;
+	// Melee leaves a side's GameWins, and the Match's GameDraws, null rather
+	// than 0 when there were none. A reported Match always holds its Game
+	// Score; an unreported Match or a bye holds none (ADR-0047).
+	const holdsGameScore = hasResult && !isBye;
 
 	return {
 		roundId,
@@ -538,12 +543,17 @@ function mapMeleeMatchToDbRow(
 		player2Id: p2.playerId,
 		player1Data: p1.playerData,
 		player2Data: p2.playerData,
-		hasResult: meleeMatch.HasResult ?? false,
-		player1GameWins: competitors[0]?.GameWins ?? null,
-		player2GameWins: competitors[1]?.GameWins ?? null,
-		gameDraws: meleeMatch.GameDraws ?? null,
+		hasResult,
+		player1GameWins: holdsGameScore
+			? competitors[0]?.GameWins ?? 0
+			: null,
+		player2GameWins: holdsGameScore
+			? competitors[1]?.GameWins ?? 0
+			: null,
+		gameDraws: holdsGameScore
+			? meleeMatch.GameDraws ?? 0
+			: null,
 		isBye,
-		resultString: meleeMatch.ResultString || null,
 		sortOrder,
 	};
 }

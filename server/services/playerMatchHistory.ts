@@ -70,7 +70,6 @@ export async function findPlayerMatchHistory(eventId: number, playerId: number) 
 			opponentDeckName: match.isBye ? null : opponentDeck.name,
 			opponentDeckColors: match.isBye ? null : opponentDeck.colors,
 			...side,
-			resultString: match.resultString,
 		};
 	});
 

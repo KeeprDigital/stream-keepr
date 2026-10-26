@@ -580,6 +580,117 @@ describe('mapMeleeMatchesToDbRows', () => {
 		expect(result).toEqual([]);
 	});
 
+	describe('a Match result', () => {
+		const players = [1, 2].map(teamId => ({
+			id: teamId * 10,
+			name: `Player ${teamId}`,
+			externalId: teamId.toString(),
+			externalSource: 'melee',
+		} as any));
+		const context = () => createMatchContext({
+			playerMap: new Map(players.map(player => [
+				externalIdentityKey('melee', player.externalId),
+				player,
+			])),
+		});
+		function mapOne(match: Pick<MeleeMatchParsed, 'HasResult' | 'GameDraws' | 'ByeReason'> & { gameWins: [number | null, number | null] | [number | null] }) {
+			const [row] = mapMeleeMatchesToDbRows([
+				{
+					Guid: 'result',
+					TableNumber: 1,
+					Competitors: match.gameWins.map((gameWins, index) => ({
+						TeamId: index + 1,
+						SortOrder: index,
+						GameWins: gameWins,
+						Decklists: [],
+					})),
+					HasResult: match.HasResult,
+					ResultString: 'Player 1 won 2-0-0',
+					GameDraws: match.GameDraws,
+					ByeReason: match.ByeReason,
+				},
+			], 10, 1, context());
+			return row!;
+		}
+
+		it('counts the game wins and game draws Melee leaves null on a reported Match as none', () => {
+			const row = mapOne({
+				HasResult: true,
+				GameDraws: null,
+				ByeReason: null,
+				gameWins: [2, null],
+			});
+
+			expect(row).toMatchObject({
+				hasResult: true,
+				isBye: false,
+				player1GameWins: 2,
+				player2GameWins: 0,
+				gameDraws: 0,
+			});
+		});
+
+		it('keeps a reported draw', () => {
+			const row = mapOne({
+				HasResult: true,
+				GameDraws: 1,
+				ByeReason: null,
+				gameWins: [1, 1],
+			});
+
+			expect(row).toMatchObject({
+				hasResult: true,
+				player1GameWins: 1,
+				player2GameWins: 1,
+				gameDraws: 1,
+			});
+		});
+
+		it('holds no game wins or game draws for an unreported Match, whatever Melee sends', () => {
+			const row = mapOne({
+				HasResult: false,
+				GameDraws: 1,
+				ByeReason: null,
+				gameWins: [1, null],
+			});
+
+			expect(row).toMatchObject({
+				hasResult: false,
+				player1GameWins: null,
+				player2GameWins: null,
+				gameDraws: null,
+			});
+		});
+
+		it('holds no game wins or game draws for a bye', () => {
+			const row = mapOne({
+				HasResult: true,
+				GameDraws: 0,
+				ByeReason: 1,
+				gameWins: [2],
+			});
+
+			expect(row).toMatchObject({
+				hasResult: true,
+				isBye: true,
+				player1GameWins: null,
+				player2GameWins: null,
+				gameDraws: null,
+			});
+		});
+
+		it('does not keep Melee\'s result text', () => {
+			const row = mapOne({
+				HasResult: true,
+				GameDraws: 0,
+				ByeReason: null,
+				gameWins: [2, 0],
+			});
+
+			expect(row).not.toHaveProperty('resultString');
+		});
+	});
+
 	it('rejects unpaired partial Matches while preserving explicit completed and bye records', () => {
 		const player = {
 			id: 11,

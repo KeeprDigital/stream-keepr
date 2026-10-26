@@ -31,7 +31,6 @@ export interface HeadToHeadMatchFacts extends MatchResultFacts {
 	phaseName: string;
 	phaseSortOrder: number;
 	sortOrder: number;
-	resultString: string | null;
 }
 
 export interface HeadToHeadFacts {
@@ -63,18 +62,12 @@ function seatsBoth(match: HeadToHeadMatchFacts, a: number, b: number): boolean {
 	return (match.player1Id === a && match.player2Id === b) || (match.player1Id === b && match.player2Id === a);
 }
 
-/**
- * A reported Match read from the first Player's side. One reported without game
- * wins reads as pending there; it is a result all the same, just one naming no
- * winner. A bye never seats both Players.
- */
-const OUTCOME_FROM_FIRST_SIDE: Record<MatchSideOutcome, HeadToHeadOutcome> = {
+/** A reported Match read from the first Player's side. A bye never seats both Players. */
+const OUTCOME_FROM_FIRST_SIDE = {
 	win: 'player1',
 	loss: 'player2',
 	draw: 'draw',
-	pending: 'reported',
-	bye: 'reported',
-};
+} as const satisfies Partial<Record<MatchSideOutcome, HeadToHeadOutcome>>;
 
 function byPlayOrder(a: HeadToHeadMatchFacts, b: HeadToHeadMatchFacts): number {
 	return a.phaseSortOrder - b.phaseSortOrder
@@ -90,20 +83,24 @@ function byPlayOrder(a: HeadToHeadMatchFacts, b: HeadToHeadMatchFacts): number {
  */
 function projectEarlierMatches(facts: HeadToHeadFacts, player1Id: number, player2Id: number): ScreenOutputHeadToHeadEarlierMatch[] {
 	return facts.matches
-		.filter(match => match.id !== facts.currentMatchId && match.hasResult && !match.isBye && seatsBoth(match, player1Id, player2Id))
+		.filter(match => match.id !== facts.currentMatchId && seatsBoth(match, player1Id, player2Id))
 		.sort(byPlayOrder)
-		.map((match) => {
+		.flatMap((match) => {
 			const side = readMatchFromPlayerSide(match, player1Id);
-			return {
-				matchId: match.id,
-				roundId: match.roundId,
-				roundName: match.roundName,
-				roundNumber: match.roundNumber,
-				phaseName: match.phaseName,
-				outcome: OUTCOME_FROM_FIRST_SIDE[side.outcome],
-				gameScore: formatGameScore(side),
-				resultString: match.resultString,
-			};
+			const gameScore = formatGameScore(side);
+			if (side.outcome === 'pending' || side.outcome === 'bye' || gameScore === null)
+				return [];
+			return [
+				{
+					matchId: match.id,
+					roundId: match.roundId,
+					roundName: match.roundName,
+					roundNumber: match.roundNumber,
+					phaseName: match.phaseName,
+					outcome: OUTCOME_FROM_FIRST_SIDE[side.outcome],
+					gameScore,
+				},
+			];
 		});
 }
 

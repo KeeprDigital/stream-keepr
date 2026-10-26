@@ -101,7 +101,6 @@ beforeAll(async () => {
 			player1GameWins: 2,
 			player2GameWins: 1,
 			gameDraws: 1,
-			resultString: 'Bob won 2-1-1',
 			sortOrder: 2,
 		},
 		{
@@ -151,7 +150,6 @@ describe('findRoundMatches', () => {
 			player1GameWins: 2,
 			player2GameWins: 1,
 			gameDraws: 1,
-			resultString: 'Bob won 2-1-1',
 		});
 		expect(table12).toMatchObject({ hasResult: false, player1GameWins: null, player2GameWins: null });
 	});

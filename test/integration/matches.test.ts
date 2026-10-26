@@ -132,7 +132,7 @@ describe('matches API', () => {
 		expect(match).toHaveProperty('player1GameWins');
 		expect(match).toHaveProperty('player2GameWins');
 		expect(match).toHaveProperty('gameDraws');
-		expect(match).toHaveProperty('resultString');
+		expect(match).not.toHaveProperty('resultString');
 		expect(match).toHaveProperty('createdAt');
 		expect(match).toHaveProperty('updatedAt');
 	});
@@ -140,19 +140,39 @@ describe('matches API', () => {
 	it('updates a match', async () => {
 		const updated = await $fetch(`/api/events/${eventId}/matches/${matchId}`, {
 			method: 'PATCH',
-			body: {
-				tableNumber: 5,
-				hasResult: true,
-				player1GameWins: 2,
-				player2GameWins: 1,
-			},
+			body: { tableNumber: 5 },
 		});
 
 		expect(updated.id).toBe(matchId);
 		expect(updated.tableNumber).toBe(5);
-		expect(updated.hasResult).toBe(true);
-		expect(updated.player1GameWins).toBe(2);
-		expect(updated.player2GameWins).toBe(1);
+		expect(updated.hasResult).toBe(false);
+	});
+
+	it('refuses a manual write carrying a result, which only Melee Sync records', async () => {
+		for (const body of [
+			{ hasResult: true, player1GameWins: 2, player2GameWins: 1 },
+			{ gameDraws: 1 },
+			{ isBye: true },
+			{ resultString: '2-1' },
+		]) {
+			const update = await $fetchRaw(`/api/events/${eventId}/matches/${matchId}`, { method: 'PATCH', body });
+			expect(update.status).toBe(400);
+
+			const create = await $fetchRaw(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: { roundId, tableNumber: 98, ...body },
+			});
+			expect(create.status).toBe(400);
+		}
+
+		const match = await $fetch(`/api/events/${eventId}/matches/${matchId}`);
+		expect(match).toMatchObject({
+			hasResult: false,
+			isBye: false,
+			player1GameWins: null,
+			player2GameWins: null,
+			gameDraws: null,
+		});
 	});
 
 	it('deletes a match', async () => {
