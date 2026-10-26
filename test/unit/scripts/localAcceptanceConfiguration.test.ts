@@ -88,16 +88,7 @@ describe('which required names a local acceptance run needs', () => {
 		expect(missingLocalAcceptanceNames({})).not.toContain(ADMIN_TOKEN);
 	});
 
-	/**
-	 * #396's addition, and the distinction that makes it not a cell-H false alarm.
-	 *
-	 * Both names are things a local run genuinely cannot proceed without once
-	 * `/api/**` denies by default: the installation cannot admit anybody at all
-	 * without the secret, and the harness acquires its operator by calling the
-	 * first-admin bootstrap with the token. What makes requiring the *token* honest
-	 * is that a deployed run — the one that has no bootstrap secret to read — is
-	 * not checked here at all.
-	 */
+	// A local run signs in with both; a deployed run, which has neither, is not checked (#396).
 	it('needs the auth secret and the bootstrap token a local run signs in with', () => {
 		expect(missingLocalAcceptanceNames({})).toEqual([SIGNING_KEY, AUTH_SECRET, BOOTSTRAP_TOKEN]);
 		expect(localAcceptanceConfiguration({ deployed: true, env: {}, readSources: noFiles }).missing).toEqual([]);
@@ -163,14 +154,7 @@ describe('folding the checkout\'s sources into one answer', () => {
 		]))).toContain(SIGNING_KEY);
 	});
 
-	/**
-	 * The assertion above does not actually reach the trim in `suppliedNames`:
-	 * `missingLocalNuxtNames` trims again downstream, so a whitespace value that
-	 * got through the fold is still counted missing and the mutation survives.
-	 * What only this case can catch is the shadowing — a `.env` holding a stray
-	 * space would otherwise occupy the name and hide the real `.env` value,
-	 * which is a false alarm on a checkout that works.
-	 */
+	// A whitespace value must not occupy the name and hide a real later one.
 	it('does not let a whitespace-only earlier source shadow a real later one', () => {
 		const supplied = suppliedNames([
 			{ [SIGNING_KEY]: '   ' },
@@ -335,17 +319,7 @@ describe('the preview command', () => {
 		readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8'),
 	) as { scripts: Record<string, string> };
 
-	/**
-	 * All three positions, because two of them are not enough. The first version
-	 * of this test pinned only staging-before-wrangler, and rev-274 ran the row it
-	 * was missing: reordering to `stage && build && migrate && wrangler` passed
-	 * every test with zero failures. It also silently restores #274's original
-	 * defect, because `nuxt build` rebuilds `.output` — a sentinel written to
-	 * `.output/server/.env` is gone afterwards — so a stage that runs first
-	 * is a stage that never happened, and the previewed Worker comes up with no
-	 * secrets again. The module docblock already stated this invariant; nothing
-	 * made it executable.
-	 */
+	// `nuxt build` rebuilds `.output`, so staging must come after it and before wrangler (#274).
 	it('builds, then stages the secrets, then starts wrangler', () => {
 		const preview = packageJson.scripts.preview!;
 		const built = preview.indexOf('pnpm build');
@@ -509,13 +483,8 @@ describe('the failure this preflight raises', () => {
 	 * instead of the notice it was trying to print.
 	 */
 	it('prints through the evidence gate without tripping it', () => {
-		// The **worst case this failure can actually produce**, which is every name a
-		// local run is checked for and not every name a checkout is required to have:
-		// the admin token is never in this list, because no acceptance route reads it.
-		// Read as the worst case rather than as one name, because the gate refuses a
-		// detail over 120 characters and three surfaces come to 103 — so a fourth
-		// required-here name would turn a helpful notice into a leak error about the
-		// notice, and this row is what says so first.
+		// The worst case: every name a local run checks. The gate refuses a detail over
+		// 120 characters, and three surfaces come to 103.
 		const evidence = createAcceptanceEvidence({ harness: 'graphics-delivery-v1', secrets: [] });
 		const surface = sentenceList(
 			LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => LOCAL_NUXT_NAME_SURFACES[name]),
