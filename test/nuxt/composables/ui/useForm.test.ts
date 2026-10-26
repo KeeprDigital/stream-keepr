@@ -78,17 +78,6 @@ describe('useForm', () => {
 		expect(getChanges()).toEqual({});
 	});
 
-	it('updateOriginal updates both formData and originalFormData', () => {
-		const { formData, originalFormData, isDirty, updateOriginal } = useForm({
-			initialData: { name: 'Alice' },
-		});
-
-		updateOriginal({ name: 'Bob' });
-		expect(formData.value.name).toBe('Bob');
-		expect(originalFormData.value.name).toBe('Bob');
-		expect(isDirty.value).toBe(false);
-	});
-
 	it('deep clones initial data to prevent reference sharing', () => {
 		const initial = {
 			name: 'Alice',
@@ -295,5 +284,92 @@ describe('useForm', () => {
 			expect(formData.value).toEqual({ commentator1TalentId: 3, commentator2TalentId: 5 });
 			expect(getChanges()).toEqual({ commentator2TalentId: 5 });
 		});
+	});
+
+	describe('runSave', () => {
+		/** A store that answers a save the way the real ones do: it holds `stored` before resolving. */
+		function storeAnswering<T>(initial: Ref<T>, stored: T, succeeded = true) {
+			return async () => {
+				initial.value = stored;
+				return succeeded;
+			};
+		}
+
+		it('settles a submitted value on the normalized one the save stored', async () => {
+			const initial = ref({ name: 'Alice', pronouns: 'she/her' as string | null });
+			const { formData, isDirty, runSave } = useForm({ initialData: initial });
+
+			formData.value.name = 'Alicia ';
+			formData.value.pronouns = '';
+			await runSave(storeAnswering(initial, { name: 'Alicia', pronouns: null }));
+
+			expect(formData.value).toEqual({ name: 'Alicia', pronouns: null });
+			expect(isDirty.value).toBe(false);
+		});
+
+		it('keeps a value edited while the save was in flight', async () => {
+			const initial = ref({ name: 'Alice', lgs: 'Shop' });
+			const { formData, getChanges, runSave } = useForm({ initialData: initial });
+
+			formData.value.name = 'Alicia ';
+			await runSave(async () => {
+				formData.value.lgs = 'Other Shop';
+				initial.value = { name: 'Alicia', lgs: 'Shop' };
+				return true;
+			});
+
+			expect(formData.value).toEqual({ name: 'Alicia', lgs: 'Other Shop' });
+			expect(getChanges()).toEqual({ lgs: 'Other Shop' });
+		});
+
+		it('leaves the form as it is when the save fails', async () => {
+			const initial = ref({ name: 'Alice' });
+			const { formData, isDirty, runSave } = useForm({ initialData: initial });
+
+			formData.value.name = 'Alicia ';
+			const result = await runSave(storeAnswering(initial, { name: 'Alice' }, false));
+
+			expect(result).toBe(false);
+			expect(formData.value).toEqual({ name: 'Alicia ' });
+			expect(isDirty.value).toBe(true);
+		});
+
+		it('keeps the form as it is when the save never reached the baseline', async () => {
+			const initial = ref({ name: 'Alice' });
+			const { formData, runSave } = useForm({ initialData: initial });
+
+			formData.value.name = 'Alicia ';
+			await runSave(async () => true);
+
+			expect(formData.value).toEqual({ name: 'Alicia ' });
+		});
+
+		it('takes a colleague\'s change that landed after the save', async () => {
+			const initial = ref({ name: 'Alice' });
+			const { formData, isDirty, runSave } = useForm({ initialData: initial });
+
+			formData.value.name = 'Alicia ';
+			await runSave(storeAnswering(initial, { name: 'Briony' }));
+
+			expect(formData.value).toEqual({ name: 'Briony' });
+			expect(isDirty.value).toBe(false);
+		});
+	});
+	it('compares nested objects regardless of key order', async () => {
+		const initial = ref({
+			player: { name: 'Alice', lgs: undefined as string | undefined, archetypeId: undefined as number | undefined },
+		});
+		const { formData, isDirty } = useForm({ initialData: initial });
+
+		formData.value.player = { name: 'Bob', lgs: 'Shop' } as typeof formData.value.player;
+		// The merge appends a key the baseline added after the local ones; the
+		// baseline holds it before `lgs`.
+		initial.value = {
+			player: { name: 'Bob', archetypeId: 7, lgs: 'Shop' },
+		};
+		await nextTick();
+
+		expect(Object.keys(formData.value.player)).toEqual(['name', 'lgs', 'archetypeId']);
+		expect(isDirty.value).toBe(false);
 	});
 });

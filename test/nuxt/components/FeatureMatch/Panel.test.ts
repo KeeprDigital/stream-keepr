@@ -322,6 +322,70 @@ describe('featureMatchPanel setup save', () => {
 		expect(pageIsDirty()).toBe(true);
 	});
 
+	// The save trims, reads blanks as null and drops an empty deck, and the server
+	// stores what it was sent; the form kept the operator's raw value as a local
+	// edit against that answer, so the toast said saved while Save stayed enabled
+	// and leaving the page warned of unsaved changes.
+	it.each([
+		[
+			'a name with trailing whitespace',
+			{ name: 'Alicia ' },
+		],
+		[
+			'a cleared field',
+			{ pronouns: '' },
+		],
+		[
+			'a number typed as text',
+			{ points: '3' },
+		],
+		[
+			'a deck name typed then cleared',
+			{
+				gameData: { type: 'mtg', deckName: null, deckColors: null },
+			},
+		],
+	])('reads clean once a save of %s lands', async (_label, edit) => {
+		const match = storeEchoedMatch();
+		match.player1Data = { name: 'Alice', pronouns: 'she/her' } as any;
+		const { wrapper, pageIsDirty } = await mountUnderGuard({ match: match as any, matchNumber: 1 });
+
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		const player1Form = wrapper.findAllComponents(PlayerFormStub)[0]!;
+		player1Form.vm.$emit('update:modelValue', {
+			...player1Form.props('modelValue'),
+			...edit,
+		});
+		await flushPromises();
+		expect(pageIsDirty()).toBe(true);
+
+		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
+		expect(pageIsDirty()).toBe(false);
+		expect(wrapper.get('button[data-label="Save"]').attributes('disabled')).toBeDefined();
+	});
+
+	it('reads clean when the saved player comes back carrying a field it did not send', async () => {
+		const match = reactive(createMockFeatureMatch({ id: 1, eventId: 1 }));
+		mockFeatureMatchStore.updateFeatureMatch.mockImplementation(async (_eventId: number, _matchId: number, update: any) => {
+			Object.assign(match, update, {
+				player1Data: { ...update.player1Data, archetypeId: 7 },
+			});
+			return { ...match };
+		});
+		const { wrapper, pageIsDirty } = await mountUnderGuard({ match: match as any, matchNumber: 1 });
+
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		wrapper.findAllComponents(PlayerFormStub)[0]!.vm.$emit('update:modelValue', { name: 'Bob', lgs: 'Shop' });
+		await flushPromises();
+		await wrapper.get('button[data-label="Save"]').trigger('click');
+		await flushPromises();
+
+		expect(pageIsDirty()).toBe(false);
+	});
+
 	it('associates hidden submit buttons with both player forms', async () => {
 		const wrapper = await mountComponent();
 

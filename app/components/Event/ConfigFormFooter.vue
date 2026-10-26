@@ -24,7 +24,7 @@ const emit = defineEmits<{
 			type="submit"
 			variant="outline"
 			:loading="loading"
-			:disabled="!isDirty"
+			:disabled="!isDirty || loading"
 			color="primary"
 		/>
 	</div>

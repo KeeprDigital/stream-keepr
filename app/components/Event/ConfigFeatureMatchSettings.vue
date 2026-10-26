@@ -7,10 +7,6 @@ const props = defineProps<{
 	loading?: boolean;
 }>();
 
-const emit = defineEmits<{
-	submit: [data: UpdateEventInput];
-}>();
-
 const initialData = computed(() => {
 	const defaults = toFeatureMatchDefaults(props.event);
 	return {
@@ -26,14 +22,12 @@ const initialData = computed(() => {
 	};
 });
 
-const { formData, isDirty, reset, getChanges } = useForm({
+const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	initialData,
+	toUpdate,
 });
 
-useRegisterDirtyState(isDirty);
-
-function submit() {
-	const changes = getChanges();
+function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput {
 	const { pronounsEnabled, standingsEnabled, lgsEnabled, tableNumberEnabled, featureMatchNotesEnabled, ...matchDefaults } = changes;
 	const eventToggles = Object.fromEntries(
 		Object.entries({
@@ -44,15 +38,15 @@ function submit() {
 			featureMatchNotesEnabled,
 		}).filter(([key]) => key in changes),
 	);
-	emit('submit', {
+	return {
 		...eventToggles,
 		...fromFeatureMatchDefaults(matchDefaults),
-	} as UpdateEventInput);
+	} as UpdateEventInput;
 }
 </script>
 
 <template>
-	<UForm :state="formData" @submit="submit">
+	<UForm :state="formData" @submit="save">
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
 				<UFormField
@@ -138,7 +132,7 @@ function submit() {
 				</UFormField>
 			</div>
 			<template #footer>
-				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading" @reset="reset" />
+				<EventConfigFormFooter :is-dirty="isDirty" :loading="loading || saving" @reset="reset" />
 			</template>
 		</UCard>
 	</UForm>

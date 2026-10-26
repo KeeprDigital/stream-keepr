@@ -99,7 +99,7 @@ function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
 	};
 }
 
-const { formData, isDirty, reset, getChanges } = useForm<FeatureMatchFormData>({
+const { formData, isDirty, reset, getChanges, runSave } = useForm<FeatureMatchFormData>({
 	initialData: computed(() => normalizeMatchData(props.match)),
 });
 
@@ -247,7 +247,7 @@ async function save() {
 	if (Object.keys(updateData).length === 0)
 		return;
 
-	await runRequest(
+	await runSave(() => runRequest(
 		async () => {
 			const updatedMatch = await featureMatchStore.updateFeatureMatch(eventStore.eventId!, formData.value.id, updateData);
 			if (!updatedMatch)
@@ -267,7 +267,7 @@ async function save() {
 					console.error('Failed to save match:', error);
 			},
 		},
-	);
+	));
 }
 </script>
 
