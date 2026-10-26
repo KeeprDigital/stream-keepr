@@ -214,7 +214,7 @@ export function playerService() {
 								eq(players.isActive, true),
 							]),
 				))
-				.orderBy(sql`${players.position} IS NULL`, asc(players.position));
+				.orderBy(sql`${players.position} IS NULL`, asc(players.position), asc(players.id));
 		}
 
 		return await db
@@ -228,7 +228,7 @@ export function playerService() {
 							eq(players.isActive, true),
 						]),
 			))
-			.orderBy(sql`${players.position} IS NULL`, asc(players.position));
+			.orderBy(sql`${players.position} IS NULL`, asc(players.position), asc(players.id));
 	};
 
 	const create = async (eventId: number, data: CreatePlayerInput): Promise<DbPlayer> => {

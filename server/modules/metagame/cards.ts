@@ -71,9 +71,17 @@ export function compareCardBreakdownEntries(
 	a: CardBreakdownEntry,
 	b: CardBreakdownEntry,
 ): number {
-	switch (sortBy) {
-		case 'avgCopies': return b.avgCopies - a.avgCopies;
-		case 'totalCopies': return b.totalCopies - a.totalCopies;
-		default: return b.inclusionRate - a.inclusionRate;
-	}
+	const primaryDifference = (() => {
+		switch (sortBy) {
+			case 'avgCopies': return b.avgCopies - a.avgCopies;
+			case 'totalCopies': return b.totalCopies - a.totalCopies;
+			default: return b.inclusionRate - a.inclusionRate;
+		}
+	})();
+
+	if (primaryDifference !== 0)
+		return primaryDifference;
+
+	// A total order: tied cards keep their places across re-reads.
+	return a.name.localeCompare(b.name) || a.id - b.id;
 }

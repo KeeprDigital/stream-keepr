@@ -242,6 +242,19 @@ describe('useStandingsModeData pagination and formatting', () => {
 
 	// ── displayRows: view modes ──
 
+	it('orders tied and unplaced Players by id, whatever order the read answers them in', async () => {
+		mutableConfig.viewMode = 'all';
+		serverPlayers = [
+			createMockPlayer({ id: 9, name: 'Ivy', position: null }),
+			createMockPlayer({ id: 4, name: 'Dee', position: 2 }),
+			createMockPlayer({ id: 7, name: 'Gus', position: null }),
+			createMockPlayer({ id: 5, name: 'Eve', position: 2 }),
+		];
+		const { displayRows } = await makeStandings();
+
+		expect(displayRows.value.map(row => row.id)).toEqual([4, 5, 7, 9]);
+	});
+
 	describe('pagination', () => {
 		it('computes totalPages from displayRows and rowsPerPage', async () => {
 			mutableConfig.viewMode = 'all';
