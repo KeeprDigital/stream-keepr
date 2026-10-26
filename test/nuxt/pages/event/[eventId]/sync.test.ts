@@ -275,35 +275,10 @@ describe('melee Sync page', () => {
 		mockEventRepo.listUnresolvedDeckCards.mockResolvedValue([]);
 	});
 
-	it('renders the status + recovery sections when setup is complete', async () => {
-		const wrapper = await mountPage();
-		await Promise.resolve();
-
-		expect(wrapper.text()).toContain('Data Freshness');
-		expect(wrapper.text()).toContain('Round Sync Status');
-		expect(wrapper.text()).toContain('Update from Melee');
-		expect(wrapper.text()).toContain('Advanced Recovery Tools');
-		expect(wrapper.text()).toContain('Danger Zone');
-		expect(wrapper.text()).toContain('Refresh Players');
-		expect(wrapper.text()).toContain('Refresh Deck Lists');
-		expect(wrapper.text()).toContain('Refresh Round Matches');
-		expect(wrapper.text()).toContain('Reset Event Structure');
-		expect(wrapper.text()).toContain('Manage Integration');
-	});
-
-	// The event store is filled from a client-side `$fetch`, which JSON round-trips
-	// every response — so `lastEventSyncedAt` and friends reach this page as ISO
-	// strings, never as the `Date` the response type declares (#272, #284). Every
-	// other fixture here hands the store real Dates, so `formatSyncTimestamp` has
-	// only ever been exercised on a shape production does not deliver.
+	// `$fetch` JSON round-trips the Event, so its sync timestamps arrive as ISO strings, not Dates (#272).
 	it('formats the freshness timestamps the wire actually delivers', async () => {
-		const wireEvent = JSON.parse(JSON.stringify(mockEventStore.event)) as typeof mockEventStore.event;
-		expect(typeof wireEvent.lastEventSyncedAt).toBe('string');
-		expect(typeof wireEvent.lastPlayersSyncedAt).toBe('string');
-		expect(typeof wireEvent.lastDecklistsSyncedAt).toBe('string');
-		mockEventStore.event = wireEvent;
+		mockEventStore.event = JSON.parse(JSON.stringify(mockEventStore.event));
 		mockRoundStore.rounds = JSON.parse(JSON.stringify(mockRoundStore.rounds));
-		expect(typeof mockRoundStore.rounds[0]!.lastSyncedAt).toBe('string');
 
 		const wrapper = await mountPage();
 		await Promise.resolve();

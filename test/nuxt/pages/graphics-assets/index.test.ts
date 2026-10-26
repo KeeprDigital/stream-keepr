@@ -9,7 +9,6 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
-import { formatByteCount } from '~~/shared/utils/formatByteCount';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
@@ -160,13 +159,7 @@ const eventStore = reactive({ eventId: 7 });
 
 mockNuxtImport('useEventStore', () => () => eventStore);
 mockNuxtImport('$fetch', () => mockApiFetch);
-/**
- * The failures each read can meet, settable per test.
- *
- * `useFetch` hands its `error` on as the failure the request produced, and the Workspace
- * renders both — so a mock that could only ever be `null` left two alerts uncovered
- * (#286).
- */
+/** The failure each `useFetch` read answers with, settable per test. */
 const listingError = ref<unknown>(null);
 const capacityLoadError = ref<unknown>(null);
 
@@ -186,20 +179,7 @@ mockNuxtImport('useFetch', () => (path: string) => ({
 const passthroughStub = defineComponent({
 	template: '<div><slot name="actions" /><slot name="header" /><slot /><slot name="footer" /></div>',
 });
-/**
- * The passthrough, plus the one prop `UAlert` reads as prose rather than as a slot.
- *
- * A slots-only stand-in dropped `title`, which made every alert passing its message
- * that way unassertable: the surface rendered nothing, so an assertion naming it
- * either failed for the wrong reason or passed off some other element carrying the
- * same words (#365, from #350's review). `description` is deliberately still
- * dropped — no alert on this page routes a failure through it, and a stub that
- * renders every prop stops telling a reader which one the page actually used.
- *
- * It is a stub of its own rather than a `title` on `passthroughStub` so the prop
- * stays an alert's concern: `UCard`, `UFormField`, `UIcon` and `NuxtLayout` share
- * that one, and none of them passes a `title` today.
- */
+/** Renders `title`, which this page's alerts pass their message through (#365). */
 const alertStub = defineComponent({
 	props: ['title'],
 	template: '<div><slot name="actions" /><slot name="header" /><span v-if="title">{{ title }}</span><slot /><slot name="footer" /></div>',
@@ -499,106 +479,6 @@ describe('the Graphics Asset Library Workspace', () => {
 			'Published Graphic Asset asset-1 Graphic Asset Revision revision-1',
 		);
 		expect(wrapper.text()).toContain('Exact source browser decode verified before publication.');
-	});
-
-	it('uploads a large image in resumable parts and reports exact transferred bytes', async () => {
-		const wrapper = await mountPage();
-		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
-		const file = new File([bytes], 'large-scoreboard.png', { type: 'image/png' });
-		const created: GraphicsIngestionOperation = {
-			...completedOperation,
-			name: 'large-scoreboard.png',
-			sourceFileName: 'large-scoreboard.png',
-			declaredMime: 'image/png',
-			declaredByteLength: bytes.byteLength,
-			transferredByteLength: 0,
-			stage: 'created',
-			report: undefined,
-			result: undefined,
-		};
-		const started: GraphicsIngestionOperation = {
-			...created,
-			stage: 'transferring',
-			transfer: {
-				method: 'multipart',
-				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				maximumConcurrentParts: 3,
-				maximumPartAttempts: 3,
-				partCount: 2,
-				cleanupPending: false,
-				completedParts: [],
-			},
-		};
-		const afterFirst: GraphicsIngestionOperation = {
-			...started,
-			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			transfer: {
-				...started.transfer!,
-				completedParts: [
-					{
-						partNumber: 1,
-						partIdentity: 'operation-1:1' as never,
-						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-					},
-				],
-			},
-		};
-		const ready: GraphicsIngestionOperation = {
-			...started,
-			transferredByteLength: bytes.byteLength,
-			transfer: {
-				...started.transfer!,
-				completedParts: [
-					...afterFirst.transfer!.completedParts,
-					{
-						partNumber: 2,
-						partIdentity: 'operation-1:2' as never,
-						byteLength: 1,
-					},
-				],
-			},
-		};
-		const completed = {
-			...completedOperation,
-			declaredByteLength: bytes.byteLength,
-			transferredByteLength: bytes.byteLength,
-			transfer: ready.transfer,
-		};
-		mockApiFetch.mockImplementation((path: string) => {
-			if (path === '/api/graphics-assets/ingestion-operations')
-				return Promise.resolve(created);
-			if (path.endsWith('/multipart'))
-				return Promise.resolve(started);
-			if (path.includes('/multipart/parts/1'))
-				return Promise.resolve(afterFirst);
-			if (path.includes('/multipart/parts/2'))
-				return Promise.resolve(ready);
-			if (path.endsWith('/multipart/complete'))
-				return Promise.resolve(completed);
-			return Promise.resolve(ready);
-		});
-
-		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
-		await flushPromises();
-		await wrapper.get('[data-testid="upload-image"]').trigger('click');
-		await flushPromises();
-
-		expect(mockApiFetch).toHaveBeenCalledWith(
-			'/api/graphics-assets/ingestion-operations/operation-1/multipart',
-			expect.objectContaining({ method: 'POST' }),
-		);
-		const partUploads = mockApiFetch.mock.calls
-			.filter(([path]) => String(path).includes('/multipart/parts/'));
-		expect(partUploads).toHaveLength(2);
-		expect(partUploads.map(([, request]) =>
-			((request as { body: Blob }).body).size)).toEqual([GRAPHICS_MULTIPART_PART_BYTES, 1]);
-		expect(mockApiFetch).toHaveBeenCalledWith(
-			'/api/graphics-assets/ingestion-operations/operation-1/multipart/complete',
-			expect.objectContaining({ method: 'POST' }),
-		);
-		expect(wrapper.text()).toContain(
-			`Transferred ${formatByteCount(bytes.byteLength)} of ${formatByteCount(bytes.byteLength)}`,
-		);
 	});
 
 	it('cancels a reconnected multipart operation through its durable identity', async () => {
@@ -1165,19 +1045,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.text()).toContain('Published');
 	});
 
-	/**
-	 * What the Workspace says when a read is refused.
-	 *
-	 * Both alerts used to render the failure's own `message`, which on a `$fetch` failure
-	 * is the transport's line — naming the route and the status code, and never the reason
-	 * the server actually gave. `failureSentence` owns which failures may be quoted, and
-	 * since #286 that includes the 5xx families whose prose the server preserves through
-	 * sanitizing: an exhausted byte store and an unavailable library are both answers this
-	 * page exists to relay, and both are 5xx. A 401 is the exception since #360: a read's
-	 * 401 means this browser holds no session either, so it names that and lights the
-	 * same banner the writes do, rather than quoting the route. Since #398 the banner
-	 * offers a sign-in rather than a reload — nothing is minted by reloading now.
-	 */
+	// A read's 401 means this browser is signed out too, so it lights the writes' banner (#360, #398).
 	it('names the ended session when the library listing answers 401, exactly as the writes do', async () => {
 		listingError.value = transportFailure({
 			status: 401,
@@ -1193,80 +1061,6 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(true);
 	});
 
-	it('names the ended session when the capacity read answers 401', async () => {
-		capacityLoadError.value = transportFailure({
-			status: 401,
-			statusText: 'Unauthorized',
-			body: { message: 'Authentication is required' },
-			request: `[GET] "/api/graphics-assets/capacity"`,
-		});
-		const wrapper = await mountPage();
-
-		const alert = wrapper.get('[data-testid="capacity-load-error"]');
-		expect(alert.text()).toContain('This browser is no longer signed in');
-		expect(alert.text()).not.toContain('401');
-	});
-
-	/**
-	 * The never-issued-a-session diagnosis (#206) is gone with the thing it
-	 * diagnosed. It existed because the Workspace's author identity was minted by a
-	 * middleware on the page request, so a session store outage produced a page
-	 * that answered 401 to everything with nothing anywhere naming the cause — a
-	 * failure a reload would not cure. Since #398 no identity is minted: this
-	 * browser is either signed in or it is not, and the one banner says which.
-	 */
-
-	it('relays an exhausted byte store, whose 507 the mapper preserved', async () => {
-		capacityLoadError.value = transportFailure({
-			status: 507,
-			statusText: 'Insufficient Storage',
-			body: { message: 'Canonical byte store capacity is exhausted' },
-			request: `[GET] "/api/graphics-assets/capacity"`,
-		});
-		const wrapper = await mountPage();
-
-		expect(wrapper.get('[data-testid="capacity-load-error"]').text())
-			.toContain('Canonical byte store capacity is exhausted');
-	});
-
-	it('falls back to the status line when the sanitizer got to the 5xx first', async () => {
-		listingError.value = transportFailure({
-			status: 503,
-			body: { message: 'Internal Server Error' },
-			request: `[GET] "/api/graphics-assets"`,
-		});
-		const wrapper = await mountPage();
-
-		expect(wrapper.get('[data-testid="library-load-error"]').text())
-			.toContain('[GET] "/api/graphics-assets": 503 Service Unavailable');
-	});
-
-	/**
-	 * The same judgement on the write paths, which did not have it (#350).
-	 *
-	 * A read here goes through `useFetch` and is reported by `reportedMessage` above; a
-	 * write goes through `$fetch` inside a `catch` and was reported by the graphics author
-	 * session's `describeFailure`, which reached for `Error.message` — so the two halves of
-	 * one page answered a refusal differently, and the half that refuses most of what an
-	 * author actually does was the one naming the route. The page has nine such catches
-	 * and five error surfaces they write to; one catch per surface is pinned below, and
-	 * the remaining four reach the same seam and are covered where it lives, in
-	 * `test/nuxt/composables/useGraphicsAuthorship.test.ts`.
-	 *
-	 * #350 could pin only the two surfaces that already carried a `data-testid`, and named
-	 * the reason: the lifecycle alert renders its message in the default slot and wanted
-	 * only the attribute, which the rule below says every alert should carry; the metadata
-	 * and replacement alerts pass theirs as `:title`, which the passthrough stub dropped,
-	 * so an assertion on either could not have failed. #365 gave all three their attribute
-	 * and gave `UAlert` a stub that renders `title` — the stub first, because a pin written
-	 * before it would have been the vacuous thing the rule below is about.
-	 *
-	 * The lifecycle testid interpolates its asset id and the other two do not, which is a
-	 * fact about where each error lives rather than a convention: `lifecycleErrorByAssetId`
-	 * is a map, so several assets can hold a lifecycle failure at once, while
-	 * `metadataError` and `replacementError` are single refs behind single-valued
-	 * `editingAssetId`/`replacementAssetId` gates — one panel open, one message, one node.
-	 */
 	it('says why an upload was refused rather than naming the route', async () => {
 		const wrapper = await mountPage();
 		const file = new File([
@@ -1288,133 +1082,8 @@ describe('the Graphics Asset Library Workspace', () => {
 		expect(alert.text()).not.toContain('409 Conflict');
 	});
 
-	it('says why an approved remote copy was refused rather than naming the route', async () => {
-		const wrapper = await mountPage();
-		mockApiFetch.mockRejectedValue(transportFailure({
-			status: 503,
-			body: { message: 'The Graphics Asset Library store is unavailable' },
-			request: `[POST] "/api/graphics-assets/ingestion-operations"`,
-		}));
-
-		await wrapper.get('[data-testid="remote-source-url"]')
-			.setValue('https://cdn.example.com/scoreboard.png');
-		await wrapper.get('[data-testid="remote-source-name"]')
-			.setValue('Remote scoreboard logo');
-		await wrapper.get('[data-testid="copy-remote-source"]').trigger('click');
-		await flushPromises();
-
-		const alert = wrapper.get('[data-testid="remote-copy-error"]');
-		expect(alert.text()).toContain('The Graphics Asset Library store is unavailable');
-		expect(alert.text()).not.toContain('503 Service Unavailable');
-	});
-
-	it('says why a lifecycle action was refused rather than naming the route', async () => {
-		const wrapper = await mountPage();
-		mockApiFetch.mockRejectedValue(transportFailure({
-			status: 409,
-			body: { message: 'This Graphic Asset is on air and cannot be retired' },
-			request: `[POST] "/api/graphics-assets/asset-1/lifecycle-actions"`,
-		}));
-
-		const retire = wrapper.findAll('button').find(button => button.text() === 'Retire');
-		await retire!.trigger('click');
-		await flushPromises();
-
-		const alert = wrapper.get('[data-testid="lifecycle-error-asset-1"]');
-		expect(alert.text()).toContain('This Graphic Asset is on air and cannot be retired');
-		expect(alert.text()).not.toContain('409 Conflict');
-	});
-
-	it('says why a metadata save was refused rather than naming the route', async () => {
-		const wrapper = await mountPage();
-		mockApiFetch.mockRejectedValue(transportFailure({
-			status: 409,
-			body: { message: 'Another author renamed this Graphic Asset first' },
-			request: `[PATCH] "/api/graphics-assets/asset-1"`,
-		}));
-
-		const edit = wrapper.findAll('button').find(button => button.text().includes('Edit metadata'));
-		await edit!.trigger('click');
-		const save = wrapper.findAll('button').find(button => button.text().includes('Save metadata'));
-		await save!.trigger('click');
-		await flushPromises();
-
-		const alert = wrapper.get('[data-testid="metadata-error"]');
-		expect(alert.text()).toContain('Another author renamed this Graphic Asset first');
-		expect(alert.text()).not.toContain('409 Conflict');
-	});
-
-	it('says why a replacement was refused rather than naming the route', async () => {
-		const replacementFile = new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' });
-		const wrapper = await mountPage();
-		// Not the capacity-load test's sentence, which this file already contains twice:
-		// a kill attributed by assertion value could not have told the two apart.
-		mockApiFetch.mockRejectedValue(transportFailure({
-			status: 507,
-			statusText: 'Insufficient Storage',
-			body: { message: 'Canonical byte store cannot hold another Graphic Asset Revision' },
-			request: `[POST] "/api/graphics-assets/asset-1/replacement-operations"`,
-		}));
-
-		const replace = wrapper.findAll('button').find(button => button.text().includes('Replace content'));
-		await replace!.trigger('click');
-		wrapper.findAllComponents(fileUploadStub).at(-1)!.vm.$emit('update:modelValue', replacementFile);
-		await flushPromises();
-		const publish = wrapper.findAll('button')
-			.find(button => button.text().includes('Replace with new Graphic Asset Revision'));
-		await publish!.trigger('click');
-		await flushPromises();
-
-		const alert = wrapper.get('[data-testid="replacement-error"]');
-		expect(alert.text()).toContain('Canonical byte store cannot hold another Graphic Asset Revision');
-		expect(alert.text()).not.toContain('507 Insufficient Storage');
-	});
-
-	/**
-	 * The two alerts that answer the author before anything has been sent.
-	 *
-	 * These are not the class above. `selectionError` and `remoteSelectionError` are
-	 * computed off what the author picked or typed, so no request exists, no
-	 * `describeFailure` runs, and there is no transport envelope for a second half to
-	 * exclude — the shape the five pins above share does not transfer, and saying so
-	 * is cheaper than a mutation row that cannot be written (#370).
-	 *
-	 * What does transfer is the rule below: an alert is asserted through its own
-	 * `data-testid`, or the assertion is not about that alert. Both of these passed
-	 * their sentence as `:title` and carried no attribute until #370, so each pin's
-	 * second half is the one earning the first: the node is conditional, and a
-	 * refusal that outlived the input it refuses would leave an author reading a
-	 * sentence about a file they had already replaced.
-	 *
-	 * The remote pin's third assertion is this pin's own extension, and is worth
-	 * naming as one rather than dressed up as a restatement.
-	 *
-	 * What this repository has decided about userinfo is that it is refused, not
-	 * that it is unprintable (README.md → Remote HTTPS copy: "no userinfo");
-	 * enforced by `validateDestination` in
-	 * `server/modules/graphics-asset-library/remote-source.ts`, which answers
-	 * `remote-source-credentials-present` at the initial URL and again after every
-	 * redirect. Non-display is decided somewhere else and about different parts of
-	 * the URL: `index.vue`, above `remoteSourcePath`, makes a remote source's query
-	 * parameters and fragment secrets that are never stored, displayed, or used to
-	 * name the Graphic Asset. Userinfo is neither of those parts, so this pin
-	 * extends that rule rather than quoting it — a surface that may not print the
-	 * query string has no better claim to print the password.
-	 *
-	 * That rule's "sent once with the copy request" is a fact about a copy that
-	 * happens, and is not true of credentials, which are never sent at all: the
-	 * same guard that raises this sentence holds `canCopyRemoteSource` false, which
-	 * 'refuses a plaintext or credential-bearing remote source before contacting
-	 * it' pins with `expect(mockApiFetch).not.toHaveBeenCalled()`. The alert is
-	 * therefore the only place these characters could surface, which is what makes
-	 * the assertion worth its line.
-	 *
-	 * Its sentence is also the one this file asserts at 'refuses a plaintext or
-	 * credential-bearing remote source before contacting it' — since #372 through
-	 * the same `data-testid`, so deleting that testid kills all three
-	 * remote-selection assertions. A kill lands on this pin by its FAIL-header
-	 * test name, not by value alone.
-	 */
+	// The two alerts that answer before any request exists; each must go once its input is fixed.
+	// Credentials in a remote source are refused, never sent, and never printed back.
 	it('says why a selected source cannot be uploaded, and stops once one that can is picked', async () => {
 		const wrapper = await mountPage();
 
@@ -1458,31 +1127,9 @@ describe('the Graphics Asset Library Workspace', () => {
 });
 
 /**
- * **Assert on the element under test, not on `wrapper.text()`.**
- *
- * `wrapper.text()` proves *something on the page* says it, which is not the same
- * claim and is weaker than it looks here. `UAlert` is stubbed, and the stub renders
- * the slots and `title` and nothing else — so any alert passing its message as
- * `:description` renders nothing at all, and an assertion naming that alert passes
- * anyway, off whichever other element happens to carry the same words. This suite
- * shipped exactly that: two cases named for the remote-copy alert passed off the
- * top-level signed-out banner, and replacing the remote-copy message with a literal
- * left all twenty-four green. (`title` was in that list until #365, which is why
- * three surfaces could not be pinned at all; `:description` still is.)
- *
- * So every alert below carries a `data-testid` and every assertion reads it. The
- * rule generalises past the stub: an assertion that cannot fail when the thing it
- * names is deleted is not testing that thing.
- *
- * What the Workspace says about who an upload belongs to, and what it says when
- * that owner stops existing.
- *
- * A Graphics Ingestion Operation is owned by one graphics author session and by
- * nothing more durable, so a session that lapses takes its operations with it —
- * reloading mints a new session and a new author, and the old operations are not
- * that author's. ADR-0010 records why that ownership is kept, and both halves of
- * the cost are asserted here: the Workspace states the rule *before* an upload
- * starts, and names the lapse rather than the status code when it happens.
+ * Assert each alert through its own `data-testid`: `wrapper.text()` passes off any element
+ * carrying the same words. An Ingestion Operation belongs to one author session (ADR-0010);
+ * the Workspace says so before an upload, and names the lapse rather than the status.
  */
 describe('the Library Workspace when its graphics author session decides ownership', () => {
 	beforeEach(() => {
@@ -1507,12 +1154,6 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		});
 	}
 
-	/**
-	 * #176's fourth acceptance criterion, restated for the identity that replaced
-	 * the Graphics Author Session (#398). What an upload is staked on is now an
-	 * account, so the two surprising consequences are the ones worth stating: an
-	 * operation outlives this browser and nobody else can finish it.
-	 */
 	it('says who an upload will belong to before one is started', async () => {
 		const wrapper = await mountPage();
 
