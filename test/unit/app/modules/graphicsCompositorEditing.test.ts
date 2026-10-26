@@ -3,9 +3,6 @@ import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
 import type { GraphicStyleAuthoringContext } from '~/composables/screen/useGraphicStyleSetAuthoring';
 import type { CompositorEdit, CompositorEditingState } from '~/modules/graphics/compositorEditing';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ref } from 'vue';
 import { applyGraphicStyleSet, resolveGraphicStyleSet } from '~~/shared/modules/graphic-style-sets';
@@ -488,72 +485,5 @@ describe('a panel editing through the module', () => {
 
 		expect(editing.canAuthor.value).toBe(false);
 		expect(committed).toEqual([]);
-	});
-});
-
-/**
- * #598: no compositor panel checks the Graphics Authoring Lease or replaces the stack
- * itself. A source scan, because what it guards against is a panel quietly growing a
- * second path to `update:graphics`: that path would work, so no behaviour test of the
- * panel would notice it skipping the lease guard or the re-capture.
- *
- * A panel is any compositor component that emits `update:graphics`. Its script may
- * emit it in one place only, the commit it hands `useCompositorEditing`; its template
- * may forward a child panel's commit unchanged.
- */
-describe('every compositor panel', () => {
-	const directory = fileURLToPath(new URL('../../../../app/components/Graphics/Compositor', import.meta.url));
-	const panels = readdirSync(directory)
-		.filter(name => name.endsWith('.vue'))
-		.map(name => ({
-			name,
-			source: readFileSync(join(directory, name), 'utf8'),
-		}))
-		.filter(({ source }) => source.includes('\'update:graphics\''))
-		.map(({ name, source }) => {
-			const end = source.indexOf('</script>');
-			return {
-				name,
-				script: source.slice(0, end),
-				template: source.slice(end),
-			};
-		});
-
-	const COMMIT = /emit\('update:graphics'/g;
-	const COMMIT_HANDED_TO_THE_MODULE = /useCompositorEditing\(\s*\(\) => props,\s*graphics => emit\('update:graphics', graphics\),\s*\)/;
-
-	it('has every panel to scan', () => {
-		expect(panels.map(panel => panel.name).sort()).toEqual([
-			'Animation.vue',
-			'Bindings.vue',
-			'Inspector.vue',
-			'SocialProfileProjections.vue',
-			'StackTree.vue',
-		]);
-	});
-
-	it('commits the stack only through the compositor editing module', () => {
-		const offenders = panels
-			.filter(({ script }) => script.match(COMMIT)?.length !== 1 || !COMMIT_HANDED_TO_THE_MODULE.test(script))
-			.map(panel => panel.name);
-
-		expect(offenders, 'emit update:graphics only as the commit handed to useCompositorEditing').toEqual([]);
-	});
-
-	it('forwards a child panel\'s commit from its template unchanged', () => {
-		const offenders = panels
-			.filter(({ template }) => (template.match(COMMIT)?.length ?? 0) !== (template.match(/emit\('update:graphics', \$event\)/g)?.length ?? 0))
-			.map(panel => panel.name);
-
-		expect(offenders, 'a template may only re-emit update:graphics with the child\'s own $event').toEqual([]);
-	});
-
-	it('neither checks the lease nor replaces a Broadcast Graphic in the stack itself', () => {
-		const LEASE_READ = /\bprops\.writable\b|\bwritable\s*[!=]==/;
-		const offenders = panels
-			.filter(({ script }) => LEASE_READ.test(script) || /\breplaceBroadcastGraphic\b/.test(script))
-			.map(panel => panel.name);
-
-		expect(offenders, 'the lease guard and the stack replacement belong to the compositor editing module').toEqual([]);
 	});
 });

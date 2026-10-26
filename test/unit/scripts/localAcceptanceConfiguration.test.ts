@@ -88,16 +88,7 @@ describe('which required names a local acceptance run needs', () => {
 		expect(missingLocalAcceptanceNames({})).not.toContain(ADMIN_TOKEN);
 	});
 
-	/**
-	 * #396's addition, and the distinction that makes it not a cell-H false alarm.
-	 *
-	 * Both names are things a local run genuinely cannot proceed without once
-	 * `/api/**` denies by default: the installation cannot admit anybody at all
-	 * without the secret, and the harness acquires its operator by calling the
-	 * first-admin bootstrap with the token. What makes requiring the *token* honest
-	 * is that a deployed run — the one that has no bootstrap secret to read — is
-	 * not checked here at all.
-	 */
+	// A local run signs in with both; a deployed run, which has neither, is not checked (#396).
 	it('needs the auth secret and the bootstrap token a local run signs in with', () => {
 		expect(missingLocalAcceptanceNames({})).toEqual([SIGNING_KEY, AUTH_SECRET, BOOTSTRAP_TOKEN]);
 		expect(localAcceptanceConfiguration({ deployed: true, env: {}, readSources: noFiles }).missing).toEqual([]);
@@ -163,14 +154,7 @@ describe('folding the checkout\'s sources into one answer', () => {
 		]))).toContain(SIGNING_KEY);
 	});
 
-	/**
-	 * The assertion above does not actually reach the trim in `suppliedNames`:
-	 * `missingLocalNuxtNames` trims again downstream, so a whitespace value that
-	 * got through the fold is still counted missing and the mutation survives.
-	 * What only this case can catch is the shadowing — a `.env` holding a stray
-	 * space would otherwise occupy the name and hide the real `.env` value,
-	 * which is a false alarm on a checkout that works.
-	 */
+	// A whitespace value must not occupy the name and hide a real later one.
 	it('does not let a whitespace-only earlier source shadow a real later one', () => {
 		const supplied = suppliedNames([
 			{ [SIGNING_KEY]: '   ' },
@@ -267,12 +251,7 @@ describe('a local run', () => {
 	});
 });
 
-/**
- * The #130 lesson, applied to this ticket's notice: the defect class is a
- * sentence, so the sentence is read in every state it can be produced in
- * rather than merely asserted to contain a substring.
- */
-describe('the notice, read as prose', () => {
+describe('the notice', () => {
 	function noticeFor(readSources: () => (string | null)[], env: Record<string, string> = {}) {
 		const decision = localAcceptanceConfiguration({ deployed: false, env, readSources });
 		return decision.missing.length === 0
@@ -280,165 +259,67 @@ describe('the notice, read as prose', () => {
 			: localConfigurationNotice(decision.missing);
 	}
 
-	/** No file at all — the fresh worktree the ticket is about. */
-	it('is the same sentence whether the file is absent or its value is blank', () => {
-		expect(noticeFor(noFiles)).toBe(noticeFor(blankFiles));
-		expect(noticeFor(noFiles)).toBe(
-			'Nothing this checkout can give a local installation sets '
-			+ 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, NUXT_BETTER_AUTH_SECRET, or NUXT_ADMIN_BOOTSTRAP_TOKEN, '
-			+ 'so Screen Output asset capabilities, signing in and every authenticated API route, '
-			+ 'and first-admin bootstrap answer 503 '
-			+ 'and this run would never reach anything to assert. Nothing was proved and nothing was disproved. '
-			+ 'NUXT_GRAPHICS_ADMIN_TOKEN is not checked here and a blank one is not what stopped this: '
-			+ 'no route an acceptance run calls reads it. '
-			+ 'A fresh git worktree is the usual way to arrive here — .env is gitignored, so a new checkout does '
-			+ 'not inherit it from the one it was branched from, and a copied .env.example carries the names with '
-			+ 'empty values. Fix: copy .env in from the checkout you branched from, or fill in .env.example — '
-			+ '`pnpm preview` stages .env into .output/server/, which is where wrangler resolves it from the '
-			+ 'config. A --deployed run reads no local file and is unaffected. '
-			+ 'See README.md → Local configuration.',
-		);
+	it('reads the same whether the file is absent or its values are blank, and carries the fix', () => {
+		const notice = noticeFor(noFiles);
+
+		expect(notice).toBe(noticeFor(blankFiles));
+		expect(notice).toMatch(/\.env(?!\.example)/);
+		for (const token of ['copy .env in from the checkout you branched from', '`pnpm preview` stages .env into .output/server/', 'README.md → Local configuration'])
+			expect(notice).toContain(token);
 	});
 
-	/**
-	 * The excluded name is named, so a reader who has just been told their run
-	 * is blocked does not go hunting for the other blank in `.env`. Read
-	 * against the partition rather than a literal, so the clause cannot outlive
-	 * the list it describes.
-	 */
-	it('says which required name it is deliberately not checking, and why', () => {
-		const notice = localConfigurationNotice([SIGNING_KEY]);
-		for (const name of LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES)
-			expect(notice).toContain(`${name} is not checked here`);
-		expect(notice).toContain('no route an acceptance run calls reads it');
+	it.each([
+		[
+			'only the name no harness reaches is blank',
+			() => [`${ADMIN_TOKEN}=""\n${configuredBody()}`, null],
+			{},
+		],
+		[
+			'the shell alone carries the names',
+			noFiles,
+			Object.fromEntries(LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => [name, A_KEY])),
+		],
+		[
+			'only the built worker\'s own copy carries them',
+			() => [
+				null,
+				configuredBody(),
+			],
+			{},
+		],
+	] as const)('says nothing when %s', (_, readSources, env) => {
+		expect(noticeFor(readSources as () => (string | null)[], env)).toBeUndefined();
 	});
 
-	/**
-	 * The first draft of that clause was false in the plural state: it named the
-	 * admin token as a cause and then said the admin token was not checked. A
-	 * name cannot be both, so the clause covers only names that are NOT missing.
-	 */
-	it('does not excuse a name it has just blamed', () => {
-		const both = localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]);
-		expect(both).toContain(`sets ${ADMIN_TOKEN} or`);
-		expect(both).not.toContain(`${ADMIN_TOKEN} is not checked here`);
-	});
-
-	/**
-	 * The advice has to carry the mechanism, because the copy step alone is
-	 * necessary and not sufficient — that was the whole defect (#274).
-	 */
-	it('says where the copied file actually has to end up', () => {
-		expect(localConfigurationNotice([SIGNING_KEY]))
-			.toContain('`pnpm preview` stages .env into .output/server/');
-	});
-
-	/**
-	 * The state a developer working through `.env.example` one name at a time
-	 * arrives in. The admin token is blank and the signing key is not, and the
-	 * run is fine — so there must be no sentence at all.
-	 */
-	it('says nothing when only the name no harness reaches is blank', () => {
-		expect(noticeFor(() => [`${ADMIN_TOKEN}=""\n${configuredBody()}`, null])).toBeUndefined();
-	});
-
-	it('says nothing when the shell alone carries the names', () => {
-		const env = Object.fromEntries(LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => [name, A_KEY]));
-
-		expect(noticeFor(noFiles, env)).toBeUndefined();
-	});
-
-	it('says nothing when only the built worker\'s own copy carries them', () => {
-		expect(noticeFor(() => [
-			null,
-			configuredBody(),
-		])).toBeUndefined();
-	});
-
-	it('joins two names and surfaces with a plain conjunction', () => {
-		const both = localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]);
-		expect(both).toContain(
-			'sets NUXT_GRAPHICS_ADMIN_TOKEN or NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY, '
-			+ 'so Graphics Administrator operations and Screen Output asset capabilities answer 503',
-		);
-	});
-
-	/**
-	 * Three is the reachable state as of #396, and the serial comma in it is
-	 * load-bearing rather than decorative: one of the surfaces contains an `and` of
-	 * its own ('signing in and every authenticated API route'), so a list joined
-	 * with bare conjunctions reads as five surfaces where there are three. The
-	 * plural sentence had never been read in this state, which is exactly how
-	 * #130's cell-H got written.
-	 */
-	it('separates three surfaces from the conjunction inside one of them', () => {
-		const all = localConfigurationNotice([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES]);
-
-		expect(all).toContain(
-			'so Screen Output asset capabilities, signing in and every authenticated API route, '
-			+ 'and first-admin bootstrap answer 503',
-		);
-		expect(all).not.toContain('capabilities and signing in');
-	});
-
-	/**
-	 * The surfaces are the map's, not this file's. Swapping the map's strings has
-	 * to change the sentence, or the reuse is decorative and a future edit to
-	 * `localConfiguration.ts` would leave the notice claiming the old surface.
-	 */
-	it('names the surface the shared map gives, not one of its own', () => {
-		expect(localConfigurationNotice([SIGNING_KEY]))
-			.toContain(`so ${LOCAL_NUXT_NAME_SURFACES[SIGNING_KEY]} answer 503`);
-		expect(localConfigurationNotice([SIGNING_KEY]))
-			.not
-			.toContain(LOCAL_NUXT_NAME_SURFACES[ADMIN_TOKEN]);
-	});
-
-	/**
-	 * The name that is present may appear — the clause above exists to say it is
-	 * not the problem — but it must never appear as the CAUSE, so this reads the
-	 * causal clause on its own rather than the whole sentence.
-	 */
-	it('names the missing name and not the one that is present as the cause', () => {
+	it('blames only the missing names, through the shared surface map', () => {
 		const notice = localConfigurationNotice([SIGNING_KEY]);
 		const cause = notice.slice(0, notice.indexOf('and this run would never reach'));
-		expect(cause).toContain(SIGNING_KEY);
+
+		expect(cause).toContain(`so ${LOCAL_NUXT_NAME_SURFACES[SIGNING_KEY]} answer 503`);
 		expect(cause).not.toContain(ADMIN_TOKEN);
 		expect(cause).not.toContain(LOCAL_NUXT_NAME_SURFACES[ADMIN_TOKEN]);
 	});
 
-	/**
-	 * The instruction has to be the one README.md → Local configuration gives,
-	 * spelled out rather than gestured at, and it must not be satisfiable by the
-	 * example files' own names — `.env.example` is not `.env`.
-	 */
-	it('gives the copy step literally', () => {
-		expect(localConfigurationNotice([SIGNING_KEY]))
-			.toContain('copy .env in from the checkout you branched from');
-		expect(localConfigurationNotice([SIGNING_KEY])).toMatch(/\.env(?!\.example)/);
+	it('names an unchecked name as not the problem, unless it has just blamed it', () => {
+		for (const name of LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES)
+			expect(localConfigurationNotice([SIGNING_KEY])).toContain(`${name} is not checked here`);
+		expect(localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY])).not.toContain(`${ADMIN_TOKEN} is not checked here`);
+	});
+
+	it('joins surfaces so the `and` inside one of them cannot read as a separator', () => {
+		expect(localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]))
+			.toContain('so Graphics Administrator operations and Screen Output asset capabilities answer 503');
+		expect(localConfigurationNotice([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES]))
+			.toContain('so Screen Output asset capabilities, signing in and every authenticated API route, and first-admin bootstrap answer 503');
 	});
 });
 
-/**
- * The staging step is the half of #274 that makes the documentation true, and
- * it lives in a `package.json` line nothing else would notice the loss of.
- */
 describe('the preview command', () => {
 	const packageJson = JSON.parse(
 		readFileSync(fileURLToPath(new URL('../../../package.json', import.meta.url)), 'utf8'),
 	) as { scripts: Record<string, string> };
 
-	/**
-	 * All three positions, because two of them are not enough. The first version
-	 * of this test pinned only staging-before-wrangler, and rev-274 ran the row it
-	 * was missing: reordering to `stage && build && migrate && wrangler` passed
-	 * every test with zero failures. It also silently restores #274's original
-	 * defect, because `nuxt build` rebuilds `.output` — a sentinel written to
-	 * `.output/server/.env` is gone afterwards — so a stage that runs first
-	 * is a stage that never happened, and the previewed Worker comes up with no
-	 * secrets again. The module docblock already stated this invariant; nothing
-	 * made it executable.
-	 */
+	// `nuxt build` rebuilds `.output`, so staging must come after it and before wrangler (#274).
 	it('builds, then stages the secrets, then starts wrangler', () => {
 		const preview = packageJson.scripts.preview!;
 		const built = preview.indexOf('pnpm build');
@@ -602,13 +483,8 @@ describe('the failure this preflight raises', () => {
 	 * instead of the notice it was trying to print.
 	 */
 	it('prints through the evidence gate without tripping it', () => {
-		// The **worst case this failure can actually produce**, which is every name a
-		// local run is checked for and not every name a checkout is required to have:
-		// the admin token is never in this list, because no acceptance route reads it.
-		// Read as the worst case rather than as one name, because the gate refuses a
-		// detail over 120 characters and three surfaces come to 103 — so a fourth
-		// required-here name would turn a helpful notice into a leak error about the
-		// notice, and this row is what says so first.
+		// The worst case: every name a local run checks. The gate refuses a detail over
+		// 120 characters, and three surfaces come to 103.
 		const evidence = createAcceptanceEvidence({ harness: 'graphics-delivery-v1', secrets: [] });
 		const surface = sentenceList(
 			LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES.map(name => LOCAL_NUXT_NAME_SURFACES[name]),

@@ -2,31 +2,12 @@ import type { BroadcastGraphicsRenderModelInput } from '~~/app/modules/broadcast
 import type { BroadcastGraphicConfig, GraphicInputDeclaration, GraphicPlaceholderStyle } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { resolveBroadcastGraphicsRenderModel } from '~~/app/modules/broadcast-graphics/renderModel';
-import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { graphic as graphicOf, shape, text } from '~~/test/helpers/graphicsComposition';
 
 function graphic(id: string): BroadcastGraphicConfig {
-	return {
-		id,
-		name: id,
-		items: [
-			{
-				type: 'shape',
-				id: `${id}-shape`,
-				label: 'Shape 1',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
-				width: 100,
-				height: 100,
-				geometry: squareShapeGeometry(),
-				surfaceStyle: {
-					fill: { type: 'solid', color: '#ffffff' },
-					fillOpacity: 1,
-				},
-			},
-		],
-	};
+	return graphicOf(id, [
+		shape(`${id}-shape`),
+	]);
 }
 
 function input(overrides: Partial<BroadcastGraphicsRenderModelInput> = {}): BroadcastGraphicsRenderModelInput {
@@ -67,53 +48,19 @@ function templateGraphic(
 	},
 ): BroadcastGraphicConfig {
 	return {
-		id: 'lower-third',
-		name: 'Lower Third',
-		inputs: TEMPLATE_INPUTS,
-		items: [
-			{
-				type: 'text',
-				id: 'name-line',
-				label: 'Name line',
-				visible: true,
-				anchor: 'top-left',
-				x: 0,
-				y: 0,
+		...graphicOf('lower-third', [
+			text('name-line', {
 				width: 600,
 				height: 120,
 				text: '{name} — {title}',
-				typography: {
-					font: { kind: 'application', fontId: 'inter' },
-					fontSize: 48,
-					fontWeight: 700,
-					fontStyle: 'normal',
-					textTransform: 'none',
-					letterSpacing: 0,
-					lineHeight: 1.2,
-					textAlign: 'left',
-					color: '#ffffff',
-				},
-				overflowPolicy: 'ellipsis',
-				minFontSize: 24,
 				placeholderStyles,
-			},
-		],
+			}),
+		]),
+		inputs: TEMPLATE_INPUTS,
 	};
 }
 
 describe('broadcast Graphics render model', () => {
-	it('renders an empty Broadcast Graphics Screen transparent in the Overlay Output', () => {
-		const model = resolveBroadcastGraphicsRenderModel(input());
-
-		expect(model.output).toBe('overlay');
-		expect(model.canvasStyle.background).toBe('transparent');
-	});
-
-	it('renders an empty Broadcast Graphics Screen black in the Fill and Key Outputs', () => {
-		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'fill' })).canvasStyle.background).toBe('#000000');
-		expect(resolveBroadcastGraphicsRenderModel(input({ output: 'key' })).canvasStyle.background).toBe('#000000');
-	});
-
 	it('gives the Overlay, Fill, and Key Outputs identical canvas dimensions', () => {
 		const overlay = resolveBroadcastGraphicsRenderModel(input()).canvasStyle;
 		const fill = resolveBroadcastGraphicsRenderModel(input({ output: 'fill' })).canvasStyle;

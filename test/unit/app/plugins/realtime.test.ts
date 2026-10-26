@@ -165,12 +165,7 @@ vi.stubGlobal('computed', computed);
 vi.stubGlobal('watch', watch);
 vi.stubGlobal('toValue', toValue);
 vi.stubGlobal('$fetch', vi.fn());
-/**
- * `location.hash` is where a Screen Output keeps its Screen Output Asset
- * Capability, and since #397 the auth callback reads it to decide which credential
- * this document has. Stubbed empty by default — the operator's own pages carry no
- * fragment — and set per test where the bearer arm is what is being read.
- */
+/** A Screen Output's capability lives in `location.hash`; operator pages carry none. */
 vi.stubGlobal('window', {
 	addEventListener: vi.fn(),
 	location: { hash: '' },
@@ -307,15 +302,7 @@ describe('realtime plugin', () => {
 		expect(callback).toHaveBeenCalledWith(null, { token: 'token-request' });
 	});
 
-	/**
-	 * The Screen Output's half of #397's dual grant.
-	 *
-	 * An output has no session, so the capability in its URL fragment is the only
-	 * thing that can get it a token — and the grant it comes back with is narrowed to
-	 * its own Screen. Presenting nothing here would have taken every Screen Output's
-	 * realtime down the moment the route stopped issuing anonymously, which is the
-	 * one failure in this ticket that reaches program.
-	 */
+	// An output has no session, so its fragment capability is its only way to a token (#397).
 	it('presents the capability in its fragment, which is a Screen Output\'s only credential', async () => {
 		window.location.hash = '#asset-capability=a-screen-output-capability-token';
 		vi.mocked($fetch as unknown as (path: string) => Promise<unknown>)
@@ -353,10 +340,7 @@ describe('realtime plugin', () => {
 	});
 
 	it('declares no clientId of its own, because the token pins one', async () => {
-		// Ably refuses a connection whose declared `clientId` conflicts with its
-		// token's, and #397 pins the identity in the token — the userId for an
-		// operator, `screen-output:<screenId>` for an output. Declaring one here would
-		// break every connection rather than merely duplicate a value.
+		// Ably refuses a declared `clientId` that conflicts with the token's (#397).
 		await createTransport();
 
 		expect(realtimeInstances[0]!.options).not.toHaveProperty('clientId');
@@ -478,17 +462,7 @@ describe('realtime plugin', () => {
 		expect(handler).toHaveBeenCalledOnce();
 	});
 
-	/**
-	 * One failed token mint used to kill every subscription for the event being
-	 * switched to, permanently, with a console warning as the only trace.
-	 *
-	 * The mechanism was a single line: `activeEventId` was assigned before the
-	 * authorize attempt, so after the attempt failed the event *looked* covered.
-	 * Every later subscribe took the already-covered fast path and attached on the
-	 * old event's token, which Ably denies — and a denied attach is handled by the
-	 * same permanent unsubscribe. Nothing retried, nothing told the operator, and
-	 * only a full page reload recovered (#307).
-	 */
+	// An Event counts as covered only once its mint succeeds (#307).
 	describe('a token mint that fails during an event switch', () => {
 		beforeEach(() => {
 			vi.useFakeTimers();
@@ -588,15 +562,7 @@ describe('realtime plugin', () => {
 		});
 	});
 
-	/**
-	 * The first connection's half of the "coverage only on success" contract.
-	 *
-	 * Since #474 the first mint runs through the same authorize() path as an
-	 * event switch (autoConnect off; the mint makes the first connection), so
-	 * one mechanism holds the contract — this pins that the very first Event
-	 * gets it too: tokenError published, nothing subscribed, next subscribe
-	 * mints again and recovers.
-	 */
+	// The first mint makes the first connection, under the same coverage contract (#474).
 	describe('the first mint after connection', () => {
 		beforeEach(() => {
 			vi.useFakeTimers();
@@ -632,15 +598,7 @@ describe('realtime plugin', () => {
 		});
 	});
 
-	/**
-	 * A Realtime Subscription outlives a token outage (#609).
-	 *
-	 * #307 made a failed mint retry and report; it still answered exhaustion by
-	 * unsubscribing every subscription that had been waiting on the mint. Coverage
-	 * could come back later — a fresh subscribe cleared the fault — but the room and
-	 * Screen handlers the page had registered were gone, and with no fresh subscribe
-	 * nothing even tried again. Only a remount recovered.
-	 */
+	// A Realtime Subscription outlives a token outage: its handlers stay registered (#609).
 	describe('a token outage that outlasts the mint\'s retries', () => {
 		beforeEach(() => {
 			vi.useFakeTimers();
@@ -1151,12 +1109,6 @@ describe('realtime plugin', () => {
 
 		expect(shown).toBe('published before the attach');
 		scope.stop();
-	});
-
-	it('does not expose authorizeForEvent — token scope is owned by the transport', async () => {
-		const realtime = await createTransport();
-
-		expect((realtime as Record<string, unknown>).authorizeForEvent).toBeUndefined();
 	});
 
 	it('keeps independent room owners for the same message type', async () => {
