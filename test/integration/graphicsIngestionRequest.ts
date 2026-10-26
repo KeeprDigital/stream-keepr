@@ -19,9 +19,8 @@ import type { GraphicsDuplicateContentPolicy } from '~~/shared/types/graphicsAss
  * genuinely exercises reuse, and it now passes `'reuse'` where it means it.
  *
  * The default alone is not the guarantee — a suite could always build the body by
- * hand and skip this function. `test/unit/integration/graphicsIngestionRequest.test.ts`
- * is what makes it one: it reads every integration source and fails when an
- * initiation whose policy the server honours does not come through here.
+ * hand and skip this function. A `no-restricted-syntax` rule over `test/integration`
+ * flags a hand-built initiation body.
  *
  * This endpoint takes three sources — `local-upload`, `remote-copy` and
  * `template-package` (`index.post.ts:81`). The first two read the policy from the
