@@ -4,17 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * Cross-Event scoping proofs for the deck services (#468): Player Decks, the
- * deck-card projection, and unresolved deck cards.
- *
- * The deck tables downstream of `player_decks` (cards, unresolved cards,
- * companions) carry no event_id of their own — their Event scope exists only
- * through a join or subquery on the owning deck. Two Events therefore hold
- * decks with the identical Melee external id and identically-normalized
- * unresolved card names, so any read or Melee-sync write whose deck-resolution
- * subquery loses its Event predicate lands on the other Event's rows.
- */
+// Deck tables below `player_decks` carry no event_id, so their Event scope is a join: two
+// Events hold colliding decks and unresolved names to prove each one (#468).
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });

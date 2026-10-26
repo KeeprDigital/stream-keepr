@@ -67,10 +67,7 @@ vi.mock('~~/server/utils/meleeSyncState', () => ({
 
 const handler = (await import('~~/server/api/events/[id]/melee-config.put')).default;
 
-// Carries a distinguishing property on purpose: `toHaveBeenCalledWith` compares
-// deeply, so the bare `{}` the rows around it pass cannot tell the request the route
-// was answering apart from any other empty object a careless edit might hand
-// `setResponseHeader`.
+// Distinguishable from the bare `{}` other rows pass to `setResponseHeader`.
 const requestEvent = { __requestEventFor: 'melee-config' } as any;
 const noKeptStructure = { keptPhases: [], keptRounds: [] };
 
@@ -295,13 +292,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		warn.mockRestore();
 	});
 
-	/**
-	 * #347: a keyring-configuration fault is the #233 family — an unfinished
-	 * deployment only the reader holding the response can finish — so the public
-	 * sentence names the setting to fix and survives the sanitizer. Asserted after
-	 * `mapPublicNitroError` because the sentence is the mapper's; the raw throw
-	 * carries the site's own prose, which no caller receives.
-	 */
+	// A keyring fault names the setting to fix and survives the sanitizer (#347).
 	it('answers a keyring configuration fault by naming the setting an operator must fix', async () => {
 		const storedValue = 'stored-envelope-never-log';
 		mockFindEvent.mockReset().mockResolvedValue({ id: 1, meleeClientSecret: storedValue });
@@ -344,13 +335,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		expect(mockReleaseMeleeSyncLease).toHaveBeenCalledWith(1, 'config-token');
 	});
 
-	/**
-	 * The other half of #347's split, decided rather than deliberate-by-omission:
-	 * a corrupt stored envelope is a genuine internal failure no setting fixes, so
-	 * it stays a sanitized 500 — and the public payload carries no crypto code
-	 * either, now that the `data` escape hatch is closed. The code still reaches
-	 * the structured log through the cause; the mapper test pins that half.
-	 */
+	// A corrupt stored envelope stays a sanitized 500 with no crypto code in the body (#347).
 	it('sanitizes a corrupt stored envelope and keeps the crypto code out of the body', async () => {
 		mockRequireMeleeIntegration.mockRejectedValue(new MeleeCredentialCryptoError(
 			'MELEE_CREDENTIAL_DECRYPTION_FAILED',
@@ -370,10 +355,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	});
 
 	it('does not misreport an upstream outage as invalid credentials', async () => {
-		// What this row pins is the discrimination: a 503 from Melee.gg is an outage
-		// (502), not credentials Melee.gg rejected (422), and nothing is persisted.
-		// Asserted at the public seam since #355 — the throw site no longer spells the
-		// refusal, so the raw throw carries nothing a caller receives.
+		// An outage (502) is not refused credentials (422), and nothing is persisted.
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request failed with status 503',
 			'http',
@@ -391,17 +373,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		warn.mockRestore();
 	});
 
-	/**
-	 * The number that goes with the word *temporarily*.
-	 *
-	 * #346, the first of the two sites #337's review found still carrying its defect:
-	 * the sentence called the outage momentary and the response carried no
-	 * `retry-after`, so a caller told to come back had to invent an interval. Asserted
-	 * after `mapPublicNitroError` because that is the response a caller actually
-	 * receives — the header and the sentence are one piece of guidance, and #321's
-	 * finding was precisely the two halves disagreeing. A row reading the header off
-	 * the raw throw would pass with the sentence sanitized away.
-	 */
+	// A sentence calling the outage temporary comes with how long to wait (#346).
 	it('tells a caller how long to wait for Melee.gg, beside a sentence saying what for', async () => {
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request failed with status 503',
@@ -416,13 +388,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	});
 
 	it('gives the same interval when the upstream timed out rather than answered', async () => {
-		// What this row pins is the *public* 504 and the header. Since #355 the throw
-		// site spells nothing — `mapPublicNitroError` computes the status from the
-		// `category` on the cause and there is no second spelling left to drift.
-		//
-		// What is genuinely this row's is the interval: the header is the site's, set
-		// for a timeout and a bad gateway alike, because both are the same advice to
-		// a caller.
+		// A timeout and a bad gateway carry the same advice, so the same interval.
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request timed out',
 			'timeout',
@@ -435,11 +401,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	});
 
 	it('does not tell a caller to wait for credentials Melee.gg refused', async () => {
-		// The counterweight, and the same distinction `requireGraphicsAdministrator`
-		// makes: an unreachable Melee.gg resolves by waiting and a rejected client ID
-		// does not — waiting only makes it later. A `retry-after` set once for the whole
-		// `MeleeTransportError` branch would satisfy the two rows above and be wrong
-		// here, which is what this exists to catch.
+		// An unreachable Melee.gg resolves by waiting; refused credentials do not.
 		mockFetchMeleeEvent.mockRejectedValue(new MeleeTransportError(
 			'Melee.gg API request failed with status 401',
 			'http',

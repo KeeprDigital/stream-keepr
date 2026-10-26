@@ -4,23 +4,9 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * Two operators editing one Feature Match Slot at once must not interleave.
- *
- * `featureMatchService().update` reads the Slot, decides from that read whether
- * the edit re-pairs the Slot (open a fresh Session) or merely corrects it
- * (amend the active Session's snapshot), and then writes. Before #462 the write
- * carried no guard, so a second operator's write landing between the read and
- * the write left the loser applying an identity decision computed against a
- * Slot that no longer existed. The write is now compare-and-swap on every field
- * the decision read — the pairing identity and the active Session pointer — so
- * the loser's write matches zero rows and surfaces a state conflict instead.
- *
- * Run against real SQLite because the defence is in the SQL: what a guarded
- * UPDATE does when its condition has gone stale is the behaviour under test.
- * The interleave is deterministic — the winner's whole update is injected into
- * the loser's read-to-write window via the loser's own stale read.
- */
+// Two operators editing one Slot: the write is compare-and-swap on everything its decision
+// read, so the loser matches no row and gets a state conflict (#462). The winner's update is
+// injected into the loser's read-to-write window.
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));

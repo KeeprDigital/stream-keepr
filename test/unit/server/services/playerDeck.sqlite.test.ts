@@ -1,232 +1,268 @@
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import * as schema from '~~/server/db/schema';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-const client = createClient({ url: 'file::memory:' });
-const sqliteDb = drizzle(client);
+// Submitted Deck Lists over real SQL: a Melee snapshot replaces a Player's
+// decks and projects the primary one onto the Player, a review survives only
+// unchanged contents, and a Match or Phase picks the deck in its format.
 
-vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
+const harness = await createSqliteD1Harness();
+const db = drizzle(harness.database, { schema });
+
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { playerDeckService } = await import('~~/server/services/playerDeck');
 
-describe('playerDeckService JSON bulk SQLite integration', () => {
-	beforeAll(async () => {
-		for (const statement of [
-			`create table players (
-				id integer primary key autoincrement, event_id integer not null, name text not null,
-				pronouns text, external_id text, external_source text, external_status integer,
-				is_active integer not null default 1, last_seen_at integer, wins integer, losses integer,
-				draws integer, position integer, points integer, archetype_id integer, lgs text,
-				game_data text, created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-			`create table archetypes (
-				id integer primary key autoincrement, event_id integer not null, name text not null,
-				colors text, created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-			`create table player_decks (
-				id integer primary key autoincrement, event_id integer not null, player_id integer not null,
-				external_id text not null, external_source text not null, format_external_id text not null,
-				name text not null, colors text not null default '', sort_order integer not null default 0,
-				is_primary integer not null default 0, archetype_id integer, reviewed_at integer,
-				created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000),
-				unique (event_id, external_id, external_source)
-			)`,
-			`create unique index player_decks_primary_unique_idx on player_decks(player_id) where is_primary = 1`,
-			`create table player_deck_cards (
-				id integer primary key autoincrement, deck_id integer not null, card_id integer not null,
-				quantity integer not null, compartment text not null, sort_order integer not null
-			)`,
-			`create table player_deck_companions (
-				id integer primary key autoincrement, deck_id integer not null unique, companion_card_id integer,
-				source text not null, created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-			`create table player_deck_unresolved_cards (
-				id integer primary key autoincrement, deck_id integer not null, entry_type text not null,
-				original_name text not null, normalized_original_name text not null, set_code text,
-				normalized_set_code text not null default '', quantity integer not null default 1,
-				compartment text, sort_order integer not null default 0, card_type text,
-				created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000)
-			)`,
-		]) {
-			await client.execute(statement);
-		}
-		await client.execute({
-			sql: 'insert into players (event_id, name, game_data) values (?, ?, ?)',
-			args: [
-				1,
-				'Deck Player',
-				JSON.stringify({
-					type: 'mtg',
-					deckName: 'Old',
-					deckColors: 'R',
-					customField: 'keep',
-				}),
-			],
-		});
-	});
+let eventId: number;
+let cardIds: number[];
+let archetypeId: number;
 
-	afterAll(async () => await client.close());
+beforeAll(async () => {
+	const [event] = await db.insert(schema.events).values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning();
+	eventId = event!.id;
+	cardIds = (await db.insert(schema.cards).values([
+		{ name: 'Lurrus', game: 'mtg' },
+		{ name: 'Kaheera', game: 'mtg' },
+	]).returning()).map(card => card.id);
+	const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: 'Control', colors: 'WU' }).returning();
+	archetypeId = archetype!.id;
+});
 
-	it('persists a complete deck snapshot, then clears only deck projection fields for an empty snapshot', async () => {
-		const service = playerDeckService();
-		await service.replaceMeleeDecksForEvent(1, [
+afterAll(async () => await harness.close());
+
+async function stagePlayer(gameData: Record<string, unknown> = { type: 'mtg', deckName: null, deckColors: null }) {
+	const [player] = await db.insert(schema.players).values({ eventId, name: 'Player', gameData: gameData as never }).returning();
+	return player!.id;
+}
+
+async function storedPlayer(playerId: number) {
+	return (await db.query.players.findFirst({
+		where: eq(schema.players.id, playerId),
+	}))!;
+}
+
+function snapshot(playerId: number, options: { externalId?: string; format?: string; quantity?: number; sortOrder?: number; companion?: number; primary?: boolean } = {}) {
+	return {
+		deck: {
+			eventId,
+			playerId,
+			externalId: options.externalId ?? `deck-${playerId}`,
+			formatExternalId: options.format ?? 'modern',
+			name: 'Imported Control',
+			colors: 'WU',
+			sortOrder: options.primary === false
+				? 1
+				: 0,
+			isPrimary: options.primary ?? true,
+		},
+		cards: [
 			{
-				playerId: 1,
-				snapshots: [
-					{
-						deck: {
-							eventId: 1,
-							playerId: 1,
-							externalId: 'deck-1',
-							formatExternalId: 'modern',
-							name: 'Bulk Deck',
-							colors: 'UG',
-							sortOrder: 0,
-							isPrimary: true,
-						},
-						cards: [
-							{
-								cardId: 7,
-								quantity: 4,
-								compartment: 'mainboard',
-								sortOrder: 0,
-							},
-						],
-						unresolvedCards: [
-							{
-								entryType: 'card',
-								originalName: 'Mystery',
-								normalizedOriginalName: 'mystery',
-								setCode: null,
-								normalizedSetCode: '',
-								quantity: 1,
-								compartment: 'sideboard',
-								sortOrder: 1,
-								cardType: null,
-							},
-						],
-						importedCompanion: { action: 'set', cardId: 7 },
-					},
-				],
+				cardId: cardIds[0]!,
+				quantity: options.quantity ?? 4,
+				compartment: 'mainboard' as const,
+				sortOrder: options.sortOrder ?? 0,
+			},
+		],
+		unresolvedCards: [],
+		importedCompanion: options.companion == null
+			? { action: 'clear' as const }
+			: { action: 'set' as const, cardId: options.companion },
+	};
+}
+
+describe('replaceMeleeDecksForEvent', () => {
+	it('stores a snapshot and projects its primary deck, then clears only the deck fields for an empty one', async () => {
+		const playerId = await stagePlayer({
+			type: 'mtg',
+			deckName: 'Old',
+			deckColors: 'R',
+			customField: 'keep',
+		});
+		const withEverything = snapshot(playerId, { companion: cardIds[0] });
+		withEverything.unresolvedCards = [
+			{
+				entryType: 'card',
+				originalName: 'Mystery',
+				normalizedOriginalName: 'mystery',
+				setCode: null,
+				normalizedSetCode: '',
+				quantity: 1,
+				compartment: 'sideboard',
+				sortOrder: 1,
+				cardType: null,
+			},
+		] as never;
+
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [withEverything],
 			},
 		]);
 
-		const deck = await client.execute('select name, colors, is_primary from player_decks');
-		const playerAfterInsert = await client.execute('select game_data from players where id = 1');
-		expect(deck.rows[0]).toMatchObject({ name: 'Bulk Deck', colors: 'UG', is_primary: 1 });
-		expect(JSON.parse(String(playerAfterInsert.rows[0]!.game_data))).toMatchObject({
-			deckName: 'Bulk Deck',
-			deckColors: 'UG',
-			customField: 'keep',
-		});
-		expect((await client.execute('select count(*) as count from player_deck_cards')).rows[0]!.count).toBe(1);
-		expect((await client.execute('select count(*) as count from player_deck_unresolved_cards')).rows[0]!.count).toBe(1);
-		expect((await client.execute('select count(*) as count from player_deck_companions')).rows[0]!.count).toBe(1);
+		const [deck] = await playerDeckService().listByPlayer(eventId, playerId);
+		expect(deck).toMatchObject({ name: 'Imported Control', colors: 'WU', isPrimary: true });
+		expect((await storedPlayer(playerId)).gameData).toMatchObject({ deckName: 'Imported Control', deckColors: 'WU', customField: 'keep' });
+		for (const table of [schema.playerDeckCards, schema.playerDeckUnresolvedCards, schema.playerDeckCompanions])
+			expect(await db.select().from(table).where(eq(table.deckId, deck!.id))).toHaveLength(1);
 
-		await service.replaceMeleeDecksForEvent(1, [
-			{ playerId: 1, snapshots: [] },
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{ playerId, snapshots: [] },
 		]);
 
-		const playerAfterClear = await client.execute('select archetype_id, game_data from players where id = 1');
-		expect((await client.execute('select count(*) as count from player_decks')).rows[0]!.count).toBe(0);
-		expect(playerAfterClear.rows[0]!.archetype_id).toBeNull();
-		expect(JSON.parse(String(playerAfterClear.rows[0]!.game_data))).toEqual({
-			type: 'mtg',
-			deckName: null,
-			deckColors: null,
-			customField: 'keep',
+		expect(await playerDeckService().listByPlayer(eventId, playerId)).toEqual([]);
+		expect(await storedPlayer(playerId)).toMatchObject({
+			archetypeId: null,
+			gameData: {
+				type: 'mtg',
+				deckName: null,
+				deckColors: null,
+				customField: 'keep',
+			},
 		});
 	});
 
-	it('preserves an unchanged deck review but clears it when the submitted contents change', async () => {
-		const playerResult = await client.execute({
-			sql: 'insert into players (event_id, name, game_data) values (?, ?, ?)',
-			args: [
-				1,
-				'Reviewed Player',
-				JSON.stringify({ type: 'mtg', deckName: null, deckColors: null }),
-			],
-		});
-		const archetypeResult = await client.execute({
-			sql: 'insert into archetypes (event_id, name, colors) values (?, ?, ?)',
-			args: [1, 'Control', 'WU'],
-		});
-		const playerId = Number(playerResult.lastInsertRowid);
-		const archetypeId = Number(archetypeResult.lastInsertRowid);
+	it('keeps a review across an unchanged resubmission and drops it when the contents or companion change', async () => {
+		const playerId = await stagePlayer();
 		const service = playerDeckService();
-		const replacement = (quantity: number, sortOrder = 0, companionCardId?: number) => [
+		const reviewed = async () => (await service.listByPlayer(eventId, playerId))[0]!;
+		const review = async () => await service.reviewDeck(eventId, playerId, (await reviewed()).id, archetypeId);
+
+		await service.replaceMeleeDecksForEvent(eventId, [
 			{
 				playerId,
 				snapshots: [
-					{
-						deck: {
-							eventId: 1,
-							playerId,
-							externalId: 'reviewed-deck',
-							formatExternalId: 'modern',
-							name: 'Imported Control',
-							colors: 'WU',
-							sortOrder: 0,
-							isPrimary: true,
-						},
-						cards: [
-							{
-								cardId: 7,
-								quantity,
-								compartment: 'mainboard' as const,
-								sortOrder,
-							},
-						],
-						unresolvedCards: [],
-						importedCompanion: companionCardId == null
-							? { action: 'clear' as const }
-							: { action: 'set' as const, cardId: companionCardId },
-					},
+					snapshot(playerId, { sortOrder: 9 }),
 				],
 			},
-		];
+		]);
+		await review();
 
-		await service.replaceMeleeDecksForEvent(1, replacement(4, 9));
-		const [deck] = await service.listByPlayer(1, playerId);
-		expect(deck).toBeDefined();
-		await service.reviewDeck(1, playerId, deck!.id, archetypeId);
-
-		await service.replaceMeleeDecksForEvent(1, replacement(4));
-		const [unchangedDeck] = await service.listByPlayer(1, playerId);
-		expect(unchangedDeck).toMatchObject({
+		await service.replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId),
+				],
+			},
+		]);
+		expect(await reviewed()).toMatchObject({
 			archetypeId,
 			reviewedAt: expect.any(Date),
 		});
 
-		await service.replaceMeleeDecksForEvent(1, replacement(3));
-		const [changedDeck] = await service.listByPlayer(1, playerId);
-		const changedPlayer = await client.execute({
-			sql: 'select archetype_id, game_data from players where id = ?',
-			args: [playerId],
-		});
-		expect(changedDeck).toMatchObject({ archetypeId: null, reviewedAt: null });
-		expect(changedPlayer.rows[0]!.archetype_id).toBeNull();
-		expect(JSON.parse(String(changedPlayer.rows[0]!.game_data))).toMatchObject({
-			deckName: 'Imported Control',
-			deckColors: 'WU',
+		await service.replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId, { quantity: 3 }),
+				],
+			},
+		]);
+		expect(await reviewed()).toMatchObject({ archetypeId: null, reviewedAt: null });
+		expect(await storedPlayer(playerId)).toMatchObject({
+			archetypeId: null,
+			gameData: expect.objectContaining({ deckName: 'Imported Control' }),
 		});
 
-		await service.reviewDeck(1, playerId, changedDeck!.id, archetypeId);
-		await service.replaceMeleeDecksForEvent(1, replacement(3, 0, 8));
-		const [deckWithNewCompanion] = await service.listByPlayer(1, playerId);
-		expect(deckWithNewCompanion).toMatchObject({ archetypeId: null, reviewedAt: null });
+		await review();
+		await service.replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId, { quantity: 3, companion: cardIds[1] }),
+				],
+			},
+		]);
+		expect(await reviewed()).toMatchObject({ archetypeId: null, reviewedAt: null });
 
-		await service.reviewDeck(1, playerId, deckWithNewCompanion!.id, archetypeId);
-		await service.replaceMeleeDecksForEvent(1, replacement(3, 4, 8));
-		const [deckWithUnchangedCompanion] = await service.listByPlayer(1, playerId);
-		expect(deckWithUnchangedCompanion).toMatchObject({
+		await review();
+		await service.replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId, { quantity: 3, sortOrder: 4, companion: cardIds[1] }),
+				],
+			},
+		]);
+		expect(await reviewed()).toMatchObject({
 			archetypeId,
 			reviewedAt: expect.any(Date),
 		});
+	});
+});
+
+describe('reviewing and projecting', () => {
+	it('projects a reviewed primary deck\'s Archetype onto its Player', async () => {
+		const playerId = await stagePlayer();
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId),
+				],
+			},
+		]);
+		const [deck] = await playerDeckService().listByPlayer(eventId, playerId);
+
+		await playerDeckService().reviewDeck(eventId, playerId, deck!.id, archetypeId);
+
+		expect(await storedPlayer(playerId)).toMatchObject({
+			archetypeId,
+			gameData: expect.objectContaining({ deckName: 'Control', deckColors: 'WU' }),
+		});
+	});
+
+	it('leaves an operator\'s Player edit alone while the primary deck is unreviewed', async () => {
+		const playerId = await stagePlayer();
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId),
+				],
+			},
+		]);
+		await db.update(schema.players).set({
+			gameData: { type: 'mtg', deckName: 'Manual', deckColors: 'G' },
+		}).where(eq(schema.players.id, playerId));
+
+		await expect(playerDeckService().reconcilePrimaryArchetype(eventId, playerId, { reviewedOnly: true })).resolves.toBeNull();
+		expect((await storedPlayer(playerId)).gameData).toMatchObject({ deckName: 'Manual', deckColors: 'G' });
+	});
+});
+
+describe('selectFromDecks', () => {
+	it('takes an explicit deck only when it is the Player\'s, else the deck in the Phase\'s or Round\'s format, else the primary', async () => {
+		const playerId = await stagePlayer();
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId,
+				snapshots: [
+					snapshot(playerId),
+					snapshot(playerId, { externalId: `finals-${playerId}`, format: 'standard', primary: false }),
+				],
+			},
+		]);
+		const decks = await playerDeckService().listByPlayer(eventId, playerId);
+		const primary = decks.find(deck => deck.isPrimary)!;
+		const finals = decks.find(deck => !deck.isPrimary)!;
+		const [standard, pioneer] = await db.insert(schema.phases).values([
+			{ eventId, name: 'Finals', formatExternalId: 'standard' },
+			{ eventId, name: 'Side', formatExternalId: 'pioneer' },
+		]).returning();
+		const [pioneerRound] = await db.insert(schema.rounds).values({
+			eventId,
+			phaseId: pioneer!.id,
+			name: 'R1',
+			roundNumber: 1,
+		}).returning();
+
+		expect(await playerDeckService().selectFromDecks(eventId, decks, { deckId: finals.id })).toEqual(finals);
+		expect(await playerDeckService().selectFromDecks(eventId, decks, { deckId: 999_999 })).toBeNull();
+		expect(await playerDeckService().selectFromDecks(eventId, decks, { phaseId: standard!.id })).toEqual(finals);
+		expect(await playerDeckService().selectFromDecks(eventId, decks, { roundId: pioneerRound!.id })).toEqual(primary);
 	});
 });

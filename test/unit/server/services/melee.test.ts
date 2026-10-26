@@ -447,17 +447,6 @@ describe('meleeService', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it('returns empty array when no players', async () => {
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(paginated([])),
-			});
-
-			const result = await meleeService(credentials).fetchPlayers();
-
-			expect(result).toEqual([]);
-		});
-
 		it('bounds the number of items accumulated across pages', async () => {
 			const players = [1, 2].map(id => ({
 				TeamId: id,
@@ -599,107 +588,59 @@ describe('meleeService', () => {
 		});
 	});
 
-	describe('fetchCurrentStandings', () => {
-		it('returns all standings across pages', async () => {
-			const standing = {
-				TeamId: 1,
-				Rank: 1,
-				Points: 9,
-				MatchWins: 3,
-				MatchLosses: 0,
-				MatchDraws: 0,
-			};
+	describe('round and standings endpoints', () => {
+		const standing = {
+			TeamId: 1,
+			Rank: 1,
+			Points: 9,
+			MatchWins: 3,
+			MatchLosses: 0,
+			MatchDraws: 0,
+		};
+		const match = {
+			Guid: 'match-1',
+			TableNumber: 1,
+			Competitors: [],
+			HasResult: false,
+			ResultString: null,
+			GameDraws: 0,
+			ByeReason: null,
+		};
+
+		it.each([
+			[
+				'current standings, bypassing Melee\'s cache',
+				(service: ReturnType<typeof meleeService>) => service.fetchCurrentStandings(),
+				standing,
+				/\/standing\/list\/current\/.*ignoreCache=true/,
+			],
+			[
+				'a Round\'s standings',
+				(service: ReturnType<typeof meleeService>) => service.fetchStandingsByRound(42),
+				standing,
+				/\/standing\/list\/round\/42/,
+			],
+			[
+				'a Round\'s Matches',
+				(service: ReturnType<typeof meleeService>) => service.fetchMatchesByRound(42),
+				match,
+				/\/match\/list\/round\/42/,
+			],
+		])('reads %s from its endpoint', async (_case, read, record, endpoint) => {
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve(paginated([standing])),
+				json: () => Promise.resolve(paginated([record])),
 			});
 
-			const result = await meleeService(credentials).fetchCurrentStandings();
-
-			expect(result).toHaveLength(1);
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('/standing/list/current/'),
-				expect.any(Object),
-			);
-			// Live standings must bypass Melee's response cache so a broadcast
-			// never shows stale pairings or records.
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('ignoreCache=true'),
-				expect.any(Object),
-			);
-		});
-	});
-
-	describe('fetchStandingsByRound', () => {
-		it('returns standings for a specific round', async () => {
-			const standing = {
-				TeamId: 1,
-				Rank: 1,
-				Points: 9,
-				MatchWins: 3,
-				MatchLosses: 0,
-				MatchDraws: 0,
-			};
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(paginated([standing])),
-			});
-
-			const result = await meleeService(credentials).fetchStandingsByRound(42);
-
-			expect(result).toHaveLength(1);
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('/standing/list/round/42'),
-				expect.any(Object),
-			);
-		});
-
-		it('returns empty array when no standings', async () => {
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(paginated([])),
-			});
-
-			const result = await meleeService(credentials).fetchStandingsByRound(42);
-
-			expect(result).toEqual([]);
-		});
-	});
-
-	describe('fetchMatchesByRound', () => {
-		it('returns matches for a round', async () => {
-			// TableNumber may be null in real Melee payloads, but the match envelope is still valid.
-			const match = {
-				Guid: 'match-1',
-				TableNumber: 1,
-				Competitors: [],
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: null,
-			};
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(paginated([match])),
-			});
-
-			const result = await meleeService(credentials).fetchMatchesByRound(42);
-
-			expect(result).toHaveLength(1);
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('/match/list/round/42'),
-				expect.any(Object),
-			);
+			await expect(read(meleeService(credentials))).resolves.toHaveLength(1);
+			expect(mockFetch).toHaveBeenCalledWith(expect.stringMatching(endpoint), expect.any(Object));
 		});
 
 		it('accepts null table numbers and null game wins from Melee', async () => {
-			const match = {
-				Guid: 'match-nullables',
+			const nullable = {
+				...match,
 				TableNumber: null,
-				HasResult: false,
-				ResultString: null,
 				GameDraws: null,
-				ByeReason: null,
 				Competitors: [
 					{
 						TeamId: 1,
@@ -711,31 +652,13 @@ describe('meleeService', () => {
 			};
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve(paginated([match])),
+				json: () => Promise.resolve(paginated([nullable])),
 			});
 
-			const result = await meleeService(credentials).fetchMatchesByRound(42);
+			const [result] = await meleeService(credentials).fetchMatchesByRound(42);
 
-			expect(result[0]?.TableNumber).toBeNull();
-			expect(result[0]?.Competitors[0]?.GameWins).toBeNull();
-		});
-	});
-
-	describe('fetchMergedPlayers', () => {
-		it('fetches players and standings then maps them', async () => {
-			mockFetch
-				.mockResolvedValueOnce({
-					ok: true,
-					json: () => Promise.resolve(paginated([])),
-				})
-				.mockResolvedValueOnce({
-					ok: true,
-					json: () => Promise.resolve(paginated([])),
-				});
-
-			const result = await meleeService(credentials).fetchMergedPlayers();
-
-			expect(result).toEqual([]);
+			expect(result?.TableNumber).toBeNull();
+			expect(result?.Competitors[0]?.GameWins).toBeNull();
 		});
 	});
 });

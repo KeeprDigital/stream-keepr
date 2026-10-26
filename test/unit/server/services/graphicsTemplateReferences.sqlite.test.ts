@@ -14,19 +14,8 @@ import {
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * A graphics Template's Graphic Asset References hold at the commit (#614).
- *
- * Every template write, for both template kinds, requires each reference to name
- * an existing revision of an active Graphic Asset whose kind fits its slot. A route
- * asks the library first, but the catalogue can change between that question and
- * the commit — an asset retired in between, a revision that never existed — so the
- * statement that writes the template carries the same rule. A refused write leaves
- * the template and its reference index exactly as they were, and an accepted one
- * indexes every reference it stores.
- *
- * Driven against libSQL because the guarantee is a condition on a statement.
- */
+// A template write commits only references to existing revisions of active assets that fit
+// their slots; a refused write leaves the template and its index as they were (#614).
 
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
@@ -133,218 +122,119 @@ beforeEach(async () => {
 
 afterAll(async () => await harness.close());
 
-describe('a Broadcast Graphic Template write', () => {
-	const OWNER = 'broadcast-graphic-template';
+/** What differs between the two template kinds; every rule below holds for both. */
+const KINDS = [
+	{
+		kind: 'Broadcast Graphic Template',
+		owner: 'broadcast-graphic-template',
+		service: () => broadcastGraphicTemplateService(),
+		ReferenceConflict: BroadcastGraphicTemplateReferenceConflict,
+		RevisionConflict: BroadcastGraphicTemplateRevisionConflict,
+		document: (first: GraphicAssetReference, second?: GraphicAssetReference) =>
+			broadcastGraphic(media('logo', first), ...(second
+				? [
+						media('badge', second),
+					]
+				: [])),
+		slots: (count: number) => count === 1
+			? ['graphics.lower-third.items.logo.asset']
+			: ['graphics.lower-third.items.badge.asset', 'graphics.lower-third.items.logo.asset'],
+	},
+	{
+		kind: 'Feature Match Layout Template',
+		owner: 'feature-match-layout-template',
+		service: () => featureMatchLayoutTemplateService(),
+		ReferenceConflict: FeatureMatchLayoutTemplateReferenceConflict,
+		RevisionConflict: FeatureMatchLayoutTemplateRevisionConflict,
+		document: (first: GraphicAssetReference, second?: GraphicAssetReference) =>
+			featureMatchLayout(first, ...(second
+				? [
+						media('logo', second),
+					]
+				: [])),
+		slots: (count: number) => count === 1
+			? ['layout.frame.backgroundImage']
+			: ['layout.composition.items.logo.asset', 'layout.frame.backgroundImage'],
+	},
+] as const;
+
+describe.each(KINDS)('a $kind write', ({ owner, service, ReferenceConflict, RevisionConflict, document, slots }) => {
+	const create = (doc: unknown) => (service() as ReturnType<typeof broadcastGraphicTemplateService>).create({
+		id: 'template',
+		name: 'Template',
+		description: null,
+		document: doc as never,
+	});
+	const update = (input: Record<string, unknown>) => (service() as ReturnType<typeof broadcastGraphicTemplateService>).update('template', input as never);
+	const stored = () => service().findById('template');
 
 	it('stores the template and indexes every reference it holds', async () => {
-		await broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE), media('badge', RETIRING_IMAGE)),
-		});
+		await create(document(IMAGE, RETIRING_IMAGE));
 
-		expect(await indexedSlots(OWNER, 'template')).toEqual([
-			'graphics.lower-third.items.badge.asset',
-			'graphics.lower-third.items.logo.asset',
-		]);
+		expect(await indexedSlots(owner, 'template')).toEqual(slots(2));
 	});
 
 	it.each([
-		['an asset of the wrong kind for its slot', FONT],
-		['a revision that does not exist', INVENTED],
+		[
+			'an asset of the wrong kind for its slot',
+			async () => FONT,
+		],
+		[
+			'a revision that does not exist',
+			async () => INVENTED,
+		],
+		[
+			'a retired asset',
+			async () => {
+				await retire(RETIRING_IMAGE);
+				return RETIRING_IMAGE;
+			},
+		],
 	])('refuses to create a template referencing %s, storing nothing', async (_, reference) => {
-		await expect(broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE), media('badge', reference)),
-		})).rejects.toBeInstanceOf(BroadcastGraphicTemplateReferenceConflict);
+		await expect(create(document(IMAGE, await reference()))).rejects.toBeInstanceOf(ReferenceConflict);
 
-		expect(await broadcastGraphicTemplateService().findById('template')).toBeUndefined();
-		expect(await indexedSlots(OWNER, 'template')).toEqual([]);
-	});
-
-	it('refuses to create a template referencing a retired asset', async () => {
-		await retire(RETIRING_IMAGE);
-
-		await expect(broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('badge', RETIRING_IMAGE)),
-		})).rejects.toBeInstanceOf(BroadcastGraphicTemplateReferenceConflict);
-
-		expect(await broadcastGraphicTemplateService().findById('template')).toBeUndefined();
+		expect(await stored()).toBeUndefined();
+		expect(await indexedSlots(owner, 'template')).toEqual([]);
 	});
 
 	it('refuses a revision once an asset it references is retired, leaving the template and its index as they were', async () => {
-		const created = await broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE), media('badge', RETIRING_IMAGE)),
-		});
+		const created = await create(document(IMAGE, RETIRING_IMAGE));
 		// Retired between the route's question and the commit.
 		await retire(RETIRING_IMAGE);
 
-		await expect(broadcastGraphicTemplateService().update('template', {
-			name: 'Renamed',
-			revision: created.revision,
-		})).rejects.toBeInstanceOf(BroadcastGraphicTemplateReferenceConflict);
+		await expect(update({ name: 'Renamed', revision: created.revision })).rejects.toBeInstanceOf(ReferenceConflict);
 
-		const stored = await broadcastGraphicTemplateService().findById('template');
-		expect(stored).toMatchObject({ name: 'Lower third', revision: created.revision });
-		expect(await indexedSlots(OWNER, 'template')).toEqual([
-			'graphics.lower-third.items.badge.asset',
-			'graphics.lower-third.items.logo.asset',
-		]);
+		expect(await stored()).toMatchObject({ name: 'Template', revision: created.revision });
+		expect(await indexedSlots(owner, 'template')).toEqual(slots(2));
 	});
 
 	it('refuses a revision that introduces an asset of the wrong kind', async () => {
-		const created = await broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE)),
-		});
+		const created = await create(document(IMAGE));
 
-		await expect(broadcastGraphicTemplateService().update('template', {
-			document: broadcastGraphic(media('logo', FONT)),
+		await expect(update({
+			document: document(IMAGE, FONT),
 			revision: created.revision,
-		})).rejects.toBeInstanceOf(BroadcastGraphicTemplateReferenceConflict);
+		})).rejects.toBeInstanceOf(ReferenceConflict);
 
-		expect((await broadcastGraphicTemplateService().findById('template'))?.document)
-			.toEqual(broadcastGraphic(media('logo', IMAGE)));
-		expect(await indexedSlots(OWNER, 'template')).toEqual(['graphics.lower-third.items.logo.asset']);
+		expect((await stored())?.document).toEqual(document(IMAGE));
+		expect(await indexedSlots(owner, 'template')).toEqual(slots(1));
 	});
 
 	it('still answers a stale revision as a revision conflict', async () => {
-		await broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE)),
-		});
+		await create(document(IMAGE));
 
-		await expect(broadcastGraphicTemplateService().update('template', { name: 'Stale', revision: 7 }))
-			.rejects
-			.toBeInstanceOf(BroadcastGraphicTemplateRevisionConflict);
+		await expect(update({ name: 'Stale', revision: 7 })).rejects.toBeInstanceOf(RevisionConflict);
 	});
 
 	it('commits a revision whose references all resolve, reindexing them', async () => {
-		const created = await broadcastGraphicTemplateService().create({
-			id: 'template',
-			name: 'Lower third',
-			description: null,
-			document: broadcastGraphic(media('logo', IMAGE)),
-		});
+		const created = await create(document(IMAGE, RETIRING_IMAGE));
 
-		const updated = await broadcastGraphicTemplateService().update('template', {
-			document: broadcastGraphic(media('badge', RETIRING_IMAGE)),
+		const updated = await update({
+			document: document(IMAGE),
 			revision: created.revision,
 		});
 
 		expect(updated?.revision).toBe(created.revision + 1);
-		expect(await indexedSlots(OWNER, 'template')).toEqual(['graphics.lower-third.items.badge.asset']);
-	});
-});
-
-describe('a Feature Match Layout Template write', () => {
-	const OWNER = 'feature-match-layout-template';
-
-	it('stores the template and indexes every reference it holds', async () => {
-		await featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(IMAGE, media('logo', RETIRING_IMAGE)),
-		});
-
-		expect(await indexedSlots(OWNER, 'layout')).toEqual([
-			'layout.composition.items.logo.asset',
-			'layout.frame.backgroundImage',
-		]);
-	});
-
-	it.each([
-		['an asset of the wrong kind for its slot', FONT],
-		['a revision that does not exist', INVENTED],
-	])('refuses to create a template referencing %s, storing nothing', async (_, reference) => {
-		await expect(featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(reference),
-		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
-
-		expect(await featureMatchLayoutTemplateService().findById('layout')).toBeUndefined();
-		expect(await indexedSlots(OWNER, 'layout')).toEqual([]);
-	});
-
-	it('refuses to create a template referencing a retired asset', async () => {
-		await retire(RETIRING_IMAGE);
-
-		await expect(featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(IMAGE, media('logo', RETIRING_IMAGE)),
-		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
-
-		expect(await featureMatchLayoutTemplateService().findById('layout')).toBeUndefined();
-	});
-
-	it('refuses a revision that introduces an asset of the wrong kind', async () => {
-		const created = await featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(IMAGE),
-		});
-
-		await expect(featureMatchLayoutTemplateService().update('layout', {
-			document: featureMatchLayout(IMAGE, media('logo', FONT)),
-			revision: created.revision,
-		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
-
-		expect((await featureMatchLayoutTemplateService().findById('layout'))?.document)
-			.toEqual(featureMatchLayout(IMAGE));
-		expect(await indexedSlots(OWNER, 'layout')).toEqual(['layout.frame.backgroundImage']);
-	});
-
-	it('refuses a revision once an asset it references is retired, leaving the template and its index as they were', async () => {
-		const created = await featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(IMAGE, media('logo', RETIRING_IMAGE)),
-		});
-		await retire(RETIRING_IMAGE);
-
-		await expect(featureMatchLayoutTemplateService().update('layout', {
-			name: 'Renamed',
-			revision: created.revision,
-		})).rejects.toBeInstanceOf(FeatureMatchLayoutTemplateReferenceConflict);
-
-		expect(await featureMatchLayoutTemplateService().findById('layout'))
-			.toMatchObject({ name: 'Layout', revision: created.revision });
-		expect(await indexedSlots(OWNER, 'layout')).toEqual([
-			'layout.composition.items.logo.asset',
-			'layout.frame.backgroundImage',
-		]);
-	});
-
-	it('still answers a stale revision as a revision conflict', async () => {
-		await featureMatchLayoutTemplateService().create({
-			id: 'layout',
-			name: 'Layout',
-			description: null,
-			document: featureMatchLayout(IMAGE),
-		});
-
-		await expect(featureMatchLayoutTemplateService().update('layout', { name: 'Stale', revision: 7 }))
-			.rejects
-			.toBeInstanceOf(FeatureMatchLayoutTemplateRevisionConflict);
+		expect(await indexedSlots(owner, 'template')).toEqual(slots(1));
 	});
 });

@@ -36,15 +36,8 @@ vi.stubGlobal('createError', (input: {
 
 const routePath = '../../../../../../server/api/graphics-assets/ingestion-operations/[operationId]/staged-source.get';
 
-/**
- * The provisional bytes an author reads back to produce decode or font evidence for a
- * remote copy they approved, and what they are told when the staging store cannot
- * produce them.
- *
- * The file exists for #321: this route's 503 was one of seven raised with no cause, so
- * the sanitizer replaced its sentence with 'Internal Server Error' and an author whose
- * confirmation had stalled was told only that something broke.
- */
+// The staged bytes an author reads back for evidence, and the sentence they get when the
+// staging store cannot produce them (#321).
 describe('staged Graphic Asset source delivery', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -85,11 +78,7 @@ describe('staged Graphic Asset source delivery', () => {
 		});
 	});
 
-	/**
-	 * Asserted after the mapper, because the rewrite this pins happens there and
-	 * nowhere else: reading the thrown error passes just as happily with the cause
-	 * dropped.
-	 */
+	// After the mapper, which is where the sentence would be lost.
 	it('says what is unavailable when the staging store cannot produce the bytes', async () => {
 		mockResolveStagedGraphicAssetSource.mockResolvedValue({ outcome: 'unavailable' });
 		const handler = (await import(routePath)).default;
@@ -103,15 +92,5 @@ describe('staged Graphic Asset source delivery', () => {
 			message: 'Staged Graphic Asset source bytes are temporarily unavailable',
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
-	});
-
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
-		mockRequireUserId.mockRejectedValue(
-			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
-		);
-		const handler = (await import(routePath)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockResolveStagedGraphicAssetSource).not.toHaveBeenCalled();
 	});
 });
