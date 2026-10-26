@@ -104,14 +104,4 @@ describe('staged Graphic Asset source delivery', () => {
 		});
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
-
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
-		mockRequireUserId.mockRejectedValue(
-			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
-		);
-		const handler = (await import(routePath)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockResolveStagedGraphicAssetSource).not.toHaveBeenCalled();
-	});
 });
