@@ -3,55 +3,30 @@ import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { createMockTalent } from '~~/test/helpers/fixtures';
 
 describe('talent mapper', () => {
-	describe('mapTalentToResponse', () => {
-		it('converts createdAt and updatedAt to Date instances', () => {
-			const talent = createMockTalent({
-				createdAt: '2026-09-01T15:00:00.000Z' as unknown as Date,
-				updatedAt: '2026-09-01T16:00:00.000Z' as unknown as Date,
-			});
-			const result = mapTalentToResponse(talent);
+	it('projects the handle columns into a Social Profile map', () => {
+		const result = mapTalentToResponse(createMockTalent({
+			twitchHandle: 'Marshall_LR',
+			xHandle: 'Marshall_LR',
+		}));
 
-			expect(result.createdAt).toBeInstanceOf(Date);
-			expect(result.updatedAt).toBeInstanceOf(Date);
-			expect(result.createdAt).toEqual(new Date('2026-09-01T15:00:00.000Z'));
-			expect(result.updatedAt).toEqual(new Date('2026-09-01T16:00:00.000Z'));
+		expect(result.socialProfiles).toEqual({
+			twitch: 'Marshall_LR',
+			x: 'Marshall_LR',
 		});
+		expect(result).not.toHaveProperty('twitchHandle');
+		expect(result).not.toHaveProperty('youtubeHandle');
+	});
 
-		it('preserves Date objects that are already Date instances', () => {
-			const created = new Date('2026-01-01T00:00:00.000Z');
-			const updated = new Date('2026-01-02T00:00:00.000Z');
-			const talent = createMockTalent({ createdAt: created, updatedAt: updated });
-			const result = mapTalentToResponse(talent);
+	it('leaves blank handles out of the Social Profile map', () => {
+		const result = mapTalentToResponse(createMockTalent({
+			twitchHandle: '',
+			blueskyHandle: 'marshall.bsky.social',
+		}));
 
-			expect(result.createdAt).toBeInstanceOf(Date);
-			expect(result.updatedAt).toBeInstanceOf(Date);
-			expect(result.createdAt).toEqual(created);
-			expect(result.updatedAt).toEqual(updated);
-		});
+		expect(result.socialProfiles).toEqual({ bluesky: 'marshall.bsky.social' });
+	});
 
-		it('preserves all talent fields in the response', () => {
-			const talent = createMockTalent({
-				id: 5,
-				eventId: 2,
-				name: 'Marshall Sutcliffe',
-				twitchHandle: 'Marshall_LR',
-				xHandle: 'Marshall_LR',
-			});
-			const result = mapTalentToResponse(talent);
-
-			expect(result.id).toBe(5);
-			expect(result.eventId).toBe(2);
-			expect(result.name).toBe('Marshall Sutcliffe');
-			expect(result.socialProfiles).toEqual({
-				twitch: 'Marshall_LR',
-				x: 'Marshall_LR',
-			});
-			expect(result).not.toHaveProperty('twitchHandle');
-			expect(result).not.toHaveProperty('youtubeHandle');
-		});
-
-		it('always exposes an empty Social Profile map for an existing Talent', () => {
-			expect(mapTalentToResponse(createMockTalent()).socialProfiles).toEqual({});
-		});
+	it('always exposes an empty Social Profile map for an existing Talent', () => {
+		expect(mapTalentToResponse(createMockTalent()).socialProfiles).toEqual({});
 	});
 });

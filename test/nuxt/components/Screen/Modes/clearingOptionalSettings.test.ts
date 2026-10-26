@@ -8,13 +8,8 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
-/**
- * Clearing an optional setting in a mode's settings editor writes the `null` that
- * deletes it (#703). An editor used to write `undefined`, which JSON omits, so the
- * server kept the old value and it came back after the save. What the write does
- * from there — the request, the merge, the reload — is
- * `test/nuxt/composables/screen/screenSettingsSaves.test.ts`.
- */
+// Clearing an optional setting in a mode's settings editor writes the `null` that deletes it
+// (#703).
 
 const config = ref<Record<string, unknown>>({});
 const writes: Record<string, unknown>[] = [];

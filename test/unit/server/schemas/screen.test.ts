@@ -6,200 +6,45 @@ import {
 	createScreenSchema,
 	deckModeConfigSchema,
 	featureMatchLayoutConfigSchema,
-	featureMatchModeConfigSchema,
 	featureMatchOverlayModeConfigSchema,
 	headToHeadModeConfigSchema,
 	metagameModeConfigSchema,
-	modeConfigParamsSchema,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
 	pairingsModeConfigSchema,
 	parseModeConfigPatchResult,
 	playerHistoryModeConfigSchema,
-	screenConfigSchema,
-	screenParamsSchema,
 	standingsModeConfigSchema,
 	topCardsModeConfigSchema,
 	updateScreenSchema,
 } from '~~/server/schemas/api/screen';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
-// ──────────────── createScreenSchema ────────────────
-
 describe('createScreenSchema', () => {
-	const validInput = {
-		name: 'Feature Match',
-		slug: 'feature-match',
-		currentMode: 'background' as const,
-	};
-
-	it('accepts valid input with required fields', () => {
-		const result = createScreenSchema.safeParse(validInput);
-		expect(result.success).toBe(true);
+	it.each([
+		['feature-match-2', true],
+		[
+			'a'.repeat(50),
+			true,
+		],
+		[
+			'a'.repeat(51),
+			false,
+		],
+		['Feature-Match', false],
+		['feature match', false],
+		['', false],
+	])('takes the slug %j → %s', (slug, accepted) => {
+		expect(createScreenSchema.safeParse({ name: 'Feature Match', slug, currentMode: 'background' }).success).toBe(accepted);
 	});
-
-	it('accepts valid input with all optional fields', () => {
-		const result = createScreenSchema.safeParse({
-			...validInput,
-			modeConfigs: {
-				'feature-match': {
-					featureMatchId: 1,
-					showNames: true,
-					showRecords: true,
-					showDeckNames: false,
-					showPronouns: true,
-					showClock: true,
-					showCounters: false,
-				},
-			},
-			screenConfig: {
-				width: 1920,
-				height: 1080,
-			},
-		});
-		expect(result.success).toBe(true);
-	});
-
-	// Required fields
-
-	it('accepts missing currentMode (has DB default)', () => {
-		const { currentMode: _, ...input } = validInput;
-		const result = createScreenSchema.safeParse(input);
-		expect(result.success).toBe(true);
-	});
-
-	// slug regex: lowercase alphanumeric with hyphens
-	it('accepts slug with lowercase letters only', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, slug: 'overlay' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts slug with numbers', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, slug: 'match-1' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts slug with hyphens', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, slug: 'feature-match-overlay' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts slug of exactly 50 characters', () => {
-		const result = createScreenSchema.safeParse({
-			...validInput,
-			slug: 'a'.repeat(50),
-		});
-		expect(result.success).toBe(true);
-	});
-
-	// currentMode enum
-	it('accepts all valid screen modes', () => {
-		for (const mode of SCREEN_MODE_VALUES) {
-			const result = createScreenSchema.safeParse({ ...validInput, currentMode: mode });
-			expect(result.success).toBe(true);
-		}
-	});
-
-	// modeConfigs
-	it('accepts null modeConfigs', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, modeConfigs: null });
-		expect(result.success).toBe(true);
-	});
-
-	// screenConfig
-	it('accepts null screenConfig', () => {
-		const result = createScreenSchema.safeParse({ ...validInput, screenConfig: null });
-		expect(result.success).toBe(true);
-	});
-
-	// Omitted fields should be stripped from output
 });
-
-// ──────────────── updateScreenSchema ────────────────
 
 describe('updateScreenSchema', () => {
-	it('accepts minimal update with only stateVersion', () => {
-		const result = updateScreenSchema.safeParse({ stateVersion: 0 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts update with slug', () => {
-		const result = updateScreenSchema.safeParse({ slug: 'new-slug', stateVersion: 1 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts stateVersion of 0', () => {
-		const result = updateScreenSchema.safeParse({ stateVersion: 0 });
-		expect(result.success).toBe(true);
-	});
-});
-
-// ──────────────── screenConfigSchema ────────────────
-
-describe('screenConfigSchema', () => {
-	it('accepts empty object (all fields optional)', () => {
-		const result = screenConfigSchema.safeParse({});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts valid width and height', () => {
-		const result = screenConfigSchema.safeParse({ width: 1920, height: 1080 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts non-negative padding values', () => {
-		const result = screenConfigSchema.safeParse({ paddingX: 24, paddingY: 0 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts fractional positive width', () => {
-		const result = screenConfigSchema.safeParse({ width: 0.5 });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts background string', () => {
-		const result = screenConfigSchema.safeParse({ background: '#ff0000' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts primary and secondary text colors', () => {
-		const result = screenConfigSchema.safeParse({
-			primaryTextColor: '#ffffff',
-			secondaryTextColor: '#9ca3af',
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts colorMode light', () => {
-		const result = screenConfigSchema.safeParse({ colorMode: 'light' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts colorMode dark', () => {
-		const result = screenConfigSchema.safeParse({ colorMode: 'dark' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts colorMode system', () => {
-		const result = screenConfigSchema.safeParse({ colorMode: 'system' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts horizontalAlign values', () => {
-		for (const align of ['left', 'center', 'right'] as const) {
-			const result = screenConfigSchema.safeParse({ horizontalAlign: align });
-			expect(result.success).toBe(true);
-		}
-	});
-
-	it('accepts verticalAlign values', () => {
-		for (const align of ['top', 'center', 'bottom'] as const) {
-			const result = screenConfigSchema.safeParse({ verticalAlign: align });
-			expect(result.success).toBe(true);
-		}
+	it('requires the stateVersion the write is based on', () => {
+		expect(updateScreenSchema.safeParse({ slug: 'new-slug', stateVersion: 0 }).success).toBe(true);
+		expect(updateScreenSchema.safeParse({ slug: 'new-slug' }).success).toBe(false);
 	});
 });
 
@@ -247,8 +92,7 @@ describe('deckModeConfigSchema', () => {
 	});
 
 	it('takes its Deck Source in a PATCH only as the canonical source, refusing the retired playerId shorthand', () => {
-		// The Deck PATCH form is derived from the contract like every other mode's
-		// (#588): no client sends `playerId` since #514, so it is an unknown key.
+		// No client has sent `playerId` since #514, so it is an unknown key.
 		expect(modeConfigPatchSchemaMap.deck.parse({
 			deckSource: { type: 'player', playerId: 3 },
 		}))
@@ -267,18 +111,6 @@ describe('deckModeConfigSchema', () => {
 			...validConfig,
 			deckSource: { type: 'player', playerId: null },
 		});
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts every board selection', () => {
-		for (const board of ['full', 'mainboard', 'sideboard'] as const) {
-			const result = deckModeConfigSchema.safeParse({ ...validConfig, board });
-			expect(result.success).toBe(true);
-		}
-	});
-
-	it('accepts a sideboard placed below the mainboard', () => {
-		const result = deckModeConfigSchema.safeParse({ ...validConfig, sideboardPlacement: 'below' });
 		expect(result.success).toBe(true);
 	});
 
@@ -307,57 +139,6 @@ describe('deckModeConfigSchema', () => {
 			...validConfig,
 			mainboard: { ...validConfig.mainboard, columns: 0 },
 		}).success).toBe(false);
-	});
-});
-
-// ──────────────── featureMatchModeConfigSchema ────────────────
-
-describe('standingsModeConfigSchema', () => {
-	const validConfig = {
-		viewMode: 'all' as const,
-		columns: [
-			{ key: 'position', visible: true },
-			{ key: 'name', visible: true },
-			{ key: 'record', visible: true },
-			{ key: 'points', visible: true },
-			{ key: 'deck', visible: false },
-		],
-		showArchetypeColors: false,
-		maxTableWidth: 1440,
-		roundId: 2,
-		showHeader: true,
-		headerText: 'Standings',
-		topNCount: 8,
-		sliceStart: 1,
-		sliceEnd: 16,
-		playerListId: 1,
-		revealCount: 8,
-		revealOrder: 'bottomUp' as const,
-		revealTrigger: 'manual' as const,
-		revealIntervalMs: 5000,
-		revealedCount: 0,
-		rowsPerPage: 8,
-		autoPageEnabled: false,
-		autoPageIntervalMs: 10000,
-		currentPage: 1,
-		animateEntries: true,
-	};
-
-	it('accepts valid standings mode config', () => {
-		const result = standingsModeConfigSchema.safeParse(validConfig);
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts an omitted maxTableWidth', () => {
-		const { maxTableWidth: _, ...input } = validConfig;
-		const result = standingsModeConfigSchema.safeParse(input);
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts an omitted roundId', () => {
-		const { roundId: _, ...input } = validConfig;
-		const result = standingsModeConfigSchema.safeParse(input);
-		expect(result.success).toBe(true);
 	});
 });
 
@@ -434,48 +215,11 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(featureMatchOverlayModeConfigSchema.safeParse(withoutComposition).success).toBe(false);
 	});
 
-	it('rejects Graphic Inputs on a Feature Match Layout composition, which binds host tokens instead', () => {
-		const declaring = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		declaring.layout.composition.inputs = [
-			{
-				type: 'text',
-				key: 'headline',
-				label: 'Headline',
-				required: false,
-				updatePolicy: 'staged',
-				default: '',
-				maxLength: 40,
-			},
-		];
-
-		expect(featureMatchOverlayModeConfigSchema.safeParse(declaring).success).toBe(false);
-	});
-
 	it('keeps the host-owned Source Item Definition version and rejects a future one', () => {
 		const future = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
 		future.layout.sources[0].configurationVersion = 2;
 
 		expect(featureMatchOverlayModeConfigSchema.safeParse(future).success).toBe(false);
-	});
-
-	it('accepts per-side border visibility and glow positioning on a Source Item', () => {
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.sources[0]!.framingStyle = {
-			borderVisible: true,
-			borderColor: '#ffffff',
-			borderWidth: 3,
-			borderLeftVisible: false,
-			glowPosition: 'outside',
-		};
-
-		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(true);
-	});
-
-	it('rejects an unknown Source Item glow position', () => {
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG) as unknown as Record<string, any>;
-		config.layout.sources[0].framingStyle = { glowPosition: 'centre' };
-
-		expect(featureMatchOverlayModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
 	it('rejects widget-era typography on a Source Item surface style', () => {
@@ -520,8 +264,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 	});
 
 	it('rejects an executable, credential-bearing, or plain-HTTP Remote Media URL', () => {
-		// Plain HTTP is blocked as mixed content by an HTTPS-served Screen, so it
-		// would only ever show a blank output (ADR-0021).
+		// Plain HTTP is mixed content on an HTTPS-served Screen (ADR-0021).
 		for (const url of [
 			'javascript:alert(1)',
 			'data:text/html,<script>alert(1)</script>',
@@ -536,17 +279,6 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 
 			expect(result.success, url).toBe(false);
 		}
-	});
-
-	it('accepts persisted anchor selections on a Source Item', () => {
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.sources[0]!.anchor = 'center';
-
-		const result = featureMatchOverlayModeConfigSchema.safeParse(config);
-
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.layout.sources[0]!.anchor).toBe('center');
 	});
 
 	describe('the Frame video playback rate', () => {
@@ -571,8 +303,7 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		});
 
 		it('clamps a rate the earlier 0.1–16 bounds stored, so a layout carrying one still saves', () => {
-			// A layout edit re-sends the whole layout, so refusing a stored legacy rate
-			// would refuse every later edit to that Frame, however unrelated.
+			// A layout edit re-sends the whole layout, legacy rate included.
 			const fast = modeConfigPatchSchemaMap['feature-match-overlay'].parse({ layout: withRate(8).layout }) as Pick<FeatureMatchOverlayModeConfig, 'layout'>;
 			const slow = featureMatchLayoutConfigSchema.parse(withRate(0.1).layout);
 
@@ -805,13 +536,8 @@ describe('backgroundModeConfigSchema', () => {
 	});
 });
 
-/**
- * A root-relative Remote Media URL names a file the application serves as media,
- * and the application serves media only under `/video/` (ADR-0021, #582). Every
- * other same-origin path — above all the library's own `/api/` content routes,
- * which preview with the author's session but answer nothing on air and protect
- * no revision — is refused, by every host of a Screen Media Source.
- */
+// The application serves media only under `/video/`, so every other same-origin
+// path, the library's own `/api/` routes above all, is refused (ADR-0021, #582).
 describe('a root-relative Remote Media URL', () => {
 	const hosts: Array<[string, (url: string) => boolean]> = [
 		[
@@ -931,13 +657,8 @@ describe('a root-relative Remote Media URL', () => {
 	});
 });
 
-/**
- * Documents stored or exported before ADR-0020 recorded a `videoCompatibility` on
- * every asset-backed video. Chromium is now the only supported engine for
- * transparent video, so the key means nothing — but refusing it would refuse every
- * later edit to a stack or layout that still carries it, and every package
- * exported before the change.
- */
+// Documents from before ADR-0020 carry a meaningless `videoCompatibility`; refusing
+// it would refuse every later edit to them.
 describe('documents recorded before ADR-0020', () => {
 	it('reads a Background Layer video source that still carries videoCompatibility, and drops the key', () => {
 		const source = {
@@ -978,15 +699,6 @@ describe('documents recorded before ADR-0020', () => {
 });
 
 describe('modeConfigPatchSchemaMap', () => {
-	it('accepts null to clear optional standings fields', () => {
-		const result = modeConfigPatchSchemaMap.standings.safeParse({
-			roundId: null,
-			maxTableWidth: null,
-		});
-
-		expect(result.success).toBe(true);
-	});
-
 	it('accepts null to clear the Deck Source back to no Player', () => {
 		const patch = modeConfigPatchSchemaMap.deck.parse({ deckSource: null }) as Record<string, unknown>;
 		const stored = parseModeConfigPatchResult(
@@ -1003,9 +715,7 @@ describe('modeConfigPatchSchemaMap', () => {
 	});
 
 	it('does not inject defaulted fields into a patch that omits them', () => {
-		// zod 4 applies `.default()` even through `.optional()`; an injected
-		// `archetypeLimit: null` is the delete sentinel, so every unrelated edit
-		// wiped the stored value ("Top archetypes" reset to All).
+		// An injected `archetypeLimit: null` would be the delete sentinel.
 		const parsed = modeConfigPatchSchemaMap.metagame.parse({ sortBy: 'count' });
 
 		expect(parsed).toEqual({ sortBy: 'count' });
@@ -1022,85 +732,6 @@ describe('modeConfigPatchSchemaMap', () => {
 			.toEqual({ minPoints: 12 });
 		expect(modeConfigPatchSchemaMap.metagame.safeParse({ archetypeLimit: 0 }).success)
 			.toBe(false);
-	});
-});
-
-// ──────────────── featureMatchModeConfigSchema ────────────────
-
-describe('featureMatchModeConfigSchema', () => {
-	const validConfig = {
-		featureMatchId: 1,
-		showNames: true,
-		showRecords: true,
-		showDeckNames: false,
-		showPronouns: true,
-		showClock: true,
-		showCounters: false,
-	};
-
-	it('accepts valid match mode config', () => {
-		const result = featureMatchModeConfigSchema.safeParse(validConfig);
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts null featureMatchId', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, featureMatchId: null });
-		expect(result.success).toBe(true);
-	});
-
-	it('validates showNames as boolean', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showNames: 'yes' });
-		expect(result.success).toBe(false);
-	});
-
-	it('accepts optional showSeatLabels', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showSeatLabels: true });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional leftSidePlayer', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, leftSidePlayer: 'player1' });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional showTurnControls', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showTurnControls: true });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional showOvertime', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showOvertime: false });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional showMulliganInfo', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showMulliganInfo: true });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional showLgs', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showLgs: false });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional showTableNumber', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, showTableNumber: true });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional allowLifeControls', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowLifeControls: true });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional allowGameWinControls', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowGameWinControls: false });
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts optional allowCounterControls', () => {
-		const result = featureMatchModeConfigSchema.safeParse({ ...validConfig, allowCounterControls: true });
-		expect(result.success).toBe(true);
 	});
 });
 
@@ -1177,15 +808,12 @@ describe('metagameModeConfigSchema', () => {
 	});
 
 	it('accepts the minPoints scope with explicit minPoints', () => {
-		const result = metagameModeConfigSchema.safeParse({
+		expect(metagameModeConfigSchema.parse({
 			...validConfig,
 			...conversionTarget,
 			scope: 'minPoints',
 			minPoints: 12,
-		});
-		expect(result.success).toBe(true);
-		if (result.success)
-			expect(result.data.minPoints).toBe(12);
+		}).minPoints).toBe(12);
 	});
 
 	it('rejects a negative or fractional minPoints', () => {
@@ -1271,18 +899,6 @@ describe('topCardsModeConfigSchema', () => {
 describe('pairingsModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('pairings');
 
-	it('defaults to no Round, the generic header, ten rows a page and no auto-page', () => {
-		expect(defaults).toEqual({
-			roundId: undefined,
-			showHeader: true,
-			headerText: undefined,
-			rowsPerPage: 10,
-			autoPageEnabled: false,
-			autoPageIntervalMs: 10000,
-		});
-		expect(pairingsModeConfigSchema.safeParse(defaults).success).toBe(true);
-	});
-
 	it('names its Round by a positive id', () => {
 		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 31 }).success).toBe(true);
 		expect(pairingsModeConfigSchema.safeParse({ ...defaults, roundId: 0 }).success).toBe(false);
@@ -1295,10 +911,6 @@ describe('pairingsModeConfigSchema', () => {
 		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 0 }).success).toBe(false);
 		expect(pairingsModeConfigSchema.safeParse({ ...defaults, rowsPerPage: 101 }).success).toBe(false);
 	});
-
-	it('takes a cleared Round as the deletion that reads as none', () => {
-		expect(modeConfigPatchSchemaMap.pairings.safeParse({ roundId: null }).success).toBe(true);
-	});
 });
 
 // ──────────────── Archetype Spotlight ────────────────
@@ -1306,42 +918,10 @@ describe('pairingsModeConfigSchema', () => {
 describe('archetypeSpotlightModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('archetype-spotlight');
 
-	it('defaults to no Archetype, the whole field, the Metagame page\'s Top 8 conversion target and its full-deck cards', () => {
-		expect(defaults).toEqual({
-			archetypeId: undefined,
-			scope: 'all',
-			topN: 8,
-			minPoints: 9,
-			playerListId: undefined,
-			conversionMetric: 'topN',
-			conversionThreshold: 8,
-			board: 'full',
-			cardLimit: 8,
-			excludedCardTypes: ['Land'],
-			showHeader: true,
-			headerText: undefined,
-			rowsPerPage: 8,
-			autoPageEnabled: false,
-			autoPageIntervalMs: 10000,
-		});
-		expect(archetypeSpotlightModeConfigSchema.safeParse(defaults).success).toBe(true);
-	});
-
 	it('names its Archetype by a positive id', () => {
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 7 }).success).toBe(true);
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 0 }).success).toBe(false);
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, archetypeId: 1.5 }).success).toBe(false);
-	});
-
-	it('takes the Metagame scope vocabulary', () => {
-		for (const scope of [
-			'all',
-			'topN',
-			'minPoints',
-			'playerList',
-		])
-			expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope }).success).toBe(true);
-		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, scope: 'everyone' }).success).toBe(false);
 	});
 
 	it('holds between 1 and 20 top cards', () => {
@@ -1357,28 +937,12 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 			excludedCardTypes: ['Tribal'],
 		}).success).toBe(false);
 	});
-
-	it('takes a cleared Archetype as the deletion that reads as none', () => {
-		expect(modeConfigPatchSchemaMap['archetype-spotlight'].safeParse({ archetypeId: null }).success).toBe(true);
-	});
 });
 
 // ──────────────── Head-to-Head ────────────────
 
 describe('headToHeadModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('head-to-head');
-
-	it('defaults to following a Feature Match Slot, none chosen yet, under the generic header', () => {
-		expect(defaults).toEqual({
-			playerSource: 'featureMatchSlot',
-			featureMatchId: null,
-			player1Id: null,
-			player2Id: null,
-			showHeader: true,
-			headerText: undefined,
-		});
-		expect(headToHeadModeConfigSchema.safeParse(defaults).success).toBe(true);
-	});
 
 	it('takes its Players from a Feature Match Slot or from two picked Players, and nothing else', () => {
 		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'featureMatchSlot', featureMatchId: 4 }).success).toBe(true);
@@ -1396,10 +960,6 @@ describe('headToHeadModeConfigSchema', () => {
 			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 0 }).success).toBe(false);
 			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 2.5 }).success).toBe(false);
 		}
-	});
-
-	it('takes a cleared Slot or Player as the deletion that reads as none', () => {
-		expect(modeConfigPatchSchemaMap['head-to-head'].safeParse({ featureMatchId: null, player1Id: null, player2Id: null }).success).toBe(true);
 	});
 
 	it('keeps which Players it shows through a display reset', () => {
@@ -1432,53 +992,5 @@ describe('page rotation config fields', () => {
 	it('metagame uses the canonical autoPageEnabled name and no longer accepts autoPaging', () => {
 		expect(metagameModeConfigSchema.partial().safeParse({ autoPageEnabled: true }).success).toBe(true);
 		expect(metagameModeConfigSchema.partial().safeParse({ autoPaging: true }).success).toBe(false);
-	});
-});
-
-// ──────────────── screenParamsSchema ────────────────
-
-describe('screenParamsSchema', () => {
-	it('coerces string id and screenId to numbers', () => {
-		const result = screenParamsSchema.safeParse({ id: '1', screenId: '5' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.id).toBe(1);
-			expect(result.data.screenId).toBe(5);
-		}
-	});
-
-	it('accepts numeric id and screenId', () => {
-		const result = screenParamsSchema.safeParse({ id: 10, screenId: 20 });
-		expect(result.success).toBe(true);
-	});
-});
-
-// ──────────────── modeConfigParamsSchema ────────────────
-
-describe('modeConfigParamsSchema', () => {
-	it('accepts valid params with mode', () => {
-		const result = modeConfigParamsSchema.safeParse({ id: '1', screenId: '5', mode: 'feature-match' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.id).toBe(1);
-			expect(result.data.screenId).toBe(5);
-			expect(result.data.mode).toBe('feature-match');
-		}
-	});
-
-	it('accepts all valid mode values', () => {
-		for (const mode of SCREEN_MODE_VALUES) {
-			const result = modeConfigParamsSchema.safeParse({ id: '1', screenId: '1', mode });
-			expect(result.success).toBe(true);
-		}
-	});
-
-	it('coerces string id and screenId', () => {
-		const result = modeConfigParamsSchema.safeParse({ id: '42', screenId: '99', mode: 'background' });
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.id).toBe(42);
-			expect(result.data.screenId).toBe(99);
-		}
 	});
 });

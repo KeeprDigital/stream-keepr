@@ -61,13 +61,11 @@ function fieldDots(scene: THREE.Scene): THREE.Mesh<THREE.SphereGeometry, THREE.M
 }
 
 describe('createGlobeDelegate', () => {
-	it('creates the fork\'s static camera aimed at its widest-viewport look target', () => {
+	it('holds its camera still over time', () => {
 		const { delegate, context, camera } = mountDelegate();
-		expect(camera.fov).toBe(20);
-		expect(camera.near).toBe(0.01);
-		expect(camera.position.toArray()).toEqual([50, 100, 150]);
+		const start = camera.position.toArray();
 		delegate.update({ ...context, elapsedSeconds: 30 });
-		expect(camera.position.toArray()).toEqual([50, 100, 150]);
+		expect(camera.position.toArray()).toEqual(start);
 	});
 
 	it('builds the fork\'s flat, unjittered point plane at its offset', () => {

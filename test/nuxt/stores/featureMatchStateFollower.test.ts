@@ -4,6 +4,7 @@ import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
 /*
@@ -30,14 +31,6 @@ mockNuxtImport('useServerTime', () => () => ({
 
 const EVENT_ID = 1;
 const SLOT_ID = 100;
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((done) => {
-		resolve = done;
-	});
-	return { promise, resolve };
-}
 
 async function flushPromises() {
 	for (let i = 0; i < 6; i++)

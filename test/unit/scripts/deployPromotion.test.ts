@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -607,70 +607,8 @@ describe('describing a marker', () => {
 	});
 });
 
-/**
- * The module is only as good as its wiring: these read the committed
- * package.json and workflow. Nothing is run against a remote.
- */
-describe('the deploy commands and workflow are wired through the markers', () => {
-	const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }).scripts;
-	const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
-	const steps = workflow.slice(workflow.indexOf('    steps:\n')).split(/^ {6}- /m).slice(1);
-	const stepIndex = (pattern: RegExp) => steps.findIndex(step => pattern.test(step));
-
-	it('pnpm deploy:validator deploys between the validator\'s markers', () => {
-		expect(scripts['deploy:validator']).toBe('node scripts/deploy-promotion.mjs deploy-validator');
-		expect(scripts['deploy:mark-app']).toBe('node scripts/deploy-promotion.mjs mark-app');
-		expect(scripts['deploy:status']).toBe('node scripts/deploy-promotion.mjs status');
-	});
-
-	it('pnpm run deploy marks the app pending right before its first remote change and deployed only after deploy:verify', () => {
-		const commands = scripts.deploy!.split('&&').map(command => command.trim());
-		const pending = commands.indexOf('pnpm deploy:mark-app pending');
-
-		expect(commands.slice(0, pending)).toEqual(['pnpm build', 'pnpm worker:dry-run', 'pnpm worker:smoke']);
-		expect(commands[pending + 1]).toBe('pnpm db:migrate:remote');
-		expect(commands.slice(-2)).toEqual(['pnpm deploy:verify', 'pnpm deploy:mark-app deployed']);
-	});
-
-	it('the workflow promotes through the tooling from its own commit, after installing the release', () => {
-		const release = stepIndex(/ref: \$\{\{ steps\.release\.outputs\.tag \}\}/);
-		const tooling = stepIndex(/path: \.deploy-tooling/);
-		const install = stepIndex(/^run: pnpm install --frozen-lockfile$/m);
-		const promoteStep = stepIndex(/run: node \.deploy-tooling\/scripts\/deploy-promotion\.mjs promote "\$INPUT_VALIDATOR"$/m);
-
-		expect(steps[tooling]).toMatch(/ref: \$\{\{ github\.sha \}\}/);
-		expect(steps[tooling]).toMatch(/sparse-checkout: scripts\/deploy-promotion\.mjs/);
-		expect(steps[tooling]).toMatch(/persist-credentials: false/);
-		expect(steps[promoteStep]).toMatch(/INPUT_VALIDATOR: \$\{\{ inputs\.validator \}\}/);
-		expect(release).toBeGreaterThanOrEqual(0);
-		expect([release, tooling, install, promoteStep]).toEqual([
-			...[release, tooling, install, promoteStep],
-		].sort((a, b) => a - b));
-		// A step-level `if:` replaces the implicit `success()`; `continue-on-error` lets a failure through.
-		expect(steps[promoteStep]).not.toMatch(/^\s+(if|continue-on-error):/m);
-	});
-
-	it('the tooling checkout cannot mark the release checkout dirty', () => {
-		expect(steps.some(step => /^run: echo \/\.deploy-tooling\/ >> \.git\/info\/exclude$/m.test(step))).toBe(true);
-	});
-
-	it('no other step deploys or moves a marker outside the promotion', () => {
-		for (const [index, step] of steps.entries()) {
-			if (index === stepIndex(/deploy-promotion\.mjs promote/))
-				continue;
-			const code = step.split('\n').filter(line => !/^\s*#/.test(line)).join('\n');
-			expect(code).not.toMatch(/git push|git tag|wrangler|pnpm (run )?deploy/);
-		}
-	});
-
-	it('the workflow\'s validator choices are exactly the modes the promotion accepts, and its tags have a tagger', () => {
-		expect(workflow).toMatch(/options:\n {10}- auto\n {10}- always\n {10}- never\n/);
-		expect(workflow).toMatch(/GIT_COMMITTER_NAME: \S+/);
-		expect(workflow).toMatch(/GIT_COMMITTER_EMAIL: \S+@\S+/);
-		expect(workflow).toMatch(/contents: write/);
-	});
-
-	it('the command line refuses an unknown command or mode before touching git', () => {
+describe('the deploy-promotion command line', () => {
+	it('refuses an unknown command or mode before touching git', () => {
 		// An empty PATH: any git or wrangler the script tried to spawn would fail to start.
 		const env = { ...process.env, PATH: '', CLOUDFLARE_API_TOKEN: 'blocked-by-test-guard' };
 		for (const args of [

@@ -1,360 +1,149 @@
 import { describe, expect, it } from 'vitest';
 import { cardParser } from '~~/shared/utils/card/parsers';
 
-// ──────────────── Helpers ────────────────
+const front = { small: 'https://example.com/small.jpg', normal: 'https://example.com/normal.jpg' };
+const back = { small: 'https://example.com/back-small.jpg', normal: 'https://example.com/back-normal.jpg' };
 
-const mockImageUris = {
-	small: 'https://example.com/small.jpg',
-	normal: 'https://example.com/normal.jpg',
-	large: 'https://example.com/large.jpg',
-	png: 'https://example.com/png.png',
-	art_crop: 'https://example.com/art_crop.jpg',
-	border_crop: 'https://example.com/border_crop.jpg',
-};
-
-const mockBackImageUris = {
-	small: 'https://example.com/back-small.jpg',
-	normal: 'https://example.com/back-normal.jpg',
-	large: 'https://example.com/back-large.jpg',
-	png: 'https://example.com/back-png.png',
-	art_crop: 'https://example.com/back-art_crop.jpg',
-	border_crop: 'https://example.com/back-border_crop.jpg',
-};
-
-function createScryfallCard(overrides: Record<string, unknown> = {}) {
+function scryfallCard(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'card-123',
 		name: 'Test Card',
 		set_name: 'Test Set',
 		layout: 'normal',
-		image_uris: mockImageUris,
+		image_uris: front,
 		...overrides,
 	} as any;
 }
 
-// ──────────────── normal layout ────────────────
+const twoFaces = {
+	image_uris: undefined,
+	card_faces: [
+		{ image_uris: front },
+		{ image_uris: back },
+	],
+};
+
+const flat = {
+	flipable: false,
+	turnable: false,
+	rotateable: false,
+	counterRotateable: false,
+};
+const upright = {
+	flipped: false,
+	rotated: false,
+	counterRotated: false,
+	turnedOver: false,
+};
 
 describe('cardParser', () => {
-	describe('normal layout', () => {
-		it('sets front image from image_uris', () => {
-			const card = createScryfallCard({ layout: 'normal' });
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-		});
-
-		it('leaves back image null', () => {
-			const card = createScryfallCard({ layout: 'normal' });
-			const result = cardParser(card);
-			expect(result.imageData.back).toBeNull();
-		});
-
-		it('sets all orientation flags to false', () => {
-			const card = createScryfallCard({ layout: 'normal' });
-			const result = cardParser(card);
-			expect(result.orientationData).toEqual({
-				flipable: false,
-				turnable: false,
-				rotateable: false,
-				counterRotateable: false,
-			});
-		});
-
-		it('populates id, name, set, and layout', () => {
-			const card = createScryfallCard();
-			const result = cardParser(card);
-			expect(result.id).toBe('card-123');
-			expect(result.name).toBe('Test Card');
-			expect(result.set).toBe('Test Set');
-			expect(result.layout).toBe('normal');
+	it('carries the card identity whatever its layout', () => {
+		expect(cardParser(scryfallCard({ layout: 'some_future_layout' }))).toMatchObject({
+			id: 'card-123',
+			name: 'Test Card',
+			set: 'Test Set',
+			layout: 'some_future_layout',
 		});
 	});
 
-	// ──────────────── saga/adventure/token fall-through ────────────────
+	it.each([
+		'normal',
+		'saga',
+		'adventure',
+		'token',
+		'leveler',
+		'class',
+		'case',
+		'prepare',
+		'mutate',
+		'prototype',
+		'battle',
+		'planar',
+		'scheme',
+		'vanguard',
+		'emblem',
+		'augment',
+		'host',
+	])('shows a single-faced %s card upright with no back', (layout) => {
+		const result = cardParser(scryfallCard({ layout }));
 
-	describe('saga/adventure/token fall-through', () => {
-		it.each([
-			'saga',
-			'adventure',
-			'token',
-			'leveler',
-			'class',
-			'case',
-			'prepare',
-			'mutate',
-			'prototype',
-			'battle',
-			'planar',
-			'scheme',
-			'vanguard',
-			'emblem',
-			'augment',
-			'host',
-		])('handles %s layout same as normal', (layout) => {
-			const card = createScryfallCard({ layout });
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-			expect(result.imageData.back).toBeNull();
-			expect(result.orientationData.turnable).toBe(false);
-			expect(result.orientationData.flipable).toBe(false);
-		});
+		expect(result.imageData).toEqual({ front, back: null });
+		expect(result.orientationData).toEqual(flat);
+		expect(result.displayData).toEqual(upright);
 	});
 
-	// ──────────────── modal_dfc ────────────────
+	it.each([
+		['modal_dfc', {}],
+		['double_faced_token', {}],
+		['reversible_card', {}],
+		['art_series', {}],
+		[
+			'transform',
+			{ type_line: 'Creature — Werewolf' },
+		],
+	])('makes a double-faced %s card turnable, reading each face', (layout, extra) => {
+		const result = cardParser(scryfallCard({
+			layout,
+			...twoFaces,
+			...extra,
+		}));
 
-	describe('modal_dfc layout', () => {
-		it('sets front from card_faces[0] and back from card_faces[1]', () => {
-			const card = createScryfallCard({
-				layout: 'modal_dfc',
-				image_uris: undefined,
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-			expect(result.imageData.back).toEqual(mockBackImageUris);
-		});
-
-		it('sets turnable to true', () => {
-			const card = createScryfallCard({
-				layout: 'modal_dfc',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.orientationData.turnable).toBe(true);
-		});
+		expect(result.imageData).toEqual({ front, back });
+		expect(result.orientationData).toEqual({ ...flat, turnable: true });
+		expect(result.displayData.rotated).toBe(false);
 	});
 
-	// ──────────────── double_faced_token ────────────────
-
-	describe('double_faced_token layout', () => {
-		it('sets front and back from card_faces with turnable=true', () => {
-			const card = createScryfallCard({
-				layout: 'double_faced_token',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-			expect(result.imageData.back).toEqual(mockBackImageUris);
-			expect(result.orientationData.turnable).toBe(true);
-		});
+	it('shows a transforming Battle rotated', () => {
+		expect(cardParser(scryfallCard({ layout: 'transform', type_line: 'Battle — Siege', ...twoFaces })).displayData.rotated).toBe(true);
 	});
 
-	// ──────────────── transform ────────────────
+	it('makes a flip card flipable', () => {
+		const result = cardParser(scryfallCard({ layout: 'flip' }));
 
-	describe('transform layout', () => {
-		it('sets turnable to true', () => {
-			const card = createScryfallCard({
-				layout: 'transform',
-				type_line: 'Creature',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.orientationData.turnable).toBe(true);
-		});
-
-		it('sets rotated=true when type_line includes Battle', () => {
-			const card = createScryfallCard({
-				layout: 'transform',
-				type_line: 'Battle — Siege',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.displayData.rotated).toBe(true);
-		});
-
-		it('sets rotated=false when type_line does not include Battle', () => {
-			const card = createScryfallCard({
-				layout: 'transform',
-				type_line: 'Creature — Werewolf',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.displayData.rotated).toBe(false);
-		});
-
-		it('sets front and back images from card_faces', () => {
-			const card = createScryfallCard({
-				layout: 'transform',
-				type_line: 'Creature',
-				card_faces: [
-					{ image_uris: mockImageUris },
-					{ image_uris: mockBackImageUris },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-			expect(result.imageData.back).toEqual(mockBackImageUris);
-		});
+		expect(result.imageData).toEqual({ front, back: null });
+		expect(result.orientationData).toEqual({ ...flat, flipable: true });
 	});
 
-	// ──────────────── flip ────────────────
+	it.each([
+		[
+			'shows a split card rotated',
+			[],
+			{ rotated: true, counterRotateable: false },
+		],
+		[
+			'makes an Aftermath split card counter-rotateable instead',
+			['Aftermath'],
+			{ rotated: false, counterRotateable: true },
+		],
+	])('%s', (_name, keywords, expected) => {
+		const result = cardParser(scryfallCard({ layout: 'split', keywords }));
 
-	describe('flip layout', () => {
-		it('sets front from image_uris', () => {
-			const card = createScryfallCard({ layout: 'flip' });
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-		});
-
-		it('sets flipable to true', () => {
-			const card = createScryfallCard({ layout: 'flip' });
-			const result = cardParser(card);
-			expect(result.orientationData.flipable).toBe(true);
-		});
-
-		it('leaves back null', () => {
-			const card = createScryfallCard({ layout: 'flip' });
-			const result = cardParser(card);
-			expect(result.imageData.back).toBeNull();
-		});
+		expect(result.imageData).toEqual({ front, back: null });
+		expect(result.displayData.rotated).toBe(expected.rotated);
+		expect(result.orientationData.counterRotateable).toBe(expected.counterRotateable);
 	});
 
-	// ──────────────── split (non-aftermath) ────────────────
+	it('names a meld card\'s two parts and its result', () => {
+		const result = cardParser(scryfallCard({
+			layout: 'meld',
+			all_parts: [
+				{ id: 'p1', component: 'meld_part', name: 'Bruna' },
+				{ id: 'p2', component: 'meld_part', name: 'Gisela' },
+				{ id: 'r1', component: 'meld_result', name: 'Brisela' },
+			],
+		}));
 
-	describe('split layout (non-aftermath)', () => {
-		it('sets front from image_uris', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: [] });
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-		});
-
-		it('sets rotated=true', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: [] });
-			const result = cardParser(card);
-			expect(result.displayData.rotated).toBe(true);
-		});
-
-		it('sets counterRotateable=false', () => {
-			const card = createScryfallCard({ layout: 'split', keywords: [] });
-			const result = cardParser(card);
-			expect(result.orientationData.counterRotateable).toBe(false);
-		});
+		expect(result.imageData).toEqual({ front, back: null });
+		expect(result.meldData).toEqual({ meldPartOne: 'Bruna', meldPartTwo: 'Gisela', meldResult: 'Brisela' });
 	});
 
-	// ──────────────── split (aftermath) ────────────────
-
-	describe('split layout (aftermath)', () => {
-		it('sets rotated=false', () => {
-			const card = createScryfallCard({
-				layout: 'split',
-				keywords: ['Aftermath'],
-			});
-			const result = cardParser(card);
-			expect(result.displayData.rotated).toBe(false);
-		});
-
-		it('sets counterRotateable=true', () => {
-			const card = createScryfallCard({
-				layout: 'split',
-				keywords: ['Aftermath'],
-			});
-			const result = cardParser(card);
-			expect(result.orientationData.counterRotateable).toBe(true);
-		});
-
-		it('sets front from image_uris', () => {
-			const card = createScryfallCard({
-				layout: 'split',
-				keywords: ['Aftermath'],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-		});
+	it('names no meld parts when Scryfall lists none', () => {
+		expect(cardParser(scryfallCard({ layout: 'meld', all_parts: undefined })).meldData)
+			.toEqual({ meldPartOne: null, meldPartTwo: null, meldResult: null });
 	});
 
-	// ──────────────── meld ────────────────
-
-	describe('meld layout', () => {
-		it('sets front from image_uris', () => {
-			const card = createScryfallCard({
-				layout: 'meld',
-				all_parts: [
-					{ id: 'p1', component: 'meld_part', name: 'Part One' },
-					{ id: 'p2', component: 'meld_part', name: 'Part Two' },
-					{ id: 'r1', component: 'meld_result', name: 'Combined' },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toEqual(mockImageUris);
-		});
-
-		it('extracts meld part names from all_parts', () => {
-			const card = createScryfallCard({
-				layout: 'meld',
-				all_parts: [
-					{ id: 'p1', component: 'meld_part', name: 'Bruna' },
-					{ id: 'p2', component: 'meld_part', name: 'Gisela' },
-					{ id: 'r1', component: 'meld_result', name: 'Brisela' },
-				],
-			});
-			const result = cardParser(card);
-			expect(result.meldData).toEqual({
-				meldPartOne: 'Bruna',
-				meldPartTwo: 'Gisela',
-				meldResult: 'Brisela',
-			});
-		});
-
-		it('handles missing all_parts gracefully', () => {
-			const card = createScryfallCard({
-				layout: 'meld',
-				all_parts: undefined,
-			});
-			const result = cardParser(card);
-			expect(result.meldData).toEqual({
-				meldPartOne: null,
-				meldPartTwo: null,
-				meldResult: null,
-			});
-		});
-
-		it('leaves back null', () => {
-			const card = createScryfallCard({
-				layout: 'meld',
-				all_parts: [],
-			});
-			const result = cardParser(card);
-			expect(result.imageData.back).toBeNull();
-		});
-	});
-
-	// ──────────────── unknown layout ────────────────
-
-	describe('unknown layout', () => {
-		it('returns cardData with id, name, set, and layout', () => {
-			const card = createScryfallCard({ layout: 'some_future_layout' });
-			const result = cardParser(card);
-			expect(result.id).toBe('card-123');
-			expect(result.name).toBe('Test Card');
-			expect(result.set).toBe('Test Set');
-			expect(result.layout).toBe('some_future_layout');
-		});
-
-		it('keeps default null images', () => {
-			const card = createScryfallCard({
-				layout: 'some_future_layout',
-				image_uris: undefined,
-			});
-			const result = cardParser(card);
-			expect(result.imageData.front).toBeNull();
-			expect(result.imageData.back).toBeNull();
-		});
+	it('shows no images for a layout it does not know', () => {
+		expect(cardParser(scryfallCard({ layout: 'some_future_layout', image_uris: undefined })).imageData)
+			.toEqual({ front: null, back: null });
 	});
 });

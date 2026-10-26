@@ -130,6 +130,17 @@ const winnerSide = computed<'player1' | 'player2' | null>(() => {
 	return null;
 });
 
+/** Each side's result, exposed on its name as `data-outcome`. */
+function getPlayerOutcome(side: 'player1' | 'player2'): 'win' | 'loss' | 'draw' | undefined {
+	if (!props.match.hasResult)
+		return undefined;
+	if (isDraw.value)
+		return 'draw';
+	return winnerSide.value === side
+		? 'win'
+		: 'loss';
+}
+
 function getPlayerResultClasses(side: 'player1' | 'player2') {
 	if (!props.match.hasResult) {
 		return 'font-medium text-default';
@@ -212,7 +223,12 @@ function getScoreColor(side: 'player1' | 'player2') {
 				</UBadge>
 				<div class="match-player-stack items-end">
 					<div class="flex items-center justify-end gap-2 min-w-0">
-						<span data-testid="player1-name" class="truncate" :class="getPlayerResultClasses('player1')">{{ match.player1Data?.name || 'TBD' }}</span>
+						<span
+							data-testid="player1-name"
+							class="truncate"
+							:class="getPlayerResultClasses('player1')"
+							:data-outcome="getPlayerOutcome('player1')"
+						>{{ match.player1Data?.name || 'TBD' }}</span>
 						<UBadge
 							v-if="match.hasResult"
 							data-testid="player1-score"
@@ -263,7 +279,12 @@ function getScoreColor(side: 'player1' | 'player2') {
 						>
 							{{ player2GameWins }}
 						</UBadge>
-						<span data-testid="player2-name" class="truncate" :class="getPlayerResultClasses('player2')">{{ match.player2Data?.name || 'TBD' }}</span>
+						<span
+							data-testid="player2-name"
+							class="truncate"
+							:class="getPlayerResultClasses('player2')"
+							:data-outcome="getPlayerOutcome('player2')"
+						>{{ match.player2Data?.name || 'TBD' }}</span>
 					</div>
 					<span v-if="formatRecord(player2Record)" class="text-xs font-mono text-muted">{{ formatRecord(player2Record) }}</span>
 					<div v-if="player2Deck.name" class="flex items-center gap-1.5 justify-start min-w-0">

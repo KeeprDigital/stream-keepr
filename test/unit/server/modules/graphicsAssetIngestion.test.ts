@@ -1,6 +1,4 @@
-import type { GraphicAssetValidationReport } from '~~/shared/types/graphicsAsset';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
+import type { GraphicAssetValidationReport, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -17,28 +15,9 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { digestOf, sixteenPixelPng as sixteenPixelPosterPng, pixelPng as transparentPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
+import { jpegPixel, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
 import { callsTo } from '~~/test/helpers/lastCallTo';
-
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const sixteenPixelPosterPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAHUlEQVR4nGP8x8Dwn4ECwEKJ5lEDRg0YNWAwGQAAkU4CO63xbeIAAAAASUVORK5CYII=',
-	'base64',
-));
-const jpegPixel = Uint8Array.from(Buffer.from(
-	'/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJtAEx7/2Q==',
-	'base64',
-));
-const webpPixel = Uint8Array.from(Buffer.from(
-	'UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEAdQlFKUp4CBiOh/AAA=',
-	'base64',
-));
-const vp9Webm = Uint8Array.from(Buffer.from(
-	'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIMEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggElTbuMU6uEHFO7a1OsggH27AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjIuMTIuMTAyV0GNTGF2ZjYyLjEyLjEwMkSJiECPQAAAAAAAFlSua8iuAQAAAAAAAD/XgQFzxYhkRqj8GKbqBJyBACK1nIN1bmSIgQCGhVZfVlA5g4EBI+ODhB3NZQDgkLCBELqBEJqBAlWwhFW5gQESVMNnQIBzc6BjwIBnyJpFo4dFTkNPREVSRIeNTGF2ZjYyLjEyLjEwMnNz2mPAi2PFiGRGqPwYpuoEZ8ilRaOHRU5DT0RFUkSHmExhdmM2Mi4yOC4xMDIgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXG54EAo6yBAACAgkmDQgAA8AD2ADgkHBhCAAAwcAAASqf/+5CBv///CAg////7iYcAAKOTgQH0AIYAQJKcAElAAAMgAABCQBxTu2uRu4+zgQC3iveBAfGCAavwgQM=',
-	'base64',
-));
 
 // Only an accepted validation report carries facts, so a reading of them has
 // to say which outcome it expected rather than assume one.
@@ -46,10 +25,6 @@ function acceptedReport(report: GraphicAssetValidationReport | undefined) {
 	if (report?.outcome !== 'accepted')
 		throw new Error(`expected an accepted validation report, got ${report?.outcome ?? 'none'}`);
 	return report;
-}
-
-function sourceDigest(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
 }
 
 function jpegSegment(marker: number, payload: Uint8Array) {
@@ -134,7 +109,7 @@ function createLibrary(
 						? input.browserDecodeEvidence
 						: {
 								outcome: 'decoded',
-								sourceDigest: sourceDigest(fixture),
+								sourceDigest: digestOf(fixture),
 								width: 1,
 								height: 1,
 							},
@@ -149,6 +124,24 @@ function createLibrary(
 	};
 }
 
+type Library = ReturnType<typeof createLibrary>['library'];
+
+/** Upload `bytes` for `operation`, under an explicit stream allowance. */
+async function uploadBytes(
+	library: Library,
+	operation: Pick<GraphicsIngestionOperation, 'id' | 'initiatedBy'>,
+	declaredMime: Parameters<Library['uploadGraphicAsset']>[0]['declaredMime'],
+	bytes: Uint8Array,
+	maximumByteLength: number,
+) {
+	return await library.uploadGraphicAsset({
+		operationId: operation.id,
+		initiatedBy: operation.initiatedBy,
+		declaredMime,
+		bytes: createBoundedByteStream(bytes, { byteLength: bytes.byteLength, maximumByteLength }),
+	});
+}
+
 describe('still-image ingestion through the Graphics Asset Library public module', () => {
 	it.each([
 		{
@@ -160,7 +153,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			label: 'browser decode rejection',
 			browserDecodeEvidence: {
 				outcome: 'rejected',
-				sourceDigest: sourceDigest(jpegPixel),
+				sourceDigest: digestOf(jpegPixel),
 			} as const,
 			code: 'browser-image-decode-failed',
 		},
@@ -168,7 +161,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			label: 'browser evidence mismatch',
 			browserDecodeEvidence: {
 				outcome: 'decoded',
-				sourceDigest: sourceDigest(jpegPixel),
+				sourceDigest: digestOf(jpegPixel),
 				width: 2,
 				height: 1,
 			} as const,
@@ -189,15 +182,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: jpegPixel.byteLength,
 		});
 
-		const failed = await library.uploadGraphicAsset({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			declaredMime: 'image/jpeg',
-			bytes: createBoundedByteStream(jpegPixel, {
-				byteLength: jpegPixel.byteLength,
-				maximumByteLength: 25 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, operation, 'image/jpeg', jpegPixel, 25 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -241,15 +226,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: bytes.byteLength,
 		});
 
-		const completed = await library.uploadGraphicAsset({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			declaredMime: mime,
-			bytes: createBoundedByteStream(bytes, {
-				byteLength: bytes.byteLength,
-				maximumByteLength: 25 * 1024 * 1024,
-			}),
-		});
+		const completed = await uploadBytes(library, operation, mime, bytes, 25 * 1024 * 1024);
 
 		expect(completed).toMatchObject({
 			stage: 'completed',
@@ -294,15 +271,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		const failed = await library.uploadGraphicAsset({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			declaredMime: 'image/png',
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: 25 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, operation, 'image/png', transparentPixelPng, 25 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -349,15 +318,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			declaredByteLength: bytes.byteLength,
 		});
 
-		const failed = await library.uploadGraphicAsset({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			declaredMime: mime,
-			bytes: createBoundedByteStream(bytes, {
-				byteLength: bytes.byteLength,
-				maximumByteLength: 25 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, operation, mime, bytes, 25 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -975,7 +936,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				declaredMime,
 				browserDecodeEvidence: {
 					outcome: 'decoded',
-					sourceDigest: sourceDigest(bytes),
+					sourceDigest: digestOf(bytes),
 					width: 1,
 					height: 1,
 				},
@@ -1081,7 +1042,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 					declaredMime: 'image/jpeg',
 					browserDecodeEvidence: {
 						outcome: 'decoded',
-						sourceDigest: sourceDigest(jpegPixel),
+						sourceDigest: digestOf(jpegPixel),
 						width: 1,
 						height: 1,
 					},
@@ -1090,15 +1051,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			),
 		);
 		const completed = await Promise.all(replacements.map(
-			async operation => await library.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/jpeg',
-				bytes: createBoundedByteStream(jpegPixel, {
-					byteLength: jpegPixel.byteLength,
-					maximumByteLength: 16 * 1024 * 1024,
-				}),
-			}),
+			async operation => await uploadBytes(library, operation, 'image/jpeg', jpegPixel, 16 * 1024 * 1024),
 		));
 
 		expect(completed.map(operation => operation.result?.outcome).sort()).toEqual([
@@ -1173,7 +1126,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				declaredMime,
 				browserDecodeEvidence: {
 					outcome: 'decoded',
-					sourceDigest: sourceDigest(bytes),
+					sourceDigest: digestOf(bytes),
 					width: 1,
 					height: 1,
 				},
@@ -1186,15 +1139,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			transparentPixelPng,
 			'image/png',
 		);
-		const staleCompletion = library.uploadGraphicAsset({
-			operationId: staleNoop.id,
-			initiatedBy: staleNoop.initiatedBy,
-			declaredMime: 'image/png',
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: 16 * 1024 * 1024,
-			}),
-		});
+		const staleCompletion = uploadBytes(library, staleNoop, 'image/png', transparentPixelPng, 16 * 1024 * 1024);
 		await noopStarted;
 
 		const changed = await replacementOperation(
@@ -1202,15 +1147,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			jpegPixel,
 			'image/jpeg',
 		);
-		const changedCompletion = await library.uploadGraphicAsset({
-			operationId: changed.id,
-			initiatedBy: changed.initiatedBy,
-			declaredMime: 'image/jpeg',
-			bytes: createBoundedByteStream(jpegPixel, {
-				byteLength: jpegPixel.byteLength,
-				maximumByteLength: 16 * 1024 * 1024,
-			}),
-		});
+		const changedCompletion = await uploadBytes(library, changed, 'image/jpeg', jpegPixel, 16 * 1024 * 1024);
 		expect(changedCompletion.result?.outcome).toBe('revision-created');
 
 		pauseNoop = false;
@@ -1470,7 +1407,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			mutedInlinePlayback: true,
 			seeked: true,
 			transparencyRendered: false,
-			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			posterDigest: digestOf(sixteenPixelPosterPng),
 			poster: createBoundedByteStream(sixteenPixelPosterPng, {
 				byteLength: sixteenPixelPosterPng.byteLength,
 				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
@@ -1492,15 +1429,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredByteLength: vp9Webm.byteLength,
 		});
 
-		const completed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const completed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 
 		expect(completed).toMatchObject({
 			stage: 'completed',
@@ -1512,9 +1441,9 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 		expect(validate).toHaveBeenCalledOnce();
 		expect(validate).toHaveBeenCalledWith(expect.objectContaining({
 			operationId: initiated.id,
-			sourceDigest: sourceDigest(vp9Webm),
+			sourceDigest: digestOf(vp9Webm),
 			inspectedFacts: expect.objectContaining({
-				sha256: sourceDigest(vp9Webm),
+				sha256: digestOf(vp9Webm),
 				format: 'webm',
 				codec: 'vp9',
 			}),
@@ -1534,15 +1463,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredByteLength: vp9Webm.byteLength,
 		});
 
-		const failed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -1568,7 +1489,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			mutedInlinePlayback: true,
 			seeked: true,
 			transparencyRendered: false,
-			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			posterDigest: digestOf(sixteenPixelPosterPng),
 			poster: createBoundedByteStream(sixteenPixelPosterPng, {
 				byteLength: sixteenPixelPosterPng.byteLength,
 				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
@@ -1592,15 +1513,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredMime: 'video/webm',
 			declaredByteLength: vp9Webm.byteLength,
 		});
-		const first = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const first = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 		expect(first).toMatchObject({
 			stage: 'failed',
 			failure: { code: 'validation-runtime-unavailable', retryable: true },
@@ -1639,7 +1552,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			mutedInlinePlayback: true,
 			seeked: true,
 			transparencyRendered: false,
-			posterDigest: sourceDigest(sixteenPixelPosterPng),
+			posterDigest: digestOf(sixteenPixelPosterPng),
 			poster: createBoundedByteStream(sixteenPixelPosterPng, {
 				byteLength: sixteenPixelPosterPng.byteLength,
 				maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
@@ -1660,15 +1573,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredMime: 'video/webm',
 			declaredByteLength: vp9Webm.byteLength,
 		});
-		const failed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 		expect(failed).toMatchObject({
 			stage: 'failed',
 			failure: { code: 'validation-runtime-unavailable', retryable: true },
@@ -1695,15 +1600,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredMime: 'video/webm',
 			declaredByteLength: vp9Webm.byteLength,
 		});
-		const failed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -1733,7 +1630,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 						mutedInlinePlayback: true,
 						seeked: true,
 						transparencyRendered: false,
-						posterDigest: sourceDigest(invalidPoster),
+						posterDigest: digestOf(invalidPoster),
 						poster: createBoundedByteStream(invalidPoster, {
 							byteLength: invalidPoster.byteLength,
 							maximumByteLength: MAX_SILENT_VIDEO_POSTER_BYTES,
@@ -1750,15 +1647,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredMime: 'video/webm',
 			declaredByteLength: vp9Webm.byteLength,
 		});
-		const failed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 
 		expect(failed).toMatchObject({
 			stage: 'failed',
@@ -1790,15 +1679,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			declaredMime: 'video/webm',
 			declaredByteLength: vp9Webm.byteLength,
 		});
-		const failed = await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		const failed = await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 		expect(failed).toMatchObject({
 			stage: 'failed',
 			report: {
@@ -1849,15 +1730,7 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 				reservedBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES,
 			},
 		});
-		await library.uploadGraphicAsset({
-			operationId: initiated.id,
-			initiatedBy: initiated.initiatedBy,
-			declaredMime: 'video/webm',
-			bytes: createBoundedByteStream(vp9Webm, {
-				byteLength: vp9Webm.byteLength,
-				maximumByteLength: 250 * 1024 * 1024,
-			}),
-		});
+		await uploadBytes(library, initiated, 'video/webm', vp9Webm, 250 * 1024 * 1024);
 		await expect(library.getCapacity()).resolves.toMatchObject({
 			staging: {
 				usedBytes: vp9Webm.byteLength,

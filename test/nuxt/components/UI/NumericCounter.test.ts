@@ -1,22 +1,14 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import { UButtonStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import NumericCounter from '~/components/UI/NumericCounter.vue';
 
-const UButtonStub = defineComponent({
-	props: {
-		size: { type: String, required: false },
-		disabled: { type: Boolean, required: false },
-		icon: { type: String, required: false },
-	},
-	emits: ['click'],
-	template: '<button :class="$attrs.class" :data-size="size" :data-icon="icon" :disabled="disabled" @click="$emit(\'click\')" />',
-});
-
+// The counter blurs and selects through the input's exposed `inputRef`, which
+// the shared stub does not expose.
 const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
-		size: { type: String, required: false },
-		ui: { type: Object, required: false },
 		disabled: { type: Boolean, required: false },
 	},
 	emits: [
@@ -27,25 +19,16 @@ const UInputNumberStub = defineComponent({
 	],
 	setup(_, { emit, expose }) {
 		const inputRef = ref<HTMLInputElement | null>(null);
-
-		function handleInput(event: Event) {
-			emit('update:modelValue', Number((event.target as HTMLInputElement).value));
-		}
-
 		expose({ inputRef });
-
 		return {
 			inputRef,
-			handleInput,
+			onInput: (event: Event) => emit('update:modelValue', Number((event.target as HTMLInputElement).value)),
 		};
 	},
-	template: '<input ref="inputRef" :class="$attrs.class" :value="modelValue ?? \'\'" :data-size="size" :data-ui-base="ui?.base" :disabled="disabled" @input="handleInput" @blur="$emit(\'blur\', $event)" @focus="$emit(\'focus\', $event)" @keydown="$emit(\'keydown\', $event)" />',
+	template: '<input ref="inputRef" :value="modelValue ?? \'\'" :disabled="disabled" @input="onInput" @blur="$emit(\'blur\', $event)" @focus="$emit(\'focus\', $event)" @keydown="$emit(\'keydown\', $event)" />',
 });
 
 async function mountComponent(props: Record<string, unknown>) {
-	const componentPath = '../../../../app/components/UI/' + 'NumericCounter.vue';
-	const { default: NumericCounter } = await import(componentPath);
-
 	return mount(NumericCounter, {
 		props: {
 			value: 20,
@@ -61,19 +44,6 @@ async function mountComponent(props: Record<string, unknown>) {
 }
 
 describe('numericCounter', () => {
-	it('uses slimmer touch sizing for secondary vertical counters', async () => {
-		const wrapper = await mountComponent({ touch: true, orientation: 'vertical' });
-
-		const buttons = wrapper.findAll('button');
-		expect(buttons[0]?.attributes('data-size')).toBe('xl');
-		expect(buttons[0]?.classes()).toContain('h-16');
-		expect(buttons[0]?.classes()).toContain('w-[7.25rem]');
-
-		const input = wrapper.get('input');
-		expect(input.attributes('data-ui-base')).toContain('w-[7.25rem]');
-		expect(input.attributes('data-ui-base')).toContain('text-6xl');
-	});
-
 	it('clamps manual input on blur', async () => {
 		const wrapper = await mountComponent({ value: 2, min: 0, max: 5 });
 

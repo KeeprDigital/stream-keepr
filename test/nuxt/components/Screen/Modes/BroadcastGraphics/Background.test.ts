@@ -1,6 +1,7 @@
 import type { BroadcastGraphicsBackgroundConfig } from '~~/shared/types/screenConfig';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
+import Background from '~/components/Screen/Modes/BroadcastGraphics/Background.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -8,9 +9,6 @@ async function mountCard(props: {
 	background?: BroadcastGraphicsBackgroundConfig;
 	writable?: boolean;
 } = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Background.vue';
-	const { default: Background } = await import(componentPath);
-
 	return mount(Background, {
 		props: { writable: true, ...props },
 	});

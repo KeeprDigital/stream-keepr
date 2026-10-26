@@ -4,6 +4,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import SocialProfileProjections from '~/components/Graphics/Compositor/SocialProfileProjections.vue';
 
 enableAutoUnmount(afterEach);
 
@@ -72,8 +73,6 @@ async function mountComponent(options: {
 	selectedTarget?: GraphicsSelectionTarget;
 	writable?: boolean;
 } = {}) {
-	const componentPath = '../../../../../app/components/Graphics/Compositor/SocialProfileProjections.vue';
-	const { default: SocialProfileProjections } = await import(componentPath);
 	return mount(SocialProfileProjections, {
 		props: {
 			graphics: options.graphics ?? [

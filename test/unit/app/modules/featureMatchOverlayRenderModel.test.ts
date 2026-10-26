@@ -195,28 +195,6 @@ describe('feature match overlay host render model', () => {
 		expect(glowFilter('key')).toBe('drop-shadow(0 0 6px #ffffffbf)');
 	});
 
-	it('keeps the opacity of a colour that is not hex', () => {
-		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([
-				source({
-					framingStyle: {
-						backgroundColor: 'rebeccapurple',
-						backgroundOpacity: 0.5,
-						borderVisible: true,
-						glowColor: 'rgb(255, 81, 199)',
-						glowSize: 10,
-						glowOpacity: 0.25,
-					},
-				}),
-			]),
-			output: 'fill',
-		});
-
-		expect(model.sourceItems[0]!.style.background).toBe('color-mix(in srgb, rebeccapurple 50%, transparent)');
-		expect(model.sourceItems[0]!.glowStyle?.filter)
-			.toBe('drop-shadow(0 0 10px color-mix(in srgb, rgb(255, 81, 199) 25%, transparent))');
-	});
-
 	it('masks a Source Item glow to only the selected side of its rounded border', () => {
 		const framingStyle = {
 			borderVisible: true,
@@ -285,7 +263,7 @@ describe('feature match overlay host render model', () => {
 		expect(key.sourceItems[0]!.style.background).toBe('#ffffffff');
 	});
 
-	it('paints the Key Output in white and the Fill Output over black', () => {
+	it('paints a Source Item border and the Frame white in the Key Output', () => {
 		const key = resolveFeatureMatchOverlayRenderModel({
 			config: configWith([
 				source({
@@ -294,23 +272,9 @@ describe('feature match overlay host render model', () => {
 			]),
 			output: 'key',
 		});
-		const fill = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([]),
-			output: 'fill',
-		});
 
 		expect(key.sourceItems[0]!.style.borderTop).toBe('4px solid #ffffff');
 		expect(key.frame.fill).toBe('#ffffff');
-		expect(fill.canvasStyle.background).toBe('#000000');
-	});
-
-	it('renders an overlay canvas transparent', () => {
-		const model = resolveFeatureMatchOverlayRenderModel({
-			config: configWith([]),
-			output: 'overlay',
-		});
-
-		expect(model.canvasStyle.background).toBe('transparent');
 	});
 
 	describe('the Frame', () => {

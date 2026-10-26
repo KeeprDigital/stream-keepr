@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventDataLifecycle } from '~~/app/modules/event-data/lifecycle';
+import { deferred } from '~~/test/helpers/deferred';
 
 interface Item {
 	id: number;
@@ -34,16 +35,6 @@ function createHarness() {
 		onMutation,
 		onReset,
 	};
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
 }
 
 describe('event data lifecycle module', () => {

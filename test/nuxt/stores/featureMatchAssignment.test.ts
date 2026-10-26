@@ -1,6 +1,7 @@
 import type { FeatureMatchAssignment } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 
 const mockRepo = {
 	listByRound: vi.fn(),
@@ -238,13 +239,3 @@ describe('useFeatureMatchAssignmentStore', () => {
 		});
 	});
 });
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}

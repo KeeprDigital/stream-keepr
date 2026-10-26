@@ -5,12 +5,8 @@ import { defineComponent } from 'vue';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import MetagameScopeFields from '~/components/Screen/MetagameScopeFields.vue';
 
-/**
- * The one editor of a Metagame Scope (#777), shared by every mode reading the
- * metagame: it offers the scopes its mode's contract holds, the field its
- * current scope reads, and the archetype filter where offered, and emits each
- * edit as the patch naming it.
- */
+// The one editor of a Metagame Scope (#777), shared by every mode reading the metagame: it offers
+// the scopes its mode's contract holds, the field its current scope reads, and the archetype filter…
 
 const mockPlayerListStore = {
 	lists: [

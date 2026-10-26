@@ -1,6 +1,7 @@
 import type { BroadcastDeckListResponse, BroadcastDeckListSummaryResponse } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 
 const mockRepo = {
 	list: vi.fn(),
@@ -34,16 +35,6 @@ function detail(overrides: Partial<BroadcastDeckListResponse> = {}): BroadcastDe
 function summary(value: BroadcastDeckListResponse): BroadcastDeckListSummaryResponse {
 	const { sourceText: _sourceText, entries: _entries, ...result } = value;
 	return result;
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason: unknown) => void;
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise;
-		reject = rejectPromise;
-	});
-	return { promise, resolve, reject };
 }
 
 describe('useBroadcastDeckListStore', () => {

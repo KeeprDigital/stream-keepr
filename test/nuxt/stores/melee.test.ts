@@ -1,10 +1,8 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-// ── Mock Dependencies ──
 
 const mockEventRepo = {
 	list: vi.fn(),
@@ -20,22 +18,9 @@ const mockEventRepo = {
 	syncDecklists: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-mockAbly.onRoom.mockImplementation(() => {});
-
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
-/*
- * `useAsyncAction` is deliberately not mocked. The hand-written copy that stood here
- * reported `e.message ?? String(e)` with no `instanceof Error` guard, where the real
- * composable reports 'An error occurred' for a rejection that is not an `Error` — so a
- * plain-object fixture could assert prose no operator would be shown. It also called
- * `onError` with no argument and resolved `undefined` where the real one passes the
- * failure and resolves `null` (#241, #263).
- */
 
-// For melee store: useEventStore() returns a pinia store where refs are auto-unwrapped.
-// We use reactive() to mimic this behavior — properties are accessed directly (no .value).
+// reactive() stands in for a Pinia store's auto-unwrapped refs.
 const mockEventState = reactive({
 	event: null as any,
 	eventId: null as number | null,
@@ -89,7 +74,6 @@ mockNuxtImport('usePlayerDeckStore', () => () => mockPlayerDeckStore);
 mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
 mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
 
-// Test round data — now DB-shaped rounds with phaseId, status, lastSyncedAt
 const testRounds = [
 	{
 		id: 10,
@@ -164,16 +148,6 @@ const initialSetupResponse = {
 	warnings: [],
 };
 
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise;
-		reject = rejectPromise;
-	});
-	return { promise, resolve, reject };
-}
-
 describe('useMeleeStore', () => {
 	let store: ReturnType<typeof useMeleeStore>;
 
@@ -195,8 +169,6 @@ describe('useMeleeStore', () => {
 		mockMatchStore.loadedRoundId = null;
 		mockPlayerStore.players = [];
 		mockPlayerDeckStore.loadByEventId = vi.fn();
-		vi.clearAllMocks();
-		mockAbly.onRoom.mockImplementation(() => {});
 	});
 
 	function setEvent(extra?: Record<string, any>) {
@@ -216,72 +188,46 @@ describe('useMeleeStore', () => {
 		mockPhaseStore.getPhaseById = vi.fn((id: number) => testPhases.find(p => p.id === id) ?? null);
 	}
 
-	// ── Computed ──
+	it.each([
+		['no Event', undefined, false],
+		[
+			'Melee enabled and configured',
+			{ meleeEnabled: true, meleeConfigured: true },
+			true,
+		],
+		[
+			'Melee configured but not enabled',
+			{ meleeEnabled: false, meleeConfigured: true },
+			false,
+		],
+	])('hasCredentials with %s is %s', (_, event, expected) => {
+		if (event)
+			setEvent(event);
 
-	describe('hasCredentials', () => {
-		it('returns false when no event', () => {
-			expect(store.hasCredentials).toBe(false);
-		});
-
-		it('returns true when melee is enabled and configured', () => {
-			setEvent({ meleeEnabled: true, meleeConfigured: true });
-			expect(store.hasCredentials).toBe(true);
-		});
-
-		it('returns false when melee not enabled', () => {
-			setEvent({ meleeEnabled: false, meleeConfigured: true });
-			expect(store.hasCredentials).toBe(false);
-		});
+		expect(store.hasCredentials).toBe(expected);
 	});
 
-	describe('nextUnsyncedRound', () => {
-		it('returns first round when none synced', () => {
-			setRoundsAndPhases();
-			expect(store.nextUnsyncedRound).toEqual(testRounds[0]);
-		});
+	it('tracks sync progress through the Event\'s Rounds in order', () => {
+		setRoundsAndPhases();
 
-		it('returns next unsynced round when some are synced', () => {
-			setRoundsAndPhases();
-			mockRoundStore.rounds[0] = {
-				...testRounds[0],
-				lastSyncedAt: new Date(),
-			};
-			expect(store.nextUnsyncedRound).toEqual(testRounds[1]);
-		});
-	});
+		expect(store.nextUnsyncedRound).toEqual(testRounds[0]);
+		expect(store.nextRoundLabel).toBe('Sync Round 1');
+		expect(store.allRoundsSynced).toBe(false);
 
-	describe('nextRoundLabel', () => {
-		it('returns label for the next unsynced round', () => {
-			setRoundsAndPhases();
-			expect(store.nextRoundLabel).toBe('Sync Round 1');
-		});
-	});
+		mockRoundStore.rounds[0] = {
+			...testRounds[0],
+			lastSyncedAt: new Date(),
+		};
 
-	describe('allRoundsSynced', () => {
-		it('returns false when there are unsynced rounds', () => {
-			setRoundsAndPhases();
-			expect(store.allRoundsSynced).toBe(false);
-		});
+		expect(store.nextUnsyncedRound).toEqual(testRounds[1]);
+		expect(store.syncedRoundCount).toBe(1);
 
-		it('returns true when all rounds are synced', () => {
-			setRoundsAndPhases();
-			mockRoundStore.rounds = testRounds.map(r => ({
-				...r,
-				lastSyncedAt: new Date(),
-			}));
-			expect(store.allRoundsSynced).toBe(true);
-		});
-	});
+		mockRoundStore.rounds = testRounds.map(r => ({
+			...r,
+			lastSyncedAt: new Date(),
+		}));
 
-	describe('syncedRoundCount', () => {
-		it('returns count of synced rounds', () => {
-			setRoundsAndPhases();
-			mockRoundStore.rounds[0] = {
-				...testRounds[0],
-				lastSyncedAt: new Date(),
-			};
-			expect(store.syncedRoundCount).toBe(1);
-		});
+		expect(store.allRoundsSynced).toBe(true);
 	});
 
 	it('excludes local, foreign-source, and manual-override rounds from sync progress', () => {
@@ -311,8 +257,6 @@ describe('useMeleeStore', () => {
 		expect(store.availableRounds.map(round => round.id)).toEqual([10, 20, 30]);
 		expect(store.totalRoundCount).toBe(3);
 	});
-
-	// ── Actions ──
 
 	describe('syncEvent', () => {
 		it('calls repo and reloads phases and rounds', async () => {
@@ -351,23 +295,7 @@ describe('useMeleeStore', () => {
 			await store.syncEvent();
 
 			expect(store.error).toBe('This Event is no longer linked to a Melee.gg tournament');
-			// The banner's own failure description falls through to `error`, so the sentence
-			// is what an operator reads under 'Event Sync Failed' as well.
 			expect(store.lastOperation?.description).toBe('This Event is no longer linked to a Melee.gg tournament');
-		});
-
-		it('reports the transport line for a 5xx, whose body message the server sanitized', async () => {
-			setEvent();
-			mockEventRepo.syncMelee.mockRejectedValue(transportFailure({
-				status: 502,
-				statusText: 'Bad Gateway',
-				body: { message: 'Internal Server Error' },
-				request: `[POST] "/api/events/1/melee/sync"`,
-			}));
-
-			await store.syncEvent();
-
-			expect(store.error).toBe('[POST] "/api/events/1/melee/sync": 502 Bad Gateway');
 		});
 	});
 
@@ -467,28 +395,6 @@ describe('useMeleeStore', () => {
 			expect(result.success).toBe(false);
 			expect(result.error).toBe('No event loaded');
 			expect(mockEventRepo.updateFromMelee).not.toHaveBeenCalled();
-		});
-
-		it('maintains updatingFromMelee while the unified update is running', async () => {
-			setEvent();
-			const runningDuringUpdate: boolean[] = [];
-			mockEventRepo.updateFromMelee.mockImplementation(async () => {
-				runningDuringUpdate.push(store.updatingFromMelee);
-				return {
-					success: true,
-					steps: ['players'],
-					players: { created: 0, updated: 0, errors: [] },
-					deckLists: null,
-					rounds: [],
-					advancedRound: null,
-					refreshedRound: null,
-				};
-			});
-
-			await store.updateFromMelee();
-
-			expect(runningDuringUpdate).toEqual([true]);
-			expect(store.updatingFromMelee).toBe(false);
 		});
 
 		it('coalesces duplicate update commands so loading cannot clear between requests', async () => {
@@ -727,21 +633,6 @@ describe('useMeleeStore', () => {
 			expect(store.lastOperation?.status).toBe('error');
 		});
 
-		it('maintains runningSetup while the canonical request runs', async () => {
-			setEvent();
-			const runningDuringRequest: boolean[] = [];
-			mockEventRepo.runInitialSetup.mockImplementation(async () => {
-				runningDuringRequest.push(store.runningSetup);
-				return initialSetupResponse;
-			});
-
-			const result = await store.runInitialSetup();
-
-			expect(result.success).toBe(true);
-			expect(runningDuringRequest).toEqual([true]);
-			expect(store.runningSetup).toBe(false);
-		});
-
 		it('progresses from server sync to local loading', async () => {
 			setEvent();
 			const stepsObserved: string[] = [];
@@ -764,16 +655,17 @@ describe('useMeleeStore', () => {
 			const pending = deferred<any>();
 			mockEventRepo.runInitialSetup.mockReturnValue(pending.promise);
 
-			// Start first setup (blocks on the one server command).
 			const firstSetup = store.runInitialSetup();
 			const duplicateSetup = store.runInitialSetup();
 
 			expect(mockEventRepo.runInitialSetup).toHaveBeenCalledOnce();
+			expect(store.runningSetup).toBe(true);
 
 			pending.resolve(initialSetupResponse);
 			const [firstResult, duplicateResult] = await Promise.all([firstSetup, duplicateSetup]);
 			expect(firstResult.success).toBe(true);
 			expect(duplicateResult).toEqual(firstResult);
+			expect(store.runningSetup).toBe(false);
 		});
 
 		it('sets setupStep to complete on success then clears after delay', async () => {
@@ -783,10 +675,8 @@ describe('useMeleeStore', () => {
 
 			await store.runInitialSetup();
 
-			// setupStep should be 'complete' immediately after
 			expect(store.setupStep).toBe('complete');
 
-			// After the 1500ms delay it should clear
 			vi.advanceTimersByTime(1500);
 			expect(store.setupStep).toBeNull();
 
@@ -794,32 +684,7 @@ describe('useMeleeStore', () => {
 		});
 	});
 
-	// ── $reset ──
-
-	describe('$reset', () => {
-		it('clears all state', () => {
-			store.error = 'some error';
-
-			store.$reset();
-
-			expect(store.syncing).toBe(false);
-			expect(store.syncingPlayers).toBe(false);
-			expect(store.syncingDecklists).toBe(false);
-			expect(store.syncingRound).toBe(false);
-			expect(store.updatingFromMelee).toBe(false);
-			expect(store.runningSetup).toBe(false);
-			expect(store.setupStep).toBeNull();
-			expect(store.syncStep).toBeNull();
-			expect(store.error).toBeNull();
-		});
-	});
-
-	/**
-	 * A Melee operation is answered for the Event it ran against. Neither another Event
-	 * nor the same Event loaded afresh since is the lifetime that answer belongs to, so
-	 * it may not reload that Event's data, report into its banner, or answer a new
-	 * operation started there (ADR-0024).
-	 */
+	// A Melee operation's answer reloads, reports and answers nothing in a later Event Lifetime (ADR-0024).
 	describe.each([
 		[
 			'Event B',

@@ -11,18 +11,15 @@ const mockFeatureMatchService = {
 	findById: vi.fn(),
 	findByEventId: vi.fn(),
 };
-
 const mockRefreshBindings = vi.fn();
 
 vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	refreshBroadcastGraphicsBindings: mockRefreshBindings,
 }));
-
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,
 	publishMessageStrict: mockPublishMessageStrict,
 }));
-
 vi.mock('~~/server/services/featureMatch', () => ({
 	featureMatchService: () => mockFeatureMatchService,
 }));
@@ -30,1018 +27,675 @@ vi.mock('~~/server/services/featureMatch', () => ({
 const { eventDataPublicationModule } = await import('~~/server/modules/event-data-publication');
 
 const NOW = new Date('2026-01-01T00:00:00.000Z');
+const origin = 'origin-1';
 
-function createEvent(overrides: Record<string, unknown> = {}) {
+function row(overrides: Record<string, unknown>) {
 	return {
 		id: 1,
-		name: 'Regional Championship',
-		slug: 'regional-championship',
-		game: 'mtg',
-		meleeEnabled: true,
-		meleeEventId: '12345',
-		meleeClientId: 'client-id',
-		meleeClientSecret: 'client-secret',
-		numFeatureMatches: 4,
-		talents: [],
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createPhase(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 2,
 		eventId: 1,
-		name: 'Swiss',
-		sortOrder: 0,
-		externalId: 'phase-2',
-		externalSource: 'melee',
 		createdAt: NOW,
 		updatedAt: NOW,
 		...overrides,
-	};
+	} as any;
 }
 
-function createRound(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 3,
-		eventId: 1,
-		phaseId: 2,
-		externalId: 'round-3',
-		externalSource: 'melee',
-		name: 'Round 3',
-		roundNumber: 3,
-		controlMode: 'melee',
-		lastSyncedAt: null,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
+const phase = row({
+	id: 2,
+	name: 'Swiss',
+	sortOrder: 0,
+	externalId: null,
+	externalSource: 'manual',
+});
+const round = row({
+	id: 3,
+	phaseId: 2,
+	name: 'Round 3',
+	roundNumber: 3,
+	controlMode: 'default',
+	externalId: null,
+	externalSource: 'manual',
+	lastSyncedAt: null,
+});
+const talent = row({
+	id: 5,
+	name: 'Casey',
+	twitchHandle: 'CaseyLive',
+	youtubeHandle: null,
+	xHandle: null,
+	instagramHandle: null,
+	tiktokHandle: null,
+	blueskyHandle: null,
+});
+const player = row({
+	id: 6,
+	name: 'Alice',
+	pronouns: null,
+	isActive: true,
+	archetypeId: null,
+	gameData: null,
+	externalId: null,
+	externalSource: null,
+});
+const playerList = row({ id: 10, name: 'Featured Players' });
+const archetype = row({ id: 11, name: 'Izzet Prowess', colors: 'UR' });
+const match = row({
+	id: 7,
+	roundId: 3,
+	tableNumber: 12,
+	player1Id: 101,
+	player2Id: 102,
+	player1Data: null,
+	player2Data: null,
+	player1Wins: 1,
+	player2Wins: 0,
+	draws: 0,
+	status: 'pending',
+	sortOrder: 0,
+	externalId: null,
+	externalSource: 'manual',
+});
+const slot = row({
+	id: 4,
+	matchId: 7,
+	tableNumber: 12,
+	player1Id: 101,
+	player2Id: 102,
+	player1Data: null,
+	player2Data: null,
+	bestOf: 3,
+	sortOrder: 0,
+	playerDisplayMode: 'score',
+	activeSessionId: null,
+	roundName: null,
+	formatName: null,
+	externalId: null,
+	externalSource: null,
+});
+const assignment = row({
+	id: 9,
+	roundId: 3,
+	slotId: 4,
+	matchId: 7,
+	note: 'Production note',
+});
+const screen = row({
+	id: 8,
+	name: 'Main Screen',
+	slug: 'main-screen',
+	currentMode: 'feature-match',
+	modeConfigs: {},
+	screenConfig: {},
+	stateVersion: 3,
+});
 
-function createTalent(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 5,
-		eventId: 1,
-		name: 'Casey',
-		twitchHandle: null,
-		youtubeHandle: null,
-		xHandle: null,
-		instagramHandle: null,
-		tiktokHandle: null,
-		blueskyHandle: null,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
+beforeEach(() => {
+	vi.clearAllMocks();
+});
 
-function createPlayerList(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 10,
-		eventId: 1,
-		name: 'Featured Players',
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
+describe('the realtime message each Event Data change sends', () => {
+	const publication = () => eventDataPublicationModule();
 
-function createPlayerDeck(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 20,
-		eventId: 1,
-		playerId: 4,
-		externalId: 'deck-20',
-		externalSource: 'melee',
-		formatExternalId: 'modern',
-		name: 'Imported Deck',
-		colors: 'UR',
-		sortOrder: 0,
-		isPrimary: true,
-		archetypeId: 7,
-		reviewedAt: NOW,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
+	it.each([
+		[
+			'phaseCreated',
+			{ entity: phase },
+			'phase:created',
+			{
+				phase: expect.objectContaining({ id: 2 }),
+			},
+		],
+		[
+			'phaseUpdated',
+			{ entity: phase },
+			'phase:updated',
+			{
+				phase: expect.objectContaining({ id: 2 }),
+			},
+		],
+		[
+			'roundCreated',
+			{ entity: round },
+			'round:created',
+			{
+				round: expect.objectContaining({ id: 3 }),
+			},
+		],
+		[
+			'talentCreated',
+			{ entity: talent },
+			'talent:created',
+			{
+				talent: expect.objectContaining({ id: 5 }),
+			},
+		],
+		[
+			'playerCreated',
+			{ entity: player },
+			'player:created',
+			{
+				player: expect.objectContaining({ id: 6 }),
+			},
+		],
+		[
+			'playerUpdated',
+			{ entity: player },
+			'player:updated',
+			{
+				player: expect.objectContaining({ id: 6 }),
+			},
+		],
+		[
+			'playerDeleted',
+			{ id: 6 },
+			'player:deleted',
+			{ playerId: 6 },
+		],
+		[
+			'playerListCreated',
+			{ entity: playerList },
+			'playerList:created',
+			{
+				playerList: expect.objectContaining({ id: 10 }),
+			},
+		],
+		[
+			'archetypeUpdated',
+			{ entity: archetype, keyCards: [] },
+			'archetype:updated',
+			{
+				archetype: expect.objectContaining({ id: 11, keyCards: [] }),
+			},
+		],
+		[
+			'matchCreated',
+			{ entity: match },
+			'match:created',
+			{
+				match: expect.objectContaining({ id: 7 }),
+			},
+		],
+		[
+			'featureMatchSlotUpdated',
+			{ entity: slot },
+			'featureMatch:updated',
+			{
+				featureMatch: expect.objectContaining({ id: 4 }),
+			},
+		],
+		[
+			'featureMatchAssignmentCreated',
+			{ entity: assignment },
+			'featureMatchAssignment:created',
+			{
+				featureMatchAssignment: expect.objectContaining({ id: 9 }),
+			},
+		],
+		[
+			'phaseDeleted',
+			{ id: 2 },
+			'phase:deleted',
+			{ phaseId: 2 },
+		],
+		[
+			'roundUpdated',
+			{ entity: round },
+			'round:updated',
+			{
+				round: expect.objectContaining({ id: 3 }),
+			},
+		],
+		[
+			'roundDeleted',
+			{ id: 3 },
+			'round:deleted',
+			{ roundId: 3 },
+		],
+		[
+			'talentUpdated',
+			{ entity: talent },
+			'talent:updated',
+			{
+				talent: expect.objectContaining({
+					id: 5,
+					socialProfiles: { twitch: 'CaseyLive' },
+				}),
+			},
+		],
+		[
+			'talentDeleted',
+			{ id: 5 },
+			'talent:deleted',
+			{ talentId: 5 },
+		],
+		[
+			'playerListUpdated',
+			{ entity: playerList },
+			'playerList:updated',
+			{
+				playerList: expect.objectContaining({ id: 10 }),
+			},
+		],
+		[
+			'playerListDeleted',
+			{ id: 10 },
+			'playerList:deleted',
+			{ listId: 10 },
+		],
+		[
+			'playerListMembersChanged',
+			{
+				listId: 10,
+				playerIds: [101, 102],
+				action: 'reordered',
+				memberCount: 2,
+			},
+			'playerList:membersChanged',
+			{
+				listId: 10,
+				playerIds: [101, 102],
+				action: 'reordered',
+				memberCount: 2,
+			},
+		],
+		[
+			'archetypeCreated',
+			{ entity: archetype },
+			'archetype:created',
+			{
+				archetype: expect.objectContaining({ id: 11, keyCards: [] }),
+			},
+		],
+		[
+			'archetypeDeleted',
+			{ id: 11 },
+			'archetype:deleted',
+			{ archetypeId: 11 },
+		],
+		[
+			'archetypeKeyCardsUpdated',
+			{ archetypeId: 11, keyCards: [] },
+			'archetype:keyCardsUpdated',
+			{ archetypeId: 11, keyCards: [] },
+		],
+		[
+			'matchUpdated',
+			{ entity: match },
+			'match:updated',
+			{
+				match: expect.objectContaining({ id: 7 }),
+			},
+		],
+		[
+			'matchDeleted',
+			{ id: 7 },
+			'match:deleted',
+			{ matchId: 7 },
+		],
+		[
+			'featureMatchSlotCreated',
+			{ entity: slot },
+			'featureMatch:created',
+			{
+				featureMatch: expect.objectContaining({ id: 4 }),
+			},
+		],
+		[
+			'featureMatchSlotDeleted',
+			{ id: 4 },
+			'featureMatch:deleted',
+			{ featureMatchId: 4 },
+		],
+		[
+			'featureMatchSlotsReordered',
+			{
+				slots: [
+					{ matchId: 4, sortOrder: 1 },
+				],
+			},
+			'featureMatch:reordered',
+			{
+				featureMatches: [
+					{ featureMatchId: 4, sortOrder: 1 },
+				],
+			},
+		],
+		[
+			'featureMatchAssignmentUpdated',
+			{ entity: assignment },
+			'featureMatchAssignment:updated',
+			{
+				featureMatchAssignment: expect.objectContaining({ id: 9, note: 'Production note' }),
+			},
+		],
+		[
+			'featureMatchAssignmentDeleted',
+			{ id: 9 },
+			'featureMatchAssignment:deleted',
+			{ featureMatchAssignmentId: 9 },
+		],
+		[
+			'eventDeleted',
+			{},
+			'event:deleted',
+			{ eventId: 1 },
+		],
+		[
+			'roundMatchesRefreshed',
+			{
+				roundId: 3,
+				matchCount: 4,
+				created: 2,
+				updated: 1,
+				staleDeleted: 1,
+			},
+			'round:matchesRefreshed',
+			{
+				roundId: 3,
+				matchCount: 4,
+				created: 2,
+				updated: 1,
+				staleDeleted: 1,
+			},
+		],
+		[
+			'meleeDataReset',
+			{ reason: 'event-changed' },
+			'melee:dataReset',
+			{ reason: 'event-changed' },
+		],
+		[
+			'playerDeckCardsResolved',
+			{
+				deckIds: [101, 102],
+				playerIds: [7],
+			},
+			'playerDeck:cardsResolved',
+			{
+				deckIds: [101, 102],
+				playerIds: [7],
+			},
+		],
+	] as const)('%s sends %s under the writer\'s origin', async (method, input, type, payload) => {
+		await (publication() as any)[method]({ eventId: 1, originConnectionId: origin, ...input });
 
-function createFeatureMatch(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 4,
-		eventId: 1,
-		matchId: 7,
-		externalId: 'match-7',
-		externalSource: 'melee',
-		tableNumber: 12,
-		player1Id: 101,
-		player2Id: 102,
-		player1Data: { name: 'Alice' },
-		player2Data: { name: 'Bob' },
-		bestOf: 3,
-		sortOrder: 0,
-		playerDisplayMode: 'score',
-		activeSessionId: null,
-		roundName: 'Round 3',
-		formatName: null,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createFeatureMatchAssignment(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 9,
-		eventId: 1,
-		roundId: 3,
-		slotId: 4,
-		matchId: 7,
-		note: 'Production note',
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createArchetype(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 11,
-		eventId: 1,
-		name: 'Izzet Prowess',
-		colors: 'UR',
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createKeyCard(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 12,
-		name: 'Sleight of Hand',
-		game: 'mtg',
-		scryfallId: 'scryfall-12',
-		oracleId: 'oracle-12',
-		cardType: 'Sorcery',
-		colors: ['U'],
-		cmc: 1,
-		manaCost: '{U}',
-		deckCounterTypes: [],
-		deckTokens: [],
-		sortOrder: 0,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createMatch(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 7,
-		eventId: 1,
-		roundId: 3,
-		externalId: 'match-7',
-		externalSource: 'melee',
-		tableNumber: 12,
-		player1Id: 101,
-		player2Id: 102,
-		player1Data: { name: 'Alice' },
-		player2Data: { name: 'Bob' },
-		player1Wins: 1,
-		player2Wins: 0,
-		draws: 0,
-		status: 'pending',
-		sortOrder: 0,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-function createScreen(overrides: Record<string, unknown> = {}) {
-	return {
-		id: 8,
-		eventId: 1,
-		name: 'Main Screen',
-		slug: 'main-screen',
-		currentMode: 'feature-match',
-		modeConfigs: {},
-		screenConfig: {},
-		stateVersion: 3,
-		createdAt: NOW,
-		updatedAt: NOW,
-		...overrides,
-	};
-}
-
-describe('event Data publication module', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, type, payload, origin);
 	});
 
-	it('publishes Phase and Round changes through domain-shaped methods', async () => {
-		const publication = eventDataPublicationModule();
-
-		const phase = await publication.phaseCreated({
-			eventId: 1,
-			entity: createPhase() as any,
-			originConnectionId: 'origin-1',
-		});
-		const updatedPhase = await publication.phaseUpdated({
-			eventId: 1,
-			entity: createPhase({ name: 'Top 8' }) as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.phaseDeleted({
-			eventId: 1,
-			id: 2,
-			originConnectionId: 'origin-1',
-		});
-		const createdRound = await publication.roundCreated({
-			eventId: 1,
-			entity: createRound({ id: 4, name: 'Round 4' }) as any,
-			originConnectionId: 'origin-1',
-		});
-		const round = await publication.roundUpdated({
-			eventId: 1,
-			entity: createRound() as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.roundDeleted({
-			eventId: 1,
-			id: 3,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(phase).toEqual(expect.objectContaining({ id: 2, name: 'Swiss' }));
-		expect(updatedPhase).toEqual(expect.objectContaining({ id: 2, name: 'Top 8' }));
-		expect(createdRound).toEqual(expect.objectContaining({ id: 4, name: 'Round 4' }));
-		expect(round).toEqual(expect.objectContaining({ id: 3, name: 'Round 3' }));
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'phase:created', {
-			phase: expect.objectContaining({ id: 2, name: 'Swiss' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'phase:updated', {
-			phase: expect.objectContaining({ id: 2, name: 'Top 8' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'phase:deleted', {
-			phaseId: 2,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:created', {
-			round: expect.objectContaining({ id: 4, name: 'Round 4' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:updated', {
-			round: expect.objectContaining({ id: 3, name: 'Round 3' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:deleted', {
-			roundId: 3,
-		}, 'origin-1');
-	});
-
-	it('publishes Talent changes through mapped domain methods', async () => {
-		const publication = eventDataPublicationModule();
-
-		const createdTalent = await publication.talentCreated({
-			eventId: 1,
-			entity: createTalent() as any,
-			originConnectionId: 'origin-1',
-		});
-		const updatedTalent = await publication.talentUpdated({
-			eventId: 1,
-			entity: createTalent({ name: 'Riley', twitchHandle: 'RileyLive', xHandle: 'RileyX' }) as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.talentDeleted({
-			eventId: 1,
-			id: 5,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(createdTalent).toEqual(expect.objectContaining({ id: 5, name: 'Casey', socialProfiles: {} }));
-		expect(updatedTalent).toEqual(expect.objectContaining({
-			id: 5,
-			name: 'Riley',
-			socialProfiles: { twitch: 'RileyLive', x: 'RileyX' },
-		}));
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:created', {
-			talent: expect.objectContaining({ id: 5, name: 'Casey', socialProfiles: {} }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:updated', {
-			talent: expect.objectContaining({
-				id: 5,
-				name: 'Riley',
-				socialProfiles: { twitch: 'RileyLive', x: 'RileyX' },
-			}),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'talent:deleted', {
-			talentId: 5,
-		}, 'origin-1');
-	});
-
-	it('publishes Player List entity and member changes through domain methods', async () => {
-		const publication = eventDataPublicationModule();
-
-		const created = await publication.playerListCreated({
-			eventId: 1,
-			entity: createPlayerList() as any,
-			originConnectionId: 'origin-1',
-		});
-		const updated = await publication.playerListUpdated({
-			eventId: 1,
-			entity: createPlayerList({ name: 'Coverage Players' }) as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.playerListDeleted({
-			eventId: 1,
-			id: 10,
-			originConnectionId: 'origin-1',
-		});
-		await publication.playerListMembersChanged({
-			eventId: 1,
-			listId: 10,
-			playerIds: [101, 102],
-			action: 'reordered',
-			memberCount: 2,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(created).toEqual(expect.objectContaining({ id: 10, name: 'Featured Players' }));
-		expect(updated).toEqual(expect.objectContaining({ id: 10, name: 'Coverage Players' }));
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerList:created', {
-			playerList: expect.objectContaining({ id: 10, name: 'Featured Players' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerList:updated', {
-			playerList: expect.objectContaining({ id: 10, name: 'Coverage Players' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerList:deleted', {
-			listId: 10,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerList:membersChanged', {
-			listId: 10,
-			playerIds: [101, 102],
-			action: 'reordered',
-			memberCount: 2,
-		}, 'origin-1');
-	});
-
-	it('publishes Melee Sync summaries without exposing message payload shape to callers', async () => {
-		await eventDataPublicationModule().roundMatchesRefreshed({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			roundId: 3,
-			matchCount: 4,
-			created: 2,
-			updated: 1,
-			staleDeleted: 1,
-		});
-
-		await eventDataPublicationModule().meleeDeckListsSynced({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			playerCount: 16,
-			deckCount: 16,
-		});
-
-		await eventDataPublicationModule().meleeStructureSynced({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			phaseCount: 2,
-			roundCount: 8,
-			changes: {
-				phases: {
-					created: [2],
-					updated: [3],
-					deleted: [],
-				},
-				rounds: {
-					created: [4],
-					updated: [5],
-					deleted: [6],
+	// A sync summary is published strictly, so the caller can report a lost notification.
+	it.each([
+		[
+			'meleePlayersSynced',
+			{ playerCount: 12 },
+			'melee:playersSynced',
+		],
+		[
+			'meleeDeckListsSynced',
+			{ playerCount: 16, deckCount: 16 },
+			'melee:decklistsSynced',
+		],
+		[
+			'meleeStructureSynced',
+			{
+				phaseCount: 1,
+				roundCount: 1,
+				changes: {
+					phases: {
+						created: [2],
+						updated: [],
+						deleted: [],
+					},
+					rounds: { created: [], updated: [], deleted: [] },
 				},
 			},
-		});
-
-		await eventDataPublicationModule().meleeFeatureMatchesSynced({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			slotIds: [7, 8],
-		});
-
-		await eventDataPublicationModule().meleeRoundSynced({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			roundId: 3,
-			matchCount: 4,
-			created: 2,
-			updated: 1,
-			staleDeleted: 1,
-		});
-
-		await eventDataPublicationModule().meleeDataReset({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			reason: 'event-changed',
-		});
-
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:matchesRefreshed', {
-			roundId: 3,
-			matchCount: 4,
-			created: 2,
-			updated: 1,
-			staleDeleted: 1,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'melee:dataReset', {
-			reason: 'event-changed',
-		}, 'origin-1');
-		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, 'melee:decklistsSynced', {
-			playerCount: 16,
-			deckCount: 16,
-		}, 'origin-1');
-		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, 'melee:structureSynced', {
-			phaseCount: 2,
-			roundCount: 8,
-			changes: {
-				phases: {
-					created: [2],
-					updated: [3],
-					deleted: [],
-				},
-				rounds: {
-					created: [4],
-					updated: [5],
-					deleted: [6],
-				},
+			'melee:structureSynced',
+		],
+		[
+			'meleeFeatureMatchesSynced',
+			{
+				slotIds: [7, 8],
 			},
-		}, 'origin-1');
-		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, 'melee:featureMatchesSynced', {
-			slotIds: [7, 8],
-		}, 'origin-1');
-		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, 'melee:roundSynced', {
-			roundId: 3,
-			matchCount: 4,
-			created: 2,
-			updated: 1,
-			staleDeleted: 1,
-		}, 'origin-1');
+			'melee:featureMatchesSynced',
+		],
+		[
+			'meleeRoundSynced',
+			{
+				roundId: 3,
+				matchCount: 4,
+				created: 2,
+				updated: 1,
+				staleDeleted: 1,
+			},
+			'melee:roundSynced',
+		],
+	] as const)('%s sends %s strictly, carrying the summary as given', async (method, summary, type) => {
+		await (publication() as any)[method]({ eventId: 1, originConnectionId: origin, ...summary });
+
+		expect(mockPublishMessageStrict).toHaveBeenCalledWith(1, type, summary, origin);
 	});
 
-	it('wraps strict Melee Sync publication failures with the message type', async () => {
+	it('names the message type when a strict Melee Sync notification fails', async () => {
 		const cause = new Error('Ably unavailable');
 		mockPublishMessageStrict.mockRejectedValueOnce(cause);
 
-		await expect(eventDataPublicationModule().meleePlayersSynced({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			playerCount: 12,
-		})).rejects.toMatchObject({
-			name: 'RealtimePublicationError',
-			messageType: 'melee:playersSynced',
-			cause,
-		});
+		await expect(publication().meleePlayersSynced({ eventId: 1, playerCount: 12 }))
+			.rejects
+			.toMatchObject({ name: 'RealtimePublicationError', messageType: 'melee:playersSynced', cause });
 	});
+});
 
-	it('publishes Archetype entity and key-card changes through domain methods', async () => {
-		const publication = eventDataPublicationModule();
-
-		const created = await publication.archetypeCreated({
-			eventId: 1,
-			entity: createArchetype() as any,
-			originConnectionId: 'origin-1',
-		});
-		const updated = await publication.archetypeUpdated({
-			eventId: 1,
-			entity: createArchetype({ name: 'Mono-Red Aggro', colors: 'R' }) as any,
-			keyCards: [
-				createKeyCard({ id: 13, name: 'Monastery Swiftspear', sortOrder: 0 }) as any,
-			],
-			originConnectionId: 'origin-1',
-		});
-		await publication.archetypeDeleted({
-			eventId: 1,
-			id: 11,
-			originConnectionId: 'origin-1',
-		});
-		const keyCards = await publication.archetypeKeyCardsUpdated({
-			eventId: 1,
-			archetypeId: 11,
-			keyCards: [
-				createKeyCard({ sortOrder: 2 }) as any,
-			],
-			originConnectionId: 'origin-1',
-		});
-
-		expect(created).toEqual(expect.objectContaining({ id: 11, name: 'Izzet Prowess', keyCards: [] }));
-		expect(updated).toEqual(expect.objectContaining({
-			id: 11,
-			name: 'Mono-Red Aggro',
-			keyCards: [
-				expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' }),
-			],
-		}));
-		expect(keyCards).toEqual([
-			expect.objectContaining({
-				archetypeId: 11,
-				id: 12,
-				name: 'Sleight of Hand',
-				sortOrder: 2,
-			}),
-		]);
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:created', {
-			archetype: expect.objectContaining({ id: 11, name: 'Izzet Prowess', keyCards: [] }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:updated', {
-			archetype: expect.objectContaining({
-				id: 11,
-				name: 'Mono-Red Aggro',
-				keyCards: [
-					expect.objectContaining({ id: 13, name: 'Monastery Swiftspear' }),
-				],
-			}),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:deleted', {
-			archetypeId: 11,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'archetype:keyCardsUpdated', {
-			archetypeId: 11,
-			keyCards: [
-				expect.objectContaining({
-					archetypeId: 11,
-					id: 12,
-					name: 'Sleight of Hand',
-					sortOrder: 2,
-				}),
-			],
-		}, 'origin-1');
-	});
-
-	it('publishes stable player deck review state', async () => {
-		const deck = createPlayerDeck();
-		const archetype = createArchetype({ id: 7, name: 'Reviewed Control', colors: 'WU' });
-
-		const result = await eventDataPublicationModule().playerDeckReviewed({
-			eventId: 1,
-			entity: deck as any,
-			archetype: archetype as any,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(result).toMatchObject({
-			name: 'Reviewed Control',
-			colors: 'WU',
-			submittedName: 'Imported Deck',
-			submittedColors: 'UR',
-		});
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:reviewed', { deck: result }, 'origin-1');
-	});
-
-	it('announces resolved deck cards by the Deck Lists and Players they rewrote, with no binding to catch up (#648)', async () => {
-		await eventDataPublicationModule().playerDeckCardsResolved({
-			eventId: 1,
-			deckIds: [101, 102],
-			playerIds: [7, 8],
-			originConnectionId: 'origin-1',
-		});
-
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:cardsResolved', {
-			deckIds: [101, 102],
-			playerIds: [7, 8],
-		}, 'origin-1');
-		expect(mockRefreshBindings).not.toHaveBeenCalled();
-	});
-
-	it('publishes Event changes without exposing credentials', async () => {
-		const publication = eventDataPublicationModule();
-
-		const event = await publication.eventUpdated({
-			eventId: 1,
-			entity: createEvent() as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.eventDeleted({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(event).toEqual(expect.objectContaining({
-			id: 1,
+it('publishes an Event without its Melee credentials', async () => {
+	const event = await eventDataPublicationModule().eventUpdated({
+		eventId: 1,
+		entity: row({
 			name: 'Regional Championship',
-			meleeConfigured: true,
-		}));
-		expect(event).not.toHaveProperty('meleeClientId');
-		expect(event).not.toHaveProperty('meleeClientSecret');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'event:updated', {
-			event: expect.objectContaining({
-				id: 1,
-				name: 'Regional Championship',
-				meleeConfigured: true,
-			}),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'event:deleted', {
-			eventId: 1,
-		}, 'origin-1');
+			game: 'mtg',
+			meleeClientId: 'client-id',
+			meleeClientSecret: 'client-secret',
+			talents: [],
+		}),
+		originConnectionId: origin,
 	});
 
-	it('publishes Match and Screen changes through mapped domain methods', async () => {
-		const publication = eventDataPublicationModule();
+	expect(event).toMatchObject({ meleeConfigured: true });
+	expect(event).not.toHaveProperty('meleeClientId');
+	expect(event).not.toHaveProperty('meleeClientSecret');
+	const [, , payload] = lastCallTo(mockPublishMessage, call => call[1] === 'event:updated');
+	expect(JSON.stringify(payload)).not.toContain('client-secret');
+});
 
-		const createdMatch = await publication.matchCreated({
-			eventId: 1,
-			entity: createMatch({ id: 6 }) as any,
-			originConnectionId: 'origin-1',
-		});
-		const match = await publication.matchUpdated({
-			eventId: 1,
-			entity: createMatch() as any,
-			originConnectionId: 'origin-1',
-		});
-		const createdScreen = await publication.screenCreated({
-			eventId: 1,
-			entity: createScreen({ id: 9 }) as any,
-			originConnectionId: 'origin-1',
-		});
-		const screen = await publication.screenUpdated({
-			eventId: 1,
-			entity: createScreen() as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.matchDeleted({
-			eventId: 1,
-			id: 7,
-			originConnectionId: 'origin-1',
-		});
-		await publication.screenDeleted({
-			eventId: 1,
-			id: 8,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(createdMatch).toEqual(expect.objectContaining({ id: 6, tableNumber: 12 }));
-		expect(match).toEqual(expect.objectContaining({ id: 7, tableNumber: 12 }));
-		expect(createdScreen).toEqual(expect.objectContaining({ id: 9, name: 'Main Screen', stateVersion: 3 }));
-		expect(screen).toEqual(expect.objectContaining({ id: 8, name: 'Main Screen', stateVersion: 3 }));
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'match:created', {
-			match: expect.objectContaining({ id: 6, tableNumber: 12 }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'match:updated', {
-			match: expect.objectContaining({ id: 7, tableNumber: 12 }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:created', {
-			screenId: 9,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:updated', {
-			screenId: 8,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'match:deleted', {
-			matchId: 7,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:deleted', {
-			screenId: 8,
-		}, 'origin-1');
+it('publishes a reviewed Deck List under its Archetype\'s name, keeping what was submitted', async () => {
+	const deck = await eventDataPublicationModule().playerDeckReviewed({
+		eventId: 1,
+		entity: row({
+			id: 20,
+			playerId: 4,
+			externalId: 'deck-20',
+			externalSource: 'melee',
+			formatExternalId: 'modern',
+			name: 'Imported Deck',
+			colors: 'UR',
+			sortOrder: 0,
+			isPrimary: true,
+			archetypeId: 7,
+			reviewedAt: NOW,
+		}),
+		archetype: row({ id: 7, name: 'Reviewed Control', colors: 'WU' }),
+		originConnectionId: origin,
 	});
 
-	it('loads all Feature Match Slots for the Event once before publishing batch updates', async () => {
+	expect(deck).toMatchObject({
+		name: 'Reviewed Control',
+		colors: 'WU',
+		submittedName: 'Imported Deck',
+		submittedColors: 'UR',
+	});
+	expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:reviewed', { deck }, origin);
+});
+
+describe('a batch of Feature Match Slot updates', () => {
+	it('reads the Event\'s Slots once and announces each one that still exists', async () => {
 		mockFeatureMatchService.findByEventId.mockResolvedValueOnce([
-			createFeatureMatch({ id: 4 }),
-			createFeatureMatch({ id: 6, matchId: null }),
+			slot,
+			{ ...slot, id: 6, matchId: null },
 		]);
 
 		const published = await eventDataPublicationModule().featureMatchSlotsUpdated({
 			eventId: 1,
 			slotIds: [4, 5, 6],
-			originConnectionId: 'origin-1',
+			originConnectionId: origin,
 		});
 
-		expect(mockFeatureMatchService.findByEventId).toHaveBeenCalledTimes(1);
-		expect(mockFeatureMatchService.findByEventId).toHaveBeenCalledWith(1);
+		expect(mockFeatureMatchService.findByEventId).toHaveBeenCalledOnce();
 		expect(mockFeatureMatchService.findById).not.toHaveBeenCalled();
-		expect(published).toEqual([
-			expect.objectContaining({ id: 4 }),
-			expect.objectContaining({ id: 6 }),
+		expect(published.map(entry => entry.id)).toEqual([4, 6]);
+		expect(mockPublishMessage.mock.calls.map(call => [call[1], call[2].featureMatch.id])).toEqual([
+			['featureMatch:updated', 4],
+			['featureMatch:updated', 6],
 		]);
-		expect(mockPublishMessage).toHaveBeenCalledTimes(2);
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:updated', {
-			featureMatch: expect.objectContaining({ id: 4 }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:updated', {
-			featureMatch: expect.objectContaining({ id: 6 }),
-		}, 'origin-1');
 	});
 
-	it('skips the Feature Match Slot lookup entirely when no Slots were affected', async () => {
-		const published = await eventDataPublicationModule().featureMatchSlotsUpdated({
-			eventId: 1,
-			slotIds: [],
-			originConnectionId: 'origin-1',
-		});
-
+	it('reads nothing when no Slot was affected', async () => {
+		await expect(eventDataPublicationModule().featureMatchSlotsUpdated({ eventId: 1, slotIds: [] })).resolves.toEqual([]);
 		expect(mockFeatureMatchService.findByEventId).not.toHaveBeenCalled();
-		expect(published).toEqual([]);
 	});
+});
 
-	it('publishes Feature Match Slot entity and reorder changes through domain methods', async () => {
-		const publication = eventDataPublicationModule();
-
-		const created = await publication.featureMatchSlotCreated({
-			eventId: 1,
-			entity: createFeatureMatch({ id: 4 }) as any,
-			originConnectionId: 'origin-1',
-		});
-		const updated = await publication.featureMatchSlotUpdated({
-			eventId: 1,
-			entity: createFeatureMatch({ id: 5, tableNumber: 16 }) as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.featureMatchSlotDeleted({
-			eventId: 1,
-			id: 4,
-			originConnectionId: 'origin-1',
-		});
-		const reordered = await publication.featureMatchSlotsReordered({
-			eventId: 1,
-			slots: [
-				{ matchId: 4, sortOrder: 1 },
-				{ matchId: 5, sortOrder: 0 },
-			],
-			originConnectionId: 'origin-1',
-		});
-
-		expect(created).toEqual(expect.objectContaining({ id: 4, tableNumber: 12 }));
-		expect(updated).toEqual(expect.objectContaining({ id: 5, tableNumber: 16 }));
-		expect(reordered).toEqual([
-			{ featureMatchId: 4, sortOrder: 1 },
-			{ featureMatchId: 5, sortOrder: 0 },
-		]);
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:created', {
-			featureMatch: expect.objectContaining({ id: 4, tableNumber: 12 }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:updated', {
-			featureMatch: expect.objectContaining({ id: 5, tableNumber: 16 }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:deleted', {
-			featureMatchId: 4,
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatch:reordered', {
-			featureMatches: [
-				{ featureMatchId: 4, sortOrder: 1 },
-				{ featureMatchId: 5, sortOrder: 0 },
-			],
-		}, 'origin-1');
-	});
-
-	it('publishes complete Feature Match Assignment changes with origin suppression metadata', async () => {
-		const publication = eventDataPublicationModule();
-
-		const created = await publication.featureMatchAssignmentCreated({
-			eventId: 1,
-			entity: createFeatureMatchAssignment() as any,
-			originConnectionId: 'origin-1',
-		});
-		const updated = await publication.featureMatchAssignmentUpdated({
-			eventId: 1,
-			entity: createFeatureMatchAssignment({ note: 'Changed note' }) as any,
-			originConnectionId: 'origin-1',
-		});
-		await publication.featureMatchAssignmentDeleted({
-			eventId: 1,
-			id: 9,
-			originConnectionId: 'origin-1',
-		});
-
-		expect(created).toEqual(expect.objectContaining({ id: 9, roundId: 3, note: 'Production note' }));
-		expect(updated).toEqual(expect.objectContaining({ id: 9, roundId: 3, note: 'Changed note' }));
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:created', {
-			featureMatchAssignment: expect.objectContaining({ id: 9, note: 'Production note' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:updated', {
-			featureMatchAssignment: expect.objectContaining({ id: 9, note: 'Changed note' }),
-		}, 'origin-1');
-		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'featureMatchAssignment:deleted', {
-			featureMatchAssignmentId: 9,
-		}, 'origin-1');
-	});
-
-	/**
-	 * Which publications wake a Broadcast Graphic up.
-	 *
-	 * The settled rule is that relevant Realtime Event Session changes re-resolve
-	 * affected Graphic Input Bindings, and this module is where the server decides one
-	 * has happened. Without this, the trigger could be deleted from every publication
-	 * and the only thing that would notice is a lower third on air holding a stale name.
-	 */
-	describe('a Screen change is announced rather than shipped', () => {
-		/**
-		 * The announcement each row below is about, told apart by its message type — the
-		 * second argument `publishMessage` is called with. A create and an update carry the
-		 * same payload here, so nothing but the type distinguishes them.
-		 */
-		function isScreenUpdate(call: unknown[]): boolean {
-			return call[1] === 'screen:updated';
-		}
-
-		/** As above, for the create row. */
-		function isScreenCreate(call: unknown[]): boolean {
-			return call[1] === 'screen:created';
-		}
-
-		/**
-		 * A Screen's `modeConfigs` is bounded by `MAX_MODE_CONFIGS_BYTES` (512 KiB),
-		 * and a realtime message is bounded by far less — 64 KiB on the packages
-		 * Ably documents that figure for. Publishing the mapped entity therefore
-		 * failed on exactly the largest authored Screens, and failed silently,
-		 * because `publishMessage` logs `realtime_publish_failed` and swallows. See #95.
-		 */
-		function screenAtTheStorageCeiling() {
-			return createScreen({
-				modeConfigs: {
-					'broadcast-graphics': {
-						graphics: [
+describe('a Screen change is announced rather than shipped', () => {
+	// modeConfigs may reach 512 KiB; a realtime message is far smaller (#95).
+	const atStorageCeiling = row({
+		...screen,
+		modeConfigs: {
+			'broadcast-graphics': {
+				graphics: [
+					{
+						id: 'lower-third',
+						items: [
 							{
-								id: 'lower-third',
-								name: 'Lower third',
-								items: [
-									{
-										id: 'bed',
-										text: 'T'.repeat(MAX_MODE_CONFIGS_BYTES - 200),
-									},
-								],
+								id: 'bed',
+								text: 'T'.repeat(MAX_MODE_CONFIGS_BYTES - 200),
 							},
 						],
 					},
-				},
-			});
-		}
-
-		it('names the Screen instead of carrying it, so the notification fits the realtime message limit', async () => {
-			const publication = eventDataPublicationModule();
-			const entity = screenAtTheStorageCeiling();
-
-			await publication.screenUpdated({ eventId: 1, entity: entity as any });
-
-			// Size first, then shape: a regression here puts half a megabyte of
-			// fixture in the diff, and the byte count says what went wrong on its own.
-			// The announcement is chosen by name, not taken from the end of the list: this
-			// mock records every message the module publishes, so a write that grows a
-			// second announcement would silently move the one under test out from under
-			// `.at(-1)`.
-			const [, , payload] = lastCallTo(mockPublishMessage, isScreenUpdate);
-			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
-				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
-			expect(payload).toEqual({ screenId: 8 });
-		});
-
-		it('announces a created Screen the same way, because a create carries a whole mode configuration too', async () => {
-			const publication = eventDataPublicationModule();
-			const entity = screenAtTheStorageCeiling();
-
-			await publication.screenCreated({ eventId: 1, entity: entity as any });
-
-			const [, , payload] = lastCallTo(mockPublishMessage, isScreenCreate);
-			expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength)
-				.toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
-			expect(payload).toEqual({ screenId: 8 });
-		});
-
-		it('still returns the whole Screen to its HTTP caller, which is not size-bound', async () => {
-			// The write's own response is the authority a client reloads from, so the
-			// notification getting smaller must not make the API answer smaller.
-			const publication = eventDataPublicationModule();
-			const entity = screenAtTheStorageCeiling();
-
-			const screen = await publication.screenUpdated({ eventId: 1, entity: entity as any });
-
-			expect(screen.modeConfigs).toEqual(entity.modeConfigs);
-		});
+				],
+			},
+		},
 	});
 
-	describe('broadcast Deck List notifications', () => {
-		it('publishes only identity and revision while returning the authoritative document', async () => {
-			const publication = eventDataPublicationModule();
-			const entity = {
-				id: 11,
-				eventId: 1,
-				revision: 7,
-				sourceText: '1 Island\n'.repeat(8_000),
-				entries: Array.from({ length: 250 }, (_, id) => ({ id, canonicalName: 'Island' })),
-			};
+	it.each([
+		['screenCreated', 'screen:created'],
+		['screenUpdated', 'screen:updated'],
+	] as const)('%s names the Screen so the notification fits the realtime limit', async (method, type) => {
+		await eventDataPublicationModule()[method]({ eventId: 1, entity: atStorageCeiling });
 
-			const returned = await publication.broadcastDeckListUpdated({
-				eventId: 1,
-				entity: entity as any,
-				originConnectionId: 'origin-1',
-			});
-
-			expect(returned).toBe(entity);
-			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:updated', {
-				listId: entity.id,
-				revision: 7,
-			}, 'origin-1');
-			expect(realtimeMessageBytes(1, 'broadcastDeckList:updated', {
-				listId: entity.id,
-				revision: 7,
-			}, 'origin-1')).toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
-		});
-
-		it('announces create and delete with their settled lightweight shapes', async () => {
-			const publication = eventDataPublicationModule();
-			const entity = { id: 11, revision: 1 };
-
-			await publication.broadcastDeckListCreated({ eventId: 1, entity: entity as any });
-			await publication.broadcastDeckListDeleted({ eventId: 1, id: entity.id });
-
-			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:created', {
-				listId: entity.id,
-				revision: 1,
-			}, undefined);
-			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:deleted', {
-				listId: entity.id,
-			}, undefined);
-		});
+		const [, , payload] = lastCallTo(mockPublishMessage, call => call[1] === type);
+		expect(realtimeMessageBytes(1, type, payload as never)).toBeLessThan(MAX_REALTIME_MESSAGE_BYTES);
+		expect(payload).toEqual({ screenId: 8 });
 	});
 
-	describe('re-resolving Broadcast Graphic bindings', () => {
-		it('catches Broadcast Graphics up on Event Data a binding may read', async () => {
-			const publication = eventDataPublicationModule();
+	it('still answers its HTTP caller with the whole Screen', async () => {
+		const answered = await eventDataPublicationModule().screenUpdated({ eventId: 1, entity: atStorageCeiling });
 
-			await publication.roundUpdated({
-				eventId: 1,
-				entity: createRound({ name: 'Round 4' }) as any,
-				originConnectionId: 'origin-1',
-			});
+		expect(answered.modeConfigs).toEqual(atStorageCeiling.modeConfigs);
+	});
 
-			expect(mockRefreshBindings).toHaveBeenCalledWith(1);
+	it('announces a deletion by id', async () => {
+		await eventDataPublicationModule().screenDeleted({ eventId: 1, id: 8, originConnectionId: origin });
+
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'screen:deleted', { screenId: 8 }, origin);
+	});
+});
+
+describe('broadcast Deck List notifications', () => {
+	it('carry only identity and revision, while the caller gets the whole document', async () => {
+		const entity = {
+			id: 11,
+			eventId: 1,
+			revision: 7,
+			sourceText: '1 Island\n'.repeat(8_000),
+		} as any;
+
+		await expect(eventDataPublicationModule().broadcastDeckListUpdated({ eventId: 1, entity, originConnectionId: origin })).resolves.toBe(entity);
+
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, 'broadcastDeckList:updated', { listId: 11, revision: 7 }, origin);
+	});
+
+	it.each([
+		[
+			'broadcastDeckListCreated',
+			{
+				entity: { id: 11, revision: 1 },
+			},
+			'broadcastDeckList:created',
+			{ listId: 11, revision: 1 },
+		],
+		[
+			'broadcastDeckListDeleted',
+			{ id: 11 },
+			'broadcastDeckList:deleted',
+			{ listId: 11 },
+		],
+	] as const)('%s sends its lightweight shape', async (method, input, type, payload) => {
+		await (eventDataPublicationModule() as any)[method]({ eventId: 1, ...input });
+
+		expect(mockPublishMessage).toHaveBeenCalledWith(1, type, payload, undefined);
+	});
+});
+
+describe('re-resolving Broadcast Graphic bindings', () => {
+	it('catches bound graphics up on Event Data a binding may read, without the writer\'s origin', async () => {
+		// The re-resolution is nobody's edit, so the writer's own client must hear it too.
+		await eventDataPublicationModule().roundUpdated({ eventId: 1, entity: round, originConnectionId: origin });
+
+		expect(mockRefreshBindings.mock.calls).toEqual([
+			[1],
+		]);
+	});
+
+	it('catches them up on a Melee Sync summary', async () => {
+		await eventDataPublicationModule().meleePlayersSynced({ eventId: 1, playerCount: 120 });
+
+		expect(mockRefreshBindings).toHaveBeenCalledWith(1);
+	});
+
+	it('catches them up once for a whole batch of Feature Match Slots', async () => {
+		mockFeatureMatchService.findByEventId.mockResolvedValue([
+			slot,
+			{ ...slot, id: 5 },
+			{ ...slot, id: 6 },
+		]);
+
+		await eventDataPublicationModule().featureMatchSlotsUpdated({
+			eventId: 1,
+			slotIds: [4, 5, 6],
 		});
 
-		it('never tells the re-resolution which connection changed the Event Data', async () => {
-			const publication = eventDataPublicationModule();
+		expect(mockRefreshBindings.mock.calls).toEqual([
+			[1],
+		]);
+	});
 
-			await publication.roundUpdated({
-				eventId: 1,
-				entity: createRound({ name: 'Round 4' }) as any,
-				originConnectionId: 'origin-1',
-			});
+	it.each([
+		[
+			'a Screen',
+			'screenUpdated',
+			{ entity: screen },
+		],
+		[
+			'a player list',
+			'playerListUpdated',
+			{ entity: playerList },
+		],
+		[
+			'resolved deck cards',
+			'playerDeckCardsResolved',
+			{
+				deckIds: [1],
+				playerIds: [1],
+			},
+		],
+	] as const)('leaves them alone for %s, which no binding can read', async (_label, method, input) => {
+		await (eventDataPublicationModule() as any)[method]({ eventId: 1, ...input });
 
-			// The message announcing the Round carries the origin, because the browser that
-			// made that edit already applied it and must not echo it back to itself. The
-			// re-resolution is a different change, which nobody issued and no client
-			// predicted — so an origin here would make the one browser that caused it the
-			// only client never told its graphics moved, leaving its Live Control behind
-			// until some later command forced a reload.
-			expect(mockPublishMessage).toHaveBeenCalledWith(1, 'round:updated', expect.anything(), 'origin-1');
-			expect(mockRefreshBindings).not.toHaveBeenCalledWith(expect.objectContaining({ originConnectionId: 'origin-1' }));
-			expect(mockRefreshBindings.mock.calls).toEqual([
-				[1],
-			]);
-		});
-
-		it('catches them up on a Melee Sync, which reports a count rather than each entity', async () => {
-			const publication = eventDataPublicationModule();
-
-			await publication.meleePlayersSynced({ eventId: 1, playerCount: 120 });
-
-			expect(mockRefreshBindings).toHaveBeenCalledWith(1);
-		});
-
-		it('catches them up once for a whole run of Feature Match Slots, not once each', async () => {
-			mockFeatureMatchService.findByEventId.mockResolvedValue([
-				createFeatureMatch({ id: 4 }),
-				createFeatureMatch({ id: 5 }),
-				createFeatureMatch({ id: 6 }),
-			]);
-			const publication = eventDataPublicationModule();
-
-			const published = await publication.featureMatchSlotsUpdated({
-				eventId: 1,
-				slotIds: [4, 5, 6],
-			});
-
-			// Every Slot is announced, because each message names one Slot. Re-resolution is
-			// per Event, so fifty Slots moving in one operation is one Event Data change as
-			// far as a Graphic Input Binding is concerned — sweeping per Slot would repeat
-			// the whole Event's work fifty times inside one request.
-			expect(published).toHaveLength(3);
-			expect(mockRefreshBindings.mock.calls).toEqual([
-				[1],
-			]);
-		});
-
-		it('leaves them alone for a change no Graphic Input Binding can read', async () => {
-			const publication = eventDataPublicationModule();
-
-			// A Screen and a Player List are Event-scoped, but no Graphic Source Selection
-			// names either, so re-resolving on them would be work that can never change a
-			// value — on every Screen in the Event, every time one is saved.
-			await publication.screenUpdated({
-				eventId: 1,
-				entity: createScreen() as any,
-			});
-			await publication.playerListUpdated({
-				eventId: 1,
-				entity: createPlayerList() as any,
-			});
-
-			expect(mockRefreshBindings).not.toHaveBeenCalled();
-		});
+		expect(mockRefreshBindings).not.toHaveBeenCalled();
 	});
 });

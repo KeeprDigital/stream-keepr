@@ -71,65 +71,137 @@ describe('melee sync command boundary', () => {
 		vi.useRealTimers();
 	});
 
-	it('records one aggregate success for an update without completing initial setup', async () => {
-		mockWorkflows.updateFromMelee.mockResolvedValue({
-			success: true,
-			message: 'Updated event data from Melee.gg',
-			steps: ['structure', 'players', 'decklists'],
-			players: { created: 1, updated: 2, errors: [] },
-			deckLists: { players: 3, deckLists: 3 },
-			rounds: [],
-			advancedRound: null,
-			refreshedRound: null,
+	const at = expect.any(Date);
+	const playersResult = {
+		success: true,
+		results: {
+			created: 0,
+			updated: 1,
+			deactivated: 0,
+			matchesUpdated: 0,
+			errors: [],
+		},
+	};
+
+	describe('the sync times a successful command records', () => {
+		it.each([
+			[
+				'an update',
+				'updateFromMelee',
+				'update',
+				[],
+				{
+					success: true,
+					steps: ['structure', 'players', 'decklists'],
+				},
+				{ lastEventSyncedAt: at, lastPlayersSyncedAt: at, lastDecklistsSyncedAt: at },
+			],
+			[
+				'an update whose game has no Deck List adapter',
+				'updateFromMelee',
+				'update',
+				[
+					{ includeDeckLists: true },
+				],
+				{
+					success: true,
+					steps: ['structure', 'players', 'decklists'],
+					deckListsSkipped: true,
+				},
+				{ lastEventSyncedAt: at, lastPlayersSyncedAt: at },
+			],
+			[
+				'initial setup',
+				'runInitialSetup',
+				'initial-setup',
+				[],
+				{ success: true },
+				{
+					initialSetupCompletedAt: at,
+					lastEventSyncedAt: at,
+					lastPlayersSyncedAt: at,
+					lastDecklistsSyncedAt: at,
+				},
+			],
+			[
+				'initial setup whose game has no Deck List adapter',
+				'runInitialSetup',
+				'initial-setup',
+				[],
+				{ success: true, deckListsSkipped: true },
+				{ initialSetupCompletedAt: at, lastEventSyncedAt: at, lastPlayersSyncedAt: at },
+			],
+			[
+				'a standalone Deck List sync, which never completes setup',
+				'syncDeckLists',
+				'decklists',
+				[],
+				{ success: true, warnings: [] },
+				{ lastDecklistsSyncedAt: at },
+			],
+			[
+				'a Deck List sync the adapter skipped',
+				'syncDeckLists',
+				'decklists',
+				[],
+				{ success: true, skipped: true, warnings: [] },
+				{},
+			],
+		] as const)('%s', async (_label, command, lease, args, workflowResult, recorded) => {
+			mockWorkflows[command].mockResolvedValue(workflowResult);
+
+			await (meleeSyncModule() as any)[command](requestEvent, 1, ...args);
+
+			expect(mockAcquireLease).toHaveBeenCalledWith(1, lease);
+			expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, recorded, 'lease-token');
+			expect(mockRecordFailure).not.toHaveBeenCalled();
+			expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
 		});
+	});
 
-		const result = await meleeSyncModule().updateFromMelee(requestEvent, 1);
+	it.each([
+		[
+			'initial setup',
+			'runInitialSetup',
+			{
+				success: false,
+				warnings: ['Deck list sync skipped 1 player'],
+			},
+			'Deck list sync skipped 1 player',
+		],
+		[
+			'an update',
+			'updateFromMelee',
+			{
+				success: false,
+				steps: ['structure', 'players', 'decklists'],
+				message: 'Updated event data with deck list warnings',
+			},
+			'Updated event data with deck list warnings',
+		],
+	] as const)('records a partial %s as one failure that advances structure and Players, not Deck Lists or setup', async (_label, command, workflowResult, message) => {
+		mockWorkflows[command].mockResolvedValue(workflowResult);
 
-		expect(result.success).toBe(true);
-		expect(mockAcquireLease).toHaveBeenCalledWith(1, 'update');
-		expect(mockRecordSuccess).toHaveBeenCalledOnce();
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			lastEventSyncedAt: expect.any(Date),
-			lastPlayersSyncedAt: expect.any(Date),
-			lastDecklistsSyncedAt: expect.any(Date),
-		}, 'lease-token');
-		expect(mockRecordFailure).not.toHaveBeenCalled();
-		expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
+		await expect((meleeSyncModule() as any)[command](requestEvent, 1)).resolves.toMatchObject({ success: false });
+
+		expect(mockRecordSuccess).not.toHaveBeenCalled();
+		expect(mockRecordFailure).toHaveBeenCalledOnce();
+		expect(mockRecordFailure).toHaveBeenCalledWith(requestEvent, 1, expect.objectContaining({ message }), { lastEventSyncedAt: at, lastPlayersSyncedAt: at }, 'lease-token');
 	});
 
 	it('loads credentials only after acquiring the command lease', async () => {
-		mockWorkflows.syncPlayers.mockResolvedValue({
-			success: true,
-			results: {
-				created: 0,
-				updated: 1,
-				deactivated: 0,
-				matchesUpdated: 0,
-				errors: [],
-			},
-		});
+		mockWorkflows.syncPlayers.mockResolvedValue(playersResult);
 
 		await meleeSyncModule().syncPlayers(requestEvent, 1);
 
-		expect(mockAcquireLease.mock.invocationCallOrder[0]).toBeLessThan(
-			mockLoadEventData.mock.invocationCallOrder[0]!,
-		);
-		expect(mockLoadEventData.mock.invocationCallOrder[0]).toBeLessThan(
-			mockWorkflows.syncPlayers.mock.invocationCallOrder[0]!,
-		);
+		expect(mockAcquireLease.mock.invocationCallOrder[0]).toBeLessThan(mockLoadEventData.mock.invocationCallOrder[0]!);
+		expect(mockLoadEventData.mock.invocationCallOrder[0]).toBeLessThan(mockWorkflows.syncPlayers.mock.invocationCallOrder[0]!);
 	});
 
-	it('refreshes players and one round under a single round command lease', async () => {
+	it('refreshes Players then one Round under a single round lease, keeping both warnings', async () => {
 		mockWorkflows.syncPlayers.mockResolvedValue({
-			success: true,
+			...playersResult,
 			warnings: ['Player notification delayed'],
-			results: {
-				created: 0,
-				updated: 1,
-				deactivated: 0,
-				matchesUpdated: 0,
-				errors: [],
-			},
 		});
 		mockWorkflows.syncRoundMatches.mockResolvedValue({
 			success: true,
@@ -142,175 +214,9 @@ describe('melee sync command boundary', () => {
 
 		expect(mockAcquireLease).toHaveBeenCalledOnce();
 		expect(mockAcquireLease).toHaveBeenCalledWith(1, 'round');
-		expect(mockLoadEventData).toHaveBeenCalledOnce();
-		expect(mockWorkflows.syncPlayers).toHaveBeenCalledWith(requestEvent, 1, eventData);
-		expect(mockWorkflows.syncRoundMatches).toHaveBeenCalledWith(requestEvent, 1, eventData, 10);
-		expect(mockWorkflows.syncPlayers.mock.invocationCallOrder[0]).toBeLessThan(
-			mockWorkflows.syncRoundMatches.mock.invocationCallOrder[0]!,
-		);
+		expect(mockWorkflows.syncPlayers.mock.invocationCallOrder[0]).toBeLessThan(mockWorkflows.syncRoundMatches.mock.invocationCallOrder[0]!);
 		expect(result.warnings).toEqual(['Player notification delayed', 'One deck was unresolved']);
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			lastPlayersSyncedAt: expect.any(Date),
-		}, 'lease-token');
-	});
-
-	it('completes initial setup only after the aggregate workflow succeeds', async () => {
-		mockWorkflows.runInitialSetup.mockResolvedValue({
-			success: true,
-			message: 'Initial Melee.gg setup completed',
-			steps: ['structure', 'players', 'decklists'],
-			players: {
-				created: 3,
-				updated: 0,
-				deactivated: 0,
-				matchesUpdated: 0,
-				errors: [],
-			},
-			deckLists: { players: 3, deckLists: 3 },
-		});
-
-		const result = await meleeSyncModule().runInitialSetup(requestEvent, 1);
-
-		expect(result.success).toBe(true);
-		expect(mockAcquireLease).toHaveBeenCalledWith(1, 'initial-setup');
-		expect(mockWorkflows.runInitialSetup).toHaveBeenCalledWith(
-			requestEvent,
-			1,
-			eventData,
-			expect.any(Function),
-			expect.any(Function),
-		);
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			initialSetupCompletedAt: expect.any(Date),
-			lastEventSyncedAt: expect.any(Date),
-			lastPlayersSyncedAt: expect.any(Date),
-			lastDecklistsSyncedAt: expect.any(Date),
-		}, 'lease-token');
-		expect(mockRecordFailure).not.toHaveBeenCalled();
-	});
-
-	it('completes aggregate setup without marking Deck Lists synced when the game adapter was skipped', async () => {
-		mockWorkflows.runInitialSetup.mockResolvedValue({
-			success: true,
-			message: 'Initial Melee.gg setup completed',
-			steps: ['structure', 'players', 'decklists'],
-			deckListsSkipped: true,
-			warnings: ['Melee.gg Deck List import is not yet supported for this Event game'],
-		});
-
-		await meleeSyncModule().runInitialSetup(requestEvent, 1);
-
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			initialSetupCompletedAt: expect.any(Date),
-			lastEventSyncedAt: expect.any(Date),
-			lastPlayersSyncedAt: expect.any(Date),
-		}, 'lease-token');
-		expect(mockRecordSuccess.mock.calls[0]?.[2]).not.toHaveProperty('lastDecklistsSyncedAt');
-	});
-
-	it('does not mark initial setup or Deck Lists complete when aggregate setup is partial', async () => {
-		mockWorkflows.runInitialSetup.mockResolvedValue({
-			success: false,
-			message: 'Initial Melee.gg setup completed with deck list warnings',
-			warnings: ['Deck list sync skipped 1 player'],
-			steps: ['structure', 'players', 'decklists'],
-		});
-
-		const result = await meleeSyncModule().runInitialSetup(requestEvent, 1);
-
-		expect(result.success).toBe(false);
-		expect(mockRecordSuccess).not.toHaveBeenCalled();
-		expect(mockRecordFailure).toHaveBeenCalledWith(
-			requestEvent,
-			1,
-			expect.objectContaining({ message: 'Deck list sync skipped 1 player' }),
-			{
-				lastEventSyncedAt: expect.any(Date),
-				lastPlayersSyncedAt: expect.any(Date),
-			},
-			'lease-token',
-		);
-	});
-
-	it('keeps standalone Deck List sync from implicitly completing setup', async () => {
-		mockLoadEventData.mockResolvedValue({
-			...eventData,
-			lastEventSyncedAt: new Date('2026-01-01T00:00:00.000Z'),
-			lastPlayersSyncedAt: new Date('2026-01-01T00:05:00.000Z'),
-		});
-		mockWorkflows.syncDeckLists.mockResolvedValue({ success: true, warnings: [] });
-
-		await meleeSyncModule().syncDeckLists(requestEvent, 1);
-
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			lastDecklistsSyncedAt: expect.any(Date),
-		}, 'lease-token');
-		expect(mockRecordSuccess.mock.calls[0]?.[2]).not.toHaveProperty('initialSetupCompletedAt');
-	});
-
-	it('does not advance Deck List metadata for an explicitly skipped adapter result', async () => {
-		mockWorkflows.syncDeckLists.mockResolvedValue({ success: true, skipped: true, warnings: [] });
-
-		await meleeSyncModule().syncDeckLists(requestEvent, 1);
-
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {}, 'lease-token');
-		expect(mockRecordSuccess.mock.calls[0]?.[2]).not.toHaveProperty('lastDecklistsSyncedAt');
-	});
-
-	it('records a partial update once without advancing the decklist timestamp', async () => {
-		mockWorkflows.updateFromMelee.mockResolvedValue({
-			success: false,
-			message: 'Updated event data with deck list warnings',
-			steps: ['structure', 'players', 'decklists'],
-			players: { created: 0, updated: 3, errors: [] },
-			deckLists: { skippedPlayers: 1 },
-			rounds: [],
-			advancedRound: null,
-			refreshedRound: null,
-		});
-
-		const result = await meleeSyncModule().updateFromMelee(requestEvent, 1);
-
-		expect(result.success).toBe(false);
-		expect(mockRecordSuccess).not.toHaveBeenCalled();
-		expect(mockRecordFailure).toHaveBeenCalledOnce();
-		expect(mockRecordFailure).toHaveBeenCalledWith(
-			requestEvent,
-			1,
-			expect.objectContaining({ message: 'Updated event data with deck list warnings' }),
-			expect.not.objectContaining({
-				initialSetupCompletedAt: expect.anything(),
-				lastDecklistsSyncedAt: expect.anything(),
-			}),
-			'lease-token',
-		);
-		expect(mockRecordFailure.mock.calls[0]?.[3]).toEqual({
-			lastEventSyncedAt: expect.any(Date),
-			lastPlayersSyncedAt: expect.any(Date),
-		});
-		expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
-	});
-
-	it('does not advance the Deck List timestamp when an aggregate update skips the adapter', async () => {
-		mockWorkflows.updateFromMelee.mockResolvedValue({
-			success: true,
-			message: 'Updated event data from Melee.gg',
-			steps: ['structure', 'players', 'decklists'],
-			deckListsSkipped: true,
-			players: { created: 0, updated: 1, errors: [] },
-			deckLists: { players: 0, deckLists: 0 },
-			rounds: [],
-			advancedRound: null,
-			refreshedRound: null,
-		});
-
-		await meleeSyncModule().updateFromMelee(requestEvent, 1, { includeDeckLists: true });
-
-		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, {
-			lastEventSyncedAt: expect.any(Date),
-			lastPlayersSyncedAt: expect.any(Date),
-		}, 'lease-token');
-		expect(mockRecordSuccess.mock.calls[0]?.[2]).not.toHaveProperty('lastDecklistsSyncedAt');
+		expect(mockRecordSuccess).toHaveBeenCalledWith(requestEvent, 1, { lastPlayersSyncedAt: at }, 'lease-token');
 	});
 
 	it('records one failure and releases the lease when execution throws', async () => {

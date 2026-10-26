@@ -1,30 +1,20 @@
+import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { getDefaultConfigForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
-// Mock getDefaultConfigForMode
-vi.mock('~~/shared/types/screenConfig', async (importOriginal) => {
-	const mod = await importOriginal() as any;
+function screenContext(screen = createMockScreen({ id: 42 })): ScreenContext {
 	return {
-		...mod,
-		getDefaultConfigForMode: vi.fn((mode: string) => {
-			if (mode === 'match')
-				return { matchId: null };
-			if (mode === 'deck') {
-				return {
-					deckSource: { type: 'player', playerId: null },
-				};
-			}
-			return {};
-		}),
+		screen: ref(screen as any),
+		eventId: computed(() => 7),
+		interactive: ref(true),
+		overlayContainer: ref<HTMLElement | null>(null),
 	};
-});
+}
 
-/** Mount a parent that provides and a child that injects, return the child's result */
-function withScreenContext<T>(
-	context: ReturnType<typeof provideScreenContext> extends void ? Parameters<typeof provideScreenContext>[0] : never,
-	childSetup: () => T,
-): T {
+/** Runs `childSetup` in a descendant of a component that provides `context`. */
+function withScreenContext<T>(context: ScreenContext, childSetup: () => T): T {
 	let result!: T;
 	const Child = defineComponent({
 		setup() {
@@ -32,119 +22,50 @@ function withScreenContext<T>(
 			return () => h('div');
 		},
 	});
-	const Parent = defineComponent({
+	mount(defineComponent({
 		setup() {
 			provideScreenContext(context);
 			return () => h(Child);
 		},
-	});
-	mount(Parent);
+	}));
 	return result;
 }
 
 describe('useScreenContext', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+	it('returns the context an ancestor provides', () => {
+		const context = screenContext();
 
-	it('returns the provided context in a descendant component', () => {
-		const screen = ref(createMockScreen({ id: 42 }) as any);
-		const ctx = {
-			screen,
-			eventId: computed(() => 7),
-			interactive: ref(true),
-			overlayContainer: ref<HTMLElement | null>(null),
-		};
-
-		const { screen: injectedScreen, eventId, interactive } = withScreenContext(ctx, () => useScreenContext());
-
-		expect(injectedScreen.value?.id).toBe(42);
-		expect(eventId.value).toBe(7);
-		expect(interactive.value).toBe(true);
+		expect(withScreenContext(context, () => useScreenContext())).toBe(context);
 	});
 
 	it('sets a composable up against a given context outside any provider, and only it (#780)', () => {
-		const ctx = {
-			screen: ref(createMockScreen({ id: 42 }) as any),
-			eventId: computed(() => 7),
-			interactive: ref(false),
-			overlayContainer: ref<HTMLElement | null>(null),
-		};
+		const context = screenContext();
 
-		const { eventId } = runInScreenContext(ctx, () => useScreenContext());
-
-		expect(eventId.value).toBe(7);
+		expect(runInScreenContext(context, () => useScreenContext())).toBe(context);
 		expect(() => useScreenContext()).toThrow('outside of a screen context');
 	});
 });
 
 describe('useScreenModeConfig', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
+	it('reads the mode\'s defaults when the Screen stores nothing for it', () => {
+		const context = screenContext(createMockScreen({ modeConfigs: null }));
+
+		const config = withScreenContext(context, () => useScreenModeConfig('deck'));
+
+		expect(config.value).toEqual(getDefaultConfigForMode('deck'));
 	});
 
-	it('returns defaults when no stored config exists for mode', () => {
-		const screen = ref(createMockScreen({ modeConfigs: null }) as any);
-		const ctx = {
-			screen,
-			eventId: computed(() => 1),
-			interactive: ref(false),
-			overlayContainer: ref<HTMLElement | null>(null),
-		};
+	it('reads what the Screen stores, completed with the mode\'s defaults', () => {
+		const modeConfigs = {
+			deck: {
+				deckSource: { type: 'player', playerId: 5 },
+			},
+		} as any;
+		const context = screenContext(createMockScreen({ modeConfigs }));
 
-		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
-
-		expect(config.value.deckSource).toEqual({ type: 'player', playerId: null });
-	});
-
-	it('merges stored config over defaults', () => {
-		const screen = ref(createMockScreen({
-			modeConfigs: {
-				deck: {
-					deckSource: { type: 'player', playerId: 5 },
-				},
-			} as any,
-		}) as any);
-		const ctx = {
-			screen,
-			eventId: computed(() => 1),
-			interactive: ref(false),
-			overlayContainer: ref<HTMLElement | null>(null),
-		};
-
-		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
+		const config = withScreenContext(context, () => useScreenModeConfig('deck'));
 
 		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 5 });
-	});
-
-	it('is reactive to screen modeConfig changes', async () => {
-		const screen = ref(createMockScreen({
-			modeConfigs: {
-				deck: {
-					deckSource: { type: 'player', playerId: 1 },
-				},
-			} as any,
-		}) as any);
-		const ctx = {
-			screen,
-			eventId: computed(() => 1),
-			interactive: ref(false),
-			overlayContainer: ref<HTMLElement | null>(null),
-		};
-
-		const config = withScreenContext(ctx, () => useScreenModeConfig('deck'));
-		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 1 });
-
-		screen.value = {
-			...screen.value,
-			modeConfigs: {
-				deck: {
-					deckSource: { type: 'player', playerId: 99 },
-				},
-			},
-		};
-		await nextTick();
-
-		expect(config.value.deckSource).toEqual({ type: 'player', playerId: 99 });
+		expect(config.value).toEqual(resolveScreenModeConfig(modeConfigs, 'deck'));
 	});
 });

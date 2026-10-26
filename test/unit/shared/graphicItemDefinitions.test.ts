@@ -301,13 +301,7 @@ describe('graphicItemDefinitions', () => {
 	});
 
 	it('carries only the contract fields the compositor reads', () => {
-		// An unread field invites false confidence that a later host's needs are
-		// already provided for. Each one joins when it has a real consumer:
-		// `contextKinds` gates the palette, `composition` decides whether a stack is
-		// authored, and `textValues` decides where placeholder values come from and
-		// therefore whether Graphic Inputs are declared. Instant-apply write
-		// semantics is deliberately not among them — both hosts already write
-		// instantly, so a field for it would have no reader.
+		// Each host field is listed only once it has a real consumer.
 		const fields = [
 			'composition',
 			'contextKinds',
@@ -406,12 +400,7 @@ describe('graphicItemDefinitions', () => {
 	});
 
 	describe('typography and the Text Overflow Policy', () => {
-		/**
-		 * What each kind offers, stated independently of the Definitions so a wrong
-		 * declaration fails here. The context-gated kinds render a live string, but
-		 * they render it as text; a Game Wins Item's win count cannot outgrow its
-		 * bounds, and a Deck List's overflow is a fixed shrink-then-clip.
-		 */
+		/** Stated independently of the Definitions, so a wrong declaration fails here. */
 		const OFFERS: Record<GraphicItemKind, { typography: boolean; textOverflowPolicy: boolean }> = {
 			'text': { typography: true, textOverflowPolicy: true },
 			'shape': { typography: false, textOverflowPolicy: false },
@@ -504,13 +493,7 @@ describe('graphicItemDefinitions', () => {
 		];
 		const GEOMETRY_SLOTS: readonly GeometrySlot[] = ['geometry', 'clipGeometry', 'boxGeometry'];
 
-		/**
-		 * What each kind owns, stated independently of the Definitions so a wrong
-		 * declaration fails here. A Media Graphic Item paints an asset, a Social Network
-		 * Icon its vector, and a Deck List cards, so none owns a surface; a Media Graphic
-		 * Item clips to its Shape Geometry, and a Game Wins Item shapes and paints its
-		 * win boxes with theirs.
-		 */
+		/** Stated independently of the Definitions, so a wrong declaration fails here. */
 		const OWNS: Record<GraphicItemKind, { surfaces: SurfaceSlot[]; geometry: GeometrySlot | null; playerSide: boolean }> = {
 			'text': {
 				surfaces: ['surfaceStyle'],

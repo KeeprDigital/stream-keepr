@@ -1,93 +1,51 @@
-import type { ArchetypeBreakdownEntry } from '~~/shared/types/metagame';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, ref } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import ArchetypeTable from '~/components/Metagame/ArchetypeTable.vue';
 
-const mockOverlay = {
+mockNuxtImport('useOverlay', () => () => ({
 	create: vi.fn(() => ({
 		open: vi.fn(),
 	})),
-};
-
-mockNuxtImport('useOverlay', () => () => mockOverlay);
-
-const UTableStub = defineComponent({
-	props: {
-		data: { type: Array, required: true },
-		columns: { type: Array, required: true },
-	},
-	template: `
-		<table>
-			<tbody>
-				<tr v-for="row in data" :key="row.id">
-					<td>{{ row.name }}</td>
-				</tr>
-			</tbody>
-		</table>
-	`,
-});
-
-function makeEntry(overrides: Partial<ArchetypeBreakdownEntry> = {}): ArchetypeBreakdownEntry {
-	return {
-		id: 1,
-		name: 'Azorius Control',
-		colors: 'WU',
-		count: 12,
-		metaShare: 37.5,
-		winRate: 55.2,
-		avgPosition: 3.2,
-		conversionRate: null,
-		keyCards: [],
-		...overrides,
-	};
-}
-
-async function mountComponent() {
-	const { default: ArchetypeTable } = await import('~/components/Metagame/ArchetypeTable.vue');
-
-	return mount(defineComponent({
-		components: { ArchetypeTable },
-		setup() {
-			const loading = ref(false);
-
-			return {
-				loading,
-				entries: [
-					makeEntry(),
-				],
-			};
-		},
-		template: `
-			<ArchetypeTable
-				:entries="entries"
-				:total-players="32"
-				:loading="loading"
-				:sort-by="'metaShare'"
-			/>
-		`,
-	}), {
-		global: {
-			stubs: {
-				UTable: UTableStub,
-				UButton: true,
-				UBadge: true,
-				UIcon: true,
-				MtgManaColorDisplay: true,
-				MetagameMetaShareBar: true,
-			},
-		},
-	});
-}
+}));
 
 describe('metagameArchetypeTable', () => {
-	it('keeps the current table mounted while loading', async () => {
-		const wrapper = await mountComponent();
+	it('keeps the current rows on screen while a new read loads', async () => {
+		const wrapper = mount(ArchetypeTable, {
+			props: {
+				entries: [
+					{
+						id: 1,
+						name: 'Azorius Control',
+						colors: 'WU',
+						count: 12,
+						metaShare: 37.5,
+						winRate: 55.2,
+						avgPosition: 3.2,
+						conversionRate: null,
+						keyCards: [],
+					},
+				],
+				totalPlayers: 32,
+				loading: false,
+				sortBy: 'metaShare',
+			},
+			global: {
+				stubs: {
+					...nuxtUiStubs,
+					UTable: {
+						props: ['data'],
+						template: '<table><tr v-for="row in data" :key="row.id"><td>{{ row.name }}</td></tr></table>',
+					},
+					MtgManaColorDisplay: true,
+					MetagameMetaShareBar: true,
+				},
+			},
+		});
 
-		(wrapper.vm as { loading: boolean }).loading = true;
-		await nextTick();
+		await wrapper.setProps({ loading: true });
 
-		expect(wrapper.find('table').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="archetype-table-loading-overlay"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain('Azorius Control');
 	});

@@ -1,90 +1,43 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('useAsyncAction', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
-	it('returns the result of a successful action', async () => {
-		const { executeAction } = useAsyncAction();
-		const result = await executeAction(async () => 'success');
-		expect(result).toBe('success');
-	});
-
-	it('sets loadingRef to true during execution and false after', async () => {
+	it('answers a successful action, loading while it runs and clearing a stale error', async () => {
 		const { executeAction } = useAsyncAction();
 		const loading = ref(false);
-		let loadingDuringExec = false;
-
-		await executeAction(async () => {
-			loadingDuringExec = loading.value;
-			return 'done';
-		}, { loadingRef: loading });
-
-		expect(loadingDuringExec).toBe(true);
-		expect(loading.value).toBe(false);
-	});
-
-	it('clears errorRef before execution', async () => {
-		const { executeAction } = useAsyncAction();
 		const error = ref<string | null>('previous error');
+		let loadingWhileRunning = false;
 
-		await executeAction(async () => 'ok', { errorRef: error });
+		const result = await executeAction(async () => {
+			loadingWhileRunning = loading.value;
+			return 'done';
+		}, { loadingRef: loading, errorRef: error });
+
+		expect(result).toBe('done');
+		expect(loadingWhileRunning).toBe(true);
+		expect(loading.value).toBe(false);
 		expect(error.value).toBeNull();
 	});
 
-	it('sets errorRef on failure', async () => {
-		const { executeAction } = useAsyncAction();
-		const error = ref<string | null>(null);
-
-		await executeAction(async () => {
-			throw new Error('test error');
-		}, { errorRef: error });
-
-		expect(error.value).toBe('test error');
-	});
-
-	it('returns null on failure by default', async () => {
-		const { executeAction } = useAsyncAction();
-
-		const result = await executeAction(async () => {
-			throw new Error('fail');
-		});
-
-		expect(result).toBeNull();
-	});
-
-	it('calls onError callback on failure', async () => {
-		const { executeAction } = useAsyncAction();
-		const onError = vi.fn();
-
-		await executeAction(async () => {
-			throw new Error('fail');
-		}, { onError });
-
-		expect(onError).toHaveBeenCalledOnce();
-		expect(onError).toHaveBeenCalledWith(expect.any(Error));
-	});
-
-	it('sets loadingRef to false even on failure', async () => {
+	it.each([
+		[
+			'an Error',
+			new Error('test error'),
+			'test error',
+		],
+		['anything else', 'string error', 'An error occurred'],
+	])('answers null for a throw of %s, reporting it and ending the load', async (_, thrown, message) => {
 		const { executeAction } = useAsyncAction();
 		const loading = ref(false);
-
-		await executeAction(async () => {
-			throw new Error('fail');
-		}, { loadingRef: loading });
-
-		expect(loading.value).toBe(false);
-	});
-
-	it('handles non-Error thrown values with generic message', async () => {
-		const { executeAction } = useAsyncAction();
 		const error = ref<string | null>(null);
+		const onError = vi.fn();
 
-		await executeAction(async () => {
-			throw 'string error'; // eslint-disable-line no-throw-literal
-		}, { errorRef: error });
+		const result = await executeAction(async () => {
+			throw thrown;
+		}, { loadingRef: loading, errorRef: error, onError });
 
-		expect(error.value).toBe('An error occurred');
+		expect(result).toBeNull();
+		expect(error.value).toBe(message);
+		expect(loading.value).toBe(false);
+		expect(onError).toHaveBeenCalledOnce();
 	});
 });

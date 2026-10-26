@@ -10,12 +10,8 @@ import {
 	screenOutputResolvableSlotPrefixes,
 } from '~~/shared/utils/graphicsAssetReferences';
 
-/**
- * A media Graphic Input's authored default names a Graphic Asset Revision exactly
- * as a Media Graphic Item's content does, so the same discovery walk has to find
- * it: what a Screen publishes is what its Screen Output Asset Capability resolves,
- * and a default nothing indexed is an asset the live output cannot fetch (#96).
- */
+// A media Graphic Input's default is found by the same discovery walk as item content,
+// or the live output cannot fetch it (#96).
 
 function reference(assetId: string, revisionId: string): GraphicAssetReference {
 	return {

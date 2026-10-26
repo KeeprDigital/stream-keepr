@@ -1,9 +1,8 @@
 import type { EffectScope } from 'vue';
 import type { ScreenModeDependencies, ScreenModeFreshnessTransport } from '~/modules/screen-mode/freshness';
-import type { RealtimeTransport } from '~/types/realtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_REREAD_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 /**
@@ -18,45 +17,10 @@ interface Held {
 	label: string;
 }
 
-type Handler = (message: Record<string, unknown>) => void;
-
-function fakeTransport() {
-	const handlers = new Map<string, Set<Handler>>();
-	const continuity = createContinuitySignal();
-	const attachment = createAttachSignal();
-	const transport = reactive({
-		connectionState: 'connected' as RealtimeTransport['connectionState'],
-		tokenError: null as Error | null,
-		onChannel: vi.fn((channel: string, type: string, handler: Handler) => {
-			const key = `${channel}|${type}`;
-			if (!handlers.has(key))
-				handlers.set(key, new Set());
-			handlers.get(key)!.add(handler);
-			return () => handlers.get(key)!.delete(handler);
-		}),
-		onContinuityLost: continuity.onContinuityLost,
-		onceAttached: attachment.onceAttached,
-	});
-	return {
-		transport,
-		/** The Event channel attached: the first time, or again after a detach. */
-		attach: (eventId: number) => attachment.attach(`event:${eventId}`),
-		deliver(eventId: number, type: string, payload: Record<string, unknown>) {
-			for (const handler of handlers.get(`event:${eventId}|${type}`) ?? [])
-				handler({ eventId, ...payload });
-		},
-		/** The Event channel attached again having lost continuity. */
-		reattach: (eventId: number) => continuity.reattach(`event:${eventId}`),
-		listeners: () => [
-			...handlers.values(),
-		].reduce((total, set) => total + set.size, 0),
-	};
-}
-
 const scopes: EffectScope[] = [];
 
 function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [] as number[] } = {}) {
-	const realtime = fakeTransport();
+	const realtime = createFakeEventChannel();
 	for (const eventId of attached)
 		realtime.attach(eventId);
 	const eventId = ref<number | null>(1);
@@ -135,7 +99,7 @@ describe('useScreenModeFreshness', () => {
 			});
 			await flushPromises();
 
-			deliver(1, 'match:deleted', { matchId: 7 });
+			deliver('match:deleted', { matchId: 7 });
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
@@ -148,8 +112,8 @@ describe('useScreenModeFreshness', () => {
 			});
 			await flushPromises();
 
-			deliver(1, 'match:deleted', { matchId: 99 });
-			deliver(1, 'round:deleted', { roundId: 7 });
+			deliver('match:deleted', { matchId: 99 });
+			deliver('round:deleted', { roundId: 7 });
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(1);
@@ -159,7 +123,7 @@ describe('useScreenModeFreshness', () => {
 			const { read, deliver } = harness({ 'phase:deleted': true });
 			await flushPromises();
 
-			deliver(1, 'phase:deleted', { phaseId: 3 });
+			deliver('phase:deleted', { phaseId: 3 });
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
@@ -171,7 +135,7 @@ describe('useScreenModeFreshness', () => {
 				'match:deleted': (message, held) => held.ids.includes(message.matchId),
 			});
 
-			deliver(1, 'match:deleted', { matchId: 99 });
+			deliver('match:deleted', { matchId: 99 });
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
@@ -184,7 +148,7 @@ describe('useScreenModeFreshness', () => {
 			const shown: string[] = [];
 			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
 
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
@@ -195,8 +159,8 @@ describe('useScreenModeFreshness', () => {
 			const { read, deliver } = harness({ 'phase:deleted': true });
 			await flushPromises();
 
-			deliver(1, 'phase:deleted', { phaseId: 3 });
-			deliver(1, 'phase:deleted', { phaseId: 4 });
+			deliver('phase:deleted', { phaseId: 3 });
+			deliver('phase:deleted', { phaseId: 4 });
 			await flushPromises();
 
 			expect(read).toHaveBeenCalledTimes(2);
@@ -223,7 +187,7 @@ describe('useScreenModeFreshness', () => {
 			}));
 			for (const player of [1, 2, 3, 4]) {
 				published = `after player ${player}`;
-				deliver(1, 'player:updated', { player });
+				deliver('player:updated', { player });
 				await flushPromises();
 			}
 			expect(read).toHaveBeenCalledTimes(2);
@@ -239,9 +203,9 @@ describe('useScreenModeFreshness', () => {
 			const { read, deliver, freshness } = harness({ 'player:updated': true });
 			const shown: string[] = [];
 			watch(freshness.data, held => shown.push(held.label), { flush: 'sync' });
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			read.mockImplementationOnce(async () => {
-				deliver(1, 'player:updated', {});
+				deliver('player:updated');
 				return {
 					ids: [7],
 					label: 'follow-up',
@@ -259,9 +223,9 @@ describe('useScreenModeFreshness', () => {
 			await vi.advanceTimersByTimeAsync(0);
 
 			read.mockImplementationOnce(() => new Promise(() => {}));
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await vi.advanceTimersByTimeAsync(SCREEN_MODE_REREAD_MS);
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await vi.advanceTimersByTimeAsync(0);
 
 			expect(read).toHaveBeenCalledTimes(3);
@@ -279,9 +243,9 @@ describe('useScreenModeFreshness', () => {
 					label: 'superseded',
 				});
 			}));
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await flushPromises();
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			selection.value = 9;
 			await flushPromises();
 			expect(read).toHaveBeenCalledTimes(3);
@@ -299,11 +263,11 @@ describe('useScreenModeFreshness', () => {
 
 			eventId.value = 2;
 			await flushPromises();
-			deliver(1, 'phase:deleted', { phaseId: 3 });
+			deliver('phase:deleted', { phaseId: 3 });
 			await flushPromises();
 			expect(read).toHaveBeenCalledTimes(1);
 
-			deliver(2, 'phase:deleted', { phaseId: 3 });
+			deliver('phase:deleted', { phaseId: 3 }, 2);
 			await flushPromises();
 			expect(read).toHaveBeenCalledTimes(2);
 
@@ -384,7 +348,7 @@ describe('useScreenModeFreshness', () => {
 
 			// The read a change asked for fails: nothing else would ask again.
 			read.mockRejectedValueOnce(new Error('unavailable')).mockRejectedValueOnce(new Error('unavailable'));
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await vi.advanceTimersByTimeAsync(0);
 			expect(read).toHaveBeenCalledTimes(2);
 			expect(freshness.data.value.label).toBe('read 1');
@@ -408,9 +372,9 @@ describe('useScreenModeFreshness', () => {
 			read.mockImplementationOnce(() => new Promise((_resolve, reject) => {
 				fail = () => reject(new Error('unavailable'));
 			}));
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			await vi.advanceTimersByTimeAsync(0);
-			deliver(1, 'player:updated', {});
+			deliver('player:updated');
 			fail();
 			await vi.advanceTimersByTimeAsync(0);
 
@@ -446,7 +410,7 @@ describe('useScreenModeFreshness', () => {
 	});
 
 	describe('reconnect', () => {
-		async function dropAndComeBack(transport: ReturnType<typeof fakeTransport>['transport']) {
+		async function dropAndComeBack(transport: ReturnType<typeof createFakeEventChannel>['transport']) {
 			transport.connectionState = 'suspended';
 			await nextTick();
 			transport.connectionState = 'connecting';

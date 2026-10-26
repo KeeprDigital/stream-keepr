@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createRequestLedger, requestLabel } from '~~/test/integration/requestLedger';
 
 /**
@@ -19,17 +20,6 @@ function clock(start = 1_000) {
 			now += milliseconds;
 		},
 	};
-}
-
-/** A request the test resolves by hand, so it can be left pending on purpose. */
-function deferred<T = void>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 describe('the integration suite\'s request ledger', () => {

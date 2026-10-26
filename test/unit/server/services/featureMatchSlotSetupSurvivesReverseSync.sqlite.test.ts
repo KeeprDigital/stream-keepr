@@ -143,6 +143,23 @@ describe('a Slot setup edit to a seated Player', () => {
 		expect((await slotById(other.id, eventId))?.player1Data).toMatchObject({ name: 'Mia K.', pronouns: 'she/her' });
 	});
 
+	it('writes the Player a setup edit seats, not the one it replaces', async () => {
+		const { eventId, slotId, player1Id } = await stageFeaturedMatch();
+		const [kai] = await db.insert(schema.players).values({ eventId, name: 'Kai' }).returning();
+
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: {
+				player1Id: kai!.id,
+				player1Data: { name: 'Kai', pronouns: 'they/them' },
+			},
+		});
+
+		expect((await playerById(kai!.id))?.pronouns).toBe('they/them');
+		expect((await playerById(player1Id))?.pronouns).toBeNull();
+	});
+
 	it('clears the Player\'s LGS when setup clears it', async () => {
 		const { eventId, slotId, player2Id, player2Data } = await stageFeaturedMatch();
 		expect(player2Data.lgs).toBe('The Battered Sleeve');

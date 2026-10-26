@@ -361,10 +361,7 @@ export interface FeatureMatchSourceItemConfig extends FeatureMatchOverlayRect {
  *   Match Layout is a Broadcast Graphic.
  *
  * There is no fourth field. The legacy widget, widget-group, and numeric z-index
- * model is gone, and nothing converts one: the database is wiped before ship and
- * capability is verified by
- * `test/unit/shared/featureMatchOverlayCapabilityParity.test.ts` instead of by a
- * migration.
+ * model is gone, and nothing converts one: the database is wiped before ship.
  */
 export interface FeatureMatchLayoutConfig {
 	frame: FeatureMatchLayoutFrameConfig;

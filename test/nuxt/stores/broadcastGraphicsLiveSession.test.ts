@@ -17,21 +17,7 @@ vi.mock('~/composables/repositories/useBroadcastGraphicsLiveSessionRepository', 
 	useBroadcastGraphicsLiveSessionRepository: () => mockRepository,
 }));
 
-/*
- * `useAsyncAction` is deliberately not mocked. It is the seam every action here
- * reports through, and a hand-written copy of it is a thing that can drift from what
- * it copies. This one had: it fell back to a rejected value's own `message` property
- * for a non-`Error`, where the real composable yields 'An error occurred', so tests
- * rejecting with plain objects asserted error prose the real composable never
- * produces (#241). The real composable is auto-imported, does no I/O and starts no
- * timers, so there is no cost to running it — and nothing left to drift.
- */
-
-/**
- * The installation-wide server clock, stubbed so a test can put this browser a known
- * distance from the authoritative one — and can hold it unsynced, which is the state
- * every output is in for the first moments after it loads.
- */
+/** The server clock, so a test can set this browser's distance from it or hold it unsynced. */
 const mockServerTimeOffset = ref(0);
 const mockClockSynced = ref(true);
 
@@ -108,23 +94,9 @@ function notification(
 const COMMANDS_PATH = '/api/…/commands';
 const SNAPSHOT_REQUEST = `[GET] "/api/…/live-session"`;
 
-/**
- * The request line every command failure below carries, since that is the request the
- * store made. The fixture itself is `test/helpers/transportFailure`, which this suite
- * built inline first (#245) and #263 consolidated.
- */
 const COMMANDS_REQUEST = `[POST] "${COMMANDS_PATH}"`;
 
-/**
- * A conflict carrying no domain refusal: what an epoch this client no longer shares
- * looks like, and the branch that reloads and restates once.
- *
- * The sentence the server wrote is in the body, and since #245 that is what the
- * operator is shown — an uncoded conflict is read for its prose exactly as a coded
- * one is. What it is still not is a refusal: no code means no `refusal`, so nothing
- * downstream may prescribe a next move, and the reload-and-restate branch treats it
- * as the ended epoch it usually is. Tests below stand on both halves of that.
- */
+/** A conflict carrying no domain refusal: an ended epoch, which reloads and restates once. */
 function bareConflict(message: string) {
 	return transportFailure({
 		status: 409,
@@ -134,20 +106,8 @@ function bareConflict(message: string) {
 }
 
 /**
- * One refused command as the client actually meets it.
- *
- * The nesting is the point. A refusal is minted as
- * `createError({ message, data: { code } })`, the server writes that out as
- * `{ statusCode, statusMessage, message, data }`, and `$fetch` hangs the parsed body
- * off `error.data` — so the code the store acts on sits at `data.data.code`, one
- * level deeper than a fixture naturally puts it, and `Error.message` is the
- * transport's `[POST] "…": 409 Conflict` rather than the domain sentence. These
- * tests used to assert against a flattened shape no server produces, which is how
- * every one of them passed while the store recognised no refusal at all (#230).
- *
- * The wire shape is pinned at the boundary itself in
- * `test/integration/broadcastGraphicsMedia.test.ts`, where a refused Take is read
- * back off a real HTTP response.
+ * One refused command as `$fetch` delivers it: the code sits at `data.data.code`
+ * (#230). The wire shape is pinned in `test/integration/broadcastGraphicsMedia.test.ts`.
  */
 function refusedCommandFailure(code: string, message: string, inputKeys: string[] = []) {
 	return transportFailure({
@@ -1269,18 +1229,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 	});
 
 	/**
-	 * A failure the authority explained without coding.
-	 *
-	 * Most of what the server refuses carries no rejection code at all — a Screen
-	 * that has left Broadcast Graphics mode, an epoch that has ended — and it says so
-	 * in the response body's `message`, exactly where a coded refusal says it. Only
-	 * the coded ones were being read, so everything else reached the operator as
-	 * `[POST] "…": 409 Conflict` under "Playout action failed" (#245).
-	 *
-	 * Gaining a sentence is deliberately not the same as being recognised as a
-	 * refusal. `refusal` stays null throughout this block: the sentence is prose to
-	 * show, a refusal is a code a surface acts on, and only a code in the vocabulary
-	 * is one (#230).
+	 * A failure the authority explained without a code reports its sentence, but is not
+	 * a refusal: only a code in the vocabulary is one a surface acts on (#245, #230).
+	 * Which failures carry a sentence is `failureSentence`'s rule.
 	 */
 	describe('a failure the authority explained but did not code', () => {
 		const NOT_IN_MODE = 'Screen is not in Broadcast Graphics mode';
@@ -1299,10 +1250,7 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.refusal).toBeNull();
 		});
 
-		it('reports the ended epoch in the words the authority used', async () => {
-			// Both deliveries meet it: the reload is what an ended epoch is supposed to
-			// resolve, and when it does not, the sentence is the whole of what the
-			// operator has to go on.
+		it('reports the ended epoch in the words the authority used once the reload does not resolve it', async () => {
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
@@ -1314,24 +1262,8 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.refusal).toBeNull();
 		});
 
-		it('reports a refused reset in the words the authority used', async () => {
-			mockRepository.resetSession.mockRejectedValue(transportFailure({
-				status: 409,
-				body: { statusCode: 409, statusMessage: 'Conflict', message: NOT_IN_MODE },
-				request: `[POST] "/api/…/live-session/reset"`,
-			}));
-
-			await store.resetLiveState(EVENT_ID, SCREEN_ID);
-
-			expect(store.error).toBe(NOT_IN_MODE);
-		});
-
 		it('reads the sentence off a code outside the vocabulary without recognising a refusal', async () => {
-			// The two halves pulled apart. A code this client does not know is not a
-			// refusal — no surface may prescribe a next move for it — but the sentence
-			// beside it is still the authority explaining itself, and an unknown code
-			// leaves the failure a bare conflict, so the reload-and-restate branch runs
-			// exactly as it did.
+			// An unknown code is no refusal, but its sentence is still the authority's, and it still reloads and restates.
 			await store.loadSession(EVENT_ID, SCREEN_ID);
 			vi.clearAllMocks();
 			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
@@ -1346,121 +1278,9 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			expect(store.refusal).toBeNull();
 			expect(mockRepository.sendCommand).toHaveBeenCalledTimes(2);
 		});
-
-		it('keeps the status line where the body carries no sentence to read', async () => {
-			await store.loadSession(EVENT_ID, SCREEN_ID);
-			vi.clearAllMocks();
-			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
-			mockRepository.sendCommand.mockRejectedValue(
-				transportFailure({
-					status: 409,
-					body: { statusCode: 409, statusMessage: 'Conflict' },
-					request: COMMANDS_REQUEST,
-				}),
-			);
-
-			await store.take(EVENT_ID, SCREEN_ID, 'slate');
-
-			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
-		});
-
-		it('keeps the status line where the sentence is empty', async () => {
-			// An empty string is not prose an operator can act on, and putting one in
-			// `error` would read as the action having failed for no stated reason.
-			await store.loadSession(EVENT_ID, SCREEN_ID);
-			vi.clearAllMocks();
-			mockRepository.getSession.mockResolvedValue(session({ id: 56 }));
-			mockRepository.sendCommand.mockRejectedValue(bareConflict(''));
-
-			await store.take(EVENT_ID, SCREEN_ID, 'slate');
-
-			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 409 Conflict`);
-		});
-
-		it('keeps the status line for a server fault, whose body message is not the authority speaking', async () => {
-			// A 4xx is the authority answering *this request*; a 5xx is usually the server
-			// failing, and this server rewrites those on the way out — `mapPublicNitroError`
-			// replaces any 5xx message it did not deliberately map with 'Internal Server
-			// Error', and Nitro writes 'Server Error' for anything unhandled. Reading one of
-			// those back would dress a placeholder as the authority's own words, which is
-			// worse than a status line: a status line at least reads as machinery.
-			//
-			// This fixture used to be a 503 whose message read
-			// `'Graphics writer was not given a Screen repository'` — chosen as the
-			// "dangerous shape", a 5xx that looks like prose — and #286 both inverted the
-			// verdict on that shape and showed the fixture had never been faithful. A 503
-			// reaching a client with a non-placeholder message is by construction one the
-			// mapper preserved: the sanitizer overwrites every other. So the shape it was
-			// testing cannot occur, and the shape it looked like now belongs to the row
-			// below. Repaired to what an unmapped 5xx actually sends (#241's discipline).
-			await store.loadSession(EVENT_ID, SCREEN_ID);
-			vi.clearAllMocks();
-			mockRepository.sendCommand.mockRejectedValue(transportFailure({
-				status: 503,
-				body: {
-					statusCode: 503,
-					statusMessage: 'Service Unavailable',
-					message: 'Internal Server Error',
-				},
-				request: COMMANDS_REQUEST,
-			}));
-
-			await store.take(EVENT_ID, SCREEN_ID, 'slate');
-
-			expect(store.error).toBe(`[POST] "${COMMANDS_PATH}": 503 Service Unavailable`);
-		});
-
-		it('quotes a 5xx whose prose the server preserved through sanitizing', async () => {
-			// The decided inversion, and the reason #286 had to land before any Graphics
-			// Administrator surface could be converted. Some 5xx bodies are spared the
-			// sanitizer on purpose — a missing setting (#233), a named dependency that is
-			// down — because they describe a deployment fault rather than a fact about the
-			// show, and they are the one kind of 5xx the person
-			// reading has anything to do about. Refusing them turned the sentence naming a
-			// missing setting into '503 Service Unavailable', which is the failure mode the
-			// blanket refusal was introduced to prevent, pointed the other way.
-			const missingSetting = 'NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY is not set, '
-				+ 'so Screen Output asset capabilities are unavailable';
-			await store.loadSession(EVENT_ID, SCREEN_ID);
-			vi.clearAllMocks();
-			mockRepository.sendCommand.mockRejectedValue(transportFailure({
-				status: 503,
-				body: { statusCode: 503, statusMessage: 'Service Unavailable', message: missingSetting },
-				request: COMMANDS_REQUEST,
-			}));
-
-			await store.take(EVENT_ID, SCREEN_ID, 'slate');
-
-			expect(store.error).toBe(missingSetting);
-		});
-
-		it('keeps its own message for a failure that never reached the server', async () => {
-			// No status means no server answer, so whatever a `data` property happens to
-			// hold was not written by the authority and must not be quoted as though it
-			// were. The transport's own words are the honest report of a request that
-			// did not arrive.
-			await store.loadSession(EVENT_ID, SCREEN_ID);
-			mockRepository.sendCommand.mockRejectedValue(
-				Object.assign(new Error('Failed to fetch'), {
-					data: { message: 'a body from nowhere' },
-				}),
-			);
-
-			await store.take(EVENT_ID, SCREEN_ID, 'slate');
-
-			expect(store.error).toBe('Failed to fetch');
-		});
 	});
 
-	/**
-	 * A Take refused because a pinned Graphic Asset Revision has gone.
-	 *
-	 * The pre-check before the button makes this the residual race and the second
-	 * operator on stale data — so it is rare, and it is exactly the moment an
-	 * operator has no other way to find out what is wrong with their show. What used
-	 * to reach them was `[POST] "…": 409 Conflict` under the heading "Playout action
-	 * failed", which names neither the graphic, the slot, nor the next move (#230).
-	 */
+	// A Take refused because a pinned Graphic Asset Revision has gone: the residual race the pre-check leaves (#230).
 	describe('a Take the authoritative side refuses over a Graphic Asset Reference', () => {
 		const MISSING_MESSAGE
 			= 'Graphic Asset Reference at graphics.promo.items.sting.asset is missing, '

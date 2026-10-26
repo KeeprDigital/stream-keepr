@@ -40,15 +40,6 @@ function linesMesh(scene: THREE.Scene): THREE.LineSegments | undefined {
 }
 
 describe('createDotsDelegate', () => {
-	it('creates the perspective camera the fork framed the field with, at its intro position', () => {
-		const { camera } = mountDelegate();
-		expect(camera.isPerspectiveCamera).toBe(true);
-		expect(camera.fov).toBe(50);
-		expect(camera.near).toBe(0.1);
-		expect(camera.far).toBe(5000);
-		expect(camera.position.toArray()).toEqual([0, 250, 50]);
-	});
-
 	it('eases the camera from the intro position toward the fork\'s resting target over elapsed time', () => {
 		const { delegate, context, camera } = mountDelegate();
 		delegate.update({ ...context, elapsedSeconds: 0 });

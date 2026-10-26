@@ -2,16 +2,11 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import Channels from '~/components/Screen/Modes/BroadcastGraphics/Channels.vue';
 
 enableAutoUnmount(afterEach);
 
-/**
- * Graphic Channel authoring on a Broadcast Graphics Screen.
- *
- * The panel declares lanes and joins Broadcast Graphics to them. Every assertion
- * here is about the write it emits rather than about its markup, because the write
- * is what the Screen stores and what every reader then resolves membership from.
- */
+// Graphic Channel authoring on a Broadcast Graphics Screen.
 
 const UButtonStub = defineComponent({
 	props: {
@@ -60,9 +55,6 @@ async function mountPanel(props: {
 	channels?: GraphicChannelConfig[];
 	writable?: boolean;
 } = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Channels.vue';
-	const { default: Channels } = await import(componentPath);
-
 	const wrapper = mount(Channels, {
 		props: {
 			graphics: [lowerThirdA, lowerThirdB],

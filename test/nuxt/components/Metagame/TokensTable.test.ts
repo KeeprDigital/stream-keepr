@@ -2,22 +2,8 @@ import type { TokenRequirementEntry } from '~~/shared/types/metagame';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
-
-const UCardStub = defineComponent({
-	template: '<div><slot name="header" /><slot /></div>',
-});
-
-const UBadgeStub = defineComponent({
-	template: '<span><slot /></span>',
-});
-
-const UInputStub = defineComponent({
-	props: {
-		modelValue: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import TokensTable from '~/components/Metagame/TokensTable.vue';
 
 const UTableStub = defineComponent({
 	props: {
@@ -57,8 +43,6 @@ function makeEntry(overrides?: Partial<TokenRequirementEntry>): TokenRequirement
 }
 
 async function mountComponent() {
-	const { default: TokensTable } = await import('~/components/Metagame/TokensTable.vue');
-
 	return mount(defineComponent({
 		components: { TokensTable },
 		setup() {
@@ -95,9 +79,7 @@ async function mountComponent() {
 	}), {
 		global: {
 			stubs: {
-				UCard: UCardStub,
-				UBadge: UBadgeStub,
-				UInput: UInputStub,
+				...nuxtUiStubs,
 				UTable: UTableStub,
 				MetagameCardThumbnail: true,
 			},

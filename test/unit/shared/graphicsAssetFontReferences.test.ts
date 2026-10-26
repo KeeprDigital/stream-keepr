@@ -15,12 +15,8 @@ import {
 	sameScreenGraphicAssetReferences,
 } from '~~/shared/utils/graphicsAssetReferences';
 
-/**
- * A font Graphic Asset Revision is reachable from a Graphic Item's typography in
- * both hosts, and travels the same discovery walk a Media Graphic Item's reference
- * does — which is what puts it in a Screen's reference index and therefore inside
- * that Screen's Screen Output Asset Capability.
- */
+// A font revision in either host's typography travels the same discovery walk into the
+// Screen's reference index and its Screen Output Asset Capability.
 
 function reference(assetId: string, revisionId: string): GraphicAssetReference {
 	return {

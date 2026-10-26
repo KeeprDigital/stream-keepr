@@ -29,28 +29,12 @@ describe('useScreenConfigUpdate', () => {
 		vi.useRealTimers();
 	});
 
-	it('returns screenConfig, saving, updateScreenConfig, resetScreenConfig', () => {
-		const result = useScreenConfigUpdate(1, 1);
-		expect(result).toHaveProperty('screenConfig');
-		expect(result).toHaveProperty('saving');
-		expect(result).toHaveProperty('updateScreenConfig');
-		expect(result).toHaveProperty('resetScreenConfig');
-	});
-
-	it('merges store config with defaults', () => {
-		const { screenConfig } = useScreenConfigUpdate(1, 1);
+	it('shows the stored config, then an edit at once, and saves the edit after the debounce', async () => {
+		const { screenConfig, updateScreenConfig } = useScreenConfigUpdate(1, 1, { debounceMs: 100 });
 		expect(screenConfig.value.background).toBe('#000');
-	});
 
-	it('applies local overrides immediately', () => {
-		const { screenConfig, updateScreenConfig } = useScreenConfigUpdate(1, 1);
 		updateScreenConfig({ background: '#fff' });
 		expect(screenConfig.value.background).toBe('#fff');
-	});
-
-	it('calls saveToStore after debounce', async () => {
-		const { updateScreenConfig } = useScreenConfigUpdate(1, 1, { debounceMs: 100 });
-		updateScreenConfig({ background: '#fff' });
 
 		await vi.advanceTimersByTimeAsync(200);
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith(1, 1, { background: '#fff' });

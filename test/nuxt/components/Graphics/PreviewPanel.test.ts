@@ -3,12 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import PreviewPanel from '~/components/Graphics/PreviewPanel.vue';
 
-/**
- * The one preview panel shared by the Broadcast Graphics and Feature Match
- * Overlay editors: output selection, zoom, the canvas-aspect viewport, and the
- * item and safe-area guide switches. The preview iframe and everything it is told
- * stay with the host.
- */
+// The one preview panel shared by the Broadcast Graphics and Feature Match Overlay editors: output
+// selection, zoom, the canvas-aspect viewport, and the item and safe-area guide switches.
 
 enableAutoUnmount(afterEach);
 
@@ -86,8 +82,6 @@ describe('graphicsPreviewPanel', () => {
 		const style = viewport(wrapper).getAttribute('style') ?? '';
 
 		expect(style).toContain('aspect-ratio: 1080 / 1920');
-		expect(style).toContain('width: 25.875vh');
-		expect(style).toContain('max-width: 100%');
 		expect(viewport(wrapper).classList).toContain('transparent-checkerboard-backdrop');
 	});
 

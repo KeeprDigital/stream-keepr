@@ -6,23 +6,8 @@ import * as schema from '~~/server/db/schema';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-/**
- * A Card's expiry is a clock projection that no read, client or timer writes
- * (ADR-0022, #707, #725). Each row is one of #707's acceptance scenarios for a
- * Card saved at T₀ with timeout D, and says which.
- *
- * The Card and Screen routes run as written over real SQLite (the Card's
- * revision is SQL). Only admission and transport are stood in for: every
- * announcement is recorded instead of sent, and the Screen Output reads are
- * admitted without a capability.
- *
- * What a row here observes, and why each is observed where it is:
- * - **durable state** is the Screen row's `activeCard`, `activeCardVersion`
- *   (its revision) and `updatedAt`. No route answers them, so they are read from
- *   the row: "a read writes nothing" means these do not move.
- * - **announcements** are the realtime messages the server published.
- * - **the derived copy** is the KV key the service mirrors the Card into.
- */
+// A Card's expiry is a projection no read, client or timer writes (ADR-0022). Each row is one
+// of #707's scenarios, observed in the Screen row, the announcements, and the KV copy.
 
 const harness = await createSqliteD1Harness();
 const realDb = drizzle(harness.database, { schema });
@@ -71,8 +56,14 @@ vi.doMock('~~/server/utils/ably', () => ({
 vi.stubGlobal('publishMessage', publishMessage);
 
 const kv = new Map<string, unknown>();
+/** Set to make the derived KV copy refuse writes, as an unavailable binding does. */
+let kvUnavailable = false;
 vi.stubGlobal('useStorage', () => ({
-	set: async (key: string, value: unknown) => void kv.set(key, value),
+	set: async (key: string, value: unknown) => {
+		if (kvUnavailable)
+			throw new Error('KV unavailable');
+		kv.set(key, value);
+	},
 	del: async (key: string) => void kv.delete(key),
 }));
 
@@ -108,6 +99,7 @@ const listScreens = (await import('~~/server/api/events/[id]/screens/index.get')
 const getScreen = (await import('~~/server/api/events/[id]/screens/[screenId]/index.get')).default as unknown as Handler;
 const getOutputScreen = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/index.get')).default as unknown as Handler;
 const getOutputScreenBySlug = (await import('~~/server/api/screen-output/events/[id]/screens/slug/[slug].get')).default as unknown as Handler;
+const { cardService } = await import('~~/server/services/card');
 
 let eventId: number;
 let screenId: number;
@@ -197,6 +189,7 @@ beforeEach(async () => {
 	screenId = screen!.id;
 	published.length = 0;
 	kv.clear();
+	kvUnavailable = false;
 	afterCardRowLoaded = null;
 });
 
@@ -432,5 +425,24 @@ describe('the Card revision', () => {
 			type: 'card:updated',
 			data: { revision: 2 },
 		});
+	});
+});
+
+describe('the derived KV copy', () => {
+	it('is only a cache: a save it cannot mirror still commits and says why', async () => {
+		kvUnavailable = true;
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		await expect(putCard(request(card('bolt')))).resolves.toEqual({ success: true, revision: 1 });
+
+		expect(await stored()).toMatchObject({ cardId: 'bolt', version: 1, kv: null });
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('kv_set'));
+		warn.mockRestore();
+	});
+
+	it('is never written for a Screen that is not there', async () => {
+		await expect(cardService().setScreenCard(eventId, screenId + 1_000, card('bolt') as never)).rejects.toThrow('Screen not found');
+
+		expect(kv.size).toBe(0);
 	});
 });

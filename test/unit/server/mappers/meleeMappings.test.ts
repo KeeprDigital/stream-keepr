@@ -1,42 +1,39 @@
-import type { MatchMapperContext } from '~~/server/mappers/melee';
-import type { MeleeMatchParsed, MeleePlayerParsed, MeleeStandingParsed } from '~~/server/schemas/external/melee';
+import type { MeleeMatchParsed } from '~~/server/schemas/external/melee';
 import { describe, expect, it } from 'vitest';
 import {
-	externalIdentityKey,
 	mapMeleeMatchesToDbRows,
 	mapMeleePlayersToDb,
 	mapMeleePlayerToDb,
 	parseAllDecklists,
 	UnsupportedMeleeTeamPayloadError,
 } from '~~/server/mappers/melee';
-
-// ──────────────── mapMeleePlayersToDb ────────────────
+import {
+	localDeck,
+	localMeleePlayer,
+	matchContext,
+	meleeCompetitor,
+	meleeMatch,
+	meleePlayer,
+	meleeStanding,
+} from '~~/test/helpers/meleeFixtures';
 
 describe('mapMeleePlayersToDb', () => {
-	it('maps player fields correctly', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 100,
-				Status: 7,
-				PlayerName: 'Reid Duke',
-				PronounsDescription: 'he/him',
-				Decklists: [],
-			},
-		];
-		const standings: MeleeStandingParsed[] = [
-			{
-				TeamId: 100,
-				MatchWins: 5,
-				MatchLosses: 2,
-				MatchDraws: 0,
-				Points: 15,
-				Rank: 1,
-			},
-		];
-		const result = mapMeleePlayersToDb(players, standings);
+	it('maps a Melee player and their standing', () => {
+		const [result] = mapMeleePlayersToDb(
+			[
+				meleePlayer(100, { Status: 7, PlayerName: 'Reid Duke', PronounsDescription: 'he/him' }),
+			],
+			[
+				meleeStanding(100, {
+					MatchWins: 5,
+					MatchLosses: 2,
+					Points: 15,
+					Rank: 1,
+				}),
+			],
+		);
 
-		expect(result).toHaveLength(1);
-		expect(result[0]).toMatchObject({
+		expect(result).toMatchObject({
 			externalId: '100',
 			externalSource: 'melee',
 			externalStatus: 7,
@@ -47,277 +44,87 @@ describe('mapMeleePlayersToDb', () => {
 			draws: 0,
 			position: 1,
 			points: 15,
+			deckLists: undefined,
 		});
 	});
 
-	it('preserves a missing upstream status as null', () => {
-		const result = mapMeleePlayersToDb([
-			{
-				TeamId: 1,
-				PlayerName: 'Player',
-				PronounsDescription: null,
-				Decklists: [],
-			},
+	it('preserves a missing upstream status and standing as null', () => {
+		const [result] = mapMeleePlayersToDb([
+			meleePlayer(1),
 		], []);
 
-		expect(result[0]?.externalStatus).toBeNull();
+		expect(result).toMatchObject({
+			externalStatus: null,
+			wins: null,
+			losses: null,
+			draws: null,
+			position: null,
+			points: null,
+		});
 	});
 
 	it('rejects team payloads that would collapse multiple players into one TeamId', () => {
-		expect(() => mapMeleePlayersToDb([
-			{
-				TeamId: 10,
-				PlayerName: 'Team Member One',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-			{
-				TeamId: 10,
-				PlayerName: 'Team Member Two',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		], [])).toThrowError(UnsupportedMeleeTeamPayloadError);
+		const team = [
+			meleePlayer(10, { PlayerName: 'Team Member One' }),
+			meleePlayer(10, { PlayerName: 'Team Member Two' }),
+		];
 
-		try {
-			mapMeleePlayersToDb([
-				{
-					TeamId: 10,
-					PlayerName: 'Team Member One',
-					PronounsDescription: null,
-					Decklists: [],
-				},
-				{
-					TeamId: 10,
-					PlayerName: 'Team Member Two',
-					PronounsDescription: null,
-					Decklists: [],
-				},
-			], []);
-		}
-		catch (error) {
-			expect(error).toMatchObject({
-				statusCode: 422,
-				statusMessage: 'Unsupported Melee team tournament',
-			});
-		}
+		expect(() => mapMeleePlayersToDb(team, [])).toThrowError(UnsupportedMeleeTeamPayloadError);
+		expect(() => mapMeleePlayersToDb(team, [])).toThrow(expect.objectContaining({
+			statusCode: 422,
+			statusMessage: 'Unsupported Melee team tournament',
+		}));
 	});
 
 	it('rejects duplicate TeamIds in the current standings snapshot', () => {
 		expect(() => mapMeleePlayersToDb(
 			[
-				{
-					TeamId: 10,
-					PlayerName: 'Player',
-					PronounsDescription: null,
-					Decklists: [],
-				},
+				meleePlayer(10),
 			],
 			[
-				{
-					TeamId: 10,
-					MatchWins: 3,
-					MatchLosses: 0,
-					MatchDraws: 0,
-					Points: 9,
-					Rank: 1,
-				},
-				{
-					TeamId: 10,
-					MatchWins: 2,
-					MatchLosses: 1,
-					MatchDraws: 0,
-					Points: 6,
-					Rank: 2,
-				},
+				meleeStanding(10, { Rank: 1 }),
+				meleeStanding(10, { Rank: 2 }),
 			],
 		)).toThrow('Duplicate current Melee standing TeamId: 10');
 	});
 
-	it('sorts players by position (rank)', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 1,
-				PlayerName: 'Third',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-			{
-				TeamId: 2,
-				PlayerName: 'First',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-			{
-				TeamId: 3,
-				PlayerName: 'Second',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const standings: MeleeStandingParsed[] = [
-			{
-				TeamId: 1,
-				MatchWins: 3,
-				MatchLosses: 4,
-				MatchDraws: 0,
-				Points: 9,
-				Rank: 3,
-			},
-			{
-				TeamId: 2,
-				MatchWins: 6,
-				MatchLosses: 1,
-				MatchDraws: 0,
-				Points: 18,
-				Rank: 1,
-			},
-			{
-				TeamId: 3,
-				MatchWins: 5,
-				MatchLosses: 2,
-				MatchDraws: 0,
-				Points: 15,
-				Rank: 2,
-			},
-		];
-		const result = mapMeleePlayersToDb(players, standings);
+	it('orders players by rank, unranked players last', () => {
+		const result = mapMeleePlayersToDb(
+			[
+				meleePlayer(1, { PlayerName: 'Third' }),
+				meleePlayer(4, { PlayerName: 'Unranked' }),
+				meleePlayer(2, { PlayerName: 'First' }),
+				meleePlayer(3, { PlayerName: 'Second' }),
+			],
+			[
+				meleeStanding(1, { Rank: 3 }),
+				meleeStanding(2, { Rank: 1 }),
+				meleeStanding(3, { Rank: 2 }),
+			],
+		);
 
-		expect(result.map(p => p.name)).toEqual(['First', 'Second', 'Third']);
-		expect(result.map(p => p.position)).toEqual([1, 2, 3]);
-	});
-
-	it('places players without standings at the end', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 1,
-				PlayerName: 'No Ranking',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-			{
-				TeamId: 2,
-				PlayerName: 'Ranked',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const standings: MeleeStandingParsed[] = [
-			{
-				TeamId: 2,
-				MatchWins: 3,
-				MatchLosses: 0,
-				MatchDraws: 0,
-				Points: 9,
-				Rank: 1,
-			},
-		];
-		const result = mapMeleePlayersToDb(players, standings);
-
-		expect(result[0]!.name).toBe('Ranked');
-		expect(result[0]!.position).toBe(1);
-		expect(result[1]!.name).toBe('No Ranking');
-		expect(result[1]!.position).toBeNull();
-	});
-
-	it('converts TeamId to string for externalId', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 42,
-				PlayerName: 'Player',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const result = mapMeleePlayersToDb(players, []);
-
-		expect(result[0]!.externalId).toBe('42');
-	});
-
-	it('sets externalSource to melee for all players', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 1,
-				PlayerName: 'A',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-			{
-				TeamId: 2,
-				PlayerName: 'B',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const result = mapMeleePlayersToDb(players, []);
-
-		expect(result.every(p => p.externalSource === 'melee')).toBe(true);
-	});
-
-	it('maps null pronouns when not provided', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 1,
-				PlayerName: 'Player',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const result = mapMeleePlayersToDb(players, []);
-
-		expect(result[0]!.pronouns).toBeNull();
-	});
-
-	it('sets deckLists to undefined when player has no decklists', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 1,
-				PlayerName: 'Player',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const result = mapMeleePlayersToDb(players, []);
-
-		expect(result[0]!.deckLists).toBeUndefined();
-	});
-
-	it('maps standing fields when no standing exists for player', () => {
-		const players: MeleePlayerParsed[] = [
-			{
-				TeamId: 999,
-				PlayerName: 'Unranked',
-				PronounsDescription: null,
-				Decklists: [],
-			},
-		];
-		const result = mapMeleePlayersToDb(players, []);
-
-		expect(result[0]!.wins).toBeNull();
-		expect(result[0]!.losses).toBeNull();
-		expect(result[0]!.draws).toBeNull();
-		expect(result[0]!.position).toBeNull();
-		expect(result[0]!.points).toBeNull();
+		expect(result.map(player => [player.name, player.position])).toEqual([
+			['First', 1],
+			['Second', 2],
+			['Third', 3],
+			['Unranked', null],
+		]);
 	});
 });
 
-// ──────────────── parseAllDecklists ────────────────
+describe('mapMeleePlayerToDb', () => {
+	it('normalizes imported player name casing', () => {
+		expect(mapMeleePlayerToDb(meleePlayer(42, { PlayerName: 'test player' })).name).toBe('Test Player');
+	});
+});
 
 describe('parseAllDecklists', () => {
-	it('returns undefined for undefined input', () => {
-		const result = parseAllDecklists(undefined);
-
-		expect(result).toBeUndefined();
+	it.each([undefined, []])('has no Deck Lists for %j', (decklists) => {
+		expect(parseAllDecklists(decklists)).toBeUndefined();
 	});
 
-	it('returns undefined for empty array', () => {
-		const result = parseAllDecklists([]);
-
-		expect(result).toBeUndefined();
-	});
-
-	it('parses decklists into ParsedDeckList format', () => {
-		const decklists = [
+	it('parses a decklist with its colors and cards', () => {
+		const [result] = parseAllDecklists([
 			{
 				Guid: 'deck-42',
 				FormatId: '42',
@@ -337,21 +144,20 @@ describe('parseAllDecklists', () => {
 					{ k: 'COLOR_BLUE', v: 'True', p: null },
 				],
 			},
-		];
+		] as never)!;
 
-		const result = parseAllDecklists(decklists as any);
-
-		expect(result).toHaveLength(1);
-		expect(result![0]!.externalId).toBe('deck-42');
-		expect(result![0]!.formatId).toBe('42');
-		expect(result![0]!.name).toBe('Azorius Control');
-		expect(result![0]!.colors).toBe('WU');
-		expect(result![0]!.cards).toHaveLength(1);
-		expect(result![0]!.companion).toBeNull();
+		expect(result).toMatchObject({
+			externalId: 'deck-42',
+			formatId: '42',
+			name: 'Azorius Control',
+			colors: 'WU',
+			companion: null,
+		});
+		expect(result!.cards).toHaveLength(1);
 	});
 
-	it('parses companion records into companion metadata', () => {
-		const decklists = [
+	it('moves a companion record out of the cards into companion metadata', () => {
+		const [result] = parseAllDecklists([
 			{
 				Guid: 'deck-companion',
 				FormatId: '42',
@@ -376,16 +182,14 @@ describe('parseAllDecklists', () => {
 				],
 				Attributes: [],
 			},
-		];
+		] as never)!;
 
-		const result = parseAllDecklists(decklists as any);
-
-		expect(result?.[0]?.cards).toHaveLength(1);
-		expect(result?.[0]?.companion?.name).toBe('Lutri, the Spellchaser');
+		expect(result!.cards).toHaveLength(1);
+		expect(result!.companion?.name).toBe('Lutri, the Spellchaser');
 	});
 
-	it('maps colorless decks to C', () => {
-		const decklists = [
+	it('maps a deck with no colour attributes to C', () => {
+		const [result] = parseAllDecklists([
 			{
 				Guid: 'deck-colourless',
 				FormatId: '1',
@@ -393,526 +197,191 @@ describe('parseAllDecklists', () => {
 				Records: [],
 				Attributes: [],
 			},
-		];
+		] as never)!;
 
-		const result = parseAllDecklists(decklists as any);
-
-		expect(result![0]!.colors).toBe('C');
+		expect(result!.colors).toBe('C');
 	});
 });
-
-// ──────────────── mapMeleePlayerToDb (singular) ────────────────
-
-describe('mapMeleePlayerToDb', () => {
-	it('maps a single player without standing', () => {
-		const player: MeleePlayerParsed = {
-			TeamId: 42,
-			PlayerName: 'Test Player',
-			PronounsDescription: 'they/them',
-			Decklists: [],
-		};
-
-		const result = mapMeleePlayerToDb(player);
-
-		expect(result.externalId).toBe('42');
-		expect(result.externalSource).toBe('melee');
-		expect(result.name).toBe('Test Player');
-		expect(result.pronouns).toBe('they/them');
-		expect(result.wins).toBeNull();
-		expect(result.losses).toBeNull();
-		expect(result.position).toBeNull();
-	});
-
-	it('normalizes imported player name casing', () => {
-		const player: MeleePlayerParsed = {
-			TeamId: 42,
-			PlayerName: 'test player',
-			PronounsDescription: null,
-			Decklists: [],
-		};
-
-		const result = mapMeleePlayerToDb(player);
-
-		expect(result.name).toBe('Test Player');
-	});
-
-	it('maps a single player with standing', () => {
-		const player: MeleePlayerParsed = {
-			TeamId: 42,
-			PlayerName: 'Test Player',
-			PronounsDescription: null,
-			Decklists: [],
-		};
-		const standing: MeleeStandingParsed = {
-			TeamId: 42,
-			MatchWins: 5,
-			MatchLosses: 2,
-			MatchDraws: 1,
-			Points: 16,
-			Rank: 3,
-		};
-
-		const result = mapMeleePlayerToDb(player, standing);
-
-		expect(result.wins).toBe(5);
-		expect(result.losses).toBe(2);
-		expect(result.draws).toBe(1);
-		expect(result.points).toBe(16);
-		expect(result.position).toBe(3);
-	});
-});
-
-// ──────────────── mapMeleeMatchesToDbRows ────────────────
-
-function createMatchContext(overrides: Partial<MatchMapperContext> = {}): MatchMapperContext {
-	return {
-		playerMap: new Map(),
-		standingsMap: new Map(),
-		playerDecksByPlayerId: new Map(),
-		archetypesById: new Map(),
-		roundFormatExternalId: null,
-		warnings: [],
-		...overrides,
-	};
-}
 
 describe('mapMeleeMatchesToDbRows', () => {
-	it('maps matches with eventId and sorts by table number', () => {
-		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{
-				Guid: 'match-2',
-				TableNumber: 2,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-			{
-				Guid: 'match-1',
-				TableNumber: 1,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-		];
-		const context = createMatchContext();
+	it('orders Matches by table, byes last, with sequential sort order', () => {
+		const result = mapMeleeMatchesToDbRows([
+			meleeMatch('bye', { TableNumber: 0, HasResult: false, ByeReason: 1 }),
+			meleeMatch('match-2', { TableNumber: 2 }),
+			meleeMatch('match-1', { TableNumber: 1 }),
+		], 10, 1, matchContext());
 
-		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
-
-		expect(result).toHaveLength(2);
-		expect(result[0]!.eventId).toBe(1);
-		expect(result[0]!.roundId).toBe(10);
-		// Table 1 first
-		expect(result[0]!.externalId).toBe('match-1');
-		expect(result[1]!.externalId).toBe('match-2');
-	});
-
-	it('sorts byes (null table number) to the end', () => {
-		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{
-				Guid: 'bye',
-				TableNumber: 0,
-				Competitors: [],
-				HasResult: false,
-				ByeReason: 1,
-				GameDraws: 0,
-			},
-			{
-				Guid: 'match-1',
-				TableNumber: 1,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-		];
-		const context = createMatchContext();
-
-		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
-
-		expect(result[0]!.externalId).toBe('match-1');
-		expect(result[1]!.externalId).toBe('bye');
-		expect(result[1]!.isBye).toBe(true);
-	});
-
-	it('assigns sequential sortOrder', () => {
-		const meleeMatches: Partial<MeleeMatchParsed>[] = [
-			{
-				Guid: 'a',
-				TableNumber: 1,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-			{
-				Guid: 'b',
-				TableNumber: 2,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-			{
-				Guid: 'c',
-				TableNumber: 3,
-				Competitors: [],
-				HasResult: true,
-				ByeReason: null,
-				GameDraws: 0,
-			},
-		];
-		const context = createMatchContext();
-
-		const result = mapMeleeMatchesToDbRows(meleeMatches as MeleeMatchParsed[], 10, 1, context);
-
-		expect(result[0]!.sortOrder).toBe(0);
-		expect(result[1]!.sortOrder).toBe(1);
-		expect(result[2]!.sortOrder).toBe(2);
-	});
-
-	it('returns empty array for empty input', () => {
-		const context = createMatchContext();
-
-		const result = mapMeleeMatchesToDbRows([], 10, 1, context);
-
-		expect(result).toEqual([]);
+		expect(result.map(match => [match.externalId, match.sortOrder])).toEqual([
+			['match-1', 0],
+			['match-2', 1],
+			['bye', 2],
+		]);
+		expect(result[2]!.isBye).toBe(true);
+		expect(result[0]).toMatchObject({ eventId: 1, roundId: 10 });
 	});
 
 	describe('a Match result', () => {
-		const players = [1, 2].map(teamId => ({
-			id: teamId * 10,
-			name: `Player ${teamId}`,
-			externalId: teamId.toString(),
-			externalSource: 'melee',
-		} as any));
-		const context = () => createMatchContext({
-			playerMap: new Map(players.map(player => [
-				externalIdentityKey('melee', player.externalId),
-				player,
-			])),
+		const context = () => matchContext({
+			players: [
+				localMeleePlayer(10, 1),
+				localMeleePlayer(20, 2),
+			],
 		});
-		function mapOne(match: Pick<MeleeMatchParsed, 'HasResult' | 'GameDraws' | 'ByeReason'> & { gameWins: [number | null, number | null] | [number | null] }) {
+		function mapOne(overrides: Partial<MeleeMatchParsed>, gameWins: Array<number | null>) {
 			const [row] = mapMeleeMatchesToDbRows([
-				{
-					Guid: 'result',
+				meleeMatch('result', {
 					TableNumber: 1,
-					Competitors: match.gameWins.map((gameWins, index) => ({
-						TeamId: index + 1,
-						SortOrder: index,
-						GameWins: gameWins,
-						Decklists: [],
-					})),
-					HasResult: match.HasResult,
 					ResultString: 'Player 1 won 2-0-0',
-					GameDraws: match.GameDraws,
-					ByeReason: match.ByeReason,
-				},
+					Competitors: gameWins.map((GameWins, index) => meleeCompetitor(index + 1, { SortOrder: index, GameWins })),
+					...overrides,
+				}),
 			], 10, 1, context());
 			return row!;
 		}
 
-		it('counts the game wins and game draws Melee leaves null on a reported Match as none', () => {
-			const row = mapOne({
-				HasResult: true,
-				GameDraws: null,
-				ByeReason: null,
-				gameWins: [2, null],
-			});
-
-			expect(row).toMatchObject({
-				hasResult: true,
-				isBye: false,
-				player1GameWins: 2,
-				player2GameWins: 0,
-				gameDraws: 0,
-			});
-		});
-
-		it('keeps a reported draw', () => {
-			const row = mapOne({
-				HasResult: true,
-				GameDraws: 1,
-				ByeReason: null,
-				gameWins: [1, 1],
-			});
-
-			expect(row).toMatchObject({
-				hasResult: true,
-				player1GameWins: 1,
-				player2GameWins: 1,
-				gameDraws: 1,
-			});
-		});
-
-		it('holds no game wins or game draws for an unreported Match, whatever Melee sends', () => {
-			const row = mapOne({
-				HasResult: false,
-				GameDraws: 1,
-				ByeReason: null,
-				gameWins: [1, null],
-			});
-
-			expect(row).toMatchObject({
-				hasResult: false,
-				player1GameWins: null,
-				player2GameWins: null,
-				gameDraws: null,
-			});
-		});
-
-		it('holds no game wins or game draws for a bye', () => {
-			const row = mapOne({
-				HasResult: true,
-				GameDraws: 0,
-				ByeReason: 1,
-				gameWins: [2],
-			});
-
-			expect(row).toMatchObject({
-				hasResult: true,
-				isBye: true,
-				player1GameWins: null,
-				player2GameWins: null,
-				gameDraws: null,
-			});
+		it.each([
+			[
+				'counts the game wins and draws Melee leaves null on a reported Match as none',
+				{ GameDraws: null },
+				[2, null],
+				{
+					hasResult: true,
+					isBye: false,
+					player1GameWins: 2,
+					player2GameWins: 0,
+					gameDraws: 0,
+				},
+			],
+			[
+				'keeps a reported draw',
+				{ GameDraws: 1 },
+				[1, 1],
+				{
+					hasResult: true,
+					player1GameWins: 1,
+					player2GameWins: 1,
+					gameDraws: 1,
+				},
+			],
+			[
+				'holds no Game Score for an unreported Match, whatever Melee sends',
+				{ HasResult: false, GameDraws: 1 },
+				[1, null],
+				{
+					hasResult: false,
+					player1GameWins: null,
+					player2GameWins: null,
+					gameDraws: null,
+				},
+			],
+			[
+				'holds no Game Score for a bye',
+				{ ByeReason: 1 },
+				[2],
+				{
+					hasResult: true,
+					isBye: true,
+					player1GameWins: null,
+					player2GameWins: null,
+					gameDraws: null,
+				},
+			],
+		] as const)('%s', (_, overrides, gameWins, expected) => {
+			expect(mapOne(overrides, [...gameWins])).toMatchObject(expected);
 		});
 
 		it('does not keep Melee\'s result text', () => {
-			const row = mapOne({
-				HasResult: true,
-				GameDraws: 0,
-				ByeReason: null,
-				gameWins: [2, 0],
-			});
-
-			expect(row).not.toHaveProperty('resultString');
+			expect(mapOne({}, [2, 0])).not.toHaveProperty('resultString');
 		});
 	});
 
 	it('rejects unpaired partial Matches while preserving explicit completed and bye records', () => {
-		const player = {
-			id: 11,
-			name: 'Player',
-			externalId: '1',
-			externalSource: 'melee',
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
+		const context = matchContext({
+			players: [
+				localMeleePlayer(11, 1),
+			],
 		});
+		const pending = { HasResult: false, GameDraws: null };
 
 		expect(() => mapMeleeMatchesToDbRows([
-			{
-				Guid: 'empty-pending',
-				TableNumber: null,
-				Competitors: [],
-				HasResult: false,
-				ResultString: null,
-				GameDraws: null,
-				ByeReason: null,
-			},
-		], 10, 1, context)).toThrow('not paired or explicitly completed');
-
+			meleeMatch('empty-pending', pending),
+		], 10, 1, context))
+			.toThrow('not paired or explicitly completed');
 		expect(() => mapMeleeMatchesToDbRows([
-			{
-				Guid: 'one-sided-pending',
-				TableNumber: null,
+			meleeMatch('one-sided-pending', {
+				...pending,
 				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 0,
-						GameWins: null,
-						Decklists: [],
-					},
+					meleeCompetitor(1),
 				],
-				HasResult: false,
-				ResultString: null,
-				GameDraws: null,
-				ByeReason: null,
-			},
-		], 10, 1, context)).toThrow('not paired or explicitly completed');
-
+			}),
+		], 10, 1, context))
+			.toThrow('not paired or explicitly completed');
 		expect(mapMeleeMatchesToDbRows([
-			{
-				Guid: 'empty-completed',
-				TableNumber: null,
-				Competitors: [],
-				HasResult: true,
-				ResultString: 'Completed administratively',
-				GameDraws: null,
-				ByeReason: null,
-			},
-		], 10, 1, context)).toHaveLength(1);
-
+			meleeMatch('empty-completed', { ResultString: 'Completed administratively', GameDraws: null }),
+		], 10, 1, context))
+			.toHaveLength(1);
 		expect(mapMeleeMatchesToDbRows([
-			{
-				Guid: 'explicit-bye',
-				TableNumber: null,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 0,
-						GameWins: null,
-						Decklists: [],
-					},
-				],
-				HasResult: false,
-				ResultString: null,
-				GameDraws: null,
+			meleeMatch('explicit-bye', {
+				...pending,
 				ByeReason: 1,
-			},
-		], 10, 1, context)).toHaveLength(1);
+				Competitors: [
+					meleeCompetitor(1),
+				],
+			}),
+		], 10, 1, context))
+			.toHaveLength(1);
 	});
 
 	it('rejects unsupported or ambiguous competitor cardinality', () => {
-		const players = [1, 2, 3].map(teamId => ({
-			id: teamId,
-			name: `Player ${teamId}`,
-			externalId: teamId.toString(),
-			externalSource: 'melee',
-		} as any));
-		const context = createMatchContext({
-			playerMap: new Map(players.map(player => [
-				externalIdentityKey('melee', player.externalId),
-				player,
-			])),
+		const context = matchContext({
+			players: [1, 2, 3].map(teamId => localMeleePlayer(teamId, teamId)),
 		});
-		const base = {
-			Guid: 'malformed',
-			TableNumber: 1,
-			HasResult: false,
-			ResultString: null,
-			GameDraws: 0,
-			ByeReason: null,
-		};
+		const malformed = (competitors: ReturnType<typeof meleeCompetitor>[]) =>
+			() => mapMeleeMatchesToDbRows([
+				meleeMatch('malformed', { TableNumber: 1, HasResult: false, Competitors: competitors }),
+			], 10, 1, context);
 
-		expect(() => mapMeleeMatchesToDbRows([
-			{
-				...base,
-				Competitors: players.map((player, index) => ({
-					TeamId: Number(player.externalId),
-					SortOrder: index,
-					GameWins: null,
-					Decklists: [],
-				})),
-			},
-		], 10, 1, context)).toThrow('at most two are supported');
-
-		expect(() => mapMeleeMatchesToDbRows([
-			{
-				...base,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 0,
-						GameWins: null,
-						Decklists: [],
-					},
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [],
-					},
-				],
-			},
-		], 10, 1, context)).toThrow('duplicate competitor 1');
+		expect(malformed([1, 2, 3].map((teamId, index) => meleeCompetitor(teamId, { SortOrder: index })))).toThrow('at most two are supported');
+		expect(malformed([
+			meleeCompetitor(1, { SortOrder: 0 }),
+			meleeCompetitor(1, { SortOrder: 1 }),
+		])).toThrow('duplicate competitor 1');
 	});
 
 	it('rejects duplicate Match identities and unknown required participants', () => {
-		const completedEmptyMatch = {
-			Guid: 'duplicate-match',
-			TableNumber: null,
-			Competitors: [],
-			HasResult: true,
-			ResultString: null,
-			GameDraws: null,
-			ByeReason: null,
-		};
+		const completed = meleeMatch('duplicate-match', { GameDraws: null });
 
+		expect(() => mapMeleeMatchesToDbRows([completed, completed], 10, 1, matchContext()))
+			.toThrow('Duplicate Melee Match external identity');
 		expect(() => mapMeleeMatchesToDbRows([
-			completedEmptyMatch,
-			completedEmptyMatch,
-		], 10, 1, createMatchContext())).toThrow('Duplicate Melee Match external identity');
-
-		expect(() => mapMeleeMatchesToDbRows([
-			{
-				...completedEmptyMatch,
-				Guid: 'unknown-player',
-				Competitors: [
-					{
-						TeamId: 999,
-						SortOrder: 0,
-						GameWins: null,
-						Decklists: [],
-					},
-				],
+			meleeMatch('unknown-player', {
 				ByeReason: 1,
-			},
-		], 10, 1, createMatchContext())).toThrow('unknown Melee participant 999');
+				Competitors: [
+					meleeCompetitor(999),
+				],
+			}),
+		], 10, 1, matchContext()))
+			.toThrow('unknown Melee participant 999');
 	});
 
 	it('uses competitor SortOrder for player and score assignment', () => {
-		const firstPlayer = {
-			id: 11,
-			name: 'First',
-			pronouns: null,
-			externalId: '1',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const secondPlayer = {
-			id: 22,
-			name: 'Second',
-			pronouns: null,
-			externalId: '2',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					firstPlayer,
-				],
-				[
-					externalIdentityKey('melee', '2'),
-					secondPlayer,
-				],
-			]),
+		const context = matchContext({
+			players: [
+				localMeleePlayer(11, 1),
+				localMeleePlayer(22, 2),
+			],
 		});
-		const matches = [
-			{
-				Guid: 'ordered-match',
-				TableNumber: 1,
-				HasResult: true,
-				ResultString: '2-1',
-				GameDraws: 0,
-				ByeReason: null,
-				Competitors: [
-					{
-						TeamId: 2,
-						SortOrder: 2,
-						GameWins: 1,
-						Decklists: [],
-					},
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: 2,
-						Decklists: [],
-					},
-				],
-			},
-		];
 
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
+		const [result] = mapMeleeMatchesToDbRows([
+			meleeMatch('ordered-match', {
+				TableNumber: 1,
+				ResultString: '2-1',
+				Competitors: [
+					meleeCompetitor(2, { SortOrder: 2, GameWins: 1 }),
+					meleeCompetitor(1, { SortOrder: 1, GameWins: 2 }),
+				],
+			}),
+		], 10, 1, context);
 
 		expect(result).toMatchObject({
 			player1Id: 11,
@@ -923,447 +392,182 @@ describe('mapMeleeMatchesToDbRows', () => {
 		});
 	});
 
-	it('uses the exact Melee competitor deck GUID before same-format alternatives', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			pronouns: null,
-			externalId: '1',
-			externalSource: 'melee',
-			archetypeId: 99,
-			lgs: null,
-			gameData: { type: 'mtg', deckName: 'Primary Deck', deckColors: 'R' },
-		} as any;
-		const reviewedAt = new Date('2026-07-15T00:00:00.000Z');
-		const exactDeck = {
-			id: 101,
-			playerId: 11,
-			externalId: 'deck-exact',
-			externalSource: 'melee',
-			formatExternalId: 'standard',
-			name: 'Submitted Control',
-			colors: 'U',
-			sortOrder: 9,
-			isPrimary: false,
-			archetypeId: 7,
-			reviewedAt,
-		} as any;
-		const otherDeck = {
-			...exactDeck,
-			id: 102,
-			externalId: 'deck-other',
-			name: 'Other Standard Deck',
-			sortOrder: 0,
-			archetypeId: null,
-			reviewedAt: null,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[otherDeck, exactDeck],
-				],
-			]),
-			archetypesById: new Map([
-				[
-					7,
-					{ id: 7, name: 'Reviewed Control', colors: 'WU' },
-				],
-			]),
-			roundFormatExternalId: 'standard',
-		});
-		const matches = [
-			{
-				Guid: 'match-exact',
-				TableNumber: 1,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: 1,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [
-							{ DecklistId: 'deck-exact', PlayerId: 1, FormatId: 'standard' },
-						],
-					},
-				],
-			},
-		];
+	describe('deck selection for a competitor', () => {
+		/** A bye for Melee player 1 (local Player 11) that submitted `decklist`. */
+		function selectDeck(
+			decks: ReturnType<typeof localDeck>[],
+			{ decklist, matchFormat, player = localMeleePlayer(11, 1), ...context }: {
+				decklist?: { id: string; formatId: string };
+				matchFormat?: string;
+				player?: ReturnType<typeof localMeleePlayer>;
+			} & Partial<Parameters<typeof matchContext>[0]> = {},
+		) {
+			const mapperContext = matchContext({
+				players: [player],
+				decks,
+				roundFormatExternalId: 'standard',
+				...context,
+			});
+			const [result] = mapMeleeMatchesToDbRows([
+				meleeMatch('match', {
+					TableNumber: 1,
+					HasResult: false,
+					ByeReason: 1,
+					...(matchFormat
+						? { FormatId: matchFormat }
+						: {}),
+					Competitors: [
+						meleeCompetitor(1, { SortOrder: 1, decklist }),
+					],
+				}),
+			], 10, 1, mapperContext);
 
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
+			return { data: result!.player1Data, warnings: mapperContext.warnings };
+		}
 
-		expect(result!.player1Data).toMatchObject({
-			deckId: 101,
-			archetypeId: 7,
-			gameData: { type: 'mtg', deckName: 'Reviewed Control', deckColors: 'WU' },
-		});
-		expect(context.warnings).toEqual([]);
-	});
+		it('uses the exact Melee competitor deck GUID before same-format alternatives', () => {
+			const exact = localDeck(101, {
+				externalId: 'deck-exact',
+				name: 'Submitted Control',
+				colors: 'U',
+				sortOrder: 9,
+				archetypeId: 7,
+				reviewedAt: new Date('2026-07-15T00:00:00.000Z'),
+			});
+			const other = localDeck(102, { externalId: 'deck-other', name: 'Other Standard Deck' });
 
-	it('uses a format fallback deterministically and warns when an exact reference is unavailable', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			externalId: '1',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const laterDeck = {
-			id: 202,
-			playerId: 11,
-			externalId: 'later',
-			externalSource: 'melee',
-			formatExternalId: 'modern',
-			name: 'Later',
-			colors: 'R',
-			sortOrder: 5,
-			isPrimary: false,
-			archetypeId: null,
-			reviewedAt: null,
-		} as any;
-		const firstDeck = {
-			...laterDeck,
-			id: 201,
-			externalId: 'first',
-			name: 'First',
-			colors: 'U',
-			sortOrder: 1,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[laterDeck, firstDeck],
-				],
-			]),
-			roundFormatExternalId: 'standard',
-		});
-		const matches = [
-			{
-				Guid: 'match-format',
-				TableNumber: 1,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: 1,
-				FormatId: 'pioneer',
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [
-							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'modern' },
-						],
-					},
-				],
-			},
-		];
+			const { data, warnings } = selectDeck([other, exact], {
+				decklist: { id: 'deck-exact', formatId: 'standard' },
+				player: localMeleePlayer(11, 1, {
+					archetypeId: 99,
+					gameData: { type: 'mtg', deckName: 'Primary Deck', deckColors: 'R' },
+				}),
+				archetypesById: new Map([
+					[
+						7,
+						{ id: 7, name: 'Reviewed Control', colors: 'WU' },
+					],
+				]),
+			});
 
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
-
-		expect(result!.player1Data).toMatchObject({
-			deckId: 201,
-			archetypeId: null,
-			gameData: { deckName: 'First', deckColors: 'U' },
-		});
-		expect(context.warnings).toEqual(expect.arrayContaining([
-			expect.stringContaining('used format fallback'),
-			expect.stringContaining('selected deterministically'),
-		]));
-	});
-
-	it('uses the Match format before a different phase format when the competitor format has no deck', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			externalId: '1',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const matchFormatDeck = {
-			id: 301,
-			playerId: 11,
-			externalId: 'modern',
-			externalSource: 'melee',
-			formatExternalId: 'modern',
-			name: 'Modern Deck',
-			colors: 'R',
-			sortOrder: 2,
-			isPrimary: false,
-			archetypeId: null,
-			reviewedAt: null,
-		} as any;
-		const phaseFormatDeck = {
-			...matchFormatDeck,
-			id: 302,
-			externalId: 'standard',
-			formatExternalId: 'standard',
-			name: 'Standard Deck',
-			colors: 'U',
-			sortOrder: 0,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[phaseFormatDeck, matchFormatDeck],
-				],
-			]),
-			roundFormatExternalId: 'standard',
-		});
-		const matches = [
-			{
-				Guid: 'match-specific-format',
-				TableNumber: 1,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: 1,
-				FormatId: 'modern',
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [
-							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'legacy' },
-						],
-					},
-				],
-			},
-		];
-
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
-
-		expect(result!.player1Data).toMatchObject({
-			deckId: 301,
-			gameData: { type: 'mtg', deckName: 'Modern Deck', deckColors: 'R' },
-		});
-		expect(context.warnings).toEqual([
-			expect.stringContaining('used format fallback'),
-		]);
-	});
-
-	it('uses the primary deck as the final fallback and emits a warning', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			externalId: '1',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const primaryDeck = {
-			id: 401,
-			playerId: 11,
-			externalId: 'primary-modern',
-			externalSource: 'melee',
-			formatExternalId: 'modern',
-			name: 'Primary Modern',
-			colors: 'G',
-			sortOrder: 0,
-			isPrimary: true,
-			archetypeId: null,
-			reviewedAt: null,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[primaryDeck],
-				],
-			]),
-			roundFormatExternalId: 'standard',
-		});
-		const matches = [
-			{
-				Guid: 'match-primary',
-				TableNumber: 1,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: 1,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [
-							{ DecklistId: 'missing-deck', PlayerId: 1, FormatId: 'standard' },
-						],
-					},
-				],
-			},
-		];
-
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
-
-		expect(result!.player1Data).toMatchObject({
-			deckId: 401,
-			gameData: { type: 'mtg', deckName: 'Primary Modern', deckColors: 'G' },
-		});
-		expect(context.warnings).toEqual([
-			expect.stringContaining('used primary fallback'),
-		]);
-	});
-
-	it('clears primary deck metadata when no exact, format, or primary deck can be selected', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			externalId: '1',
-			externalSource: 'melee',
-			archetypeId: 9,
-			gameData: { type: 'mtg', deckName: 'Primary Leak', deckColors: 'R' },
-		} as any;
-		const offFormatDeck = {
-			id: 301,
-			playerId: 11,
-			externalId: 'legacy',
-			externalSource: 'melee',
-			formatExternalId: 'legacy',
-			name: 'Legacy',
-			colors: 'B',
-			sortOrder: 0,
-			isPrimary: false,
-			archetypeId: 9,
-			reviewedAt: new Date(),
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[offFormatDeck],
-				],
-			]),
-			roundFormatExternalId: 'standard',
-		});
-		const matches = [
-			{
-				Guid: 'match-missing',
-				TableNumber: 1,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: 0,
-				ByeReason: 1,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 1,
-						GameWins: null,
-						Decklists: [],
-					},
-				],
-			},
-		];
-
-		const [result] = mapMeleeMatchesToDbRows(matches, 10, 1, context);
-
-		expect(result!.player1Data).toMatchObject({
-			deckId: null,
-			archetypeId: null,
-			gameData: { type: 'mtg', deckName: null, deckColors: null },
-		});
-		expect(context.warnings[0]).toContain('no submitted deck');
-	});
-
-	it('never selects another source\'s deck as a Melee fallback', () => {
-		const player = {
-			id: 11,
-			name: 'Alice',
-			externalId: '1',
-			externalSource: 'melee',
-			gameData: null,
-		} as any;
-		const manualDeck = {
-			id: 701,
-			playerId: 11,
-			externalId: 'manual-deck',
-			externalSource: 'manual',
-			formatExternalId: 'standard',
-			name: 'Manual Deck',
-			colors: 'R',
-			sortOrder: 0,
-			isPrimary: true,
-			archetypeId: null,
-			reviewedAt: null,
-		} as any;
-		const context = createMatchContext({
-			playerMap: new Map([
-				[
-					externalIdentityKey('melee', '1'),
-					player,
-				],
-			]),
-			playerDecksByPlayerId: new Map([
-				[
-					11,
-					[manualDeck],
-				],
-			]),
-			roundFormatExternalId: 'standard',
+			expect(data).toMatchObject({
+				deckId: 101,
+				archetypeId: 7,
+				gameData: { type: 'mtg', deckName: 'Reviewed Control', deckColors: 'WU' },
+			});
+			expect(warnings).toEqual([]);
 		});
 
-		const [result] = mapMeleeMatchesToDbRows([
-			{
-				Guid: 'source-safe-deck',
-				TableNumber: null,
-				HasResult: false,
-				ResultString: null,
-				GameDraws: null,
-				ByeReason: 1,
-				Competitors: [
-					{
-						TeamId: 1,
-						SortOrder: 0,
-						GameWins: null,
-						Decklists: [
-							{ DecklistId: 'manual-deck', PlayerId: 1, FormatId: 'standard' },
-						],
-					},
-				],
-			},
-		], 10, 1, context);
+		it('uses a format fallback deterministically and warns when an exact reference is unavailable', () => {
+			const later = localDeck(202, {
+				formatExternalId: 'modern',
+				name: 'Later',
+				colors: 'R',
+				sortOrder: 5,
+			});
+			const first = localDeck(201, {
+				formatExternalId: 'modern',
+				name: 'First',
+				colors: 'U',
+				sortOrder: 1,
+			});
 
-		expect(result!.player1Data).toMatchObject({
-			deckId: null,
-			gameData: { type: 'mtg', deckName: null, deckColors: null },
+			const { data, warnings } = selectDeck([later, first], {
+				decklist: { id: 'missing-deck', formatId: 'modern' },
+				matchFormat: 'pioneer',
+			});
+
+			expect(data).toMatchObject({
+				deckId: 201,
+				archetypeId: null,
+				gameData: { deckName: 'First', deckColors: 'U' },
+			});
+			expect(warnings).toEqual(expect.arrayContaining([
+				expect.stringContaining('used format fallback'),
+				expect.stringContaining('selected deterministically'),
+			]));
 		});
-		expect(context.warnings).toEqual(expect.arrayContaining([
-			expect.stringContaining('was not available locally'),
-		]));
+
+		it('uses the Match format before a different phase format when the competitor format has no deck', () => {
+			const matchFormat = localDeck(301, {
+				formatExternalId: 'modern',
+				name: 'Modern Deck',
+				colors: 'R',
+				sortOrder: 2,
+			});
+			const phaseFormat = localDeck(302, { formatExternalId: 'standard', name: 'Standard Deck', colors: 'U' });
+
+			const { data, warnings } = selectDeck([phaseFormat, matchFormat], {
+				decklist: { id: 'missing-deck', formatId: 'legacy' },
+				matchFormat: 'modern',
+			});
+
+			expect(data).toMatchObject({
+				deckId: 301,
+				gameData: { type: 'mtg', deckName: 'Modern Deck', deckColors: 'R' },
+			});
+			expect(warnings).toEqual([
+				expect.stringContaining('used format fallback'),
+			]);
+		});
+
+		it('uses the primary deck as the final fallback and emits a warning', () => {
+			const primary = localDeck(401, {
+				formatExternalId: 'modern',
+				name: 'Primary Modern',
+				colors: 'G',
+				isPrimary: true,
+			});
+
+			const { data, warnings } = selectDeck([primary], {
+				decklist: { id: 'missing-deck', formatId: 'standard' },
+			});
+
+			expect(data).toMatchObject({
+				deckId: 401,
+				gameData: { type: 'mtg', deckName: 'Primary Modern', deckColors: 'G' },
+			});
+			expect(warnings).toEqual([
+				expect.stringContaining('used primary fallback'),
+			]);
+		});
+
+		it('clears primary deck metadata when no exact, format, or primary deck can be selected', () => {
+			const offFormat = localDeck(301, {
+				formatExternalId: 'legacy',
+				archetypeId: 9,
+				reviewedAt: new Date(),
+			});
+
+			const { data, warnings } = selectDeck([offFormat], {
+				player: localMeleePlayer(11, 1, {
+					archetypeId: 9,
+					gameData: { type: 'mtg', deckName: 'Primary Leak', deckColors: 'R' },
+				}),
+			});
+
+			expect(data).toMatchObject({
+				deckId: null,
+				archetypeId: null,
+				gameData: { type: 'mtg', deckName: null, deckColors: null },
+			});
+			expect(warnings[0]).toContain('no submitted deck');
+		});
+
+		it('never selects another source\'s deck as a Melee fallback', () => {
+			const manual = localDeck(701, { externalId: 'manual-deck', externalSource: 'manual', isPrimary: true });
+
+			const { data, warnings } = selectDeck([manual], {
+				decklist: { id: 'manual-deck', formatId: 'standard' },
+			});
+
+			expect(data).toMatchObject({
+				deckId: null,
+				gameData: { type: 'mtg', deckName: null, deckColors: null },
+			});
+			expect(warnings).toEqual(expect.arrayContaining([
+				expect.stringContaining('was not available locally'),
+			]));
+		});
 	});
 });

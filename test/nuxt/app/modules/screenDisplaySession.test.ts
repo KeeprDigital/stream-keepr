@@ -2,22 +2,13 @@ import type { ScreenDisplaySession } from '~/modules/screen/displaySession';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, reactive, watch } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/screen/displaySession';
 
 function flushPromises() {
 	return new Promise(resolve => setTimeout(resolve, 0));
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
 }
 
 function createRoute(query: Record<string, unknown> = {}, hash = '') {
@@ -370,19 +361,8 @@ describe('useScreenDisplaySession', () => {
 		expect(callbacks.getPresenceData(42, 7)).toMatchObject({ cardData: 'complete' });
 	});
 
-	/**
-	 * A Program monitor is live in every way an output is — it composes what playout
-	 * took, resolves media through the capability, and composites as program — and is
-	 * still not one of the Screen's outputs. It is the control surface an operator is
-	 * already looking at, embedded beside the controls that drive it.
-	 *
-	 * So it joins no presence and answers no Screen command. Joining would have every
-	 * presence-derived surface count the operator's own monitor as a client watching:
-	 * the Screen's connected count would read one with nothing open, and the Open
-	 * Screen Output Engines would name the operator's browser as an engine to state a
-	 * Graphic Asset Revision's cost against. Answering commands would flash Identify
-	 * on the one display an operator never needs to find.
-	 */
+	// A Program monitor renders like an output but is the operator's own control surface:
+	// joining presence would count it as a watching client, and commands would flash Identify on it.
 	it('does not start realtime when embed=monitor, so a Program monitor is no output', async () => {
 		const harness = createHarness({
 			query: { embed: 'monitor' },
@@ -424,17 +404,7 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.session.screenContext.isPreview?.value).toBe(false);
 	});
 
-	/**
-	 * Preview guides never appear in live Screen Outputs. This is the step of that
-	 * guarantee the URL owns: the guide flags carry no authority of their own, so a
-	 * Screen Output URL that asks for guides without asking to be a preview gets
-	 * none. Downstream is already pinned — the render model builds guide arrays only
-	 * when these flags are set, and the guide layer draws exclusively from those
-	 * arrays — so this closes the chain from query string to drawn guide.
-	 *
-	 * The Screen Output this hands back is a live one, and that is the point: it is
-	 * asked for as such here so the case cannot quietly become a preview.
-	 */
+	// Preview guides never appear on a live Screen Output: the guide flags count only with embed=preview.
 	it('draws no guides for guides=1 and safe=1 without embed=preview', async () => {
 		const harness = createHarness({
 			query: { guides: '1', safe: '1' },

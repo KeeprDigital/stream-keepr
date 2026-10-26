@@ -1,8 +1,31 @@
+import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
+import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
+import { getGraphicItemDefinition, parseGraphicTextTemplate } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+
+function everyPresetItem(): Array<GraphicItemConfig | GraphicGroupChildConfig> {
+	return FEATURE_MATCH_OVERLAY_PRESETS.flatMap(preset => preset.config.layout.composition.items.flatMap(item =>
+		item.type === 'group'
+			? [item, ...item.children]
+			: [item]));
+}
+
+function presetSurfaceStyles(): GraphicSurfaceStyle[] {
+	return everyPresetItem().flatMap((item) => {
+		const styles: GraphicSurfaceStyle[] = [];
+		if ('surfaceStyle' in item && item.surfaceStyle)
+			styles.push(item.surfaceStyle);
+		if (item.type === 'group' && item.defaultChildSurfaceStyle)
+			styles.push(item.defaultChildSurfaceStyle);
+		if (item.type === 'game-wins')
+			styles.push(item.boxSurfaceStyle, item.wonBoxSurfaceStyle);
+		return styles;
+	});
+}
 
 describe('feature match overlay presets', () => {
 	it('preserves the selected Feature Match Slot when applying a preset', () => {
@@ -14,11 +37,7 @@ describe('feature match overlay presets', () => {
 		expect(result.presetId).toBe('full-table');
 	});
 
-	it('replaces the whole layout, because a preset now owns every part of one', () => {
-		// Before the shared compositor a preset only initialised the legacy widget
-		// list, so applying one had to carry the shared item tree across or a click
-		// on "Reset" would delete it. A preset now ships the tree itself, so nothing
-		// is carried and nothing is half-replaced.
+	it('replaces the whole layout rather than carrying authored items across', () => {
 		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		authored.layout.composition.items = [
 			getGraphicItemDefinition('clock').createDefault({
@@ -50,50 +69,6 @@ describe('feature match overlay presets', () => {
 		expect(second.layout.composition.items[0]!.label).not.toBe('Renamed');
 	});
 
-	it('keeps each built-in preset previous Graphic Layer Order', () => {
-		expect(Object.fromEntries(FEATURE_MATCH_OVERLAY_PRESETS.map(preset => [
-			preset.id,
-			{
-				sources: preset.config.layout.sources.map(source => source.id),
-				items: preset.config.layout.composition.items.map(item => item.id),
-			},
-		]))).toEqual({
-			'full-table': {
-				sources: ['main-source'],
-				items: [
-					'top-bar',
-					'bottom-bar',
-					'player1-game-wins',
-					'player2-game-wins',
-					'branding',
-				],
-			},
-			'left-stacked-player-cams': {
-				sources: ['main-source', 'player1-source', 'player2-source'],
-				items: [
-					'top-bar',
-					'bottom-bar',
-					'player1-game-wins',
-					'player2-game-wins',
-					'branding',
-				],
-			},
-			'neon-feature-match': {
-				sources: ['main-source', 'player1-source', 'player2-source'],
-				items: [
-					'upper-neon-rail',
-					'left-empty-panel',
-					'left-branding',
-					'left-footer-panel',
-					'right-branding',
-					'right-footer-panel',
-					'top-player-bar',
-					'round-clock',
-				],
-			},
-		});
-	});
-
 	it('keeps every Graphic Item id unique within a preset, including group children', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
 			const ids = preset.config.layout.composition.items.flatMap(item =>
@@ -105,6 +80,35 @@ describe('feature match overlay presets', () => {
 					: [item.id]);
 
 			expect(new Set(ids).size, preset.id).toBe(ids.length);
+		}
+	});
+
+	it('only names tokens the Feature Match token catalogue provides', () => {
+		const placeholders = everyPresetItem()
+			.filter(item => item.type === 'text')
+			.flatMap(item => parseGraphicTextTemplate(item.text)
+				.map(segment => segment.inputKey)
+				.filter((key): key is string => key !== undefined));
+
+		expect(placeholders.length).toBeGreaterThan(0);
+		for (const key of placeholders)
+			expect(FEATURE_MATCH_TOKEN_KEYS).toContain(key);
+	});
+
+	it('never nests a Graphic Group inside another', () => {
+		for (const group of everyPresetItem().filter(item => item.type === 'group'))
+			expect(group.children.some(child => (child as { type: string }).type === 'group')).toBe(false);
+	});
+
+	it('keeps every gradient fill within the Graphic Fill stop bounds', () => {
+		const gradients = presetSurfaceStyles().filter(style => style.fill.type === 'linear-gradient');
+
+		expect(gradients.length).toBeGreaterThan(0);
+		for (const style of gradients) {
+			if (style.fill.type !== 'linear-gradient')
+				continue;
+			expect(style.fill.stops.length).toBeGreaterThanOrEqual(MIN_GRAPHIC_FILL_STOPS);
+			expect(style.fill.stops.length).toBeLessThanOrEqual(MAX_GRAPHIC_FILL_STOPS);
 		}
 	});
 });

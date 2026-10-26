@@ -17,15 +17,7 @@ import {
 	MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHICS_SCREEN,
 } from '~~/shared/types/graphics';
 
-/**
- * Authoring Graphic Source Selections and Graphic Input Bindings.
- *
- * The rule every assertion here serves is that an authoring surface cannot produce
- * a Broadcast Graphic the write path refuses. The server checks a derived selection
- * against the relation table, checks the `from` chains for cycles, and allows one
- * Graphic Input Binding per Graphic Input; these operations are where the same
- * refusals happen while an author is still holding the mouse.
- */
+// An authoring surface cannot produce a Broadcast Graphic the write path refuses.
 
 function textInput(key: string): GraphicInputDeclaration {
 	return {
@@ -125,11 +117,6 @@ describe('graphic Source Selection authoring', () => {
 		]);
 	});
 
-	/**
-	 * A derived selection whose parent no longer exists is exactly what the write
-	 * path refuses, so removing the parent removes the chain that followed it rather
-	 * than leaving a config an author cannot save.
-	 */
 	it('takes the whole derived chain with a removed Graphic Source Selection', () => {
 		const graphics = deleteGraphicSourceSelection(
 			stack({
@@ -165,13 +152,7 @@ describe('graphic Source Selection authoring', () => {
 		]);
 	});
 
-	/**
-	 * The caps are the write path's, restated where an author meets them.
-	 *
-	 * A ninth Graphic Source Selection on one Broadcast Graphic, or a forty-first
-	 * across the Screen, is a config the schema refuses — so the operation declines to
-	 * produce one rather than leaving an author holding a Screen they cannot save.
-	 */
+	// The write path's caps, met at authoring time.
 	it('declares no more Graphic Source Selections than one Broadcast Graphic may hold', () => {
 		const full = Array.from(
 			{ length: MAX_GRAPHIC_SOURCE_SELECTIONS_PER_BROADCAST_GRAPHIC },
@@ -279,16 +260,8 @@ describe('deriving one Graphic Source Selection from another', () => {
 		]);
 	});
 
-	/**
-	 * The two guards below are stated against hand-written declarations rather than
-	 * ones these operations produced, because neither is reachable through the current
-	 * relation vocabulary: the relation table is acyclic and no relationship yields the
-	 * kind it starts from. That is the same standing the resolution cycle guard and the
-	 * schema's own `graphicSourceDerivationsAcyclic` have, and both are kept for the
-	 * same reason — a future relationship that closes a cycle must meet a rule that is
-	 * already written down. Stating them here is what makes each guard's removal
-	 * visible instead of silent.
-	 */
+	// Unreachable through today's relation vocabulary, stated so a future cyclic relation
+	// meets a rule already written down.
 	it('never offers a Graphic Source Selection whose chain already reaches this one', () => {
 		const sources = [
 			{ key: 'p', label: 'Player', kind: 'player' as const },
@@ -499,13 +472,7 @@ describe('graphic Input Binding authoring', () => {
 	});
 });
 
-/**
- * The same rules from the write path's side.
- *
- * The server's cross-field validation is the contract this authoring layer mirrors,
- * so these assertions state both halves together: what the operations produce parses,
- * and the configs they refuse to produce are the ones the schema rejects.
- */
+// What the operations produce parses; what they refuse, the schema rejects.
 describe('what the write path accepts', () => {
 	it('accepts a Broadcast Graphic built entirely through these operations', () => {
 		const declared = addGraphicSourceSelection(

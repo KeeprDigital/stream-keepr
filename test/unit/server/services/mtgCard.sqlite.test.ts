@@ -1,41 +1,30 @@
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { drizzle } from 'drizzle-orm/d1';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+import * as schema from '~~/server/db/schema';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-const client = createClient({ url: 'file::memory:' });
-const sqliteDb = drizzle(client);
+// Card upserts over real SQL: one row per name whatever its case, fields a
+// refresh leaves out survive it, and the JSON arrays it supplies replace.
 
-vi.doMock('~~/server/db', () => ({ db: sqliteDb }));
+const harness = await createSqliteD1Harness();
+const db = drizzle(harness.database, { schema });
+
+vi.doMock('~~/server/db', () => ({ db }));
 
 const { mtgCardService } = await import('~~/server/services/mtgCard');
 
-describe('mtgCardService JSON bulk SQLite integration', () => {
-	beforeAll(async () => {
-		await client.execute(`
-			create table cards (
-				id integer primary key autoincrement,
-				name text not null,
-				game text not null default 'mtg',
-				scryfall_id text,
-				oracle_id text,
-				card_type text,
-				colors text,
-				cmc real,
-				mana_cost text,
-				deck_counter_types text not null default '[]',
-				deck_tokens text not null default '[]',
-				created_at integer not null default (unixepoch() * 1000),
-				updated_at integer not null default (unixepoch() * 1000),
-				unique (name, game)
-			)
-		`);
-	});
+afterAll(async () => await harness.close());
 
-	afterAll(async () => await client.close());
-
-	it('executes insert/conflict CTEs, preserves absent fields, and replaces supplied JSON arrays', async () => {
-		const service = mtgCardService();
-		await service.batchUpsert([
+describe('mtgCardService.batchUpsert', () => {
+	it('keeps fields a refresh leaves out and replaces the arrays it supplies', async () => {
+		const token = (id: string) => ({
+			id,
+			scryfallId: null,
+			name: id,
+			typeLine: null,
+			uri: null,
+		});
+		await mtgCardService().batchUpsert([
 			{
 				name: 'Integration Bolt',
 				game: 'mtg',
@@ -43,31 +32,19 @@ describe('mtgCardService JSON bulk SQLite integration', () => {
 				colors: 'R',
 				deckCounterTypes: ['charge'],
 				deckTokens: [
-					{
-						id: 'old-token',
-						scryfallId: null,
-						name: 'Old Token',
-						typeLine: null,
-						uri: null,
-					},
+					token('old-token'),
 				],
 			},
 		]);
 
-		const result = await service.batchUpsert([
+		const result = await mtgCardService().batchUpsert([
 			{
 				name: 'Integration Bolt',
 				game: 'mtg',
 				colors: 'U',
 				deckCounterTypes: ['energy'],
 				deckTokens: [
-					{
-						id: 'new-token',
-						scryfallId: 'new-token',
-						name: 'New Token',
-						typeLine: 'Token Creature',
-						uri: null,
-					},
+					token('new-token'),
 				],
 			},
 		]);
@@ -77,8 +54,31 @@ describe('mtgCardService JSON bulk SQLite integration', () => {
 			colors: 'U',
 			deckCounterTypes: ['energy'],
 			deckTokens: [
-				expect.objectContaining({ id: 'new-token', name: 'New Token' }),
+				expect.objectContaining({ id: 'new-token' }),
 			],
 		});
+	});
+
+	it('stores one card per name, whatever its case, keyed by the lowercase name', async () => {
+		const result = await mtgCardService().batchUpsert([
+			{ name: 'Lightning Bolt', game: 'mtg' },
+			{ name: 'LIGHTNING BOLT', game: 'mtg' },
+		]);
+
+		expect([
+			...result.keys(),
+		]).toEqual(['lightning bolt']);
+		expect((await db.select().from(schema.cards)).filter(card => card.name.toLowerCase() === 'lightning bolt')).toHaveLength(1);
+	});
+
+	it('upserts a thousand cards', async () => {
+		const result = await mtgCardService().batchUpsert(Array.from({ length: 1000 }, (_, index) => ({
+			name: `Card ${index}`,
+			game: 'mtg' as const,
+			deckCounterTypes: [],
+			deckTokens: [],
+		})));
+
+		expect(result.size).toBe(1000);
 	});
 });

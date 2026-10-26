@@ -1,8 +1,6 @@
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { TemplatePackagePreflightReport } from '~~/shared/types/templatePackage';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -22,32 +20,15 @@ import {
 } from '~~/shared/utils/templatePackageRequirements';
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 import { maximalFeatureMatchLayoutDocument } from '../../../helpers/featureMatchLayoutDocument';
+import { digestOf, pixelPng } from '../../../helpers/graphicsFixtures';
 import { collectStream } from '../../../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
 	writeTemplatePackage,
 } from '../../../helpers/templatePackageArchive';
 
-/**
- * What a `.sklayout` Template Package is held to, at the library seam an
- * installation actually crosses.
- *
- * The mirror of the `.skgraphic` suite, wired the same way: the real Graphics Asset
- * Library with the real Template Package Payload registry, because the rules under
- * test only exist once the envelope and the Feature Match Layout vocabulary are put
- * together. Every refusal here is a Template Package Preflight error, which is what
- * makes it atomic — it lands before an asset, an origin, a reference, or a Template
- * exists.
- */
-
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
+// A `.sklayout` Template Package at the library seam, mirroring the `.skgraphic`
+// suite. Every refusal is a Preflight error, so it lands before anything is written.
 
 let sequence = 0;
 
@@ -75,19 +56,19 @@ async function ingestImage(library: Library, name: string): Promise<GraphicAsset
 		duplicateContentPolicy: 'create-separate',
 		browserDecodeEvidence: {
 			outcome: 'decoded',
-			sourceDigest: digestOf(transparentPixelPng),
+			sourceDigest: digestOf(pixelPng),
 			width: 1,
 			height: 1,
 		},
-		declaredByteLength: transparentPixelPng.byteLength,
+		declaredByteLength: pixelPng.byteLength,
 	});
 	const completed = await library.uploadGraphicAsset({
 		operationId: operation.id,
 		initiatedBy: operation.initiatedBy,
 		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(transparentPixelPng, {
-			byteLength: transparentPixelPng.byteLength,
-			maximumByteLength: transparentPixelPng.byteLength,
+		bytes: createBoundedByteStream(pixelPng, {
+			byteLength: pixelPng.byteLength,
+			maximumByteLength: pixelPng.byteLength,
 		}),
 	});
 	return {
@@ -167,14 +148,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.templateRevision).toBe(4);
 	});
 
-	/**
-	 * The Frame, the Source Items, and the composition arrive exactly as they left —
-	 * the whole document, Graphic Asset References included, because the rewrite
-	 * happens on the way in at install rather than on the way out at export. A
-	 * maximal document is what makes this a real guarantee rather than a spot check:
-	 * every optional field of the vocabulary is present, so a field the transfer drops
-	 * fails here rather than months later on a design nobody can re-import.
-	 */
+	// A maximal document round-trips whole, so a field the transfer drops fails here.
 	it('carries the whole layout across unchanged', async () => {
 		const { document, archive } = await exportedPackage();
 		const travelled = readTemplatePackageParts(archive).template as FeatureMatchLayoutConfig;
@@ -182,13 +156,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(travelled).toEqual(document);
 	});
 
-	/**
-	 * "Event identities stripped", proved on the way in rather than assumed on the
-	 * way out. A Feature Match Slot assignment is Screen state that lives beside the
-	 * layout, so a document carrying one is not a layout with an extra field — it is a
-	 * document written by something that thought a layout was Screen state, and
-	 * installing it with the extra silently dropped would hide that.
-	 */
+	// A Feature Match Slot assignment is Screen state, never part of a layout.
 	it('refuses a Template document carrying a Feature Match Slot assignment', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -200,11 +168,6 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
 	});
 
-	/**
-	 * The envelope proves a Template document is data. It cannot prove it is a
-	 * Feature Match Layout, and a package that installed one that is not would leave
-	 * an author with a design nothing can place.
-	 */
 	it('refuses a Template document that is not a Feature Match Layout, before anything is installed', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -224,13 +187,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(after.map((asset: GraphicAsset) => asset.id)).toEqual(before.map((asset: GraphicAsset) => asset.id));
 	});
 
-	/**
-	 * The two package kinds are separate artifacts, not two flavours of one. A
-	 * Broadcast Graphic is a perfectly valid document that a `.sklayout` receiver must
-	 * refuse, because nothing on a Feature Match Overlay could render it — it has no
-	 * Frame and no Source Items, and it declares Graphic Inputs a layout has no way to
-	 * accept.
-	 */
+	// A Broadcast Graphic is a valid document a `.sklayout` receiver must still refuse.
 	it('refuses a Broadcast Graphic document travelling as a Feature Match Layout', async () => {
 		const { archive, itemAsset } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -242,12 +199,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
 	});
 
-	/**
-	 * The host vocabularies are the half of a layout the package cannot carry: a
-	 * Source Role, a Frame animation effect, and a Feature Match token are all terms
-	 * whose meaning the receiving installation supplies. So they are declared, and the
-	 * declarations are what a receiver checks before installing anything.
-	 */
+	// Host vocabulary terms are declared, and a receiver checks them before installing.
 	it('declares every host vocabulary term the layout uses', async () => {
 		const { archive } = await exportedPackage();
 		const declared = readTemplatePackageParts(archive).manifest.applicationCapabilities.filter(declaration => declaration.capability === 'host-vocabulary').map(declaration => declaration.identity);
@@ -259,19 +211,11 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			featureMatchLayoutVocabularyIdentity('frame-animation-effect', 'caustics'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Name'),
 			featureMatchLayoutVocabularyIdentity('token', 'player1Record'),
-			// Named by a Graphic Placeholder Style rather than by the template text: a
-			// style for a token this installation does not have can never apply.
 			featureMatchLayoutVocabularyIdentity('token', 'player1Deck'),
 		]));
 	});
 
-	/**
-	 * A `{placeholder}` that names no catalogue token is not a capability. The shared
-	 * Graphic Text Template mechanism renders one as an absence by design, so an
-	 * author who mis-typed `{player1name}` is looking at an empty run and a package
-	 * that refused to carry it would be refusing over a typo — with a message about a
-	 * vocabulary term and no way to satisfy it.
-	 */
+	// An unknown `{placeholder}` renders as an absence, so it travels undeclared.
 	it('carries a placeholder that names no token without claiming a capability for it', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -286,11 +230,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.outcome).not.toBe('rejected');
 	});
 
-	/**
-	 * A term this installation has never heard of is refused rather than installed
-	 * and rendered as an absence. A Source Item framing a role nobody routes is a hole
-	 * in a live layout, discovered on air.
-	 */
+	// An unknown host term is refused rather than rendered as a hole on air.
 	it('refuses a host vocabulary term this installation does not implement', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -310,12 +250,6 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
 	});
 
-	/**
-	 * The format-version half of the same pin. A sender at a newer Feature Match
-	 * Layout format version means something by `main` that this installation cannot
-	 * know, and an identity that still resolves is exactly the case only a version can
-	 * catch.
-	 */
 	it('refuses a host vocabulary at a format version this installation does not implement', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -331,12 +265,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
 	});
 
-	/**
-	 * A host vocabulary term the document uses and the manifest never declares is one
-	 * whose format version was never checked against anything. Installing it would
-	 * assume the sender meant the version we happen to implement, which is the
-	 * assumption a version-pinned envelope exists to refuse.
-	 */
+	// An undeclared term was never version-checked, so it is refused.
 	it('refuses a host vocabulary term the Template uses and the package never declares', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -353,11 +282,6 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		)).toBe(true);
 	});
 
-	/**
-	 * The Source Item Definition is the one Graphic Item Definition only a Feature
-	 * Match Layout may place, so a layout declares it and a receiver of a `.sklayout`
-	 * supports it.
-	 */
 	it('declares the host-owned Source Item Definition alongside the shared ones', async () => {
 		const { archive } = await exportedPackage();
 		const declared = readTemplatePackageParts(archive).manifest.applicationCapabilities.filter(declaration => declaration.capability === 'graphic-item-definition').map(declaration => declaration.identity);
@@ -374,16 +298,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		]));
 	});
 
-	/**
-	 * The newest context-gated Definition rides the same generic walk as the rest:
-	 * `templatePackageRequirements` reads the kind and its `configurationVersion`
-	 * off the Definition, so a Deck List Item is declared and version-pinned with
-	 * nothing deck-list-shaped anywhere in the packaging path. Pinned here so a
-	 * version bump on the Definition cannot ship without the declaration moving
-	 * with it. There is no `.skgraphic` twin for this: the Broadcast Graphics
-	 * palette withholds the kind, so no exporter here can write one into a
-	 * Broadcast Graphic document.
-	 */
+	// The Deck List Item is declared and version-pinned through the generic walk.
 	it('declares the Deck List Definition at its configuration version, discovered from the composition', async () => {
 		const { archive } = await exportedPackage();
 		const declarations = readTemplatePackageParts(archive).manifest.applicationCapabilities;
@@ -396,12 +311,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		}));
 	});
 
-	/**
-	 * Strict validation of the Source Role vocabulary in the document itself, not
-	 * only in what the manifest declares. A hand-edited archive that names a role
-	 * nobody implements while declaring only roles that are implemented would
-	 * otherwise pass the capability check and install a Source Item framing nothing.
-	 */
+	// The document's own Source Roles are checked, not only the manifest's declarations.
 	it('refuses a Source Item declaring a role outside the vocabulary', async () => {
 		const { archive } = await exportedPackage();
 		const parts = readTemplatePackageParts(archive);
@@ -421,12 +331,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
 	});
 
-	/**
-	 * The other direction of the same separation, and the reason host vocabularies
-	 * route by package kind at all. A Broadcast Graphic declares its own Graphic
-	 * Inputs in its document and has no host vocabulary, so a `.skgraphic` naming one
-	 * of these terms is a package no exporter here could have written.
-	 */
+	// A `.skgraphic` naming a layout host term is a package no exporter could write.
 	it('refuses a host vocabulary term declared by a `.skgraphic` package', async () => {
 		const sender = createLibrary(`skgraphic-sender-${++sequence}`);
 		const asset = await ingestImage(sender, 'Backdrop');
@@ -453,13 +358,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		expect(result.report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
 	});
 
-	/**
-	 * Application fonts are the one capability that deliberately does *not* route by
-	 * package kind. There is one application font registry and both hosts share it,
-	 * so both kinds are validated against the same list — routing would invent a
-	 * divergence that does not exist. This pins that as a decision rather than
-	 * leaving it as the shape the code happens to have (issue #138).
-	 */
+	// Both kinds share one application font registry (#138).
 	it('validates both package kinds against the one shared application font registry', async () => {
 		const sender = createLibrary(`font-sender-${++sequence}`);
 		const asset = await ingestImage(sender, 'Backdrop');

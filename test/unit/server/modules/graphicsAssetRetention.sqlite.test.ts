@@ -1,179 +1,73 @@
-import type {
-	GraphicsMultipartUploadIdentity,
-	InMemoryGraphicsStagingObjectStore,
-} from '~~/server/modules/graphics-asset-library/object-store';
-import type {
-	GraphicAssetId,
-	GraphicAssetRevisionId,
-	GraphicsIngestionOperation,
-} from '~~/shared/types/graphicsAsset';
+import type { GraphicsMultipartUploadIdentity, InMemoryGraphicsStagingObjectStore } from '~~/server/modules/graphics-asset-library/object-store';
+import type { GraphicAssetId } from '~~/shared/types/graphicsAsset';
+import type { TestGraphicsLibrary, TestGraphicsLibraryOptions } from '~~/test/helpers/graphicsLibrary';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
-	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
-	graphicsObjectIdentity,
-} from '~~/server/modules/graphics-asset-library/object-store';
+import { graphicsObjectIdentity } from '~~/server/modules/graphics-asset-library/object-store';
 import { createGraphicsRemoteSourceFetcher } from '~~/server/modules/graphics-asset-library/remote-source';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_EVIDENCE_CATEGORY_GROUPS } from '~~/shared/utils/graphicsAssetEvidence';
 import { evidenceOf } from '~~/test/helpers/graphicsEvidence';
+import { digestOf, pixelPng, pngWithTextChunks, replacementPng } from '~~/test/helpers/graphicsFixtures';
+import {
+	addScreenReference,
+	boundedBytes,
+	createTestGraphicsLibrary,
+	DAY,
+	HOUR,
+	ingestImage,
+	initiateImage,
+	removeScreenReference,
+	replaceImage,
+	uploadImage,
+} from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { collectStream } from '~~/test/helpers/storedZipArchive';
 import { acceptEveryTemplateDocument } from '~~/test/helpers/templatePackagePayload';
 
-const pixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
-const replacementPng = Uint8Array.of(
-	...pixelPng.slice(0, -12),
-	...emptyTextChunk,
-	...pixelPng.slice(-12),
-);
-
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
-
-function digestOf(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
-
-function decodeEvidence(bytes: Uint8Array) {
-	return {
-		outcome: 'decoded' as const,
-		sourceDigest: digestOf(bytes),
-		width: 1,
-		height: 1,
-	};
-}
-
 let harness: SqliteD1Harness;
 
-function createRetentionLibrary(
-	dependencies: Partial<Parameters<typeof createGraphicsAssetLibrary>[0]> = {},
-) {
-	let currentTime = new Date('2026-07-28T00:00:00.000Z');
-	let nextIdentity = 0;
-	const staging = createInMemoryStagingGraphicsObjectStore();
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const library = createGraphicsAssetLibrary({
+function createRetentionLibrary(dependencies: Partial<TestGraphicsLibraryOptions> = {}) {
+	return createTestGraphicsLibrary({
 		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical,
 		templatePayloads: acceptEveryTemplateDocument(),
-		now: () => currentTime,
-		generateIdentity: () => `retention-${++nextIdentity}`,
+		identityPrefix: 'retention',
 		...dependencies,
 	});
-	return {
-		library,
-		staging,
-		canonical,
-		now: () => currentTime,
-		advance(milliseconds: number) {
-			currentTime = new Date(currentTime.getTime() + milliseconds);
-		},
-		advanceTo(instant: string) {
-			currentTime = new Date(instant);
-		},
-	};
 }
 
-type RetentionLibrary = ReturnType<typeof createRetentionLibrary>;
+const author = { initiatedBy: 'retention-author' };
 
-async function ingestAsset(
-	context: RetentionLibrary,
-	options: { idempotencyKey: string; name: string; bytes?: Uint8Array },
-): Promise<GraphicsIngestionOperation> {
-	const bytes = options.bytes ?? pixelPng;
-	const operation = await context.library.initiateGraphicsIngestion({
-		idempotencyKey: options.idempotencyKey,
-		initiatedBy: 'retention-author',
-		name: options.name,
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(bytes),
-		declaredByteLength: bytes.byteLength,
-		duplicateContentPolicy: 'create-separate',
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(bytes, {
-			byteLength: bytes.byteLength,
-			maximumByteLength: bytes.byteLength,
-		}),
+function ingestAsset(context: TestGraphicsLibrary, options: { idempotencyKey: string; name: string; bytes?: Uint8Array }) {
+	return ingestImage(context, {
+		...author,
+		...options,
 	});
 }
 
-async function replaceAsset(
-	context: RetentionLibrary,
-	input: { assetId: GraphicAssetId; idempotencyKey: string; bytes: Uint8Array },
-): Promise<GraphicsIngestionOperation> {
-	const operation = await context.library.initiateGraphicAssetReplacement({
-		assetId: input.assetId,
-		idempotencyKey: input.idempotencyKey,
-		initiatedBy: 'retention-author',
-		sourceFileName: 'logo.png',
-		declaredMime: 'image/png',
-		browserDecodeEvidence: decodeEvidence(input.bytes),
-		declaredByteLength: input.bytes.byteLength,
-	});
-	context.advance(1000);
-	return await context.library.uploadGraphicAsset({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-		declaredMime: 'image/png',
-		bytes: createBoundedByteStream(input.bytes, {
-			byteLength: input.bytes.byteLength,
-			maximumByteLength: input.bytes.byteLength,
-		}),
+function replaceAsset(context: TestGraphicsLibrary, options: { assetId: GraphicAssetId; idempotencyKey: string; bytes: Uint8Array }) {
+	return replaceImage(context, {
+		...author,
+		...options,
 	});
 }
 
-/**
- * Persisted references are owned by graphics artifacts, not by the library, so
- * tests arrange them exactly as the Screen reference writer does and then
- * observe the consequences through the library interface.
- */
-async function addReference(input: {
-	referenceId: string;
-	assetId: GraphicAssetId;
-	revisionId: GraphicAssetRevisionId;
-	ownerSlot?: string;
-}) {
-	await harness.client.execute({
-		sql: `
-			INSERT INTO graphic_asset_references (
-				id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
-				event_id, created_at, updated_at
-			) VALUES (?, ?, ?, 'screen', '1', ?, NULL, 0, 0)
-		`,
-		args: [
-			input.referenceId,
-			input.assetId,
-			input.revisionId,
-			input.ownerSlot ?? 'layout.frame.backgroundImage',
-		],
+/** Abandoned or about-to-fail ingestions: initiated by the retention author, uploaded (or not) by the test. */
+function initiateAsset(context: TestGraphicsLibrary, options: { idempotencyKey: string; name: string; decoded?: boolean }) {
+	return initiateImage(context, {
+		...author,
+		...options,
 	});
 }
 
-/**
- * One Evidence entry written straight to the ledger, for the case the library
- * cannot stage through its own writers: an observation recorded long after the
- * subject it explains was already cleaned up.
- */
+const addReference = (input: Parameters<typeof addScreenReference>[1]) => addScreenReference(harness, input);
+const removeReference = (referenceId: string) => removeScreenReference(harness, referenceId);
+
+/** An Evidence entry written straight to the ledger: an observation recorded after its subject was purged. */
 async function recordLateEvidence(input: {
 	id: string;
 	assetId: GraphicAssetId;
@@ -192,13 +86,6 @@ async function recordLateEvidence(input: {
 	});
 }
 
-async function removeReference(referenceId: string) {
-	await harness.client.execute({
-		sql: 'DELETE FROM graphic_asset_references WHERE id = ?',
-		args: [referenceId],
-	});
-}
-
 beforeEach(async () => {
 	harness = await createSqliteD1Harness();
 });
@@ -209,14 +96,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 	describe('staged input expiry', () => {
 		it('expires an incomplete transfer after 24 hours without verified progress', async () => {
 			const context = createRetentionLibrary();
-			const abandoned = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'abandoned-transfer',
-				initiatedBy: 'retention-author',
-				name: 'Abandoned transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const abandoned = await initiateAsset(context, { idempotencyKey: 'abandoned-transfer', name: 'Abandoned transfer', decoded: false });
 
 			context.advance(DAY - 1);
 			await context.library.runGraphicsRetention();
@@ -243,14 +123,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 
 		it('requires a new operation once staged input has expired', async () => {
 			const context = createRetentionLibrary();
-			const abandoned = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'expired-needs-new-operation',
-				initiatedBy: 'retention-author',
-				name: 'Expired transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const abandoned = await initiateAsset(context, { idempotencyKey: 'expired-needs-new-operation', name: 'Expired transfer', decoded: false });
 			context.advance(DAY + 1);
 			await context.library.runGraphicsRetention();
 
@@ -258,38 +131,14 @@ describe('scheduled Graphics Asset Library retention', () => {
 				operationId: abandoned.id,
 				initiatedBy: abandoned.initiatedBy,
 			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
-			await expect(context.library.uploadGraphicAsset({
-				operationId: abandoned.id,
-				initiatedBy: abandoned.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+			await expect(uploadImage(context, abandoned)).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 		});
 
 		it('retains completed input awaiting retry for seven days', async () => {
 			const context = createRetentionLibrary();
 			context.canonical.injectTransientFailure('create', 2);
-			const operation = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'retryable-completed-input',
-				initiatedBy: 'retention-author',
-				name: 'Interrupted publication',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
-			const failed = await context.library.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			const operation = await initiateAsset(context, { idempotencyKey: 'retryable-completed-input', name: 'Interrupted publication' });
+			const failed = await uploadImage(context, operation);
 			expect(failed).toMatchObject({
 				stage: 'failed',
 				failure: { retryable: true },
@@ -324,24 +173,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 		it('gives a transfer that failed before completing the 24-hour window', async () => {
 			const context = createRetentionLibrary();
 			context.staging.injectTransientFailure('create', 2);
-			const operation = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'mid-transfer-failure',
-				initiatedBy: 'retention-author',
-				name: 'Interrupted transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
-			const failed = await context.library.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			const operation = await initiateAsset(context, { idempotencyKey: 'mid-transfer-failure', name: 'Interrupted transfer' });
+			const failed = await uploadImage(context, operation);
 			// The transfer never completed, so this is an incomplete transfer even
 			// though its stage is now 'failed'.
 			expect(failed).toMatchObject({
@@ -375,11 +208,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('gives an approved remote copy awaiting confirmation the seven-day promise', async () => {
-			// A remote copy stages its complete input through its own path rather
-			// than the streamed-upload one. If that path skipped the durable
-			// transfer-completed fact, the copy would read as an incomplete
-			// transfer and be expired after 24 hours instead of the seven days its
-			// staged input was promised.
+			// A remote copy stages through its own path, which must still record the
+			// transfer as complete, or it would expire after 24 hours, not seven days.
 			const context = createRetentionLibrary({
 				remoteSource: {
 					async open() {
@@ -440,11 +270,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('gives a staged Template Package awaiting installation the seven-day promise', async () => {
-			// A Template Package stages a complete input exactly like an upload, and
-			// then rests while it waits to be installed. If that resting stage were
-			// not recognised as holding staged input, the package would either be
-			// expired against the 24-hour incomplete-transfer guarantee or never
-			// reclaimed at all — and its author was promised seven days.
+			// A package resting before installation still holds complete staged input.
 			const context = createRetentionLibrary();
 			const backdrop = await ingestAsset(context, {
 				idempotencyKey: 'package-source',
@@ -485,10 +311,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			const staged = await context.library.uploadGraphicAsset({
 				operationId: operation.id,
 				initiatedBy: operation.initiatedBy,
-				bytes: createBoundedByteStream(archive, {
-					byteLength: archive.byteLength,
-					maximumByteLength: archive.byteLength,
-				}),
+				bytes: boundedBytes(archive),
 			});
 			expect(staged).toMatchObject({ stage: 'awaiting-installation' });
 			const stagedAt = new Date(staged.updatedAt).getTime();
@@ -517,17 +340,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('leaves an operation whose resumed transfer completed out of the candidate list', async () => {
-			// The fixture is aged past the seven-day completed-input promise on
-			// purpose: with the deadline satisfied, the retained-stage list is the
-			// only thing left that can spare it. `completed` is absent from that
-			// list, so this operation is never listed as a candidate — and the
-			// claim's stage predicate would refuse it even if it were. Either way
-			// what spares it is not the expiry's observed-instant guard, which the
-			// test below covers.
-			//
-			// The listing is wrapped only to record, so "never listed" is observed
-			// here rather than narrated. Without that, this test passes whether the
-			// stage list excludes the operation or not.
+			// Aged past the seven-day promise, so only the retained-stage list can spare
+			// it; the listing is wrapped to observe that it is never a candidate.
 			const delegate = createD1GraphicsAssetCatalogue(harness.database);
 			const observed: string[] = [];
 			const catalogue: typeof delegate = {
@@ -539,25 +353,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 				},
 			};
 			const context = createRetentionLibrary({ catalogue });
-			const resumed = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'resumed-transfer-completed',
-				initiatedBy: 'retention-author',
-				name: 'Resumed transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const resumed = await initiateAsset(context, { idempotencyKey: 'resumed-transfer-completed', name: 'Resumed transfer' });
 			context.advance(DAY + 1);
-			const completed = await context.library.uploadGraphicAsset({
-				operationId: resumed.id,
-				initiatedBy: resumed.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			const completed = await uploadImage(context, resumed);
 
 			context.advanceTo(new Date(
 				new Date(completed.updatedAt).getTime() + 7 * DAY,
@@ -576,11 +374,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 		});
 
 		it('cancels expiry when a durable checkpoint advanced since observation', async () => {
-			// The guard is the expiry's compare-and-swap on the instant the sweep
-			// observed, so the operation has to remain in a stage the sweep would
-			// otherwise expire: a resume that also left the retained stages would be
-			// refused by the claim's stage predicate instead, and the observed
-			// instant would never be the reason for anything.
+			// The operation stays in an expirable stage, so the observed-instant
+			// compare-and-swap is the only thing that can cancel the expiry.
 			const delegate = createD1GraphicsAssetCatalogue(harness.database);
 			const observed: string[] = [];
 			const catalogue: typeof delegate = {
@@ -604,14 +399,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 				},
 			};
 			const context = createRetentionLibrary({ catalogue });
-			const resumed = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'progress-cancels-expiry',
-				initiatedBy: 'retention-author',
-				name: 'Resumed transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const resumed = await initiateAsset(context, { idempotencyKey: 'progress-cancels-expiry', name: 'Resumed transfer', decoded: false });
 
 			context.advance(DAY + 1);
 			const swept = await context.library.runGraphicsRetention();
@@ -700,14 +488,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 
 		it('releases the staging reservation and staged bytes it expired', async () => {
 			const context = createRetentionLibrary();
-			const abandoned = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'expiry-releases-capacity',
-				initiatedBy: 'retention-author',
-				name: 'Abandoned transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const abandoned = await initiateAsset(context, { idempotencyKey: 'expiry-releases-capacity', name: 'Abandoned transfer', decoded: false });
 			expect((await context.library.getCapacity()).staging.reservedBytes)
 				.toBe(pixelPng.byteLength);
 
@@ -852,24 +633,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 		it('reports retained bytes rather than reclaimed ones when the staged objects survive', async () => {
 			const context = createRetentionLibrary();
 			context.canonical.injectTransientFailure('create', 2);
-			const operation = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'unreleasable-staged-input',
-				initiatedBy: 'retention-author',
-				name: 'Interrupted publication',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
-			const failed = await context.library.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			const operation = await initiateAsset(context, { idempotencyKey: 'unreleasable-staged-input', name: 'Interrupted publication' });
+			const failed = await uploadImage(context, operation);
 			const identity = graphicsObjectIdentity(`ingestion/${operation.id}/source`);
 			await expect(context.staging.readMetadata(identity))
 				.resolves
@@ -901,23 +666,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 
 		it('leaves the rest of the batch for the next sweep once the store is unavailable', async () => {
 			const context = createRetentionLibrary();
-			const first = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'unavailable-store-first',
-				initiatedBy: 'retention-author',
-				name: 'First abandoned transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const first = await initiateAsset(context, { idempotencyKey: 'unavailable-store-first', name: 'First abandoned transfer', decoded: false });
 			context.advance(1000);
-			const second = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'unavailable-store-second',
-				initiatedBy: 'retention-author',
-				name: 'Second abandoned transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const second = await initiateAsset(context, { idempotencyKey: 'unavailable-store-second', name: 'Second abandoned transfer', decoded: false });
 
 			context.advance(DAY + 1);
 			// Exactly the two deletes the first candidate needs, so a sweep that
@@ -963,25 +714,9 @@ describe('scheduled Graphics Asset Library retention', () => {
 				},
 			};
 			const context = createRetentionLibrary({ catalogue });
-			const resumed = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'claim-refused-keeps-objects',
-				initiatedBy: 'retention-author',
-				name: 'Resumed transfer',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
+			const resumed = await initiateAsset(context, { idempotencyKey: 'claim-refused-keeps-objects', name: 'Resumed transfer' });
 			context.canonical.injectTransientFailure('create', 2);
-			await context.library.uploadGraphicAsset({
-				operationId: resumed.id,
-				initiatedBy: resumed.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			await uploadImage(context, resumed);
 			const identity = graphicsObjectIdentity(`ingestion/${resumed.id}/source`);
 
 			context.advance(8 * DAY);
@@ -1001,32 +736,11 @@ describe('scheduled Graphics Asset Library retention', () => {
 	});
 
 	describe('stranded staged input', () => {
-		/**
-		 * One operation whose staged input the sweep expires but cannot release:
-		 * publication fails retryably, the retention deadline passes, and the
-		 * staging store is unavailable for exactly the sweep's own deletes. The
-		 * #358 trade: the CAS claim wins, the bytes strand.
-		 */
-		async function strandStagedInput(context: RetentionLibrary) {
+		/** Staged input the sweep expires but cannot delete: the claim wins, the bytes strand (#358). */
+		async function strandStagedInput(context: TestGraphicsLibrary) {
 			context.canonical.injectTransientFailure('create', 2);
-			const operation = await context.library.initiateGraphicsIngestion({
-				idempotencyKey: 'stranded-staged-input',
-				initiatedBy: 'retention-author',
-				name: 'Stranded publication',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-			});
-			const failed = await context.library.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
-			});
+			const operation = await initiateAsset(context, { idempotencyKey: 'stranded-staged-input', name: 'Stranded publication' });
+			const failed = await uploadImage(context, operation);
 			context.advanceTo(new Date(new Date(failed.updatedAt).getTime() + 7 * DAY).toISOString());
 			context.staging.injectTransientFailure('delete', 2);
 			await context.library.runGraphicsRetention();
@@ -1593,42 +1307,24 @@ describe('scheduled Graphics Asset Library retention', () => {
 				confirmation: 'purge-now',
 			});
 
-			const reusedIdentity = createGraphicsAssetLibrary({
-				catalogue: createD1GraphicsAssetCatalogue(harness.database),
-				staging: createInMemoryStagingGraphicsObjectStore(),
-				canonical: createInMemoryCanonicalGraphicsObjectStore(),
-				now: context.now,
+			const reusedIdentity = createRetentionLibrary({
+				start: context.now().toISOString(),
 				generateIdentity: () => assetId,
 			});
-			const operation = await reusedIdentity.initiateGraphicsIngestion({
+			const attempted = await ingestAsset(reusedIdentity, {
 				idempotencyKey: 'tombstoned-identity-reingestion',
-				initiatedBy: 'retention-author',
 				name: 'Re-ingested logo',
-				sourceFileName: 'logo.png',
-				declaredMime: 'image/png',
-				browserDecodeEvidence: decodeEvidence(pixelPng),
-				declaredByteLength: pixelPng.byteLength,
-				duplicateContentPolicy: 'create-separate',
-			});
-			const attempted = await reusedIdentity.uploadGraphicAsset({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				declaredMime: 'image/png',
-				bytes: createBoundedByteStream(pixelPng, {
-					byteLength: pixelPng.byteLength,
-					maximumByteLength: pixelPng.byteLength,
-				}),
 			});
 			expect(attempted.stage).toBe('failed');
 			expect(attempted.result).toBeUndefined();
-			await expect(reusedIdentity.listGraphicAssets({
+			await expect(reusedIdentity.library.listGraphicAssets({
 				lifecycleStates: ['active', 'retired', 'trashed'],
 			})).resolves.toEqual([]);
 		});
 	});
 
 	describe('shared content garbage collection', () => {
-		async function purgeNow(context: RetentionLibrary, assetId: GraphicAssetId) {
+		async function purgeNow(context: TestGraphicsLibrary, assetId: GraphicAssetId) {
 			await context.library.trashGraphicAsset({ assetId });
 			await context.library.purgeTrashedGraphicAsset({
 				assetId,
@@ -2115,11 +1811,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 	});
 
 	describe('reading the Evidence ledger', () => {
-		/**
-		 * A ledger with entries from two assets, two actors, and several
-		 * categories, so every filter has something it must exclude as well as
-		 * something it must find.
-		 */
+		/** Two assets, two actors, several categories: every filter must exclude as well as find. */
 		async function populatedLedger() {
 			const context = createRetentionLibrary();
 			const first = await ingestAsset(context, {
@@ -2219,10 +1911,8 @@ describe('scheduled Graphics Asset Library retention', () => {
 				name: 'Simultaneous logo',
 			});
 			const { assetId, revisionId } = published.result!;
-			// A reference holds the first revision out of the retention rows while
-			// it is superseded, so once it is released both revisions are scheduled
-			// by the same publication and share a recorded instant. That is where a
-			// cursor comparing only the timestamp repeats an entry or loses one.
+			// Releasing the reference schedules both revisions in one publication, so
+			// their entries share an instant: the case a timestamp-only cursor gets wrong.
 			await addReference({ referenceId: 'reference-same-instant', assetId, revisionId });
 			const second = await replaceAsset(context, {
 				assetId,
@@ -2233,11 +1923,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			await replaceAsset(context, {
 				assetId,
 				idempotencyKey: 'ledger-same-instant-third',
-				bytes: Uint8Array.of(
-					...replacementPng.slice(0, -12),
-					...emptyTextChunk,
-					...replacementPng.slice(-12),
-				),
+				bytes: pngWithTextChunks(2),
 			});
 			const everything = await evidenceOf(context.library);
 			expect(everything).toHaveLength(2);
@@ -2480,10 +2166,7 @@ describe('scheduled Graphics Asset Library retention', () => {
 			});
 			const purgedAt = context.now().getTime();
 
-			// A provenance question about a purged identity can arrive at any time,
-			// and the tombstone is there to answer it. Evidence written more than a
-			// year after the purge would be sealed already expired against the
-			// terminal anchor and destroyed by the same sweep that sealed it.
+			// Evidence written over a year after the purge must not be sealed already expired.
 			context.advanceTo(new Date(purgedAt + 400 * DAY).toISOString());
 			const observedAt = context.now().getTime();
 			await recordLateEvidence({ id: 'late-observation', assetId, recordedAt: observedAt });

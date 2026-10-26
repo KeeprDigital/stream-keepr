@@ -76,12 +76,7 @@ describe('graphicInputAuthoring', () => {
 		]);
 	});
 
-	/**
-	 * Renaming frees the label but never the key, so counting labels alone reused
-	 * 'Input 1' and had to disambiguate its key into `input-1-2` — a shape that
-	 * appears only after a rename, that no author predicts, and that they must
-	 * then reproduce exactly in a `{placeholder}` (#234).
-	 */
+	// Renaming frees a label but never a key (#234).
 	it('does not spend a key twice when a rename frees the name that made it', () => {
 		let graphics = addGraphicInput(stack(), 'lower-third', 'text');
 		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', { label: 'leftName' });
@@ -122,12 +117,7 @@ describe('graphicInputAuthoring', () => {
 		expect(patched[0]!.inputs![1]).toMatchObject({ key: 'input-2', type: 'toggle' });
 	});
 
-	/**
-	 * A Graphic Input's label is what an operator reads beside its field in Live
-	 * Control, and the write path requires at least one character of it. An author
-	 * clearing the field is mid-rename rather than asking for a nameless input, so the
-	 * previous name stands.
-	 */
+	// A blank label is mid-rename; the write path requires one character, so the old name stands.
 	it('refuses a blank label, which is a Graphic Input the write path rejects', () => {
 		const graphics = addGraphicInput(stack(), 'lower-third', 'text');
 
@@ -153,11 +143,7 @@ describe('graphicInputAuthoring', () => {
 		});
 	});
 
-	/**
-	 * A default outside its own options is a value the input reports unavailable, so
-	 * every Broadcast Graphic placed from the declaration would start on something it
-	 * can never show. An author editing the list is saying what this input may be.
-	 */
+	// A default outside the options would start every placed graphic unavailable.
 	it('drops a choice Graphic Input’s default when the option list stops offering it', () => {
 		let graphics = addGraphicInput(stack(), 'lower-third', 'choice');
 		graphics = setGraphicInputChoiceOptions(graphics, 'lower-third', 'input-1', [
@@ -178,12 +164,7 @@ describe('graphicInputAuthoring', () => {
 		expect(orphaned[0]!.inputs![0]).toMatchObject({ default: null });
 	});
 
-	/**
-	 * Nothing set a media Graphic Input declaration's kind before #336 — the writes
-	 * around it were all for the Media Graphic ITEM, whose kind comes from its chosen
-	 * asset — so a runtime silent-video Graphic Input could not be declared through
-	 * the product at all. The declared kind is what Live Control's picker offers.
-	 */
+	// The declared kind is what Live Control's picker offers (#336).
 	it('declares which media a media Graphic Input accepts, dropping a default of the other kind', () => {
 		let graphics = addGraphicInput(stack(), 'lower-third', 'media');
 		graphics = patchGraphicInput(graphics, 'lower-third', 'input-1', {

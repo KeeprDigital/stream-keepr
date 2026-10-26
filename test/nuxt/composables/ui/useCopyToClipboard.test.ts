@@ -95,15 +95,7 @@ describe('useCopyToClipboard', () => {
 		expect(execCommand).toHaveBeenCalledWith('copy');
 	});
 
-	/**
-	 * The defect this composable was rebuilt for (#257).
-	 *
-	 * VueUse's `copy()` swallows a denied Clipboard API write into its `legacyCopy`,
-	 * which calls `document.execCommand('copy')` and throws the boolean away — then
-	 * sets `copied` true and resolves. Success and failure left the seam looking
-	 * byte-for-byte identical, so an operator whose copy failed was told "URL Copied"
-	 * and walked away with whatever was on their clipboard before.
-	 */
+	// VueUse's `copy()` reports success even when its legacy fallback did not copy (#257).
 	it('reports a failure when the legacy write answers that it did not copy', async () => {
 		writeText.mockRejectedValue(new Error('NotAllowedError'));
 		execCommand.mockReturnValue(false);
@@ -120,19 +112,7 @@ describe('useCopyToClipboard', () => {
 		expect(mocks.toast.add).not.toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
 	});
 
-	/**
-	 * A throwing `execCommand` is the one failure the pre-#257 composable could actually
-	 * see, and the rebuild nearly lost it: VueUse calls `legacyCopy` *outside* the try
-	 * that guards its Clipboard API write, so the throw propagated out of `copy()` and
-	 * into the old catch. Reading the legacy result put that call in this file, where a
-	 * `try`/`finally` with no `catch` would have let it escape `copyToClipboard`
-	 * entirely — an unhandled rejection, and the operator told nothing at all, which is
-	 * a worse silence than the wrong toast #257 was filed for.
-	 *
-	 * Reachable rather than theoretical: `execCommand` is long deprecated, and a browser
-	 * that has removed it throws `TypeError: document.execCommand is not a function`
-	 * through this exact path.
-	 */
+	// A browser that has removed `execCommand` throws here; that must still reach the operator.
 	it('reports a failure, rather than throwing, when the legacy write itself throws', async () => {
 		stubClipboardApi(false);
 		execCommand.mockImplementation(() => {
@@ -162,12 +142,7 @@ describe('useCopyToClipboard', () => {
 		expect(document.querySelectorAll('textarea')).toHaveLength(0);
 	});
 
-	/**
-	 * Both of the caller's words, not just its description. The title a caller names is
-	 * deliberately different from the default here: the two live Screen callers both
-	 * happen to pass "Nothing copied", so a test using their wording cannot tell an
-	 * honoured override from a hard-coded string.
-	 */
+	// The title differs from the default, so an honoured override is distinguishable from a hard-coded one.
 	it('does not write at all when there is no value, and says what the caller said', async () => {
 		const { copyToClipboard } = useCopyToClipboard();
 
@@ -198,18 +173,7 @@ describe('useCopyToClipboard', () => {
 		});
 	});
 
-	/**
-	 * The second half of #257: one error pair covered "there was nothing to hand over"
-	 * and "the clipboard would not take it", so a caller naming the first necessarily
-	 * mis-named the second.
-	 *
-	 * The split is by who knows the answer. Only the caller knows why it had nothing —
-	 * on the Screen surfaces it is an asset access refusal, and telling that operator
-	 * "copy failed" sends them to the address in their own browser's bar, which is the
-	 * media-losing URL the refusal exists to withhold (#231, #250). Only this composable
-	 * knows the clipboard would not take the write, so it owns those words outright and
-	 * a caller cannot overwrite them with a reason that does not apply.
-	 */
+	// The caller words "nothing to copy"; only this composable words "the clipboard refused" (#257).
 	it('names the two failures differently, and will not let a caller confuse them', async () => {
 		const refusal = {
 			nothingToCopyTitle: 'Nothing copied',

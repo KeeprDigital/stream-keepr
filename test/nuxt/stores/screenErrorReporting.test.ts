@@ -2,16 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-
-/*
- * `useAsyncAction` has never been mocked here, unlike in this store's other two suites,
- * which stood a hand-written copy in until #311. It is the seam every write reports
- * through, and what these tests are about is the prose that comes out of it — a
- * stand-in that ignores `errorRef` can assert nothing about what an operator is shown.
- * The real composable is auto-imported, does no I/O and starts no timers (#241, #245).
- */
 
 const mockRepo = {
 	list: vi.fn(),
@@ -24,46 +15,19 @@ const mockRepo = {
 	remove: vi.fn(),
 };
 
-const mockAbly = createMockRealtime();
-
 mockNuxtImport('useScreenRepository', () => () => mockRepo);
-mockNuxtImport('useRealtime', () => () => mockAbly);
-
-/**
- * The request line a failure below carries unless the row names another, since the list
- * route is what most of them exercise. It is asserted on by the two rows that read a
- * status line rather than a sentence, so it is a constant passed explicitly rather than
- * a parameter default on the fixture.
- *
- * The fixture itself is `test/helpers/transportFailure`, of which this suite held the
- * third hand copy until #288 (#262 lifted it, #263 took the second).
- */
-const LIST_REQUEST = `[GET] "/api/events/1/screens"`;
 
 /** A refusal the authority explained in the response body, carrying no code. */
-function explainedRefusal(status: number, statusText: string, message: string, request = LIST_REQUEST) {
+function explainedRefusal(status: number, message: string) {
 	return transportFailure({
 		status,
-		statusText,
-		body: { statusCode: status, statusMessage: statusText, message },
-		request,
+		body: { statusCode: status, message },
 	});
 }
 
 /**
- * What the operator is shown when a Screen request is refused.
- *
- * Everything this store reports ends at an `Error.message`, and for a `$fetch`
- * failure that message is the transport's status line — `[GET] "…": 409 Conflict` —
- * which names neither what was refused nor what to do about it. The sentence the
- * server wrote about the show is in the response body, and since #245 the
- * live-session store reads it; this is the same adoption for the Screen store, whose
- * `error` is what the Screens page puts in front of an operator (#262).
- *
- * The boundary is `failureSentence`'s and is documented there: a sub-500 status is
- * the authority answering this request, a 5xx is the server failing and its prose has
- * been rewritten to a placeholder on the way out, and a failure with no status never
- * reached the server at all.
+ * Every Screen request reports through one seam, so the Screens page shows the
+ * authority's sentence; `failureSentence`'s own suite owns which failures carry one.
  */
 describe('useScreenStore error reporting', () => {
 	let store: ReturnType<typeof useScreenStore>;
@@ -71,73 +35,44 @@ describe('useScreenStore error reporting', () => {
 	beforeEach(() => {
 		store = useScreenStore();
 		store.$reset();
-		// Reset rather than clear: these rows differ in the failure each route answers
-		// with, and `clearAllMocks` leaves a previous row's rejection installed — which
-		// is how the conflict-retry's refresh once picked up an unrelated 404.
+		// Reset, not clear: a previous row's rejection must not leak into the next route.
 		vi.resetAllMocks();
 	});
 
-	it('reports the list route’s sentence rather than its status line', async () => {
-		mockRepo.list.mockRejectedValue(explainedRefusal(403, 'Forbidden', 'This Event has been archived'));
+	it.each([
+		[
+			'the list',
+			'list',
+			(s: ReturnType<typeof useScreenStore>) => s.loadScreensByEventId(1),
+		],
+		[
+			'the slug read',
+			'getBySlug',
+			(s: ReturnType<typeof useScreenStore>) => s.loadScreenBySlug(1, 'main').catch(() => {}),
+		],
+		[
+			'the single-Screen read',
+			'getById',
+			(s: ReturnType<typeof useScreenStore>) => s.getScreenById(1, 5),
+		],
+		[
+			'a create',
+			'create',
+			(s: ReturnType<typeof useScreenStore>) => s.createScreen(1, { name: 'Screen', slug: 'main', currentMode: 'background' }),
+		],
+	] as const)('reports %s\'s refusal in the authority\'s words', async (_, method, request) => {
+		mockRepo[method].mockRejectedValue(explainedRefusal(409, 'This Event has been archived'));
 
-		await store.loadScreensByEventId(1);
+		await request(store);
 
 		expect(store.error).toBe('This Event has been archived');
 	});
 
-	it('reports the slug route’s sentence rather than its status line', async () => {
-		mockRepo.getBySlug.mockRejectedValue(explainedRefusal(
-			409,
-			'Conflict',
-			'This Screen has been retired',
-			`[GET] "/api/events/1/screens/by-slug/main"`,
-		));
-
-		await expect(store.loadScreenBySlug(1, 'main')).rejects.toThrow();
-
-		expect(store.error).toBe('This Screen has been retired');
-	});
-
-	it('reports the single-Screen route’s sentence rather than its status line', async () => {
-		mockRepo.getById.mockRejectedValue(explainedRefusal(
-			404,
-			'Not Found',
-			'That Screen no longer belongs to this Event',
-			`[GET] "/api/events/1/screens/5"`,
-		));
-
-		await store.getScreenById(1, 5);
-
-		expect(store.error).toBe('That Screen no longer belongs to this Event');
-	});
-
-	it('reports a refused create in the words the authority used', async () => {
-		// The writes report through the Module, which is handed the same reporting
-		// wrapper the store's own actions use — one seam, not two that can drift.
-		mockRepo.create.mockRejectedValue(explainedRefusal(
-			409,
-			'Conflict',
-			'A Screen with that slug already exists',
-			`[POST] "/api/events/1/screens"`,
-		));
-
-		await store.createScreen(1, { name: 'Screen', slug: 'main', currentMode: 'background' });
-
-		expect(store.error).toBe('A Screen with that slug already exists');
-	});
-
-	it('reports a refused delete in the words the authority used, and puts the Screen back', async () => {
-		// The rollback runs off the substituted failure exactly as it ran off the raw
-		// one: what the wrapper changes is the prose, not whether the action failed.
+	it('puts the Screen back when a delete is refused, and reports why', async () => {
 		store.screens = [
 			createMockScreen({ id: 5, name: 'Main' }),
 		];
-		mockRepo.remove.mockRejectedValue(explainedRefusal(
-			409,
-			'Conflict',
-			'This Screen is on air and cannot be deleted',
-			`[DELETE] "/api/events/1/screens/5"`,
-		));
+		mockRepo.remove.mockRejectedValue(explainedRefusal(409, 'This Screen is on air and cannot be deleted'));
 
 		await store.removeScreen(1, 5);
 
@@ -145,26 +80,27 @@ describe('useScreenStore error reporting', () => {
 		expect(store.screens.map(s => s.id)).toEqual([5]);
 	});
 
-	it('carries the sentence to a debounced write’s own caller, not only to the banner', async () => {
-		// A config write answers its caller by rejecting a promise of its own, and the
-		// editing surface reads that rejection for the message it shows beside the
-		// field. Substituting the failure inside the action is what puts the sentence
-		// on both paths.
+	// A debounced write answers its own caller, which shows the message beside the field, as well as the banner.
+	it.each([
+		[
+			'Screen-config',
+			(s: ReturnType<typeof useScreenStore>) => s.updateScreenConfig(1, 5, { width: 1920 }),
+			'updateScreenConfig',
+		],
+		[
+			'mode-config',
+			(s: ReturnType<typeof useScreenStore>) => s.updateModeConfig(1, 5, 'card', { scale: 2 }),
+			'updateModeConfig',
+		],
+	] as const)('carries a refused %s write\'s sentence to its caller and to the banner', async (_, write, method) => {
 		vi.useFakeTimers();
 		store.screens = [
 			createMockScreen({ id: 5, stateVersion: 1 }),
 		];
-		// Deliberately not a 409: that status is the conflict-retry's own signal, and
-		// what this row is about is the reporting seam, not the retry.
-		mockRepo.updateScreenConfig.mockRejectedValue(explainedRefusal(
-			403,
-			'Forbidden',
-			'This Event has been archived',
-			`[PATCH] "/api/events/1/screens/5/screen-config"`,
-		));
+		// Not a 409, which is the conflict retry's own signal.
+		mockRepo[method].mockRejectedValue(explainedRefusal(403, 'This Event has been archived'));
 
-		const write = store.updateScreenConfig(1, 5, { width: 1920 });
-		const settled = expect(write).rejects.toThrow('This Event has been archived');
+		const settled = expect(write(store)).rejects.toThrow('This Event has been archived');
 		await vi.advanceTimersByTimeAsync(300);
 		await settled;
 
@@ -172,62 +108,19 @@ describe('useScreenStore error reporting', () => {
 		vi.useRealTimers();
 	});
 
-	it('carries a refused mode-config write’s sentence the same way, from its own queue', async () => {
-		// The Module has five `state.executeAction(` sites, and this is the one that was
-		// left unpinned — third of the five in file order, and the first of the two
-		// debounced queues. It reports through the same seam as the Screen-config queue
-		// above and shares its debounce, its `writeQueue` and its `errorRef`/`onError`
-		// options; what differs is the mode it carries, which its repository call takes
-		// as an argument and its queue key includes. #353's adoption row killed the other
-		// four and left this one alive, because the only tests reaching it asserted the
-		// batching — nothing said a refusal here reaches `errorRef` or the caller at all
-		// (#365). It almost certainly always did; unpinned is the defect, and a second
-		// queue is exactly the thing an edit can drift.
-		vi.useFakeTimers();
-		store.screens = [
-			createMockScreen({ id: 5, stateVersion: 1 }),
-		];
-		// Not a 409, for the reason the row above gives: that status belongs to the
-		// conflict retry, and what this pins is the reporting seam.
-		mockRepo.updateModeConfig.mockRejectedValue(explainedRefusal(
-			403,
-			'Forbidden',
-			'This Event has been archived',
-			`[PATCH] "/api/events/1/screens/5/config/card"`,
-		));
-
-		const write = store.updateModeConfig(1, 5, 'card', { scale: 2 });
-		const settled = expect(write).rejects.toThrow('This Event has been archived');
-		await vi.advanceTimersByTimeAsync(300);
-		await settled;
-
-		expect(store.error).toBe('This Event has been archived');
-		vi.useRealTimers();
-	});
-
+	// The sentence substitution wraps the whole action, so the conflict retry inside it still meets the raw 409 (#381).
 	it('leaves the conflict retry able to recognise the conflict it retries', async () => {
-		// Where the substitution sits is load-bearing, and true by construction is not
-		// pinned: it wraps the whole action, so `withConflictRetry` — nested further in —
-		// still meets the raw FetchError and can read its 409 and marked body. Substitute
-		// one level deeper and `isConflictError` sees an Error carrying no status, the
-		// refresh and the retry never run, and a write that should have settled reports a
-		// sentence instead. The fixture carries the state-conflict mark because since
-		// #381 only a marked 409 — a lost race — is retried at all; an unmarked one is a
-		// refusal, pinned in the config-and-realtime suite.
 		store.screens = [
 			createMockScreen({ id: 5, name: 'Old', stateVersion: 1 }),
 		];
 		mockRepo.update
 			.mockRejectedValueOnce(transportFailure({
 				status: 409,
-				statusText: 'Conflict',
 				body: {
 					statusCode: 409,
-					statusMessage: 'Conflict',
 					message: 'Screen 5 state was modified concurrently',
 					data: { code: STATE_CONFLICT_CODE },
 				},
-				request: `[PATCH] "/api/events/1/screens/5"`,
 			}))
 			.mockResolvedValueOnce(createMockScreen({ id: 5, name: 'Renamed', stateVersion: 3 }));
 		mockRepo.getById.mockResolvedValue(createMockScreen({ id: 5, name: 'Refreshed', stateVersion: 2 }));
@@ -235,55 +128,8 @@ describe('useScreenStore error reporting', () => {
 		const updated = await store.updateScreen(1, 5, { name: 'Renamed' });
 
 		expect(mockRepo.update).toHaveBeenCalledTimes(2);
-		// And the retry went out against the revision the refresh brought, not the one
-		// the conflict was raised about.
 		expect(mockRepo.update).toHaveBeenLastCalledWith(1, 5, expect.objectContaining({ stateVersion: 2 }));
 		expect(updated!.name).toBe('Renamed');
 		expect(store.error).toBeNull();
-	});
-
-	it('keeps the status line for a server failure, whose prose is a placeholder', async () => {
-		// A 5xx body's message has been through `mapPublicNitroError`, so quoting it
-		// would put 'Internal Server Error' in front of an operator dressed as the
-		// authority's own words about the show.
-		mockRepo.list.mockRejectedValue(explainedRefusal(500, 'Internal Server Error', 'Internal Server Error'));
-
-		await store.loadScreensByEventId(1);
-
-		expect(store.error).toBe(`${LIST_REQUEST}: 500 Internal Server Error`);
-	});
-
-	it('keeps the status line where the body carries no sentence to read', async () => {
-		mockRepo.list.mockRejectedValue(transportFailure({
-			status: 409,
-			body: { statusCode: 409, statusMessage: 'Conflict' },
-			request: LIST_REQUEST,
-		}));
-
-		await store.loadScreensByEventId(1);
-
-		expect(store.error).toBe(`${LIST_REQUEST}: 409 Conflict`);
-	});
-
-	it('falls back to a static line where the throw was not an Error at all', async () => {
-		// The one case on which the two spellings of this could have disagreed. #341
-		// replaced a hand-written expansion of `reportedMessage`'s ordering with the
-		// util itself, and the fallback is the branch that expansion reached last:
-		// no sentence, and nothing carrying a message to show instead.
-		mockRepo.list.mockRejectedValue('the repository threw a string');
-
-		await store.loadScreensByEventId(1);
-
-		expect(store.error).toBe('An error occurred');
-	});
-
-	it('keeps its own message for a failure that never reached the server', async () => {
-		// No status means nothing about it was written by the authority, so none of it
-		// may be quoted as though it were.
-		mockRepo.list.mockRejectedValue(new Error('Failed to fetch'));
-
-		await store.loadScreensByEventId(1);
-
-		expect(store.error).toBe('Failed to fetch');
 	});
 });

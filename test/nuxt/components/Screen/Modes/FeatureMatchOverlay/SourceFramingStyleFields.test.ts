@@ -4,11 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import SourceFramingStyleFields from '~/components/Screen/Modes/FeatureMatchOverlay/SourceFramingStyleFields.vue';
 
-/**
- * A Source Item's border and glow go through the shared border and glow fields
- * with every Feature Match Overlay option: per side, a glow position, a glow only
- * around a visible border, and hex colours.
- */
+// A Source Item's border and glow go through the shared border and glow fields with every Feature
+// Match Overlay option: per side, a glow position, a glow only around a visible border, and hex…
 
 enableAutoUnmount(afterEach);
 

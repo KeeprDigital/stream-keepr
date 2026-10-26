@@ -33,12 +33,10 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
  * A preset initialises a whole Feature Match Layout: the host-owned Frame and
  * Source Items, and the shared Graphic Item tree. Nothing is carried over from a
  * legacy widget list, because there is none — the database is wiped before ship
- * and `test/unit/shared/featureMatchOverlayCapabilityParity.test.ts` replaces
- * migration.
+ * and nothing is migrated.
  *
- * These three are that checklist's evidence, and `left-stacked-player-cams` is
- * also the default Feature Match Overlay configuration. Between them they
- * exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
+ * `left-stacked-player-cams` is also the default Feature Match Overlay
+ * configuration. Between them the three presets exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
  * Life and Game Wins Definitions, Media Graphic Items, canvas Graphic Groups,
  * Graphic Layer Order as list order, per-corner Shape Geometry, gradient and solid
  * Graphic Fills with outline and glow, Text Overflow Policies, and — for the

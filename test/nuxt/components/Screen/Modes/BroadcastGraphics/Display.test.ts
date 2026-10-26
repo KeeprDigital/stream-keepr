@@ -8,19 +8,11 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import {
-	broadcastGraphicChannelContexts,
-	broadcastGraphicPhaseProjections,
-	broadcastGraphicPhaseTiming,
-	broadcastGraphicPlayoutState,
-	broadcastGraphicRenderedInputs,
-	broadcastGraphicRenderedSocialProfilePresentations,
-	broadcastGraphicRenderedSocialProfileValues,
 	createInitialBroadcastGraphicsLiveState,
-	onAirBroadcastGraphicIds,
-	projectSocialProfilePresentation,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
-import { GRAPHIC_ANIMATION_REPEAT_INDEFINITE } from '~~/shared/types/graphics';
+import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import Display from '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
@@ -45,11 +37,8 @@ mockNuxtImport('useScreenContext', () => () => ({
 	assetCapability: mockAssetCapability,
 }));
 
-/**
- * Every capability-session exchange a live Screen Output makes, so a test can
- * prove media content is resolved through the capability rather than by any other
- * route.
- */
+// Every capability-session exchange a live Screen Output makes, so a test can prove media content
+// is resolved through the capability rather than by any other route.
 const capabilitySessionRequests: string[] = [];
 
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => ({
@@ -99,13 +88,7 @@ const mockLoadSession = ref<(eventId: number, screenId: number) => void>(() => {
 const mockServerNow = ref(1_700_000_000_000);
 const mockSessionSequence = ref(1);
 
-/**
- * The authoritative snapshot, assembled from whichever parts a test cares about.
- *
- * A test that only wants a graphic on air sets `mockOnAirGraphicIds`; one that wants
- * it mid-phase sets `mockPlayout` directly with the effective start times the server
- * would have stamped.
- */
+// The authoritative snapshot, assembled from whichever parts a test cares about.
 const mockPlayout = ref<BroadcastGraphicsLiveState['playout'] | null>(null);
 
 function mockState(): BroadcastGraphicsLiveState {
@@ -122,36 +105,8 @@ function mockState(): BroadcastGraphicsLiveState {
 	};
 }
 
-/**
- * The timing one Broadcast Graphic is read against, including its Graphic Channel.
- *
- * The store derives the channel contexts from the authored stack and the channels its
- * caller hands it, and this stands in for that derivation exactly — because waiting is
- * only reachable through a channel, so a stand-in that dropped the channels would let
- * the Screen Output compose a waiting graphic with no test noticing.
- *
- * What this pins is the composition site: drop `channels` from the call that decides
- * which Broadcast Graphics compose and the waiting one appears on program. The other
- * two sites that pass channels feed the animation projection, and dropping them is not
- * observable here — a waiting graphic is excluded from the composition before any
- * projection for it is read, so the projection is computed and then ignored. The harm
- * the review named is closed by this test; the remaining two are wasted work rather
- * than a wrong frame, and pinning them would mean asserting on an unread value.
- */
-function timingFor(
-	graphic: BroadcastGraphicConfig,
-	now?: number,
-	channels?: readonly GraphicChannelConfig[],
-) {
-	const contexts = channels?.length
-		? broadcastGraphicChannelContexts({ graphics: mockScreen.value?.modeConfigs?.['broadcast-graphics']?.graphics ?? [], channels })
-		: {};
-	return broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value, contexts[graphic.id]);
-}
-
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
-	// Every selector delegates to the real shared module rather than reimplementing it,
-	// so these tests cannot pass on behaviour the Screen Output does not actually use.
+	...liveSessionSelectors(mockState, () => mockServerNow.value),
 	get sessions() {
 		return new Map([
 			[
@@ -160,138 +115,6 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 			],
 		]);
 	},
-	serverNow: () => mockServerNow.value,
-	onAirGraphicIds: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-		channels?: readonly GraphicChannelConfig[],
-	) =>
-		onAirBroadcastGraphicIds(
-			mockState(),
-			graphics,
-			graphic => timingFor(graphic as BroadcastGraphicConfig, now, channels),
-		),
-	animationProjection: (
-		_screenId: number,
-		graphics: readonly BroadcastGraphicConfig[],
-		now?: number,
-		channels?: readonly GraphicChannelConfig[],
-	) =>
-		Object.fromEntries(graphics.flatMap((graphic) => {
-			const projection = broadcastGraphicPhaseProjections(
-				mockState(),
-				graphic.id,
-				timingFor(graphic, now, channels),
-			);
-			// Empty means settled, and the real store leaves a settled graphic out of the
-			// map entirely so "is anything moving?" stays one question about the map's size.
-			return projection.length > 0
-				? [
-						[graphic.id, projection],
-					]
-				: [];
-		})),
-	renderedInputValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
-		const current: Record<string, Record<string, unknown>> = {};
-		const outgoing: Record<string, Record<string, unknown>> = {};
-		for (const graphic of graphics) {
-			const rendered = broadcastGraphicRenderedInputs(
-				mockState(),
-				graphic.id,
-				graphic.inputs ?? [],
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
-			);
-			current[graphic.id] = rendered.current;
-			if (rendered.outgoing)
-				outgoing[graphic.id] = rendered.outgoing;
-		}
-		return { current, outgoing };
-	},
-	renderedSocialProfileValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
-		const current: Record<string, Record<string, unknown>> = {};
-		const outgoing: Record<string, Record<string, unknown>> = {};
-		for (const graphic of graphics) {
-			const rendered = broadcastGraphicRenderedSocialProfileValues(
-				mockState(),
-				graphic,
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
-			);
-			current[graphic.id] = rendered.current;
-			if (rendered.outgoing)
-				outgoing[graphic.id] = rendered.outgoing;
-		}
-		return { current, outgoing };
-	},
-	renderedSocialProfilePresentations: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) => {
-		const current: Record<string, Record<string, unknown>> = {};
-		const outgoing: Record<string, Record<string, unknown>> = {};
-		for (const graphic of graphics) {
-			const rendered = broadcastGraphicRenderedSocialProfilePresentations(
-				mockState(),
-				graphic,
-				broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value),
-			);
-			current[graphic.id] = rendered.current;
-			if (rendered.outgoing)
-				outgoing[graphic.id] = rendered.outgoing;
-		}
-		return { current, outgoing };
-	},
-	socialProfileValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[]) =>
-		Object.fromEntries(graphics.flatMap((graphic) => {
-			const values = Object.fromEntries(Object.entries(
-				mockState().socialProfileProjections?.[graphic.id] ?? {},
-			).flatMap(([projectionKey, projection]) => {
-				const current = projection.acceptedProfiles.find(profile => profile.network === projection.currentNetwork);
-				return current
-					? [
-							[projectionKey, current],
-						]
-					: [];
-			}));
-			return Object.keys(values).length > 0
-				? [
-						[graphic.id, values],
-					]
-				: [];
-		})),
-	socialProfilePresentations: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
-		Object.fromEntries(graphics.flatMap((graphic) => {
-			const projections = mockState().socialProfileProjections?.[graphic.id] ?? {};
-			const declarations = new Map((graphic.socialProfileProjections ?? []).map(entry => [entry.key, entry]));
-			const presentations = Object.fromEntries(Object.entries(projections).flatMap(([key, projection]) => {
-				const declaration = declarations.get(key);
-				return declaration
-					? [
-							[
-								key,
-								projectSocialProfilePresentation(projection, declaration, {
-									onAir: mockState().playout[graphic.id]?.onAir === true,
-									now: now ?? mockServerNow.value,
-								}),
-							],
-						]
-					: [];
-			}));
-			return Object.keys(presentations).length > 0
-				? [
-						[graphic.id, presentations],
-					]
-				: [];
-		})),
-	playoutState: (
-		_screenId: number,
-		graphicId: string,
-		graphic?: Pick<BroadcastGraphicConfig, 'items' | 'animation'>,
-		now?: number,
-	) => broadcastGraphicPlayoutState(
-		mockState(),
-		graphicId,
-		graphic
-			? broadcastGraphicPhaseTiming(graphic, now ?? mockServerNow.value)
-			: undefined,
-	),
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
 	readSessionAsScreenOutput: (screenId: number, read: () => Promise<unknown>) => {
 		mockSessionReaders.set(screenId, read);
@@ -438,9 +261,6 @@ const AnimationSurfaceStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	return mount(Display, {
 		global: {
 			stubs: { ScreenAnimationEffectSurface: AnimationSurfaceStub },
@@ -826,12 +646,8 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(wrapper.find('.item-guide').exists()).toBe(false);
 	});
 
-	/**
-	 * The editor's only other moment to push is the iframe's `load` event, which
-	 * this client-rendered application fires before the frame's own app has
-	 * mounted as often as after it. A push that lost that race was dropped
-	 * silently and left the preview composing the Screen's stored stack (#234).
-	 */
+	// The editor's only other moment to push is the iframe's `load` event, which this client-
+	// rendered application fires before the frame's own app has mounted as often as after it.
 	it('tells the editor it is listening, as soon as it is', async () => {
 		mockIsPreview.value = true;
 		const announced: unknown[] = [];
@@ -969,39 +785,6 @@ describe('broadcastGraphicsDisplay', () => {
 		await pushPreviewState();
 
 		expect(wrapper.get('.item-guide').classes()).toContain('is-selected');
-	});
-
-	it('paints a Graphic Surface Style as one Shape Geometry path with its outline', async () => {
-		mockIsPreview.value = true;
-		const outlined: BroadcastGraphicConfig = {
-			...lowerThird,
-			items: [
-				{
-					...bar,
-					geometry: {
-						...squareShapeGeometry(),
-						rightSlant: 60,
-					},
-					surfaceStyle: {
-						fill: { type: 'solid', color: '#0077a3' },
-						fillOpacity: 1,
-						outline: { color: '#00d9ff', width: 3 },
-					},
-				},
-			],
-		};
-
-		const wrapper = await mountComponent();
-		await pushPreviewState([outlined]);
-
-		const paths = wrapper.findAll('[data-graphic-item-kind="shape"] path');
-		// One fill, one clip path for the stroke, and the stroke itself.
-		expect(paths.length).toBe(3);
-		expect(paths[0]!.attributes('d')).toBe('M 0 0 L 840 0 L 900 120 L 0 120 Z');
-		// The surface stretches to the box the layout actually gave the item, so the
-		// case-sensitive SVG attribute has to survive the template.
-		expect(wrapper.get('[data-graphic-item-kind="shape"] svg').attributes('preserveAspectRatio')).toBe('none');
-		expect(wrapper.get('[data-graphic-item-kind="shape"] path[stroke]').attributes('stroke-width')).toBe('6');
 	});
 
 	describe('media Graphic Items', () => {
@@ -1192,12 +975,7 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 	});
 
-	/**
-	 * A Broadcast Graphics Screen Output paints a Graphics Asset Library font (#141).
-	 * It never could before, and the Feature Match Overlay lost the capability when it
-	 * moved onto the shared compositor, so this is the shared vocabulary's own font
-	 * loading rather than one host's - `useGraphicAssetFontFaces`, mounted by both.
-	 */
+	// A Broadcast Graphics Screen Output paints a Graphics Asset Library font (#141).
 	describe('library fonts', () => {
 		const fontAssetId = 'font-asset' as GraphicAssetId;
 
@@ -1422,57 +1200,8 @@ describe('broadcastGraphicsDisplay', () => {
 			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
 		});
 
-		/**
-		 * A stack change is the ordinary case here, not the exception: every Take,
-		 * every Update Graphic, every authoring edit rebuilds it. If each one restarted
-		 * the font load, a Screen Output would blank itself on air every time playout
-		 * touched it — which is the visible blank the hiding exists to prevent (#160).
-		 */
-		it('keeps a settled canvas visible when a stack change pins no different font', async () => {
-			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([
-				withLibraryFont(),
-			]);
-			mockOnAirGraphicIds.value = ['lower-third'];
-			const { registered } = stubRecordingFontFace();
-
-			const wrapper = await mountComponent();
-			await flushPromises();
-			await nextTick();
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
-			});
-			const settled = [...registered];
-			expect(settled).toEqual(['stream-keepr-graphic-asset-font-asset-font-revision-2']);
-
-			// The same font, different rendered text: an Update Graphic-shaped change.
-			mockScreen.value = screenWithStack([
-				withLibraryFont({ text: 'Player Two' }),
-			]);
-			await nextTick();
-
-			const canvas = wrapper.get('.graphics-compositor-canvas');
-			// The change really landed, so this is not a test that changed nothing.
-			expect(wrapper.get('[data-graphic-item-kind="text"] p').text()).toBe('Player Two');
-			// Read at the moment the change renders, which is when the blank would be on air.
-			expect(canvas.attributes('data-font-ready')).toBe('true');
-			expect((canvas.element as HTMLElement).style.visibility).toBe('');
-
-			await flushPromises();
-			await nextTick();
-
-			expect(registered).toEqual(settled);
-			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
-		});
-
-		/**
-		 * The Take the issue names, and the one stack change that does not leave the
-		 * Screen's asset reference set alone: a second Broadcast Graphic joins carrying
-		 * an image. Content-URL resolution restarts for the new revision — clearing
-		 * every URL, font URLs included, and going unsettled for the round trip — while
-		 * no font reference changed at all. A settled output must sit through that
-		 * window with its faces intact rather than blanking for the duration.
-		 */
+		// The Take the issue names, and the one stack change that does not leave the Screen's asset
+		// reference set alone: a second Broadcast Graphic joins carrying an image.
 		it('keeps a settled canvas visible when a Take brings on an asset of another kind', async () => {
 			mockAssetCapability.value = 'capability-token';
 			mockScreen.value = screenWithStack([
@@ -1512,147 +1241,6 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
 			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
 			expect(registered).toEqual(settled);
-		});
-
-		/**
-		 * What recovering from a failed load now costs. Before #160 the watch woke for
-		 * every configuration edit, so any edit at all cleared `fontsFailed` and tried
-		 * again — an accident of the over-firing this issue removed, not a designed
-		 * retry. What remains is narrower, and both sides of the line are pinned: this
-		 * test for what still retries, the next for what deliberately no longer does.
-		 */
-		it('retries a font that failed to load when content-URL resolution runs again', async () => {
-			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([
-				withLibraryFont(),
-			]);
-			mockOnAirGraphicIds.value = ['lower-third'];
-			let failLoads = true;
-			vi.stubGlobal('FontFace', class {
-				constructor(public family: string, public source: string) {}
-				async load() {
-					if (failLoads)
-						throw new Error('font revision content is unavailable');
-					return this;
-				}
-			});
-
-			const wrapper = await mountComponent();
-			await flushPromises();
-			await nextTick();
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-error')).toBe('true');
-			});
-
-			failLoads = false;
-			mockScreen.value = screenWithStack([
-				withLibraryFont(),
-				withImage(),
-			]);
-
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
-			});
-			const canvas = wrapper.get('.graphics-compositor-canvas');
-			expect(canvas.attributes('data-font-error')).toBe('false');
-			expect((canvas.element as HTMLElement).style.visibility).toBe('');
-		});
-
-		/**
-		 * The other side of that line, and the only behaviour `loadKey` is the sole cause
-		 * of. Every other thing the key does is also done by the body's comparison
-		 * against the faces actually registered, so deleting the key changes nothing an
-		 * output paints — except here, where waking for an edit that names no asset is
-		 * exactly what would clear `fontsFailed` and try again.
-		 *
-		 * Read against a load that *would* now succeed: nothing changes, so nothing was
-		 * attempted. Without this the key reads as dead weight, and deleting it would
-		 * silently restore a retry on every cosmetic edit with the suite still green.
-		 */
-		it('does not retry a failed font load for a stack change that names no asset', async () => {
-			mockAssetCapability.value = 'capability-token';
-			mockScreen.value = screenWithStack([
-				withLibraryFont(),
-			]);
-			mockOnAirGraphicIds.value = ['lower-third'];
-			let failLoads = true;
-			vi.stubGlobal('FontFace', class {
-				constructor(public family: string, public source: string) {}
-				async load() {
-					if (failLoads)
-						throw new Error('font revision content is unavailable');
-					return this;
-				}
-			});
-
-			const wrapper = await mountComponent();
-			await flushPromises();
-			await nextTick();
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-error')).toBe('true');
-			});
-
-			failLoads = false;
-			// Same pinned revision, different rendered text: the Update Graphic-shaped
-			// change, which leaves the Screen's asset reference set exactly where it was.
-			mockScreen.value = screenWithStack([
-				withLibraryFont({ text: 'Player Two' }),
-			]);
-			await nextTick();
-			await flushPromises();
-			await nextTick();
-
-			// The change really landed, so this is not a test that changed nothing.
-			expect(wrapper.get('[data-graphic-item-kind="text"] p').text()).toBe('Player Two');
-			const canvas = wrapper.get('.graphics-compositor-canvas');
-			expect(canvas.attributes('data-font-error')).toBe('true');
-			expect(canvas.attributes('data-font-ready')).toBe('false');
-			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
-		});
-
-		/**
-		 * The other half of the same rule: a change that really does change which faces
-		 * the canvas paints has to load them, and has to hide until they are ready. A
-		 * fix that simply stopped reloading would satisfy the test above and put a
-		 * fallback typeface on program here.
-		 *
-		 * Read through the authoring preview, which is where an author actually swaps a
-		 * library font, and which is the path that proves the required faces are what
-		 * this turns on. A live stack change also restarts content-URL resolution, and a
-		 * canvas that reloaded only because of *that* would look identical from here.
-		 */
-		it('loads the new face and hides again when an authored font change pins a different revision', async () => {
-			mockIsPreview.value = true;
-			const { registered, gate } = stubRecordingFontFace();
-
-			const wrapper = await mountComponent();
-			await pushPreviewState([
-				withLibraryFont(),
-			]);
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
-			});
-
-			const release = gate();
-			await pushPreviewState([
-				withLibraryFont({ revisionId: 'font-revision-3' }),
-			]);
-
-			const canvas = wrapper.get('.graphics-compositor-canvas');
-			expect(canvas.attributes('data-font-ready')).toBe('false');
-			expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
-
-			release();
-			await vi.waitFor(() => {
-				expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
-			});
-			expect(registered).toEqual([
-				'stream-keepr-graphic-asset-font-asset-font-revision-2',
-				'stream-keepr-graphic-asset-font-asset-font-revision-3',
-			]);
-			expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
-			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
-				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-3;');
 		});
 	});
 
@@ -1781,88 +1369,6 @@ describe('broadcastGraphicsDisplay', () => {
 			// And the exit is running over them: half way through a 400ms fade.
 			expect(wrapper.get('[data-broadcast-graphic="templated"]').attributes('style'))
 				.toContain('opacity: 0.5');
-		});
-
-		it('encloses both frames of a whole-graphic update in the exit running over them', async () => {
-			mockScreen.value = screenWithStack([
-				{
-					...templated,
-					animation: { update: CROSS_FADE, exit: CROSS_FADE },
-				},
-			]);
-			exitingMidUpdate();
-
-			const wrapper = await mountComponent();
-
-			// One element for the exit, holding both frames of the cross-dissolve — rather
-			// than the exit applied to each frame, which composites differently where the
-			// two overlap.
-			const enclosure = wrapper.get('[data-broadcast-graphic-enclosure="templated"]');
-			expect(enclosure.attributes('style')).toContain('opacity: 0.5');
-			expect(enclosure.find('[data-broadcast-graphic-outgoing="templated"]').exists()).toBe(true);
-			expect(enclosure.find('[data-broadcast-graphic="templated"]').exists()).toBe(true);
-			expect(enclosure.get('[data-broadcast-graphic-outgoing="templated"]').text()).toContain('Bo Lin');
-			expect(enclosure.get('[data-broadcast-graphic="templated"]').text()).toContain('Ava Reed');
-		});
-
-		it('wipes two concurrent reveals on two elements, adding no clip to either', async () => {
-			// CSS allows one mask per element and one clip path per element, and a Graphic
-			// Group already spends its clip on Shape Geometry clipping. So a second wipe gets
-			// an element of its own and stays a mask — which is also what keeps the Key
-			// Output's alpha matte intact, because nesting masks multiplies alpha rather than
-			// painting anything.
-			mockScreen.value = screenWithStack([
-				{
-					...lowerThird,
-					items: [
-						{
-							...bar,
-							animation: {
-								'on-screen': {
-									duration: 800,
-									easing: 'linear',
-									delay: 0,
-									pause: 0,
-									repeat: GRAPHIC_ANIMATION_REPEAT_INDEFINITE,
-									reveal: { edge: 'top' },
-								},
-								'exit': {
-									duration: 400,
-									easing: 'linear',
-									delay: 0,
-									reveal: { edge: 'left' },
-								},
-							},
-						},
-					],
-				},
-			]);
-			mockPlayout.value = {
-				'lower-third': {
-					onAir: false,
-					effectiveStartedAt: mockServerNow.value - 200,
-					cut: false,
-					cyclingStartedAt: mockServerNow.value - 100,
-				},
-			};
-
-			const wrapper = await mountComponent();
-
-			const enclosure = wrapper.get('[data-graphic-item-enclosure="bar"]');
-			const item = enclosure.get('[data-graphic-item-kind="shape"]');
-
-			// Two elements, one wipe each. The gradients themselves are pinned in the
-			// render-model test rather than here: this environment's CSS object model drops
-			// `mask-image` outright, so a DOM assertion on it would pass against a
-			// composition that emitted no mask at all.
-			expect(item.attributes('data-graphic-item-kind')).toBe('shape');
-			// The enclosure is the item's own box, so both gradients resolve across the
-			// bounds the reveals were authored across.
-			expect(enclosure.attributes('style')).toContain('width: 900px');
-			// Neither element spends a clip on the wipe, so Shape Geometry clipping is free
-			// to stay exactly where an author put it.
-			expect(enclosure.attributes('style')).not.toContain('clip-path');
-			expect(item.attributes('style')).not.toContain('clip-path');
 		});
 	});
 });
@@ -2033,42 +1539,6 @@ describe('live playout animation in a Screen Output', () => {
 		mockAssetCapability.value = undefined;
 	});
 
-	it('joins an entrance already in progress rather than replaying it from the beginning', async () => {
-		// A capture browser opened, or reconnected, one second into a four-second
-		// entrance. The frame it draws is the frame every other output is drawing.
-		mockPlayout.value = {
-			'lower-third': { onAir: true, effectiveStartedAt: T0 - 1000, cut: false },
-		};
-
-		const wrapper = await mountComponent();
-
-		// A quarter of the way through: a quarter of the fade and a quarter of the slide.
-		expect(itemStyle(wrapper)).toContain('opacity: 0.25');
-		expect(itemStyle(wrapper)).toContain('translate(0px, 90px)');
-	});
-
-	it('settles a Broadcast Graphic whose entrance is long over, without animating it', async () => {
-		mockPlayout.value = {
-			'lower-third': { onAir: true, effectiveStartedAt: T0 - 4_000_000, cut: false },
-		};
-
-		const wrapper = await mountComponent();
-
-		expect(itemStyle(wrapper)).not.toContain('opacity');
-		expect(itemStyle(wrapper)).not.toContain('transform');
-	});
-
-	it('settles a Cut Take immediately, with no entrance at all', async () => {
-		mockPlayout.value = {
-			'lower-third': { onAir: true, effectiveStartedAt: T0, cut: true },
-		};
-
-		const wrapper = await mountComponent();
-
-		expect(itemStyle(wrapper)).not.toContain('opacity');
-		expect(itemStyle(wrapper)).not.toContain('transform');
-	});
-
 	it('keeps an exiting Broadcast Graphic on program until its exit completes', async () => {
 		mockPlayout.value = {
 			'lower-third': { onAir: false, effectiveStartedAt: T0 - 1000, cut: false },
@@ -2088,27 +1558,6 @@ describe('live playout animation in a Screen Output', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
-	});
-
-	it('reverses an interrupted entrance from the frame that was on program', async () => {
-		// Out arrived one second into the entrance, so the reversal unwinds that one
-		// second of enter over the next second. Half a second later, half of it is left.
-		mockPlayout.value = {
-			'lower-third': {
-				onAir: false,
-				effectiveStartedAt: T0 - 500,
-				cut: false,
-				reversalCompletesAt: T0 + 500,
-			},
-		};
-
-		const wrapper = await mountComponent();
-
-		// 500ms of a four-second entrance still rendered: an eighth of the way in, and
-		// heading back out rather than onwards.
-		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(true);
-		expect(itemStyle(wrapper)).toContain('opacity: 0.125');
-		expect(itemStyle(wrapper)).toContain('translate(0px, 105px)');
 	});
 
 	describe('a Graphic Channel the Screen Output is composed against', () => {

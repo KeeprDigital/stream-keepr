@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computed, ref } from 'vue';
+import Display from '~/components/Screen/Modes/HeadToHead/Display.vue';
 
 const screen = ref<any>(null);
 const config = ref<any>(null);
@@ -62,9 +63,6 @@ function earlierMatch(overrides: Record<string, unknown> = {}) {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/HeadToHead/Display.vue';
-	const { default: Display } = await import(componentPath);
-
 	// ScreenModeBase is left real so the empty case asserts the broadcast
 	// contract itself: that state renders nothing at all.
 	return mount(Display, {

@@ -1,80 +1,74 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import CounterList from '~/components/FeatureMatch/State/CounterList.vue';
 
-const mockPlayerControls = {
+const playerControls = {
 	updateCounters: vi.fn(),
 };
 
-mockNuxtImport('usePlayerControls', () => () => mockPlayerControls);
+mockNuxtImport('usePlayerControls', () => () => playerControls);
 mockNuxtImport('useEventStore', () => () => ({
 	event: { game: 'mtg' },
 }));
 
-const CounterItemStub = defineComponent({
-	template: '<div data-testid="counter-item" />',
-});
+const CounterItemStub = {
+	props: ['counter'],
+	emits: ['change', 'reset', 'remove'],
+	template: `<div data-testid="counter-item" :data-type="counter.type">
+		<button type="button" data-action="decrease" @click="$emit('change', -5)" />
+		<button type="button" data-action="reset" @click="$emit('reset')" />
+		<button type="button" data-action="remove" @click="$emit('remove')" />
+	</div>`,
+};
 
-const UPopoverStub = defineComponent({
-	template: '<div :class="$attrs.class"><slot /><slot name="content" /></div>',
-});
+const counters = [
+	{ type: 'poison', value: 1 },
+	{ type: 'energy', value: 2 },
+];
 
-const UButtonStub = defineComponent({
-	props: {
-		size: { type: String, required: false },
-		icon: { type: String, required: false },
-	},
-	template: '<button :class="$attrs.class" :data-size="size" :data-icon="icon"><slot /></button>',
-});
-
-async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../app/components/FeatureMatch/State/' + 'CounterList.vue';
-	const { default: CounterList } = await import(componentPath);
-
+function mountCounterList(props: Record<string, unknown> = {}) {
 	return mount(CounterList, {
 		props: {
 			matchId: 1,
 			player: 'player1',
-			counters: [
-				{ type: 'poison', value: 1 },
-				{ type: 'energy', value: 2 },
-				{ type: 'experience', value: 3 },
-			],
+			counters,
 			...props,
 		},
 		global: {
-			stubs: {
-				FeatureMatchStateCounterItem: CounterItemStub,
-				UPopover: UPopoverStub,
-				UButton: UButtonStub,
-			},
+			stubs: { ...nuxtUiStubs, FeatureMatchStateCounterItem: CounterItemStub },
 		},
 	});
 }
 
+async function act(wrapper: ReturnType<typeof mountCounterList>, type: string, action: string) {
+	await wrapper.get(`[data-type="${type}"] [data-action="${action}"]`).trigger('click');
+	return playerControls.updateCounters.mock.lastCall?.[0];
+}
+
 describe('featureMatchCounterList', () => {
-	it('supports three touch columns when requested', async () => {
-		const wrapper = await mountComponent({ touch: true, touchColumns: 3 });
-
-		expect(wrapper.classes()).toContain('grid-cols-3');
-		expect(wrapper.classes()).toContain('gap-3');
-		expect(wrapper.findAll('[data-testid="counter-item"]')).toHaveLength(3);
-
-		const addPopover = wrapper.findComponent(UPopoverStub);
-		expect(addPopover.classes()).toContain('col-span-full');
-		expect(addPopover.classes()).toContain('justify-self-center');
+	it('never takes a counter below zero', async () => {
+		expect(await act(mountCounterList(), 'poison', 'decrease')).toEqual([
+			{ type: 'poison', value: 0 },
+			{ type: 'energy', value: 2 },
+		]);
 	});
 
-	it('hides add-counter affordances in readonly mode', async () => {
-		const wrapper = await mountComponent({ readonly: true });
+	it('resets one counter to zero and removes another, leaving the rest', async () => {
+		const wrapper = mountCounterList();
 
-		expect(wrapper.findComponent(UPopoverStub).exists()).toBe(false);
-		expect(wrapper.findAll('[data-testid="counter-item"]')).toHaveLength(3);
+		expect(await act(wrapper, 'energy', 'reset')).toEqual([
+			{ type: 'poison', value: 1 },
+			{ type: 'energy', value: 0 },
+		]);
+		expect(await act(wrapper, 'poison', 'remove')).toEqual([
+			{ type: 'energy', value: 2 },
+		]);
 	});
 
-	it('uses derived available counter types when provided', async () => {
-		const wrapper = await mountComponent({
+	it('offers only the counter types the Player does not already track', async () => {
+		const wrapper = mountCounterList({
 			counters: [
 				{ type: 'energy', value: 2 },
 			],
@@ -84,8 +78,21 @@ describe('featureMatchCounterList', () => {
 			],
 		});
 
-		const buttons = wrapper.findAll('button');
-		expect(buttons.map(button => button.text())).toContain('Poison');
-		expect(buttons.map(button => button.text())).not.toContain('Storm');
+		await wrapper.get('[aria-label="Add counter"]').trigger('click');
+		const offered = wrapper.findAll('button').map(button => button.text()).filter(Boolean);
+		expect(offered).toEqual(['Poison']);
+
+		await wrapper.findAll('button').find(button => button.text() === 'Poison')!.trigger('click');
+		expect(playerControls.updateCounters).toHaveBeenLastCalledWith([
+			{ type: 'energy', value: 2 },
+			{ type: 'poison', value: 0 },
+		]);
+	});
+
+	it('hides adding counters when read-only', () => {
+		const wrapper = mountCounterList({ readonly: true });
+
+		expect(wrapper.find('[aria-label="Add counter"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid="counter-item"]')).toHaveLength(2);
 	});
 });

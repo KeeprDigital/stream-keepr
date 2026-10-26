@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import DeckListModal from '~/components/Player/DeckListModal.vue';
 
 mockNuxtImport('useEventStore', () => () => reactive({ eventId: 1 }));
 
@@ -54,8 +55,6 @@ function makeDeckList(): PlayerDeckList {
 
 describe('player deck list modal', () => {
 	it('renders deck lists delivered as reactive proxies, as useOverlay passes props', async () => {
-		const { default: DeckListModal } = await import('~/components/Player/DeckListModal.vue');
-
 		// useOverlay().create(...).open(props) stores props in reactive() state,
 		// so the modal receives deep reactive proxies rather than plain objects.
 		const overlayProps = reactive({

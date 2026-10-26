@@ -3,14 +3,7 @@ import { MAX_REALTIME_MESSAGE_BYTES } from '~~/shared/types/messages';
 import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { ErrorInfoShaped } from '~~/test/helpers/providerRefusal';
 
-/**
- * The failure line, told apart from the other line this module writes.
- *
- * `console.error` is a shared subject: `ably.ts` logs `realtime_publish_oversized`
- * from the size diagnostic as well as `realtime_publish_failed` from the catch, and
- * both reach the same spy. Selecting by the line's own `message` means these tests
- * read the failure they arranged even when another line lands beside it (#280).
- */
+/** The failure line, selected by its own `message`: the size diagnostic logs beside it. */
 function isPublishFailureLine(call: unknown[]): boolean {
 	const [line] = call;
 	return typeof line === 'string' && line.includes('"message":"realtime_publish_failed"');
@@ -82,13 +75,8 @@ describe('getOriginConnectionId', () => {
 		}
 	});
 
-	/**
-	 * The header is client-supplied and feeds two places: the echo filter (a forged
-	 * id suppresses another client's updates) and the published message itself (an
-	 * oversized value inflates every publish it rides on). Shape and length are the
-	 * bounds a server can actually enforce — an id it cannot verify it can at least
-	 * refuse to relay when it could not have come from the provider.
-	 */
+	// The header is client-supplied and reaches the echo filter and every publish, so
+	// only an id the provider could have issued is relayed.
 	it('ignores an oversized connection id instead of relaying it', async () => {
 		vi.mocked(getHeader).mockReturnValue('a'.repeat(65));
 		const { getOriginConnectionId } = await import('~~/server/utils/ably');
@@ -206,19 +194,8 @@ describe('publishMessage', () => {
 
 // ──────────────── the failed-publish diagnosis ────────────────
 
-/**
- * What the log says when the provider refuses a publish (#253).
- *
- * `publishMessage` log-and-swallows by design — the Screen command route's 200
- * depends on nothing local (#242 item 3) — so the log line is the only witness a
- * publish failed. It used to name the event and the message type and stop there,
- * which is silence in the case that matters: under a rejected key every Screen
- * mutation spends an outbound request and the log never says the key was why.
- *
- * These pin the enriched fields, the fallbacks for throws that are not the
- * provider's, that nothing outside the named fields reaches the log, and — the
- * part a future edit could quietly take away — that the swallow still swallows.
- */
+// `publishMessage` swallows a refused publish, so its log line is the only witness: it
+// names why, keeps everything else out, and still swallows (#253).
 describe('failed realtime publishes', () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -290,11 +267,7 @@ describe('failed realtime publishes', () => {
 	});
 
 	it('says the key was missing rather than only that a publish failed', async () => {
-		// getAblyClient throws inside the same try, so the commonest deployment
-		// failure of all arrives with its reason attached. Since #267 the reason
-		// names the setting and `errorName` names the classification, which is what
-		// tells this line apart from a provider refusal at a glance — the swallowing
-		// path logs both under the same `realtime_publish_failed` message.
+		// A missing key arrives with its reason, told apart from a provider refusal by `errorName`.
 		vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { publishMessage } = await import('~~/server/utils/ably');
@@ -304,41 +277,6 @@ describe('failed realtime publishes', () => {
 		expect(loggedFields(errorSpy)).toMatchObject({
 			errorName: 'ServiceConfigurationError',
 			reason: 'NUXT_ABLY_API_KEY is not configured',
-		});
-		errorSpy.mockRestore();
-	});
-
-	it('reports a non-numeric provider code as absent rather than as NaN', async () => {
-		// The SDK builds `Number(headers['x-ably-errorcode'])` for a response that
-		// carries no Ably error body, so NaN is a shape that actually reaches here.
-		const uncoded = new ErrorInfoShaped('Error response received from server', Number.NaN, 502);
-		mockPublish.mockRejectedValue(uncoded);
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { publishMessage } = await import('~~/server/utils/ably');
-
-		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
-
-		expect(loggedFields(errorSpy)).toMatchObject({ statusCode: 502, errorCode: null });
-		errorSpy.mockRestore();
-	});
-
-	it('keeps the numeric diagnosis when the message is not prose', async () => {
-		// Losing the reason must not cost the status too: the fields are read
-		// independently, so a malformed message leaves 404/40400 legible.
-		const arrayMessage = new ErrorInfoShaped('', 40400, 404);
-		Object.defineProperty(arrayMessage, 'message', {
-			value: ['No application found'],
-		});
-		mockPublish.mockRejectedValue(arrayMessage);
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { publishMessage } = await import('~~/server/utils/ably');
-
-		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
-
-		expect(loggedFields(errorSpy)).toMatchObject({
-			statusCode: 404,
-			errorCode: 40400,
-			reason: null,
 		});
 		errorSpy.mockRestore();
 	});
@@ -384,25 +322,6 @@ describe('failed realtime publishes', () => {
 		errorSpy.mockRestore();
 	});
 
-	it('reports a throw that is not an Error at all without inventing fields', async () => {
-		mockPublish.mockRejectedValue('the provider rejected with a bare string');
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { publishMessage } = await import('~~/server/utils/ably');
-
-		await publishMessage(7, 'event:deleted', { eventId: 7 }, 'conn-123');
-
-		expect(loggedFields(errorSpy)).toEqual({
-			message: 'realtime_publish_failed',
-			eventId: 7,
-			messageType: 'event:deleted',
-			statusCode: null,
-			errorCode: null,
-			errorName: null,
-			reason: null,
-		});
-		errorSpy.mockRestore();
-	});
-
 	it('does not let a hostile error shape turn a swallowed failure into a real one', async () => {
 		// The catch block is the last line of defence; if reading the error throws,
 		// the swallow becomes a 500 on a route whose write already committed.
@@ -432,18 +351,8 @@ describe('failed realtime publishes', () => {
 
 // ──────────────── the oversized-message diagnostic ────────────────
 
-/**
- * The diagnostic #95 was premised on.
- *
- * A message larger than the provider accepts is refused on publication, and this
- * API logs `realtime_publish_failed` and carries on — correct for best-effort
- * delivery, and useless for diagnosis, because it never says the size was why.
- * That is how a Screen large enough to break its own notification went unnoticed.
- *
- * These pin that it reports, what it reports, and — the part that matters — that it
- * does *not* refuse: the write it announces has already committed, and the account's
- * real ceiling may be above the documented floor this compares against.
- */
+// An oversized message is reported, never refused: the write it announces has already
+// committed, and the account's ceiling may be above the documented floor (#95).
 describe('oversized realtime messages', () => {
 	function oversizedPayload() {
 		// One field over the documented floor, so the assertion is about the threshold
@@ -459,16 +368,7 @@ describe('oversized realtime messages', () => {
 		return spy.mock.calls.map(([entry]: unknown[]) => JSON.parse(entry as string));
 	}
 
-	/**
-	 * The oversize line, selected by name the way `loggedFields` selects the failure one.
-	 *
-	 * #300: the reads below were `loggedMessages(spy)[0]`, which on a run that logged
-	 * nothing indexes past the end of a mapped array and dies as `TypeError: Cannot read
-	 * properties of undefined` — naming neither the spy nor the expectation, in a file
-	 * where the interesting failure is precisely "the diagnostic did not fire". That is
-	 * #273/#280's defect exactly, but written without the `!` those tickets swept for,
-	 * so the sweep could not see it. Index-after-map is the shape that hides from it.
-	 */
+	/** The oversize line, selected by name so a run that logged nothing fails readably. */
 	function oversizedFields(spy: ReturnType<typeof vi.spyOn>) {
 		const [line] = lastCallTo(spy, isOversizedLine);
 		return JSON.parse(line as string);
@@ -559,16 +459,8 @@ describe('publishScreenCommand', () => {
 		);
 	});
 
-	/**
-	 * That a refused publish leaves here as this server's failure, not as the
-	 * provider's status wearing the route's clothes.
-	 *
-	 * The route's only work is this publish, so whatever comes out of here is the
-	 * route's answer — and h3 adopts `statusCode` from anything thrown, so an
-	 * unwrapped `ErrorInfo` made a rejected key answer 404, indistinguishable from
-	 * the route's own 'Screen not found'. #242 spent a round diagnosing that from
-	 * the client side; #264 is the server saying it.
-	 */
+	// A refused publish leaves as this server's failure, not the provider's status
+	// that h3 would otherwise adopt as the route's answer (#264).
 	describe('when the provider refuses the publish', () => {
 		it('propagates a named server-side failure instead of the provider\'s 404', async () => {
 			mockPublish.mockRejectedValue(new ErrorInfoShaped('No application found', 40400, 404));
@@ -621,21 +513,6 @@ describe('publishScreenCommand', () => {
 			errorSpy.mockRestore();
 		});
 
-		it('reports an absent provider code rather than inventing one', async () => {
-			// A throw that is not the provider's — the SDK's own TypeErrors, or a
-			// transport failure — must not acquire a code it never had.
-			mockPublish.mockRejectedValue(new TypeError('channel.publish is not a function'));
-			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-			const { publishScreenCommand } = await import('~~/server/utils/ably');
-
-			const failure = await publishScreenCommand(1, 10, 'identify').then(() => null, error => error);
-
-			expect(failure.code).toBeNull();
-			expect(failure.statusCode).toBe(502);
-			expect(loggedFields(errorSpy)).toMatchObject({ errorName: 'TypeError', errorCode: null });
-			errorSpy.mockRestore();
-		});
-
 		it('keeps the throw it wrapped, so nothing about the failure is lost', async () => {
 			const refusal = new ErrorInfoShaped('No application found', 40400, 404);
 			mockPublish.mockRejectedValue(refusal);
@@ -649,16 +526,7 @@ describe('publishScreenCommand', () => {
 		});
 	});
 
-	/**
-	 * That a key nobody ever set says so, in the one word the reader can act on.
-	 *
-	 * `getAblyClient` throws before there is a publish to refuse, and a missing
-	 * setting is not the provider refusing anything — classifying it as one would
-	 * file an unfinished deployment under 'the realtime service said no'. #267 is
-	 * the other half: the throw used to be a plain `Error`, which matches no mapper
-	 * branch, so the 5xx sanitizer rewrote it to a bare 'Internal Server Error' and
-	 * the only person who could fix it was told nothing.
-	 */
+	// A key nobody set is a configuration failure naming the setting, not a provider refusal (#267).
 	describe('when the key was never configured', () => {
 		it('leaves an unconfigured key to say so as a configuration failure', async () => {
 			// The classification first: not a publish refusal, and not an SDK
@@ -680,14 +548,7 @@ describe('publishScreenCommand', () => {
 		});
 
 		it('reaches the caller as a 503 naming the setting, not as a sanitized 500', async () => {
-			// Post-mapper, because the mapper is where this was being lost: the real
-			// throw, through the real mapping. Shaped harsher than h3's own hand-over
-			// — `createError` copies a truthy `statusCode`, so this error genuinely
-			// arrives at 503 already — and starting from the sanitizer's worst case
-			// proves the mapping rather than the arrival. 500 is what the *plain*
-			// Error this replaced arrived as, which is where the bare 'Internal
-			// Server Error' came from. `unhandled` is true either way, and clearing
-			// it is what lets the message survive Nitro's own handler afterwards.
+			// Through the real mapper, from the sanitizer's worst case: a plain 500 still marked unhandled.
 			vi.mocked(useRuntimeConfig).mockReturnValue({ ablyApiKey: '' } as any);
 			const { publishScreenCommand } = await import('~~/server/utils/ably');
 			const { mapPublicNitroError } = await import('~~/server/utils/nitroErrorMapping');

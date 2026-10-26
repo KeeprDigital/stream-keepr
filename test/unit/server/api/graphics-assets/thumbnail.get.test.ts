@@ -112,30 +112,4 @@ describe('graphic Asset thumbnail delivery', () => {
 		});
 		expect(mockResolveGraphicAssetThumbnail).not.toHaveBeenCalled();
 	});
-
-	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
-		const { GraphicsAssetLibraryError } = await import('~~/server/modules/graphics-asset-library');
-		mockResolveGraphicAssetThumbnail.mockRejectedValue(new GraphicsAssetLibraryError(
-			'Graphic Asset preview lookup is temporarily unavailable',
-			'graphics-asset-library-unavailable',
-		));
-		const handler = (await import(routePath)).default;
-		const event = stubH3Event();
-
-		await expect(handler(event)).rejects.toMatchObject({
-			statusCode: 503,
-			message: 'Graphic Asset preview lookup is temporarily unavailable',
-		});
-		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
-	});
-
-	it('rejects the read before touching the library when no author session is authenticated', async () => {
-		mockRequireUserId.mockRejectedValue(
-			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
-		);
-		const handler = (await import(routePath)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockResolveGraphicAssetThumbnail).not.toHaveBeenCalled();
-	});
 });

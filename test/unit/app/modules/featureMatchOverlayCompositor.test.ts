@@ -153,48 +153,18 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		expect(wins!.winBoxes?.map(box => box.won)).toEqual([true, true]);
 	});
 
-	it('paints no canvas backdrop of its own in any Screen Output', () => {
-		// The composed tree is one layer inside a canvas the Feature Match Overlay
-		// already paints, and it is mounted above the Frame and the Source Items. A
-		// backdrop here would be a second, opaque copy covering the whole host-owned
-		// layer — solid black in the Fill and Key Outputs, which is an on-air failure
-		// rather than a cosmetic one.
-		for (const output of ['overlay', 'fill', 'key'] as const) {
-			const model = resolveFeatureMatchOverlayCompositorRenderModel({
-				output,
-				layout: layout([]),
-				...CANVAS,
-			});
-
-			expect(model.canvasStyle.background).toBe('transparent');
-			expect(model.graphics[0]!.items).toEqual([]);
-		}
-	});
-
-	it('leaves the layer in flow rather than establishing its own positioning', () => {
-		// The host positions the layer, because the canvas coordinate space belongs to
-		// the Screen and the Frame is drawn in the same space. An inline `position`
-		// here would override the scoped rule that places it.
+	it.each(['overlay', 'fill', 'key'] as const)('composes as a layer of its host in the %s Output', (output) => {
+		// Mounted above the Frame, so a backdrop would cover the host-owned layer, and the
+		// host both positions it and draws the one guide layer over it.
 		const model = resolveFeatureMatchOverlayCompositorRenderModel({
-			output: 'overlay',
-			layout: layout([]),
-			...CANVAS,
-		});
-
-		expect(model.canvasStyle.position).toBeUndefined();
-	});
-
-	it('declares itself a layer, so its host draws the one guide layer over it', () => {
-		// The same division that decides the backdrop and the placement decides the
-		// guides: whoever paints the canvas draws them. Two guide layers stacked over
-		// one canvas would leave whichever landed underneath unclickable.
-		const model = resolveFeatureMatchOverlayCompositorRenderModel({
-			output: 'overlay',
+			output,
 			layout: layout([]),
 			...CANVAS,
 		});
 
 		expect(model.canvasRole).toBe('layer');
+		expect(model.canvasStyle.background).toBe('transparent');
+		expect(model.canvasStyle.position).toBeUndefined();
 	});
 
 	it('draws no guide of any kind unless an editor preview asks for one', () => {

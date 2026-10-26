@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, reactive } from 'vue';
+import SummaryPanel from '~/components/Metagame/SummaryPanel.vue';
 
 const mockEventStore = reactive({
 	event: { game: 'mtg' as const },
@@ -81,8 +82,6 @@ function makeSummary(): MetagameSummaryResponse {
 }
 
 async function mountComponent() {
-	const { default: SummaryPanel } = await import('~/components/Metagame/SummaryPanel.vue');
-
 	return mount(SummaryPanel, {
 		props: {
 			summary: makeSummary(),

@@ -2,8 +2,6 @@ import type {
 	GraphicsMultipartUploadIdentity,
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
@@ -15,7 +13,6 @@ import {
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
 	consumeBoundedByteStream,
-	createBoundedByteStream,
 	graphicsObjectIdentity,
 	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
@@ -25,6 +22,8 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
 
@@ -42,15 +41,6 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string; caus
 	Object.assign(new Error(input.message), input));
 const mockSetResponseHeader = vi.fn();
 vi.stubGlobal('setResponseHeader', mockSetResponseHeader);
-
-const transparentPixelPng = Uint8Array.from(Buffer.from(
-	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-	'base64',
-));
-
-function sourceDigest(bytes: Uint8Array) {
-	return createHash('sha256').update(bytes).digest('hex');
-}
 
 interface RemoteHop {
 	status?: number;
@@ -287,7 +277,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			initiatedBy: operation.initiatedBy,
 			evidence: {
 				outcome: 'decoded',
-				sourceDigest: sourceDigest(transparentPixelPng),
+				sourceDigest: digestOf(transparentPixelPng),
 				width: 1,
 				height: 1,
 			},
@@ -333,21 +323,6 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		{
 			label: 'a loopback literal',
 			sourceUrl: 'https://127.0.0.1/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'an IPv6 loopback literal',
-			sourceUrl: 'https://[::1]/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'a private literal',
-			sourceUrl: 'https://10.1.2.3/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'a cloud-metadata literal',
-			sourceUrl: 'https://169.254.169.254/latest/meta-data/scoreboard.png',
 			code: 'remote-source-destination-not-public',
 		},
 		{
@@ -398,6 +373,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		).resolves.toMatchObject({ outcome: 'missing' });
 	});
 
+	// Address ranges are owned by graphicsRemoteSourceResolver.test.ts; these prove the copy consults it.
 	it.each([
 		{
 			label: 'loopback',
@@ -406,22 +382,6 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		{
 			label: 'private',
 			addresses: ['93.184.216.34', '192.168.10.4'],
-		},
-		{
-			label: 'link-local cloud metadata',
-			addresses: ['169.254.169.254'],
-		},
-		{
-			label: 'IPv6 unique-local',
-			addresses: ['fd00::1'],
-		},
-		{
-			label: 'IPv4-mapped loopback',
-			addresses: ['::ffff:127.0.0.1'],
-		},
-		{
-			label: 'reserved',
-			addresses: ['240.0.0.1'],
 		},
 	] as const)('rejects a hostname whose DNS result includes a $label address', async ({
 		addresses,
@@ -680,7 +640,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			initiatedBy: operation.initiatedBy,
 			evidence: {
 				outcome: 'decoded',
-				sourceDigest: sourceDigest(transparentPixelPng),
+				sourceDigest: digestOf(transparentPixelPng),
 				width: 1,
 				height: 1,
 			},
@@ -961,12 +921,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		)).resolves.toMatchObject({ outcome: 'resumed' });
 	});
 
-	/**
-	 * Staging a remote source has two deaths that converge on the same abort: a
-	 * store call answering `unavailable`, and anything that throws. Only the first
-	 * is reachable by injecting a store failure, so covering the second needs the
-	 * read itself to die — which is what a connection dropped mid-body does.
-	 */
+	// The thrown-read death, which no injected store failure reaches.
 	it('aborts and clears the checkpoint when the remote body dies mid-transfer', async () => {
 		const delegate = createInMemoryStagingGraphicsObjectStore();
 		let uploadId: GraphicsMultipartUploadIdentity | undefined;
@@ -1128,15 +1083,8 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stranded.operation.initiatedBy,
 		)).resolves.toMatchObject({ uploadId: stranded.uploadId });
 
-		// The sentence names which store is out of reach, so it must reach the
-		// caller rather than being rewritten to 'Internal Server Error'. There is no
-		// route test for remote-copy.post.ts, so its two mapping hops are run here
-		// instead. The event carries a distinguishing property because
-		// `toHaveBeenCalledWith` compares deeply, and a bare `{}` cannot tell this
-		// request apart from any other empty object (#356; the same change made the
-		// helper's event parameter required, which is why this call passes one at
-		// all — and having to pass one, the row now pins the `retry-after` header
-		// its earlier form disclaimed).
+		// No route test covers remote-copy.post.ts, so its mapping to a public 503 naming the store
+		// is run here; the event is distinguishable so the header call is matched to it (#356).
 		const requestEvent = stubH3Event({ __requestEventFor: 'remote-copy-release-failure' });
 		let routeError: unknown;
 		try {
@@ -1263,7 +1211,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		const { library } = createLibrary();
 		const evidence = {
 			outcome: 'decoded',
-			sourceDigest: sourceDigest(transparentPixelPng),
+			sourceDigest: digestOf(transparentPixelPng),
 			width: 1,
 			height: 1,
 		} as const;
@@ -1354,10 +1302,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		await expect(library.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
-			bytes: createBoundedByteStream(transparentPixelPng, {
-				byteLength: transparentPixelPng.byteLength,
-				maximumByteLength: transparentPixelPng.byteLength,
-			}),
+			bytes: boundedBytes(transparentPixelPng),
 		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 	});
 

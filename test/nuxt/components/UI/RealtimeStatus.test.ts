@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import RealtimeStatus from '~/components/UI/RealtimeStatus.vue';
 
 const UPopoverStub = defineComponent({
 	template: '<div><slot /><slot name="content" /></div>',
@@ -25,9 +26,6 @@ mockNuxtImport('tryUseRealtime', () => () => ({
 }));
 
 async function mountStatus() {
-	const componentPath = '../../../../app/components/UI/RealtimeStatus.vue';
-	const { default: RealtimeStatus } = await import(componentPath);
-
 	return mount(RealtimeStatus, {
 		global: {
 			stubs: { UPopover: UPopoverStub, UIcon: UIconStub },
@@ -35,14 +33,7 @@ async function mountStatus() {
 	});
 }
 
-/**
- * The surface a token this client cannot mint has, now that it has one.
- *
- * A failed mint leaves the socket connected and the page looking healthy while
- * every channel for the Event the operator just switched to is unsubscribable.
- * Before #307 that was reported by a single `console.warn` — which is not a
- * surface anyone running a show is looking at — and recovered only by a reload.
- */
+// The surface a token this client cannot mint has, now that it has one.
 describe('uiRealtimeStatus', () => {
 	beforeEach(() => {
 		connectionState.value = 'connected';

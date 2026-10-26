@@ -2,11 +2,8 @@ import type { EventRound } from '~~/shared/utils/eventRoundOrder';
 import { describe, expect, it } from 'vitest';
 import { previousStandingsRoundId, seedingRoundId } from '~~/shared/utils/eventRoundOrder';
 
-/**
- * Which Round's Round Standings a reading compares with, from the Event's
- * Rounds in Round order (Phase sort order, then round number): the Position
- * Change baseline (#755) and a Top Cut Bracket's seeds (#759).
- */
+// Which Round's standings a reading compares with, in Round order: the Position Change
+// baseline (#755) and a Top Cut Bracket's seeds (#759).
 
 const SWISS = 1;
 const DAY_2 = 2;

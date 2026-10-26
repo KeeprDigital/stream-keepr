@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
+import Settings from '~/components/Screen/Modes/BroadcastGraphics/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
@@ -86,12 +87,8 @@ mockNuxtImport('useScreenConfigUpdate', () => () => ({
 	updateScreenConfig: mockUpdateScreenConfig,
 	resetScreenConfig: vi.fn(),
 }));
-/**
- * The hoisted Live Session sync (#373): loaded here so the Program monitor and
- * the Edit workspace's on-air marks project from a loaded session whichever
- * workspace is open. The sync's own behaviour has its own suite; the settings
- * surface only reads its disconnection signal.
- */
+// The hoisted Live Session sync (#373): loaded here so the Program monitor and the Edit workspace's
+// on-air marks project from a loaded session whichever workspace is open.
 const mockPlayoutDisconnected = ref(false);
 mockNuxtImport('useBroadcastGraphicsLiveSessionSync', () => () => ({
 	disconnected: mockPlayoutDisconnected,
@@ -179,9 +176,6 @@ const UInputNumberStub = defineComponent({
 });
 
 async function mountComponent() {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/BroadcastGraphics/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: {
@@ -241,11 +235,8 @@ describe('broadcastGraphicsSettings', () => {
 		expect(wrapper.find('[data-testid="live-workspace"]').exists()).toBe(false);
 	});
 
-	/**
-	 * The hoisted sync's disconnection signal reaches the Edit workspace (#373):
-	 * its on-air marks must say "unknown" while the connection is down, and the
-	 * Edit workspace can only say so if the surface holding the sync tells it.
-	 */
+	// The hoisted sync's disconnection signal reaches the Edit workspace (#373): its on-air marks
+	// must say "unknown" while the connection is down, and the Edit workspace can only say so if…
 	it('hands the Edit workspace the playout disconnection signal', async () => {
 		mockRoute.query = { workspace: 'edit' };
 		mockPlayoutDisconnected.value = true;
@@ -314,7 +305,7 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('modelValue'))).toEqual([1920, 1080]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
@@ -423,18 +414,14 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('disabled'))).toEqual([false, false]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ height: 720 });
 	});
 
-	/**
-	 * Story 23 (#60, carried as #335): a persistent Program monitor in BOTH
-	 * workspaces, so the operator always knows what is on air — an Edit-workspace
-	 * change can reach program instantly through a live On-air Update Policy, and
-	 * the person making it must be able to see that happen.
-	 */
+	// Story 23 (#60, carried as #335): a persistent Program monitor in BOTH workspaces, so the
+	// operator always knows what is on air — an Edit-workspace change can reach program instantly…
 	describe('the persistent Program monitor', () => {
 		it('shows the Program monitor in the Live workspace, at full size', async () => {
 			const wrapper = await mountComponent();
@@ -455,11 +442,8 @@ describe('broadcastGraphicsSettings', () => {
 			expect(monitor.attributes('data-compact')).toBe('true');
 		});
 
-		/**
-		 * Persistent means one instance: the monitor must survive a workspace switch
-		 * as the same element, or the switch reloads program in front of the operator
-		 * — a black frame on the one surface that exists to show what is on air.
-		 */
+		// Persistent means one instance: the monitor must survive a workspace switch as the same
+		// element, or the switch reloads program in front of the operator — a black frame on the…
 		it('keeps one monitor instance across a workspace switch', async () => {
 			const wrapper = await mountComponent();
 			await flushPromises();
@@ -504,7 +488,7 @@ describe('broadcastGraphicsSettings', () => {
 		const inputs = wrapper.findAllComponents({ name: 'UInputNumber' });
 		expect(inputs.map(input => input.props('disabled'))).toEqual([true, true]);
 
-		await inputs[1]?.vm.$emit('update:modelValue', 720);
+		await inputs[1]!.vm.$emit('update:modelValue', 720);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).not.toHaveBeenCalled();
@@ -515,11 +499,8 @@ describe('broadcastGraphicsSettings', () => {
 	});
 });
 
-/**
- * Editor Focus Mode (#744) applies to the Edit workspace only: its toggle sits
- * in the workspace toolbar while Edit is open, and the Live workspace neither
- * offers it nor yields the page to it, whatever this browser chose.
- */
+// Editor Focus Mode (#744) applies to the Edit workspace only: its toggle sits in the workspace
+// toolbar while Edit is open, and the Live workspace neither offers it nor yields the page to it,…
 describe('broadcastGraphicsSettings — Editor Focus Mode', () => {
 	const focusMode = useEditorFocusMode();
 

@@ -1,17 +1,9 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+import PackageImport from '~/components/Graphics/PackageImport.vue';
 
-/**
- * The package-import surface the three graphics libraries share.
- *
- * What is under test is the seam rather than any one library: this component names the
- * artifact it was told about, and it hands a chosen archive straight back instead of
- * deciding what importing it means. That is what keeps a Graphic Style Set Package's
- * preserve-identity import from being flattened into the Template Package path — the
- * decision is made at each library's own call site, and there is nothing here that could
- * make it.
- */
+// The package-import surface the three graphics libraries share.
 
 enableAutoUnmount(afterEach);
 
@@ -25,9 +17,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountImport(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/PackageImport.vue';
-	const { default: PackageImport } = await import(componentPath);
-
 	return mount(PackageImport, {
 		props: {
 			kind: 'skgraphic',
@@ -56,12 +45,8 @@ async function chooseFile(wrapper: Awaited<ReturnType<typeof mountImport>>, name
 }
 
 describe('graphicsPackageImport', () => {
-	/**
-	 * The noun and the accepted extension are two facts about one artifact kind, so the
-	 * component is told the kind and derives both. Told separately they were free text
-	 * either side of a prop boundary, and this test itself used to mount a "Graphic Style
-	 * Set Package" that accepted `.skgraphic` — a pairing no exporter can produce (#156).
-	 */
+	// The noun and the accepted extension are two facts about one artifact kind, so the component
+	// is told the kind and derives both.
 	it('names the artifact it receives and accepts exactly what that artifact travels as', async () => {
 		const styleSet = await mountImport({ kind: 'skstyle' });
 
@@ -79,12 +64,7 @@ describe('graphicsPackageImport', () => {
 			.attributes('accept')).toBe('.sklayout');
 	});
 
-	/**
-	 * The component receives the file and stops there. An import means something
-	 * different in each library — an unlinked Installed Graphics Template in one, a
-	 * preserved Style Set identity and revision in another — so the archive goes back to
-	 * the caller that has those semantics.
-	 */
+	// The component receives the file and stops there.
 	it('hands the chosen archive back instead of importing it', async () => {
 		const wrapper = await mountImport();
 

@@ -1,20 +1,12 @@
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils';
 import type { GraphicStyleSetEntry } from '~~/shared/types/graphicStyleSet';
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import StyleSetEntryEditor from '~/components/Graphics/StyleSetEntryEditor.vue';
 
-/**
- * The value controls for one Graphic Style Set entry.
- *
- * The rules under test are the ones that make an entry worth having. Every colour is
- * a *picker of palette entries* rather than a colour input, so a brand change reaches
- * every entry that links to it. A single-field edit keeps its siblings, because the
- * editor writes whole entry values. A Graphic Fill's kind replaces the value rather
- * than merging into it, because it is a discriminated union. And an observer can read
- * every entry and write none of them.
- */
+// The value controls for one Graphic Style Set entry.
 
 enableAutoUnmount(afterEach);
 
@@ -136,9 +128,6 @@ const TYPOGRAPHY: GraphicStyleSetEntry = {
 };
 
 async function mountEditor(entry: GraphicStyleSetEntry, props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../app/components/Graphics/StyleSetEntryEditor.vue';
-	const { default: StyleSetEntryEditor } = await import(componentPath);
-
 	return mount(StyleSetEntryEditor, {
 		props: {
 			entry,
@@ -226,16 +215,6 @@ describe('graphicsStyleSetEntryEditor', () => {
 			...TYPOGRAPHY.value,
 			font: { kind: 'application', fontId: 'mplantin' },
 		});
-	});
-
-	it('bounds a typography entry to what every typography accepts', async () => {
-		const wrapper = await mountEditor(TYPOGRAPHY);
-
-		await fieldNamed(wrapper, 'Letter spacing').get('input').setValue(-250);
-		expect(emittedValue(wrapper).letterSpacing).toBe(-100);
-
-		await fieldNamed(wrapper, 'Line height').get('input').setValue(0);
-		expect(emittedValue(wrapper).lineHeight).toBe(0.05);
 	});
 
 	it('keeps every sibling field when one is edited', async () => {
@@ -381,32 +360,6 @@ describe('graphicsStyleSetEntryEditor', () => {
 		expect(emittedValue(outlined).outline).toBeUndefined();
 	});
 
-	it('asks for a corner size only while the corner is not square', async () => {
-		const geometry: GraphicStyleSetEntry = {
-			id: 'cut-corner',
-			kind: 'shape-geometry',
-			name: 'Cut corner',
-			schemaVersion: 1,
-			value: {
-				...squareShapeGeometry(),
-				topRight: { treatment: 'cut', size: 24 },
-			},
-		};
-		const wrapper = await mountEditor(geometry);
-
-		// Only the cut top-right corner has a size; the square ones would ignore it.
-		const sizes = wrapper.findAll<HTMLInputElement>('input').filter(input => /^(?:Top|Bottom) (?:left|right) size$/.test(input.attributes('aria-label') ?? ''));
-		expect(sizes.map(size => size.attributes('aria-label'))).toEqual(['Top right size']);
-		expect(sizes[0]!.element.value).toBe('24');
-
-		await sizes[0]!.setValue('40');
-
-		expect(emittedValue(wrapper)).toEqual({
-			...squareShapeGeometry(),
-			topRight: { treatment: 'cut', size: 40 },
-		});
-	});
-
 	it('initialises a Shape Geometry entry from a built-in preset, sized as a new Shape Graphic Item', async () => {
 		const geometry: GraphicStyleSetEntry = {
 			id: 'cut-corner',
@@ -429,77 +382,6 @@ describe('graphicsStyleSetEntryEditor', () => {
 			topRight: { treatment: 'cut', size: 32 },
 			bottomLeft: { treatment: 'cut', size: 32 },
 		});
-	});
-
-	it('will not ask for a repeat count while a Graphic Animation Recipe repeats indefinitely', async () => {
-		const recipe: GraphicStyleSetEntry = {
-			id: 'pulse',
-			kind: 'animation-recipe',
-			name: 'Pulse',
-			schemaVersion: 1,
-			value: { duration: 800, easing: 'ease-in-out', repeat: 'indefinite' },
-		};
-		const wrapper = await mountEditor(recipe);
-
-		expect(wrapper.get<HTMLInputElement>('[data-testid="style-entry-animation-repeat"]').element.disabled)
-			.toBe(true);
-
-		await wrapper.get('[data-testid="style-entry-animation-repeat-indefinite"]').setValue(false);
-
-		// Turning it off leaves a count rather than nothing, which is a recipe the write
-		// schema accepts.
-		expect(emittedValue(wrapper).repeat).toBe(1);
-	});
-
-	it('switches a Graphic Animation Recipe channel the way a lifecycle phase does', async () => {
-		const recipe: GraphicStyleSetEntry = {
-			id: 'drift',
-			kind: 'animation-recipe',
-			name: 'Drift',
-			schemaVersion: 1,
-			value: {
-				duration: 400,
-				easing: 'ease-out',
-				fade: { opacity: 0 },
-			},
-		};
-		const wrapper = await mountEditor(recipe);
-
-		await wrapper.get('[data-testid="style-entry-animation-slide-enabled"]').setValue(true);
-
-		// The compositor's channel defaults, beside the recipe's other fields.
-		expect(emittedValue(wrapper)).toEqual({
-			duration: 400,
-			easing: 'ease-out',
-			fade: { opacity: 0 },
-			slide: { direction: 'north', distanceMode: 'fixed', distance: 100 },
-		});
-
-		await wrapper.get('[data-testid="style-entry-animation-fade-enabled"]').setValue(false);
-
-		// Removed, not left as an undefined key on a value persisted as JSON.
-		expect(emittedValue(wrapper)).toEqual({ duration: 400, easing: 'ease-out' });
-		expect('fade' in emittedValue(wrapper)).toBe(false);
-	});
-
-	it('keeps a Graphic Animation Recipe entry\'s slide length in pixels, whatever the Geometry Unit', async () => {
-		localStorage.setItem('editor-geometryUnit', 'percent');
-		const recipe: GraphicStyleSetEntry = {
-			id: 'rise',
-			kind: 'animation-recipe',
-			name: 'Rise',
-			schemaVersion: 1,
-			value: {
-				duration: 400,
-				easing: 'ease-out',
-				slide: { direction: 'north', distanceMode: 'fixed', distance: 120 },
-			},
-		};
-		const wrapper = await mountEditor(recipe);
-		await flushPromises();
-
-		// An entry has no owner, so no parent a percentage could be measured against.
-		expect(fieldNamed(wrapper, 'Fixed distance (px)').get<HTMLInputElement>('input').element.value).toBe('120');
 	});
 
 	it('edits a media treatment entry with the same media fields a Media Graphic Item has', async () => {

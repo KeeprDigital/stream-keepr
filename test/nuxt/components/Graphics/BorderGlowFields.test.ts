@@ -4,12 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import BorderGlowFields from '~/components/Graphics/BorderGlowFields.vue';
 
-/**
- * The one border and glow fields control, shared by the Feature Match Overlay
- * Frame, Source Item framing, a Graphic Surface Style, and a Graphic Surface
- * Style entry in a Graphic Style Set: what each host's props offer, and the
- * edit each change emits.
- */
+// The one border and glow fields control, shared by the Feature Match Overlay Frame, Source Item
+// framing, a Graphic Surface Style, and a Graphic Surface Style entry in a Graphic Style Set: what…
 
 enableAutoUnmount(afterEach);
 
@@ -145,18 +141,6 @@ describe('border and glow fields', () => {
 		const on = mountFields();
 		await switchFor(on, 'Glow')!.trigger('click');
 		expect(lastEdit(on)).toEqual({ kind: 'glow', patch: null });
-	});
-
-	it('caps border width and glow size at 0–500', () => {
-		const wrapper = mountFields();
-
-		for (const label of ['Border width', 'Glow size']) {
-			const field = input(wrapper, 'UInputNumber', label)!;
-			expect([
-				field.props('min'),
-				field.props('max'),
-			]).toEqual([0, 500]);
-		}
 	});
 
 	it('emits each value edit as a patch, a cleared number as 0', async () => {

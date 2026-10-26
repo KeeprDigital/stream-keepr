@@ -4,14 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { applyGraphicStyleFillEntryEdit, graphicFillOfStyleEntry } from '~~/shared/modules/graphic-style-sets';
 import { applyGraphicFillEdit } from '~~/shared/modules/graphics';
 
-/**
- * One Graphic Fill edit, applied the same way wherever a fill is authored.
- *
- * The colour is opaque to the edit: a Graphic Item's fill holds a CSS colour and
- * a Graphic Style Set fill entry holds a palette entry id, and both take the same
- * edits through the same rules. Only what a new gradient's end stop starts as is
- * the host's to say.
- */
+// One Graphic Fill edit for every host: the colour is opaque to it, and only a new
+// gradient's end stop is the host's to choose.
 
 const gradient: GraphicFill = {
 	type: 'linear-gradient',

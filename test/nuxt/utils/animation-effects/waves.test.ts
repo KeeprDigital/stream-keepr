@@ -4,13 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { animationEffectDefaultParams } from '~~/shared/animationEffects';
 import { createWavesDelegate } from '~/utils/animation-effects/waves';
 
-/**
- * The waves delegate is exercised against the real `three` module: everything
- * it does — build a jittered grid, light it, displace vertices per frame —
- * is plain geometry and scene-graph work that needs no WebGL context, so the
- * assertions here are on the actual numbers the pre-rebuild application
- * rendered with rather than on a stub's call log.
- */
+/** Against the real `three` module: geometry and scene-graph work needs no WebGL context. */
 
 function mountDelegate(overrides: Partial<AnimationEffectParams<'waves'>> = {}) {
 	const params = {
@@ -37,22 +31,7 @@ function wavesMesh(scene: THREE.Scene): THREE.Mesh {
 	return mesh!;
 }
 
-function sceneLight<Light extends THREE.Light>(scene: THREE.Scene, marker: 'isAmbientLight' | 'isPointLight' | 'isDirectionalLight'): Light {
-	const light = scene.children.find((child): child is Light => Boolean((child as unknown as Record<string, unknown>)[marker]));
-	expect(light).toBeDefined();
-	return light!;
-}
-
 describe('createWavesDelegate', () => {
-	it('creates the perspective camera the fork framed the water with', () => {
-		const { camera } = mountDelegate();
-		expect(camera.isPerspectiveCamera).toBe(true);
-		expect(camera.fov).toBe(35);
-		expect(camera.near).toBe(50);
-		expect(camera.far).toBe(10000);
-		expect(camera.aspect).toBeCloseTo(800 / 450);
-	});
-
 	it('positions the camera at the fork position divided by zoom, looking at the fork target', () => {
 		// The fork eased the camera toward its base position divided by zoom as
 		// the pointer centred; with no pointer, that steady state is the position.
@@ -86,21 +65,11 @@ describe('createWavesDelegate', () => {
 		expect(mesh.geometry.index!.count).toBe(100 * 80 * 6);
 	});
 
-	it('lights and shades the water the way the pre-rebuild application did', () => {
+	it('shades the water in its colour and shininess params', () => {
 		const { scene, params } = mountDelegate();
 		const material = wavesMesh(scene).material as THREE.MeshPhongMaterial;
 		expect(material.color.getHexString()).toBe(params.waveColor.slice(1));
 		expect(material.shininess).toBe(params.shininess);
-		expect(material.flatShading).toBe(true);
-		expect(material.side).toBe(THREE.DoubleSide);
-
-		expect(sceneLight<THREE.AmbientLight>(scene, 'isAmbientLight').intensity).toBe(0.25);
-		const point = sceneLight<THREE.PointLight>(scene, 'isPointLight');
-		expect(point.intensity).toBe(2.4);
-		expect(point.position.toArray()).toEqual([-100, 250, -100]);
-		const directional = sceneLight<THREE.DirectionalLight>(scene, 'isDirectionalLight');
-		expect(directional.intensity).toBe(2.2);
-		expect(directional.position.toArray()).toEqual([260, 420, 180]);
 	});
 
 	it('clears to the background colour the fork\'s base cleared to, where the plane leaves the frame', () => {

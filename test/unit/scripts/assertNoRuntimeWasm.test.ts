@@ -9,20 +9,8 @@ import {
 } from '../../../scripts/assert-no-runtime-wasm.mjs';
 
 /**
- * The bundle scanner's file-walking half (#326).
- *
- * `selfTest()` proves the pattern matcher bites and is run before every scan,
- * but it never opens a file — and the walker is the half that was wrong in the
- * guard's first version: it filtered on `.js`/`.mjs`, and rollup emits a
- * re-registered `build/wasmModulePlugin.ts`'s *JavaScript* under the codecs'
- * original `.wasm` names, so the forbidden constructor shipped inside a file
- * the filter never opened. Nothing standing caught a future narrowing of
- * `NOT_SCANNED`, or a regression in the refusals that stop a scan of nothing
- * from reading as a pass.
- *
- * Every row here plants a regression in a real directory and requires the scan
- * to find it, per the scanner's own precedent — a self-test of the pattern is
- * not evidence that the walk reaches the file the pattern would match.
+ * The bundle scanner's file walk (#326): rollup emits JavaScript under `.wasm` names, so
+ * each row plants a regression in a real directory and requires the scan to reach it.
  */
 
 /** What `build/wasmModulePlugin.ts` emits, which a scan must always report. */

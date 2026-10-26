@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import FeatureMatchNote from '~/components/FeatureMatch/Note.vue';
 
 const UButtonStub = defineComponent({
 	props: {
@@ -19,7 +20,6 @@ const UTextareaStub = defineComponent({
 });
 
 async function mountNote(props: Record<string, unknown>) {
-	const { default: FeatureMatchNote } = await import('~/components/FeatureMatch/Note.vue');
 	return mount(FeatureMatchNote, {
 		props: {
 			note: '',

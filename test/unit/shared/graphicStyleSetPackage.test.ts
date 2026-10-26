@@ -16,15 +16,8 @@ import {
 	GRAPHIC_STYLE_SET_PACKAGE_STYLE_SET_ENTRY,
 } from '~~/shared/types/graphicStyleSetPackage';
 
-/**
- * What a `.skstyle` package decides, proved without an archive or a database.
- *
- * The rules under test are the glossary's, and they are the whole reason this artifact
- * is not a Template Package: an import preserves the packaged identity and revision, a
- * newer revision may update the installed Style Set, an older one never downgrades it,
- * an identical one does nothing, a same-revision content difference is a conflict, and
- * an independent copy is always available instead.
- */
+// `.skstyle` import rules: identity and revision are preserved, newer updates, older never
+// downgrades, identical does nothing, same-revision difference conflicts, a copy is always offered.
 
 const BRAND: GraphicStyleSetEntry = {
 	id: 'brand',

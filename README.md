@@ -1168,8 +1168,8 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
 
 - **Feature Match Overlay runs on the Shared Graphics Foundation.** The legacy
   widget / widget-group / z-index model was deleted without a migration.
-  `test/unit/shared/featureMatchOverlayCapabilityParity.test.ts` pins every
-  legacy capability against the recreated built-in presets (`full-table`,
+  `test/unit/shared/featureMatchOverlayPresets.test.ts` pins the invariants of
+  the recreated built-in presets (`full-table`,
   `left-stacked-player-cams`, `neon-feature-match`). Dropped by design: per-side
   borders on a Surface Style (compose with rule-preset Shape items), the
   `visible` text-overflow option, and per-child offsets and clamps.

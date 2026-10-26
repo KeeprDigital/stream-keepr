@@ -315,6 +315,7 @@ watch(() => [props.template.id, props.template.revision], () => void refresh(), 
 						size="xs"
 						:variant="decisionFor(change.ownerItemId, change.slot) === 'inherit' ? 'subtle' : 'ghost'"
 						:disabled="!canAuthor"
+						:aria-pressed="decisionFor(change.ownerItemId, change.slot) === 'inherit'"
 						data-testid="style-update-inherit"
 						@click="decide(change.ownerItemId, change.slot, 'inherit')"
 					>
@@ -325,6 +326,7 @@ watch(() => [props.template.id, props.template.revision], () => void refresh(), 
 						color="neutral"
 						:variant="decisionFor(change.ownerItemId, change.slot) === 'keep-as-override' ? 'subtle' : 'ghost'"
 						:disabled="!canAuthor"
+						:aria-pressed="decisionFor(change.ownerItemId, change.slot) === 'keep-as-override'"
 						data-testid="style-update-keep"
 						@click="decide(change.ownerItemId, change.slot, 'keep-as-override')"
 					>

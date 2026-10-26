@@ -2,14 +2,8 @@ import type { BroadcastGraphicConfig, GraphicInputDeclaration, MediaGraphicInput
 import { describe, expect, it } from 'vitest';
 import { broadcastGraphicsRenderedInputGraphicAssetReferences } from '~~/shared/modules/broadcast-graphics-live-session';
 
-/**
- * The client-side counterpart of the Live Session's published references.
- *
- * A Broadcast Graphics Screen whose only media arrives as live-session-accepted
- * Graphic Input values publishes media that no walk over authored configuration can
- * see, so the Live workspace's capability-absent warning never fired for it (#238).
- * This is the walk that sees it, over the rendering the compositor is producing.
- */
+// The client-side walk over what the compositor renders from the Live Session, which no
+// walk over authored configuration can see (#238).
 
 function value(assetId: string, revisionId: string, overrides: Partial<MediaGraphicInputValue> = {}) {
 	return { assetId, revisionId, ...overrides } as MediaGraphicInputValue;
@@ -78,12 +72,7 @@ describe('broadcast Graphics rendered Graphic Input asset references', () => {
 		]);
 	});
 
-	/**
-	 * Both renderings are on program while an update cross-transitions between them, so
-	 * an output that cannot resolve media is losing both — and the case only this half
-	 * catches is a media Graphic Input updated to no value at all, whose old media is
-	 * still on screen for the length of the update.
-	 */
+	// Both renderings are on program during an update, including an old one updated to no value.
 	it('finds the rendering an update is leaving as well as the one it is arriving at', () => {
 		expect(broadcastGraphicsRenderedInputGraphicAssetReferences(
 			[
@@ -175,13 +164,7 @@ describe('broadcast Graphics rendered Graphic Input asset references', () => {
 		)).toEqual([]);
 	});
 
-	/**
-	 * The declared kind is not a guarantee about the stored value. A value that
-	 * violates its declaration is stored rather than coerced — that is what lets Live
-	 * Control show an operator exactly what is there and why it cannot go on air — so a
-	 * media Graphic Input can be holding a string an earlier declaration left behind.
-	 * Reading it as a reference would build one out of `undefined` ids.
-	 */
+	// A stored value can violate its declaration; it must not become a reference of undefined ids.
 	it('finds nothing for a media Graphic Input holding something that is not a media value', () => {
 		expect(broadcastGraphicsRenderedInputGraphicAssetReferences(
 			[

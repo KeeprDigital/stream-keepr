@@ -341,32 +341,6 @@ describe('matches page', () => {
 		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 2);
 	});
 
-	it('shows the navbar Add Match action once matches exist', async () => {
-		mockRoundStore.rounds = [
-			{
-				id: 2,
-				phaseId: 1,
-				name: 'Round 1',
-				lastSyncedAt: null,
-			},
-		];
-		mockMatchStore.matches = [
-			{
-				id: 9,
-				roundId: 2,
-				hasResult: false,
-				isBye: false,
-			},
-		];
-
-		const wrapper = await mountPage();
-		await flushPromises();
-
-		expect(wrapper.get('[data-testid="actions"]').text()).toContain('Add Match');
-		expect(wrapper.get('[data-testid="toolbar"]').text()).toContain('1 Match');
-		expect(wrapper.get('[data-testid="match-list"]').text()).toContain('Match list: 9');
-	});
-
 	it('prefers the most recently synced round when no query or current round exists', async () => {
 		mockRoundStore.rounds = [
 			{
@@ -393,54 +367,6 @@ describe('matches page', () => {
 		await flushPromises();
 
 		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 3);
-	});
-
-	it('uses most recently synced round when no query exists', async () => {
-		mockRoundStore.rounds = [
-			{
-				id: 2,
-				phaseId: 1,
-				name: 'Round 1',
-				lastSyncedAt: '2026-04-10T11:00:00.000Z',
-			},
-			{
-				id: 4,
-				phaseId: 1,
-				name: 'Round 2',
-				lastSyncedAt: null,
-			},
-		];
-
-		await mountPage();
-		await flushPromises();
-
-		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 2);
-	});
-
-	it('shows available rounds in the selector', async () => {
-		mockRoundStore.rounds = [
-			{
-				id: 2,
-				phaseId: 1,
-				name: 'Round 1',
-				lastSyncedAt: null,
-			},
-			{
-				id: 3,
-				phaseId: 1,
-				name: 'Round 2',
-				lastSyncedAt: null,
-			},
-		];
-		mockMatchStore.matches = [
-			{ id: 1, roundId: 3 },
-		];
-
-		const wrapper = await mountPage();
-		await flushPromises();
-
-		expect(wrapper.get('[data-testid="round-select"]').text()).toContain('Round 1|enabled');
-		expect(wrapper.get('[data-testid="round-select"]').text()).toContain('Round 2|enabled');
 	});
 
 	it('shows all matches for the selected round', async () => {

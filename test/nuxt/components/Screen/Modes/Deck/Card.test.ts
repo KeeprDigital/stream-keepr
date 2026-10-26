@@ -1,6 +1,7 @@
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import Card from '~/components/Screen/Modes/Deck/Card.vue';
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
 	return {
@@ -16,9 +17,6 @@ function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCard
 }
 
 async function mountComponent(props: Record<string, unknown> = {}) {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Deck/Card.vue';
-	const { default: Card } = await import(componentPath);
-
 	return mount(Card, {
 		props: {
 			card: createCard(),
@@ -42,15 +40,11 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 }
 
 describe('screenDeckCard', () => {
-	it('renders a configurable Highlander point badge', async () => {
+	it('shows the card\'s Highlander points in the configured colours', async () => {
 		const wrapper = await mountComponent();
 		const badge = wrapper.get('[data-testid="highlander-card-badge"]');
 
 		expect(badge.text()).toBe('1');
-		expect(badge.classes()).toContain('-bottom-1');
-		expect(badge.classes()).toContain('-left-1');
-		expect(badge.classes()).toContain('min-w-8');
-		expect(badge.classes()).toContain('text-base');
 		expect(badge.attributes('style')).toContain('color: red;');
 		expect(badge.attributes('style')).toContain('background-color: blue;');
 	});

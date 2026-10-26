@@ -74,11 +74,7 @@ describe('screen Output selection', () => {
 			.toBe('/event/7/screen/main?output=overlay&embed=monitor');
 	});
 
-	/**
-	 * The two embed roles are one selection rather than two opt-outs, so a URL can
-	 * never ask to be both — an editor preview that is also live playout is not a
-	 * thing this application has, and the query cannot spell one.
-	 */
+	/** One role selection, so a URL can never ask to be both preview and monitor. */
 	it('offers exactly the preview and monitor embed roles', () => {
 		expect(SCREEN_EMBED_VALUES).toEqual(['preview', 'monitor']);
 	});
@@ -91,11 +87,7 @@ describe('screen Output selection', () => {
 		expect(parseScreenEmbed(['monitor', 'preview'])).toBe('monitor');
 	});
 
-	/**
-	 * An unreadable role is a live Screen Output, which is the reading that fails
-	 * safe: it joins presence and answers Screen commands, so a mistyped URL is
-	 * over-reported to its operator rather than watching invisibly.
-	 */
+	/** An unreadable role fails safe as a live Screen Output, visible to its operator. */
 	it('treats an unrecognised embed role as no role at all', () => {
 		expect(parseScreenEmbed('program')).toBeNull();
 	});

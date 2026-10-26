@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 
 enableAutoUnmount(afterEach);
@@ -165,9 +166,6 @@ const UButtonStub = defineComponent({
 });
 
 async function mountComponent(screen: Partial<Screen> = {}) {
-	const componentPath = '../../../../../../../app/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: {
@@ -277,7 +275,7 @@ describe('featureMatchOverlaySettings', () => {
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-width')).toBe('1920');
 		expect(wrapper.get('[data-testid="preview-output-aside"]').attributes('data-canvas-height')).toBe('1080');
 
-		await inputs[0]?.vm.$emit('update:modelValue', 1280);
+		await inputs[0]!.vm.$emit('update:modelValue', 1280);
 		await nextTick();
 
 		expect(mockUpdateScreenConfig).toHaveBeenCalledWith({ width: 1280 });
@@ -550,11 +548,8 @@ describe('featureMatchOverlaySettings', () => {
 	});
 });
 
-/**
- * Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit
- * workspace throughout, so its toolbar always offers the toggle, and only that
- * toggle exits — Escape stays the editor's own.
- */
+// Editor Focus Mode (#744): the Feature Match Overlay editor is an Edit workspace throughout, so
+// its toolbar always offers the toggle, and only that toggle exits — Escape stays the editor's own.
 describe('featureMatchOverlaySettings — Editor Focus Mode', () => {
 	const focusMode = useEditorFocusMode();
 

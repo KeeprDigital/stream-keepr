@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import AnimationEffectSurface from '~/components/Screen/AnimationEffectSurface.vue';
 
 const animationMocks = vi.hoisted(() => ({
 	loadAnimationEffect: vi.fn(),
@@ -27,7 +28,6 @@ function effectInstance() {
 }
 
 async function mountSurface(props: Record<string, unknown>) {
-	const { default: AnimationEffectSurface } = await import('../../../../app/components/Screen/AnimationEffectSurface.vue');
 	return mount(AnimationEffectSurface, { props: props as never });
 }
 

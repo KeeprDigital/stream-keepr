@@ -119,6 +119,18 @@ describe('melee Sync and a Player field an operator edited', () => {
 		expect(await playerById(reiId)).toMatchObject({ name: 'Rei Melee', pronouns: null });
 	});
 
+	it('computes the edited fields itself, ignoring any a client sends', async () => {
+		const { eventId, reiId } = await stageMeleePlayers();
+
+		await playerService().update(reiId, eventId, {
+			name: 'Rei K.',
+			manuallyEditedFields: ['pronouns'],
+		} as never);
+		await resyncPlayers(eventId);
+
+		expect(await playerById(reiId)).toMatchObject({ name: 'Rei K.', pronouns: 'they/them' });
+	});
+
 	it('marks only the fields a write changed', async () => {
 		const { eventId, miaId } = await stageMeleePlayers();
 

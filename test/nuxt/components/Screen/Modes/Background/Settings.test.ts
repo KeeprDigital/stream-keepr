@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
+import Settings from '~/components/Screen/Modes/Background/Settings.vue';
 import { createMockScreen } from '../../../../../helpers/fixtures';
 
 const config = ref<BackgroundModeConfig>({ layers: [] });
@@ -95,9 +96,6 @@ function animationLayer(id: string): BackgroundLayer {
 }
 
 async function mountComponent() {
-	const componentPath = '../../../../../../app/components/Screen/Modes/Background/Settings.vue';
-	const { default: Settings } = await import(componentPath);
-
 	return mount(Settings, {
 		props: {
 			screen: createMockScreen({ currentMode: 'background' }),

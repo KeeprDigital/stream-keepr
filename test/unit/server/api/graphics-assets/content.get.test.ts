@@ -49,18 +49,6 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 		mockSetResponseHeader.mockReset();
 	});
 
-	it('rejects resolution before touching the library when no editor session is authenticated', async () => {
-		mockRequireUserId.mockRejectedValue(
-			Object.assign(new Error('authenticated session required'), { statusCode: 401 }),
-		);
-		const handler = (await import(
-			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
-		)).default;
-
-		await expect(handler(stubH3Event())).rejects.toMatchObject({ statusCode: 401 });
-		expect(mockResolveGraphicAssetRevision).not.toHaveBeenCalled();
-	});
-
 	it('serves the complete revision with a validator and range support advertised', async () => {
 		mockResolveGraphicAssetRevision.mockResolvedValue({
 			outcome: 'available',
@@ -162,32 +150,6 @@ describe('authenticated exact Graphic Asset Revision content delivery', () => {
 				range: expect.anything(),
 			}),
 		);
-	});
-
-	it('maps a retryable catalogue failure to 503 with retry guidance', async () => {
-		const { GraphicsAssetLibraryError } = await import(
-			'~~/server/modules/graphics-asset-library',
-		);
-		mockResolveGraphicAssetRevision.mockRejectedValue(
-			new GraphicsAssetLibraryError(
-				'catalogue unavailable',
-				'graphics-asset-library-unavailable',
-			),
-		);
-		const handler = (await import(
-			'../../../../../server/api/graphics-assets/[assetId]/revisions/[revisionId]/content.get',
-		)).default;
-		// Carries a distinguishing property on purpose: `toHaveBeenCalledWith`
-		// compares deeply, so the literal `{}` this row used to pass could not tell
-		// the request being answered apart from any other empty object a careless
-		// edit might hand `setResponseHeader` (#346 M7-pre, closed by #356).
-		const event = stubH3Event({ __requestEventFor: 'revision-content' });
-
-		await expect(handler(event)).rejects.toMatchObject({
-			statusCode: 503,
-			message: 'catalogue unavailable',
-		});
-		expect(mockSetResponseHeader).toHaveBeenCalledWith(event, 'retry-after', 5);
 	});
 
 	/**

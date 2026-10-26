@@ -26,13 +26,6 @@ describe('useUnsavedChanges', () => {
 		});
 	});
 
-	it('returns isDirty, registerDirtyState, and bypassGuard', () => {
-		const result = useUnsavedChanges();
-		expect(result).toHaveProperty('isDirty');
-		expect(result).toHaveProperty('registerDirtyState');
-		expect(result).toHaveProperty('bypassGuard');
-	});
-
 	it('starts not dirty', () => {
 		const { isDirty } = useUnsavedChanges();
 		expect(isDirty.value).toBe(false);
@@ -83,37 +76,35 @@ describe('useUnsavedChanges', () => {
 	// ── onBeforeRouteLeave guard ──
 
 	describe('route leave guard', () => {
-		it('shows confirmation modal when dirty', async () => {
-			const { registerDirtyState } = useUnsavedChanges();
-			registerDirtyState(ref(true));
-
-			await capturedRouteLeaveGuard!();
-
-			expect(mockOpenFn).toHaveBeenCalled();
-		});
-
-		it('allows navigation when user confirms', async () => {
+		it.each([
+			['confirms', true],
+			['cancels', false],
+		])('asks before leaving a dirty page, and leaves only when the operator confirms (%s)', async (_, confirmed) => {
 			mockOpenFn.mockReturnValueOnce({
-				result: Promise.resolve(true),
+				result: Promise.resolve(confirmed),
 			});
 			const { registerDirtyState } = useUnsavedChanges();
 			registerDirtyState(ref(true));
 
-			const result = await capturedRouteLeaveGuard!();
-
-			expect(result).toBe(true);
+			await expect(capturedRouteLeaveGuard!()).resolves.toBe(confirmed);
+			expect(mockOpenFn).toHaveBeenCalledOnce();
 		});
 
-		it('blocks navigation when user cancels', async () => {
-			mockOpenFn.mockReturnValueOnce({
-				result: Promise.resolve(false),
-			});
-			const { registerDirtyState } = useUnsavedChanges();
+		it('leaves a clean page without asking', async () => {
+			useUnsavedChanges().registerDirtyState(ref(false));
+
+			await expect(capturedRouteLeaveGuard!()).resolves.toBe(true);
+			expect(mockOpenFn).not.toHaveBeenCalled();
+		});
+
+		it('leaves a dirty page without asking once the guard is bypassed', async () => {
+			const { registerDirtyState, bypassGuard } = useUnsavedChanges();
 			registerDirtyState(ref(true));
 
-			const result = await capturedRouteLeaveGuard!();
+			bypassGuard();
 
-			expect(result).toBe(false);
+			await expect(capturedRouteLeaveGuard!()).resolves.toBe(true);
+			expect(mockOpenFn).not.toHaveBeenCalled();
 		});
 	});
 });

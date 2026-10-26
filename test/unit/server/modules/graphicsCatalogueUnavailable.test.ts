@@ -37,9 +37,7 @@ describe('a catalogue whose D1 binding is gone', () => {
 	it('is acquired when it is used, not when the library is built', () => {
 		bindingPresent = false;
 
-		// Building must not throw. A library that fails to construct fails outside
-		// every guard that knows what a catalogue failure means, which is how a
-		// missing binding escaped as a raw 500 while a failing query did not.
+		// A library that fails to construct fails outside every catalogue guard, as a raw 500.
 		expect(() => graphicsCatalogueClient()).not.toThrow();
 	});
 
@@ -55,21 +53,17 @@ describe('a catalogue whose D1 binding is gone', () => {
 		expect(() => client.prepare('select 1')).toThrowError(GraphicsAssetLibraryError);
 	});
 
-	it('passes the real client through untouched while the binding is there', () => {
-		const client = graphicsCatalogueClient();
-		client.prepare('select 1');
+	it('answers with the real client while the binding is there', () => {
+		query.mockReturnValueOnce('the prepared statement');
 
-		expect(query).toHaveBeenCalledWith('select 1');
+		expect(graphicsCatalogueClient().prepare('select 1')).toBe('the prepared statement');
 	});
 
 	it('does not lie about what it has when it cannot answer at all', () => {
 		bindingPresent = false;
 		const client = graphicsCatalogueClient();
 
-		// Inspecting the client structurally must reach the same conclusion as
-		// calling it. A proxy that only trapped `get` would answer these from its
-		// empty target, so an unreachable catalogue would look like a reachable
-		// one with no methods — a lie that reads as a different fault entirely.
+		// Structural inspection must agree with calling it, not answer from an empty proxy target.
 		expect(() => 'prepare' in client).toThrowError(GraphicsAssetLibraryError);
 		expect(() => Object.keys(client)).toThrowError(GraphicsAssetLibraryError);
 		expect(() => ({ ...client })).toThrowError(GraphicsAssetLibraryError);
