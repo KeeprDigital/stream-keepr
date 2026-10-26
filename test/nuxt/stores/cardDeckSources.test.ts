@@ -246,6 +246,15 @@ describe('useCardStore deck sources and search', () => {
 			}));
 		});
 
+		it('controls nothing, and saves nothing, with no active Card', async () => {
+			store.activeScreenId = 5;
+
+			await store.controlActiveCard('flip');
+
+			expect(store.activeCard).toBeNull();
+			expect(mockCardRepo.saveScreenCard).not.toHaveBeenCalled();
+		});
+
 		it('"clear" clears the active Card', async () => {
 			store.activeScreenId = 5;
 			store.activeCard = createMockMtgCard();

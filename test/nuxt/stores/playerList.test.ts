@@ -148,6 +148,16 @@ describe('usePlayerListStore', () => {
 			expect(store.membersByListId.get(1)).toEqual([20, 30]);
 		});
 
+		it('removing a member keeps the cached members in step even when the List summary is not held', async () => {
+			store.membersByListId.set(1, [10, 20]);
+			mockRepo.removeMember.mockResolvedValue({ success: true, memberCount: 1 });
+
+			await store.removeMember(1, 1, 10);
+
+			expect(store.membersByListId.get(1)).toEqual([20]);
+			expect(store.lists).toEqual([]);
+		});
+
 		it('reordering holds the new order', async () => {
 			store.lists = [
 				createSummary({ id: 1, memberCount: 3 }),
