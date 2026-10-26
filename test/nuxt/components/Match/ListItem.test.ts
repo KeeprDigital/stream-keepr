@@ -42,7 +42,6 @@ async function mountComponent(
 			featureMatchLabel: null,
 			featureMatchMenuItems: [],
 			promoting: false,
-			resultsEditable: true,
 			...itemOverrides,
 		},
 		global: {
@@ -100,17 +99,36 @@ describe('matchListItem', () => {
 		expect(wrapper.get('[data-testid="player2-score"]').text()).toBe(String(player2GameWins));
 	});
 
-	it('marks no outcome or score before a result is entered', async () => {
+	it('marks no outcome or score before Melee reports a result', async () => {
 		const wrapper = await mountComponent({
 			hasResult: false,
 			player1GameWins: null,
 			player2GameWins: null,
-			resultString: null,
 		});
 
 		expect(wrapper.get('[data-testid="player1-name"]').attributes('data-outcome')).toBeUndefined();
 		expect(wrapper.find('[data-testid="player1-score"]').exists()).toBe(false);
-		expect(wrapper.text()).toContain('Enter Result');
+	});
+
+	// A Match Result is Melee's alone (ADR-0047), so a manual Match has none to enter.
+	it.each([
+		[
+			'an unreported manual Match',
+			{ externalSource: 'manual', hasResult: false },
+		],
+		[
+			'a reported Match',
+			{
+				hasResult: true,
+				player1GameWins: 2,
+				player2GameWins: 0,
+				gameDraws: 0,
+			},
+		],
+	] as const)('offers no way to enter or edit a result on %s', async (_, match) => {
+		const wrapper = await mountComponent(match);
+
+		expect(wrapper.text()).not.toMatch(/(Enter|Edit) Result/);
 	});
 
 	it('keeps the bye layout and copy', async () => {

@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import type { Match } from '~/types';
-import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { isManualResultsRound } from '~~/shared/utils/roundControl';
+import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import { LazyMatchCreateModal } from '#components';
-import MatchResultModal from '~/components/Match/ResultModal.vue';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
@@ -77,9 +74,7 @@ const hasMatches = computed(() => matchStore.matches.length > 0);
 const selectedRound = computed(() => viewedRoundId.value
 	? roundStore.getRoundById(viewedRoundId.value)
 	: undefined);
-const selectedRoundBestOf = computed(() => toFeatureMatchDefaults(eventStore.event).bestOf);
-const isSelectedRoundManualResults = computed(() => isManualResultsRound(selectedRound.value));
-const canCreateMatches = computed(() => !!selectedRound.value && isSelectedRoundManualResults.value);
+const canCreateMatches = computed(() => !!selectedRound.value && !isMeleeManagedRound(selectedRound.value));
 const canSyncSelectedRound = computed(() => !!(eventStore.event?.meleeEnabled && selectedRound.value?.externalSource === 'melee'));
 
 const {
@@ -177,14 +172,6 @@ function handleCreateMatch() {
 	const modal = overlay.create(LazyMatchCreateModal);
 	void modal.open({
 		defaultRoundId: viewedRoundId.value,
-	});
-}
-
-function handleEditResult(match: Match) {
-	const modal = overlay.create(MatchResultModal);
-	void modal.open({
-		match,
-		bestOf: selectedRoundBestOf.value,
 	});
 }
 
@@ -330,10 +317,8 @@ const noMatchesAvailableDescription = computed(() => hasRounds.value
 				:is-assignment-remote-changed="assignmentStore.isRemoteChanged"
 				:loading="initialLoading"
 				:global-filter="globalFilter"
-				:results-editable="isSelectedRoundManualResults"
 				@promote="handlePromote"
 				@view-deck-list="openPlayerDeckList"
-				@edit-result="handleEditResult"
 			/>
 		</div>
 

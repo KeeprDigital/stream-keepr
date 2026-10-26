@@ -71,5 +71,18 @@ describe('provenance', () => {
 
 			expect(picked).toEqual({ roundName: 'Finals' });
 		});
+
+		it('strips a Match\'s result, which only Melee Sync writes', () => {
+			const picked = pickManualWritable('matches', {
+				tableNumber: 4,
+				hasResult: true,
+				player1GameWins: 2,
+				player2GameWins: 0,
+				gameDraws: 0,
+				isBye: false,
+			});
+
+			expect(picked).toEqual({ tableNumber: 4 });
+		});
 	});
 });

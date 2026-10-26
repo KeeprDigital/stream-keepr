@@ -160,7 +160,6 @@ function history(name: string, result: Record<string, unknown> = {}) {
 				opponentGameWins: 0,
 				gameDraws: 0,
 				hasResult: true,
-				resultString: null,
 				...result,
 			},
 		],

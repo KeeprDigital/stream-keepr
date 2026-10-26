@@ -53,7 +53,6 @@ function pairingRow(overrides: Record<string, unknown> = {}) {
 		player1GameWins: null,
 		player2GameWins: null,
 		gameDraws: null,
-		resultString: null,
 		...overrides,
 	};
 }

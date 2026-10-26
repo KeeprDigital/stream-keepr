@@ -21,9 +21,9 @@ export interface MatchSide {
 }
 
 /**
- * A Match's result from `playerId`'s side. A bye is a bye whatever its game
- * wins; a Match without a reported result, or with one but no game wins, is
- * pending.
+ * A Match's result from `playerId`'s side. A bye is a bye; a Match without a
+ * reported result is pending. A reported Match always holds its game wins, as
+ * Melee Sync stores them (ADR-0047).
  */
 export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: number): MatchSide {
 	const isPlayer1 = match.player1Id === playerId;
@@ -52,9 +52,9 @@ export function readMatchFromPlayerSide(match: MatchResultFacts, playerId: numbe
 }
 
 /**
- * A Match's game score from one Player's side, theirs first: `2-1`, or
- * `1-1-1` with game draws. `null` for a bye or a Match with no game wins
- * reported, which have no score to show.
+ * A Match's Game Score from one Player's side, theirs first: `2-1`, or
+ * `1-1-1` with game draws. `null` for a bye or an unreported Match, which
+ * have none.
  */
 export function formatGameScore(side: MatchSide): string | null {
 	if (side.outcome === 'bye' || !side.hasResult || side.playerGameWins == null || side.opponentGameWins == null)

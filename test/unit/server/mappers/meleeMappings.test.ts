@@ -1,3 +1,4 @@
+import type { MeleeMatchParsed } from '~~/server/schemas/external/melee';
 import { describe, expect, it } from 'vitest';
 import {
 	mapMeleeMatchesToDbRows,
@@ -217,6 +218,81 @@ describe('mapMeleeMatchesToDbRows', () => {
 		]);
 		expect(result[2]!.isBye).toBe(true);
 		expect(result[0]).toMatchObject({ eventId: 1, roundId: 10 });
+	});
+
+	describe('a Match result', () => {
+		const context = () => matchContext({
+			players: [
+				localMeleePlayer(10, 1),
+				localMeleePlayer(20, 2),
+			],
+		});
+		function mapOne(overrides: Partial<MeleeMatchParsed>, gameWins: Array<number | null>) {
+			const [row] = mapMeleeMatchesToDbRows([
+				meleeMatch('result', {
+					TableNumber: 1,
+					ResultString: 'Player 1 won 2-0-0',
+					Competitors: gameWins.map((GameWins, index) => meleeCompetitor(index + 1, { SortOrder: index, GameWins })),
+					...overrides,
+				}),
+			], 10, 1, context());
+			return row!;
+		}
+
+		it.each([
+			[
+				'counts the game wins and draws Melee leaves null on a reported Match as none',
+				{ GameDraws: null },
+				[2, null],
+				{
+					hasResult: true,
+					isBye: false,
+					player1GameWins: 2,
+					player2GameWins: 0,
+					gameDraws: 0,
+				},
+			],
+			[
+				'keeps a reported draw',
+				{ GameDraws: 1 },
+				[1, 1],
+				{
+					hasResult: true,
+					player1GameWins: 1,
+					player2GameWins: 1,
+					gameDraws: 1,
+				},
+			],
+			[
+				'holds no Game Score for an unreported Match, whatever Melee sends',
+				{ HasResult: false, GameDraws: 1 },
+				[1, null],
+				{
+					hasResult: false,
+					player1GameWins: null,
+					player2GameWins: null,
+					gameDraws: null,
+				},
+			],
+			[
+				'holds no Game Score for a bye',
+				{ ByeReason: 1 },
+				[2],
+				{
+					hasResult: true,
+					isBye: true,
+					player1GameWins: null,
+					player2GameWins: null,
+					gameDraws: null,
+				},
+			],
+		] as const)('%s', (_, overrides, gameWins, expected) => {
+			expect(mapOne(overrides, [...gameWins])).toMatchObject(expected);
+		});
+
+		it('does not keep Melee\'s result text', () => {
+			expect(mapOne({}, [2, 0])).not.toHaveProperty('resultString');
+		});
 	});
 
 	it('rejects unpaired partial Matches while preserving explicit completed and bye records', () => {
