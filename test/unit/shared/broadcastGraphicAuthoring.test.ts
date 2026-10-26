@@ -458,12 +458,54 @@ describe('broadcastGraphicAuthoring', () => {
 		});
 	});
 
-	it('ignores a property-group edit aimed at the wrong Graphic Item kind', () => {
-		const built = addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic;
+	it.each([
+		[
+			'Shape Geometry on text',
+			(built: BroadcastGraphicConfig) => patchShapeGeometry(built, 'name', { leftSlant: 12 }),
+		],
+		[
+			'typography on a missing item',
+			(built: BroadcastGraphicConfig) => patchGraphicTypography(built, 'missing', { fontSize: 96 }),
+		],
+		[
+			'group arrangement on text',
+			(built: BroadcastGraphicConfig) => patchGraphicGroup(built, 'name', { padding: 8 }),
+		],
+		[
+			'media fit on a shape',
+			(built: BroadcastGraphicConfig) => patchMediaGraphicItem(built, 'bar', { fit: 'fill' }),
+		],
+		[
+			'a media clip on a shape',
+			(built: BroadcastGraphicConfig) => setMediaClipGeometry(built, 'bar', true),
+		],
+		[
+			'a media focal position on a shape',
+			(built: BroadcastGraphicConfig) => patchMediaFocalPosition(built, 'bar', { horizontal: 0 }),
+		],
+		[
+			'a win box surface on a shape',
+			(built: BroadcastGraphicConfig) => applyGraphicSurfaceStyleEdit(built, 'bar', 'boxSurfaceStyle', { kind: 'solid-fill', color: '#000000' }),
+		],
+		[
+			'a Game Wins display mode on a shape',
+			(built: BroadcastGraphicConfig) => patchGameWinsGraphicItem(built, 'bar', { displayMode: 'number' }),
+		],
+		[
+			'a life animation on a shape',
+			(built: BroadcastGraphicConfig) => patchPlayerLifeGraphicItem(built, 'bar', { lifeAnimation: 'pop' }),
+		],
+		[
+			'a Text Overflow Policy on a shape',
+			(built: BroadcastGraphicConfig) => patchGraphicTextOverflow(built, 'bar', { overflowPolicy: 'clip' }),
+		],
+	])('ignores %s', (_name, edit) => {
+		const built = addGraphicItem(
+			addGraphicItem(graphic('a'), { kind: 'text', id: 'name', ...CANVAS }).graphic,
+			{ kind: 'shape', id: 'bar', ...CANVAS },
+		).graphic;
 
-		expect(patchShapeGeometry(built, 'name', { leftSlant: 12 })).toEqual(built);
-		expect(patchGraphicTypography(built, 'missing', { fontSize: 96 })).toEqual(built);
-		expect(patchGraphicGroup(built, 'name', { padding: 8 })).toEqual(built);
+		expect(edit(built)).toEqual(built);
 	});
 
 	it('patches one Graphic Item and leaves its siblings untouched', () => {
@@ -869,14 +911,6 @@ describe('broadcastGraphicAuthoring', () => {
 			expect(patchGraphicSurfaceStyle(built, 'logo', { fillOpacity: 0.5 })).toEqual(built);
 			expect(clearGraphicSurfaceStyle(built, 'logo')).toEqual(built);
 		});
-
-		it('ignores a media edit aimed at another Graphic Item kind', () => {
-			const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
-
-			expect(patchMediaGraphicItem(built, 'bar', { fit: 'fill' })).toEqual(built);
-			expect(setMediaClipGeometry(built, 'bar', true)).toEqual(built);
-			expect(patchMediaFocalPosition(built, 'bar', { horizontal: 0 })).toEqual(built);
-		});
 	});
 	describe('the context-gated Feature Match Definitions', () => {
 		/** A Broadcast Graphic holding one item of a context-gated kind. */
@@ -1050,16 +1084,6 @@ describe('broadcastGraphicAuthoring', () => {
 				.toEqual(built);
 			expect(applyGraphicSurfaceStyleEdit(built, 'game-wins', 'wonBoxSurfaceStyle', { kind: 'present', present: false }))
 				.toEqual(built);
-		});
-
-		it('ignores a win box edit aimed at another Graphic Item kind', () => {
-			const built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'bar', ...CANVAS }).graphic;
-
-			expect(applyGraphicSurfaceStyleEdit(built, 'bar', 'boxSurfaceStyle', { kind: 'solid-fill', color: '#000000' }))
-				.toEqual(built);
-			expect(patchGameWinsGraphicItem(built, 'bar', { displayMode: 'number' })).toEqual(built);
-			expect(patchPlayerLifeGraphicItem(built, 'bar', { lifeAnimation: 'pop' })).toEqual(built);
-			expect(patchGraphicTextOverflow(built, 'bar', { overflowPolicy: 'clip' })).toEqual(built);
 		});
 	});
 });

@@ -500,10 +500,8 @@ describe('placeBroadcastGraphicTemplate', () => {
 		expect('animation' in placed).toBe(false);
 	});
 
-	it('shares no object with the template document, one level down', () => {
-		// `toEqual` passes on identity, so equality cannot see this: a copy that returned
-		// the template's own recipe objects would satisfy every other test in this file
-		// while making a placed graphic's animation editable through the template.
+	it('shares no animation object with the template document, a rewritten stagger included', () => {
+		// `toEqual` cannot see shared objects, so the copy is edited and the template checked.
 		const document = composed();
 		document.animation = {
 			enter: {
@@ -515,29 +513,6 @@ describe('placeBroadcastGraphicTemplate', () => {
 			exit: {
 				duration: 200,
 				easing: 'ease-in',
-				delay: 0,
-				fade: { opacity: 0 },
-			},
-		};
-		const template = { id: 'template-1', name: 'Lower third', document };
-
-		const placed = placeBroadcastGraphicTemplate(template, {
-			generateId: sequentialIds(),
-			existing: [],
-		});
-
-		expect(placed.animation).not.toBe(document.animation);
-		expect(placed.animation!.enter).not.toBe(document.animation.enter);
-		expect(placed.animation!.enter!.fade).not.toBe(document.animation.enter!.fade);
-		expect(placed.animation!.exit).not.toBe(document.animation.exit);
-	});
-
-	it('shares no object with the template document when a stagger is rewritten', () => {
-		const document = composed();
-		document.animation = {
-			enter: {
-				duration: 400,
-				easing: 'ease-out',
 				delay: 0,
 				fade: { opacity: 0 },
 			},
@@ -556,9 +531,13 @@ describe('placeBroadcastGraphicTemplate', () => {
 			existing: [],
 		});
 		placed.animation!.enter!.duration = 1;
+		placed.animation!.enter!.fade!.opacity = 1;
+		placed.animation!.exit!.duration = 1;
 		placed.animation!.stagger!.enter!.step = 1;
 
 		expect(document.animation.enter!.duration).toBe(400);
+		expect(document.animation.enter!.fade!.opacity).toBe(0);
+		expect(document.animation.exit!.duration).toBe(200);
 		expect(document.animation.stagger!.enter!.step).toBe(80);
 	});
 
