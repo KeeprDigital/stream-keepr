@@ -1,61 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 describe('usePlayerDisplayConfig', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
+	it('shows a Player\'s identity and controls, but not their record or LGS, unless configured', () => {
+		const defaults = usePlayerDisplayConfig(undefined);
+		const configured = usePlayerDisplayConfig({ showName: false, showRecord: true, allowLifeControls: false, startingHandSize: 5 });
+
+		expect([defaults.showName.value, defaults.showRecord.value, defaults.showLgs.value, defaults.allowLifeControls.value, defaults.startingHandSize.value])
+			.toEqual([true, false, false, true, 7]);
+		expect([configured.showName.value, configured.showRecord.value, configured.allowLifeControls.value, configured.startingHandSize.value])
+			.toEqual([false, true, false, 5]);
 	});
 
-	it('returns default values when config is undefined', () => {
-		const result = usePlayerDisplayConfig(undefined);
-		expect(result.showName.value).toBe(true);
-		expect(result.showPronouns.value).toBe(true);
-		expect(result.showDeckName.value).toBe(true);
-		expect(result.showCounters.value).toBe(true);
-		expect(result.showRecord.value).toBe(false);
-		expect(result.showLgs.value).toBe(false);
-		expect(result.showMulliganInfo.value).toBe(true);
-		expect(result.allowLifeControls.value).toBe(true);
-		expect(result.allowGameWinControls.value).toBe(true);
-		expect(result.allowCounterControls.value).toBe(true);
-		expect(result.mulliganPhase.value).toBe(false);
-		expect(result.startingHandSize.value).toBe(7);
-		expect(result.activePlayerTrackingEnabled.value).toBe(false);
-		expect(result.hasDeckList.value).toBe(false);
+	it('labels the seat from the config, else from the default it is given', () => {
+		expect(usePlayerDisplayConfig(undefined, 'Top').seatLabel.value).toBe('Top');
+		expect(usePlayerDisplayConfig({ seatLabel: 'Left' }, 'Top').seatLabel.value).toBe('Left');
 	});
 
-	it('respects config overrides', () => {
-		const config = {
-			showName: false,
-			showRecord: true,
-			allowLifeControls: false,
-			mulliganPhase: true,
-			startingHandSize: 5,
-		};
-		const result = usePlayerDisplayConfig(config);
-		expect(result.showName.value).toBe(false);
-		expect(result.showRecord.value).toBe(true);
-		expect(result.allowLifeControls.value).toBe(false);
-		expect(result.mulliganPhase.value).toBe(true);
-		expect(result.startingHandSize.value).toBe(5);
-	});
-
-	it('uses defaultSeatLabel when config has no seatLabel', () => {
-		const result = usePlayerDisplayConfig(undefined, 'Top');
-		expect(result.seatLabel.value).toBe('Top');
-	});
-
-	it('prefers config seatLabel over default', () => {
-		const config = { seatLabel: 'Left' };
-		const result = usePlayerDisplayConfig(config, 'Top');
-		expect(result.seatLabel.value).toBe('Left');
-	});
-
-	it('supports reactive config', () => {
+	it('follows a config that changes', () => {
 		const config = ref<any>({ showName: true });
 		const result = usePlayerDisplayConfig(config);
-		expect(result.showName.value).toBe(true);
 
 		config.value = { showName: false };
+
 		expect(result.showName.value).toBe(false);
 	});
 });

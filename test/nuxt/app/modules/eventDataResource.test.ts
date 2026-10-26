@@ -1,10 +1,10 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventDataResource } from '~~/app/modules/event-data/client';
-import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 
-const mockAbly = createMockRealtime();
-mockNuxtImport('useRealtime', () => () => mockAbly);
+// Path building, list normalization and origin headers are the client module's own
+// (test/unit/app/modules/eventDataClient.test.ts); this is the resource's wiring of them.
+
 const mockApiHeaders = {
 	getHeaders: vi.fn(() => ({ 'x-realtime-connection-id': 'test-connection-id' })),
 };
@@ -17,123 +17,41 @@ mockNuxtImport('$fetch', () => mockFetch);
 
 describe('useEventDataResource', () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
-		mockAbly.connectionId = 'test-connection-id';
+		mockFetch.mockReset();
+		mockFetch.mockResolvedValue({});
 	});
 
-	describe('path construction', () => {
-		it('builds event-scoped paths', () => {
-			const repo = useEventDataResource({ resourcePath: 'players', eventScoped: true });
-			// Exercise list to trigger buildPath
-			mockFetch.mockResolvedValue([]);
-			void repo.list(1);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players');
-		});
+	it('lists an Event\'s resource, normalized to its items', async () => {
+		mockFetch.mockResolvedValue({ players: [{ id: 1 }], total: 1 });
 
-		it('builds non-event-scoped paths', () => {
-			const repo = useEventDataResource({ resourcePath: 'events', eventScoped: false });
-			mockFetch.mockResolvedValue([]);
-			void repo.list(null);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events');
-		});
+		const items = await useEventDataResource({ resourcePath: 'players', eventScoped: true }).list(1);
 
-		it('appends resource ID to path', () => {
-			const repo = useEventDataResource({ resourcePath: 'players', eventScoped: true });
-			mockFetch.mockResolvedValue({});
-			void repo.getById(1, 42);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/42');
-		});
+		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players');
+		expect(items).toEqual([{ id: 1 }]);
 	});
 
-	describe('list', () => {
-		it('returns array responses directly', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			const players = [
-				{ id: 1, name: 'A' },
-			];
-			mockFetch.mockResolvedValue(players);
-			const result = await repo.list(1);
-			expect(result).toEqual(players);
-		});
+	it('lists a resource outside any Event', async () => {
+		await useEventDataResource({ resourcePath: 'events', eventScoped: false }).list(null);
 
-		it('extracts items from object responses using resourcePath key', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			mockFetch.mockResolvedValue({
-				players: [
-					{ id: 1 },
-				],
-				total: 1,
-			});
-			const result = await repo.list(1);
-			expect(result).toEqual([
-				{ id: 1 },
-			]);
-		});
-
-		it('returns empty array for unrecognized response shapes', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			mockFetch.mockResolvedValue({ unknown: 'data' });
-			const result = await repo.list(1);
-			expect(result).toEqual([]);
-		});
+		expect(mockFetch).toHaveBeenCalledWith('/api/events');
 	});
 
-	describe('getById', () => {
-		it('returns the fetched entity', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			const player = { id: 1, name: 'Test' };
-			mockFetch.mockResolvedValue(player);
-			const result = await repo.getById(1, 1);
-			expect(result).toEqual(player);
-		});
+	it.each([
+		['reads one', (repo: ReturnType<typeof useEventDataResource>) => repo.getById(1, 42), '/api/events/1/players/42', undefined],
+		['creates', (repo: ReturnType<typeof useEventDataResource>) => repo.create(1, { name: 'New' }), '/api/events/1/players', { method: 'POST', body: { name: 'New' } }],
+		['updates', (repo: ReturnType<typeof useEventDataResource>) => repo.update(1, 42, { name: 'Renamed' }), '/api/events/1/players/42', { method: 'PATCH', body: { name: 'Renamed' } }],
+		['removes', (repo: ReturnType<typeof useEventDataResource>) => repo.remove(1, 42), '/api/events/1/players/42', { method: 'DELETE' }],
+	])('%s through the resource path', async (_, call, path, options) => {
+		await call(useEventDataResource({ resourcePath: 'players', eventScoped: true }));
+
+		expect(mockFetch).toHaveBeenCalledWith(...(options ? [path, options] : [path]));
 	});
 
-	describe('create', () => {
-		it('sends POST request with body', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			const data = { name: 'New Player' };
-			mockFetch.mockResolvedValue({ id: 1, ...data });
-			await repo.create(1, data);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players', {
-				method: 'POST',
-				body: data,
-			});
-		});
+	it('sends realtime-origin headers with a write when asked to', async () => {
+		await useEventDataResource({ resourcePath: 'players', includeHeaders: true }).create(1, { name: 'New' });
 
-		it('includes headers when includeHeaders is true', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players', includeHeaders: true });
-			const data = { name: 'New Player' };
-			mockFetch.mockResolvedValue({ id: 1, ...data });
-			await repo.create(1, data);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players', expect.objectContaining({
-				method: 'POST',
-				body: data,
-				headers: { 'x-realtime-connection-id': 'test-connection-id' },
-			}));
-		});
-	});
-
-	describe('update', () => {
-		it('sends PATCH request with body', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			const data = { name: 'Updated' };
-			mockFetch.mockResolvedValue({ id: 1, ...data });
-			await repo.update(1, 1, data);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/1', {
-				method: 'PATCH',
-				body: data,
-			});
-		});
-	});
-
-	describe('remove', () => {
-		it('sends DELETE request', async () => {
-			const repo = useEventDataResource({ resourcePath: 'players' });
-			mockFetch.mockResolvedValue({ success: true });
-			await repo.remove(1, 1);
-			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players/1', {
-				method: 'DELETE',
-			});
-		});
+		expect(mockFetch).toHaveBeenCalledWith('/api/events/1/players', expect.objectContaining({
+			headers: { 'x-realtime-connection-id': 'test-connection-id' },
+		}));
 	});
 });

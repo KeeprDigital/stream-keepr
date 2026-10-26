@@ -1,6 +1,7 @@
 import type { ScreenDisplaySession } from '~/modules/screen/displaySession';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { defineComponent, h, nextTick, reactive, watch } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
@@ -10,15 +11,6 @@ function flushPromises() {
 	return new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}
 
 function createRoute(query: Record<string, unknown> = {}, hash = '') {
 	return reactive({

@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -8,15 +9,6 @@ const { mockFetch } = vi.hoisted(() => ({
 
 mockNuxtImport('$fetch', () => mockFetch);
 
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (cause: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
-}
 
 function mountCapability(eventId: Ref<number>, screenId: Ref<number | undefined>) {
 	let result!: ReturnType<typeof useScreenOutputAssetCapability>;

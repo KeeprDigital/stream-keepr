@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 
 const mockToast = {
 	add: vi.fn(),
@@ -42,38 +43,13 @@ describe('useConfigUpdate', () => {
 		};
 	}
 
-	function deferred<T = void>() {
-		let resolve!: (value: T | PromiseLike<T>) => void;
-		let reject!: (reason?: unknown) => void;
-		const promise = new Promise<T>((promiseResolve, promiseReject) => {
-			resolve = promiseResolve;
-			reject = promiseReject;
-		});
-		return { promise, resolve, reject };
-	}
-
-	it('returns merged config with defaults', () => {
-		const { config } = createTestSetup();
-		expect(config.value).toEqual({ color: 'red', size: 10 });
-	});
-
-	it('merges store config over defaults', () => {
-		const { config } = createTestSetup({ color: 'blue' });
-		expect(config.value.color).toBe('blue');
-		expect(config.value.size).toBe(10);
-	});
-
-	it('applies local overrides immediately on updateConfig', () => {
-		const { config, updateConfig } = createTestSetup();
+	it('shows the stored config over the defaults, and an edit at once while it saves', () => {
+		const { config, saving, updateConfig } = createTestSetup({ color: 'blue' });
+		expect(config.value).toEqual({ color: 'blue', size: 10 });
 
 		updateConfig({ color: 'green' });
+
 		expect(config.value.color).toBe('green');
-	});
-
-	it('sets saving to true when updateConfig is called', () => {
-		const { saving, updateConfig } = createTestSetup();
-
-		updateConfig({ color: 'green' });
 		expect(saving.value).toBe(true);
 	});
 

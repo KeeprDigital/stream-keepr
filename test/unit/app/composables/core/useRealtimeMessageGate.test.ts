@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 import { useRealtimeMessageGate } from '~~/app/composables/core/useRealtimeMessageGate';
 
 describe('useRealtimeMessageGate', () => {
